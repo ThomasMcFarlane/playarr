@@ -1,0 +1,37 @@
+# Every docker-compose*.yml under infra/docker/ builds with context: ../..
+# (the repo root) -- without this file, `COPY backend/ ./` and friends in
+# backend.Dockerfile copy local build artifacts (backend/target/ alone
+# routinely reaches double-digit GB from normal `cargo check`/`cargo test`
+# use) into the build context on every single build. Confirmed to actually
+# exhaust Docker Desktop's VM disk allocation in practice, not just a
+# performance nicety.
+
+# Rust
+backend/target/
+**/target/
+
+# Node/pnpm (not used by backend.Dockerfile, but harmless to exclude
+# repo-wide since nothing under infra/docker/ builds from clients/)
+node_modules/
+**/node_modules/
+clients/*/dist/
+clients/tv-web/**/dist/
+
+# Android/Gradle
+**/.gradle/
+**/build/
+
+# iOS/Swift
+**/.build/
+**/.swiftpm/
+**/DerivedData/
+
+# Version control and editor/OS noise
+.git/
+.DS_Store
+*.swp
+
+# Local-only, never meant to enter an image
+.env
+.env.*
+*.env.local

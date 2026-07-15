@@ -34,11 +34,51 @@ pub async fn connect(database_url: &str) -> Result<DbPool, DbError> {
     // can pick the right one from the URL scheme.
     sqlx::any::install_default_drivers();
 
+    let database_url = ensure_sqlite_create_mode(database_url);
+
     let pool = AnyPoolOptions::new()
         .max_connections(10)
-        .connect(database_url)
+        .connect(&database_url)
         .await?;
     Ok(pool)
+}
+
+/// `sqlx`'s SQLite driver does **not** create the database file on first
+/// connect unless the connection string explicitly opts in
+/// (`?mode=rwc` -- "read-write-create") -- without it, connecting to a
+/// `sqlite://` URL whose file doesn't exist yet fails outright
+/// (`SQLITE_CANTOPEN`, "unable to open database file"). That's a real
+/// first-boot bug for the exact zero-dependency single-node deployment
+/// SQLite exists to serve (ADR 0001's Tier 1): an operator's very first
+/// `docker run`/`systemctl start` against a fresh volume/disk would
+/// otherwise crash-loop before ever reaching a migration, with no
+/// actionable error beyond a low-level SQLite error code. This function is
+/// the fix: every `sqlite:` URL passed to [`connect`] gets `mode=rwc`
+/// appended (only if the caller hasn't already set a `mode=` param
+/// themselves, so an explicit `?mode=ro` for a read-only replica-style
+/// connection is still respected). Postgres URLs pass through unchanged.
+/// `sqlite::memory:` also gets `mode=rwc` appended -- harmless (an
+/// in-memory database is always freshly created regardless) but simpler
+/// than special-casing it, and confirmed not to break sqlx's parsing by
+/// this module's own tests.
+fn ensure_sqlite_create_mode(database_url: &str) -> std::borrow::Cow<'_, str> {
+    if !database_url.starts_with("sqlite:") {
+        return std::borrow::Cow::Borrowed(database_url);
+    }
+
+    let (base, query) = match database_url.split_once('?') {
+        Some((base, query)) => (base, Some(query)),
+        None => (database_url, None),
+    };
+
+    if let Some(query) = query {
+        if query.split('&').any(|param| param.starts_with("mode=")) {
+            return std::borrow::Cow::Borrowed(database_url);
+        }
+        std::borrow::Cow::Owned(format!("{base}?{query}&mode=rwc"))
+    } else {
+        std::borrow::Cow::Owned(format!("{base}?mode=rwc"))
+    }
 }
 
 /// Runs the migration set matching `is_postgres` against an already-open
@@ -110,4 +150,74 @@ pub(crate) async fn test_sqlite_pool() -> DbPool {
         .await
         .expect("run sqlite migrations");
     pool
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    #[test]
+    fn appends_mode_rwc_to_a_bare_sqlite_url() {
+        assert_eq!(
+            ensure_sqlite_create_mode("sqlite:///data/streamarr.db"),
+            "sqlite:///data/streamarr.db?mode=rwc"
+        );
+        assert_eq!(
+            ensure_sqlite_create_mode("sqlite://streamarr.db"),
+            "sqlite://streamarr.db?mode=rwc"
+        );
+        assert_eq!(
+            ensure_sqlite_create_mode("sqlite::memory:"),
+            "sqlite::memory:?mode=rwc"
+        );
+    }
+
+    #[test]
+    fn appends_mode_rwc_alongside_existing_query_params() {
+        assert_eq!(
+            ensure_sqlite_create_mode("sqlite:///data/streamarr.db?cache=shared"),
+            "sqlite:///data/streamarr.db?cache=shared&mode=rwc"
+        );
+    }
+
+    #[test]
+    fn respects_an_explicit_mode_param() {
+        assert_eq!(
+            ensure_sqlite_create_mode("sqlite:///data/streamarr.db?mode=ro"),
+            "sqlite:///data/streamarr.db?mode=ro"
+        );
+    }
+
+    #[test]
+    fn leaves_postgres_urls_unchanged() {
+        assert_eq!(
+            ensure_sqlite_create_mode("postgres://user:pass@host/db"),
+            "postgres://user:pass@host/db"
+        );
+    }
+
+    /// Reproduces the exact bug this fix closes: connecting to a `sqlite:`
+    /// URL whose file doesn't exist yet, via the real public `connect`
+    /// entrypoint every deployment tier actually calls (not the
+    /// `max_connections(1)`-pinned `test_sqlite_pool` test helper, which
+    /// only ever uses `:memory:`) -- before this fix, this failed with
+    /// `SQLITE_CANTOPEN` on every fresh install.
+    #[tokio::test]
+    async fn connect_creates_a_fresh_sqlite_file_that_does_not_exist_yet() {
+        let path = std::env::temp_dir().join(format!("streamarr-pool-test-{}.db", Uuid::new_v4()));
+        assert!(!path.exists(), "test file must not already exist");
+
+        let url = format!("sqlite://{}", path.display());
+        let pool = connect(&url)
+            .await
+            .expect("connect must create the database file, not error");
+        run_migrations(&pool, false)
+            .await
+            .expect("migrations must run against the freshly created file");
+        pool.close().await;
+
+        assert!(path.exists(), "connect should have created the file");
+        let _ = std::fs::remove_file(&path);
+    }
 }

@@ -42,6 +42,13 @@ impl SourceInstanceRegistry {
         self.by_id.insert(instance.id, instance);
     }
 
+    /// Removes a registered instance, if present. `arr-sync` simply stops
+    /// polling it on its next reconciliation tick -- already-imported
+    /// catalog data from it is untouched (there is no cascading delete).
+    pub fn remove(&self, id: Uuid) -> Option<SourceInstance> {
+        self.by_id.remove(&id).map(|(_, instance)| instance)
+    }
+
     pub fn get(&self, id: Uuid) -> Option<SourceInstance> {
         self.by_id.get(&id).map(|entry| entry.clone())
     }

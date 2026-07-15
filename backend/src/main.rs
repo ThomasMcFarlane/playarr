@@ -116,6 +116,21 @@ async fn serve() -> anyhow::Result<()> {
     // exists yet anywhere in the workspace).
     let source_instances = Arc::new(streamarr_api::SourceInstanceRegistry::new());
 
+    // `streamarr-telemetry`'s own docs are explicit that `init` above only
+    // covers logging -- the /metrics HTTP listener is real, tested code
+    // that this composition root is documented as responsible for
+    // spawning, and (until now) never actually did: every deployment
+    // config (docker-compose, the Helm chart's Service/ServiceMonitor,
+    // this file's own metrics_bind_addr) assumed :9090/metrics answers
+    // requests, and it silently didn't -- nothing was listening on that
+    // port at all. Spawned unconditionally, before the role branch below,
+    // since both api and worker roles expose metrics per the Helm chart.
+    let metrics_registry = streamarr_telemetry::metrics::MetricsRegistry::new();
+    tokio::spawn(spawn_metrics_listener(
+        config.metrics_bind_addr,
+        metrics_registry,
+    ));
+
     // Spawns background tasks and returns immediately; they keep running
     // for the life of the process regardless of which role served the
     // foreground listener below.
@@ -739,6 +754,37 @@ async fn run_while_leader<Fut>(
 
     task.await;
     renewal.abort();
+}
+
+/// Binds `streamarr_telemetry::metrics::http::router` (the real, tested
+/// `/metrics` Prometheus-exposition-format handler that crate ships but
+/// never wires up itself) to `metrics_bind_addr`, on its own listener
+/// separate from the public API port -- so it can be firewalled off from
+/// public-facing ingress without needing auth middleware of its own,
+/// matching every deployment tier's existing assumption that this port is
+/// a private/internal one (see infra/kubernetes/helm/streamarr/values.yaml's
+/// `metricsPort`, never exposed via an Ingress). Logged, not propagated
+/// via `?`, since this runs detached via `tokio::spawn` -- a failure here
+/// (e.g. the port already in use) shouldn't take the whole process down
+/// when the public API/worker loops are otherwise healthy, but it must be
+/// loud, not silent, since a metrics outage is still a real operational
+/// problem worth seeing in the logs.
+async fn spawn_metrics_listener(
+    metrics_bind_addr: std::net::SocketAddr,
+    registry: streamarr_telemetry::metrics::MetricsRegistry,
+) {
+    let router = streamarr_telemetry::metrics::http::router(registry);
+    let listener = match tokio::net::TcpListener::bind(metrics_bind_addr).await {
+        Ok(listener) => listener,
+        Err(err) => {
+            tracing::error!(addr = %metrics_bind_addr, error = %err, "failed to bind metrics listener");
+            return;
+        }
+    };
+    tracing::info!(addr = %metrics_bind_addr, "metrics listener listening");
+    if let Err(err) = axum::serve(listener, router).await {
+        tracing::error!(addr = %metrics_bind_addr, error = %err, "metrics listener exited");
+    }
 }
 
 /// Worker-only role: no public API router, but still a real HTTP listener

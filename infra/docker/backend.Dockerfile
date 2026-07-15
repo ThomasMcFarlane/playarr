@@ -79,9 +79,11 @@ RUN cargo build --release --workspace --locked --bin streamarr \
 
 # ------------------------------------------------------------------------
 # Stage 4: runtime -- minimal Debian base, non-root, read-only-root-
-# filesystem friendly (the only writable path the binary needs is /tmp;
-# state lives in Postgres/Redis per ADR 0001's Tier 2/3 design, so no
-# /data or /config volume is declared here -- see infra/docker/README.md).
+# filesystem friendly. /data is writable (owned by the streamarr user) for
+# the SQLite tier (DATABASE_URL=sqlite:///data/streamarr.db) -- mount a
+# named volume there for a genuinely containerized Tier 1 experience (see
+# docker-compose.standalone.yml). Postgres/Redis-backed Tier 2/3
+# deployments don't need it and can leave the mount point empty.
 # ------------------------------------------------------------------------
 FROM debian:${DEBIAN_CODENAME}-slim AS runtime
 
@@ -96,8 +98,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system --gid 10001 streamarr \
     && useradd --system --uid 10001 --gid streamarr --home-dir /app --shell /usr/sbin/nologin streamarr \
-    && mkdir -p /app \
-    && chown -R streamarr:streamarr /app
+    && mkdir -p /app /data \
+    && chown -R streamarr:streamarr /app /data
 
 # --------------------------------------------------------------------
 # Self-update-refusal marker.

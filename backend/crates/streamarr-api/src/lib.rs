@@ -22,6 +22,7 @@
 //! changing any route; run the same test without the env var (as CI does)
 //! to confirm the checked-in file still matches.
 
+pub mod admin;
 pub mod auth_extractor;
 pub mod catalog;
 pub mod error;
@@ -65,7 +66,8 @@ pub use version_gate::{ClientCompatibilityTable, VersionGateLayer};
         (name = "webhooks", description = "*arr webhook receiver"),
         (name = "catalog", description = "Catalog browse/search/detail"),
         (name = "requests", description = "Media request lifecycle: submit/approve/reject/list"),
-        (name = "playback", description = "Playback negotiation: direct-play vs. transcode decision")
+        (name = "playback", description = "Playback negotiation: direct-play vs. transcode decision"),
+        (name = "admin", description = "Admin-only configuration: registering *arr source instances")
     )
 )]
 pub struct ApiDoc;
@@ -93,6 +95,11 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(requests::approve_request_handler))
         .routes(routes!(requests::reject_request_handler))
         .routes(routes!(playback::playback_info_handler))
+        .routes(routes!(
+            admin::create_source_instance_handler,
+            admin::list_source_instances_handler
+        ))
+        .routes(routes!(admin::delete_source_instance_handler))
 }
 
 pub fn openapi_spec() -> utoipa::openapi::OpenApi {

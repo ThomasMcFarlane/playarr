@@ -37,6 +37,75 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VersionEnvelope'
+  /api/v1/admin/source-instances:
+    get:
+      tags:
+      - admin
+      summary: Every currently-registered `*arr` connection.
+      operationId: list_source_instances_handler
+      responses:
+        '200':
+          description: All registered source instances
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SourceInstanceResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+    post:
+      tags:
+      - admin
+      summary: |-
+        Registers a new `*arr` connection, or updates an existing one in place
+        when `id` is set. Confirms the instance is actually reachable with the
+        given `base_url`/`api_key` before accepting it.
+      operationId: create_source_instance_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourceInstanceRequest'
+        required: true
+      responses:
+        '200':
+          description: Registered (or updated) and confirmed reachable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceInstanceResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '502':
+          description: base_url/api_key rejected, or the instance could not be reached
+  /api/v1/admin/source-instances/{id}:
+    delete:
+      tags:
+      - admin
+      summary: |-
+        De-registers a `*arr` connection. `arr-sync` stops polling it on its
+        next reconciliation tick; already-imported catalog data is untouched.
+      operationId: delete_source_instance_handler
+      parameters:
+      - name: id
+        in: path
+        description: Source instance id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed (or was already absent)
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
   /api/v1/auth/login:
     post:
       tags:
@@ -1019,6 +1088,101 @@ components:
             $ref: '#/components/schemas/EpisodeDetailSchema'
         season:
           $ref: '#/components/schemas/Season'
+    SourceInstanceRequest:
+      type: object
+      description: |-
+        Request body for registering (or re-registering, by re-POSTing with the
+        same `id` you got back) a `*arr` connection. `api_key` is write-only --
+        it is never echoed back in [`SourceInstanceResponse`].
+      required:
+      - kind
+      - name
+      - base_url
+      - api_key
+      properties:
+        api_key:
+          type: string
+        base_url:
+          type: string
+        best_effort:
+          type: boolean
+        default_quality_profile_id:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        default_root_folder_id:
+          type:
+          - string
+          - 'null'
+        enabled_for_requests:
+          type: boolean
+        id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: |-
+            Omit to create a new instance (a fresh id is assigned and returned);
+            set to an id from a prior response to update that same instance in
+            place (e.g. to rotate its API key).
+        kind:
+          $ref: '#/components/schemas/SourceKind'
+        name:
+          type: string
+        priority:
+          type: integer
+          format: int32
+    SourceInstanceResponse:
+      type: object
+      description: |-
+        The redacted, admin-facing projection of [`SourceInstance`] -- see that
+        type's own doc comment for why it isn't `ToSchema`-derived directly
+        (it carries the API key). `api_key` is never included, not even
+        redacted-looking -- the field simply doesn't exist on the response.
+      required:
+      - id
+      - kind
+      - name
+      - base_url
+      - priority
+      - enabled_for_requests
+      - best_effort
+      properties:
+        base_url:
+          type: string
+        best_effort:
+          type: boolean
+        default_quality_profile_id:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        default_root_folder_id:
+          type:
+          - string
+          - 'null'
+        enabled_for_requests:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/SourceKind'
+        name:
+          type: string
+        priority:
+          type: integer
+          format: int32
+    SourceKind:
+      type: string
+      enum:
+      - sonarr
+      - radarr
+      - lidarr
+      - bazarr
+      - prowlarr
+      - readarr
     SubmitRequestBody:
       type: object
       required:
@@ -1263,3 +1427,5 @@ tags:
   description: 'Media request lifecycle: submit/approve/reject/list'
 - name: playback
   description: 'Playback negotiation: direct-play vs. transcode decision'
+- name: admin
+  description: 'Admin-only configuration: registering *arr source instances'
