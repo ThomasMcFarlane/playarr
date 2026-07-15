@@ -63,17 +63,17 @@ public final class WorkDetailViewModel {
 
     /// Submits a real `POST /api/v1/requests` for this screen's own `Work`
     /// — an `existing_work` target, since the work is already cataloged,
-    /// just not (fully) `.available`. `requestedBy` is supplied by the
-    /// caller (see `SubmitRequestBody.requestedBy`'s `TODO(auth)` note in
-    /// the spec: there's no auth-extraction middleware yet, so the client
-    /// has to supply the requesting user id directly — `WorkDetailView`
-    /// sources it from `AppEnvironment.localUserID`).
-    public func requestWork(requestedBy: UUID, note: String? = nil) async {
+    /// just not (fully) `.available`. As of Round E this call requires a
+    /// verified `Authorization: Bearer <access_token>` header and
+    /// `requested_by` is derived server-side from that token's `sub` claim
+    /// — the view layer no longer supplies a requesting user id at all (see
+    /// `SubmitRequestBody`'s doc comment in `OpenAPISchemas.swift`);
+    /// `APIClient` attaches/obtains the token transparently.
+    public func requestWork(note: String? = nil) async {
         guard let work = detail?.work else { return }
         requestState = .submitting
         do {
             let body = SubmitRequestBody(
-                requestedBy: requestedBy,
                 kind: work.kind,
                 target: .existingWork(workID: work.id),
                 note: note

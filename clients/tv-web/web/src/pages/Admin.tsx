@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
-import { ApiError, type ExternalProvider, type MediaRequest } from "@streamarr-tv/api-client";
+import { describeApiError, type ExternalProvider, type MediaRequest } from "@streamarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
-import { isValidUuid } from "../lib/uuid";
-
-const ADMIN_USER_ID_STORAGE_KEY = "streamarr:adminUserId";
 
 /** `ExternalProvider` is a closed set of string variants plus an `{other: string}` escape hatch. */
 function providerLabel(provider: ExternalProvider): string {
@@ -23,19 +20,19 @@ function targetLabel(request: MediaRequest, workTitles: Record<string, string>):
  * by the real `GET/POST /api/v1/requests`, `POST /api/v1/requests/{id}/approve`,
  * and `POST /api/v1/requests/{id}/reject` endpoints.
  *
- * `DecideRequestBody.decided_by` is a real admin user id -- the backend has
- * no auth middleware wired up yet (see the spec's own TODO on
- * `SubmitRequestBody.requested_by`), so there is no verified "current user"
- * to source it from. This page asks for it once and persists it locally.
+ * Round E wired real auth middleware into the backend: `decided_by` is no
+ * longer a client-supplied field (the removed Round D workaround asked an
+ * operator to type in a real admin user id and persist it locally) -- the
+ * server now derives it from the verified access token's `sub` claim, and
+ * rejects (403) any caller that token doesn't identify as an admin. The
+ * `ApiClient` this page uses (see `ApiClientProvider`) obtains that token
+ * transparently via `POST /api/v1/auth/login`.
  */
 export function AdminPage() {
   const client = useApiClient();
   const [requests, setRequests] = useState<MediaRequest[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [workTitles, setWorkTitles] = useState<Record<string, string>>({});
-  const [adminUserId, setAdminUserId] = useState(
-    () => localStorage.getItem(ADMIN_USER_ID_STORAGE_KEY) ?? ""
-  );
   const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,7 +44,7 @@ export function AdminPage() {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setError(err instanceof ApiError ? err.message : String(err));
+        setError(describeApiError(err));
       });
     return () => {
       cancelled = true;
@@ -83,27 +80,19 @@ export function AdminPage() {
     };
   }, [requests, workTitles, client]);
 
-  function handleAdminUserIdChange(value: string) {
-    setAdminUserId(value);
-    localStorage.setItem(ADMIN_USER_ID_STORAGE_KEY, value);
-  }
-
   async function decide(id: string, decision: "approve" | "reject") {
     setBusyId(id);
+    setError(null);
     try {
       const updated =
-        decision === "approve"
-          ? await client.approveRequest(id, { decided_by: adminUserId })
-          : await client.rejectRequest(id, { decided_by: adminUserId });
+        decision === "approve" ? await client.approveRequest(id, {}) : await client.rejectRequest(id, {});
       setRequests((current) => current?.map((r) => (r.id === id ? updated : r)) ?? current);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : String(err));
+      setError(describeApiError(err));
     } finally {
       setBusyId(null);
     }
   }
-
-  const isValidAdminId = isValidUuid(adminUserId);
 
   return (
     <div style={{ padding: "2rem", color: "#ffffff" }}>
@@ -111,27 +100,6 @@ export function AdminPage() {
       <p style={{ color: "#a0a0a0", maxWidth: 560 }}>
         Review and approve/reject pending <code>MediaRequest</code>s.
       </p>
-
-      <label style={{ display: "block", marginTop: "1rem", color: "#a0a0a0", fontSize: "0.875rem" }}>
-        Admin user id (uuid, used as <code>decided_by</code>)
-        <input
-          type="text"
-          value={adminUserId}
-          onChange={(event) => handleAdminUserIdChange(event.target.value)}
-          placeholder="00000000-0000-0000-0000-000000000000"
-          style={{
-            display: "block",
-            marginTop: "0.25rem",
-            width: "100%",
-            maxWidth: 360,
-            padding: "0.4rem 0.6rem",
-            borderRadius: 6,
-            border: "1px solid #2a2a2a",
-            background: "#121212",
-            color: "#ffffff",
-          }}
-        />
-      </label>
 
       {error && <p style={{ color: "#e74c3c", marginTop: "1rem" }}>{error}</p>}
       {requests === null && !error && <p style={{ color: "#a0a0a0", marginTop: "1rem" }}>Loading...</p>}
@@ -158,14 +126,14 @@ export function AdminPage() {
                 <td style={{ padding: "0.5rem", display: "flex", gap: "0.5rem" }}>
                   <button
                     type="button"
-                    disabled={request.status !== "pending" || busyId === request.id || !isValidAdminId}
+                    disabled={request.status !== "pending" || busyId === request.id}
                     onClick={() => void decide(request.id, "approve")}
                   >
                     Approve
                   </button>
                   <button
                     type="button"
-                    disabled={request.status !== "pending" || busyId === request.id || !isValidAdminId}
+                    disabled={request.status !== "pending" || busyId === request.id}
                     onClick={() => void decide(request.id, "reject")}
                   >
                     Reject

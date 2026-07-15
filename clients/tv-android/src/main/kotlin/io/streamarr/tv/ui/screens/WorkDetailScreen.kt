@@ -23,7 +23,6 @@ import androidx.tv.material3.ListItem
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dagger.hilt.android.lifecycle.HiltViewModel
-import io.streamarr.shared.auth.TokenStore
 import io.streamarr.shared.data.model.Availability
 import io.streamarr.shared.data.model.RequestTarget
 import io.streamarr.shared.data.model.Work
@@ -38,7 +37,6 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 sealed interface TvWorkDetailUiState {
@@ -59,7 +57,6 @@ sealed interface TvRequestActionState {
 class TvWorkDetailViewModel @Inject constructor(
     private val getWorkDetailsUseCase: GetWorkDetailsUseCase,
     private val submitMediaRequestUseCase: SubmitMediaRequestUseCase,
-    private val tokenStore: TokenStore,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<TvWorkDetailUiState>(TvWorkDetailUiState.Loading)
@@ -74,32 +71,39 @@ class TvWorkDetailViewModel @Inject constructor(
             _requestState.value = TvRequestActionState.Idle
             _uiState.value = when (val result = getWorkDetailsUseCase(workId)) {
                 is StreamarrResult.Success -> TvWorkDetailUiState.Content(result.value)
-                is StreamarrResult.Failure -> TvWorkDetailUiState.Failure(result.error.toUserMessage())
+                is StreamarrResult.Failure -> TvWorkDetailUiState.Failure(result.error.toWorkDetailErrorMessage())
             }
         }
     }
 
+    /**
+     * No longer needs a locally-read user id: the submitting user is
+     * derived server-side from the verified access token
+     * `StreamarrHttpClient` attaches -- see [SubmitMediaRequestUseCase]'s
+     * KDoc.
+     */
     fun requestWork(work: Work) {
         viewModelScope.launch {
             _requestState.value = TvRequestActionState.Submitting
-            val requestedBy = tokenStore.userId.first()
-            if (requestedBy == null) {
-                _requestState.value = TvRequestActionState.Failed("Sign in again to submit a request.")
-                return@launch
-            }
             _requestState.value = when (
-                val result = submitMediaRequestUseCase(requestedBy = requestedBy, kind = work.kind, target = RequestTarget.ExistingWork(work.id))
+                val result = submitMediaRequestUseCase(kind = work.kind, target = RequestTarget.ExistingWork(work.id))
             ) {
                 is StreamarrResult.Success -> TvRequestActionState.Submitted
-                is StreamarrResult.Failure -> TvRequestActionState.Failed(result.error.toUserMessage())
+                is StreamarrResult.Failure -> TvRequestActionState.Failed(result.error.toWorkDetailErrorMessage())
             }
         }
     }
 }
 
-private fun StreamarrError.toUserMessage(): String = when (this) {
+/** `internal` (rather than `private`) so this module's unit tests can exercise the 401/403 mapping directly. */
+internal fun StreamarrError.toWorkDetailErrorMessage(): String = when (this) {
     is StreamarrError.Network -> "Can't reach the Streamarr server. Check the server address in Settings."
-    is StreamarrError.Http -> if (code == 404) "This title couldn't be found." else "Server error ($code)."
+    is StreamarrError.Http -> when (code) {
+        401 -> "Sign in again to submit a request."
+        403 -> "You don't have permission to do that."
+        404 -> "This title couldn't be found."
+        else -> "Server error ($code)."
+    }
     is StreamarrError.Unknown -> "Something went wrong loading this title."
 }
 

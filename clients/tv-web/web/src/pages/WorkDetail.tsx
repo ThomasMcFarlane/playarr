@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ApiError, type Availability } from "@streamarr-tv/api-client";
+import { describeApiError, type Availability } from "@streamarr-tv/api-client";
 import { useWorkDetail } from "@streamarr-tv/api-client/react";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { pickImage } from "../lib/images";
-import { getStoredRequesterId, setStoredRequesterId } from "../lib/requesterIdentity";
-import { isValidUuid } from "../lib/uuid";
 
 type RequestUiStatus = "idle" | "submitting" | "submitted" | "error";
 
@@ -19,6 +17,12 @@ type RequestUiStatus = "idle" | "submitting" | "submitted" | "error";
  * stays hidden for those kinds pending a per-episode/track/book picker
  * (out of this pass's scope). Whenever the work isn't fully `available`,
  * a "Request" action (`POST /api/v1/requests`) is offered instead.
+ *
+ * Round E wired real auth middleware into the backend: `requested_by` is no
+ * longer a client-supplied field (the removed Round D workaround asked for
+ * a real user id and persisted it locally) -- the server now derives it from
+ * the verified access token's `sub` claim, obtained transparently by the
+ * `ApiClient` this page uses (see `ApiClientProvider`) via `POST /api/v1/auth/login`.
  */
 export function WorkDetailPage() {
   const { workId } = useParams<{ workId: string }>();
@@ -26,7 +30,6 @@ export function WorkDetailPage() {
   const state = useWorkDetail(client, workId);
   const navigate = useNavigate();
 
-  const [requesterId, setRequesterId] = useState(() => getStoredRequesterId());
   const [requestStatus, setRequestStatus] = useState<RequestUiStatus>("idle");
   const [requestError, setRequestError] = useState<string | null>(null);
 
@@ -36,24 +39,18 @@ export function WorkDetailPage() {
     setRequestError(null);
   }, [workId]);
 
-  function handleRequesterIdChange(value: string) {
-    setRequesterId(value);
-    setStoredRequesterId(value);
-  }
-
   async function submitRequest(kind: "movie" | "series" | "artist" | "author", targetWorkId: string) {
     setRequestStatus("submitting");
     setRequestError(null);
     try {
       await client.submitRequest({
         kind,
-        requested_by: requesterId,
         target: { target_kind: "existing_work", work_id: targetWorkId },
       });
       setRequestStatus("submitted");
     } catch (err) {
       setRequestStatus("error");
-      setRequestError(err instanceof ApiError ? err.message : String(err));
+      setRequestError(describeApiError(err));
     }
   }
 
@@ -117,9 +114,7 @@ export function WorkDetailPage() {
               {showRequest && (
                 <button
                   type="button"
-                  disabled={
-                    !isValidUuid(requesterId) || requestStatus === "submitting" || requestStatus === "submitted"
-                  }
+                  disabled={requestStatus === "submitting" || requestStatus === "submitted"}
                   onClick={() => void submitRequest(work.kind, work.id)}
                   style={{
                     padding: "0.5rem 1.5rem",
@@ -128,14 +123,8 @@ export function WorkDetailPage() {
                     background: canPlay ? "transparent" : "#e50914",
                     color: "#ffffff",
                     fontWeight: 600,
-                    cursor:
-                      !isValidUuid(requesterId) || requestStatus === "submitting" || requestStatus === "submitted"
-                        ? "default"
-                        : "pointer",
-                    opacity:
-                      !isValidUuid(requesterId) || requestStatus === "submitting" || requestStatus === "submitted"
-                        ? 0.7
-                        : 1,
+                    cursor: requestStatus === "submitting" || requestStatus === "submitted" ? "default" : "pointer",
+                    opacity: requestStatus === "submitting" || requestStatus === "submitted" ? 0.7 : 1,
                   }}
                 >
                   {requestStatusLabel(requestStatus)}
@@ -145,26 +134,6 @@ export function WorkDetailPage() {
 
             {showRequest && (
               <div style={{ marginTop: "0.75rem", maxWidth: 360 }}>
-                <label style={{ display: "block", color: "#a0a0a0", fontSize: "0.875rem" }}>
-                  Your user id (uuid, used as <code>requested_by</code> -- there is no sign-in yet, see{" "}
-                  <code>SubmitRequestBody</code>'s TODO)
-                  <input
-                    type="text"
-                    value={requesterId}
-                    onChange={(event) => handleRequesterIdChange(event.target.value)}
-                    placeholder="00000000-0000-0000-0000-000000000000"
-                    style={{
-                      display: "block",
-                      marginTop: "0.25rem",
-                      width: "100%",
-                      padding: "0.4rem 0.6rem",
-                      borderRadius: 6,
-                      border: "1px solid #2a2a2a",
-                      background: "#121212",
-                      color: "#ffffff",
-                    }}
-                  />
-                </label>
                 {requestStatus === "submitted" && (
                   <p style={{ color: "#2ecc71", marginTop: "0.5rem" }}>
                     Requested -- an admin can review it from the Admin page.

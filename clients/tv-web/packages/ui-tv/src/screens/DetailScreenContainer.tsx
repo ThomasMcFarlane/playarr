@@ -1,8 +1,7 @@
 import { useState } from "react";
-import type { ApiClient } from "@streamarr-tv/api-client";
+import { describeApiError, type ApiClient } from "@streamarr-tv/api-client";
 import { useWorkDetail } from "@streamarr-tv/api-client/react";
 import { AsyncStateMessage } from "../lib/AsyncStateMessage";
-import { getOrCreateDeviceUserId } from "../lib/deviceUser";
 import { DetailScreen, type RequestActionStatus } from "./DetailScreen";
 
 export interface DetailScreenContainerProps {
@@ -26,6 +25,14 @@ export interface DetailScreenContainerProps {
  * each with their own sibling `media_file_id`). A per-episode/track/book
  * picker is out of this pass's scope, so Play stays hidden for those kinds
  * and Request is offered instead whenever the work isn't `available`.
+ *
+ * Round E wired real auth middleware into the backend: `requested_by` is no
+ * longer a client-supplied field (the removed Round D workaround generated a
+ * device-local pseudo-identity via `getOrCreateDeviceUserId`) -- the server
+ * now derives it from the verified access token's `sub` claim, already held
+ * by `client` by the time this container can mount (the TV shells gate every
+ * screen behind `PairingScreenContainer`'s RFC 8628 device flow -- see
+ * `TvApp`).
  */
 export function DetailScreenContainer({ client, workId, onPlay, onBack }: DetailScreenContainerProps) {
   const state = useWorkDetail(client, workId);
@@ -52,13 +59,12 @@ export function DetailScreenContainer({ client, workId, onPlay, onBack }: Detail
     try {
       await client.submitRequest({
         kind: work.kind,
-        requested_by: getOrCreateDeviceUserId(),
         target: { target_kind: "existing_work", work_id: work.id },
       });
       setRequestStatus("submitted");
     } catch (err) {
       setRequestStatus("error");
-      setRequestError(err instanceof Error ? err.message : String(err));
+      setRequestError(describeApiError(err));
     }
   }
 

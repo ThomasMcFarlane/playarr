@@ -50,6 +50,20 @@ import Foundation
 // flagged as a real backend gap (no `MediaFileRepo`) is resolved
 // server-side now; see `WorkDetailViewModel`/`WorkDetailView` for where the
 // client actually consumes it.
+//
+// Round E update (security fix): `POST /api/v1/requests`,
+// `.../{id}/approve`, and `.../{id}/reject` now require a verified
+// `Authorization: Bearer <access_token>` header (401 without one, 403 if
+// the caller isn't an admin for approve/reject). `SubmitRequestBody` no
+// longer has a `requested_by` field and `DecideRequestBody` no longer has a
+// `decided_by` field — both are derived server-side from the verified
+// token's `sub` claim now, so this file's mirror of them drops the fields
+// too (see each struct's own doc comment below). This file also gains
+// `LoginRequest`/`LoginResponse` for the new `POST /api/v1/auth/login`
+// endpoint — see that section further down for the trusted-network-mode
+// note. `APIClient`/`AppEnvironment` in `StreamarrApp` are the client-side
+// half of this change: see their own doc comments for how the Bearer token
+// actually gets attached/obtained now.
 
 // MARK: - Enums
 
@@ -784,22 +798,23 @@ public struct MediaRequest: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-/// Request body for `POST /api/v1/requests`.
+/// Request body for `POST /api/v1/requests`. `requested_by` is deliberately
+/// absent (Round E): it comes from the verified access token's `sub` claim
+/// server-side now, never from anything the caller puts in the request body
+/// — see `submit_request_handler` in the spec, and `APIClient`'s
+/// doc comment for how this client attaches that token.
 public struct SubmitRequestBody: Codable, Sendable {
-    public var requestedBy: UUID
     public var kind: WorkKind
     public var target: RequestTarget
     public var note: String?
 
     enum CodingKeys: String, CodingKey {
-        case requestedBy = "requested_by"
         case kind
         case target
         case note
     }
 
-    public init(requestedBy: UUID, kind: WorkKind, target: RequestTarget, note: String? = nil) {
-        self.requestedBy = requestedBy
+    public init(kind: WorkKind, target: RequestTarget, note: String? = nil) {
         self.kind = kind
         self.target = target
         self.note = note
@@ -807,18 +822,105 @@ public struct SubmitRequestBody: Codable, Sendable {
 }
 
 /// Request body for `POST /api/v1/requests/{id}/approve` and `.../reject`.
+/// `decided_by` is deliberately absent (Round E): it comes from the
+/// verified access token's `sub` claim (via the server's `AdminUser`
+/// extractor) server-side now, never from anything the caller puts in the
+/// request body — see `approve_request_handler`/`reject_request_handler` in
+/// the spec.
 public struct DecideRequestBody: Codable, Sendable {
-    public var decidedBy: UUID
     public var reason: String?
 
     enum CodingKeys: String, CodingKey {
-        case decidedBy = "decided_by"
         case reason
     }
 
-    public init(decidedBy: UUID, reason: String? = nil) {
-        self.decidedBy = decidedBy
+    public init(reason: String? = nil) {
         self.reason = reason
+    }
+}
+
+// MARK: - Auth (session login)
+
+/// Request body for `POST /api/v1/auth/login` (Round E). Under the server's
+/// default `AuthMode::TrustedNetwork`, a login from a trusted source IP
+/// succeeds with none of the optional fields set — only the four required
+/// ones matter in that mode. `password`/`pin`/`profile_user_id`/`username`
+/// are consulted only under the stricter `AuthMode` tiers this client
+/// doesn't drive today (`FullAccount`/`ManagedProfiles`/PIN-gated modes);
+/// see each field's doc comment in `backend/openapi/streamarr.yaml`'s
+/// `LoginRequest` schema for exactly which tier reads it.
+public struct LoginRequest: Codable, Sendable {
+    /// Client-generated, stable-per-install device id — resend the same
+    /// value on every subsequent login/refresh from this install (mirrors
+    /// the spec's own `device_id` doc comment).
+    public var deviceID: UUID
+    public var deviceName: String
+    public var clientPlatform: ClientPlatform
+    public var clientVersion: String
+    public var password: String?
+    public var pin: String?
+    /// `AuthMode::ManagedProfiles` only; ignored by every other tier.
+    public var profileUserID: UUID?
+    /// `AuthMode::FullAccount` only; ignored by every other tier.
+    public var username: String?
+
+    enum CodingKeys: String, CodingKey {
+        case deviceID = "device_id"
+        case deviceName = "device_name"
+        case clientPlatform = "client_platform"
+        case clientVersion = "client_version"
+        case password
+        case pin
+        case profileUserID = "profile_user_id"
+        case username
+    }
+
+    public init(
+        deviceID: UUID,
+        deviceName: String,
+        clientPlatform: ClientPlatform,
+        clientVersion: String,
+        password: String? = nil,
+        pin: String? = nil,
+        profileUserID: UUID? = nil,
+        username: String? = nil
+    ) {
+        self.deviceID = deviceID
+        self.deviceName = deviceName
+        self.clientPlatform = clientPlatform
+        self.clientVersion = clientVersion
+        self.password = password
+        self.pin = pin
+        self.profileUserID = profileUserID
+        self.username = username
+    }
+}
+
+/// `POST /api/v1/auth/login`'s 200 response — the same access+refresh token
+/// pair shape the RFC 8628 device-flow `TokenResponse` returns, plus the
+/// server-resolved `user_id` this session belongs to (the one thing
+/// `TokenResponse` doesn't carry).
+public struct LoginResponse: Codable, Sendable {
+    public var accessToken: String
+    public var refreshToken: String
+    public var tokenType: String
+    public var expiresIn: Int64
+    public var userID: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case accessToken = "access_token"
+        case refreshToken = "refresh_token"
+        case tokenType = "token_type"
+        case expiresIn = "expires_in"
+        case userID = "user_id"
+    }
+
+    public init(accessToken: String, refreshToken: String, tokenType: String, expiresIn: Int64, userID: UUID) {
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+        self.tokenType = tokenType
+        self.expiresIn = expiresIn
+        self.userID = userID
     }
 }
 

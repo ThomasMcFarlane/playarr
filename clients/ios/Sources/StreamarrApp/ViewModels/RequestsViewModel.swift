@@ -16,18 +16,20 @@ import StreamarrKit
 /// load/pull-to-refresh) picks which of those this view model asks for,
 /// and whether `approve(_:)`/`reject(_:)` are allowed to do anything.
 ///
-/// NOTE on `isAdmin`/`currentUserID`: the real API has no user/role model
-/// yet — `SubmitRequestBody.requestedBy` and `DecideRequestBody.decidedBy`
-/// are both raw client-supplied UUIDs (see the spec's own `TODO(auth)`
-/// note on `requested_by`), and nothing in `backend/openapi/streamarr.yaml`
-/// exposes a caller's role. So both values are supplied by the caller from
-/// `AppEnvironment`'s local, `UserDefaults`-backed placeholders
-/// (`localUserID`, `isAdminMode`) rather than a real signed-in identity —
-/// see that type's doc comment. Swap this for a real identity/role claim
-/// the moment auth middleware exists server-side; nothing else about this
-/// view model's shape should need to change when that happens (it already
-/// treats "who is asking, and are they an admin" as caller-supplied
-/// context, not something it derives itself).
+/// NOTE on `isAdmin`/`currentUserID` (updated for Round E): approve/reject
+/// are now real, authenticated calls — the server derives `decided_by` from
+/// the caller's verified access token and independently enforces admin
+/// access (403 if the token isn't an admin's), so `DecideRequestBody` no
+/// longer carries a client-supplied id at all. `isAdmin`/`currentUserID`
+/// here are still both supplied by the caller from `AppEnvironment`'s
+/// local, `UserDefaults`-backed placeholders (`localUserID`, `isAdminMode`)
+/// rather than a real signed-in identity/role claim, but their remaining
+/// job is narrower than before: `currentUserID` only picks which slice of
+/// `GET /api/v1/requests` to ask for (that endpoint stays
+/// unauthenticated/query-driven per the current spec), and `isAdmin` only
+/// gates whether this view model even attempts approve/reject client-side
+/// — the server's own 403 is what actually enforces it now. See
+/// `AppEnvironment.localUserID`/`.isAdminMode`'s doc comments.
 @MainActor
 @Observable
 public final class RequestsViewModel {
@@ -73,8 +75,10 @@ public final class RequestsViewModel {
 
     /// `POST /api/v1/requests/{id}/approve`. No-ops (rather than throwing)
     /// when `isAdmin` is `false` — the UI shouldn't be offering this action
-    /// to a non-admin in the first place, but this is the one place that's
-    /// actually enforced, so a stray call site can't bypass it.
+    /// to a non-admin in the first place. This is a client-side courtesy,
+    /// not the real enforcement: the server independently checks the
+    /// caller's verified access token and returns `403` if it isn't an
+    /// admin's, regardless of what this local guard does.
     public func approve(_ request: MediaRequest) async {
         await decide(request) { [apiClient] id, body in
             try await apiClient.approveRequest(id: id, body: body)
@@ -94,12 +98,12 @@ public final class RequestsViewModel {
         _ request: MediaRequest,
         _ action: (UUID, DecideRequestBody) async throws -> MediaRequest
     ) async {
-        guard isAdmin, let currentUserID, !decidingRequestIDs.contains(request.id) else { return }
+        guard isAdmin, !decidingRequestIDs.contains(request.id) else { return }
         decidingRequestIDs.insert(request.id)
         actionErrorMessage = nil
         defer { decidingRequestIDs.remove(request.id) }
         do {
-            let updated = try await action(request.id, DecideRequestBody(decidedBy: currentUserID))
+            let updated = try await action(request.id, DecideRequestBody())
             apply(updated)
         } catch let error as APIError {
             actionErrorMessage = error.displayMessage

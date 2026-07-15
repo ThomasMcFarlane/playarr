@@ -6,10 +6,18 @@
  * `openapi-typescript` (run `pnpm run generate` to refresh it against the
  * spec); this file wraps that generated `paths`/`components` pair with
  * `openapi-fetch` (a thin typed fetch client) behind a small, ergonomic
- * `ApiClient` class covering all 13 paths / 14 operations the spec defines:
- * system health/ready/version, the RFC 8628 OAuth device-code + token
- * endpoints, the *arr webhook receiver, catalog browse/get/search, the
- * request lifecycle (submit/list/approve/reject), and playback negotiation.
+ * `ApiClient` class covering all 14 paths / 15 operations the spec defines:
+ * system health/ready/version, trusted-network/credentialed login, the
+ * RFC 8628 OAuth device-code + token endpoints, the *arr webhook receiver,
+ * catalog browse/get/search, the request lifecycle (submit/list/approve/reject),
+ * and playback negotiation.
+ *
+ * Round E wired real auth middleware into the backend: `POST /api/v1/requests`,
+ * `.../approve`, and `.../reject` now require a verified `Authorization: Bearer
+ * <access_token>` header (401 without one, 403 if the caller isn't an admin for
+ * approve/reject) -- see the constructor's `authMiddleware` below, which attaches
+ * that header to exactly those three operations and no others (catalog/playback/
+ * list-requests/login/oauth stay unauthenticated per the spec's own responses).
  *
  * Callers who want the raw `openapi-fetch` client (e.g. for an operation
  * this wrapper hasn't grown a convenience method for yet) can reach it via
@@ -59,6 +67,8 @@ export type PlaybackInfo = components["schemas"]["PlaybackInfoResponse"];
 export type PlaybackMode = components["schemas"]["PlaybackMode"];
 
 export type ClientPlatform = components["schemas"]["ClientPlatform"];
+export type LoginRequest = components["schemas"]["LoginRequest"];
+export type LoginResponse = components["schemas"]["LoginResponse"];
 export type DeviceCodeRequest = components["schemas"]["DeviceCodeRequest"];
 export type DeviceCodeResponse = components["schemas"]["DeviceCodeResponseSchema"];
 export type DeviceTokenRequest = components["schemas"]["DeviceTokenRequest"];
@@ -96,7 +106,13 @@ export interface PlaybackInfoParams {
 export interface ApiClientConfig {
   /** API origin, e.g. "http://localhost:8080" (no trailing slash required). */
   baseUrl: string;
-  /** Called before every request; return undefined to send the request unauthenticated. */
+  /**
+   * Called before each of the *protected* requests (`submitRequest`/
+   * `approveRequest`/`rejectRequest` -- see `PROTECTED_OPERATIONS` below);
+   * never called for catalog/playback/login/oauth/list-requests, which stay
+   * unauthenticated. Return undefined to send the request without a token
+   * anyway (the server will 401 it).
+   */
   getAccessToken?: () => string | undefined | Promise<string | undefined>;
   /** Injectable for tests / non-browser runtimes (webOS/Tizen legacy engines). Defaults to global fetch. */
   fetchImpl?: (input: Request) => Promise<Response>;
@@ -116,6 +132,39 @@ export class ApiError extends Error {
     this.statusText = statusText;
     this.body = body;
   }
+}
+
+/**
+ * Operations Round E's auth middleware actually guards -- `Authorization:
+ * Bearer <token>` is attached to exactly these, identified by the same
+ * `schemaPath` (the OpenAPI path template, curly braces and all) `openapi-fetch`
+ * passes its middleware, paired with the HTTP method (`/api/v1/requests` also
+ * has an unauthenticated GET for listing, so the path alone isn't enough).
+ */
+const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }> = [
+  { schemaPath: "/api/v1/requests", method: "POST" },
+  { schemaPath: "/api/v1/requests/{id}/approve", method: "POST" },
+  { schemaPath: "/api/v1/requests/{id}/reject", method: "POST" },
+];
+
+function isProtectedOperation(schemaPath: string, method: string): boolean {
+  return PROTECTED_OPERATIONS.some((op) => op.schemaPath === schemaPath && op.method === method);
+}
+
+/**
+ * Human-readable summary of a caught error, distinguishing the two auth-specific
+ * statuses Round E's middleware can now return on the request-decision endpoints
+ * (401 missing/invalid token, 403 authenticated-but-not-admin) from every other
+ * failure, so callers can surface a real, specific message instead of a generic
+ * "something went wrong" -- see `submitRequest`/`approveRequest`/`rejectRequest`.
+ */
+export function describeApiError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 401) return "Sign-in required -- could not obtain a valid access token.";
+    if (err.status === 403) return "You do not have permission to do this.";
+    return err.message;
+  }
+  return err instanceof Error ? err.message : String(err);
 }
 
 /**
@@ -139,7 +188,8 @@ export class ApiClient {
     });
 
     const authMiddleware: Middleware = {
-      onRequest: async ({ request }) => {
+      onRequest: async ({ request, schemaPath }) => {
+        if (!isProtectedOperation(schemaPath, request.method)) return request;
         const token = await config.getAccessToken?.();
         if (token) {
           request.headers.set("Authorization", `Bearer ${token}`);
@@ -180,6 +230,21 @@ export class ApiClient {
 
   async getVersion(): Promise<VersionEnvelope> {
     return this.unwrap(await this.raw.GET("/api/system/version"));
+  }
+
+  // ---------------------------------------------------------------------
+  // auth
+  // ---------------------------------------------------------------------
+
+  /**
+   * `POST /api/v1/auth/login`. In the default `AuthMode::TrustedNetwork`
+   * server config, a call from a trusted source IP succeeds with no
+   * credentials at all -- `username`/`password`/`pin`/`profile_user_id` are
+   * only consulted under the other auth tiers (`FullAccount`/`ManagedProfiles`
+   * respectively). Unauthenticated itself -- not one of `PROTECTED_OPERATIONS`.
+   */
+  async login(body: LoginRequest): Promise<LoginResponse> {
+    return this.unwrap(await this.raw.POST("/api/v1/auth/login", { body }));
   }
 
   // ---------------------------------------------------------------------

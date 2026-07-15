@@ -10,11 +10,14 @@ import kotlinx.serialization.json.jsonPrimitive
  * user's id) out of an access token's payload segment -- mirrors
  * `streamarr_auth::jwt::AccessTokenClaims::sub`. This client never verifies
  * the JWT signature; that is the server's job on every request the token is
- * attached to. Reading `sub` locally is not itself a trust decision: any
- * request built using it (e.g. `SubmitRequestBody.requestedBy`,
- * `DecideRequestBody.decidedBy`) only succeeds if the bearer token sent
- * alongside it verifies server-side, so a forged/stale local read can only
- * make an authenticated call *as* whatever id it names.
+ * attached to. Reading `sub` locally is not itself a trust decision: it
+ * only narrows `GET /api/v1/requests?user_id=<sub>` to "my requests" for
+ * display -- the server never trusts anything this client sends about who
+ * is asking; `submit_request_handler`/`approve_request_handler`/
+ * `reject_request_handler` all derive the acting user from the verified
+ * bearer token itself, never from a client-supplied id (see
+ * `SubmitRequestBody`/`DecideRequestBody` in
+ * `backend/openapi/streamarr.yaml`, which carry no such field at all).
  *
  * There is no `/me` endpoint in the real spec (`backend/openapi/streamarr.yaml`)
  * and no role/admin claim on [io.streamarr.shared.auth.model.TokenResponse]'s

@@ -14,6 +14,10 @@ struct PreviewAPIClient: StreamarrAPIClient {
         VersionEnvelope(serverVersion: "0.1.0", apiVersion: "v1")
     }
 
+    func login(_ body: LoginRequest) async throws -> LoginResponse {
+        LoginResponse(accessToken: "preview", refreshToken: "preview", tokenType: "Bearer", expiresIn: 3600, userID: UUID())
+    }
+
     func browseCatalog(
         kind: WorkKind?,
         genre: String?,

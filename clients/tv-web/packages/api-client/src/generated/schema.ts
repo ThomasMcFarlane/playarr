@@ -52,6 +52,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["login_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog": {
         parameters: {
             query?: never;
@@ -301,9 +317,13 @@ export interface components {
              */
             sunset?: string | null;
         };
+        /**
+         * @description `decided_by` is deliberately absent: it comes from the verified access
+         *     token's `sub` claim (via [`AdminUser`]), never from anything the caller
+         *     puts in the request body -- see this module's `approve_request_handler`/
+         *     `reject_request_handler`.
+         */
         DecideRequestBody: {
-            /** Format: uuid */
-            decided_by: string;
             reason?: string | null;
         };
         DeviceCodeRequest: {
@@ -383,6 +403,37 @@ export interface components {
         };
         /** @enum {string} */
         ImageKind: "poster" | "backdrop" | "banner" | "logo" | "thumb";
+        LoginRequest: {
+            client_platform: components["schemas"]["ClientPlatform"];
+            client_version: string;
+            /**
+             * Format: uuid
+             * @description Client-generated, stable-per-install device id -- the same id the
+             *     caller should resend on every subsequent login/refresh from this
+             *     install, so `Policy::device_allow`/`max_concurrent_sessions` reason
+             *     about one `Device`, not a fresh one per login.
+             */
+            device_id: string;
+            device_name: string;
+            password?: string | null;
+            pin?: string | null;
+            /**
+             * Format: uuid
+             * @description `AuthMode::ManagedProfiles` only; ignored by every other tier.
+             */
+            profile_user_id?: string | null;
+            /** @description `AuthMode::FullAccount` only; ignored by every other tier. */
+            username?: string | null;
+        };
+        LoginResponse: {
+            access_token: string;
+            /** Format: int64 */
+            expires_in: number;
+            refresh_token: string;
+            token_type: string;
+            /** Format: uuid */
+            user_id: string;
+        };
         /** @description Doc-only mirror of [`MediaRequest`] -- see [`RequestStatusSchema`]. */
         MediaRequestSchema: {
             /** Format: date-time */
@@ -468,14 +519,6 @@ export interface components {
         SubmitRequestBody: {
             kind: components["schemas"]["WorkKind"];
             note?: string | null;
-            /**
-             * Format: uuid
-             * @description TODO(auth): once these routes run behind auth middleware that
-             *     extracts the caller from a verified access token (see
-             *     `streamarr_auth::jwt`), `requested_by` should come from that instead
-             *     of the request body -- no such middleware exists in this pass yet.
-             */
-            requested_by: string;
             target: components["schemas"]["RequestTargetDto"];
         };
         /** @description Doc-only mirror of [`TokenResponse`]; see [`DeviceCodeResponseSchema`]. */
@@ -649,6 +692,44 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["VersionEnvelope"];
                 };
+            };
+        };
+    };
+    login_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Access + refresh token pair */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+            /** @description credentials_required | pin_required */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description untrusted_network | invalid_credentials | invalid_pin | account_disabled */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -892,6 +973,13 @@ export interface operations {
                     "application/json": components["schemas"]["MediaRequestSchema"];
                 };
             };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description No configured/usable source instance for this kind */
             422: {
                 headers: {
@@ -925,6 +1013,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MediaRequestSchema"];
                 };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Request not found */
             404: {
@@ -966,6 +1068,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MediaRequestSchema"];
                 };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Request not found */
             404: {

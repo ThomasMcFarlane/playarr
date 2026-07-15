@@ -4,11 +4,27 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { ApiClient } from "@streamarr-tv/api-client";
+import { ensureAccessToken, TokenStore } from "@streamarr-tv/device-auth";
 import { getStoredApiBaseUrl, resolveApiBaseUrl, setStoredApiBaseUrl } from "@streamarr-tv/domain";
+
+/**
+ * This build's own identity for the transparent `POST /api/v1/auth/login`
+ * call (see `ensureAccessToken`) -- the Web app has no RFC 8628 pairing
+ * flow of its own, so this is how it obtains a real access token the first
+ * time it needs one (the request submit/approve/reject calls, per Round
+ * E's auth middleware). `__APP_VERSION__` is injected at build time by
+ * `vite.config.ts`, same as `lib/appUpdate.ts` uses.
+ */
+const WEB_LOGIN_IDENTITY = {
+  deviceName: "Streamarr Web",
+  clientPlatform: "web" as const,
+  clientVersion: __APP_VERSION__,
+};
 
 interface ApiClientContextValue {
   client: ApiClient;
@@ -32,6 +48,13 @@ async function resolveInitialApiBaseUrl(): Promise<string> {
 
 export function ApiClientProvider({ children }: { children: ReactNode }) {
   const [apiBaseUrl, setApiBaseUrlState] = useState<string | null>(null);
+  // One `TokenStore` for the lifetime of this provider (survives an `apiBaseUrl`
+  // change, e.g. from the Settings page) -- see `ensureAccessToken`'s doc comment
+  // on why the login path and any future pairing path must share exactly one.
+  const tokenStoreRef = useRef<TokenStore>();
+  if (!tokenStoreRef.current) {
+    tokenStoreRef.current = new TokenStore();
+  }
 
   useEffect(() => {
     void resolveInitialApiBaseUrl().then(setApiBaseUrlState);
@@ -42,7 +65,18 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     setApiBaseUrlState(value);
   }, []);
 
-  const client = useMemo(() => (apiBaseUrl ? new ApiClient({ baseUrl: apiBaseUrl }) : null), [apiBaseUrl]);
+  const client = useMemo<ApiClient | null>(() => {
+    if (!apiBaseUrl) return null;
+    const tokenStore = tokenStoreRef.current as TokenStore;
+    // `instance` is referenced inside `getAccessToken` below before this
+    // `const` finishes initializing -- safe because that closure only ever
+    // runs later (on a protected request), by which point `instance` is bound.
+    const instance: ApiClient = new ApiClient({
+      baseUrl: apiBaseUrl,
+      getAccessToken: () => ensureAccessToken(instance, tokenStore, WEB_LOGIN_IDENTITY),
+    });
+    return instance;
+  }, [apiBaseUrl]);
 
   if (!apiBaseUrl || !client) {
     // Briefly resolving the stored/query-param base URL; nothing to render yet.

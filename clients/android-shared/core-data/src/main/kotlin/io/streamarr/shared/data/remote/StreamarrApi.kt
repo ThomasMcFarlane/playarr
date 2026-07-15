@@ -90,16 +90,24 @@ interface StreamarrApi {
 
     // ---- requests ------------------------------------------------------------
 
-    /** [userId] narrows to that user's own requests (any status); omitted lists every request still `Pending`. */
+    /** [userId] narrows to that user's own requests (any status); omitted lists every request still `Pending`. Unauthenticated, per the real spec. */
     @GET("api/v1/requests")
     suspend fun listRequests(@Query("user_id") userId: String? = null): List<MediaRequest>
 
+    /**
+     * Requires a verified `Authorization: Bearer` access token -- see
+     * [StreamarrHttpClient.create]'s `accessTokenProvider` -- and 401s
+     * without one. `requested_by` on the returned [MediaRequest] is derived
+     * server-side from the token's `sub` claim, not from anything sent here.
+     */
     @POST("api/v1/requests")
     suspend fun submitRequest(@Body body: SubmitRequestBody): MediaRequest
 
+    /** Requires a verified `Authorization: Bearer` access token: 401 without one, 403 if the verified caller isn't an admin. */
     @POST("api/v1/requests/{id}/approve")
     suspend fun approveRequest(@Path("id") id: String, @Body body: DecideRequestBody): MediaRequest
 
+    /** Requires a verified `Authorization: Bearer` access token: 401 without one, 403 if the verified caller isn't an admin. */
     @POST("api/v1/requests/{id}/reject")
     suspend fun rejectRequest(@Path("id") id: String, @Body body: DecideRequestBody): MediaRequest
 

@@ -11,16 +11,19 @@ import javax.inject.Inject
  * `POST /api/v1/requests/{id}/approve`, `POST /api/v1/requests/{id}/reject`.
  * Mirrors [WorkRepository]'s "thin pass-through to [StreamarrApi]" shape.
  *
- * There is no server-exposed way for this client to know whether the
+ * [submitRequest]/[approveRequest]/[rejectRequest] all require a verified
+ * `Authorization: Bearer` access token now -- see
+ * `io.streamarr.shared.data.remote.StreamarrHttpClient` for where that
+ * header is attached -- and 401 without one. There is still no
+ * server-exposed way for this client to know *in advance* whether the
  * signed-in user is an admin (`Policy.is_admin` is server-internal only --
  * see `streamarr_model::policy::Policy` -- and the access-token JWT carries
- * no role claim -- see `streamarr_auth::jwt::AccessTokenClaims`). [approve]/
- * [reject] are therefore always attempted rather than hidden behind a
- * client-side guess at permission; a caller lacking real admin rights is
- * expected to get an authorization failure back from the server once such
- * enforcement exists there (today the server doesn't check this either --
- * see `SubmitRequestBody.requestedBy`'s own `TODO(auth)` note in
- * `backend/openapi/streamarr.yaml`), which surfaces the same way any other
+ * no role claim -- see `streamarr_auth::jwt::AccessTokenClaims`), so
+ * [approveRequest]/[rejectRequest] are always attempted rather than hidden
+ * behind a client-side guess at permission; a caller lacking real admin
+ * rights now gets a real 403 back from the server (enforced there since
+ * the security fix that removed `requested_by`/`decided_by` from the
+ * request bodies), which surfaces the same way any other
  * [StreamarrError.Http] does.
  */
 interface RequestRepository {

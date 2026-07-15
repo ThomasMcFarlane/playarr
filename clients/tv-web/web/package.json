@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@streamarr-tv/api-client": "workspace:*",
+    "@streamarr-tv/device-auth": "workspace:*",
     "@streamarr-tv/domain": "workspace:*",
     "@streamarr-tv/player-core": "workspace:*",
     "@streamarr-tv/player-shaka": "workspace:*",

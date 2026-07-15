@@ -14,8 +14,6 @@ struct WorkDetailView: View {
     let viewModel: WorkDetailViewModel
     let apiClient: StreamarrAPIClient
 
-    @Environment(AppEnvironment.self) private var environment
-
     var body: some View {
         content
             .navigationTitle(viewModel.detail?.work.title ?? "Detail")
@@ -96,7 +94,7 @@ struct WorkDetailView: View {
         switch viewModel.requestState {
         case .none:
             Button {
-                Task { await viewModel.requestWork(requestedBy: environment.localUserID) }
+                Task { await viewModel.requestWork() }
             } label: {
                 Label("Request", systemImage: "plus.circle")
             }
@@ -112,7 +110,7 @@ struct WorkDetailView: View {
         case .failed(let message):
             VStack(alignment: .leading, spacing: 4) {
                 Button {
-                    Task { await viewModel.requestWork(requestedBy: environment.localUserID) }
+                    Task { await viewModel.requestWork() }
                 } label: {
                     Label("Request", systemImage: "plus.circle")
                 }

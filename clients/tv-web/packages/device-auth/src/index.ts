@@ -12,12 +12,20 @@
  * examples use), and the device-code request carries a `client_platform`
  * enum rather than a generic OAuth `client_id`/`scope` pair, so callers pass
  * an already-configured `ApiClient` in rather than a bespoke endpoint config.
+ *
+ * Also exports the session/token-acquisition path (`./session`, `./tokenStore`,
+ * `./deviceId`) clients with no pairing UI of their own (Web) use instead --
+ * see `ensureAccessToken`'s doc comment.
  */
 import { ApiError, DEVICE_CODE_GRANT_TYPE } from "@streamarr-tv/api-client";
 import type { ApiClient, ClientPlatform, OAuthErrorBody } from "@streamarr-tv/api-client";
 
 export { DEVICE_CODE_GRANT_TYPE };
 export type { ClientPlatform };
+
+export { getOrCreateDeviceId } from "./deviceId";
+export { TokenStore, type StoredSession } from "./tokenStore";
+export { ensureAccessToken, type EnsureAccessTokenIdentity } from "./session";
 
 /** RFC 8628 §3.2 device authorization response, normalized to camelCase for callers. */
 export interface DeviceCodeResponse {

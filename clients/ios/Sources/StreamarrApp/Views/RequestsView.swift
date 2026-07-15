@@ -2,11 +2,11 @@ import StreamarrKit
 import SwiftUI
 
 /// Request-management screen — `GET /api/v1/requests` via
-/// `RequestsViewModel`, with real `POST .../{id}/approve` /
+/// `RequestsViewModel`, with real, authenticated `POST .../{id}/approve` /
 /// `.../{id}/reject` actions for admins. Shows either "My Requests"
 /// (regular users) or the admin "Pending Approval" queue, depending on
 /// `AppEnvironment.isAdminMode` — see `RequestsViewModel`'s doc comment for
-/// how that's decided today, absent a real role model server-side.
+/// how that local toggle relates to the server's own, now-real admin check.
 struct RequestsView: View {
     let viewModel: RequestsViewModel
 
@@ -18,7 +18,7 @@ struct RequestsView: View {
                 .navigationTitle(viewModel.isAdmin ? "Pending Requests" : "My Requests")
                 .task {
                     if case .idle = viewModel.loadState {
-                        await viewModel.load(currentUserID: environment.localUserID, isAdmin: environment.isAdminMode)
+                        await viewModel.load(currentUserID: environment.resolvedUserID(), isAdmin: environment.isAdminMode)
                     }
                 }
                 .refreshable {

@@ -289,6 +289,9 @@ importers:
       '@streamarr-tv/api-client':
         specifier: workspace:*
         version: link:../packages/api-client
+      '@streamarr-tv/device-auth':
+        specifier: workspace:*
+        version: link:../packages/device-auth
       '@streamarr-tv/domain':
         specifier: workspace:*
         version: link:../packages/domain

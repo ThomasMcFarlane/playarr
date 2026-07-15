@@ -25,7 +25,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.streamarr.mobile.R
-import io.streamarr.shared.auth.TokenStore
 import io.streamarr.shared.data.model.Availability
 import io.streamarr.shared.data.model.RequestTarget
 import io.streamarr.shared.data.model.Work
@@ -39,7 +38,6 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 sealed interface WorkDetailUiState {
@@ -60,7 +58,6 @@ sealed interface RequestActionState {
 class WorkDetailViewModel @Inject constructor(
     private val getWorkDetailsUseCase: GetWorkDetailsUseCase,
     private val submitMediaRequestUseCase: SubmitMediaRequestUseCase,
-    private val tokenStore: TokenStore,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<WorkDetailUiState>(WorkDetailUiState.Loading)
@@ -75,33 +72,41 @@ class WorkDetailViewModel @Inject constructor(
             _requestState.value = RequestActionState.Idle
             _uiState.value = when (val result = getWorkDetailsUseCase(workId)) {
                 is StreamarrResult.Success -> WorkDetailUiState.Content(result.value)
-                is StreamarrResult.Failure -> WorkDetailUiState.Failure(result.error.toUserMessage())
+                is StreamarrResult.Failure -> WorkDetailUiState.Failure(result.error.toWorkDetailErrorMessage())
             }
         }
     }
 
-    /** `POST /api/v1/requests` for [work] itself (`RequestTarget.ExistingWork`) -- see [WorkDetailContent]'s KDoc for when this action is shown. */
+    /**
+     * `POST /api/v1/requests` for [work] itself (`RequestTarget.ExistingWork`) --
+     * see [WorkDetailContent]'s KDoc for when this action is shown. No
+     * longer needs a locally-read user id: the submitting user is derived
+     * server-side from the verified access token
+     * `StreamarrHttpClient` attaches -- see
+     * [SubmitMediaRequestUseCase]'s KDoc.
+     */
     fun requestWork(work: Work) {
         viewModelScope.launch {
             _requestState.value = RequestActionState.Submitting
-            val requestedBy = tokenStore.userId.first()
-            if (requestedBy == null) {
-                _requestState.value = RequestActionState.Failed("Sign in again to submit a request.")
-                return@launch
-            }
             _requestState.value = when (
-                val result = submitMediaRequestUseCase(requestedBy = requestedBy, kind = work.kind, target = RequestTarget.ExistingWork(work.id))
+                val result = submitMediaRequestUseCase(kind = work.kind, target = RequestTarget.ExistingWork(work.id))
             ) {
                 is StreamarrResult.Success -> RequestActionState.Submitted
-                is StreamarrResult.Failure -> RequestActionState.Failed(result.error.toUserMessage())
+                is StreamarrResult.Failure -> RequestActionState.Failed(result.error.toWorkDetailErrorMessage())
             }
         }
     }
 }
 
-private fun StreamarrError.toUserMessage(): String = when (this) {
+/** `internal` (rather than `private`) so this module's unit tests can exercise the 401/403 mapping directly. */
+internal fun StreamarrError.toWorkDetailErrorMessage(): String = when (this) {
     is StreamarrError.Network -> "Can't reach the Streamarr server. Check the server address in Settings."
-    is StreamarrError.Http -> if (code == 404) "This title couldn't be found." else "Server error ($code)."
+    is StreamarrError.Http -> when (code) {
+        401 -> "Sign in again to submit a request."
+        403 -> "You don't have permission to do that."
+        404 -> "This title couldn't be found."
+        else -> "Server error ($code)."
+    }
     is StreamarrError.Unknown -> "Something went wrong loading this title."
 }
 

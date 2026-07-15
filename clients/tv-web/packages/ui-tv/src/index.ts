@@ -48,4 +48,3 @@ export type { AsyncStateMessageProps } from "./lib/AsyncStateMessage";
 
 export { pickImage } from "./lib/images";
 export { mimeTypeForPlaybackMode } from "./lib/playback";
-export { getOrCreateDeviceUserId } from "./lib/deviceUser";

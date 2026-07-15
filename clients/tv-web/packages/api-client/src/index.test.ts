@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ApiClient, ApiError, DEVICE_CODE_GRANT_TYPE } from "./index";
+import { ApiClient, ApiError, DEVICE_CODE_GRANT_TYPE, describeApiError } from "./index";
 
 /** Builds a `fetchImpl` matching openapi-fetch's `(input: Request) => Promise<Response>` contract. */
 function mockFetch(handler: (request: Request) => Response | Promise<Response>) {
@@ -193,9 +193,10 @@ describe("ApiClient", () => {
     }
   });
 
-  it("attaches the bearer token from getAccessToken to subsequent requests", async () => {
+  it("does NOT call getAccessToken or attach an Authorization header for unprotected operations (e.g. getVersion)", async () => {
+    const getAccessToken = vi.fn(() => "test-token");
     const fetchImpl = mockFetch((request) => {
-      expect(request.headers.get("Authorization")).toBe("Bearer test-token");
+      expect(request.headers.has("Authorization")).toBe(false);
       return jsonResponse(200, {
         server_version: "0.1.0",
         api_version: "0.1.0",
@@ -204,14 +205,130 @@ describe("ApiClient", () => {
       });
     });
 
-    const client = new ApiClient({
-      baseUrl: BASE_URL,
-      fetchImpl,
-      getAccessToken: () => "test-token",
-    });
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken });
 
     const version = await client.getVersion();
     expect(version.server_version).toBe("0.1.0");
+    expect(getAccessToken).not.toHaveBeenCalled();
+  });
+
+  it("does NOT attach an Authorization header to the unauthenticated GET /api/v1/requests list either", async () => {
+    const fetchImpl = mockFetch((request) => {
+      expect(request.method).toBe("GET");
+      expect(request.headers.has("Authorization")).toBe(false);
+      return jsonResponse(200, []);
+    });
+
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken: () => "test-token" });
+    await client.listRequests();
+  });
+
+  it.each([
+    ["submitRequest", (client: ApiClient) => client.submitRequest({ kind: "movie", target: { target_kind: "existing_work", work_id: "w1" } })],
+    ["approveRequest", (client: ApiClient) => client.approveRequest("req-1", {})],
+    ["rejectRequest", (client: ApiClient) => client.rejectRequest("req-1", {})],
+  ] as const)("attaches the bearer token from getAccessToken to the protected %s call", async (_name, call) => {
+    const fetchImpl = mockFetch((request) => {
+      expect(request.headers.get("Authorization")).toBe("Bearer test-token");
+      return jsonResponse(200, {
+        id: "req-1",
+        requested_by: "00000000-0000-0000-0000-000000000001",
+        kind: "movie",
+        target: { target_kind: "existing_work", work_id: "w1" },
+        status: "pending",
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+      });
+    });
+
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken: () => "test-token" });
+    await call(client);
+  });
+
+  it("submits a SubmitRequestBody with no requested_by field (server derives it from the token)", async () => {
+    const fetchImpl = mockFetch(async (request) => {
+      const body = (await request.json()) as Record<string, unknown>;
+      expect(body).not.toHaveProperty("requested_by");
+      expect(body).toEqual({ kind: "movie", target: { target_kind: "existing_work", work_id: "w1" } });
+      return jsonResponse(201, {
+        id: "req-1",
+        requested_by: "00000000-0000-0000-0000-000000000001",
+        kind: "movie",
+        target: { target_kind: "existing_work", work_id: "w1" },
+        status: "pending",
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+      });
+    });
+
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken: () => "test-token" });
+    await client.submitRequest({ kind: "movie", target: { target_kind: "existing_work", work_id: "w1" } });
+  });
+
+  it("decides a request with a DecideRequestBody carrying no decided_by field", async () => {
+    const fetchImpl = mockFetch(async (request) => {
+      const body = (await request.json()) as Record<string, unknown>;
+      expect(body).not.toHaveProperty("decided_by");
+      return jsonResponse(200, {
+        id: "req-1",
+        requested_by: "00000000-0000-0000-0000-000000000001",
+        decided_by: "00000000-0000-0000-0000-000000000002",
+        kind: "movie",
+        target: { target_kind: "existing_work", work_id: "w1" },
+        status: "approved",
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+      });
+    });
+
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken: () => "test-token" });
+    const updated = await client.approveRequest("req-1", { reason: "looks good" });
+    expect(updated.status).toBe("approved");
+  });
+
+  it.each([
+    ["submitRequest", 401, (client: ApiClient) => client.submitRequest({ kind: "movie", target: { target_kind: "existing_work", work_id: "w1" } })],
+    ["approveRequest", 403, (client: ApiClient) => client.approveRequest("req-1", {})],
+    ["rejectRequest", 401, (client: ApiClient) => client.rejectRequest("req-1", {})],
+  ] as const)(
+    "surfaces a %s call's %i response as a distinct ApiError instead of failing silently",
+    async (_name, status, call) => {
+      const fetchImpl = mockFetch(() => new Response(null, { status, statusText: "unauthorized" }));
+      const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken: () => "test-token" });
+
+      await expect(call(client)).rejects.toMatchObject({ name: "ApiError", status });
+    }
+  );
+
+  it("logs in with the real LoginRequest shape and parses a real LoginResponse", async () => {
+    const fetchImpl = mockFetch(async (request) => {
+      expect(new URL(request.url).pathname).toBe("/api/v1/auth/login");
+      expect(request.headers.has("Authorization")).toBe(false);
+      expect(await request.json()).toEqual({
+        device_id: "d1",
+        device_name: "Streamarr Web",
+        client_platform: "web",
+        client_version: "1.0.0",
+      });
+      return jsonResponse(200, {
+        access_token: "at-1",
+        refresh_token: "rt-1",
+        token_type: "Bearer",
+        expires_in: 3600,
+        user_id: "00000000-0000-0000-0000-000000000009",
+      });
+    });
+
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl });
+    const response = await client.login({
+      device_id: "d1",
+      device_name: "Streamarr Web",
+      client_platform: "web",
+      client_version: "1.0.0",
+    });
+
+    expect(response.access_token).toBe("at-1");
+    expect(response.user_id).toBe("00000000-0000-0000-0000-000000000009");
   });
 
   it("builds playback-info query params from PlaybackInfoParams (camelCase -> wire snake_case)", async () => {
@@ -233,5 +350,25 @@ describe("ApiClient", () => {
 
     expect(info.mode).toBe("direct");
     expect(client.resolveUrl(info.url)).toBe("http://localhost:8080/api/v1/media/media-file-1/stream");
+  });
+});
+
+describe("describeApiError", () => {
+  it("describes a 401 ApiError distinctly as a sign-in problem", () => {
+    expect(describeApiError(new ApiError(401, "Unauthorized", undefined))).toMatch(/sign-in required/i);
+  });
+
+  it("describes a 403 ApiError distinctly as a permissions problem", () => {
+    expect(describeApiError(new ApiError(403, "Forbidden", undefined))).toMatch(/permission/i);
+  });
+
+  it("falls back to the ApiError's own message for every other status", () => {
+    const err = new ApiError(404, "Not Found", undefined);
+    expect(describeApiError(err)).toBe(err.message);
+  });
+
+  it("falls back to a plain Error's message, and to String() for anything else", () => {
+    expect(describeApiError(new Error("boom"))).toBe("boom");
+    expect(describeApiError("just a string")).toBe("just a string");
   });
 });

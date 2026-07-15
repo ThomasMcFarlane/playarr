@@ -10,12 +10,13 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 
 /**
- * Builds a [DeviceAuthApi] pointed at a Streamarr server. Separate from
- * `core-data`'s `StreamarrHttpClient` on purpose: device pairing happens
- * before any access token exists, so this client carries no
- * `Authorization` interceptor (there's nothing to attach yet) and has no
- * dependency on `core-data` at all -- `tv-android` can complete pairing
- * with only `core-auth` on its classpath.
+ * Builds pre-session Retrofit clients ([DeviceAuthApi], [LoginApi]) pointed
+ * at a Streamarr server. Separate from `core-data`'s `StreamarrHttpClient`
+ * on purpose: device pairing and login both happen before any access token
+ * exists, so this client carries no `Authorization` interceptor (there's
+ * nothing to attach yet) and has no dependency on `core-data` at all --
+ * `tv-android` can complete pairing, and any client can log in, with only
+ * `core-auth` on its classpath.
  */
 object AuthHttpClient {
 
@@ -27,7 +28,19 @@ object AuthHttpClient {
      *   from Settings takes effect on the very next pairing request without
      *   an app restart).
      */
-    fun create(baseUrlProvider: () -> String, enableHttpLogging: Boolean = false): DeviceAuthApi {
+    fun create(baseUrlProvider: () -> String, enableHttpLogging: Boolean = false): DeviceAuthApi =
+        buildRetrofit(baseUrlProvider, enableHttpLogging).create(DeviceAuthApi::class.java)
+
+    /**
+     * Same underlying client as [create] (no `Authorization` interceptor,
+     * same base-URL rewriting), pointed at `POST /api/v1/auth/login`
+     * instead -- see [LoginApi] and
+     * [io.streamarr.shared.auth.SessionManager].
+     */
+    fun createLoginApi(baseUrlProvider: () -> String, enableHttpLogging: Boolean = false): LoginApi =
+        buildRetrofit(baseUrlProvider, enableHttpLogging).create(LoginApi::class.java)
+
+    private fun buildRetrofit(baseUrlProvider: () -> String, enableHttpLogging: Boolean): Retrofit {
         val json = Json { ignoreUnknownKeys = true }
 
         val okHttpClient = OkHttpClient.Builder()
@@ -39,13 +52,11 @@ object AuthHttpClient {
             }
             .build()
 
-        val retrofit = Retrofit.Builder()
+        return Retrofit.Builder()
             .baseUrl(PLACEHOLDER_BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
-
-        return retrofit.create(DeviceAuthApi::class.java)
     }
 
     /** Never actually dialled -- see [create]'s KDoc. Must be a syntactically valid absolute URL for [Retrofit.Builder.baseUrl]. */

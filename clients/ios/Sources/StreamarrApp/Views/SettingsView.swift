@@ -64,9 +64,10 @@ struct SettingsView: View {
                     Text("Requests")
                 } footer: {
                     Text(
-                        "The real API has no user/role model yet, so \"Admin Mode\" is a local, " +
-                        "on-this-device-only placeholder: it only changes what the Requests tab shows " +
-                        "and lets you do (Approve/Reject) here, it isn't checked or enforced by the server."
+                        "\"Admin Mode\" is a local, on-this-device-only toggle: it only changes what " +
+                        "the Requests tab shows and lets you attempt (Approve/Reject) here. Turning it " +
+                        "on doesn't grant you anything — the server independently checks your signed-in " +
+                        "identity and will refuse Approve/Reject if it isn't an admin's."
                     )
                 }
 

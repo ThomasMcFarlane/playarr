@@ -12,6 +12,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.streamarr.shared.auth.remote.AuthHttpClient
 import io.streamarr.shared.auth.remote.DeviceAuthApi
+import io.streamarr.shared.auth.remote.LoginApi
 import io.streamarr.shared.data.config.ServerConfigStore
 import io.streamarr.tv.BuildConfig
 import javax.inject.Singleton
@@ -45,7 +46,15 @@ object AuthModule {
         enableHttpLogging = BuildConfig.DEBUG,
     )
 
-    // DeviceAuthClient, TokenStore, and ServerConfigStore are
-    // @Inject-constructed directly by Hilt from the bindings above -- see
-    // mobile-android's AuthModule for the same note.
+    /** Backs [io.streamarr.shared.auth.SessionManager]'s transparent `POST /api/v1/auth/login` call -- see [NetworkModule]'s `accessTokenProvider`. */
+    @Provides
+    @Singleton
+    fun provideLoginApi(serverConfigStore: ServerConfigStore): LoginApi = AuthHttpClient.createLoginApi(
+        baseUrlProvider = { runBlocking { serverConfigStore.baseUrl.first() } },
+        enableHttpLogging = BuildConfig.DEBUG,
+    )
+
+    // DeviceAuthClient, TokenStore, SessionManager, and ServerConfigStore
+    // are @Inject-constructed directly by Hilt from the bindings above --
+    // see mobile-android's AuthModule for the same note.
 }

@@ -74,8 +74,8 @@ class TvRequestsViewModel @Inject constructor(
             val mine = listMediaRequestsUseCase(userId = userId)
             val pending = listMediaRequestsUseCase(userId = null)
             _uiState.value = when {
-                mine is StreamarrResult.Failure -> TvRequestsUiState.Failure(mine.error.toUserMessage())
-                pending is StreamarrResult.Failure -> TvRequestsUiState.Failure(pending.error.toUserMessage())
+                mine is StreamarrResult.Failure -> TvRequestsUiState.Failure(mine.error.toRequestsErrorMessage())
+                pending is StreamarrResult.Failure -> TvRequestsUiState.Failure(pending.error.toRequestsErrorMessage())
                 else -> TvRequestsUiState.Content(
                     myRequests = (mine as StreamarrResult.Success).value,
                     pendingApproval = (pending as StreamarrResult.Success).value,
@@ -88,25 +88,34 @@ class TvRequestsViewModel @Inject constructor(
 
     fun reject(requestId: String) = decide(requestId, rejectMediaRequestUseCase::invoke)
 
-    private fun decide(requestId: String, action: suspend (String, String, String?) -> StreamarrResult<MediaRequest>) {
+    /**
+     * No longer needs a locally-read user id: the deciding admin is
+     * derived server-side from the verified access token
+     * `StreamarrHttpClient` attaches -- see [ApproveMediaRequestUseCase]/
+     * [RejectMediaRequestUseCase]'s KDoc. A 403 here (the caller isn't
+     * really an admin) surfaces through [toRequestsErrorMessage] like any other
+     * [StreamarrError.Http].
+     */
+    private fun decide(requestId: String, action: suspend (String, String?) -> StreamarrResult<MediaRequest>) {
         viewModelScope.launch {
             _actionError.value = null
-            val decidedBy = tokenStore.userId.first()
-            if (decidedBy == null) {
-                _actionError.value = "Sign in again to decide on requests."
-                return@launch
-            }
-            when (val result = action(requestId, decidedBy, null)) {
+            when (val result = action(requestId, null)) {
                 is StreamarrResult.Success -> refresh()
-                is StreamarrResult.Failure -> _actionError.value = result.error.toUserMessage()
+                is StreamarrResult.Failure -> _actionError.value = result.error.toRequestsErrorMessage()
             }
         }
     }
 }
 
-private fun StreamarrError.toUserMessage(): String = when (this) {
+/** `internal` (rather than `private`) so this module's unit tests can exercise the 401/403 mapping directly. */
+internal fun StreamarrError.toRequestsErrorMessage(): String = when (this) {
     is StreamarrError.Network -> "Can't reach the Streamarr server. Check the server address in Settings."
-    is StreamarrError.Http -> if (code == 409) "This request was already decided." else "Server error ($code)."
+    is StreamarrError.Http -> when (code) {
+        401 -> "Sign in again to continue."
+        403 -> "You don't have permission to approve or reject requests."
+        409 -> "This request was already decided."
+        else -> "Server error ($code)."
+    }
     is StreamarrError.Unknown -> "Something went wrong loading requests."
 }
 

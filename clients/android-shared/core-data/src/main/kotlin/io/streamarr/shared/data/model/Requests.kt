@@ -18,9 +18,9 @@ import kotlinx.serialization.json.jsonPrimitive
 /**
  * Kotlin mirror of the `requests` paths in `backend/openapi/streamarr.yaml`:
  * `GET/POST /api/v1/requests`, `POST /api/v1/requests/{id}/approve`,
- * `POST /api/v1/requests/{id}/reject`. No screen in this app calls these
- * yet (see `StreamarrApi`'s KDoc); the types exist so the SDK's coverage
- * of the spec is complete and real, ready for a future requests UI.
+ * `POST /api/v1/requests/{id}/reject`. Backs `WorkDetailScreen`'s "Request"
+ * action and `RequestsScreen`'s list/approve/reject actions on both
+ * `mobile-android` and `tv-android`.
  */
 @Serializable
 enum class RequestStatus {
@@ -97,18 +97,32 @@ data class MediaRequest(
     val updatedAt: Instant,
 )
 
-/** Body for `POST /api/v1/requests` -- mirrors `SubmitRequestBody`. */
+/**
+ * Body for `POST /api/v1/requests` -- mirrors `SubmitRequestBody`. Carries
+ * no `requested_by`: the real spec derives it server-side from the
+ * verified `Authorization: Bearer` access token's `sub` claim (see
+ * `SubmitRequestBody`'s doc comment in `backend/openapi/streamarr.yaml`),
+ * never from anything the caller puts in the request body. This call now
+ * 401s without a valid bearer token -- see
+ * [io.streamarr.shared.data.remote.StreamarrHttpClient] for where that
+ * header gets attached.
+ */
 @Serializable
 data class SubmitRequestBody(
-    val requestedBy: String,
     val kind: WorkKind,
     val target: RequestTarget,
     val note: String? = null,
 )
 
-/** Body for `POST /api/v1/requests/{id}/approve` and `.../reject` -- mirrors `DecideRequestBody`. */
+/**
+ * Body for `POST /api/v1/requests/{id}/approve` and `.../reject` --
+ * mirrors `DecideRequestBody`. Carries no `decided_by` for the same reason
+ * [SubmitRequestBody] carries no `requested_by`: it comes from the
+ * verified access token's `sub` claim server-side. Both calls now 401
+ * without a valid bearer token and 403 if the verified caller isn't an
+ * admin.
+ */
 @Serializable
 data class DecideRequestBody(
-    val decidedBy: String,
     val reason: String? = null,
 )
