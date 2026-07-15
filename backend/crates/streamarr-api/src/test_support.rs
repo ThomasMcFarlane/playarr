@@ -226,7 +226,7 @@ pub async fn test_state() -> (Router, TestState) {
         node_id: "test-node".to_string(),
     };
 
-    let (router, _api) = build_router(app.clone(), test_version_gate());
+    let (router, _api) = build_router(app.clone(), test_version_gate(), None);
 
     (
         router,

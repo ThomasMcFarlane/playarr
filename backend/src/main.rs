@@ -284,6 +284,41 @@ fn default_admin_user_id_from_env() -> uuid::Uuid {
     }
 }
 
+/// Resolves the directory the standalone Web app's built static assets
+/// (`index.html` + `assets/`) live in, so `boot_api` can co-host the UI on
+/// the same origin/port as the API -- see [`streamarr_api::build_router`]'s
+/// `web_assets_dir` doc comment for why that's the goal (parity with how
+/// every `*arr` app ships its own UI, rather than requiring a separately
+/// hosted web client pointed at this API).
+///
+/// `STREAMARR_WEB_ASSETS_DIR` wins if set. Otherwise defaults to a `web/`
+/// directory next to this binary's own executable (not the process's
+/// current working directory, which is unreliable across systemd/Docker/
+/// direct-invocation) -- `infra/docker/backend.Dockerfile` copies the built
+/// assets there, and a bare-metal/systemd install lays out the release
+/// tarball the same way. Returns `None` (API-only, exactly the prior
+/// behavior) when neither resolves to a directory actually containing
+/// `index.html` -- e.g. a `cargo run` during backend-only development
+/// where nobody has run `pnpm run build` for the web app, which must keep
+/// working without requiring a web build first.
+fn web_assets_dir_from_env() -> Option<std::path::PathBuf> {
+    let candidate = match std::env::var("STREAMARR_WEB_ASSETS_DIR") {
+        Ok(raw) => std::path::PathBuf::from(raw),
+        Err(_) => std::env::current_exe().ok()?.parent()?.join("web"),
+    };
+
+    if candidate.join("index.html").is_file() {
+        Some(candidate)
+    } else {
+        tracing::info!(
+            path = %candidate.display(),
+            "no built web UI found at this path; serving API only. Set STREAMARR_WEB_ASSETS_DIR, \
+             or build clients/tv-web/web and place its dist/ output there, to co-host the Web app."
+        );
+        None
+    }
+}
+
 /// Resolves the operator's configured login trust tier
 /// (`STREAMARR_AUTH_MODE` -- `trusted-network` (the default) or
 /// `full-account`) for `POST /api/v1/auth/login`. See
@@ -573,7 +608,7 @@ async fn boot_api(
     };
     let version_gate = VersionGateLayer::new(compatibility_table);
 
-    let (router, _openapi) = build_router(state, version_gate);
+    let (router, _openapi) = build_router(state, version_gate, web_assets_dir_from_env());
 
     let listener = tokio::net::TcpListener::bind(config.http_bind_addr).await?;
     tracing::info!(addr = %config.http_bind_addr, "http server listening");

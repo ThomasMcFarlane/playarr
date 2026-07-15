@@ -1,16 +1,7 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import { ApiClient } from "@streamarr-tv/api-client";
 import { ensureAccessToken, TokenStore } from "@streamarr-tv/device-auth";
-import { getStoredApiBaseUrl, resolveApiBaseUrl, setStoredApiBaseUrl } from "@streamarr-tv/domain";
+import { API_BASE_URL_QUERY_PARAM, getStoredApiBaseUrl, setStoredApiBaseUrl } from "@streamarr-tv/domain";
 
 /**
  * This build's own identity for the transparent `POST /api/v1/auth/login`
@@ -38,16 +29,35 @@ const ApiClientContext = createContext<ApiClientContextValue | null>(null);
 /**
  * Resolves the initial API base URL for the web app: an operator-entered
  * value persisted from the Settings page wins, then a `?apiBaseUrl=...`
- * query param, then `DEFAULT_API_BASE_URL`. Unlike the TV app shells, the
- * web app has a real Settings text field (see `pages/Settings.tsx`), so it
- * skips the TV-only `streamarr-config.json` runtime-config-file lookup.
+ * query param (for a split reverse-proxy deployment or pointing a dev
+ * build at a non-default backend), then this page's own origin.
+ *
+ * Same-origin is the real default, not a placeholder: `streamarr-bin` co-
+ * hosts this app's built assets with the API on one port (see
+ * `streamarr_api::build_router`'s `web_assets_dir`), matching how every
+ * other `*arr` app ships its own UI, so "this page's origin" *is* the API
+ * for the common case -- no configuration required. `vite.config.ts`
+ * proxies `/api` etc. to a local backend so this also holds for
+ * `pnpm run dev`. Unlike the TV app shells, the web app has a real
+ * Settings text field (see `pages/Settings.tsx`) instead of the TV-only
+ * `streamarr-config.json` runtime-config-file lookup, so that lookup is
+ * skipped here.
  */
-async function resolveInitialApiBaseUrl(): Promise<string> {
-  return getStoredApiBaseUrl() ?? (await resolveApiBaseUrl({ configFileUrl: null }));
+function resolveInitialApiBaseUrl(): string {
+  const stored = getStoredApiBaseUrl();
+  if (stored) return stored;
+
+  const fromQuery = new URLSearchParams(window.location.search).get(API_BASE_URL_QUERY_PARAM);
+  if (fromQuery) return fromQuery;
+
+  return window.location.origin;
 }
 
 export function ApiClientProvider({ children }: { children: ReactNode }) {
-  const [apiBaseUrl, setApiBaseUrlState] = useState<string | null>(null);
+  // Resolvable synchronously now that same-origin (rather than an awaited
+  // config-file fetch) is the fallback -- see `resolveInitialApiBaseUrl` --
+  // so this is a plain lazy initializer, not a `null`-until-resolved effect.
+  const [apiBaseUrl, setApiBaseUrlState] = useState<string>(resolveInitialApiBaseUrl);
   // One `TokenStore` for the lifetime of this provider (survives an `apiBaseUrl`
   // change, e.g. from the Settings page) -- see `ensureAccessToken`'s doc comment
   // on why the login path and any future pairing path must share exactly one.
@@ -55,10 +65,6 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
   if (!tokenStoreRef.current) {
     tokenStoreRef.current = new TokenStore();
   }
-
-  useEffect(() => {
-    void resolveInitialApiBaseUrl().then(setApiBaseUrlState);
-  }, []);
 
   const setApiBaseUrl = useCallback((value: string) => {
     setStoredApiBaseUrl(value);

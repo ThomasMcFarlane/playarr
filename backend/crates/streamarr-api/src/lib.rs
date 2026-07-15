@@ -40,11 +40,13 @@ pub mod webhooks;
 #[cfg(test)]
 pub mod test_support;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::extract::FromRef;
 use axum::Router;
 use tower_http::cors::CorsLayer;
+use tower_http::services::{ServeDir, ServeFile};
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
@@ -203,19 +205,33 @@ impl FromRef<AppState> for VersionState {
 /// authenticated, never cookie/session-authenticated, so there is no CSRF
 /// surface a stricter origin allow-list would actually protect (the token
 /// itself is the access control; a browser page on an unrelated origin
-/// still can't produce a valid one). Every first-party client -- the Web
-/// app, and any of the TV-web shells if they're ever served over HTTP
-/// rather than loaded as a packaged app -- is "an arbitrary operator-run
-/// instance's browser client" per the architecture's own stated principle
-/// (`docs/architecture/overview.md`), so there's no single "the" origin to
-/// allow-list in the first place. Layered outermost (after `version_gate`
-/// in this builder chain, which axum applies innermost-first) so a
-/// preflight `OPTIONS` request is answered before it ever reaches
-/// auth/version-gate logic that would otherwise reject it for having no
-/// `Authorization` header.
+/// still can't produce a valid one). It also still matters even now that
+/// the standalone Web app is co-hosted (see `web_assets_dir` below): the
+/// packaged TV-web shells (webOS/Tizen/VIDAA) run from their own app/webview
+/// origin and always call the API cross-origin, and a split reverse-proxy
+/// deployment (UI on one host, API on another) is still a legitimate setup
+/// this must keep working for. Layered outermost (after `version_gate` in
+/// this builder chain, which axum applies innermost-first) so a preflight
+/// `OPTIONS` request is answered before it ever reaches auth/version-gate
+/// logic that would otherwise reject it for having no `Authorization`
+/// header.
+///
+/// `web_assets_dir`, when `Some`, mounts the standalone Web app's built
+/// static assets (`clients/tv-web/web/dist`) as this router's fallback —
+/// any request that doesn't match an `/api/*` route, `/healthz`, or
+/// `/readyz` is served a static file from that directory, falling back to
+/// `index.html` for anything not found on disk (React Router's
+/// client-side routes, e.g. `/library/{id}`, aren't real files). This is
+/// what lets the API and the Web UI live on one origin, one port, one
+/// `docker run` — the same story every `*arr` app ships, rather than
+/// requiring a separately-hosted web client pointed at this API via CORS.
+/// `streamarr-bin` resolves the directory (env override or a path next to
+/// the binary) and passes `None` when it can't find a built `index.html`
+/// there, in which case this router serves API-only, exactly as before.
 pub fn build_router(
     state: AppState,
     version_gate: VersionGateLayer,
+    web_assets_dir: Option<PathBuf>,
 ) -> (Router, utoipa::openapi::OpenApi) {
     let readiness_for_alias = state.readiness.clone();
     let (router, api) = api_router().with_state(state).split_for_parts();
@@ -228,10 +244,27 @@ pub fn build_router(
                 async move { readiness::readiness_handler(axum::extract::State(readiness)).await }
             }),
         );
-    (
-        router.layer(version_gate).layer(CorsLayer::permissive()),
-        api,
-    )
+
+    let router = router.layer(version_gate).layer(CorsLayer::permissive());
+
+    let router = match web_assets_dir {
+        Some(dir) => {
+            // Deliberately `.fallback(...)`, not `.not_found_service(...)`:
+            // the latter is tower-http's helper for a real "not found" page
+            // and always forces a 404 status onto whatever it serves
+            // (`SetStatus::new(fallback, StatusCode::NOT_FOUND)` -- see its
+            // own doc comment). React Router's client-side routes (e.g.
+            // `/library/{id}`) are not 404s -- they're real pages the SPA
+            // shell renders once loaded -- so this needs `index.html`
+            // served with its own natural 200, which plain `.fallback(...)`
+            // preserves.
+            let index_html = ServeFile::new(dir.join("index.html"));
+            router.fallback_service(ServeDir::new(dir).fallback(index_html))
+        }
+        None => router,
+    };
+
+    (router, api)
 }
 
 #[cfg(test)]

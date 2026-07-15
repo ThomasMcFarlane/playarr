@@ -3,6 +3,11 @@ import { ApiError, type VersionEnvelope } from "@streamarr-tv/api-client";
 import { DEFAULT_API_BASE_URL } from "@streamarr-tv/domain";
 import { useApiBaseUrl, useApiClient } from "../lib/ApiClientProvider";
 
+/** Restores the actual default (this page's own origin -- see `ApiClientProvider.tsx`) when the field is cleared. */
+function defaultApiBaseUrl(): string {
+  return typeof window !== "undefined" ? window.location.origin : DEFAULT_API_BASE_URL;
+}
+
 type ConnectionTestState =
   | { status: "idle" }
   | { status: "testing" }
@@ -23,7 +28,7 @@ export function SettingsPage() {
 
   function handleSave(event: React.FormEvent) {
     event.preventDefault();
-    const trimmed = draft.trim() || DEFAULT_API_BASE_URL;
+    const trimmed = draft.trim() || defaultApiBaseUrl();
     setApiBaseUrl(trimmed);
     setDraft(trimmed);
     setTestState({ status: "idle" });
@@ -47,8 +52,10 @@ export function SettingsPage() {
       <div className="card" style={{ maxWidth: 560 }}>
         <h2 className="section-title">Server connection</h2>
         <p className="muted" style={{ marginBottom: "1rem" }}>
-          Point this app at your own Streamarr instance. Every operator runs their own server, so
-          there is no baked-in default beyond <code>{DEFAULT_API_BASE_URL}</code> for local development.
+          This app is normally served by your Streamarr instance itself, so it talks to that same
+          server by default -- nothing to configure. Only change this if you're running the web app
+          separately from the API (a split reverse-proxy setup, or pointing a local dev build at a
+          different instance).
         </p>
 
         <form onSubmit={handleSave} style={{ display: "flex", gap: "0.5rem" }}>
@@ -61,7 +68,7 @@ export function SettingsPage() {
             className="input"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder={DEFAULT_API_BASE_URL}
+            placeholder={defaultApiBaseUrl()}
             style={{ flex: 1 }}
           />
           <button type="submit" className="btn btn-primary">

@@ -13,8 +13,18 @@
 # docker-compose.prod.yml, and the Helm chart under infra/kubernetes/ all
 # deploy from one artifact.
 #
-# Build context MUST be the repository root (so `backend/` is reachable),
-# e.g.:
+# This image also co-hosts the standalone Web app's built static assets
+# (stage `web-builder` below, copied to /app/web in the runtime stage) --
+# `streamarr` serves both the API and the UI on one origin/port, same as
+# every `*arr` app ships its own UI, rather than requiring a separately
+# hosted web client pointed at this API over CORS. The binary remains the
+# one artifact that matters (the assets are inert static files it serves,
+# not a second process), so this doesn't change the single-binary principle
+# above; see `streamarr_api::build_router`'s `web_assets_dir` doc comment
+# and `backend/src/main.rs`'s `web_assets_dir_from_env`.
+#
+# Build context MUST be the repository root (so both `backend/` and
+# `clients/tv-web/` are reachable), e.g.:
 #
 #   docker build -f infra/docker/backend.Dockerfile -t streamarr:dev .
 #
@@ -28,7 +38,10 @@
 # STREAMARR_ROLE, STREAMARR_LOG, STREAMARR_HTTP_BIND_ADDR,
 # STREAMARR_METRICS_BIND_ADDR, STREAMARR_OTLP_ENDPOINT -- the same names
 # whether started by `docker run`, docker-compose, or a Kubernetes Pod. See
-# infra/docker/README.md for the full rationale.
+# infra/docker/README.md for the full rationale. STREAMARR_WEB_ASSETS_DIR
+# (see `web_assets_dir_from_env`) only needs setting to override where this
+# image already places the built Web UI (/app/web) -- not part of that core
+# contract, and left unset in this image's own compose/Helm config.
 # ==============================================================================
 
 ARG RUST_VERSION=1
@@ -78,6 +91,26 @@ RUN cargo build --release --workspace --locked --bin streamarr \
     && strip /build/out/streamarr
 
 # ------------------------------------------------------------------------
+# Stage: web-builder -- builds the standalone Web app's static assets
+# (clients/tv-web/web/dist), so the runtime stage can co-host the UI on
+# the same origin/port as the API (see the header comment above). Only
+# `@streamarr-tv/web` and its actual workspace dependencies are built
+# (pnpm's `...` filter suffix) -- NOT `pnpm -r`, which would also try to
+# build the TV app shells (apps/tv-webos, apps/tv-tizen) and their
+# packaging steps (`ares-package`, Tizen Studio CLI) that this generic
+# Node image has no business trying to run. Independent of the Rust chef/
+# planner/builder stages above -- BuildKit runs this concurrently with
+# them, not after.
+# ------------------------------------------------------------------------
+FROM node:20-slim AS web-builder
+WORKDIR /build
+RUN corepack enable && corepack prepare pnpm@9 --activate
+COPY clients/tv-web/ ./clients/tv-web/
+WORKDIR /build/clients/tv-web
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @streamarr-tv/web... run build
+
+# ------------------------------------------------------------------------
 # Stage 4: runtime -- minimal Debian base, non-root, read-only-root-
 # filesystem friendly. /data is writable (owned by the streamarr user) for
 # the SQLite tier (DATABASE_URL=sqlite:///data/streamarr.db) -- mount a
@@ -122,6 +155,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN touch /.streamarr-container && chmod 0444 /.streamarr-container
 
 COPY --from=builder --chown=streamarr:streamarr /build/out/streamarr /app/streamarr
+COPY --from=web-builder --chown=streamarr:streamarr /build/clients/tv-web/web/dist /app/web
 
 WORKDIR /app
 USER streamarr:streamarr

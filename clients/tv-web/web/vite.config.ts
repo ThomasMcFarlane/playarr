@@ -17,6 +17,17 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // The built app is co-hosted by the backend in production (see
+    // streamarr_api::build_router's `web_assets_dir`) and defaults to a
+    // same-origin API base URL accordingly (see ApiClientProvider.tsx).
+    // Proxying here reproduces that "same origin" story for `pnpm run dev`
+    // too, so a fresh checkout works against a locally running backend with
+    // zero required Settings-page configuration.
+    proxy: {
+      "/api": "http://localhost:8080",
+      "/healthz": "http://localhost:8080",
+      "/readyz": "http://localhost:8080",
+    },
   },
   build: {
     outDir: "dist",

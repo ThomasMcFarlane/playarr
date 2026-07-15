@@ -10,8 +10,12 @@
 backend/target/
 **/target/
 
-# Node/pnpm (not used by backend.Dockerfile, but harmless to exclude
-# repo-wide since nothing under infra/docker/ builds from clients/)
+# Node/pnpm. backend.Dockerfile's `web-builder` stage does build from
+# clients/tv-web/ (to co-host the Web app's static assets), but always via
+# its own `pnpm install` + `pnpm run build` inside the image -- local
+# node_modules/ and dist/ output are still exclude-worthy build-context
+# bloat the container stage regenerates from source itself, same reasoning
+# as backend/target/ above.
 node_modules/
 **/node_modules/
 clients/*/dist/
