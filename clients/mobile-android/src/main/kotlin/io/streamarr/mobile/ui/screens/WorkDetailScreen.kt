@@ -25,15 +25,21 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.streamarr.mobile.R
+import io.streamarr.shared.auth.TokenStore
+import io.streamarr.shared.data.model.Availability
+import io.streamarr.shared.data.model.RequestTarget
+import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
 import io.streamarr.shared.data.model.WorkDetail
 import io.streamarr.shared.domain.model.StreamarrError
 import io.streamarr.shared.domain.model.StreamarrResult
 import io.streamarr.shared.domain.usecase.GetWorkDetailsUseCase
+import io.streamarr.shared.domain.usecase.SubmitMediaRequestUseCase
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 sealed interface WorkDetailUiState {
@@ -42,20 +48,52 @@ sealed interface WorkDetailUiState {
     data class Failure(val message: String) : WorkDetailUiState
 }
 
+/** Local state for the "Request" action on [WorkDetailScreen], independent of [WorkDetailUiState] (the detail load). */
+sealed interface RequestActionState {
+    data object Idle : RequestActionState
+    data object Submitting : RequestActionState
+    data object Submitted : RequestActionState
+    data class Failed(val message: String) : RequestActionState
+}
+
 @HiltViewModel
 class WorkDetailViewModel @Inject constructor(
     private val getWorkDetailsUseCase: GetWorkDetailsUseCase,
+    private val submitMediaRequestUseCase: SubmitMediaRequestUseCase,
+    private val tokenStore: TokenStore,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<WorkDetailUiState>(WorkDetailUiState.Loading)
     val uiState: StateFlow<WorkDetailUiState> = _uiState.asStateFlow()
 
+    private val _requestState = MutableStateFlow<RequestActionState>(RequestActionState.Idle)
+    val requestState: StateFlow<RequestActionState> = _requestState.asStateFlow()
+
     fun load(workId: String) {
         viewModelScope.launch {
             _uiState.value = WorkDetailUiState.Loading
+            _requestState.value = RequestActionState.Idle
             _uiState.value = when (val result = getWorkDetailsUseCase(workId)) {
                 is StreamarrResult.Success -> WorkDetailUiState.Content(result.value)
                 is StreamarrResult.Failure -> WorkDetailUiState.Failure(result.error.toUserMessage())
+            }
+        }
+    }
+
+    /** `POST /api/v1/requests` for [work] itself (`RequestTarget.ExistingWork`) -- see [WorkDetailContent]'s KDoc for when this action is shown. */
+    fun requestWork(work: Work) {
+        viewModelScope.launch {
+            _requestState.value = RequestActionState.Submitting
+            val requestedBy = tokenStore.userId.first()
+            if (requestedBy == null) {
+                _requestState.value = RequestActionState.Failed("Sign in again to submit a request.")
+                return@launch
+            }
+            _requestState.value = when (
+                val result = submitMediaRequestUseCase(requestedBy = requestedBy, kind = work.kind, target = RequestTarget.ExistingWork(work.id))
+            ) {
+                is StreamarrResult.Success -> RequestActionState.Submitted
+                is StreamarrResult.Failure -> RequestActionState.Failed(result.error.toUserMessage())
             }
         }
     }
@@ -67,15 +105,7 @@ private fun StreamarrError.toUserMessage(): String = when (this) {
     is StreamarrError.Unknown -> "Something went wrong loading this title."
 }
 
-/**
- * `GET /api/v1/catalog/{id}` -- a work plus its full kind-specific child
- * tree. [onPlayMediaFile] is called with what the tapped leaf's own `id`
- * is, standing in for a `media_file_id` (movies use the work's own `id`).
- * The real spec has no endpoint that maps a work/episode/track/book to the
- * `MediaFile` id `GET /api/v1/playback/{media_file_id}` actually expects,
- * so this is a best-effort assumption -- documented rather than silently
- * guessed -- until the catalog schema exposes real media-file identifiers.
- */
+/** `GET /api/v1/catalog/{id}` -- a work plus its full kind-specific child tree. */
 @Composable
 fun WorkDetailScreen(
     workId: String,
@@ -84,6 +114,7 @@ fun WorkDetailScreen(
     viewModel: WorkDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val requestState by viewModel.requestState.collectAsState()
 
     LaunchedEffect(workId) { viewModel.load(workId) }
 
@@ -99,13 +130,38 @@ fun WorkDetailScreen(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-            is WorkDetailUiState.Content -> WorkDetailContent(detail = current.detail, onPlayMediaFile = onPlayMediaFile)
+            is WorkDetailUiState.Content -> WorkDetailContent(
+                detail = current.detail,
+                requestState = requestState,
+                onPlayMediaFile = onPlayMediaFile,
+                onRequestWork = { viewModel.requestWork(current.detail.work) },
+            )
         }
     }
 }
 
+/**
+ * [onPlayMediaFile] is called with the real, server-resolved `media_file_id`
+ * for whichever leaf was tapped (`WorkDetailSchema.media_file_id` for a
+ * movie; the sibling `media_file_id` on `EpisodeDetailSchema`/
+ * `TrackDetailSchema`/`BookDetailSchema` for series/artist/author children).
+ * A leaf with no resolved file yet (`media_file_id == null` -- nothing has
+ * synced for it) renders without a play affordance rather than navigating
+ * to the Player screen with nothing to play.
+ *
+ * The "Request" action (`POST /api/v1/requests`, [onRequestWork]) shows
+ * whenever [Work.availability] is anything other than
+ * [Availability.Available] -- i.e. there is at least some part of this work
+ * still missing -- independent of which individual leaves already have a
+ * resolved file.
+ */
 @Composable
-private fun WorkDetailContent(detail: WorkDetail, onPlayMediaFile: (String) -> Unit) {
+private fun WorkDetailContent(
+    detail: WorkDetail,
+    requestState: RequestActionState,
+    onPlayMediaFile: (String) -> Unit,
+    onRequestWork: () -> Unit,
+) {
     val work = detail.work
 
     LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -123,13 +179,24 @@ private fun WorkDetailContent(detail: WorkDetail, onPlayMediaFile: (String) -> U
             }
         }
 
+        if (work.availability != Availability.Available) {
+            item {
+                RequestActionRow(requestState = requestState, onRequestWork = onRequestWork, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            }
+        }
+
         when (val children = detail.children) {
-            WorkChildren.Movie -> item {
-                Button(
-                    onClick = { onPlayMediaFile(work.id) },
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                ) {
-                    Text(stringResource(R.string.work_detail_play))
+            WorkChildren.Movie -> {
+                val mediaFileId = detail.mediaFileId
+                if (mediaFileId != null) {
+                    item {
+                        Button(
+                            onClick = { onPlayMediaFile(mediaFileId) },
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        ) {
+                            Text(stringResource(R.string.work_detail_play))
+                        }
+                    }
                 }
             }
 
@@ -141,11 +208,21 @@ private fun WorkDetailContent(detail: WorkDetail, onPlayMediaFile: (String) -> U
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
-                items(seasonDetail.episodes, key = { it.id }) { episode ->
+                items(seasonDetail.episodes, key = { it.episode.id }) { episodeDetail ->
+                    val mediaFileId = episodeDetail.mediaFileId
+                    val episode = episodeDetail.episode
                     ListItem(
                         headlineContent = { Text(episode.title ?: stringResource(R.string.work_detail_untitled)) },
-                        supportingContent = { Text(stringResource(R.string.work_detail_episode_number, episode.episodeNumber)) },
-                        modifier = Modifier.clickable { onPlayMediaFile(episode.id) },
+                        supportingContent = {
+                            Text(
+                                if (mediaFileId != null) {
+                                    stringResource(R.string.work_detail_episode_number, episode.episodeNumber)
+                                } else {
+                                    stringResource(R.string.work_detail_not_available)
+                                },
+                            )
+                        },
+                        modifier = if (mediaFileId != null) Modifier.clickable { onPlayMediaFile(mediaFileId) } else Modifier,
                     )
                 }
             }
@@ -158,20 +235,55 @@ private fun WorkDetailContent(detail: WorkDetail, onPlayMediaFile: (String) -> U
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
-                items(albumDetail.tracks, key = { it.id }) { track ->
+                items(albumDetail.tracks, key = { it.track.id }) { trackDetail ->
+                    val mediaFileId = trackDetail.mediaFileId
+                    val track = trackDetail.track
                     ListItem(
                         headlineContent = { Text(track.title) },
-                        supportingContent = { Text(stringResource(R.string.work_detail_track_number, track.trackNumber)) },
-                        modifier = Modifier.clickable { onPlayMediaFile(track.id) },
+                        supportingContent = {
+                            Text(
+                                if (mediaFileId != null) {
+                                    stringResource(R.string.work_detail_track_number, track.trackNumber)
+                                } else {
+                                    stringResource(R.string.work_detail_not_available)
+                                },
+                            )
+                        },
+                        modifier = if (mediaFileId != null) Modifier.clickable { onPlayMediaFile(mediaFileId) } else Modifier,
                     )
                 }
             }
 
-            is WorkChildren.Author -> items(children.books, key = { it.id }) { book ->
+            is WorkChildren.Author -> items(children.books, key = { it.book.id }) { bookDetail ->
+                val mediaFileId = bookDetail.mediaFileId
                 ListItem(
-                    headlineContent = { Text(book.title) },
-                    modifier = Modifier.clickable { onPlayMediaFile(book.id) },
+                    headlineContent = { Text(bookDetail.book.title) },
+                    supportingContent = if (mediaFileId == null) {
+                        { Text(stringResource(R.string.work_detail_not_available)) }
+                    } else {
+                        null
+                    },
+                    modifier = if (mediaFileId != null) Modifier.clickable { onPlayMediaFile(mediaFileId) } else Modifier,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RequestActionRow(requestState: RequestActionState, onRequestWork: () -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        when (requestState) {
+            is RequestActionState.Idle -> Button(onClick = onRequestWork) { Text(stringResource(R.string.work_detail_request)) }
+            is RequestActionState.Submitting -> Button(onClick = {}, enabled = false) { Text(stringResource(R.string.work_detail_requesting)) }
+            is RequestActionState.Submitted -> Text(
+                text = stringResource(R.string.work_detail_request_submitted),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            is RequestActionState.Failed -> Column {
+                Text(text = requestState.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                Button(onClick = onRequestWork, modifier = Modifier.padding(top = 4.dp)) { Text(stringResource(R.string.work_detail_request)) }
             }
         }
     }

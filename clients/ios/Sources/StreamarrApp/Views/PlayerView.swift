@@ -53,9 +53,10 @@ struct PlayerView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 Text(
-                    "The catalog API doesn't expose a media_file_id for a title yet (see WorkDetailViewModel), " +
-                    "so playback is driven directly by id here — this still calls the real " +
-                    "GET /api/v1/playback/{media_file_id} negotiation endpoint."
+                    "Normally pre-filled from a title's real, resolved media_file_id when you navigate " +
+                    "here via a \"Play\" button in WorkDetailView. Empty here means no media file has " +
+                    "synced for that title yet — you can still enter one directly; this always calls " +
+                    "the real GET /api/v1/playback/{media_file_id} negotiation endpoint."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)

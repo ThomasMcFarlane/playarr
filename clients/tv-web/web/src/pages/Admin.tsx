@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { ApiError, type ExternalProvider, type MediaRequest } from "@streamarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
+import { isValidUuid } from "../lib/uuid";
 
 const ADMIN_USER_ID_STORAGE_KEY = "streamarr:adminUserId";
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** `ExternalProvider` is a closed set of string variants plus an `{other: string}` escape hatch. */
 function providerLabel(provider: ExternalProvider): string {
@@ -103,7 +103,7 @@ export function AdminPage() {
     }
   }
 
-  const isValidAdminId = UUID_PATTERN.test(adminUserId);
+  const isValidAdminId = isValidUuid(adminUserId);
 
   return (
     <div style={{ padding: "2rem", color: "#ffffff" }}>

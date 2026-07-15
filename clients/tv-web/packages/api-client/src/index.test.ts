@@ -60,6 +60,95 @@ describe("ApiClient", () => {
     });
   });
 
+  it("round-trips a movie's real, resolved media_file_id from WorkDetailSchema", async () => {
+    const workId = "3f8b3e2a-1111-4a11-9a11-000000000001";
+    const mediaFileId = "9c1d2e3f-2222-4b22-9b22-000000000002";
+    const fetchImpl = mockFetch((request) => {
+      expect(new URL(request.url).pathname).toBe(`/api/v1/catalog/${workId}`);
+      return jsonResponse(200, {
+        work: {
+          id: workId,
+          kind: "movie",
+          external_refs: [],
+          title: "Voyage",
+          sort_title: "Voyage",
+          images: [],
+          genres: [],
+          tags: [],
+          added_at: "2024-01-01T00:00:00Z",
+          monitored: true,
+          availability: "available",
+        },
+        children: "Movie",
+        media_file_id: mediaFileId,
+      });
+    });
+
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl });
+    const detail = await client.getWork(workId);
+
+    expect(detail.media_file_id).toBe(mediaFileId);
+    expect(detail.children).toBe("Movie");
+  });
+
+  it("resolves media_file_id to null for a series whose leaves live on its episodes instead", async () => {
+    const workId = "3f8b3e2a-1111-4a11-9a11-000000000003";
+    const episodeMediaFileId = "9c1d2e3f-2222-4b22-9b22-000000000004";
+    const fetchImpl = mockFetch(() =>
+      jsonResponse(200, {
+        work: {
+          id: workId,
+          kind: "series",
+          external_refs: [],
+          title: "Test Series H",
+          sort_title: "Test Series H",
+          images: [],
+          genres: [],
+          tags: [],
+          added_at: "2024-01-01T00:00:00Z",
+          monitored: true,
+          availability: "partially_available",
+        },
+        children: {
+          Series: [
+            {
+              season: {
+                id: "s1",
+                series_work_id: workId,
+                season_number: 1,
+                monitored: true,
+                availability: "partially_available",
+              },
+              episodes: [
+                {
+                  episode: {
+                    id: "e1",
+                    season_id: "s1",
+                    episode_number: 1,
+                    monitored: true,
+                    availability: "available",
+                  },
+                  media_file_id: episodeMediaFileId,
+                },
+              ],
+            },
+          ],
+        },
+        media_file_id: null,
+      })
+    );
+
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl });
+    const detail = await client.getWork(workId);
+
+    expect(detail.media_file_id).toBeNull();
+    if (typeof detail.children === "object" && "Series" in detail.children) {
+      expect(detail.children.Series[0]?.episodes[0]?.media_file_id).toBe(episodeMediaFileId);
+    } else {
+      expect.unreachable("expected children to be the Series variant");
+    }
+  });
+
   it("requests a device code with the real DeviceCodeRequest/DeviceCodeResponseSchema shapes", async () => {
     const fetchImpl = mockFetch(async (request) => {
       expect(request.method).toBe("POST");

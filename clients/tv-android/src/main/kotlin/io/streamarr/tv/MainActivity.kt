@@ -7,6 +7,7 @@ import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
 import io.streamarr.tv.navigation.StreamarrTvNavHost
 import io.streamarr.tv.ui.theme.StreamarrTvTheme
+import io.streamarr.tv.update.AppUpdateEffect
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -15,6 +16,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             StreamarrTvTheme {
+                AppUpdateEffect()
                 val navController = rememberNavController()
                 StreamarrTvNavHost(navController = navController)
             }

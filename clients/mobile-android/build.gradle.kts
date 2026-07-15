@@ -66,6 +66,7 @@ dependencies {
     implementation(project(":core-designsystem"))
     implementation(project(":core-player"))
     implementation(project(":core-auth"))
+    implementation(project(":core-update"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

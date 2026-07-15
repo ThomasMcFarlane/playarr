@@ -5,10 +5,31 @@
  * `@streamarr-tv/api-client` generates real wire types straight off
  * `backend/openapi/streamarr.yaml` (`Work`, `MediaRequest`, `PlaybackInfo`,
  * `ClientPlatform`, ...), this package has narrowed down to what's left --
- * client-local concepts that don't round-trip the API. Right now that's
- * exactly one thing: where to find the API. Import wire-shape types
- * directly from `@streamarr-tv/api-client` instead of from here.
+ * client-local concepts that don't round-trip the API. That's where to find
+ * the API (below), plus -- per Round D -- the client self-update story built
+ * on the same "defensive, never-throws resolution" shape: evaluating a
+ * client's own version against the server's compatibility table
+ * (`./version-check`) and, for the Web/TV-web family specifically, polling
+ * the CDN-hosted build manifest that is Web's OTA update signal
+ * (`./bundle-manifest`). Import wire-shape types directly from
+ * `@streamarr-tv/api-client` instead of from here.
  */
+
+export {
+  compareVersions,
+  evaluateClientVersion,
+  type ClientVersionEvaluation,
+  type ClientVersionStatus,
+  type CompatibilityEntryLike,
+} from "./version-check";
+
+export {
+  BUNDLE_MANIFEST_FILE_NAME,
+  fetchBuildManifest,
+  isNewerBundleAvailable,
+  type BuildManifest,
+  type FetchBuildManifestOptions,
+} from "./bundle-manifest";
 
 /** Default Streamarr API origin for local development. */
 export const DEFAULT_API_BASE_URL = "http://localhost:8080";

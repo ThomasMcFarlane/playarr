@@ -2,11 +2,11 @@
   "name": "@streamarr-tv/web",
   "version": "0.1.0",
   "private": true,
-  "description": "Streamarr standalone web app: Vite + React + TypeScript, with placeholder routing for Home/Library/Player/Settings/Admin (Admin hosts the future request-management UI).",
+  "description": "Streamarr standalone web app: Vite + React + TypeScript. Home/Library/Player/Settings routes, Admin's real request-management UI, and a versioned service-worker-driven OTA self-update flow (see src/lib/appUpdate.ts).",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "dev": "node scripts/generate-build-manifest.mjs && vite",
+    "build": "node scripts/generate-build-manifest.mjs && tsc -p tsconfig.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",
     "clean": "rm -rf dist"

@@ -21,7 +21,8 @@ clients/ios/
       Auth/DeviceFlowClient.swift         # RFC 8628 device-authorization-grant client
     StreamarrApp/                         # SwiftUI app target
       App.swift
-      AppEnvironment.swift                 # composition root + UserDefaults-backed server URL
+      AppEnvironment.swift                 # composition root + UserDefaults-backed server URL/localUserID/isAdminMode
+      InstalledAppVersion.swift            # installed-version/bundle-id/App-Store-id placeholders for the update module
       ViewModels/
       Views/
 ```
@@ -71,16 +72,26 @@ in a different implementation (or a mock for tests) is a one-line
 dependency-injection change — see `Views/PreviewSupport.swift`'s
 `PreviewAPIClient` for exactly that.
 
-**Known real gap in the spec, not a client-side placeholder:** none of
-`Work`/`Episode`/`Track`/`Book` carry a `media_file_id` anywhere in the
-current schema — catalog and playback-negotiation aren't cross-linked yet
-server-side (`streamarr-api/src/playback.rs`'s own doc comment notes there
-is no `MediaFileRepo` yet). `WorkDetailViewModel`'s doc comment and
-`PlayerView`'s manual media-file-ID entry field are the honest
-reflection of that: playback is wired end-to-end against the real `GET
-/api/v1/playback/{media_file_id}` endpoint, it just can't be reached by
-tapping something in the catalog UI yet, only by supplying an id
-directly.
+**Round D update — catalog/playback are now cross-linked server-side:**
+`GET /api/v1/catalog/{id}` resolves a real, nullable `media_file_id` for
+every playable leaf: `WorkDetail.mediaFileID` for a movie's own leaf, and
+`EpisodeDetail`/`TrackDetail`/`BookDetail.mediaFileID` for a series'
+episodes / an artist's tracks / an author's books (see
+`OpenAPISchemas.swift`'s "Round D update" note and
+`backend/openapi/streamarr.yaml`'s `WorkDetailSchema`/`EpisodeDetailSchema`/
+`TrackDetailSchema`/`BookDetailSchema`). `WorkDetailView` wires each
+leaf's real id straight into a `PlayerView` "Play" `NavigationLink` when
+one has synced, and falls back to a plain (non-playable) row when it's
+still `nil`. `PlayerView`'s manual media-file-ID entry field is still
+there as a fallback/debugging path (and is what gets pre-filled when
+navigated to from a real leaf), not the primary path anymore.
+
+**Round D also added real request-management and an auto-update module**
+(see their own sections below): `WorkDetailView`'s "Request" action and
+`RequestsView`/`RequestsViewModel` (`POST/GET /api/v1/requests`,
+`POST .../{id}/approve`/`.../reject`), and `UpdateViewModel`/
+`AppUpdateEvaluator`/`UpdateGateModifier` (`GET /api/system/version`
+polled on foreground).
 
 ## `Player/PlayerEngine.swift`
 
@@ -119,6 +130,85 @@ else. It's an `actor` (not a `@MainActor` class) specifically so it
 satisfies `Sendable` without relying on
 global-actor-isolation-implies-Sendable inference.
 `AppEnvironment`/`SettingsViewModel` wire it up as the app's sign-in flow.
+
+## Request management (`RequestsView`/`RequestsViewModel`, `WorkDetailView`'s "Request" action)
+
+`WorkDetailView` offers a real "Request" action (`POST /api/v1/requests`,
+via `WorkDetailViewModel.requestWork(requestedBy:)`) whenever the loaded
+`Work`'s `availability != .available` — an `existing_work` target request
+against the work already showing in the catalog, not a from-scratch
+metadata-provider lookup. `RequestsView`/`RequestsViewModel` (a new
+"Requests" tab in `RootView`) hit `GET /api/v1/requests`, which — per the
+real `list_requests_handler`'s own doc comment — returns two different
+things depending on whether `user_id` is supplied: that user's own
+requests (any status) when set, or every request still `Pending` an admin
+decision when absent. `RequestsViewModel` picks between those and, in the
+admin case, exposes real `POST .../{id}/approve` / `.../{id}/reject`
+actions.
+
+**Real spec gap this works around, not a client-side placeholder:** the
+API has no user/role model yet — `SubmitRequestBody.requestedBy` and
+`DecideRequestBody.decidedBy` are both raw client-supplied UUIDs (see the
+spec's own `TODO(auth)` note), and nothing exposes a caller's role. So
+`AppEnvironment` generates and persists a `localUserID` (UserDefaults,
+stable per install) to supply as `requestedBy`/`decidedBy`, and exposes an
+`isAdminMode` toggle (also UserDefaults-persisted, flipped from a new
+"Requests" section in `SettingsView`) purely as a local, on-this-device,
+**not server-enforced** stand-in for "is this person allowed to
+approve/reject." Replace both with a real identity/role claim the moment
+auth middleware exists server-side — `RequestsViewModel`'s shape (caller
+supplies `currentUserID`/`isAdmin` per call) shouldn't need to change when
+that happens.
+
+## Client auto-update module (`UpdateViewModel`/`AppUpdateEvaluator`/`UpdateGateModifier`)
+
+Implements the "client auto-update" piece of the architecture plan
+(`docs/versioning-policy.md`, `docs/architecture/clients/ios.md`) against
+the *real* current backend shape, not those docs' more elaborate
+`apiVersion`/`apiVersionFloor` integer scheme (a `426`-based gate, an
+`X-Streamarr-Api-Version` header) — the real `GET /api/system/version`
+(`streamarr-model::VersionEnvelope`, `backend/config/client-compatibility.toml`)
+only exposes a flat `compatibility: [CompatibilityEntry]` table keyed by
+`ClientPlatform`, each entry carrying plain per-platform SemVer-shaped
+strings (`latest_version` / `min_supported_version`). This is a real,
+noted drift between those architecture docs and the current backend, not
+something this client pass reconciled (out of scope — backend/docs aren't
+in this pass's edit scope).
+
+- `AppUpdateEvaluator` (`StreamarrKit`, pure logic, no networking/UIKit):
+  compares the installed version against the `ios` `CompatibilityEntry`'s
+  two floors and returns `.upToDate` / `.softNudge(latestVersion:)` /
+  `.blocked(minSupportedVersion:)`.
+- `AppStoreLookupClient` (`StreamarrKit`): the secondary, **display-only**
+  `https://itunes.apple.com/lookup?bundleId=...` source the architecture
+  docs describe — never used for the actual gating decision, only polled
+  (throttled to ~daily) so a diagnostics screen could show "what's on the
+  App Store" if useful.
+- `UpdateViewModel` (`StreamarrApp`): `@MainActor` glue — calls
+  `fetchVersion()` and the throttled store lookup, holds the resulting
+  `AppUpdateStatus`, knows how to `openAppStore()` (`itms-apps://`).
+  `RootView` calls `checkForUpdate()` once on first appear and again on
+  every `scenePhase` transition to `.active` (i.e. every foreground).
+- `UpdateGateModifier`/`BlockingUpdateInterstitial` (`StreamarrApp`):
+  renders the status — a dismissible `.alert` for `.softNudge`, a
+  `.fullScreenCover` with no dismiss/skip affordance for `.blocked`.
+
+**Enforcement ceiling, stated explicitly (per this pass's instructions):**
+Apple prohibits OTA code updates on iOS outright — nothing here, or
+anywhere on this platform, can force an actual update. The "blocking"
+interstitial is UX-level only: it withholds this app's own UI, but cannot
+stop a determined user/debugger from working around it and does nothing at
+the network/API layer (every request this app makes is unaffected by it).
+Real enforcement, if ever needed, has to happen server-side. See
+`AppUpdateEvaluator.swift`'s and `UpdateGateView.swift`'s header comments
+for the same statement in place against the actual code.
+
+`InstalledAppVersion` (`StreamarrApp`) is where the "what version/bundle
+id/App Store id am I" placeholders live — `CFBundleShortVersionString`
+isn't populated yet (no real `Info.plist`, see "Why `StreamarrApp` isn't a
+real `.app` yet" below), and the numeric App Store id is an obviously-fake
+placeholder (`"0000000000"`) until this app is actually published. Replace
+both with real values at that point.
 
 ## Configurable server base URL
 
@@ -164,7 +254,7 @@ Result, on a clean build (`rm -rf .build && swift build`):
 
 - **`StreamarrKit` (Networking, Player, Auth, `Models/Sensitive.swift`):
   zero errors, zero warnings.**
-- **`StreamarrApp` (the SwiftUI app target): only three categories of
+- **`StreamarrApp` (the SwiftUI app target): only four categories of
   failure, all artifacts of substituting macOS for iOS locally, not
   source defects**:
   1. `#Preview { ... }` in each `Views/*.swift` file fails with *"external
@@ -180,17 +270,50 @@ Result, on a clean build (`rm -rf .build && swift build`):
   3. `LibraryView.swift`'s `ToolbarItem(placement: .navigationBarTrailing)`
      fails because that `ToolbarItemPlacement` case is unavailable on
      macOS — again correct, standard iOS API, just inapplicable here.
+  4. `UpdateGateView.swift`'s `.fullScreenCover(isPresented:content:)`
+     fails because that modifier is unavailable on macOS — same category
+     as #3, a real, standard iOS API with no macOS counterpart.
 
 No other errors were found in either target across the whole package.
 
+**Unit tests were attempted and reverted, not skipped:** a
+`StreamarrKitTests`/`StreamarrAppTests` pass (schema decode/encode
+round-trips against real spec-shaped fixtures, `AppUpdateEvaluator`
+version-comparison boundary cases, `RequestsViewModel`/
+`WorkDetailViewModel` behavior against a fake `StreamarrAPIClient`, an
+`AppStoreLookupClient` test against a mocked `URLProtocol`) was written,
+then removed once direct experiment (a throwaway scratch SPM package, not
+assumption) confirmed this environment has **neither `XCTest.framework`
+nor the `Testing` module available at all**, under any swift-tools-version
+— both `import XCTest` and `import Testing` fail with "no such module"
+here, and there is no `XCTest.framework` anywhere on the filesystem to
+point at. Since compilation aborts at that unresolved import before
+type-checking anything else in the file, keeping those test files would
+mean shipping asserted-but-never-compiled code — see "No test target"
+below.
+
 ## Known gaps / assumptions to revisit
 
-- **Catalog/playback aren't cross-linked server-side yet** — see the
-  "Known real gap in the spec" note above. Once the backend exposes a
-  `media_file_id` from a catalog `Work`/`Episode`/`Track`/`Book` (or a
-  dedicated "media files for this work" endpoint), wire `WorkDetailView`'s
-  "Play…" button straight to it instead of the manual entry field in
-  `PlayerView`.
+- **`localUserID`/`isAdminMode` are local, device-only placeholders**, not
+  a real identity/role system — see "Request management" above. Replace
+  both with a real authenticated user id and a real role claim the moment
+  the server exposes either; nothing else about `RequestsViewModel`'s
+  shape should need to change.
+- **`MediaRequestSchema` doesn't embed a resolved catalog title** for
+  `existing_work` targets (only `work_id`) — a real, current spec
+  limitation, not a client bug. `RequestsView`'s row shows a truncated
+  work id for now; resolve it via `GET /api/v1/catalog/{id}` in a future
+  pass if this screen needs the real title.
+- **`InstalledAppVersion`'s bundle id / numeric App Store id are
+  placeholders** (`"com.streamarr.ios"` fallback, `"0000000000"`) until
+  this app has a real App Store Connect listing — see "Client auto-update
+  module" above.
+- **`docs/versioning-policy.md`/`docs/architecture/clients/ios.md` describe
+  a more elaborate `apiVersion`/`apiVersionFloor` integer scheme than the
+  real backend implements today** — see "Client auto-update module" above
+  for the noted drift; this pass implemented against the real
+  `CompatibilityEntry` shape, per instructions, not the docs' aspirational
+  one.
 - **`grant_type`'s exact value** (`urn:ietf:params:oauth:grant-type:device_code`,
   `DeviceTokenRequest.deviceCodeGrantType`) was confirmed against the
   backend's `streamarr_api::oauth::DEVICE_CODE_GRANT_TYPE` constant, not
@@ -205,12 +328,17 @@ No other errors were found in either target across the whole package.
   request still attaches whatever bearer token is available so the client
   is ready the moment that middleware lands, without another client-side
   change.
-- **No test target** — this package doesn't declare one yet. Once real
-  network/player behavior needs testing, `PlayerEngine`'s protocol and
-  `StreamarrAPIClient`'s protocol are both designed to be mocked (see
-  `PreviewAPIClient` for the shape a test double would take); a
-  `StreamarrKitTests` target can be added to `Package.swift` without
-  touching either.
+- **No test target** — this package doesn't declare one yet, and can't
+  meaningfully in this environment (see "Unit tests were attempted and
+  reverted" above: neither `XCTest` nor `Testing` resolves here at all).
+  `PlayerEngine`'s protocol and `StreamarrAPIClient`'s protocol are both
+  designed to be mocked (see `PreviewAPIClient` for the shape a test
+  double would take); once real Xcode is available, add a
+  `StreamarrKitTests` target (schema round-trips, `AppUpdateEvaluator`,
+  `AppStoreLookupClient` against a mocked `URLProtocol`) and a
+  `StreamarrAppTests` target (`RequestsViewModel`/`WorkDetailViewModel`
+  against a fake `StreamarrAPIClient`) — this pass wrote and then removed
+  exactly that pair, so the design just needs re-adding, not re-designing.
 - **No Xcode project layer** (see "Why `StreamarrApp` isn't a real `.app`
   yet"). The first real step once Xcode is available: open
   `Package.swift` directly in Xcode, pick an iOS Simulator destination,

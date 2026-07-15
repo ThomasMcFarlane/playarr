@@ -5,8 +5,12 @@ import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import io.streamarr.shared.domain.repository.DefaultPlaybackRepository
+import io.streamarr.shared.domain.repository.DefaultRequestRepository
+import io.streamarr.shared.domain.repository.DefaultVersionRepository
 import io.streamarr.shared.domain.repository.DefaultWorkRepository
 import io.streamarr.shared.domain.repository.PlaybackRepository
+import io.streamarr.shared.domain.repository.RequestRepository
+import io.streamarr.shared.domain.repository.VersionRepository
 import io.streamarr.shared.domain.repository.WorkRepository
 import javax.inject.Singleton
 
@@ -21,4 +25,12 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindPlaybackRepository(impl: DefaultPlaybackRepository): PlaybackRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindRequestRepository(impl: DefaultRequestRepository): RequestRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindVersionRepository(impl: DefaultVersionRepository): VersionRepository
 }

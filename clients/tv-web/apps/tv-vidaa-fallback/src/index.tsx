@@ -46,6 +46,7 @@ function App() {
       engine={engine}
       apiBaseUrl={apiBaseUrl}
       clientPlatform="tv-vidaa"
+      appVersion={__APP_VERSION__}
       playbackCapabilities={PLAYBACK_CAPABILITIES}
       videoSurface={
         <video ref={videoRef} style={{ position: "fixed", inset: 0, width: "100%", height: "100%" }} />

@@ -230,7 +230,7 @@ export interface components {
         };
         AlbumDetailSchema: {
             album: components["schemas"]["Album"];
-            tracks: components["schemas"]["Track"][];
+            tracks: components["schemas"]["TrackDetailSchema"][];
         };
         /** @enum {string} */
         AlbumType: "studio" | "live" | "compilation" | "ep" | "single" | "soundtrack";
@@ -256,6 +256,15 @@ export interface components {
             /** Format: float */
             series_position?: number | null;
             title: string;
+        };
+        /**
+         * @description Doc-only mirror of `streamarr_catalog::BookDetail`; see
+         *     [`EpisodeDetailSchema`].
+         */
+        BookDetailSchema: {
+            book: components["schemas"]["Book"];
+            /** Format: uuid */
+            media_file_id?: string | null;
         };
         /**
          * @description Doc-only mirror of [`streamarr_catalog::CatalogPage`] -- the real type
@@ -338,6 +347,16 @@ export interface components {
             /** Format: uuid */
             season_id: string;
             title?: string | null;
+        };
+        /**
+         * @description Doc-only mirror of `streamarr_catalog::EpisodeDetail` -- the resolved
+         *     `MediaFile` id (via `MediaFileRepo::find_by_leaf`) that plays this
+         *     episode, `None` when no file has synced for it yet.
+         */
+        EpisodeDetailSchema: {
+            episode: components["schemas"]["Episode"];
+            /** Format: uuid */
+            media_file_id?: string | null;
         };
         /**
          * @description A cross-reference to the identifier this `Work` (or one of its source
@@ -443,7 +462,7 @@ export interface components {
             title?: string | null;
         };
         SeasonDetailSchema: {
-            episodes: components["schemas"]["Episode"][];
+            episodes: components["schemas"]["EpisodeDetailSchema"][];
             season: components["schemas"]["Season"];
         };
         SubmitRequestBody: {
@@ -480,6 +499,15 @@ export interface components {
             title: string;
             /** Format: int32 */
             track_number: number;
+        };
+        /**
+         * @description Doc-only mirror of `streamarr_catalog::TrackDetail`; see
+         *     [`EpisodeDetailSchema`].
+         */
+        TrackDetailSchema: {
+            /** Format: uuid */
+            media_file_id?: string | null;
+            track: components["schemas"]["Track"];
         };
         /** @description Response body for `GET /api/system/version`. */
         VersionEnvelope: {
@@ -531,10 +559,17 @@ export interface components {
         } | {
             Artist: components["schemas"]["AlbumDetailSchema"][];
         } | {
-            Author: components["schemas"]["Book"][];
+            Author: components["schemas"]["BookDetailSchema"][];
         };
         WorkDetailSchema: {
             children: components["schemas"]["WorkChildrenSchema"];
+            /**
+             * Format: uuid
+             * @description The resolved `MediaFile` id for a movie's own leaf (`LeafRef::Work`);
+             *     always `None` for series/artist/author works, whose playable leaves
+             *     are their children instead -- see `streamarr_catalog::WorkDetail`.
+             */
+            media_file_id?: string | null;
             work: components["schemas"]["Work"];
         };
         /**

@@ -41,6 +41,15 @@ import Foundation
 // for `utoipa` docs while actually returning the real domain type — the
 // wire shape is identical either way, since the doc-only mirrors are kept
 // in lock-step by hand).
+//
+// Round D update: `WorkDetailSchema`/`EpisodeDetailSchema`/
+// `TrackDetailSchema`/`BookDetailSchema` now each carry a real, nullable
+// `media_file_id` sibling field (`WorkDetail.mediaFileID`,
+// `EpisodeDetail`/`TrackDetail`/`BookDetail` wrapper structs) — the
+// catalog/playback cross-link that a prior pass's doc comments correctly
+// flagged as a real backend gap (no `MediaFileRepo`) is resolved
+// server-side now; see `WorkDetailViewModel`/`WorkDetailView` for where the
+// client actually consumes it.
 
 // MARK: - Enums
 
@@ -385,11 +394,33 @@ public struct Episode: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+/// Doc-only mirrored as `EpisodeDetailSchema` in the spec: the resolved
+/// `MediaFile` id (via `MediaFileRepo::find_by_leaf`) that plays this
+/// episode, `nil` when no file has synced for it yet. `id` mirrors the
+/// wrapped `Episode.id` so this conforms to `Identifiable` directly (call
+/// sites that used to `ForEach` over `[Episode]` need no other change).
+public struct EpisodeDetail: Codable, Identifiable, Hashable, Sendable {
+    public var episode: Episode
+    public var mediaFileID: UUID?
+
+    public var id: UUID { episode.id }
+
+    enum CodingKeys: String, CodingKey {
+        case episode
+        case mediaFileID = "media_file_id"
+    }
+
+    public init(episode: Episode, mediaFileID: UUID? = nil) {
+        self.episode = episode
+        self.mediaFileID = mediaFileID
+    }
+}
+
 public struct SeasonDetail: Codable, Sendable {
     public var season: Season
-    public var episodes: [Episode]
+    public var episodes: [EpisodeDetail]
 
-    public init(season: Season, episodes: [Episode]) {
+    public init(season: Season, episodes: [EpisodeDetail]) {
         self.season = season
         self.episodes = episodes
     }
@@ -471,11 +502,31 @@ public struct Track: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+/// Doc-only mirrored as `TrackDetailSchema` in the spec; see
+/// `EpisodeDetail`'s doc comment for the resolved-`media_file_id` shape
+/// this mirrors (nullable, `nil` until a file's synced for this track).
+public struct TrackDetail: Codable, Identifiable, Hashable, Sendable {
+    public var track: Track
+    public var mediaFileID: UUID?
+
+    public var id: UUID { track.id }
+
+    enum CodingKeys: String, CodingKey {
+        case track
+        case mediaFileID = "media_file_id"
+    }
+
+    public init(track: Track, mediaFileID: UUID? = nil) {
+        self.track = track
+        self.mediaFileID = mediaFileID
+    }
+}
+
 public struct AlbumDetail: Codable, Sendable {
     public var album: Album
-    public var tracks: [Track]
+    public var tracks: [TrackDetail]
 
-    public init(album: Album, tracks: [Track]) {
+    public init(album: Album, tracks: [TrackDetail]) {
         self.album = album
         self.tracks = tracks
     }
@@ -527,6 +578,27 @@ public struct Book: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+/// Doc-only mirrored as `BookDetailSchema` in the spec; see
+/// `EpisodeDetail`'s doc comment for the resolved-`media_file_id` shape
+/// this mirrors (nullable — presumably an audiobook file, `nil` until one
+/// has synced for this book).
+public struct BookDetail: Codable, Identifiable, Hashable, Sendable {
+    public var book: Book
+    public var mediaFileID: UUID?
+
+    public var id: UUID { book.id }
+
+    enum CodingKeys: String, CodingKey {
+        case book
+        case mediaFileID = "media_file_id"
+    }
+
+    public init(book: Book, mediaFileID: UUID? = nil) {
+        self.book = book
+        self.mediaFileID = mediaFileID
+    }
+}
+
 /// The kind-specific "full tree" hanging off a `Work` in `WorkDetail`
 /// (`WorkChildren` in `streamarr-catalog/src/lib.rs`, a plain
 /// `#[derive(Serialize, Deserialize)]` enum with no `#[serde(tag = ...)]` —
@@ -537,7 +609,7 @@ public enum WorkChildren: Codable, Sendable {
     case movie
     case series([SeasonDetail])
     case artist([AlbumDetail])
-    case author([Book])
+    case author([BookDetail])
 
     private enum ObjectCodingKeys: String, CodingKey {
         case series = "Series"
@@ -563,7 +635,7 @@ public enum WorkChildren: Codable, Sendable {
             self = .series(seasons)
         } else if let albums = try container.decodeIfPresent([AlbumDetail].self, forKey: .artist) {
             self = .artist(albums)
-        } else if let books = try container.decodeIfPresent([Book].self, forKey: .author) {
+        } else if let books = try container.decodeIfPresent([BookDetail].self, forKey: .author) {
             self = .author(books)
         } else {
             throw DecodingError.dataCorrupted(DecodingError.Context(
@@ -591,13 +663,27 @@ public enum WorkChildren: Codable, Sendable {
     }
 }
 
+/// Doc-only mirrored as `WorkDetailSchema` in the spec.
 public struct WorkDetail: Codable, Sendable {
     public var work: Work
     public var children: WorkChildren
+    /// The resolved `MediaFile` id for a movie's own leaf (`LeafRef::Work`)
+    /// — always `nil` for series/artist/author works, whose playable leaves
+    /// are their children instead (`EpisodeDetail`/`TrackDetail`/
+    /// `BookDetail.mediaFileID`), and `nil` for a movie too until a file
+    /// has synced for it.
+    public var mediaFileID: UUID?
 
-    public init(work: Work, children: WorkChildren) {
+    enum CodingKeys: String, CodingKey {
+        case work
+        case children
+        case mediaFileID = "media_file_id"
+    }
+
+    public init(work: Work, children: WorkChildren, mediaFileID: UUID? = nil) {
         self.work = work
         self.children = children
+        self.mediaFileID = mediaFileID
     }
 }
 

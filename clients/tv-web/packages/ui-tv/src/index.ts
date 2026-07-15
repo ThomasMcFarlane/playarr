@@ -14,7 +14,10 @@ export { BrowseScreen } from "./screens/BrowseScreen";
 export type { BrowseScreenProps, BrowseRow } from "./screens/BrowseScreen";
 
 export { DetailScreen } from "./screens/DetailScreen";
-export type { DetailScreenProps } from "./screens/DetailScreen";
+export type { DetailScreenProps, RequestAction, RequestActionStatus } from "./screens/DetailScreen";
+
+export { VersionBanner } from "./screens/VersionBanner";
+export type { VersionBannerProps } from "./screens/VersionBanner";
 
 export { PlayerScreen } from "./screens/PlayerScreen";
 export type { PlayerScreenProps } from "./screens/PlayerScreen";
@@ -45,3 +48,4 @@ export type { AsyncStateMessageProps } from "./lib/AsyncStateMessage";
 
 export { pickImage } from "./lib/images";
 export { mimeTypeForPlaybackMode } from "./lib/playback";
+export { getOrCreateDeviceUserId } from "./lib/deviceUser";

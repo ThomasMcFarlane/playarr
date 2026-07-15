@@ -38,10 +38,16 @@ export type WorkChildren = components["schemas"]["WorkChildrenSchema"];
 export type Season = components["schemas"]["Season"];
 export type SeasonDetail = components["schemas"]["SeasonDetailSchema"];
 export type Episode = components["schemas"]["Episode"];
+/** Wraps an `Episode` with the resolved `MediaFile` id that plays it (`null` until one has synced). */
+export type EpisodeDetail = components["schemas"]["EpisodeDetailSchema"];
 export type Album = components["schemas"]["Album"];
 export type AlbumDetail = components["schemas"]["AlbumDetailSchema"];
 export type Track = components["schemas"]["Track"];
+/** Wraps a `Track` with the resolved `MediaFile` id that plays it (`null` until one has synced). */
+export type TrackDetail = components["schemas"]["TrackDetailSchema"];
 export type Book = components["schemas"]["Book"];
+/** Wraps a `Book` with the resolved `MediaFile` id that plays it (`null` until one has synced). */
+export type BookDetail = components["schemas"]["BookDetailSchema"];
 
 export type MediaRequest = components["schemas"]["MediaRequestSchema"];
 export type RequestStatus = components["schemas"]["RequestStatusSchema"];

@@ -13,8 +13,9 @@ import { WEB_PLAYBACK_CAPABILITIES } from "../lib/playbackCapabilities";
  * webOS/VIDAA TV shells use) with whatever it returns, via the shared
  * `PlaybackEngine` interface from `@streamarr-tv/player-core`.
  *
- * KNOWN GAP: see `WorkDetail.tsx` -- `mediaFileId` here is really a `Work.id`
- * until the backend's catalog schemas expose a real per-file id.
+ * `mediaFileId` is the real, resolved `MediaFile` id from
+ * `WorkDetailSchema.media_file_id` -- see `WorkDetail.tsx`, which only
+ * links here once that field is non-null.
  */
 export function PlayerPage() {
   const { mediaFileId } = useParams<{ mediaFileId: string }>();

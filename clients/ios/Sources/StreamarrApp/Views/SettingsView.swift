@@ -4,6 +4,8 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var viewModel: SettingsViewModel
 
+    @Environment(AppEnvironment.self) private var environment
+
     var body: some View {
         NavigationStack {
             Form {
@@ -48,6 +50,26 @@ struct SettingsView: View {
                     }
                 }
 
+                Section {
+                    Toggle(
+                        "Admin Mode",
+                        isOn: Binding(
+                            get: { environment.isAdminMode },
+                            set: { environment.isAdminMode = $0 }
+                        )
+                    )
+                    LabeledContent("Your Request ID", value: environment.localUserID.uuidString)
+                        .font(.caption)
+                } header: {
+                    Text("Requests")
+                } footer: {
+                    Text(
+                        "The real API has no user/role model yet, so \"Admin Mode\" is a local, " +
+                        "on-this-device-only placeholder: it only changes what the Requests tab shows " +
+                        "and lets you do (Approve/Reject) here, it isn't checked or enforced by the server."
+                    )
+                }
+
                 if let errorMessage = viewModel.errorMessage {
                     Section {
                         Text(errorMessage)
@@ -61,5 +83,7 @@ struct SettingsView: View {
 }
 
 #Preview {
-    SettingsView(viewModel: SettingsViewModel(environment: AppEnvironment()))
+    let environment = AppEnvironment()
+    SettingsView(viewModel: SettingsViewModel(environment: environment))
+        .environment(environment)
 }

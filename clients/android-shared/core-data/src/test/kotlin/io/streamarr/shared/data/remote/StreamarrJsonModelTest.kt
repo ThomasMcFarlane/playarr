@@ -1,5 +1,6 @@
 package io.streamarr.shared.data.remote
 
+import io.streamarr.shared.data.model.AlbumDetail
 import io.streamarr.shared.data.model.Availability
 import io.streamarr.shared.data.model.CatalogPage
 import io.streamarr.shared.data.model.ExternalProvider
@@ -88,10 +89,20 @@ class StreamarrJsonModelTest {
     fun `decodes WorkDetail with WorkChildren Movie as a bare string`() {
         val detail = json.decodeFromString(workDetailSerializer, """{"work": $movieWorkJson, "children": "Movie"}""")
         assertEquals(WorkChildren.Movie, detail.children)
+        assertEquals(null, detail.mediaFileId)
     }
 
     @Test
-    fun `decodes WorkDetail with WorkChildren Series as a single-key object of SeasonDetailSchema`() {
+    fun `decodes WorkDetail's media_file_id for a movie's own resolved leaf`() {
+        val detail = json.decodeFromString(
+            workDetailSerializer,
+            """{"work": $movieWorkJson, "children": "Movie", "media_file_id": "mf-1"}""",
+        )
+        assertEquals("mf-1", detail.mediaFileId)
+    }
+
+    @Test
+    fun `decodes WorkDetail with WorkChildren Series as a single-key object of SeasonDetailSchema, each episode wrapped with its own media_file_id`() {
         val detail = json.decodeFromString(
             workDetailSerializer,
             """
@@ -102,7 +113,13 @@ class StreamarrJsonModelTest {
                   {
                     "season": {"id": "s1", "series_work_id": "w1", "season_number": 1, "monitored": true, "availability": "available"},
                     "episodes": [
-                      {"id": "e1", "season_id": "s1", "episode_number": 1, "title": "Pilot", "monitored": true, "availability": "available"}
+                      {
+                        "episode": {"id": "e1", "season_id": "s1", "episode_number": 1, "title": "Pilot", "monitored": true, "availability": "available"},
+                        "media_file_id": "mf-e1"
+                      },
+                      {
+                        "episode": {"id": "e2", "season_id": "s1", "episode_number": 2, "title": "Second", "monitored": true, "availability": "pending"}
+                      }
                     ]
                   }
                 ]
@@ -115,24 +132,56 @@ class StreamarrJsonModelTest {
         children as WorkChildren.Series
         assertEquals(1, children.seasons.size)
         assertEquals(1, children.seasons.single().season.seasonNumber)
-        assertEquals("Pilot", children.seasons.single().episodes.single().title)
+        val episodes = children.seasons.single().episodes
+        assertEquals("Pilot", episodes[0].episode.title)
+        assertEquals("mf-e1", episodes[0].mediaFileId)
+        assertEquals("Second", episodes[1].episode.title)
+        assertEquals(null, episodes[1].mediaFileId)
     }
 
     @Test
-    fun `decodes WorkChildren Author as a bare list of Book, not a wrapped Author object`() {
+    fun `decodes WorkChildren Author as a list of BookDetailSchema, not a bare list of Book`() {
         val detail = json.decodeFromString(
             workDetailSerializer,
             """
             {
               "work": $movieWorkJson,
-              "children": {"Author": [{"id": "b1", "author_work_id": "w1", "title": "Sample Title", "monitored": true, "availability": "available"}]}
+              "children": {
+                "Author": [
+                  {
+                    "book": {"id": "b1", "author_work_id": "w1", "title": "Sample Title", "monitored": true, "availability": "available"},
+                    "media_file_id": "mf-b1"
+                  }
+                ]
+              }
             }
             """.trimIndent(),
         )
         val children = detail.children
         assertTrue(children is WorkChildren.Author)
         children as WorkChildren.Author
-        assertEquals("Sample Title", children.books.single().title)
+        assertEquals("Sample Title", children.books.single().book.title)
+        assertEquals("mf-b1", children.books.single().mediaFileId)
+    }
+
+    @Test
+    fun `decodes AlbumDetail tracks as TrackDetailSchema with a nullable media_file_id`() {
+        val albumDetail = json.decodeFromString(
+            AlbumDetail.serializer(),
+            """
+            {
+              "album": {"id": "al1", "artist_work_id": "w1", "title": "Sample Album", "album_type": "studio", "monitored": true, "availability": "available"},
+              "tracks": [
+                {
+                  "track": {"id": "t1", "album_id": "al1", "disc_number": 1, "track_number": 1, "title": "Sample Track One", "availability": "available"},
+                  "media_file_id": "mf-t1"
+                }
+              ]
+            }
+            """.trimIndent(),
+        )
+        assertEquals("Sample Track One", albumDetail.tracks.single().track.title)
+        assertEquals("mf-t1", albumDetail.tracks.single().mediaFileId)
     }
 
     @Test

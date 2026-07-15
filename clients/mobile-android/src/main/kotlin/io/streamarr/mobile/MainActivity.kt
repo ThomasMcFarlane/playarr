@@ -8,6 +8,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
 import io.streamarr.mobile.navigation.StreamarrNavHost
+import io.streamarr.mobile.update.AppUpdateEffect
 import io.streamarr.shared.designsystem.theme.StreamarrTheme
 
 @AndroidEntryPoint
@@ -19,6 +20,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             StreamarrTheme {
+                AppUpdateEffect()
                 val navController = rememberNavController()
                 StreamarrNavHost(navController = navController)
             }

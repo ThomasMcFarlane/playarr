@@ -44,6 +44,7 @@ include(":core-domain")
 include(":core-designsystem")
 include(":core-player")
 include(":core-auth")
+include(":core-update")
 
 // --- App modules: siblings of android-shared, included by relative path -
 include(":mobile-android")

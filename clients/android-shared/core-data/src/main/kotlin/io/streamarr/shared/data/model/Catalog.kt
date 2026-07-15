@@ -20,25 +20,67 @@ data class CatalogPage(
     val total: Long? = null,
 )
 
-/** `GET /api/v1/catalog/{id}` response body -- mirrors `WorkDetailSchema`. */
+/**
+ * `GET /api/v1/catalog/{id}` response body -- mirrors `WorkDetailSchema`.
+ *
+ * [mediaFileId] is the resolved `MediaFile` id for a *movie's own* leaf
+ * (`LeafRef::Work` server-side) -- `null` either when no file has synced
+ * for this movie yet, or (always) for series/artist/author works, whose
+ * playable leaves are their children instead (see [EpisodeDetail],
+ * [TrackDetail], [BookDetail]).
+ */
 @Serializable
 data class WorkDetail(
     val work: Work,
     val children: WorkChildren,
+    val mediaFileId: String? = null,
+)
+
+/**
+ * One episode plus the resolved `MediaFile` id that plays it -- mirrors
+ * `EpisodeDetailSchema`. [mediaFileId] is `null` until a file has synced
+ * for this episode.
+ */
+@Serializable
+data class EpisodeDetail(
+    val episode: Episode,
+    val mediaFileId: String? = null,
 )
 
 /** One season plus its episodes -- mirrors `SeasonDetailSchema`. */
 @Serializable
 data class SeasonDetail(
     val season: Season,
-    val episodes: List<Episode>,
+    val episodes: List<EpisodeDetail>,
+)
+
+/**
+ * One track plus the resolved `MediaFile` id that plays it -- mirrors
+ * `TrackDetailSchema`. [mediaFileId] is `null` until a file has synced for
+ * this track.
+ */
+@Serializable
+data class TrackDetail(
+    val track: Track,
+    val mediaFileId: String? = null,
 )
 
 /** One album plus its tracks -- mirrors `AlbumDetailSchema`. */
 @Serializable
 data class AlbumDetail(
     val album: Album,
-    val tracks: List<Track>,
+    val tracks: List<TrackDetail>,
+)
+
+/**
+ * One book plus the resolved `MediaFile` id that plays it -- mirrors
+ * `BookDetailSchema`. [mediaFileId] is `null` until a file has synced for
+ * this book.
+ */
+@Serializable
+data class BookDetail(
+    val book: Book,
+    val mediaFileId: String? = null,
 )
 
 /**
@@ -51,11 +93,11 @@ data class AlbumDetail(
  */
 @Serializable(with = WorkChildrenSerializer::class)
 sealed interface WorkChildren {
-    /** A movie `Work` has no children of its own. */
+    /** A movie `Work` has no children of its own; see [WorkDetail.mediaFileId] instead. */
     data object Movie : WorkChildren
     data class Series(val seasons: List<SeasonDetail>) : WorkChildren
     data class Artist(val albums: List<AlbumDetail>) : WorkChildren
-    data class Author(val books: List<Book>) : WorkChildren
+    data class Author(val books: List<BookDetail>) : WorkChildren
 }
 
 object WorkChildrenSerializer : KSerializer<WorkChildren> {
@@ -64,7 +106,7 @@ object WorkChildrenSerializer : KSerializer<WorkChildren> {
 
     private val seasonDetailListSerializer = ListSerializer(SeasonDetail.serializer())
     private val albumDetailListSerializer = ListSerializer(AlbumDetail.serializer())
-    private val bookListSerializer = ListSerializer(Book.serializer())
+    private val bookDetailListSerializer = ListSerializer(BookDetail.serializer())
 
     override fun serialize(encoder: Encoder, value: WorkChildren) {
         require(encoder is JsonEncoder) { "WorkChildren can only be serialized to JSON" }
@@ -77,7 +119,7 @@ object WorkChildrenSerializer : KSerializer<WorkChildren> {
                 JsonObject(mapOf("Artist" to encoder.json.encodeToJsonElement(albumDetailListSerializer, value.albums))),
             )
             is WorkChildren.Author -> encoder.encodeJsonElement(
-                JsonObject(mapOf("Author" to encoder.json.encodeToJsonElement(bookListSerializer, value.books))),
+                JsonObject(mapOf("Author" to encoder.json.encodeToJsonElement(bookDetailListSerializer, value.books))),
             )
         }
     }
@@ -95,7 +137,7 @@ object WorkChildrenSerializer : KSerializer<WorkChildren> {
             "Artist" in obj ->
                 WorkChildren.Artist(decoder.json.decodeFromJsonElement(albumDetailListSerializer, obj.getValue("Artist")))
             "Author" in obj ->
-                WorkChildren.Author(decoder.json.decodeFromJsonElement(bookListSerializer, obj.getValue("Author")))
+                WorkChildren.Author(decoder.json.decodeFromJsonElement(bookDetailListSerializer, obj.getValue("Author")))
             else -> error("Unknown WorkChildren shape: ${obj.keys}")
         }
     }

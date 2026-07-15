@@ -51,5 +51,20 @@ let package = Package(
             dependencies: ["StreamarrKit"],
             path: "Sources/StreamarrApp"
         )
+
+        // No `.testTarget` yet: this environment (Command Line Tools only,
+        // no Xcode) has neither `XCTest.framework` nor the `Testing`
+        // module available under any swift-tools-version — confirmed by
+        // direct experiment, not assumed (both `import XCTest` and
+        // `import Testing` fail to resolve even inside a trivial scratch
+        // SPM package). A `StreamarrKitTests`/`StreamarrAppTests` pass
+        // (schema decode/encode round-trips against real spec-shaped
+        // fixtures, `AppUpdateEvaluator` version-comparison boundary
+        // cases, `RequestsViewModel`/`WorkDetailViewModel` behavior against
+        // a fake `StreamarrAPIClient`) was written and then reverted for
+        // this reason: none of it could be type-checked here, so keeping
+        // it would mean shipping asserted-but-never-compiled test code.
+        // Re-add once real Xcode is available — see clients/ios/README.md
+        // "No test target" for the existing note this extends.
     ]
 )

@@ -21,6 +21,8 @@ import StreamarrKit
 public final class AppEnvironment {
     static let serverBaseURLDefaultsKey = "com.streamarr.ios.serverBaseURL"
     static let defaultServerBaseURL = URL(string: "http://localhost:8080")!
+    static let localUserIDDefaultsKey = "com.streamarr.ios.localUserID"
+    static let isAdminModeDefaultsKey = "com.streamarr.ios.isAdminMode"
 
     public private(set) var apiClient: StreamarrAPIClient
     public private(set) var deviceFlowClient: DeviceFlowClient
@@ -34,6 +36,29 @@ public final class AppEnvironment {
         }
     }
 
+    /// Stand-in for a real signed-in user id, since the real API has no
+    /// auth-extraction middleware yet (see `SubmitRequestBody.requestedBy`'s
+    /// `TODO(auth)` note in the spec) — `requested_by`/`decided_by` on the
+    /// media-request endpoints have to come from *somewhere* client-side
+    /// until that lands. Generated once per install and persisted in
+    /// `UserDefaults` so it's stable across launches; `SettingsView`
+    /// surfaces it read-only for now. Replace with the real authenticated
+    /// user id the moment the server hands one back.
+    public let localUserID: UUID
+
+    /// Local, device-only placeholder for "is this person an admin," since
+    /// the real API has no role model yet either — gates whether
+    /// `RequestsView` shows the admin "Pending Approval" queue (with
+    /// Approve/Reject) or the regular "My Requests" list. Toggled from
+    /// `SettingsView`; persisted in `UserDefaults`. Not server-enforced in
+    /// any way — see `RequestsViewModel`'s doc comment.
+    public var isAdminMode: Bool {
+        didSet {
+            guard isAdminMode != oldValue else { return }
+            userDefaults.set(isAdminMode, forKey: Self.isAdminModeDefaultsKey)
+        }
+    }
+
     @ObservationIgnored private let userDefaults: UserDefaults
     @ObservationIgnored private let tokenStore: InMemoryTokenStore
 
@@ -44,11 +69,21 @@ public final class AppEnvironment {
         let resolvedURL = storedURLString.flatMap(URL.init(string:)) ?? Self.defaultServerBaseURL
         self.serverBaseURL = resolvedURL
 
+        if let storedUserID = userDefaults.string(forKey: Self.localUserIDDefaultsKey),
+           let parsedUserID = UUID(uuidString: storedUserID) {
+            self.localUserID = parsedUserID
+        } else {
+            let generatedUserID = UUID()
+            userDefaults.set(generatedUserID.uuidString, forKey: Self.localUserIDDefaultsKey)
+            self.localUserID = generatedUserID
+        }
+        self.isAdminMode = userDefaults.bool(forKey: Self.isAdminModeDefaultsKey)
+
         let tokenStore = InMemoryTokenStore()
         self.tokenStore = tokenStore
 
         self.apiClient = APIClient(
-            configuration: APIClientConfiguration(baseURL: resolvedURL),
+            configuration: APIClientConfiguration(baseURL: resolvedURL, clientVersion: InstalledAppVersion.current),
             tokenProvider: tokenStore
         )
         self.deviceFlowClient = DeviceFlowClient(
@@ -71,7 +106,7 @@ public final class AppEnvironment {
 
     private func rebuildClients() {
         apiClient = APIClient(
-            configuration: APIClientConfiguration(baseURL: serverBaseURL),
+            configuration: APIClientConfiguration(baseURL: serverBaseURL, clientVersion: InstalledAppVersion.current),
             tokenProvider: tokenStore
         )
         deviceFlowClient = DeviceFlowClient(

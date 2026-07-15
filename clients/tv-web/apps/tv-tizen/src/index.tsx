@@ -41,6 +41,7 @@ function App() {
       engine={engine}
       apiBaseUrl={apiBaseUrl}
       clientPlatform="tv-tizen"
+      appVersion={__APP_VERSION__}
       playbackCapabilities={PLAYBACK_CAPABILITIES}
     />
   );

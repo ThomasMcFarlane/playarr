@@ -28,6 +28,9 @@ class TokenStore @Inject constructor(
     val accessToken: Flow<String?> = dataStore.data.map { it[ACCESS_TOKEN_KEY] }
     val refreshToken: Flow<String?> = dataStore.data.map { it[REFRESH_TOKEN_KEY] }
 
+    /** The current access token's `sub` claim (the signed-in user's id) -- see [JwtClaims]. `null` when signed out or the token doesn't decode. */
+    val userId: Flow<String?> = accessToken.map { token -> token?.let(JwtClaims::subject) }
+
     suspend fun save(token: TokenResponse) {
         dataStore.edit { prefs ->
             prefs[ACCESS_TOKEN_KEY] = token.accessToken

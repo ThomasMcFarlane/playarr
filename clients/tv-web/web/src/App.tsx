@@ -5,6 +5,9 @@ import { WorkDetailPage } from "./pages/WorkDetail";
 import { PlayerPage } from "./pages/Player";
 import { SettingsPage } from "./pages/Settings";
 import { AdminPage } from "./pages/Admin";
+import { UpdateToast } from "./components/UpdateToast";
+import { useAppUpdate } from "./lib/appUpdate";
+import { useApiClient } from "./lib/ApiClientProvider";
 
 const NAV_LINKS = [
   { to: "/", label: "Home", end: true },
@@ -19,10 +22,19 @@ const NAV_LINKS = [
  * standalone nav link, since playback always starts from a specific work.
  * `Admin` hosts the real request-management UI (approve/reject
  * `MediaRequest`s against `GET/POST /api/v1/requests`).
+ *
+ * Also mounts the Web app's OTA self-update flow (`useAppUpdate`) at the
+ * top level so the "Update available" toast (or a forced reload once the
+ * running bundle drops below the server's version floor) can surface from
+ * anywhere in the app -- see `lib/appUpdate.ts`.
  */
 export function App() {
+  const client = useApiClient();
+  const appUpdate = useAppUpdate(client, "web");
+
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+      <UpdateToast state={appUpdate} />
       <nav
         style={{
           display: "flex",

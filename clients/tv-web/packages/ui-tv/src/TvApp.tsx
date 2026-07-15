@@ -1,19 +1,30 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ApiClient, type ClientPlatform, type Work } from "@streamarr-tv/api-client";
 import type { PlaybackCapabilities } from "@streamarr-tv/api-client/react";
 import type { DeviceTokenSuccess } from "@streamarr-tv/device-auth";
+import { evaluateClientVersion, type ClientVersionEvaluation } from "@streamarr-tv/domain";
 import type { PlaybackEngine } from "@streamarr-tv/player-core";
 import { SpatialNavProvider } from "./SpatialNavContext";
 import { PairingScreenContainer } from "./screens/PairingScreenContainer";
 import { BrowseScreenContainer } from "./screens/BrowseScreenContainer";
 import { DetailScreenContainer } from "./screens/DetailScreenContainer";
 import { PlayerScreenContainer } from "./screens/PlayerScreenContainer";
+import { VersionBanner } from "./screens/VersionBanner";
 
 export interface TvAppProps {
   /** Platform `PlaybackEngine` (`ShakaPlaybackEngine` or `TizenAvplayEngine`) -- constructed once by the app shell. */
   engine: PlaybackEngine;
   apiBaseUrl: string;
   clientPlatform: ClientPlatform;
+  /**
+   * This build's own version (e.g. from the shell's `package.json`, injected
+   * at build time), checked once on launch against `GET /api/system/version`'s
+   * compatibility table -- see `VersionBanner`. webOS/Tizen/VIDAA-fallback
+   * have no OTA loophole (per `docs/versioning-policy.md`'s per-platform
+   * table), so this only ever surfaces a non-blocking banner, never forces
+   * a reload the way the Web app's update flow does.
+   */
+  appVersion: string;
   playbackCapabilities?: PlaybackCapabilities;
   /**
    * Rendered behind every screen; only needed by MSE-based engines (Shaka)
@@ -31,7 +42,7 @@ type Screen = { name: "browse" } | { name: "detail"; workId: string } | { name: 
  * switches between Browse / Detail / Player, each backed by the real
  * catalog/playback endpoints via the containers in `./screens`.
  */
-export function TvApp({ engine, apiBaseUrl, clientPlatform, playbackCapabilities, videoSurface }: TvAppProps) {
+export function TvApp({ engine, apiBaseUrl, clientPlatform, appVersion, playbackCapabilities, videoSurface }: TvAppProps) {
   // A mutable ref (rather than state) so acquiring/refreshing the token doesn't need to
   // recreate the ApiClient -- `getAccessToken` just reads whatever is current at call time.
   const tokenRef = useRef<string | undefined>(undefined);
@@ -42,6 +53,27 @@ export function TvApp({ engine, apiBaseUrl, clientPlatform, playbackCapabilities
 
   const [authenticated, setAuthenticated] = useState(false);
   const [screen, setScreen] = useState<Screen>({ name: "browse" });
+  const [versionEvaluation, setVersionEvaluation] = useState<ClientVersionEvaluation | null>(null);
+
+  // Check once on launch (not polled) -- see the `appVersion` doc comment
+  // above: there is nothing a TV shell can do beyond notify the viewer, so
+  // there is no forced-reload/retry loop to drive here the way the Web
+  // client's OTA flow needs one.
+  useEffect(() => {
+    let cancelled = false;
+    client
+      .getVersion()
+      .then((version) => {
+        if (cancelled) return;
+        setVersionEvaluation(evaluateClientVersion(appVersion, clientPlatform, version.compatibility));
+      })
+      .catch(() => {
+        // Version-check endpoint unreachable -- non-fatal, just skip the banner this session.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, appVersion, clientPlatform]);
 
   function handleAuthenticated(token: DeviceTokenSuccess): void {
     tokenRef.current = token.accessToken;
@@ -54,6 +86,7 @@ export function TvApp({ engine, apiBaseUrl, clientPlatform, playbackCapabilities
 
   return (
     <SpatialNavProvider>
+      {versionEvaluation && <VersionBanner evaluation={versionEvaluation} />}
       {videoSurface}
 
       {!authenticated && (
