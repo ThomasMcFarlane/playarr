@@ -94,6 +94,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/source-instances/{id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Asks this source instance's running `ReconciliationPoller` to do a full
+         *     sync right now, instead of waiting for its next scheduled (every 300s)
+         *     pass -- the "Sync now" action every `*arr` app itself exposes per
+         *     configured connection. Fire-and-forget: a `202` means the request
+         *     reached the poller, not that the resulting sync has finished yet.
+         */
+        post: operations["sync_source_instance_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -891,6 +914,55 @@ export interface operations {
             };
             /** @description Caller is authenticated but not an admin */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sync_source_instance_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Source instance id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sync request handed to the running reconciliation poller */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No source instance registered with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No reconciliation poller is currently running for this instance yet */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -143,6 +143,21 @@ impl From<streamarr_auth::device_flow::DeviceFlowError> for ApiError {
     }
 }
 
+impl From<crate::source_registry::SyncTriggerError> for ApiError {
+    fn from(err: crate::source_registry::SyncTriggerError) -> Self {
+        use crate::source_registry::SyncTriggerError;
+        match err {
+            SyncTriggerError::NotFound => Self::not_found("source instance not found"),
+            SyncTriggerError::PollerNotRunning => Self::new(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "poller_not_running",
+                "no reconciliation poller is currently running for this source instance yet -- \
+                 it may still be starting up (checked every 10s after registration)",
+            ),
+        }
+    }
+}
+
 impl From<streamarr_auth::LoginError> for ApiError {
     fn from(err: streamarr_auth::LoginError) -> Self {
         use streamarr_auth::LoginError;

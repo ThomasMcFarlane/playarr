@@ -154,6 +154,7 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/admin/source-instances", method: "POST" },
   { schemaPath: "/api/v1/admin/source-instances", method: "GET" },
   { schemaPath: "/api/v1/admin/source-instances/{id}", method: "DELETE" },
+  { schemaPath: "/api/v1/admin/source-instances/{id}/sync", method: "POST" },
 ];
 
 function isProtectedOperation(schemaPath: string, method: string): boolean {
@@ -364,6 +365,22 @@ export class ApiClient {
   async deleteSourceInstance(id: string): Promise<void> {
     this.assertOk(
       await this.raw.DELETE("/api/v1/admin/source-instances/{id}", { params: { path: { id } } })
+    );
+  }
+
+  /**
+   * Asks this source instance's reconciliation poller to do a full sync
+   * right now, instead of waiting for its next scheduled pass. Fire-and-
+   * forget: resolving means the request reached the poller, not that the
+   * resulting sync has finished. 503s (surfaced via `describeApiError`) if
+   * no poller is running yet for this instance -- normal for the first
+   * ~10s after registration.
+   */
+  async syncSourceInstance(id: string): Promise<void> {
+    this.assertOk(
+      await this.raw.POST("/api/v1/admin/source-instances/{id}/sync", {
+        params: { path: { id } },
+      })
     );
   }
 

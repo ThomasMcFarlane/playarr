@@ -36,6 +36,8 @@ function SourceInstancesSection() {
   const [form, setForm] = useState<SourceInstanceRequest>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<Record<string, string>>({});
 
   function refresh() {
     setError(null);
@@ -79,6 +81,21 @@ function SourceInstancesSection() {
     }
   }
 
+  async function handleSync(id: string) {
+    setSyncingId(id);
+    setSyncStatus((current) => ({ ...current, [id]: "" }));
+    try {
+      await client.syncSourceInstance(id);
+      setSyncStatus((current) => ({ ...current, [id]: "Sync requested" }));
+    } catch (err) {
+      // Most commonly a 503 -- registered less than ~10s ago, its poller
+      // hasn't spawned yet. Not a real failure, just "try again shortly".
+      setSyncStatus((current) => ({ ...current, [id]: describeApiError(err) }));
+    } finally {
+      setSyncingId(null);
+    }
+  }
+
   return (
     <section className="section">
       <h2 className="section-title">Source instances</h2>
@@ -113,14 +130,29 @@ function SourceInstancesSection() {
                     </span>
                   </td>
                   <td>
-                    <button
-                      type="button"
-                      className="btn btn-danger btn-sm"
-                      disabled={deletingId === instance.id}
-                      onClick={() => void handleDelete(instance.id)}
-                    >
-                      Remove
-                    </button>
+                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        disabled={syncingId === instance.id}
+                        onClick={() => void handleSync(instance.id)}
+                      >
+                        {syncingId === instance.id ? "Syncing..." : "Sync now"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm"
+                        disabled={deletingId === instance.id}
+                        onClick={() => void handleDelete(instance.id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    {syncStatus[instance.id] && (
+                      <p className="hint" style={{ marginTop: "0.35rem" }}>
+                        {syncStatus[instance.id]}
+                      </p>
+                    )}
                   </td>
                 </tr>
               ))}

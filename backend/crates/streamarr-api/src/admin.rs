@@ -199,6 +199,33 @@ pub async fn delete_source_instance_handler(
     axum::http::StatusCode::NO_CONTENT
 }
 
+/// Asks this source instance's running `ReconciliationPoller` to do a full
+/// sync right now, instead of waiting for its next scheduled (every 300s)
+/// pass -- the "Sync now" action every `*arr` app itself exposes per
+/// configured connection. Fire-and-forget: a `202` means the request
+/// reached the poller, not that the resulting sync has finished yet.
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/source-instances/{id}/sync",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Source instance id")),
+    responses(
+        (status = 202, description = "Sync request handed to the running reconciliation poller"),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Caller is authenticated but not an admin"),
+        (status = 404, description = "No source instance registered with this id"),
+        (status = 503, description = "No reconciliation poller is currently running for this instance yet")
+    )
+)]
+pub async fn sync_source_instance_handler(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+    Path(id): Path<Uuid>,
+) -> Result<axum::http::StatusCode, ApiError> {
+    state.source_instances.trigger_sync(id)?;
+    Ok(axum::http::StatusCode::ACCEPTED)
+}
+
 #[cfg(test)]
 mod tests {
     use axum::body::Body;
@@ -340,6 +367,68 @@ mod tests {
             .unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
         assert_eq!(state.app.source_instances.all().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn sync_reports_not_found_for_unknown_instance() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        state.admin_registry.add(admin_id);
+        let token = mint_access_token(&state, admin_id);
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!(
+                        "/api/v1/admin/source-instances/{}/sync",
+                        Uuid::new_v4()
+                    ))
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn sync_reports_poller_not_running_when_none_is_registered() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        state.admin_registry.add(admin_id);
+        let token = mint_access_token(&state, admin_id);
+
+        let instance = streamarr_model::SourceInstance {
+            id: Uuid::new_v4(),
+            kind: streamarr_model::SourceKind::Prowlarr,
+            name: "Prowlarr".to_string(),
+            base_url: "http://localhost:9696".to_string(),
+            api_key_encrypted: streamarr_model::Sensitive::new("key".to_string()),
+            priority: 0,
+            default_root_folder_id: None,
+            default_quality_profile_id: None,
+            enabled_for_requests: false,
+            best_effort: false,
+        };
+        state.app.source_instances.upsert(instance.clone());
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!(
+                        "/api/v1/admin/source-instances/{}/sync",
+                        instance.id
+                    ))
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 
     #[tokio::test]

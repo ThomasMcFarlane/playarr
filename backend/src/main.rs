@@ -636,62 +636,144 @@ async fn boot_api(
 /// background dispatch loop. Returns immediately with the spawned tasks'
 /// `JoinHandle`s — callers that don't need to observe completion (`serve`)
 /// can drop them; the tasks keep running detached either way.
+/// Spawns one [`ReconciliationPoller`] for `instance`, sharing the given
+/// repos/pool/coordinator with every other poller. Factored out of
+/// [`boot_worker`] so both its initial snapshot loop and the supervisor
+/// loop below (which spawns pollers for instances registered *after*
+/// startup) share exactly one construction path.
+fn spawn_poller_for(
+    instance: &streamarr_model::SourceInstance,
+    source_instances: &Arc<streamarr_api::SourceInstanceRegistry>,
+    work_repo: Arc<dyn streamarr_db::WorkRepo>,
+    media_file_repo: Arc<dyn streamarr_db::MediaFileRepo>,
+    pool: DbPool,
+    coordinator: Arc<dyn streamarr_coordination::ClusterCoordinator>,
+) -> tokio::task::JoinHandle<()> {
+    use streamarr_arr_sync::{ArrClient, ReconciliationPoller};
+    use streamarr_telemetry::correlation::spawn::spawn_traced;
+
+    let arr_client = ArrClient::from_source_instance(instance);
+    // No webhook wired to this specific poller yet (see the TODO in
+    // `boot_api`) — this channel only ever sees `Scheduled` ticks from its
+    // own interval, plus whatever `SourceInstanceRegistry::trigger_sync`
+    // sends on an operator's manual "Sync now" (the admin UI's per-instance
+    // sync button, `POST /api/v1/admin/source-instances/{id}/sync`), never
+    // a webhook-fast-pathed single-entity `Refetch`, until that separate
+    // wiring lands.
+    let (refetch_tx, refetch_rx) = tokio::sync::mpsc::channel(64);
+    source_instances.register_trigger(instance.id, refetch_tx);
+    let poller = ReconciliationPoller::new(
+        instance.id,
+        instance.kind,
+        arr_client,
+        Duration::from_secs(300),
+        work_repo,
+        media_file_repo,
+        pool,
+        coordinator,
+        refetch_rx,
+    );
+    let span = tracing::info_span!(
+        "arr_sync_poller",
+        source_instance_id = %instance.id,
+        source_kind = ?instance.kind,
+    );
+    spawn_traced(span, async move {
+        if let Err(err) = poller.run().await {
+            tracing::error!(%err, "reconciliation poller exited with an error");
+        }
+    })
+}
+
 async fn boot_worker(
     pool: DbPool,
     coordinator: Arc<dyn streamarr_coordination::ClusterCoordinator>,
     source_instances: Arc<streamarr_api::SourceInstanceRegistry>,
     active_sessions: streamarr_transcode::ActiveSessionCounter,
 ) -> anyhow::Result<Vec<tokio::task::JoinHandle<()>>> {
-    use streamarr_arr_sync::{ArrClient, ReconciliationPoller};
+    use std::collections::HashSet;
+
     use streamarr_db::repo::{SqlxMediaFileRepo, SqlxRenditionRepo, SqlxWorkRepo};
     use streamarr_db::{MediaFileRepo, RenditionRepo, WorkRepo};
-    use streamarr_telemetry::correlation::spawn::spawn_traced;
 
     let mut handles = Vec::new();
 
     let work_repo: Arc<dyn WorkRepo> = Arc::new(SqlxWorkRepo::new(pool.clone()));
     let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(SqlxMediaFileRepo::new(pool.clone()));
+
+    let mut spawned_instance_ids: HashSet<uuid::Uuid> = HashSet::new();
     let configured_instances = source_instances.all();
     if configured_instances.is_empty() {
         tracing::info!(
-            "no SourceInstance is configured (no persistence/admin API for source instance \
-             config exists yet — see streamarr_api::SourceInstanceRegistry's doc comment); \
-             arr-sync has nothing to poll until one is registered"
+            "no SourceInstance is configured yet; arr-sync has nothing to poll until one is \
+             registered via the admin API. Checked again every 10s by the supervisor loop \
+             below, so a later registration doesn't need a process restart to start syncing."
         );
     }
-    for instance in configured_instances {
-        let arr_client = ArrClient::from_source_instance(&instance);
-        // No webhook wired to this specific poller yet (see the TODO in
-        // `boot_api`) — an empty, otherwise-unused sender end means this
-        // channel only ever sees `Scheduled` reconciliation ticks, never a
-        // fast-pathed `Refetch`, until that wiring lands.
-        let (_refetch_tx, refetch_rx) = tokio::sync::mpsc::channel(64);
-        let poller = ReconciliationPoller::new(
-            instance.id,
-            instance.kind,
-            arr_client,
-            Duration::from_secs(300),
+    for instance in &configured_instances {
+        handles.push(spawn_poller_for(
+            instance,
+            &source_instances,
             work_repo.clone(),
             media_file_repo.clone(),
             pool.clone(),
             coordinator.clone(),
-            refetch_rx,
-        );
-        let span = tracing::info_span!(
-            "arr_sync_poller",
-            source_instance_id = %instance.id,
-            source_kind = ?instance.kind,
-        );
-        handles.push(spawn_traced(span, async move {
-            if let Err(err) = poller.run().await {
-                tracing::error!(%err, "reconciliation poller exited with an error");
+        ));
+        spawned_instance_ids.insert(instance.id);
+    }
+
+    // `SourceInstanceRegistry` has no persistence yet (see its own doc
+    // comment) and `POST /api/v1/admin/source-instances` (`admin.rs`'s
+    // `create_source_instance_handler`) only ever upserts into the shared
+    // registry -- it never signals this worker. Without this loop, a
+    // SourceInstance registered after the snapshot above would silently
+    // never get a poller and never sync until the process restarted. This
+    // is a cheap in-memory `DashMap` read, not a network/DB call, so a 10s
+    // poll interval is negligible overhead.
+    //
+    // NOTE: this only closes the gap for `STREAMARR_ROLE=all` (this
+    // worker and the `api` role sharing one `Arc<SourceInstanceRegistry>`
+    // in the same process, e.g. `docker-compose.standalone.yml`). Split
+    // `api`/`worker`-role deployments (Postgres tiers 2/3) run this
+    // function in a *different* process than the one serving the admin
+    // endpoint, each with its own empty registry -- that gap needs real
+    // `SourceInstance` DB persistence, not a bigger poll interval, and is
+    // still open.
+    {
+        let source_instances = source_instances.clone();
+        let work_repo = work_repo.clone();
+        let media_file_repo = media_file_repo.clone();
+        let pool = pool.clone();
+        let coordinator = coordinator.clone();
+        handles.push(tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(10));
+            interval.tick().await; // first tick fires immediately; the snapshot above already covers "now"
+            loop {
+                interval.tick().await;
+                for instance in source_instances.all() {
+                    if spawned_instance_ids.insert(instance.id) {
+                        tracing::info!(
+                            source_instance_id = %instance.id,
+                            source_kind = ?instance.kind,
+                            "SourceInstance registered after startup; spawning its reconciliation poller now"
+                        );
+                        spawn_poller_for(
+                            &instance,
+                            &source_instances,
+                            work_repo.clone(),
+                            media_file_repo.clone(),
+                            pool.clone(),
+                            coordinator.clone(),
+                        );
+                    }
+                }
             }
         }));
     }
 
     if let Ok(tdarr_url) = std::env::var("TDARR_URL") {
         let tdarr_api_key = std::env::var("TDARR_API_KEY").unwrap_or_default();
-        let rendition_repo: Arc<dyn RenditionRepo> = Arc::new(SqlxRenditionRepo::new(pool));
+        let rendition_repo: Arc<dyn RenditionRepo> = Arc::new(SqlxRenditionRepo::new(pool.clone()));
         let tdarr = streamarr_tdarr_client::TdarrClient::new(tdarr_url, tdarr_api_key);
         // TODO: nothing produces `MediaFileImportEvent`s yet (no
         // `MediaFileRepo`/import pipeline — see `streamarr-transcode`'s own

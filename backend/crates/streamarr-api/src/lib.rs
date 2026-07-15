@@ -55,7 +55,7 @@ pub use auth_extractor::{AdminUser, AuthUser};
 pub use error::{ApiError, ErrorBody};
 pub use playback::{InMemoryMediaFileLookup, MediaFileLookup, RepoBackedMediaFileLookup};
 pub use readiness::ReadinessState;
-pub use source_registry::SourceInstanceRegistry;
+pub use source_registry::{SourceInstanceRegistry, SyncTriggerError};
 pub use version::VersionState;
 pub use version_gate::{ClientCompatibilityTable, VersionGateLayer};
 
@@ -103,6 +103,7 @@ fn api_router() -> OpenApiRouter<AppState> {
             admin::list_source_instances_handler
         ))
         .routes(routes!(admin::delete_source_instance_handler))
+        .routes(routes!(admin::sync_source_instance_handler))
 }
 
 pub fn openapi_spec() -> utoipa::openapi::OpenApi {
