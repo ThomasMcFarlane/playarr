@@ -4,33 +4,16 @@ import { color, radius, spacing, typeScale } from "@streamarr-tv/design-tokens";
 import { useFocusable } from "../SpatialNavContext";
 import { pickImage } from "../lib/images";
 
-export type RequestActionStatus = "idle" | "submitting" | "submitted" | "error";
-
-export interface RequestAction {
-  status: RequestActionStatus;
-  errorMessage?: string;
-  onSubmit: () => void;
-}
-
 export interface DetailScreenProps {
   work: Work;
   /** Whether a resolved `media_file_id` exists for this work (see `DetailScreenContainer`) -- gates the "Play" action. */
   canPlay: boolean;
   onPlay: () => void;
   onBack?: () => void;
-  /** Present exactly when this work isn't fully available yet, offering a `POST /api/v1/requests` action instead of/alongside Play. */
-  request?: RequestAction;
 }
 
-const REQUEST_LABEL: Record<RequestActionStatus, string> = {
-  idle: "Request",
-  submitting: "Requesting...",
-  submitted: "Requested",
-  error: "Retry request",
-};
-
-/** Full-bleed backdrop + synopsis + focusable "Play"/"Request" actions. Skeleton, no real layout system yet. */
-export function DetailScreen({ work, canPlay, onPlay, onBack, request }: DetailScreenProps) {
+/** Full-bleed backdrop + synopsis + focusable "Play"/"Back" actions. Skeleton, no real layout system yet. */
+export function DetailScreen({ work, canPlay, onPlay, onBack }: DetailScreenProps) {
   const backdropUrl = pickImage(work.images, "backdrop") ?? pickImage(work.images, "poster");
 
   return (
@@ -83,28 +66,8 @@ export function DetailScreen({ work, canPlay, onPlay, onBack, request }: DetailS
         </p>
         <div style={{ display: "flex", gap: spacing.md, marginTop: spacing.lg }}>
           {canPlay && <ActionButton id="detail-play" label="Play" primary onSelect={onPlay} />}
-          {request && (
-            <ActionButton
-              id="detail-request"
-              label={REQUEST_LABEL[request.status]}
-              primary={!canPlay}
-              disabled={request.status === "submitting" || request.status === "submitted"}
-              onSelect={request.onSubmit}
-            />
-          )}
           {onBack && <ActionButton id="detail-back" label="Back" onSelect={onBack} />}
         </div>
-        {request?.status === "error" && request.errorMessage && (
-          <p
-            style={{
-              color: color.state.error,
-              fontSize: typeScale.caption.fontSize,
-              margin: 0,
-            }}
-          >
-            Could not submit this request ({request.errorMessage}).
-          </p>
-        )}
       </div>
     </div>
   );

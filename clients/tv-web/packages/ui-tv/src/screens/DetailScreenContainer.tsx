@@ -1,8 +1,7 @@
-import { useState } from "react";
-import { describeApiError, type ApiClient } from "@streamarr-tv/api-client";
+import { type ApiClient } from "@streamarr-tv/api-client";
 import { useWorkDetail } from "@streamarr-tv/api-client/react";
 import { AsyncStateMessage } from "../lib/AsyncStateMessage";
-import { DetailScreen, type RequestActionStatus } from "./DetailScreen";
+import { DetailScreen } from "./DetailScreen";
 
 export interface DetailScreenContainerProps {
   client: ApiClient;
@@ -15,29 +14,17 @@ export interface DetailScreenContainerProps {
 /**
  * Fetches a work's full detail tree from the real `GET /api/v1/catalog/{id}`
  * endpoint and hands the real, resolved `media_file_id` (`WorkDetailSchema.media_file_id`,
- * nullable) through to `onPlay`, plus a lightweight "Request" action
- * (`POST /api/v1/requests`) for anything not yet fully available.
+ * nullable) through to `onPlay`.
  *
  * `media_file_id` is only ever non-null on `WorkDetail` itself for the
  * `Movie`-leaf case (`LeafRef::Work`, per the spec's doc comment on that
  * field) -- series/artist/author works carry their playable leaves on their
  * children instead (`EpisodeDetailSchema`/`TrackDetailSchema`/`BookDetailSchema`,
  * each with their own sibling `media_file_id`). A per-episode/track/book
- * picker is out of this pass's scope, so Play stays hidden for those kinds
- * and Request is offered instead whenever the work isn't `available`.
- *
- * Round E wired real auth middleware into the backend: `requested_by` is no
- * longer a client-supplied field (the removed Round D workaround generated a
- * device-local pseudo-identity via `getOrCreateDeviceUserId`) -- the server
- * now derives it from the verified access token's `sub` claim, already held
- * by `client` by the time this container can mount (the TV shells gate every
- * screen behind `PairingScreenContainer`'s RFC 8628 device flow -- see
- * `TvApp`).
+ * picker is out of this pass's scope, so Play stays hidden for those kinds.
  */
 export function DetailScreenContainer({ client, workId, onPlay, onBack }: DetailScreenContainerProps) {
   const state = useWorkDetail(client, workId);
-  const [requestStatus, setRequestStatus] = useState<RequestActionStatus>("idle");
-  const [requestError, setRequestError] = useState<string | undefined>(undefined);
 
   if (state.status === "loading" || state.status === "idle") {
     return <AsyncStateMessage kind="loading" />;
@@ -51,22 +38,6 @@ export function DetailScreenContainer({ client, workId, onPlay, onBack }: Detail
 
   const { work, media_file_id: mediaFileId } = state.data;
   const canPlay = mediaFileId != null;
-  const showRequest = work.availability !== "available";
-
-  async function submitRequest() {
-    setRequestStatus("submitting");
-    setRequestError(undefined);
-    try {
-      await client.submitRequest({
-        kind: work.kind,
-        target: { target_kind: "existing_work", work_id: work.id },
-      });
-      setRequestStatus("submitted");
-    } catch (err) {
-      setRequestStatus("error");
-      setRequestError(describeApiError(err));
-    }
-  }
 
   return (
     <DetailScreen
@@ -76,11 +47,6 @@ export function DetailScreenContainer({ client, workId, onPlay, onBack }: Detail
         if (mediaFileId) onPlay(mediaFileId);
       }}
       onBack={onBack}
-      request={
-        showRequest
-          ? { status: requestStatus, errorMessage: requestError, onSubmit: () => void submitRequest() }
-          : undefined
-      }
     />
   );
 }

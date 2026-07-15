@@ -1,6 +1,6 @@
 //! `streamarr-api` — the Axum HTTP server. Wires the OpenAPI-annotated
 //! system routes ([`health`], [`readiness`], [`version`]) plus the real
-//! catalog/requests/oauth/webhooks/playback routes through
+//! catalog/oauth/webhooks/playback routes through
 //! `utoipa-axum`'s [`utoipa_axum::router::OpenApiRouter`] (so the route
 //! table and the OpenAPI spec can never drift apart — every
 //! `#[utoipa::path]`-annotated handler mounted via `routes!` contributes
@@ -31,7 +31,6 @@ pub mod login;
 pub mod oauth;
 pub mod playback;
 pub mod readiness;
-pub mod requests;
 pub mod source_registry;
 pub mod version;
 pub mod version_gate;
@@ -68,7 +67,6 @@ pub use version_gate::{ClientCompatibilityTable, VersionGateLayer};
         (name = "oauth", description = "RFC 8628 OAuth 2.0 device authorization endpoints"),
         (name = "webhooks", description = "*arr webhook receiver"),
         (name = "catalog", description = "Catalog browse/search/detail"),
-        (name = "requests", description = "Media request lifecycle: submit/approve/reject/list"),
         (name = "playback", description = "Playback negotiation: direct-play vs. transcode decision"),
         (name = "admin", description = "Admin-only configuration: registering *arr source instances")
     )
@@ -93,10 +91,6 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(catalog::browse_catalog_handler))
         .routes(routes!(catalog::get_work_handler))
         .routes(routes!(catalog::search_catalog_handler))
-        .routes(routes!(requests::submit_request_handler))
-        .routes(routes!(requests::list_requests_handler))
-        .routes(routes!(requests::approve_request_handler))
-        .routes(routes!(requests::reject_request_handler))
         .routes(routes!(playback::playback_info_handler))
         .routes(routes!(
             admin::create_source_instance_handler,
@@ -115,11 +109,11 @@ pub fn openapi_spec() -> utoipa::openapi::OpenApi {
 /// on. `streamarr-bin`'s `boot_api` is the composition root that
 /// constructs one of these from `streamarr_config::Config`; every field
 /// here is either `Arc<dyn Trait>` (when the owning crate defines a real
-/// trait boundary — `RequestRepo`, `DeviceFlowHandler`, `MediaFileLookup`,
+/// trait boundary — `DeviceFlowHandler`, `MediaFileLookup`,
 /// `UserDirectory`, real in production via `RepoBackedMediaFileLookup`,
 /// real-but-in-memory in tests via `InMemoryMediaFileLookup`) or
 /// `Arc<ConcreteType>` (when it only exposes a concrete service struct —
-/// `CatalogService`, `RequestService`, `TranscodeOrchestrator`,
+/// `CatalogService`, `TranscodeOrchestrator`,
 /// `WebhookReceiver`, `JwtIssuer`, `RefreshTokenService` — or is a
 /// composition-root-owned type with no sibling implementation to abstract
 /// over yet — `SourceInstanceRegistry`, `InMemoryAdminRegistry`).
@@ -128,8 +122,6 @@ pub struct AppState {
     pub readiness: ReadinessState,
     pub version: VersionState,
     pub catalog: Arc<streamarr_catalog::CatalogService>,
-    pub requests: Arc<streamarr_requests::RequestService>,
-    pub request_repo: Arc<dyn streamarr_requests::RequestRepo>,
     pub transcode: Arc<streamarr_transcode::TranscodeOrchestrator>,
     pub device_flow: Arc<dyn streamarr_auth::DeviceFlowHandler>,
     pub webhook: Arc<streamarr_arr_sync::WebhookReceiver>,
@@ -384,10 +376,8 @@ mod tests {
         assert!(json.contains("/api/v1/catalog"));
         assert!(json.contains("/api/v1/catalog/{id}"));
         assert!(json.contains("/api/v1/catalog/search"));
-        assert!(json.contains("/api/v1/requests"));
-        assert!(json.contains("/api/v1/requests/{id}/approve"));
-        assert!(json.contains("/api/v1/requests/{id}/reject"));
         assert!(json.contains("/api/v1/playback/{media_file_id}"));
+        assert!(json.contains("/api/v1/admin/source-instances"));
     }
 
     /// Regenerates (with `UPDATE_OPENAPI_SPEC=1`) or verifies (without it)

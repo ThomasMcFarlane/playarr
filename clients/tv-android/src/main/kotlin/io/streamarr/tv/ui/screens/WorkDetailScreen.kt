@@ -23,15 +23,11 @@ import androidx.tv.material3.ListItem
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dagger.hilt.android.lifecycle.HiltViewModel
-import io.streamarr.shared.data.model.Availability
-import io.streamarr.shared.data.model.RequestTarget
-import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
 import io.streamarr.shared.data.model.WorkDetail
 import io.streamarr.shared.domain.model.StreamarrError
 import io.streamarr.shared.domain.model.StreamarrResult
 import io.streamarr.shared.domain.usecase.GetWorkDetailsUseCase
-import io.streamarr.shared.domain.usecase.SubmitMediaRequestUseCase
 import io.streamarr.tv.R
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,51 +41,20 @@ sealed interface TvWorkDetailUiState {
     data class Failure(val message: String) : TvWorkDetailUiState
 }
 
-/** Mirrors `mobile-android`'s `RequestActionState` -- local state for the "Request" action, independent of [TvWorkDetailUiState] (the detail load). */
-sealed interface TvRequestActionState {
-    data object Idle : TvRequestActionState
-    data object Submitting : TvRequestActionState
-    data object Submitted : TvRequestActionState
-    data class Failed(val message: String) : TvRequestActionState
-}
-
 @HiltViewModel
 class TvWorkDetailViewModel @Inject constructor(
     private val getWorkDetailsUseCase: GetWorkDetailsUseCase,
-    private val submitMediaRequestUseCase: SubmitMediaRequestUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<TvWorkDetailUiState>(TvWorkDetailUiState.Loading)
     val uiState: StateFlow<TvWorkDetailUiState> = _uiState.asStateFlow()
 
-    private val _requestState = MutableStateFlow<TvRequestActionState>(TvRequestActionState.Idle)
-    val requestState: StateFlow<TvRequestActionState> = _requestState.asStateFlow()
-
     fun load(workId: String) {
         viewModelScope.launch {
             _uiState.value = TvWorkDetailUiState.Loading
-            _requestState.value = TvRequestActionState.Idle
             _uiState.value = when (val result = getWorkDetailsUseCase(workId)) {
                 is StreamarrResult.Success -> TvWorkDetailUiState.Content(result.value)
                 is StreamarrResult.Failure -> TvWorkDetailUiState.Failure(result.error.toWorkDetailErrorMessage())
-            }
-        }
-    }
-
-    /**
-     * No longer needs a locally-read user id: the submitting user is
-     * derived server-side from the verified access token
-     * `StreamarrHttpClient` attaches -- see [SubmitMediaRequestUseCase]'s
-     * KDoc.
-     */
-    fun requestWork(work: Work) {
-        viewModelScope.launch {
-            _requestState.value = TvRequestActionState.Submitting
-            _requestState.value = when (
-                val result = submitMediaRequestUseCase(kind = work.kind, target = RequestTarget.ExistingWork(work.id))
-            ) {
-                is StreamarrResult.Success -> TvRequestActionState.Submitted
-                is StreamarrResult.Failure -> TvRequestActionState.Failed(result.error.toWorkDetailErrorMessage())
             }
         }
     }
@@ -99,7 +64,7 @@ class TvWorkDetailViewModel @Inject constructor(
 internal fun StreamarrError.toWorkDetailErrorMessage(): String = when (this) {
     is StreamarrError.Network -> "Can't reach the Streamarr server. Check the server address in Settings."
     is StreamarrError.Http -> when (code) {
-        401 -> "Sign in again to submit a request."
+        401 -> "Sign in again to continue."
         403 -> "You don't have permission to do that."
         404 -> "This title couldn't be found."
         else -> "Server error ($code)."
@@ -107,7 +72,7 @@ internal fun StreamarrError.toWorkDetailErrorMessage(): String = when (this) {
     is StreamarrError.Unknown -> "Something went wrong loading this title."
 }
 
-/** Mirrors `mobile-android`'s `WorkDetailScreen.kt` -- see that file's KDoc for when the play affordance and Request action show. */
+/** Mirrors `mobile-android`'s `WorkDetailScreen.kt` -- see that file's KDoc for when the play affordance shows. */
 @Composable
 fun WorkDetailScreen(
     workId: String,
@@ -116,7 +81,6 @@ fun WorkDetailScreen(
     viewModel: TvWorkDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val requestState by viewModel.requestState.collectAsState()
 
     LaunchedEffect(workId) { viewModel.load(workId) }
 
@@ -130,9 +94,7 @@ fun WorkDetailScreen(
             }
             is TvWorkDetailUiState.Content -> TvWorkDetailContent(
                 detail = current.detail,
-                requestState = requestState,
                 onPlayMediaFile = onPlayMediaFile,
-                onRequestWork = { viewModel.requestWork(current.detail.work) },
             )
         }
     }
@@ -141,9 +103,7 @@ fun WorkDetailScreen(
 @Composable
 private fun TvWorkDetailContent(
     detail: WorkDetail,
-    requestState: TvRequestActionState,
     onPlayMediaFile: (String) -> Unit,
-    onRequestWork: () -> Unit,
 ) {
     val work = detail.work
 
@@ -158,12 +118,6 @@ private fun TvWorkDetailContent(
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
-            }
-        }
-
-        if (work.availability != Availability.Available) {
-            item {
-                TvRequestActionRow(requestState = requestState, onRequestWork = onRequestWork, modifier = Modifier.padding(horizontal = 48.dp, vertical = 8.dp))
             }
         }
 
@@ -250,24 +204,6 @@ private fun TvWorkDetailContent(
                     },
                     modifier = Modifier.padding(horizontal = 48.dp),
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun TvRequestActionRow(requestState: TvRequestActionState, onRequestWork: () -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
-        when (requestState) {
-            is TvRequestActionState.Idle -> Button(onClick = onRequestWork) { Text(stringResource(R.string.work_detail_request)) }
-            is TvRequestActionState.Submitting -> Button(onClick = {}, enabled = false) { Text(stringResource(R.string.work_detail_requesting)) }
-            is TvRequestActionState.Submitted -> Text(
-                text = stringResource(R.string.work_detail_request_submitted),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            is TvRequestActionState.Failed -> Column {
-                Text(text = requestState.message, style = MaterialTheme.typography.bodySmall)
-                Button(onClick = onRequestWork, modifier = Modifier.padding(top = 4.dp)) { Text(stringResource(R.string.work_detail_request)) }
             }
         }
     }

@@ -12,7 +12,6 @@ streamarr-telemetry = { path = "../streamarr-telemetry" }
 streamarr-db = { path = "../streamarr-db", features = ["sqlite", "postgres"] }
 streamarr-cache = { path = "../streamarr-cache" }
 streamarr-catalog = { path = "../streamarr-catalog" }
-streamarr-requests = { path = "../streamarr-requests" }
 streamarr-transcode = { path = "../streamarr-transcode" }
 streamarr-auth = { path = "../streamarr-auth" }
 streamarr-arr-sync = { path = "../streamarr-arr-sync" }

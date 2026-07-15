@@ -2,10 +2,10 @@
  * Session / token-acquisition path for clients with no RFC 8628 pairing UI
  * of their own -- today just the standalone Web app (the TV shells always
  * pair first via `pollForToken`/`PairingScreenContainer` before they can
- * reach any screen that needs a token). Round E's auth fix requires a real
- * `Authorization: Bearer <token>` on the request submit/approve/reject
- * calls; `ensureAccessToken` obtains one transparently via `POST
- * /api/v1/auth/login` -- the default `AuthMode::TrustedNetwork` server
+ * reach any screen that needs a token). The admin source-instance calls
+ * require a real `Authorization: Bearer <token>`; `ensureAccessToken`
+ * obtains one transparently via `POST /api/v1/auth/login` -- the default
+ * `AuthMode::TrustedNetwork` server
  * config needs no credentials at all, a trusted-source-IP caller just gets
  * a token back -- and persists it through the same `TokenStore` shape the
  * device-pairing flow's `DeviceTokenSuccess` result would populate, rather

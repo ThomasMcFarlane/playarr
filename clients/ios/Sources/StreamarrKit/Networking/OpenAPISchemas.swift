@@ -8,7 +8,7 @@ import Foundation
 // (and, for wire-shape details the spec leaves implicit — enum casing,
 // discriminator tags, date formats — the real `#[derive(Serialize,
 // Deserialize)]` Rust structs/enums under `backend/crates/streamarr-model`,
-// `streamarr-catalog`, `streamarr-requests`, `streamarr-auth`, and
+// `streamarr-catalog`, `streamarr-auth`, and
 // `streamarr-api` those schemas mirror), not inferred/guessed. A one-shot
 // `openapi-generator-cli generate -g swift5` run was considered instead of
 // hand-writing this file; hand-writing won because several of these schemas
@@ -17,8 +17,6 @@ import Foundation
 //   - `ExternalProvider` is a `oneOf` of bare-string-enum variants plus an
 //     `{"other": "..."}` escape hatch (Rust's default externally-tagged
 //     representation for a mixed unit/tuple-variant enum).
-//   - `RequestTarget` is a `oneOf` with an internal `target_kind` tag
-//     (`#[serde(tag = "target_kind")]`).
 //   - `WorkChildren` is a `oneOf` where the unit variant (`Movie`)
 //     serializes as a bare JSON string and the tuple variants
 //     (`Series`/`Artist`/`Author`) serialize as single-key objects —
@@ -34,8 +32,8 @@ import Foundation
 // Field-by-field provenance: every struct/enum below is checked against
 // its Rust source (`backend/crates/streamarr-model/src/{work,series,music,
 // publishing,platform}.rs`, `streamarr-catalog/src/lib.rs`,
-// `streamarr-requests/src/lib.rs`, `streamarr-auth/src/device_flow.rs`,
-// `streamarr-api/src/{oauth,catalog,requests,playback}.rs`) as well as
+// `streamarr-auth/src/device_flow.rs`,
+// `streamarr-api/src/{oauth,catalog,playback}.rs`) as well as
 // `backend/openapi/streamarr.yaml` itself, not just the doc-only
 // `*Schema`-suffixed OpenAPI mirror types (which some handlers use purely
 // for `utoipa` docs while actually returning the real domain type — the
@@ -51,19 +49,9 @@ import Foundation
 // server-side now; see `WorkDetailViewModel`/`WorkDetailView` for where the
 // client actually consumes it.
 //
-// Round E update (security fix): `POST /api/v1/requests`,
-// `.../{id}/approve`, and `.../{id}/reject` now require a verified
-// `Authorization: Bearer <access_token>` header (401 without one, 403 if
-// the caller isn't an admin for approve/reject). `SubmitRequestBody` no
-// longer has a `requested_by` field and `DecideRequestBody` no longer has a
-// `decided_by` field — both are derived server-side from the verified
-// token's `sub` claim now, so this file's mirror of them drops the fields
-// too (see each struct's own doc comment below). This file also gains
-// `LoginRequest`/`LoginResponse` for the new `POST /api/v1/auth/login`
-// endpoint — see that section further down for the trusted-network-mode
-// note. `APIClient`/`AppEnvironment` in `StreamarrApp` are the client-side
-// half of this change: see their own doc comments for how the Bearer token
-// actually gets attached/obtained now.
+// This file also gains `LoginRequest`/`LoginResponse` for the
+// `POST /api/v1/auth/login` endpoint — see that section further down for
+// the trusted-network-mode note.
 
 // MARK: - Enums
 
@@ -121,18 +109,6 @@ public enum AlbumType: String, Codable, Sendable, CaseIterable, Hashable {
 public enum PlaybackMode: String, Codable, Sendable, CaseIterable, Hashable {
     case direct
     case hls
-}
-
-/// Doc-only-mirrored as `RequestStatusSchema` in the spec; the real type is
-/// `streamarr_requests::RequestStatus` (`#[serde(rename_all =
-/// "snake_case")]`).
-public enum RequestStatus: String, Codable, Sendable, CaseIterable, Hashable {
-    case pending
-    case approved
-    case rejected
-    case submitted
-    case available
-    case failed
 }
 
 /// A cross-reference to the identifier a `Work` (or one of its source
@@ -698,144 +674,6 @@ public struct WorkDetail: Codable, Sendable {
         self.work = work
         self.children = children
         self.mediaFileID = mediaFileID
-    }
-}
-
-// MARK: - Requests (media-request lifecycle)
-
-/// What a `MediaRequest` points at: something already in the catalog, or
-/// something identified only by an external provider ref
-/// (`RequestTargetDto`/`RequestTarget`, `#[serde(tag = "target_kind")]` —
-/// an internally-tagged enum, unlike `WorkChildren` above).
-public enum RequestTarget: Codable, Sendable, Hashable {
-    case existingWork(workID: UUID)
-    case external(ExternalRef)
-
-    private enum CodingKeys: String, CodingKey {
-        case targetKind = "target_kind"
-        case workID = "work_id"
-        case externalRef = "external_ref"
-    }
-
-    private enum TargetKind: String, Codable {
-        case existingWork = "existing_work"
-        case external
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let kind = try container.decode(TargetKind.self, forKey: .targetKind)
-        switch kind {
-        case .existingWork:
-            let workID = try container.decode(UUID.self, forKey: .workID)
-            self = .existingWork(workID: workID)
-        case .external:
-            let ref = try container.decode(ExternalRef.self, forKey: .externalRef)
-            self = .external(ref)
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        switch self {
-        case .existingWork(let workID):
-            try container.encode(TargetKind.existingWork, forKey: .targetKind)
-            try container.encode(workID, forKey: .workID)
-        case .external(let ref):
-            try container.encode(TargetKind.external, forKey: .targetKind)
-            try container.encode(ref, forKey: .externalRef)
-        }
-    }
-}
-
-public struct MediaRequest: Codable, Identifiable, Hashable, Sendable {
-    public let id: UUID
-    public var requestedBy: UUID
-    public var kind: WorkKind
-    public var target: RequestTarget
-    public var sourceInstanceID: UUID?
-    public var status: RequestStatus
-    public var note: String?
-    public var createdAt: Date
-    public var updatedAt: Date
-    public var decidedBy: UUID?
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case requestedBy = "requested_by"
-        case kind
-        case target
-        case sourceInstanceID = "source_instance_id"
-        case status
-        case note
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-        case decidedBy = "decided_by"
-    }
-
-    public init(
-        id: UUID,
-        requestedBy: UUID,
-        kind: WorkKind,
-        target: RequestTarget,
-        sourceInstanceID: UUID? = nil,
-        status: RequestStatus,
-        note: String? = nil,
-        createdAt: Date,
-        updatedAt: Date,
-        decidedBy: UUID? = nil
-    ) {
-        self.id = id
-        self.requestedBy = requestedBy
-        self.kind = kind
-        self.target = target
-        self.sourceInstanceID = sourceInstanceID
-        self.status = status
-        self.note = note
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
-        self.decidedBy = decidedBy
-    }
-}
-
-/// Request body for `POST /api/v1/requests`. `requested_by` is deliberately
-/// absent (Round E): it comes from the verified access token's `sub` claim
-/// server-side now, never from anything the caller puts in the request body
-/// — see `submit_request_handler` in the spec, and `APIClient`'s
-/// doc comment for how this client attaches that token.
-public struct SubmitRequestBody: Codable, Sendable {
-    public var kind: WorkKind
-    public var target: RequestTarget
-    public var note: String?
-
-    enum CodingKeys: String, CodingKey {
-        case kind
-        case target
-        case note
-    }
-
-    public init(kind: WorkKind, target: RequestTarget, note: String? = nil) {
-        self.kind = kind
-        self.target = target
-        self.note = note
-    }
-}
-
-/// Request body for `POST /api/v1/requests/{id}/approve` and `.../reject`.
-/// `decided_by` is deliberately absent (Round E): it comes from the
-/// verified access token's `sub` claim (via the server's `AdminUser`
-/// extractor) server-side now, never from anything the caller puts in the
-/// request body — see `approve_request_handler`/`reject_request_handler` in
-/// the spec.
-public struct DecideRequestBody: Codable, Sendable {
-    public var reason: String?
-
-    enum CodingKeys: String, CodingKey {
-        case reason
-    }
-
-    public init(reason: String? = nil) {
-        self.reason = reason
     }
 }
 

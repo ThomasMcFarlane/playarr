@@ -91,13 +91,13 @@ currently the only reason direct-play is preferred when a device can
 decode the source natively is to avoid the cost of a transcode session,
 not any DRM consideration.
 
-## Request-management screens
+## Work detail screen and playback resolution
 
 Same as Android Mobile (see
-[`android-mobile.md`](android-mobile.md#request-management-screens)):
-`tv-android` ships its own real `RequestsScreen` and `WorkDetailScreen`,
-Compose-for-TV versions of the same `core-domain` use cases, resolving the
-server's real cross-linked `media_file_id` per leaf for the "Play" action.
+[`android-mobile.md`](android-mobile.md#work-detail-screen-and-playback-resolution)):
+`tv-android`'s `WorkDetailScreen`, a Compose-for-TV version built on the
+same `core-domain` use cases, resolves the server's real cross-linked
+`media_file_id` per leaf for the "Play" action.
 
 ## Code-sharing story with sibling platforms
 

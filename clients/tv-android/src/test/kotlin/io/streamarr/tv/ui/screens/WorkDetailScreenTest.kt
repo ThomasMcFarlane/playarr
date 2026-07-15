@@ -11,9 +11,8 @@ import retrofit2.Response
 
 /**
  * Mirrors `mobile-android`'s `WorkDetailScreenTest` -- see that file's
- * KDoc. [TvWorkDetailViewModel.requestWork] surfaces a 401/403 as real,
- * distinct [TvRequestActionState.Failed] messages via
- * [StreamarrError.toUserMessage].
+ * KDoc. [TvWorkDetailViewModel.load] surfaces a 401/403 as real, distinct
+ * [TvWorkDetailUiState.Failure] messages via [StreamarrError.toUserMessage].
  */
 class WorkDetailScreenTest {
 
@@ -24,7 +23,7 @@ class WorkDetailScreenTest {
 
     @Test
     fun `401 surfaces as a distinct sign-in-required message, not a generic server error`() {
-        assertEquals("Sign in again to submit a request.", httpError(401).toWorkDetailErrorMessage())
+        assertEquals("Sign in again to continue.", httpError(401).toWorkDetailErrorMessage())
     }
 
     @Test

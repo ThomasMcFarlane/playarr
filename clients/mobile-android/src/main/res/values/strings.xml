@@ -3,7 +3,6 @@
 
     <string name="nav_home">Home</string>
     <string name="nav_library">Library</string>
-    <string name="nav_requests">Requests</string>
     <string name="nav_player">Player</string>
     <string name="nav_settings">Settings</string>
 
@@ -26,18 +25,6 @@
     <string name="work_detail_episode_number">Episode %1$d</string>
     <string name="work_detail_track_number">Track %1$d</string>
     <string name="work_detail_not_available">Not available yet</string>
-    <string name="work_detail_request">Request</string>
-    <string name="work_detail_requesting">Requesting…</string>
-    <string name="work_detail_request_submitted">Requested -- an admin will review it soon.</string>
-
-    <string name="requests_title">Requests</string>
-    <string name="requests_my_requests">My Requests</string>
-    <string name="requests_pending_approval">Pending Approval</string>
-    <string name="requests_empty_mine">You haven\'t requested anything yet.</string>
-    <string name="requests_empty_pending">Nothing is waiting on a decision.</string>
-    <string name="requests_approve">Approve</string>
-    <string name="requests_reject">Reject</string>
-    <string name="requests_status">Status: %1$s</string>
 
     <string name="settings_server">Server</string>
     <string name="settings_server_url">Server address</string>

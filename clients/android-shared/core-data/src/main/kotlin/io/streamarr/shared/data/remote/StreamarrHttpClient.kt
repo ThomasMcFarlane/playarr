@@ -8,7 +8,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.logging.HttpLoggingInterceptor
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import retrofit2.Retrofit
@@ -27,8 +26,8 @@ object StreamarrHttpClient {
      * The shared JSON codec: unknown-key-tolerant so an older client
      * survives additive server changes. [JsonNamingStrategy.SnakeCase] is
      * what actually connects this module's idiomatic-camelCase Kotlin
-     * models (`Work.sortTitle`, `MediaRequest.requestedBy`, ...) to the
-     * spec's snake_case wire fields (`sort_title`, `requested_by`, ...)
+     * models (`Work.sortTitle`, `CatalogPage.total`, ...) to the
+     * spec's snake_case wire fields (`sort_title`, `total`, ...)
      * without a `@SerialName` on every single property -- fields that
      * already carry an explicit `@SerialName` (enum wire values,
      * `core-auth`'s hand-annotated OAuth DTOs) are unaffected, since an
@@ -55,27 +54,17 @@ object StreamarrHttpClient {
      * @param clientPlatform stamped onto every request via `X-Streamarr-Client-Platform`,
      *   matching the header contract `streamarr-model::platform::ClientPlatform::wire_name` documents server-side.
      * @param clientVersion this app build's version name, sent alongside the platform header.
-     * @param accessTokenProvider returns the bearer token to attach, or `null` if none is
-     *   available. Only invoked for the requests write calls that actually need one --
-     *   [requiresBearerAuth] -- so it is safe (and expected) for a real implementation to
-     *   block on a fresh login when no token is stored yet, per
-     *   `io.streamarr.shared.auth.SessionManager.ensureAccessToken`; that cost is never paid
-     *   by catalog/playback/system calls, which stay unauthenticated per the server's own
-     *   design. Re-invoked on every matching request so a refreshed token is picked up
-     *   without rebuilding the client.
      * @param enableHttpLogging verbose body logging; callers should gate this behind a debug build flag.
      */
     fun create(
         baseUrlProvider: () -> String,
         clientPlatform: ClientPlatform,
         clientVersion: String,
-        accessTokenProvider: () -> String?,
         enableHttpLogging: Boolean = false,
     ): StreamarrApi {
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor(dynamicBaseUrlInterceptor(baseUrlProvider))
             .addInterceptor(platformHeaderInterceptor(clientPlatform, clientVersion))
-            .addInterceptor(authorizationInterceptor(accessTokenProvider))
             .apply {
                 if (enableHttpLogging) {
                     addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY })
@@ -101,56 +90,8 @@ object StreamarrHttpClient {
             chain.proceed(request)
         }
 
-    /**
-     * Only calls [accessTokenProvider] (and attaches its result) for requests
-     * matching [requiresBearerAuth] -- every other request is sent untouched,
-     * so catalog/playback browsing never pays the cost of a possible
-     * login-on-demand call and never carries a token it doesn't need.
-     */
-    private fun authorizationInterceptor(accessTokenProvider: () -> String?): Interceptor =
-        Interceptor { chain ->
-            val original = chain.request()
-            if (!original.requiresBearerAuth()) {
-                return@Interceptor chain.proceed(original)
-            }
-            val token = accessTokenProvider()
-            val request = if (token != null) {
-                original.newBuilder().header("Authorization", "Bearer $token").build()
-            } else {
-                original
-            }
-            chain.proceed(request)
-        }
-
     /** Never actually dialled -- see [create]'s KDoc. Must be a syntactically valid absolute URL for [Retrofit.Builder.baseUrl]. */
     private const val PLACEHOLDER_BASE_URL = "http://streamarr.invalid/"
-}
-
-/** `POST /api/v1/requests`, `.../{id}/approve`, `.../{id}/reject` -- the wire path segments [requiresBearerAuth] matches against. */
-private val REQUESTS_PATH_SEGMENTS = listOf("api", "v1", "requests")
-private val DECISION_ACTIONS = setOf("approve", "reject")
-
-/**
- * `true` only for the three `requests` write operations
- * `backend/openapi/streamarr.yaml` documents as needing a verified
- * `Authorization: Bearer` access token (401 without one; approve/reject
- * also 403 a non-admin caller): `POST /api/v1/requests`,
- * `POST /api/v1/requests/{id}/approve`, `POST /api/v1/requests/{id}/reject`.
- * Every other path -- catalog, playback, system, and even
- * `GET /api/v1/requests` itself -- is documented as unauthenticated by
- * the server's own design, so this stays a narrow allow-list rather than
- * attaching the header to every request that happens to have a token
- * available. `internal` (rather than `private`) so this module's own test
- * sourceset can exercise the matching directly without a live network call.
- */
-internal fun Request.requiresBearerAuth(): Boolean {
-    if (method != "POST") return false
-    val segments = url.pathSegments
-    return when (segments.size) {
-        3 -> segments == REQUESTS_PATH_SEGMENTS
-        5 -> segments.subList(0, 3) == REQUESTS_PATH_SEGMENTS && segments[4] in DECISION_ACTIONS
-        else -> false
-    }
 }
 
 /**

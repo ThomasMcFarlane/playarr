@@ -1,7 +1,7 @@
 import StreamarrKit
 import SwiftUI
 
-/// Tab container wiring the five screens to their view models. View models
+/// Tab container wiring the four screens to their view models. View models
 /// are created once, in `init`, and held in `@State` (not re-created on
 /// every `body` evaluation) — the standard SwiftUI + `@Observable`
 /// ownership pattern this app uses throughout.
@@ -23,7 +23,6 @@ struct RootView: View {
     @State private var libraryViewModel: LibraryViewModel
     @State private var playerViewModel: PlayerViewModel
     @State private var settingsViewModel: SettingsViewModel
-    @State private var requestsViewModel: RequestsViewModel
     @State private var updateViewModel: UpdateViewModel
 
     @Environment(\.scenePhase) private var scenePhase
@@ -36,7 +35,6 @@ struct RootView: View {
             initialValue: PlayerViewModel(engine: AVPlayerEngine(), apiClient: environment.apiClient)
         )
         _settingsViewModel = State(initialValue: SettingsViewModel(environment: environment))
-        _requestsViewModel = State(initialValue: RequestsViewModel(apiClient: environment.apiClient))
         _updateViewModel = State(initialValue: UpdateViewModel(apiClient: environment.apiClient))
     }
 
@@ -52,9 +50,6 @@ struct RootView: View {
                 PlayerView(viewModel: playerViewModel)
             }
             .tabItem { Label("Now Playing", systemImage: "play.circle") }
-
-            RequestsView(viewModel: requestsViewModel)
-                .tabItem { Label("Requests", systemImage: "tray.and.arrow.down") }
 
             SettingsView(viewModel: settingsViewModel)
                 .tabItem { Label("Settings", systemImage: "gearshape") }

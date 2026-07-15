@@ -86,33 +86,23 @@ every subsequent call:
 - **Transparent trusted-network login.** `APIClient`'s `attachAuth` calls
   `POST /api/v1/auth/login` on demand — no user action, no credentials
   needed under the server's default `AuthMode::TrustedNetwork` — the first
-  time a call that needs a bearer token has none cached. This is what
-  actually keeps the request-management screens working without requiring
-  a device-flow sign-in first.
+  time a call that needs a bearer token has none cached. This means a
+  bearer token is acquired transparently the moment one is needed, without
+  requiring a device-flow sign-in first.
 
-Only `POST /api/v1/requests` and its `.../{id}/approve`/`.../{id}/reject`
-siblings require the resulting `Authorization: Bearer` header; catalog,
-playback, and system calls stay unauthenticated by the server's own
-design. **Token persistence is in-memory only** (`AppEnvironment`'s
+No endpoint the iOS app actually calls requires the resulting
+`Authorization: Bearer` header today — catalog, playback, and system calls
+all stay unauthenticated by the server's own design. (The server does
+enforce Bearer-plus-admin-checked auth on the source-instance management
+endpoints, but the iOS app has no admin UI and never calls them.)
+**Token persistence is in-memory only** (`AppEnvironment`'s
 `InMemoryTokenStore`) — there is a documented `TODO` at the one call site
 that would need it (`refreshAccessToken()`) marking where Keychain-backed
 persistence and a real OAuth refresh-token exchange still need to go; a
 signed-in session does not currently survive an app relaunch.
 
-## Request-management and auto-update
+## Auto-update
 
-`WorkDetailView` offers a real "Request" action
-(`POST /api/v1/requests`) whenever a loaded work's availability isn't
-`available`, using the real, server-resolved `media_file_id` per leaf
-(`WorkDetailSchema`/`EpisodeDetailSchema`/`TrackDetailSchema`/
-`BookDetailSchema.mediaFileID`) for "Play" the rest of the time.
-`RequestsView`/`RequestsViewModel` hit `GET /api/v1/requests` (which
-returns either "my requests" or the full pending-approval queue,
-depending on whether `user_id` is supplied) and expose real
-`approve`/`reject` actions gated by a **local-only, not server-enforced**
-`isAdminMode` toggle in Settings — the server independently enforces admin
-access on approve/reject (403 otherwise), so this toggle only decides what
-the device *attempts to show*, not what it can actually do.
 `UpdateViewModel`/`AppUpdateEvaluator`/`UpdateGateModifier` implement the
 client auto-update module against the real `GET /api/system/version`
 `CompatibilityEntry` shape (SemVer-ish `latest_version`/
@@ -190,8 +180,8 @@ SDK at all. Concretely, that means:
   interpreted/native code outside what App Review approved; every update,
   including trivial ones, must go through a full build-and-review cycle.
   This is a hard platform constraint, not a Streamarr policy choice. The
-  real client-side mechanism (see "Request-management and auto-update"
-  above) is `UpdateViewModel` polling `GET /api/system/version` on every
+  real client-side mechanism (see "Auto-update" above) is `UpdateViewModel`
+  polling `GET /api/system/version` on every
   foreground and comparing this build's version against its platform's
   `CompatibilityEntry` — a dismissible soft nudge
   (`.alert`) once below `latest_version`, escalating to a non-dismissible

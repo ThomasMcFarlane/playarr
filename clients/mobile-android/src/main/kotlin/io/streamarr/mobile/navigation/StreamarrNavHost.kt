@@ -3,7 +3,6 @@ package io.streamarr.mobile.navigation
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -29,7 +28,6 @@ import io.streamarr.mobile.R
 import io.streamarr.mobile.ui.screens.HomeScreen
 import io.streamarr.mobile.ui.screens.LibraryScreen
 import io.streamarr.mobile.ui.screens.PlayerScreen
-import io.streamarr.mobile.ui.screens.RequestsScreen
 import io.streamarr.mobile.ui.screens.SettingsScreen
 import io.streamarr.mobile.ui.screens.WorkDetailScreen
 
@@ -42,7 +40,6 @@ private data class BottomNavDestination(
 private val bottomNavDestinations = listOf(
     BottomNavDestination(Routes.Home, R.string.nav_home, Icons.Filled.Home),
     BottomNavDestination(Routes.Library, R.string.nav_library, Icons.Filled.VideoLibrary),
-    BottomNavDestination(Routes.Requests, R.string.nav_requests, Icons.Filled.Inbox),
     BottomNavDestination(Routes.Player(), R.string.nav_player, Icons.Filled.PlayArrow),
     BottomNavDestination(Routes.Settings, R.string.nav_settings, Icons.Filled.Settings),
 )
@@ -73,9 +70,6 @@ fun StreamarrNavHost(navController: NavHostController) {
             composable<Routes.Player> { backStackEntry ->
                 val route: Routes.Player = backStackEntry.toRoute()
                 PlayerScreen(mediaFileId = route.mediaFileId)
-            }
-            composable<Routes.Requests> {
-                RequestsScreen()
             }
             composable<Routes.Settings> {
                 SettingsScreen()

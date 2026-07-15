@@ -1,31 +1,23 @@
-//! `SourceInstanceRegistry` — the composition root's implementation of the
-//! [`streamarr_requests::SourceInstanceLookup`] seam that crate's own docs
-//! call out as intentionally not owned by any crate yet ("the API/worker
-//! composition root injects a real implementation once instance
-//! configuration has a home"). It also backs the webhook receiver's
-//! `instance_id -> SourceKind` lookup (`GET`ting a [`SourceInstance`] by id
-//! rather than by kind).
+//! `SourceInstanceRegistry` — the admin-facing store of configured `*arr`
+//! connections. Backs `admin.rs`'s create/list/delete/sync endpoints, the
+//! webhook receiver's `instance_id -> SourceKind` lookup (`GET`ting a
+//! [`SourceInstance`] by id rather than by kind), and `streamarr-bin`'s
+//! worker boot sequence (which reconciliation pollers to spawn).
 //!
 //! There is genuinely no persistence for [`SourceInstance`] configuration
 //! anywhere in the workspace yet -- it isn't one of `streamarr-db`'s repo
-//! traits, and no admin-config crate owns it either (same gap
-//! `streamarr-requests`'s own doc comment describes). This registry is a
-//! real, thread-safe, in-process store -- not a mock -- that starts empty
-//! and is populated via [`SourceInstanceRegistry::upsert`]; a follow-up pass
-//! that adds a `SourceInstanceRepo`/admin API can populate this from
-//! storage at startup (or replace it outright) without changing anything
-//! that depends on the [`streamarr_requests::SourceInstanceLookup`] trait.
-//! TODO(persistence): see above -- wiring `streamarr-bin` to hydrate this
-//! from configuration/an admin API is deferred, not the lookup contract
-//! itself.
+//! traits. This registry is a real, thread-safe, in-process store -- not a
+//! mock -- that starts empty and is populated via
+//! [`SourceInstanceRegistry::upsert`]; a follow-up pass that adds a
+//! `SourceInstanceRepo`/admin API can populate this from storage at startup
+//! (or replace it outright). TODO(persistence): see above -- wiring
+//! `streamarr-bin` to hydrate this from configuration is deferred.
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use dashmap::DashMap;
-use streamarr_arr_sync::{work_kind_and_provider, RefetchRequest};
-use streamarr_model::{SourceInstance, WorkKind};
-use streamarr_requests::{RequestError, SourceInstanceLookup};
+use streamarr_arr_sync::RefetchRequest;
+use streamarr_model::SourceInstance;
 use uuid::Uuid;
 
 /// Why [`SourceInstanceRegistry::trigger_sync`] couldn't ask a
@@ -124,22 +116,6 @@ impl SourceInstanceRegistry {
     }
 }
 
-#[async_trait]
-impl SourceInstanceLookup for SourceInstanceRegistry {
-    async fn instances_for(&self, kind: WorkKind) -> Result<Vec<SourceInstance>, RequestError> {
-        Ok(self
-            .by_id
-            .iter()
-            .filter(|entry| {
-                work_kind_and_provider(entry.kind)
-                    .map(|(work_kind, _)| work_kind == kind)
-                    .unwrap_or(false)
-            })
-            .map(|entry| entry.value().clone())
-            .collect())
-    }
-}
-
 pub type SharedSourceInstanceRegistry = Arc<SourceInstanceRegistry>;
 
 #[cfg(test)]
@@ -216,21 +192,6 @@ mod tests {
             registry.trigger_sync(radarr.id),
             Err(SyncTriggerError::NotFound)
         ));
-    }
-
-    #[tokio::test]
-    async fn instances_for_filters_by_work_kind() {
-        let registry = SourceInstanceRegistry::new();
-        let radarr = instance(SourceKind::Radarr);
-        let sonarr = instance(SourceKind::Sonarr);
-        let prowlarr = instance(SourceKind::Prowlarr);
-        registry.upsert(radarr.clone());
-        registry.upsert(sonarr);
-        registry.upsert(prowlarr);
-
-        let movies = registry.instances_for(WorkKind::Movie).await.unwrap();
-        assert_eq!(movies.len(), 1);
-        assert_eq!(movies[0].id, radarr.id);
     }
 
     #[test]

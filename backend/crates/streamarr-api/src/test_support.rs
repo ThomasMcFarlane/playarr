@@ -20,12 +20,10 @@ use streamarr_catalog::CatalogService;
 use streamarr_db::repo::{SqlxDeviceRepo, SqlxMediaFileRepo, SqlxRenditionRepo, SqlxWorkRepo};
 use streamarr_db::{DbPool, DeviceRepo, MediaFileRepo, RenditionRepo, WorkRepo};
 use streamarr_model::{Availability, Sensitive, User, Work, WorkKind};
-use streamarr_requests::{InMemoryRequestRepo, RequestRepo, RequestService};
 use streamarr_transcode::{ActiveSessionCounter, TranscodeOrchestrator};
 use uuid::Uuid;
 
 use crate::playback::{InMemoryMediaFileLookup, MediaFileLookup};
-use crate::requests::HealthCheckArrPusher;
 use crate::source_registry::SourceInstanceRegistry;
 use crate::version::VersionState;
 use crate::version_gate::{ClientCompatibilityTable, VersionGateLayer};
@@ -126,13 +124,7 @@ pub async fn test_state() -> (Router, TestState) {
         pool,
     ));
 
-    let request_repo: Arc<dyn RequestRepo> = Arc::new(InMemoryRequestRepo::new());
     let source_instances = Arc::new(SourceInstanceRegistry::new());
-    let requests = Arc::new(RequestService::new(
-        request_repo.clone(),
-        source_instances.clone(),
-        Arc::new(HealthCheckArrPusher::new()),
-    ));
 
     let transcode = Arc::new(
         TranscodeOrchestrator::new(rendition_repo, cache, ActiveSessionCounter::new())
@@ -210,8 +202,6 @@ pub async fn test_state() -> (Router, TestState) {
             },
         },
         catalog,
-        requests,
-        request_repo,
         transcode,
         device_flow: device_flow.clone(),
         webhook,

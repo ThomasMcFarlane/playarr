@@ -22,13 +22,9 @@ use uuid::Uuid;
 use crate::error::ApiError;
 use crate::AppState;
 
-/// Resolves a [`MediaFile`] by id. There is no `MediaFileRepo` anywhere in
-/// `streamarr-db` yet (`streamarr-transcode`'s own docs note the same gap:
-/// "There is no `MediaFileRepo` in `streamarr-db` yet ... dispatch is
-/// entirely event-driven") -- no *arr import pipeline populates media files
-/// as of this pass. This trait is the seam a follow-up that adds one can
-/// implement against, mirroring how `streamarr-requests` defines
-/// `SourceInstanceLookup` for the same kind of not-yet-built persistence.
+/// Resolves a [`MediaFile`] by id. [`RepoBackedMediaFileLookup`] below is
+/// the real, `MediaFileRepo`-backed implementation `boot_api` wires into
+/// production; [`InMemoryMediaFileLookup`] exists only for tests.
 #[async_trait]
 pub trait MediaFileLookup: Send + Sync {
     async fn get(&self, id: Uuid) -> Option<MediaFile>;

@@ -21,14 +21,11 @@ import kotlinx.coroutines.sync.withLock
  * Persists the result through [TokenStore] -- the same store device-flow
  * pairing already writes to -- rather than a second, parallel token store,
  * so whichever path won (pairing or login) is indistinguishable to every
- * caller downstream (`core-data`'s `StreamarrHttpClient`, in particular).
+ * caller downstream.
  *
- * Callers (see `mobile-android`/`tv-android`'s `NetworkModule`) are
- * expected to invoke [ensureAccessToken] from the same place
- * `StreamarrHttpClient`'s `accessTokenProvider` already runs, i.e.
- * synchronously off the main thread inside an OkHttp interceptor -- this
- * class stays entirely suspend-based and leaves the blocking to that
- * caller, mirroring how [DeviceAuthClient] and [TokenStore] do too.
+ * This class stays entirely suspend-based, mirroring how [DeviceAuthClient]
+ * and [TokenStore] do too, so a caller that needs to block a synchronous
+ * context (e.g. an OkHttp interceptor) on it is free to do so.
  */
 class SessionManager @Inject constructor(
     private val loginApi: LoginApi,

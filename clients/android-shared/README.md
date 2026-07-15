@@ -137,26 +137,32 @@ Maven / Maven Central metadata at build time, not from memory.
 
 `core-data`'s `StreamarrApi` (`data/remote/StreamarrApi.kt`) is now a real,
 hand-written Retrofit client checked field-for-field against
-`backend/openapi/streamarr.yaml`: all 13 paths (system health/ready/version,
-catalog list/get/search, requests list/create/approve/reject,
-playback-info, webhooks), typed against that spec's actual schemas, not an
-inferred/guessed surface. `core-data`'s model package
-(`io.streamarr.shared.data.model`) mirrors exactly the schemas that spec
-defines (`Work`, `CatalogPage`, `WorkDetail`/`WorkChildren`,
-`Season`/`Episode`, `Album`/`Track`, `Book`, `MediaRequest`/`RequestTarget`,
-`PlaybackInfoResponse`, `VersionEnvelope`) rather than a broader
-`streamarr-model` crate mirror that included concepts (`MediaFile`,
-`Rendition`, `Policy`, `UserProfile`/`Device`, playback-session analytics)
-the real API surface doesn't actually expose yet. Serde's wire
-representation for the spec's `oneOf`/externally- and internally-tagged
-schemas (`ExternalProvider::Other`, `WorkChildrenSchema`'s mixed
-unit/tuple variants, `RequestTargetDto`'s `#[serde(tag = "target_kind")]`
-shape) is reproduced exactly via hand-written `KSerializer`s, verified
-against literal spec-shaped JSON in `core-data`'s unit tests, not
-approximated. The Kotlin-to-wire-field mapping is a global
-`JsonNamingStrategy.SnakeCase` on `StreamarrHttpClient.json` (camelCase
-Kotlin properties, snake_case JSON) rather than a `@SerialName` on every
-field.
+`backend/openapi/streamarr.yaml`: 8 paths (system health/ready/version,
+catalog list/get/search, playback-info, webhooks), typed against that
+spec's actual schemas, not an inferred/guessed surface. `core-data`'s
+model package (`io.streamarr.shared.data.model`) mirrors exactly the
+schemas that spec defines (`Work`, `CatalogPage`, `WorkDetail`/`WorkChildren`,
+`Season`/`Episode`, `Album`/`Track`, `Book`, `PlaybackInfoResponse`,
+`VersionEnvelope`) rather than a broader `streamarr-model` crate mirror
+that included concepts (`MediaFile`, `Rendition`, `Policy`,
+`UserProfile`/`Device`, playback-session analytics) the real API surface
+doesn't actually expose yet. Serde's wire representation for the spec's
+`oneOf`/externally-tagged schemas (`ExternalProvider::Other`,
+`WorkChildrenSchema`'s mixed unit/tuple variants) is reproduced exactly
+via hand-written `KSerializer`s, verified against literal spec-shaped
+JSON in `core-data`'s unit tests, not approximated. The Kotlin-to-wire-field
+mapping is a global `JsonNamingStrategy.SnakeCase` on
+`StreamarrHttpClient.json` (camelCase Kotlin properties, snake_case JSON)
+rather than a `@SerialName` on every field.
+
+Streamarr's request-management feature (an Overseerr/Jellyseerr-style
+submit/approve/reject flow) has been removed entirely -- it duplicated an
+already-existing tool and was out of Streamarr's actual scope (auth +
+catalog enumeration + streaming only). Nothing in this tree implements
+`requests` paths any more, and `StreamarrHttpClient`'s bearer-auth-attachment
+mechanism (which existed solely to gate those three write calls) was
+removed along with it; every request this client sends is unauthenticated,
+matching the rest of the real API surface.
 
 `core-auth`'s RFC 8628 device-flow endpoints (`POST /api/v1/oauth/device/code`,
 `POST /api/v1/oauth/token`) and error codes
@@ -181,10 +187,6 @@ commonly plain HTTP on a home LAN.
   app's `WorkDetailScreen` uses the tapped leaf's own id (or the work's own
   id for a movie) as a best-effort stand-in, documented in that file's
   KDoc, until the catalog schema exposes real media-file identifiers.
-- `POST /api/v1/requests` and its `/approve`/`/reject`/list siblings are
-  fully typed in `StreamarrApi` and `core-data`'s models (so the SDK's
-  spec coverage is complete) but have no dedicated screen yet, since
-  neither app has an admin/request-approval surface to hang one off.
 - Catalog search (`GET /api/v1/catalog/search`) is wired through
   `core-domain`'s `SearchCatalogUseCase` but has no dedicated search
   screen yet.

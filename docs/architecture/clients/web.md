@@ -97,8 +97,8 @@ itself). What differs per app is confined to:
   shells always pair first (`PairingScreenContainer`, since there is no
   keyboard for credentials); the Web app has no pairing UI and instead
   obtains a session transparently via `POST /api/v1/auth/login`
-  (`@streamarr-tv/device-auth`'s `ensureAccessToken`) the first time a
-  request-management call needs one.
+  (`@streamarr-tv/device-auth`'s `ensureAccessToken`) the first time an
+  authenticated call needs one.
 - **Whether `spatial-nav`'s D-pad focus engine is mounted at all** — the
   three TV shells use it; the Web app doesn't, since it has ordinary
   pointer/keyboard/anchor-tag navigation via `react-router-dom` instead.

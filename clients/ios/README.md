@@ -21,7 +21,7 @@ clients/ios/
       Auth/DeviceFlowClient.swift         # RFC 8628 device-authorization-grant client
     StreamarrApp/                         # SwiftUI app target
       App.swift
-      AppEnvironment.swift                 # composition root + UserDefaults-backed server URL/localUserID/isAdminMode
+      AppEnvironment.swift                 # composition root + UserDefaults-backed server URL
       InstalledAppVersion.swift            # installed-version/bundle-id/App-Store-id placeholders for the update module
       ViewModels/
       Views/
@@ -53,10 +53,10 @@ This is a hand-written client generated directly against the real
 replaces the Wave-1 scaffold's inferred/guessed `Models/`. Every
 `Codable` type in `OpenAPISchemas.swift` was checked field-by-field
 against both the spec and the real backend Rust structs it mirrors
-(`backend/crates/streamarr-model`, `streamarr-catalog`, `streamarr-requests`,
+(`backend/crates/streamarr-model`, `streamarr-catalog`,
 `streamarr-auth`, `streamarr-api`) — see that file's header comment for
 the full provenance note and why a handful of schemas (`ExternalProvider`,
-`RequestTarget`, `WorkChildren`) need custom `Codable` conformances a
+`WorkChildren`) need custom `Codable` conformances a
 generic `openapi-generator-cli -g swift5` run wouldn't produce correctly
 (Rust's default externally-tagged and internally-tagged enum
 representations).
@@ -65,8 +65,7 @@ representations).
 operation in the spec except the two OAuth device-flow endpoints, which
 live in `Auth/DeviceFlowClient.swift` instead (see that file's header for
 why the split): system health/ready/version, catalog browse/search/get,
-the media-request lifecycle (list/submit/approve/reject), playback
-negotiation, and the `*arr` webhook receiver. View models code against the
+playback negotiation, and the `*arr` webhook receiver. View models code against the
 `StreamarrAPIClient` protocol, never `APIClient` concretely, so swapping
 in a different implementation (or a mock for tests) is a one-line
 dependency-injection change — see `Views/PreviewSupport.swift`'s
@@ -86,12 +85,9 @@ still `nil`. `PlayerView`'s manual media-file-ID entry field is still
 there as a fallback/debugging path (and is what gets pre-filled when
 navigated to from a real leaf), not the primary path anymore.
 
-**Round D also added real request-management and an auto-update module**
-(see their own sections below): `WorkDetailView`'s "Request" action and
-`RequestsView`/`RequestsViewModel` (`POST/GET /api/v1/requests`,
-`POST .../{id}/approve`/`.../reject`), and `UpdateViewModel`/
-`AppUpdateEvaluator`/`UpdateGateModifier` (`GET /api/system/version`
-polled on foreground).
+**Round D also added an auto-update module** (see its own section below):
+`UpdateViewModel`/`AppUpdateEvaluator`/`UpdateGateModifier`
+(`GET /api/system/version` polled on foreground).
 
 ## `Player/PlayerEngine.swift`
 
@@ -130,35 +126,6 @@ else. It's an `actor` (not a `@MainActor` class) specifically so it
 satisfies `Sendable` without relying on
 global-actor-isolation-implies-Sendable inference.
 `AppEnvironment`/`SettingsViewModel` wire it up as the app's sign-in flow.
-
-## Request management (`RequestsView`/`RequestsViewModel`, `WorkDetailView`'s "Request" action)
-
-`WorkDetailView` offers a real "Request" action (`POST /api/v1/requests`,
-via `WorkDetailViewModel.requestWork(requestedBy:)`) whenever the loaded
-`Work`'s `availability != .available` — an `existing_work` target request
-against the work already showing in the catalog, not a from-scratch
-metadata-provider lookup. `RequestsView`/`RequestsViewModel` (a new
-"Requests" tab in `RootView`) hit `GET /api/v1/requests`, which — per the
-real `list_requests_handler`'s own doc comment — returns two different
-things depending on whether `user_id` is supplied: that user's own
-requests (any status) when set, or every request still `Pending` an admin
-decision when absent. `RequestsViewModel` picks between those and, in the
-admin case, exposes real `POST .../{id}/approve` / `.../{id}/reject`
-actions.
-
-**Real spec gap this works around, not a client-side placeholder:** the
-API has no user/role model yet — `SubmitRequestBody.requestedBy` and
-`DecideRequestBody.decidedBy` are both raw client-supplied UUIDs (see the
-spec's own `TODO(auth)` note), and nothing exposes a caller's role. So
-`AppEnvironment` generates and persists a `localUserID` (UserDefaults,
-stable per install) to supply as `requestedBy`/`decidedBy`, and exposes an
-`isAdminMode` toggle (also UserDefaults-persisted, flipped from a new
-"Requests" section in `SettingsView`) purely as a local, on-this-device,
-**not server-enforced** stand-in for "is this person allowed to
-approve/reject." Replace both with a real identity/role claim the moment
-auth middleware exists server-side — `RequestsViewModel`'s shape (caller
-supplies `currentUserID`/`isAdmin` per call) shouldn't need to change when
-that happens.
 
 ## Client auto-update module (`UpdateViewModel`/`AppUpdateEvaluator`/`UpdateGateModifier`)
 
@@ -279,9 +246,9 @@ No other errors were found in either target across the whole package.
 **Unit tests were attempted and reverted, not skipped:** a
 `StreamarrKitTests`/`StreamarrAppTests` pass (schema decode/encode
 round-trips against real spec-shaped fixtures, `AppUpdateEvaluator`
-version-comparison boundary cases, `RequestsViewModel`/
-`WorkDetailViewModel` behavior against a fake `StreamarrAPIClient`, an
-`AppStoreLookupClient` test against a mocked `URLProtocol`) was written,
+version-comparison boundary cases, `WorkDetailViewModel` behavior against
+a fake `StreamarrAPIClient`, an `AppStoreLookupClient` test against a
+mocked `URLProtocol`) was written,
 then removed once direct experiment (a throwaway scratch SPM package, not
 assumption) confirmed this environment has **neither `XCTest.framework`
 nor the `Testing` module available at all**, under any swift-tools-version
@@ -294,16 +261,6 @@ below.
 
 ## Known gaps / assumptions to revisit
 
-- **`localUserID`/`isAdminMode` are local, device-only placeholders**, not
-  a real identity/role system — see "Request management" above. Replace
-  both with a real authenticated user id and a real role claim the moment
-  the server exposes either; nothing else about `RequestsViewModel`'s
-  shape should need to change.
-- **`MediaRequestSchema` doesn't embed a resolved catalog title** for
-  `existing_work` targets (only `work_id`) — a real, current spec
-  limitation, not a client bug. `RequestsView`'s row shows a truncated
-  work id for now; resolve it via `GET /api/v1/catalog/{id}` in a future
-  pass if this screen needs the real title.
 - **`InstalledAppVersion`'s bundle id / numeric App Store id are
   placeholders** (`"com.streamarr.ios"` fallback, `"0000000000"`) until
   this app has a real App Store Connect listing — see "Client auto-update
@@ -321,13 +278,10 @@ below.
 - **Token persistence is in-memory only** (`AppEnvironment`'s
   `InMemoryTokenStore`) — there's a `// TODO` at the one call site
   (`refreshAccessToken()`) marking where Keychain-backed persistence and a
-  real OAuth refresh-token exchange need to go. No route in the current
-  spec is documented as requiring authentication yet either (no
-  auth-extraction middleware exists server-side in this pass — see
-  `SubmitRequestBody.requestedBy`'s `TODO(auth)` in the spec) — every
-  request still attaches whatever bearer token is available so the client
-  is ready the moment that middleware lands, without another client-side
-  change.
+  real OAuth refresh-token exchange need to go. No operation this client
+  drives requires authentication today (see `APIClient.swift`'s header
+  note); `AccessTokenProviding`/`InMemoryTokenStore` exist to back the
+  device-flow Sign In/Out UI in `SettingsView`.
 - **No test target** — this package doesn't declare one yet, and can't
   meaningfully in this environment (see "Unit tests were attempted and
   reverted" above: neither `XCTest` nor `Testing` resolves here at all).
@@ -336,9 +290,9 @@ below.
   double would take); once real Xcode is available, add a
   `StreamarrKitTests` target (schema round-trips, `AppUpdateEvaluator`,
   `AppStoreLookupClient` against a mocked `URLProtocol`) and a
-  `StreamarrAppTests` target (`RequestsViewModel`/`WorkDetailViewModel`
-  against a fake `StreamarrAPIClient`) — this pass wrote and then removed
-  exactly that pair, so the design just needs re-adding, not re-designing.
+  `StreamarrAppTests` target (`WorkDetailViewModel` against a fake
+  `StreamarrAPIClient`) — this pass wrote and then removed exactly that
+  pair, so the design just needs re-adding, not re-designing.
 - **No Xcode project layer** (see "Why `StreamarrApp` isn't a real `.app`
   yet"). The first real step once Xcode is available: open
   `Package.swift` directly in Xcode, pick an iOS Simulator destination,

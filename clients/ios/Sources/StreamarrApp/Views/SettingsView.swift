@@ -4,8 +4,6 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var viewModel: SettingsViewModel
 
-    @Environment(AppEnvironment.self) private var environment
-
     var body: some View {
         NavigationStack {
             Form {
@@ -48,27 +46,6 @@ struct SettingsView: View {
                         }
                         .disabled(viewModel.isSigningIn)
                     }
-                }
-
-                Section {
-                    Toggle(
-                        "Admin Mode",
-                        isOn: Binding(
-                            get: { environment.isAdminMode },
-                            set: { environment.isAdminMode = $0 }
-                        )
-                    )
-                    LabeledContent("Your Request ID", value: environment.localUserID.uuidString)
-                        .font(.caption)
-                } header: {
-                    Text("Requests")
-                } footer: {
-                    Text(
-                        "\"Admin Mode\" is a local, on-this-device-only toggle: it only changes what " +
-                        "the Requests tab shows and lets you attempt (Approve/Reject) here. Turning it " +
-                        "on doesn't grant you anything — the server independently checks your signed-in " +
-                        "identity and will refuse Approve/Reject if it isn't an admin's."
-                    )
                 }
 
                 if let errorMessage = viewModel.errorMessage {

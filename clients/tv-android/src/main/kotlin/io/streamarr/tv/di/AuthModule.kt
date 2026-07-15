@@ -46,7 +46,7 @@ object AuthModule {
         enableHttpLogging = BuildConfig.DEBUG,
     )
 
-    /** Backs [io.streamarr.shared.auth.SessionManager]'s transparent `POST /api/v1/auth/login` call -- see [NetworkModule]'s `accessTokenProvider`. */
+    /** Backs [io.streamarr.shared.auth.SessionManager]'s transparent `POST /api/v1/auth/login` call. */
     @Provides
     @Singleton
     fun provideLoginApi(serverConfigStore: ServerConfigStore): LoginApi = AuthHttpClient.createLoginApi(

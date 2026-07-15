@@ -229,54 +229,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/requests": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["list_requests_handler"];
-        put?: never;
-        post: operations["submit_request_handler"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/requests/{id}/approve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["approve_request_handler"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/requests/{id}/reject": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["reject_request_handler"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/webhooks/{instance_id}": {
         parameters: {
             query?: never;
@@ -381,15 +333,6 @@ export interface components {
              *     time rather than being cut off with no notice.
              */
             sunset?: string | null;
-        };
-        /**
-         * @description `decided_by` is deliberately absent: it comes from the verified access
-         *     token's `sub` claim (via [`AdminUser`]), never from anything the caller
-         *     puts in the request body -- see this module's `approve_request_handler`/
-         *     `reject_request_handler`.
-         */
-        DecideRequestBody: {
-            reason?: string | null;
         };
         DeviceCodeRequest: {
             client_platform: components["schemas"]["ClientPlatform"];
@@ -499,25 +442,6 @@ export interface components {
             /** Format: uuid */
             user_id: string;
         };
-        /** @description Doc-only mirror of [`MediaRequest`] -- see [`RequestStatusSchema`]. */
-        MediaRequestSchema: {
-            /** Format: date-time */
-            created_at: string;
-            /** Format: uuid */
-            decided_by?: string | null;
-            /** Format: uuid */
-            id: string;
-            kind: components["schemas"]["WorkKind"];
-            note?: string | null;
-            /** Format: uuid */
-            requested_by: string;
-            /** Format: uuid */
-            source_instance_id?: string | null;
-            status: components["schemas"]["RequestStatusSchema"];
-            target: components["schemas"]["RequestTargetDto"];
-            /** Format: date-time */
-            updated_at: string;
-        };
         OAuthErrorBody: {
             /**
              * @description One of RFC 8628 §3.5's four device-flow error codes, or RFC 6749
@@ -541,30 +465,6 @@ export interface components {
         };
         /** @enum {string} */
         PlaybackMode: "direct" | "hls";
-        /**
-         * @description Doc-only mirror of [`streamarr_requests::RequestStatus`] -- the real
-         *     type has no `ToSchema` (`streamarr-requests` doesn't depend on
-         *     `utoipa`); handlers still serialize the real `MediaRequest` directly,
-         *     this is only referenced from `#[utoipa::path]` `responses(...)`.
-         * @enum {string}
-         */
-        RequestStatusSchema: "pending" | "approved" | "rejected" | "submitted" | "available" | "failed";
-        /**
-         * @description Wire-compatible mirror of [`RequestTarget`]: real `Deserialize` (used to
-         *     extract the actual request body) and `ToSchema` (used for OpenAPI docs).
-         *     Kept in lock-step with `RequestTarget`'s own `#[serde(tag =
-         *     "target_kind")]` shape so it round-trips identically.
-         */
-        RequestTargetDto: {
-            /** @enum {string} */
-            target_kind: "existing_work";
-            /** Format: uuid */
-            work_id: string;
-        } | {
-            external_ref: components["schemas"]["ExternalRef"];
-            /** @enum {string} */
-            target_kind: "external";
-        };
         Season: {
             availability: components["schemas"]["Availability"];
             /** Format: uuid */
@@ -628,11 +528,6 @@ export interface components {
         };
         /** @enum {string} */
         SourceKind: "sonarr" | "radarr" | "lidarr" | "bazarr" | "prowlarr" | "readarr";
-        SubmitRequestBody: {
-            kind: components["schemas"]["WorkKind"];
-            note?: string | null;
-            target: components["schemas"]["RequestTargetDto"];
-        };
         /** @description Doc-only mirror of [`TokenResponse`]; see [`DeviceCodeResponseSchema`]. */
         TokenResponseSchema: {
             access_token: string;
@@ -1193,180 +1088,6 @@ export interface operations {
             };
             /** @description No on-demand transcode capacity available on this node */
             503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    list_requests_handler: {
-        parameters: {
-            query?: {
-                /**
-                 * @description When set, lists this user's own requests (any status); when absent,
-                 *     lists every request still `Pending` an admin decision.
-                 */
-                user_id?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Requests */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MediaRequestSchema"][];
-                };
-            };
-        };
-    };
-    submit_request_handler: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SubmitRequestBody"];
-            };
-        };
-        responses: {
-            /** @description Request created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MediaRequestSchema"];
-                };
-            };
-            /** @description Missing or invalid access token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description No configured/usable source instance for this kind */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    approve_request_handler: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Request id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DecideRequestBody"];
-            };
-        };
-        responses: {
-            /** @description Request approved and submitted */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MediaRequestSchema"];
-                };
-            };
-            /** @description Missing or invalid access token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Caller is authenticated but not an admin */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request is not Pending */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    reject_request_handler: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Request id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DecideRequestBody"];
-            };
-        };
-        responses: {
-            /** @description Request rejected */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MediaRequestSchema"];
-                };
-            };
-            /** @description Missing or invalid access token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Caller is authenticated but not an admin */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request is not Pending */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };

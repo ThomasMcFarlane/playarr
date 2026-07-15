@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   describeApiError,
-  type ExternalProvider,
-  type MediaRequest,
-  type RequestStatus,
   type SourceInstanceRequest,
   type SourceInstanceResponse,
   type SourceKind,
@@ -220,175 +217,17 @@ function SourceInstancesSection() {
   );
 }
 
-/** `ExternalProvider` is a closed set of string variants plus an `{other: string}` escape hatch. */
-function providerLabel(provider: ExternalProvider): string {
-  return typeof provider === "string" ? provider : `other:${provider.other}`;
-}
-
-function targetLabel(request: MediaRequest, workTitles: Record<string, string>): string {
-  if (request.target.target_kind === "existing_work") {
-    return workTitles[request.target.work_id] ?? `Work ${request.target.work_id}`;
-  }
-  const { provider, external_id: externalId } = request.target.external_ref;
-  return `${providerLabel(provider)}:${externalId}`;
-}
-
-function statusBadgeClass(status: RequestStatus): string {
-  switch (status) {
-    case "approved":
-      return "badge-success";
-    case "rejected":
-      return "badge-warning";
-    default:
-      return "badge-neutral";
-  }
-}
-
 /**
- * Request management: approve/reject user-submitted `MediaRequest`s, backed
- * by the real `GET/POST /api/v1/requests`, `POST /api/v1/requests/{id}/approve`,
- * and `POST /api/v1/requests/{id}/reject` endpoints.
- *
- * Round E wired real auth middleware into the backend: `decided_by` is no
- * longer a client-supplied field (the removed Round D workaround asked an
- * operator to type in a real admin user id and persist it locally) -- the
- * server now derives it from the verified access token's `sub` claim, and
- * rejects (403) any caller that token doesn't identify as an admin. The
- * `ApiClient` this page uses (see `ApiClientProvider`) obtains that token
- * transparently via `POST /api/v1/auth/login`.
+ * Admin: registering *arr source instances (the only admin surface
+ * Streamarr has -- see `SourceInstancesSection` above). Streamarr has no
+ * request-management feature; that's Overseerr/Jellyseerr's job, not
+ * this app's.
  */
 export function AdminPage() {
   return (
     <div className="page">
       <h1 className="page-title">Admin</h1>
       <SourceInstancesSection />
-      <RequestsSection />
     </div>
-  );
-}
-
-function RequestsSection() {
-  const client = useApiClient();
-  const [requests, setRequests] = useState<MediaRequest[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [workTitles, setWorkTitles] = useState<Record<string, string>>({});
-  const [busyId, setBusyId] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    client
-      .listRequests()
-      .then((result) => {
-        if (!cancelled) setRequests(result);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(describeApiError(err));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [client]);
-
-  // Resolve titles for "existing_work" targets lazily (the request list only carries the work id).
-  useEffect(() => {
-    if (!requests) return;
-    const missingIds = Array.from(
-      new Set(
-        requests
-          .filter((r) => r.target.target_kind === "existing_work" && !(r.target.work_id in workTitles))
-          .map((r) => (r.target as { work_id: string }).work_id)
-      )
-    );
-    if (missingIds.length === 0) return;
-
-    let cancelled = false;
-    void Promise.all(
-      missingIds.map((id) =>
-        client
-          .getWork(id)
-          .then((detail) => [id, detail.work.title] as const)
-          .catch(() => [id, id] as const)
-      )
-    ).then((entries) => {
-      if (cancelled) return;
-      setWorkTitles((current) => ({ ...current, ...Object.fromEntries(entries) }));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [requests, workTitles, client]);
-
-  async function decide(id: string, decision: "approve" | "reject") {
-    setBusyId(id);
-    setError(null);
-    try {
-      const updated =
-        decision === "approve" ? await client.approveRequest(id, {}) : await client.rejectRequest(id, {});
-      setRequests((current) => current?.map((r) => (r.id === id ? updated : r)) ?? current);
-    } catch (err) {
-      setError(describeApiError(err));
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  return (
-    <section className="section">
-      <h2 className="section-title">Requests</h2>
-      <p className="muted" style={{ maxWidth: 560, marginBottom: "1rem" }}>
-        Review and approve/reject pending <code>MediaRequest</code>s.
-      </p>
-
-      <div className="card">
-        {error && <p className="error-text" style={{ marginBottom: "1rem" }}>{error}</p>}
-        {requests === null && !error && <p className="muted">Loading...</p>}
-        {requests !== null && requests.length === 0 && <p className="muted">No pending requests.</p>}
-
-        {requests !== null && requests.length > 0 && (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Target</th>
-                <th>Kind</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {requests.map((request) => (
-                <tr key={request.id}>
-                  <td>{targetLabel(request, workTitles)}</td>
-                  <td style={{ textTransform: "capitalize" }}>{request.kind}</td>
-                  <td>
-                    <span className={`badge ${statusBadgeClass(request.status)}`}>{request.status}</span>
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-sm"
-                        disabled={request.status !== "pending" || busyId === request.id}
-                        onClick={() => void decide(request.id, "approve")}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-danger btn-sm"
-                        disabled={request.status !== "pending" || busyId === request.id}
-                        onClick={() => void decide(request.id, "reject")}
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </section>
   );
 }

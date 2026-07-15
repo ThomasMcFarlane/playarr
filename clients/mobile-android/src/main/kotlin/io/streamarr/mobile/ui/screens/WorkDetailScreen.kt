@@ -25,15 +25,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.streamarr.mobile.R
-import io.streamarr.shared.data.model.Availability
-import io.streamarr.shared.data.model.RequestTarget
-import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
 import io.streamarr.shared.data.model.WorkDetail
 import io.streamarr.shared.domain.model.StreamarrError
 import io.streamarr.shared.domain.model.StreamarrResult
 import io.streamarr.shared.domain.usecase.GetWorkDetailsUseCase
-import io.streamarr.shared.domain.usecase.SubmitMediaRequestUseCase
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,53 +42,20 @@ sealed interface WorkDetailUiState {
     data class Failure(val message: String) : WorkDetailUiState
 }
 
-/** Local state for the "Request" action on [WorkDetailScreen], independent of [WorkDetailUiState] (the detail load). */
-sealed interface RequestActionState {
-    data object Idle : RequestActionState
-    data object Submitting : RequestActionState
-    data object Submitted : RequestActionState
-    data class Failed(val message: String) : RequestActionState
-}
-
 @HiltViewModel
 class WorkDetailViewModel @Inject constructor(
     private val getWorkDetailsUseCase: GetWorkDetailsUseCase,
-    private val submitMediaRequestUseCase: SubmitMediaRequestUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<WorkDetailUiState>(WorkDetailUiState.Loading)
     val uiState: StateFlow<WorkDetailUiState> = _uiState.asStateFlow()
 
-    private val _requestState = MutableStateFlow<RequestActionState>(RequestActionState.Idle)
-    val requestState: StateFlow<RequestActionState> = _requestState.asStateFlow()
-
     fun load(workId: String) {
         viewModelScope.launch {
             _uiState.value = WorkDetailUiState.Loading
-            _requestState.value = RequestActionState.Idle
             _uiState.value = when (val result = getWorkDetailsUseCase(workId)) {
                 is StreamarrResult.Success -> WorkDetailUiState.Content(result.value)
                 is StreamarrResult.Failure -> WorkDetailUiState.Failure(result.error.toWorkDetailErrorMessage())
-            }
-        }
-    }
-
-    /**
-     * `POST /api/v1/requests` for [work] itself (`RequestTarget.ExistingWork`) --
-     * see [WorkDetailContent]'s KDoc for when this action is shown. No
-     * longer needs a locally-read user id: the submitting user is derived
-     * server-side from the verified access token
-     * `StreamarrHttpClient` attaches -- see
-     * [SubmitMediaRequestUseCase]'s KDoc.
-     */
-    fun requestWork(work: Work) {
-        viewModelScope.launch {
-            _requestState.value = RequestActionState.Submitting
-            _requestState.value = when (
-                val result = submitMediaRequestUseCase(kind = work.kind, target = RequestTarget.ExistingWork(work.id))
-            ) {
-                is StreamarrResult.Success -> RequestActionState.Submitted
-                is StreamarrResult.Failure -> RequestActionState.Failed(result.error.toWorkDetailErrorMessage())
             }
         }
     }
@@ -102,7 +65,7 @@ class WorkDetailViewModel @Inject constructor(
 internal fun StreamarrError.toWorkDetailErrorMessage(): String = when (this) {
     is StreamarrError.Network -> "Can't reach the Streamarr server. Check the server address in Settings."
     is StreamarrError.Http -> when (code) {
-        401 -> "Sign in again to submit a request."
+        401 -> "Sign in again to continue."
         403 -> "You don't have permission to do that."
         404 -> "This title couldn't be found."
         else -> "Server error ($code)."
@@ -119,7 +82,6 @@ fun WorkDetailScreen(
     viewModel: WorkDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val requestState by viewModel.requestState.collectAsState()
 
     LaunchedEffect(workId) { viewModel.load(workId) }
 
@@ -137,9 +99,7 @@ fun WorkDetailScreen(
             }
             is WorkDetailUiState.Content -> WorkDetailContent(
                 detail = current.detail,
-                requestState = requestState,
                 onPlayMediaFile = onPlayMediaFile,
-                onRequestWork = { viewModel.requestWork(current.detail.work) },
             )
         }
     }
@@ -153,19 +113,11 @@ fun WorkDetailScreen(
  * A leaf with no resolved file yet (`media_file_id == null` -- nothing has
  * synced for it) renders without a play affordance rather than navigating
  * to the Player screen with nothing to play.
- *
- * The "Request" action (`POST /api/v1/requests`, [onRequestWork]) shows
- * whenever [Work.availability] is anything other than
- * [Availability.Available] -- i.e. there is at least some part of this work
- * still missing -- independent of which individual leaves already have a
- * resolved file.
  */
 @Composable
 private fun WorkDetailContent(
     detail: WorkDetail,
-    requestState: RequestActionState,
     onPlayMediaFile: (String) -> Unit,
-    onRequestWork: () -> Unit,
 ) {
     val work = detail.work
 
@@ -181,12 +133,6 @@ private fun WorkDetailContent(
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
-            }
-        }
-
-        if (work.availability != Availability.Available) {
-            item {
-                RequestActionRow(requestState = requestState, onRequestWork = onRequestWork, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             }
         }
 
@@ -270,25 +216,6 @@ private fun WorkDetailContent(
                     },
                     modifier = if (mediaFileId != null) Modifier.clickable { onPlayMediaFile(mediaFileId) } else Modifier,
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RequestActionRow(requestState: RequestActionState, onRequestWork: () -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
-        when (requestState) {
-            is RequestActionState.Idle -> Button(onClick = onRequestWork) { Text(stringResource(R.string.work_detail_request)) }
-            is RequestActionState.Submitting -> Button(onClick = {}, enabled = false) { Text(stringResource(R.string.work_detail_requesting)) }
-            is RequestActionState.Submitted -> Text(
-                text = stringResource(R.string.work_detail_request_submitted),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            is RequestActionState.Failed -> Column {
-                Text(text = requestState.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                Button(onClick = onRequestWork, modifier = Modifier.padding(top = 4.dp)) { Text(stringResource(R.string.work_detail_request)) }
             }
         }
     }

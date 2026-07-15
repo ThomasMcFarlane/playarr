@@ -56,11 +56,14 @@ same DataStore-backed `TokenStore` so every downstream caller (`core-data`'s
   same module but has no pairing UI of its own, since a phone/tablet has a
   keyboard and benefits from the login path instead.
 
-Only three endpoints actually require the resulting `Authorization: Bearer`
-header: `POST /api/v1/requests`, `.../{id}/approve`, `.../{id}/reject`. Every
-catalog/playback/system call stays unauthenticated by the server's own
-design, and `StreamarrHttpClient`'s auth interceptor only invokes the token
-provider for those three write paths.
+No endpoint the mobile app actually calls requires the resulting
+`Authorization: Bearer` header today — catalog, playback, and system calls
+all stay unauthenticated by the server's own design. (The server does
+enforce Bearer-plus-admin-checked auth on the source-instance management
+endpoints under `/api/v1/admin/source-instances`, but the mobile app has
+no admin UI and never calls them.) `StreamarrHttpClient`'s auth interceptor
+still acquires and attaches a token up front, ready for whichever
+authenticated write path needs one first.
 
 ## Playback / DRM approach
 
@@ -82,8 +85,9 @@ paths at all) — playback is unencrypted HLS/direct-play only. This is a
 real, current gap relative to earlier drafts of this document, which
 described a Widevine license-proxy endpoint that was never actually built.
 Revisit this section if/when server-side content protection is added; for
-now, "content protection" here means nothing more than requiring a
-bearer-token-gated request/approval flow before a title becomes playable.
+now, there is no content-protection mechanism at all gating playback — the
+playback endpoint is unauthenticated, so anything reachable on the network
+can request a stream for an available title.
 
 ## Code-sharing story with sibling platforms
 
@@ -152,15 +156,11 @@ There is no code sharing with iOS beyond the OpenAPI contract itself
   table in [`../../versioning-policy.md`](../../versioning-policy.md) for
   the exact trigger condition shared with Android TV.
 
-## Request-management screens
+## Work detail screen and playback resolution
 
-Both apps ship a real `RequestsScreen` and `WorkDetailScreen` — not a
-placeholder — wired to `core-domain`'s `SubmitMediaRequestUseCase`,
-`ListMediaRequestsUseCase`, and `DecideMediaRequestUseCase` against the
-real `POST/GET /api/v1/requests` and `.../{id}/approve`/`.../{id}/reject`
-endpoints. `WorkDetailScreen`'s "Play" action uses the real,
-server-resolved `media_file_id` the catalog endpoint now cross-links per
-leaf (`WorkDetailSchema.mediaFileId` for a movie; the sibling field on
+`WorkDetailScreen`'s "Play" action uses the real, server-resolved
+`media_file_id` the catalog endpoint cross-links per leaf
+(`WorkDetailSchema.mediaFileId` for a movie; the sibling field on
 `EpisodeDetailSchema`/`TrackDetailSchema`/`BookDetailSchema` for a series'
 episodes / an artist's tracks / an author's books), falling back to a
 non-playable row when a given leaf's file hasn't been resolved yet

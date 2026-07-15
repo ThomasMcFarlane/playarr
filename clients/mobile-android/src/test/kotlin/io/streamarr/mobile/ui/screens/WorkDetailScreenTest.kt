@@ -10,9 +10,8 @@ import retrofit2.HttpException
 import retrofit2.Response
 
 /**
- * [WorkDetailViewModel.requestWork] (`POST /api/v1/requests`) surfaces a
- * 401 (missing/invalid bearer token, per Round E's security fix) and a 403
- * as real, distinct [RequestActionState.Failed] messages via
+ * [WorkDetailViewModel.load] (`GET /api/v1/catalog/{id}`) surfaces a 401
+ * and a 403 as real, distinct [WorkDetailUiState.Failure] messages via
  * [StreamarrError.toUserMessage] -- not a silent failure, and not lumped
  * into the generic "Server error (n)" branch every other status shares.
  */
@@ -26,7 +25,7 @@ class WorkDetailScreenTest {
     @Test
     fun `401 surfaces as a distinct sign-in-required message, not a generic server error`() {
         val message = httpError(401).toWorkDetailErrorMessage()
-        assertEquals("Sign in again to submit a request.", message)
+        assertEquals("Sign in again to continue.", message)
     }
 
     @Test

@@ -11,14 +11,12 @@ import Foundation
 // own unauthenticated, polling-with-backoff shape that doesn't fit this
 // client's "one call in, one typed result (or typed error) out" pattern,
 // and `DeviceFlowClient` already existed as the app's dedicated component
-// for it. Together the two components cover all 14 paths / 15 operations
-// in the spec:
+// for it. Together the two components cover all of the spec's paths and
+// operations:
 //   - system: GET /api/system/health, /ready, /version
 //   - auth: POST /api/v1/auth/login
 //   - catalog: GET /api/v1/catalog, /api/v1/catalog/search,
 //     /api/v1/catalog/{id}
-//   - requests: GET+POST /api/v1/requests, POST .../{id}/approve,
-//     POST .../{id}/reject
 //   - playback: GET /api/v1/playback/{media_file_id}
 //   - webhooks: POST /webhooks/{instance_id}
 //   - oauth (in DeviceFlowClient.swift): POST /api/v1/oauth/device/code,
@@ -28,19 +26,14 @@ import Foundation
 // same directory — see that file's header for how they were produced and
 // checked against the spec/backend source.
 //
-// Round E/F update (security fix + client follow-up): the requests
-// submit/approve/reject operations now require a verified
-// `Authorization: Bearer <access_token>` header server-side; catalog and
-// playback stay unauthenticated by the backend's own design (no 401
-// documented on those operations in the spec), so this client only attaches
-// the header on the three requests-lifecycle write calls — see
-// `attachAuth`/the `requiresAuth` parameter on the private `post` helper
-// below. When no token is cached yet, `attachAuth` transparently calls the
-// new `login` operation (trusted-network mode needs no credentials) and
-// persists the result through `AccessTokenProviding.storeSession`, i.e.
-// through whatever token store the caller already wired up for the device
-// flow (`AppEnvironment.InMemoryTokenStore` in `StreamarrApp`) — no second,
-// parallel token store.
+// Every operation this client drives is unauthenticated by the backend's
+// own design (no 401 documented on any of them in the spec), so `post`
+// never attaches a bearer token — `login` itself only obtains one, never
+// consumes one. `AccessTokenProviding`/`AppEnvironment.InMemoryTokenStore`
+// in `StreamarrApp` still exist to back the RFC 8628 device-flow sign-in
+// this app drives from `SettingsView` (see `DeviceFlowClient.swift` and
+// `AppEnvironment.setSession`/`.signOut`) — this client itself just has no
+// remaining call that needs to read that token back out.
 
 /// Configuration for talking to one Streamarr server instance. `baseURL` is
 /// the one thing that must be user-configurable per the architecture
@@ -51,14 +44,13 @@ public struct APIClientConfiguration: Sendable {
     public var baseURL: URL
     public var clientPlatform: ClientPlatform
     public var clientVersion: String
-    /// `LoginRequest.deviceID`/`.deviceName` for the transparent
-    /// `POST /api/v1/auth/login` call `APIClient` makes on demand (see this
-    /// file's header note) when no access token is cached yet. Real callers
-    /// (`AppEnvironment`) should pass a `deviceID` persisted per-install,
-    /// not a fresh `UUID()` per launch — see `LoginRequest.deviceID`'s doc
-    /// comment in `OpenAPISchemas.swift` for why. The defaults here exist
-    /// only for callers (previews, ad hoc construction) that never exercise
-    /// the login path.
+    /// `LoginRequest.deviceID`/`.deviceName` a caller can use to build a
+    /// `LoginRequest` for `login(_:)`. Real callers (`AppEnvironment`)
+    /// should pass a `deviceID` persisted per-install, not a fresh
+    /// `UUID()` per launch — see `LoginRequest.deviceID`'s doc comment in
+    /// `OpenAPISchemas.swift` for why. The defaults here exist only for
+    /// callers (previews, ad hoc construction) that never exercise the
+    /// login path.
     public var deviceID: UUID
     public var deviceName: String
     public var urlSessionConfiguration: URLSessionConfiguration
@@ -80,28 +72,23 @@ public struct APIClientConfiguration: Sendable {
     }
 }
 
-/// Supplies (and refreshes) the bearer token attached to authenticated
-/// requests. `DeviceFlowClient` (see `Auth/DeviceFlowClient.swift`)
-/// produces one token pair (via user-driven sign-in); `APIClient`'s own
-/// transparent `POST /api/v1/auth/login` call (see this file's header
-/// note) produces another (no user action required, in the server's
-/// default trusted-network mode). A concrete conformer typically persists
-/// whichever arrives in the Keychain and refreshes it before it expires.
-///
-/// As of Round E, `POST /api/v1/requests` and `.../{id}/approve`/`.../reject`
-/// really do require a verified `Authorization: Bearer <access_token>`
-/// header (401 without one, 403 if the caller isn't an admin for
-/// approve/reject) — see `APIClient`'s `requiresAuth` plumbing on those
-/// three calls specifically; every other operation in the spec stays
-/// unauthenticated by the backend's own design.
+/// Supplies (and refreshes) the bearer token obtained via user-driven
+/// sign-in. `DeviceFlowClient` (see `Auth/DeviceFlowClient.swift`) produces
+/// the token pair; a concrete conformer typically persists it in the
+/// Keychain and refreshes it before it expires. Every operation
+/// `APIClient` itself drives is unauthenticated by the backend's own
+/// design, so `APIClient` doesn't currently read this token back out — this
+/// protocol exists to back the app's real Sign In/Out UI (`SettingsView`
+/// via `AppEnvironment.setSession`/`.signOut`), independent of whether
+/// anything in this file consumes the token it holds.
 public protocol AccessTokenProviding: Sendable {
     func currentAccessToken() async -> Sensitive<String>?
     func refreshAccessToken() async throws -> Sensitive<String>
 
-    /// Persists a token pair obtained by `APIClient`'s transparent
-    /// `POST /api/v1/auth/login` call, through the same store a conformer
-    /// already uses for `DeviceFlowClient`-obtained tokens — never a
-    /// second, parallel store.
+    /// Persists a token pair obtained outside of a conformer's own
+    /// `update`/equivalent entry point (e.g. a future refresh-token
+    /// exchange), through the same store already used for
+    /// `DeviceFlowClient`-obtained tokens — never a second, parallel store.
     func storeSession(accessToken: Sensitive<String>, refreshToken: Sensitive<String>?) async
 }
 
@@ -120,10 +107,13 @@ public enum APIError: Error, Sendable {
     /// `GET /api/v1/playback/{media_file_id}` for an unknown media file,
     /// `POST /webhooks/{instance_id}` for an unknown source instance.
     case notFound(APIErrorBody?)
-    /// `409` — approve/reject on a request that's no longer `Pending`.
+    /// `409` — no current operation in this client's coverage documents a
+    /// 409 response; kept for forward compatibility with the generic
+    /// `{"error": "<code>", "message": "<...>"}` error shape.
     case conflict(APIErrorBody?)
-    /// `422` — `POST /api/v1/requests` with no configured/usable source
-    /// instance for the requested kind.
+    /// `422` — no current operation in this client's coverage documents a
+    /// 422 response; kept for forward compatibility with the generic
+    /// `{"error": "<code>", "message": "<...>"}` error shape.
     case unprocessableEntity(APIErrorBody?)
     /// `503` — `GET /api/v1/playback/{media_file_id}` with no on-demand
     /// transcode capacity available on this node.
@@ -164,12 +154,10 @@ public protocol StreamarrAPIClient: Sendable {
     func fetchVersion() async throws -> VersionEnvelope
 
     // Auth
-    /// `POST /api/v1/auth/login`. Not normally called directly by view-layer
-    /// code — `APIClient`'s own `attachAuth` calls this transparently on
-    /// demand when a requests submit/approve/reject call needs a bearer
-    /// token and none is cached yet. Exposed on the protocol so a caller
-    /// that does want an explicit sign-in affordance (e.g. a future
-    /// non-trusted-network login screen) can call it directly too.
+    /// `POST /api/v1/auth/login`. Exposed on the protocol for a caller that
+    /// wants an explicit sign-in affordance (e.g. a future
+    /// non-trusted-network login screen); no operation this client drives
+    /// calls it on the caller's behalf.
     func login(_ body: LoginRequest) async throws -> LoginResponse
 
     // Catalog
@@ -184,12 +172,6 @@ public protocol StreamarrAPIClient: Sendable {
 
     func searchCatalog(query: String, limit: Int?) async throws -> [Work]
     func fetchWork(id: UUID) async throws -> WorkDetail
-
-    // Requests
-    func listRequests(userID: UUID?) async throws -> [MediaRequest]
-    func submitRequest(_ body: SubmitRequestBody) async throws -> MediaRequest
-    func approveRequest(id: UUID, body: DecideRequestBody) async throws -> MediaRequest
-    func rejectRequest(id: UUID, body: DecideRequestBody) async throws -> MediaRequest
 
     // Playback
     func playbackInfo(
@@ -215,18 +197,15 @@ public protocol StreamarrAPIClient: Sendable {
 public final class APIClient: StreamarrAPIClient {
     private let configuration: APIClientConfiguration
     private let session: URLSession
-    private let tokenProvider: AccessTokenProviding?
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
 
     public init(
         configuration: APIClientConfiguration,
-        tokenProvider: AccessTokenProviding? = nil,
         session: URLSession? = nil
     ) {
         self.configuration = configuration
         self.session = session ?? URLSession(configuration: configuration.urlSessionConfiguration)
-        self.tokenProvider = tokenProvider
         self.decoder = StreamarrJSONCoding.makeDecoder()
         self.encoder = StreamarrJSONCoding.makeEncoder()
     }
@@ -250,11 +229,7 @@ public final class APIClient: StreamarrAPIClient {
     // MARK: Auth
 
     public func login(_ body: LoginRequest) async throws -> LoginResponse {
-        // `requiresAuth: false` — this call *obtains* the token, it can't
-        // require one already being attached (that would deadlock against
-        // `attachAuth`'s own fallback to this very method for the
-        // requests-lifecycle calls below).
-        try await post("/api/v1/auth/login", body: body, requiresAuth: false)
+        try await post("/api/v1/auth/login", body: body)
     }
 
     // MARK: Catalog
@@ -285,26 +260,6 @@ public final class APIClient: StreamarrAPIClient {
 
     public func fetchWork(id: UUID) async throws -> WorkDetail {
         try await get("/api/v1/catalog/\(id.uuidString)")
-    }
-
-    // MARK: Requests
-
-    public func listRequests(userID: UUID? = nil) async throws -> [MediaRequest] {
-        var query: [URLQueryItem] = []
-        if let userID { query.append(URLQueryItem(name: "user_id", value: userID.uuidString)) }
-        return try await get("/api/v1/requests", query: query)
-    }
-
-    public func submitRequest(_ body: SubmitRequestBody) async throws -> MediaRequest {
-        try await post("/api/v1/requests", body: body, expectedStatuses: [200, 201], requiresAuth: true)
-    }
-
-    public func approveRequest(id: UUID, body: DecideRequestBody) async throws -> MediaRequest {
-        try await post("/api/v1/requests/\(id.uuidString)/approve", body: body, requiresAuth: true)
-    }
-
-    public func rejectRequest(id: UUID, body: DecideRequestBody) async throws -> MediaRequest {
-        try await post("/api/v1/requests/\(id.uuidString)/reject", body: body, requiresAuth: true)
     }
 
     // MARK: Playback
@@ -341,15 +296,12 @@ public final class APIClient: StreamarrAPIClient {
         URL(string: path, relativeTo: configuration.baseURL)?.absoluteURL
     }
 
-    // MARK: - Request plumbing
+    // MARK: - Request helpers
     //
-    // `get`/`sendNoBody` never attach auth — every `GET` in the spec (system,
-    // catalog, `GET /api/v1/requests`, playback) is unauthenticated by the
-    // backend's own design. `post` only attaches auth when the call site
-    // passes `requiresAuth: true` — as of Round E that's exactly
-    // `submitRequest`/`approveRequest`/`rejectRequest`, never `login` itself
-    // (see that method's own comment) and never `sendWebhook` (which builds
-    // its request directly, not through `post`).
+    // Neither `get`/`sendNoBody` nor `post` attach auth — every operation in
+    // the spec this client drives is unauthenticated by the backend's own
+    // design (`sendWebhook` also builds its request directly, not through
+    // `post`, for the same reason).
 
     private func get<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
         let request = try makeRequest(path: path, method: "GET", query: query)
@@ -359,14 +311,10 @@ public final class APIClient: StreamarrAPIClient {
     private func post<Body: Encodable, T: Decodable>(
         _ path: String,
         body: Body,
-        expectedStatuses: Set<Int> = [200],
-        requiresAuth: Bool = false
+        expectedStatuses: Set<Int> = [200]
     ) async throws -> T {
         var request = try makeRequest(path: path, method: "POST", query: [])
         try attachBody(body, to: &request)
-        if requiresAuth {
-            await attachAuth(&request)
-        }
         return try await send(request, expectedStatuses: expectedStatuses)
     }
 
@@ -406,39 +354,6 @@ public final class APIClient: StreamarrAPIClient {
         } catch {
             throw APIError.decoding(error)
         }
-    }
-
-    private func attachAuth(_ request: inout URLRequest) async {
-        guard let tokenProvider else { return }
-        if let token = await tokenProvider.currentAccessToken() {
-            request.setValue("Bearer \(token.exposeSecret())", forHTTPHeaderField: "Authorization")
-            return
-        }
-        // No token cached yet — transparently obtain one via
-        // `POST /api/v1/auth/login` (the server's default trusted-network
-        // mode needs no credentials for this to succeed) and persist it
-        // through the caller's existing token store. Failure here isn't
-        // fatal: the request just goes out without a header and the server
-        // responds `401`, which surfaces through the normal
-        // `APIError.unauthorized` path exactly as it would have before this
-        // fallback existed.
-        guard let token = try? await obtainSessionViaLogin(storingIn: tokenProvider) else { return }
-        request.setValue("Bearer \(token.exposeSecret())", forHTTPHeaderField: "Authorization")
-    }
-
-    private func obtainSessionViaLogin(storingIn tokenProvider: AccessTokenProviding) async throws -> Sensitive<String> {
-        let response = try await login(LoginRequest(
-            deviceID: configuration.deviceID,
-            deviceName: configuration.deviceName,
-            clientPlatform: configuration.clientPlatform,
-            clientVersion: configuration.clientVersion
-        ))
-        let accessToken = Sensitive(response.accessToken)
-        await tokenProvider.storeSession(
-            accessToken: accessToken,
-            refreshToken: Sensitive(response.refreshToken)
-        )
-        return accessToken
     }
 
     private func send<T: Decodable>(_ request: URLRequest, expectedStatuses: Set<Int> = [200]) async throws -> T {

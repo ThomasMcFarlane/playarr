@@ -34,7 +34,6 @@ import io.streamarr.tv.ui.screens.HomeScreen
 import io.streamarr.tv.ui.screens.LibraryScreen
 import io.streamarr.tv.ui.screens.PairingScreen
 import io.streamarr.tv.ui.screens.PlayerScreen
-import io.streamarr.tv.ui.screens.RequestsScreen
 import io.streamarr.tv.ui.screens.SettingsScreen
 import io.streamarr.tv.ui.screens.WorkDetailScreen
 
@@ -103,9 +102,6 @@ fun StreamarrTvNavHost(
                         val route: Routes.Player = backStackEntry.toRoute()
                         PlayerScreen(mediaFileId = route.mediaFileId)
                     }
-                    composable<Routes.Requests> {
-                        RequestsScreen()
-                    }
                     composable<Routes.Settings> {
                         SettingsScreen()
                     }
@@ -120,7 +116,6 @@ private data class TvNavDestination(val route: Routes, val labelRes: Int)
 private val tvTopBarDestinations = listOf(
     TvNavDestination(Routes.Home, R.string.nav_home),
     TvNavDestination(Routes.Library, R.string.nav_library),
-    TvNavDestination(Routes.Requests, R.string.nav_requests),
     TvNavDestination(Routes.Settings, R.string.nav_settings),
 )
 

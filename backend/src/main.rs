@@ -474,7 +474,6 @@ async fn boot_api(
     use streamarr_db::repo::{SqlxDeviceRepo, SqlxMediaFileRepo, SqlxRenditionRepo, SqlxWorkRepo};
     use streamarr_db::{DeviceRepo, MediaFileRepo, RenditionRepo, WorkRepo};
     use streamarr_model::VersionEnvelope;
-    use streamarr_requests::{InMemoryRequestRepo, RequestRepo, RequestService};
 
     let compatibility_table = ClientCompatibilityTable::from_toml_str(CLIENT_COMPATIBILITY_TOML)?;
 
@@ -507,13 +506,6 @@ async fn boot_api(
         media_file_repo,
         cache.clone(),
         pool,
-    ));
-
-    let request_repo: Arc<dyn RequestRepo> = Arc::new(InMemoryRequestRepo::new());
-    let requests = Arc::new(RequestService::new(
-        request_repo.clone(),
-        source_instances.clone(),
-        Arc::new(streamarr_api::requests::HealthCheckArrPusher::new()),
     ));
 
     let transcode = Arc::new(
@@ -591,8 +583,6 @@ async fn boot_api(
             envelope: version_envelope,
         },
         catalog,
-        requests,
-        request_repo,
         transcode,
         device_flow,
         webhook,

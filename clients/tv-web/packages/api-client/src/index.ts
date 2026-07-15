@@ -6,18 +6,18 @@
  * `openapi-typescript` (run `pnpm run generate` to refresh it against the
  * spec); this file wraps that generated `paths`/`components` pair with
  * `openapi-fetch` (a thin typed fetch client) behind a small, ergonomic
- * `ApiClient` class covering all 14 paths / 15 operations the spec defines:
- * system health/ready/version, trusted-network/credentialed login, the
- * RFC 8628 OAuth device-code + token endpoints, the *arr webhook receiver,
- * catalog browse/get/search, the request lifecycle (submit/list/approve/reject),
- * and playback negotiation.
+ * `ApiClient` class covering the spec's operations: system health/ready/
+ * version, trusted-network/credentialed login, the RFC 8628 OAuth
+ * device-code + token endpoints, the *arr webhook receiver, catalog
+ * browse/get/search, admin source-instance registration, and playback
+ * negotiation.
  *
- * Round E wired real auth middleware into the backend: `POST /api/v1/requests`,
- * `.../approve`, and `.../reject` now require a verified `Authorization: Bearer
- * <access_token>` header (401 without one, 403 if the caller isn't an admin for
- * approve/reject) -- see the constructor's `authMiddleware` below, which attaches
- * that header to exactly those three operations and no others (catalog/playback/
- * list-requests/login/oauth stay unauthenticated per the spec's own responses).
+ * The admin source-instance create/list/delete/sync operations require a
+ * verified `Authorization: Bearer <access_token>` header (401 without one,
+ * 403 if the caller isn't an admin) -- see the constructor's
+ * `authMiddleware` below, which attaches that header to exactly those
+ * operations and no others (catalog/playback/login/oauth stay
+ * unauthenticated per the spec's own responses).
  *
  * Callers who want the raw `openapi-fetch` client (e.g. for an operation
  * this wrapper hasn't grown a convenience method for yet) can reach it via
@@ -56,12 +56,6 @@ export type TrackDetail = components["schemas"]["TrackDetailSchema"];
 export type Book = components["schemas"]["Book"];
 /** Wraps a `Book` with the resolved `MediaFile` id that plays it (`null` until one has synced). */
 export type BookDetail = components["schemas"]["BookDetailSchema"];
-
-export type MediaRequest = components["schemas"]["MediaRequestSchema"];
-export type RequestStatus = components["schemas"]["RequestStatusSchema"];
-export type RequestTarget = components["schemas"]["RequestTargetDto"];
-export type SubmitRequestBody = components["schemas"]["SubmitRequestBody"];
-export type DecideRequestBody = components["schemas"]["DecideRequestBody"];
 
 export type PlaybackInfo = components["schemas"]["PlaybackInfoResponse"];
 export type PlaybackMode = components["schemas"]["PlaybackMode"];
@@ -111,9 +105,9 @@ export interface ApiClientConfig {
   /** API origin, e.g. "http://localhost:8080" (no trailing slash required). */
   baseUrl: string;
   /**
-   * Called before each of the *protected* requests (`submitRequest`/
-   * `approveRequest`/`rejectRequest` -- see `PROTECTED_OPERATIONS` below);
-   * never called for catalog/playback/login/oauth/list-requests, which stay
+   * Called before each of the *protected* requests (the admin source-
+   * instance create/list/delete/sync calls -- see `PROTECTED_OPERATIONS`
+   * below); never called for catalog/playback/login/oauth, which stay
    * unauthenticated. Return undefined to send the request without a token
    * anyway (the server will 401 it).
    */
@@ -139,18 +133,14 @@ export class ApiError extends Error {
 }
 
 /**
- * Operations Round E's auth middleware actually guards -- `Authorization:
- * Bearer <token>` is attached to exactly these, identified by the same
- * `schemaPath` (the OpenAPI path template, curly braces and all) `openapi-fetch`
- * passes its middleware, paired with the HTTP method (`/api/v1/requests` also
- * has an unauthenticated GET for listing, so the path alone isn't enough).
+ * Operations the auth middleware actually guards -- `Authorization: Bearer
+ * <token>` is attached to exactly these, identified by the same
+ * `schemaPath` (the OpenAPI path template, curly braces and all)
+ * `openapi-fetch` passes its middleware, paired with the HTTP method.
+ * Admin-only (403, not just 401, for a non-admin caller) -- see
+ * backend/crates/streamarr-api/src/admin.rs.
  */
 const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }> = [
-  { schemaPath: "/api/v1/requests", method: "POST" },
-  { schemaPath: "/api/v1/requests/{id}/approve", method: "POST" },
-  { schemaPath: "/api/v1/requests/{id}/reject", method: "POST" },
-  // Admin-only (403, not just 401, for a non-admin caller) -- see
-  // backend/crates/streamarr-api/src/admin.rs.
   { schemaPath: "/api/v1/admin/source-instances", method: "POST" },
   { schemaPath: "/api/v1/admin/source-instances", method: "GET" },
   { schemaPath: "/api/v1/admin/source-instances/{id}", method: "DELETE" },
@@ -162,11 +152,11 @@ function isProtectedOperation(schemaPath: string, method: string): boolean {
 }
 
 /**
- * Human-readable summary of a caught error, distinguishing the two auth-specific
- * statuses Round E's middleware can now return on the request-decision endpoints
- * (401 missing/invalid token, 403 authenticated-but-not-admin) from every other
- * failure, so callers can surface a real, specific message instead of a generic
- * "something went wrong" -- see `submitRequest`/`approveRequest`/`rejectRequest`.
+ * Human-readable summary of a caught error, distinguishing the two auth-
+ * specific statuses the admin source-instance endpoints can return (401
+ * missing/invalid token, 403 authenticated-but-not-admin) from every other
+ * failure, so callers can surface a real, specific message instead of a
+ * generic "something went wrong".
  */
 export function describeApiError(err: unknown): string {
   if (err instanceof ApiError) {
@@ -315,35 +305,8 @@ export class ApiClient {
   }
 
   // ---------------------------------------------------------------------
-  // requests
-  // ---------------------------------------------------------------------
-
-  /** When `userId` is set, lists that user's own requests (any status); otherwise every request still Pending. */
-  async listRequests(userId?: string): Promise<MediaRequest[]> {
-    return this.unwrap(
-      await this.raw.GET("/api/v1/requests", { params: { query: { user_id: userId } } })
-    );
-  }
-
-  async submitRequest(body: SubmitRequestBody): Promise<MediaRequest> {
-    return this.unwrap(await this.raw.POST("/api/v1/requests", { body }));
-  }
-
-  async approveRequest(id: string, body: DecideRequestBody): Promise<MediaRequest> {
-    return this.unwrap(
-      await this.raw.POST("/api/v1/requests/{id}/approve", { params: { path: { id } }, body })
-    );
-  }
-
-  async rejectRequest(id: string, body: DecideRequestBody): Promise<MediaRequest> {
-    return this.unwrap(
-      await this.raw.POST("/api/v1/requests/{id}/reject", { params: { path: { id } }, body })
-    );
-  }
-
-  // ---------------------------------------------------------------------
   // admin (source instances) -- registering the *arr apps Streamarr talks
-  // to. All three operations are admin-gated (401 with no/invalid token,
+  // to. Every operation here is admin-gated (401 with no/invalid token,
   // 403 for a valid-but-non-admin caller).
   // ---------------------------------------------------------------------
 

@@ -86,39 +86,6 @@ impl From<streamarr_catalog::CatalogError> for ApiError {
     }
 }
 
-impl From<streamarr_requests::RequestError> for ApiError {
-    fn from(err: streamarr_requests::RequestError) -> Self {
-        use streamarr_requests::RequestError;
-        match err {
-            RequestError::NotFound => Self::not_found("request not found"),
-            RequestError::Db(streamarr_db::DbError::NotFound) => {
-                Self::not_found("request not found")
-            }
-            RequestError::Db(other) => Self::internal(other.to_string()),
-            RequestError::InvalidTransition(id) => Self::new(
-                StatusCode::CONFLICT,
-                "invalid_transition",
-                format!("request {id} is not in a state that allows this transition"),
-            ),
-            RequestError::NoSourceInstance { kind } => Self::new(
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "no_source_instance",
-                format!("no source instance is configured and enabled for {kind:?} requests"),
-            ),
-            RequestError::SourceInstanceNotConfigured { .. } => Self::new(
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "source_instance_not_configured",
-                err.to_string(),
-            ),
-            RequestError::ArrPush(inner) => Self::new(
-                StatusCode::BAD_GATEWAY,
-                "arr_push_failed",
-                inner.to_string(),
-            ),
-        }
-    }
-}
-
 impl From<streamarr_transcode::TranscodeError> for ApiError {
     fn from(err: streamarr_transcode::TranscodeError) -> Self {
         use streamarr_transcode::TranscodeError;

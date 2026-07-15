@@ -1,7 +1,7 @@
 //! Repository traits: one per aggregate, each a thin async CRUD-shaped
 //! boundary over [`crate::DbPool`]. Handlers and services depend on these
 //! traits (often via `Arc<dyn WorkRepo>`), not on `sqlx` directly, so
-//! `streamarr-catalog`/`streamarr-requests`/etc. stay testable behind
+//! `streamarr-catalog`/`streamarr-arr-sync`/etc. stay testable behind
 //! mocks and don't need to know which of SQLite/Postgres backs them.
 //!
 //! Each trait has a real `Sqlx*` implementation backed by [`crate::DbPool`]

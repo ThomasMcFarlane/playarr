@@ -3,7 +3,7 @@
  *
  * As foretold by this package's original placeholder comment: now that
  * `@streamarr-tv/api-client` generates real wire types straight off
- * `backend/openapi/streamarr.yaml` (`Work`, `MediaRequest`, `PlaybackInfo`,
+ * `backend/openapi/streamarr.yaml` (`Work`, `PlaybackInfo`,
  * `ClientPlatform`, ...), this package has narrowed down to what's left --
  * client-local concepts that don't round-trip the API. That's where to find
  * the API (below), plus -- per Round D -- the client self-update story built

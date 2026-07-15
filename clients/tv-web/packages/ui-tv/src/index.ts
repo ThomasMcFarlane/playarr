@@ -14,7 +14,7 @@ export { BrowseScreen } from "./screens/BrowseScreen";
 export type { BrowseScreenProps, BrowseRow } from "./screens/BrowseScreen";
 
 export { DetailScreen } from "./screens/DetailScreen";
-export type { DetailScreenProps, RequestAction, RequestActionStatus } from "./screens/DetailScreen";
+export type { DetailScreenProps } from "./screens/DetailScreen";
 
 export { VersionBanner } from "./screens/VersionBanner";
 export type { VersionBannerProps } from "./screens/VersionBanner";

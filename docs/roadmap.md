@@ -66,7 +66,7 @@ on this codebase should be scoped and handed out.
   `AuthUser`/`AdminUser` are genuine Axum `FromRequestParts` extractors
   that reject a missing/invalid/expired token with a real 401 (and a
   non-admin token with a real 403) before the handler body runs — see e.g.
-  the Web admin request-approval screen
+  the Web admin's source-instance management screen
   (`clients/tv-web/web/src/pages/Admin.tsx`) exercising exactly this path.
   **Deferred: no persisted `UserRepo`/`PolicyRepo`.** `UserDirectory` and
   the admin registry are both real trait boundaries, but their only
@@ -190,13 +190,10 @@ someone runs them for real.
   time via `scripts/gen-sdk.sh`.
 - **Android Mobile.** **Built.** `clients/android-shared/` (core-auth,
   core-data, core-domain, core-designsystem, core-player, core-update) plus
-  `clients/mobile-android/` for the app shell, including a real
-  request-management screen (`RequestsScreen.kt`) over the request-lifecycle
-  API.
+  `clients/mobile-android/` for the app shell.
 - **iOS.** **Built**, within the documented environment constraint:
   `clients/ios/Sources/StreamarrKit/` and `StreamarrApp/` are real Swift
-  source, including request-management UI (`RequestsView.swift`/
-  `RequestsViewModel.swift`). **Deferred: no Xcode project layer** — the
+  source. **Deferred: no Xcode project layer** — the
   package is real SPM source but there's no `.xcodeproj`/real App target,
   documented explicitly in `clients/ios/README.md` as a consequence of
   Xcode not being installed in the environment this was built in
@@ -206,8 +203,7 @@ someone runs them for real.
 ## Wave 6 — TV Clients
 
 - **Android TV.** **Built.** `clients/tv-android/` shares
-  `android-shared`'s core modules, including its own request-management
-  screen (`RequestsScreen.kt`).
+  `android-shared`'s core modules.
 - **webOS.** **Built.** `clients/tv-web/apps/tv-webos/`, a real adapter
   over the shared TV shell using `player-shaka`.
 - **Tizen.** **Built.** `clients/tv-web/apps/tv-tizen/`, using the

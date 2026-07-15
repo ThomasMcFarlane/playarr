@@ -39,10 +39,9 @@ data class LoginResponse(
     /** Access token lifetime in seconds. */
     @SerialName("expires_in") val expiresIn: Long,
     /**
-     * Redundant with the access token's own `sub` claim (see
-     * [io.streamarr.shared.auth.JwtClaims]) -- present on the wire because
-     * the real spec's `LoginResponse` requires it, but nothing in this
-     * client reads it directly rather than decoding the token.
+     * Redundant with the access token's own `sub` claim -- present on the
+     * wire because the real spec's `LoginResponse` requires it, but nothing
+     * in this client reads it directly rather than decoding the token.
      */
     @SerialName("user_id") val userId: String,
 )

@@ -7,9 +7,9 @@ import { API_BASE_URL_QUERY_PARAM, getStoredApiBaseUrl, setStoredApiBaseUrl } fr
  * This build's own identity for the transparent `POST /api/v1/auth/login`
  * call (see `ensureAccessToken`) -- the Web app has no RFC 8628 pairing
  * flow of its own, so this is how it obtains a real access token the first
- * time it needs one (the request submit/approve/reject calls, per Round
- * E's auth middleware). `__APP_VERSION__` is injected at build time by
- * `vite.config.ts`, same as `lib/appUpdate.ts` uses.
+ * time it needs one (the admin source-instance create/list/delete/sync
+ * calls). `__APP_VERSION__` is injected at build time by `vite.config.ts`,
+ * same as `lib/appUpdate.ts` uses.
  */
 const WEB_LOGIN_IDENTITY = {
   deviceName: "Streamarr Web",

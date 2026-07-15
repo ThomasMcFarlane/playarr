@@ -132,12 +132,11 @@ into a peer's internals:
 | `streamarr-arr-client` | Typed HTTP clients for the wrapped *arr apps: Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, Readarr. |
 | `streamarr-arr-sync` | Webhook-as-signal, poll-as-truth reconciliation between Streamarr's catalog and the configured *arr source instances — see "The arr-wrapping approach" below. |
 | `streamarr-catalog` | Read-optimised catalog query API: browse/search/get-by-id over the `Work` aggregate, cache-fronted. |
-| `streamarr-requests` | The `MediaRequest` domain type and request lifecycle: users asking for something to be added, approved/rejected/submitted to a source *arr instance. |
 | `streamarr-tdarr-client` | Typed client for Tdarr's REST v2 API — the background transcode pipeline. |
 | `streamarr-transcode` | Playback-time transcode decision-making (direct-play / existing-rendition / on-demand-transcode ordering) plus the background Tdarr dispatch loop. See "The Tdarr background-vs-on-demand transcode split" below. |
 | `streamarr-auth` | Trust tiers (`AuthMode`), `Policy` evaluation, JWT issuance/verification, refresh-token rotation, RFC 8628 device flow. See [`auth-modes.md`](auth-modes.md). |
 | `streamarr-telemetry` | Logging, correlation IDs, metrics, optional OpenTelemetry export, playback analytics collection, diagnostics endpoints. |
-| `streamarr-api` | The Axum HTTP surface: system routes, auth (`/api/v1/auth/login`, `/api/v1/oauth/...`), catalog, playback, requests, webhooks — handlers are annotated with `utoipa`, so `backend/openapi/streamarr.yaml` is *generated from* the code, not the other way around. Versioning-middleware enforcement (see [`versioning-policy.md`](../versioning-policy.md)). |
+| `streamarr-api` | The Axum HTTP surface: system routes, auth (`/api/v1/auth/login`, `/api/v1/oauth/...`), catalog, playback, webhooks — handlers are annotated with `utoipa`, so `backend/openapi/streamarr.yaml` is *generated from* the code, not the other way around. Versioning-middleware enforcement (see [`versioning-policy.md`](../versioning-policy.md)). |
 
 `streamarr-model` sits at the bottom of the dependency graph on purpose:
 domain types must be usable by the DB layer, the API layer, and background
@@ -163,8 +162,8 @@ than trusting a webhook payload as authoritative ("webhook-as-signal,
 poll-as-truth," per that crate's own doc comment) — writing the normalised
 result into `streamarr-model` types (`Work`, `MediaFile`, ...) via
 `streamarr-db`. The user sees one coherent Streamarr UI and one auth session;
-underneath, requests like "add this series to my watchlist and acquire it"
-are translated into Sonarr API calls.
+underneath, an action like "add this series to the library and acquire it"
+is translated into Sonarr API calls.
 
 This keeps Streamarr's own scope disciplined: it owns *library and
 playback*, not acquisition. The *arr apps keep their own UIs available for
@@ -172,9 +171,8 @@ power users who want them directly; Streamarr is additive, not a fork or a
 replacement.
 
 **Known gap:** which *arr instances to reconcile against is not yet
-persisted or admin-configurable anywhere in the workspace — the request
-lifecycle's `SourceInstanceLookup` seam and the webhook receiver's
-`instance_id` lookup are both backed by `streamarr-api::SourceInstanceRegistry`,
+persisted or admin-configurable anywhere in the workspace — the webhook
+receiver's `instance_id` lookup is backed by `streamarr-api::SourceInstanceRegistry`,
 a real, thread-safe, in-process registry that starts empty every boot and
 has no admin API to populate it yet (see that type's own doc comment). A
 fresh deployment currently needs its source instances wired in by whoever

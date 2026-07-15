@@ -60,8 +60,8 @@ let package = Package(
         // SPM package). A `StreamarrKitTests`/`StreamarrAppTests` pass
         // (schema decode/encode round-trips against real spec-shaped
         // fixtures, `AppUpdateEvaluator` version-comparison boundary
-        // cases, `RequestsViewModel`/`WorkDetailViewModel` behavior against
-        // a fake `StreamarrAPIClient`) was written and then reverted for
+        // cases, `WorkDetailViewModel` behavior against a fake
+        // `StreamarrAPIClient`) was written and then reverted for
         // this reason: none of it could be type-checked here, so keeping
         // it would mean shipping asserted-but-never-compiled test code.
         // Re-add once real Xcode is available — see clients/ios/README.md

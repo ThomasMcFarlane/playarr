@@ -20,8 +20,8 @@ const NAV_LINKS = [
  * Top-level routing for the standalone web app. `/player` now takes a
  * `:mediaFileId` param -- reached from a title's detail page rather than a
  * standalone nav link, since playback always starts from a specific work.
- * `Admin` hosts the real request-management UI (approve/reject
- * `MediaRequest`s against `GET/POST /api/v1/requests`).
+ * `Admin` hosts *arr source-instance registration (`GET/POST/DELETE
+ * /api/v1/admin/source-instances`) -- Streamarr's only admin surface.
  *
  * Also mounts the Web app's OTA self-update flow (`useAppUpdate`) at the
  * top level so the "Update available" toast (or a forced reload once the

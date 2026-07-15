@@ -28,18 +28,8 @@ public final class WorkDetailViewModel {
         case failed(String)
     }
 
-    /// State for the "Request" action (`POST /api/v1/requests`) offered by
-    /// `WorkDetailView` for a `Work` that isn't `.available` yet.
-    public enum RequestState: Equatable, Sendable {
-        case none
-        case submitting
-        case submitted(MediaRequest)
-        case failed(String)
-    }
-
     public private(set) var loadState: LoadState = .idle
     public private(set) var detail: WorkDetail?
-    public private(set) var requestState: RequestState = .none
 
     private let apiClient: StreamarrAPIClient
     public let workID: UUID
@@ -58,32 +48,6 @@ public final class WorkDetailViewModel {
             loadState = .failed(error.displayMessage)
         } catch {
             loadState = .failed(error.localizedDescription)
-        }
-    }
-
-    /// Submits a real `POST /api/v1/requests` for this screen's own `Work`
-    /// — an `existing_work` target, since the work is already cataloged,
-    /// just not (fully) `.available`. As of Round E this call requires a
-    /// verified `Authorization: Bearer <access_token>` header and
-    /// `requested_by` is derived server-side from that token's `sub` claim
-    /// — the view layer no longer supplies a requesting user id at all (see
-    /// `SubmitRequestBody`'s doc comment in `OpenAPISchemas.swift`);
-    /// `APIClient` attaches/obtains the token transparently.
-    public func requestWork(note: String? = nil) async {
-        guard let work = detail?.work else { return }
-        requestState = .submitting
-        do {
-            let body = SubmitRequestBody(
-                kind: work.kind,
-                target: .existingWork(workID: work.id),
-                note: note
-            )
-            let created = try await apiClient.submitRequest(body)
-            requestState = .submitted(created)
-        } catch let error as APIError {
-            requestState = .failed(error.displayMessage)
-        } catch {
-            requestState = .failed(error.localizedDescription)
         }
     }
 }

@@ -2,23 +2,22 @@
 //!
 //! There is no persisted `Policy`/`User` store anywhere in this workspace
 //! yet (`streamarr_model::User::policy_id` anticipates one, but no
-//! `PolicyRepo`/`UserRepo` exists -- see this crate's module doc comment
-//! and `streamarr-requests`'s own persistence notes for the same situation
-//! applied to `MediaRequest`). `crate::policy::PolicyEvaluator` judges a
-//! real `Policy` once one exists; nothing yet loads one from anywhere, so
-//! it has nothing to evaluate.
+//! `PolicyRepo`/`UserRepo` exists -- see this crate's module doc comment).
+//! `crate::policy::PolicyEvaluator` judges a real `Policy` once one exists;
+//! nothing yet loads one from anywhere, so it has nothing to evaluate.
 //!
 //! [`InMemoryAdminRegistry`] is the deliberately small stand-in this pass
 //! wires up instead: "is this user id an admin" is the one authorization
-//! question `streamarr-api`'s request-approve/reject endpoints actually
-//! need answered right now. It's a real, thread-safe, fully working
-//! implementation -- not a mock -- mirroring `InMemoryRefreshTokenStore`/
-//! `InMemoryDeviceAuthorizationStore`'s "in-memory is a legitimate choice
-//! for a single-node deployment, pending real persistence" idiom elsewhere
-//! in this crate (and `streamarr-requests::InMemoryRequestRepo`,
+//! question `streamarr-api`'s admin source-instance endpoints (create/
+//! list/delete/sync) actually need answered right now. It's a real,
+//! thread-safe, fully working implementation -- not a mock -- mirroring
+//! `InMemoryRefreshTokenStore`/`InMemoryDeviceAuthorizationStore`'s
+//! "in-memory is a legitimate choice for a single-node deployment, pending
+//! real persistence" idiom elsewhere in this crate (and
 //! `streamarr-api::SourceInstanceRegistry`). It defaults every user id to
 //! non-admin unless explicitly added, so a misconfiguration fails closed
-//! (nobody can approve/reject anything) rather than open (everybody can).
+//! (nobody can register/change source instances) rather than open
+//! (everybody can).
 //!
 //! TODO(persistence): once a real `PolicyRepo`/`UserRepo` exists, replace
 //! this with a real `Policy`-backed check (`Policy::is_admin`, evaluated

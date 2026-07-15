@@ -9,7 +9,6 @@ members = [
     "crates/streamarr-arr-client",
     "crates/streamarr-arr-sync",
     "crates/streamarr-catalog",
-    "crates/streamarr-requests",
     "crates/streamarr-tdarr-client",
     "crates/streamarr-transcode",
     "crates/streamarr-auth",
@@ -42,7 +41,6 @@ streamarr-db = { path = "crates/streamarr-db", features = ["sqlite", "postgres"]
 streamarr-cache = { path = "crates/streamarr-cache" }
 streamarr-coordination = { path = "crates/streamarr-coordination" }
 streamarr-catalog = { path = "crates/streamarr-catalog" }
-streamarr-requests = { path = "crates/streamarr-requests" }
 streamarr-transcode = { path = "crates/streamarr-transcode" }
 streamarr-auth = { path = "crates/streamarr-auth" }
 streamarr-arr-sync = { path = "crates/streamarr-arr-sync" }

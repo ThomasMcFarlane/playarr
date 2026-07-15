@@ -7,9 +7,7 @@ import SwiftUI
 /// leaf's real, resolved `media_file_id` straight into `PlayerView` when
 /// one has synced (`WorkDetail.mediaFileID` for a movie's own leaf;
 /// `EpisodeDetail`/`TrackDetail`/`BookDetail.mediaFileID` for a series'
-/// episodes / an artist's tracks / an author's books), and offers a real
-/// "Request" action (`POST /api/v1/requests`) for a `Work` that isn't
-/// `.available` yet.
+/// episodes / an artist's tracks / an author's books).
 struct WorkDetailView: View {
     let viewModel: WorkDetailViewModel
     let apiClient: StreamarrAPIClient
@@ -53,10 +51,6 @@ struct WorkDetailView: View {
                         if detail.work.kind == .movie {
                             moviePlayRow(detail: detail)
                         }
-
-                        if detail.work.availability != .available {
-                            requestSection
-                        }
                     }
 
                     childrenSection(for: detail.children)
@@ -84,40 +78,6 @@ struct WorkDetailView: View {
         } else {
             Label("Not yet available to play", systemImage: "play.slash")
                 .foregroundStyle(.secondary)
-        }
-    }
-
-    // MARK: - Request action
-
-    @ViewBuilder
-    private var requestSection: some View {
-        switch viewModel.requestState {
-        case .none:
-            Button {
-                Task { await viewModel.requestWork() }
-            } label: {
-                Label("Request", systemImage: "plus.circle")
-            }
-        case .submitting:
-            HStack(spacing: 8) {
-                ProgressView()
-                Text("Requesting…")
-            }
-            .foregroundStyle(.secondary)
-        case .submitted(let request):
-            Label("Requested (\(request.status.rawValue))", systemImage: "checkmark.circle")
-                .foregroundStyle(.secondary)
-        case .failed(let message):
-            VStack(alignment: .leading, spacing: 4) {
-                Button {
-                    Task { await viewModel.requestWork() }
-                } label: {
-                    Label("Request", systemImage: "plus.circle")
-                }
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
         }
     }
 

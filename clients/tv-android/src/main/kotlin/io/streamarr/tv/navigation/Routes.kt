@@ -15,8 +15,5 @@ sealed interface Routes {
 
     @Serializable data class Player(val mediaFileId: String? = null) : Routes
 
-    /** `GET /api/v1/requests` -- the signed-in user's own requests plus every request still pending an admin decision. */
-    @Serializable data object Requests : Routes
-
     @Serializable data object Settings : Routes
 }

@@ -1,10 +1,7 @@
 package io.streamarr.shared.data.remote
 
 import io.streamarr.shared.data.model.CatalogPage
-import io.streamarr.shared.data.model.DecideRequestBody
-import io.streamarr.shared.data.model.MediaRequest
 import io.streamarr.shared.data.model.PlaybackInfoResponse
-import io.streamarr.shared.data.model.SubmitRequestBody
 import io.streamarr.shared.data.model.VersionEnvelope
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkDetail
@@ -18,23 +15,28 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 /**
- * Real, typed Retrofit client for every path in `backend/openapi/streamarr.yaml`
- * *except* the RFC 8628 device-authorization endpoints, which stay on
- * `core-auth`'s `DeviceAuthApi` (see that interface's KDoc for why -- a
- * device legitimately needs those two calls before it has any access
- * token, hence before it has any business constructing an authenticated
- * [StreamarrApi]).
+ * Real, typed Retrofit client for every catalog/playback/system/webhooks
+ * path in `backend/openapi/streamarr.yaml`, *except* the RFC 8628
+ * device-authorization endpoints (which stay on `core-auth`'s
+ * `DeviceAuthApi` -- see that interface's KDoc for why: a device
+ * legitimately needs those two calls before it has any access token,
+ * hence before it has any business constructing an authenticated
+ * [StreamarrApi]) and the `requests` list/create/approve/reject paths,
+ * which no longer exist here at all: Streamarr's request-management
+ * feature (an Overseerr/Jellyseerr-style submit/approve/reject flow) was
+ * removed entirely -- it duplicated an already-existing tool and was out
+ * of Streamarr's actual scope.
  *
  * Hand-written rather than run through `openapi-generator-cli`: this
  * project's hand-rolled `KSerializer`s for the spec's externally/internally
- * tagged `oneOf` schemas (`ExternalProvider`, `WorkChildren`,
- * `RequestTarget`) already reproduce serde's exact wire shapes, and
- * every method below is checked field-for-field against the spec, so a
- * generated client would either need heavy post-generation patching for
- * those types or a custom template -- not worth the codegen dependency for
- * 13 paths. This is the **replacement** for the Wave-1 placeholder that
- * used to live at this same file path (`/api/works`, `/api/me`, `/api/playback/sessions`,
- * ... paths that were never real).
+ * tagged `oneOf` schemas (`ExternalProvider`, `WorkChildren`) already
+ * reproduce serde's exact wire shapes, and every method below is checked
+ * field-for-field against the spec, so a generated client would either
+ * need heavy post-generation patching for those types or a custom template
+ * -- not worth the codegen dependency for 8 paths. This is the
+ * **replacement** for the Wave-1 placeholder that used to live at this
+ * same file path (`/api/works`, `/api/me`, `/api/playback/sessions`, ...
+ * paths that were never real).
  *
  * This is deliberately one flat interface (not split per-tag) to mirror
  * how `StreamarrHttpClient.create` hands out exactly one Retrofit-backed
@@ -87,29 +89,6 @@ interface StreamarrApi {
     /** `GET /api/v1/catalog/{id}` -- a work and its full kind-specific child tree. */
     @GET("api/v1/catalog/{id}")
     suspend fun getWork(@Path("id") id: String): WorkDetail
-
-    // ---- requests ------------------------------------------------------------
-
-    /** [userId] narrows to that user's own requests (any status); omitted lists every request still `Pending`. Unauthenticated, per the real spec. */
-    @GET("api/v1/requests")
-    suspend fun listRequests(@Query("user_id") userId: String? = null): List<MediaRequest>
-
-    /**
-     * Requires a verified `Authorization: Bearer` access token -- see
-     * [StreamarrHttpClient.create]'s `accessTokenProvider` -- and 401s
-     * without one. `requested_by` on the returned [MediaRequest] is derived
-     * server-side from the token's `sub` claim, not from anything sent here.
-     */
-    @POST("api/v1/requests")
-    suspend fun submitRequest(@Body body: SubmitRequestBody): MediaRequest
-
-    /** Requires a verified `Authorization: Bearer` access token: 401 without one, 403 if the verified caller isn't an admin. */
-    @POST("api/v1/requests/{id}/approve")
-    suspend fun approveRequest(@Path("id") id: String, @Body body: DecideRequestBody): MediaRequest
-
-    /** Requires a verified `Authorization: Bearer` access token: 401 without one, 403 if the verified caller isn't an admin. */
-    @POST("api/v1/requests/{id}/reject")
-    suspend fun rejectRequest(@Path("id") id: String, @Body body: DecideRequestBody): MediaRequest
 
     // ---- playback --------------------------------------------------------------
 

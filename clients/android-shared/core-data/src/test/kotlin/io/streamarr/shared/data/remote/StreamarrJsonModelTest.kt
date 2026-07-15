@@ -4,11 +4,8 @@ import io.streamarr.shared.data.model.AlbumDetail
 import io.streamarr.shared.data.model.Availability
 import io.streamarr.shared.data.model.CatalogPage
 import io.streamarr.shared.data.model.ExternalProvider
-import io.streamarr.shared.data.model.MediaRequest
 import io.streamarr.shared.data.model.PlaybackMode
 import io.streamarr.shared.data.model.PlaybackInfoResponse
-import io.streamarr.shared.data.model.RequestStatus
-import io.streamarr.shared.data.model.RequestTarget
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
 import io.streamarr.shared.data.model.WorkDetail
@@ -182,43 +179,6 @@ class StreamarrJsonModelTest {
         )
         assertEquals("Sample Track One", albumDetail.tracks.single().track.title)
         assertEquals("mf-t1", albumDetail.tracks.single().mediaFileId)
-    }
-
-    @Test
-    fun `decodes a MediaRequest with an existing_work RequestTarget`() {
-        val request = json.decodeFromString(
-            MediaRequest.serializer(),
-            """
-            {
-              "id": "r1", "requested_by": "u1", "kind": "movie",
-              "target": {"target_kind": "existing_work", "work_id": "w1"},
-              "status": "pending",
-              "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"
-            }
-            """.trimIndent(),
-        )
-        assertEquals(RequestStatus.Pending, request.status)
-        val target = request.target
-        assertTrue(target is RequestTarget.ExistingWork)
-        assertEquals("w1", (target as RequestTarget.ExistingWork).workId)
-    }
-
-    @Test
-    fun `decodes a MediaRequest with an external RequestTarget`() {
-        val request = json.decodeFromString(
-            MediaRequest.serializer(),
-            """
-            {
-              "id": "r1", "requested_by": "u1", "kind": "series",
-              "target": {"target_kind": "external", "external_ref": {"provider": "tvdb", "external_id": "999"}},
-              "status": "approved",
-              "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"
-            }
-            """.trimIndent(),
-        )
-        val target = request.target
-        assertTrue(target is RequestTarget.External)
-        assertEquals("999", (target as RequestTarget.External).externalRef.externalId)
     }
 
     @Test

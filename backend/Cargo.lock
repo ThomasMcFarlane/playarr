@@ -2580,7 +2580,6 @@ dependencies = [
  "streamarr-config",
  "streamarr-db",
  "streamarr-model",
- "streamarr-requests",
  "streamarr-telemetry",
  "streamarr-transcode",
  "thiserror 1.0.69",
@@ -2673,7 +2672,6 @@ dependencies = [
  "streamarr-coordination",
  "streamarr-db",
  "streamarr-model",
- "streamarr-requests",
  "streamarr-tdarr-client",
  "streamarr-telemetry",
  "streamarr-transcode",
@@ -2759,22 +2757,6 @@ dependencies = [
  "serde",
  "serde_json",
  "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "streamarr-requests"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "serde",
- "serde_json",
- "streamarr-db",
- "streamarr-model",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
  "uuid",
 ]
 

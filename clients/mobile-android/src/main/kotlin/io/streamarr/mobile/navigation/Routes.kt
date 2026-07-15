@@ -18,8 +18,5 @@ sealed interface Routes {
     /** `mediaFileId == null` renders the "nothing playing" placeholder state. */
     @Serializable data class Player(val mediaFileId: String? = null) : Routes
 
-    /** `GET /api/v1/requests` -- the signed-in user's own requests plus (see `RequestsScreen`'s KDoc) every request still pending an admin decision. */
-    @Serializable data object Requests : Routes
-
     @Serializable data object Settings : Routes
 }

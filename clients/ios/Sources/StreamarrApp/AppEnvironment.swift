@@ -21,8 +21,6 @@ import StreamarrKit
 public final class AppEnvironment {
     static let serverBaseURLDefaultsKey = "com.streamarr.ios.serverBaseURL"
     static let defaultServerBaseURL = URL(string: "http://localhost:8080")!
-    static let localUserIDDefaultsKey = "com.streamarr.ios.localUserID"
-    static let isAdminModeDefaultsKey = "com.streamarr.ios.isAdminMode"
     static let deviceIDDefaultsKey = "com.streamarr.ios.deviceID"
     /// `LoginRequest.deviceName` — a fixed, human-readable label rather than
     /// a `UIKit`-sourced device name (`UIDevice.current.name`), since
@@ -42,46 +40,13 @@ public final class AppEnvironment {
         }
     }
 
-    /// Round D placeholder that Round E's real auth retired the *meaningful*
-    /// use of: it used to double as `SubmitRequestBody.requestedBy`/
-    /// `DecideRequestBody.decidedBy` (the real server-derived-from-token
-    /// identity replaces both of those now — see `OpenAPISchemas.swift`'s
-    /// Round E note) and, until the Round F follow-up fix, was also used as
-    /// the `user_id` this app passes to `GET /api/v1/requests` for "My
-    /// Requests" — which was wrong, since it's never guaranteed to equal
-    /// the identity your own submitted requests are actually stored under
-    /// (that's the access token's `sub` claim). `resolvedUserID()` is the
-    /// correct source for that now; this property survives only as its
-    /// before-first-login fallback and as the read-only value
-    /// `SettingsView` displays. Generated once per install and persisted in
-    /// `UserDefaults`.
-    public let localUserID: UUID
-
-    /// Local, device-only placeholder for "is this person an admin." Gates
-    /// whether `RequestsView` shows the admin "Pending Approval" queue
-    /// (with Approve/Reject) or the regular "My Requests" list, and whether
-    /// `RequestsViewModel` even attempts approve/reject. Toggled from
-    /// `SettingsView`; persisted in `UserDefaults`. As of Round E the server
-    /// *does* independently enforce admin access on approve/reject (403 if
-    /// the caller's verified token isn't an admin) — but this local toggle
-    /// only decides what this device shows/attempts, it doesn't grant
-    /// anything and isn't itself checked by the server. See
-    /// `RequestsViewModel`'s doc comment.
-    public var isAdminMode: Bool {
-        didSet {
-            guard isAdminMode != oldValue else { return }
-            userDefaults.set(isAdminMode, forKey: Self.isAdminModeDefaultsKey)
-        }
-    }
-
-    /// `LoginRequest.deviceID` for `APIClient`'s transparent
-    /// `POST /api/v1/auth/login` call (see that file's header note) —
-    /// generated once per install and persisted in `UserDefaults`, same
-    /// pattern as `localUserID`, so this app resends the same device id on
-    /// every login/refresh from this install rather than a fresh one each
-    /// launch (the spec calls this out explicitly on `LoginRequest.device_id`
-    /// as required for `Policy::device_allow`/`max_concurrent_sessions` to
-    /// reason about one `Device`).
+    /// `LoginRequest.deviceID` for `DeviceFlowClient`'s sign-in flow —
+    /// generated once per install and persisted in `UserDefaults`, so this
+    /// app resends the same device id on every sign-in/refresh from this
+    /// install rather than a fresh one each launch (the spec calls this out
+    /// explicitly on `LoginRequest.device_id` as required for
+    /// `Policy::device_allow`/`max_concurrent_sessions` to reason about one
+    /// `Device`).
     public let deviceID: UUID
 
     @ObservationIgnored private let userDefaults: UserDefaults
@@ -93,16 +58,6 @@ public final class AppEnvironment {
         let storedURLString = userDefaults.string(forKey: Self.serverBaseURLDefaultsKey)
         let resolvedURL = storedURLString.flatMap(URL.init(string:)) ?? Self.defaultServerBaseURL
         self.serverBaseURL = resolvedURL
-
-        if let storedUserID = userDefaults.string(forKey: Self.localUserIDDefaultsKey),
-           let parsedUserID = UUID(uuidString: storedUserID) {
-            self.localUserID = parsedUserID
-        } else {
-            let generatedUserID = UUID()
-            userDefaults.set(generatedUserID.uuidString, forKey: Self.localUserIDDefaultsKey)
-            self.localUserID = generatedUserID
-        }
-        self.isAdminMode = userDefaults.bool(forKey: Self.isAdminModeDefaultsKey)
 
         if let storedDeviceIDString = userDefaults.string(forKey: Self.deviceIDDefaultsKey),
            let parsedDeviceID = UUID(uuidString: storedDeviceIDString) {
@@ -122,8 +77,7 @@ public final class AppEnvironment {
                 clientVersion: InstalledAppVersion.current,
                 deviceID: self.deviceID,
                 deviceName: Self.deviceName
-            ),
-            tokenProvider: tokenStore
+            )
         )
         self.deviceFlowClient = DeviceFlowClient(
             configuration: DeviceFlowConfiguration(baseURL: resolvedURL)
@@ -143,20 +97,6 @@ public final class AppEnvironment {
         isSignedIn = false
     }
 
-    /// The identity `GET /api/v1/requests?user_id=` should actually filter
-    /// by for "My Requests": the current access token's own `sub` claim
-    /// when one is available (this is exactly the identity the server
-    /// attributes newly-submitted/decided requests to as of Round E), with
-    /// `localUserID` only as a before-first-login fallback so the UI has
-    /// *some* id to show immediately rather than blocking on a network
-    /// round-trip. Trusted-network mode's transparent login (see
-    /// `APIClient`'s `obtainSessionViaLogin`) means a token is normally
-    /// available by the time this is called from `RequestsView`.
-    public func resolvedUserID() async -> UUID {
-        guard let token = await tokenStore.currentAccessToken() else { return localUserID }
-        return JWTClaims.subject(ofAccessToken: token.exposeSecret()) ?? localUserID
-    }
-
     private func rebuildClients() {
         apiClient = APIClient(
             configuration: APIClientConfiguration(
@@ -164,8 +104,7 @@ public final class AppEnvironment {
                 clientVersion: InstalledAppVersion.current,
                 deviceID: deviceID,
                 deviceName: Self.deviceName
-            ),
-            tokenProvider: tokenStore
+            )
         )
         deviceFlowClient = DeviceFlowClient(
             configuration: DeviceFlowConfiguration(baseURL: serverBaseURL)
@@ -206,14 +145,11 @@ actor InMemoryTokenStore: AccessTokenProviding {
         return accessToken
     }
 
-    /// `AccessTokenProviding.storeSession` — how `APIClient`'s transparent
-    /// `POST /api/v1/auth/login` fallback (see that file's header note)
-    /// persists a token pair it obtained without any `AppEnvironment.setSession`
-    /// call from the view layer. Deliberately doesn't touch
-    /// `AppEnvironment.isSignedIn`: that flag reflects a user-initiated
-    /// device-flow sign-in for `SettingsView`'s "Signed In"/"Sign Out"
-    /// affordance, not a background trusted-network session this store also
-    /// now happens to hold.
+    /// `AccessTokenProviding.storeSession` — how a conformer persists a
+    /// token pair obtained outside of `AppEnvironment.setSession`'s own
+    /// device-flow path (e.g. a future refresh-token exchange). Deliberately
+    /// doesn't touch `AppEnvironment.isSignedIn` itself; callers that need
+    /// that flag updated too go through `setSession`.
     func storeSession(accessToken: Sensitive<String>, refreshToken: Sensitive<String>?) async {
         self.accessToken = accessToken
         self.refreshToken = refreshToken

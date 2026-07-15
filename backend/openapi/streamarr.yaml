@@ -372,121 +372,6 @@ paths:
           description: Unknown media_file_id
         '503':
           description: No on-demand transcode capacity available on this node
-  /api/v1/requests:
-    get:
-      tags:
-      - requests
-      operationId: list_requests_handler
-      parameters:
-      - name: user_id
-        in: query
-        description: |-
-          When set, lists this user's own requests (any status); when absent,
-          lists every request still `Pending` an admin decision.
-        required: false
-        schema:
-          type:
-          - string
-          - 'null'
-          format: uuid
-      responses:
-        '200':
-          description: Requests
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/MediaRequestSchema'
-    post:
-      tags:
-      - requests
-      operationId: submit_request_handler
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SubmitRequestBody'
-        required: true
-      responses:
-        '201':
-          description: Request created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MediaRequestSchema'
-        '401':
-          description: Missing or invalid access token
-        '422':
-          description: No configured/usable source instance for this kind
-  /api/v1/requests/{id}/approve:
-    post:
-      tags:
-      - requests
-      operationId: approve_request_handler
-      parameters:
-      - name: id
-        in: path
-        description: Request id
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DecideRequestBody'
-        required: true
-      responses:
-        '200':
-          description: Request approved and submitted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MediaRequestSchema'
-        '401':
-          description: Missing or invalid access token
-        '403':
-          description: Caller is authenticated but not an admin
-        '404':
-          description: Request not found
-        '409':
-          description: Request is not Pending
-  /api/v1/requests/{id}/reject:
-    post:
-      tags:
-      - requests
-      operationId: reject_request_handler
-      parameters:
-      - name: id
-        in: path
-        description: Request id
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DecideRequestBody'
-        required: true
-      responses:
-        '200':
-          description: Request rejected
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MediaRequestSchema'
-        '401':
-          description: Missing or invalid access token
-        '403':
-          description: Caller is authenticated but not an admin
-        '404':
-          description: Request not found
-        '409':
-          description: Request is not Pending
   /webhooks/{instance_id}:
     post:
       tags:
@@ -694,18 +579,6 @@ components:
             RFC 3339 timestamp after which `min_supported_version` will be
             ratcheted up; surfaced to clients so they can warn users ahead of
             time rather than being cut off with no notice.
-    DecideRequestBody:
-      type: object
-      description: |-
-        `decided_by` is deliberately absent: it comes from the verified access
-        token's `sub` claim (via [`AdminUser`]), never from anything the caller
-        puts in the request body -- see this module's `approve_request_handler`/
-        `reject_request_handler`.
-      properties:
-        reason:
-          type:
-          - string
-          - 'null'
     DeviceCodeRequest:
       type: object
       required:
@@ -954,50 +827,6 @@ components:
         user_id:
           type: string
           format: uuid
-    MediaRequestSchema:
-      type: object
-      description: Doc-only mirror of [`MediaRequest`] -- see [`RequestStatusSchema`].
-      required:
-      - id
-      - requested_by
-      - kind
-      - target
-      - status
-      - created_at
-      - updated_at
-      properties:
-        created_at:
-          type: string
-          format: date-time
-        decided_by:
-          type:
-          - string
-          - 'null'
-          format: uuid
-        id:
-          type: string
-          format: uuid
-        kind:
-          $ref: '#/components/schemas/WorkKind'
-        note:
-          type:
-          - string
-          - 'null'
-        requested_by:
-          type: string
-          format: uuid
-        source_instance_id:
-          type:
-          - string
-          - 'null'
-          format: uuid
-        status:
-          $ref: '#/components/schemas/RequestStatusSchema'
-        target:
-          $ref: '#/components/schemas/RequestTargetDto'
-        updated_at:
-          type: string
-          format: date-time
     OAuthErrorBody:
       type: object
       required:
@@ -1032,50 +861,6 @@ components:
       enum:
       - direct
       - hls
-    RequestStatusSchema:
-      type: string
-      description: |-
-        Doc-only mirror of [`streamarr_requests::RequestStatus`] -- the real
-        type has no `ToSchema` (`streamarr-requests` doesn't depend on
-        `utoipa`); handlers still serialize the real `MediaRequest` directly,
-        this is only referenced from `#[utoipa::path]` `responses(...)`.
-      enum:
-      - pending
-      - approved
-      - rejected
-      - submitted
-      - available
-      - failed
-    RequestTargetDto:
-      oneOf:
-      - type: object
-        required:
-        - work_id
-        - target_kind
-        properties:
-          target_kind:
-            type: string
-            enum:
-            - existing_work
-          work_id:
-            type: string
-            format: uuid
-      - type: object
-        required:
-        - external_ref
-        - target_kind
-        properties:
-          external_ref:
-            $ref: '#/components/schemas/ExternalRef'
-          target_kind:
-            type: string
-            enum:
-            - external
-      description: |-
-        Wire-compatible mirror of [`RequestTarget`]: real `Deserialize` (used to
-        extract the actual request body) and `ToSchema` (used for OpenAPI docs).
-        Kept in lock-step with `RequestTarget`'s own `#[serde(tag =
-        "target_kind")]` shape so it round-trips identically.
     Season:
       type: object
       required:
@@ -1213,20 +998,6 @@ components:
       - bazarr
       - prowlarr
       - readarr
-    SubmitRequestBody:
-      type: object
-      required:
-      - kind
-      - target
-      properties:
-        kind:
-          $ref: '#/components/schemas/WorkKind'
-        note:
-          type:
-          - string
-          - 'null'
-        target:
-          $ref: '#/components/schemas/RequestTargetDto'
     TokenResponseSchema:
       type: object
       description: Doc-only mirror of [`TokenResponse`]; see [`DeviceCodeResponseSchema`].
@@ -1453,8 +1224,6 @@ tags:
   description: '*arr webhook receiver'
 - name: catalog
   description: Catalog browse/search/detail
-- name: requests
-  description: 'Media request lifecycle: submit/approve/reject/list'
 - name: playback
   description: 'Playback negotiation: direct-play vs. transcode decision'
 - name: admin

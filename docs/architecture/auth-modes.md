@@ -128,9 +128,11 @@ a fully-built system:
   constructs an `AccessContext` and calls it. The only authorization check
   actually enforced today is the binary admin/non-admin check described
   next.
-- **"Admin" is a flat id set, not `Policy.is_admin`.** The request
-  approve/reject endpoints (the only endpoints today that require more
-  than "logged in") are gated by an `AdminUser` Axum extractor
+- **"Admin" is a flat id set, not `Policy.is_admin`.** The source-instance
+  management endpoints (`POST`/`GET`/`DELETE`/`.../{id}/sync` under
+  `/api/v1/admin/source-instances`, `backend/crates/streamarr-api/src/admin.rs`)
+  are the concrete example of what requires more than "logged in" today:
+  they're gated by an `AdminUser` Axum extractor
   (`streamarr-api::auth_extractor`), which checks
   `streamarr_auth::admin::InMemoryAdminRegistry::is_admin(user_id)` — a
   real, thread-safe, in-process set of admin user ids, seeded at boot with

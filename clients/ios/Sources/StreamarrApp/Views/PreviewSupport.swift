@@ -35,20 +35,6 @@ struct PreviewAPIClient: StreamarrAPIClient {
         throw APIError.notFound(nil)
     }
 
-    func listRequests(userID: UUID?) async throws -> [MediaRequest] { [] }
-
-    func submitRequest(_ body: SubmitRequestBody) async throws -> MediaRequest {
-        throw APIError.unprocessableEntity(nil)
-    }
-
-    func approveRequest(id: UUID, body: DecideRequestBody) async throws -> MediaRequest {
-        throw APIError.notFound(nil)
-    }
-
-    func rejectRequest(id: UUID, body: DecideRequestBody) async throws -> MediaRequest {
-        throw APIError.notFound(nil)
-    }
-
     func playbackInfo(
         mediaFileID: UUID,
         containers: [String],
