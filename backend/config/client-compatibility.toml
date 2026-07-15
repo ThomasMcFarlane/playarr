@@ -1,0 +1,77 @@
+# Client version compatibility table, consumed by `streamarr-api`'s
+# `version_gate` middleware (see backend/crates/streamarr-api/src/version_gate.rs)
+# and served verbatim (via `streamarr-model::VersionEnvelope`) at
+# `GET /api/system/version` so clients can self-check before being rejected.
+#
+# Schema:
+#   [server]                     server's own version + API version
+#   [<platform>]                 one section per streamarr_model::ClientPlatform
+#                                 (kebab-case wire name — see ClientPlatform::wire_name)
+#
+# Android platforms (android-mobile, android-tv) gate on Android's own
+# monotonic build counter, versionCode (an integer), because that's what
+# Android app updates actually key off of:
+#   latestVersionCode            newest published build
+#   minSupportedVersionCode      floor — requests from below this are
+#                                 rejected with HTTP 426 by the version-gate
+#                                 middleware once its comparison logic is
+#                                 implemented (it currently always passes)
+#   deprecatedBelowVersionCode   floor below which clients should nag the
+#                                 user to update but are still served
+#   sunset                       ISO-8601 date after which
+#                                 minSupportedVersionCode is expected to be
+#                                 ratcheted up to deprecatedBelowVersionCode
+#
+# Every other platform gates on a semver-shaped version string instead:
+#   latestVersion / minSupported / deprecatedBelow / sunset  (same meanings)
+
+[server]
+version = "0.1.0"
+apiVersion = "1"
+
+[android-mobile]
+latestVersionCode = 100
+minSupportedVersionCode = 80
+deprecatedBelowVersionCode = 90
+sunset = "2026-12-31"
+
+[android-tv]
+latestVersionCode = 100
+minSupportedVersionCode = 80
+deprecatedBelowVersionCode = 90
+sunset = "2026-12-31"
+
+[ios]
+latestVersion = "1.0.0"
+minSupported = "0.8.0"
+deprecatedBelow = "0.9.0"
+sunset = "2026-12-31"
+
+[web]
+# The web client is deployed alongside the server and rolls out
+# continuously, so its floor tracks the server version closely rather than
+# lagging behind app-store review time the way the native clients do.
+latestVersion = "1.0.0"
+minSupported = "0.9.0"
+deprecatedBelow = "0.9.0"
+sunset = "2026-12-31"
+
+[tv-webos]
+latestVersion = "1.0.0"
+minSupported = "0.8.0"
+deprecatedBelow = "0.9.0"
+sunset = "2026-12-31"
+
+[tv-tizen]
+latestVersion = "1.0.0"
+minSupported = "0.8.0"
+deprecatedBelow = "0.9.0"
+sunset = "2026-12-31"
+
+[tv-vidaa]
+# VIDAA support ships later than the other TV platforms (see the plan's
+# webOS/Tizen-first TV rollout note) and starts from a lower baseline.
+latestVersion = "0.5.0"
+minSupported = "0.5.0"
+deprecatedBelow = "0.5.0"
+sunset = "2026-12-31"

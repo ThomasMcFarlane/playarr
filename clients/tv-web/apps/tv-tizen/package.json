@@ -1,0 +1,28 @@
+{
+  "name": "@streamarr-tv/app-tizen",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Streamarr Tizen TV app shell: bootstraps @streamarr-tv/ui-tv + @streamarr-tv/player-avplay. Bundled with Vite to static assets, then packaged with Tizen Studio's CLI (tizen package) -- see README.md, the CLI is not installed in this environment.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "preview": "vite preview",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@streamarr-tv/player-avplay": "workspace:*",
+    "@streamarr-tv/player-core": "workspace:*",
+    "@streamarr-tv/ui-tv": "workspace:*",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

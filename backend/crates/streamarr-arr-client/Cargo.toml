@@ -1,0 +1,15 @@
+[package]
+name = "streamarr-arr-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Typed HTTP clients for the *arr apps Streamarr treats as sources of catalog/download truth: Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, Readarr."
+
+[dependencies]
+streamarr-model = { path = "../streamarr-model" }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

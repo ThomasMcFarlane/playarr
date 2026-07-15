@@ -1,0 +1,9 @@
+<resources>
+    <!-- Real theming (color scheme, typography) is applied by TvTheme in
+         Compose, see core-designsystem's StreamarrPalette and this
+         module's ui/theme/TvTheme.kt. This XML theme only covers the
+         pre-Compose window background. -->
+    <style name="Theme.StreamarrTv" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/streamarr_tv_surface</item>
+    </style>
+</resources>

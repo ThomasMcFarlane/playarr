@@ -1,0 +1,26 @@
+apiVersion: v2
+name: streamarr
+description: Helm chart for deploying Streamarr (API and worker) to Kubernetes
+type: application
+
+# Chart version: bump on every change to templates/values in this chart.
+version: 0.1.0
+
+# appVersion tracks the Streamarr application release this chart deploys.
+# values.yaml's image.tag is pinned to this same version by convention -
+# never bump appVersion without also updating values.yaml image.tag, and
+# never point either at "latest".
+appVersion: "0.1.0"
+
+keywords:
+  - streamarr
+  - media
+  - api
+  - worker
+
+home: https://github.com/streamarr/streamarr
+sources:
+  - https://github.com/streamarr/streamarr
+
+maintainers:
+  - name: Streamarr maintainers

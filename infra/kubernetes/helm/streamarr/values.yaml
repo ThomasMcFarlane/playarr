@@ -1,0 +1,173 @@
+# Default values for the streamarr chart.
+# This is a YAML-formatted file. Declare variables to be substituted into
+# templates/*.
+
+# -- Container image. tag is pinned to Chart.yaml's appVersion and MUST
+# never be set to "latest" - GitOps auto-update (see
+# ../flux-image-automation.example.yaml) is the sanctioned way to bump this
+# value via a PR, not a floating tag resolved at pull time.
+image:
+  repository: ghcr.io/streamarr/streamarr
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Specifies whether a ServiceAccount should be created
+  create: true
+  annotations: {}
+  # -- If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+commonLabels: {}
+commonAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# -- Probe configuration shared by both the api and worker Deployments. The
+# streamarr binary exposes these endpoints regardless of STREAMARR_ROLE.
+probes:
+  port: 8080
+  livenessPath: /healthz
+  readinessPath: /readyz
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+  successThreshold: 1
+
+# -- Grace period for the pod as a whole and the preStop sleep used to let
+# in-flight requests / jobs drain before SIGTERM is sent. preStopSleepSeconds
+# must be comfortably less than terminationGracePeriodSeconds.
+terminationGracePeriodSeconds: 30
+preStopSleepSeconds: 15
+
+# -- Non-secret application configuration, rendered into a ConfigMap and
+# consumed via envFrom by both Deployments.
+config:
+  APP_ENV: "production"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  METRICS_ENABLED: "true"
+  METRICS_PORT: "9090"
+  HTTP_PORT: "8080"
+
+# -- DATABASE_URL / REDIS_URL are secret-shaped values. This chart never
+# accepts them as plaintext values.yaml entries. Instead it renders an
+# (opt-in) Secret placeholder, and both Deployments always read the two
+# vars via secretKeyRef against `secret.name`.
+#
+# In real environments prefer create: false and manage `secret.name`
+# out-of-band with something like External Secrets Operator, Sealed
+# Secrets, or a manually-applied `kubectl create secret` - so DATABASE_URL
+# / REDIS_URL never round-trip through `helm template`/`helm get values`
+# or land in this git repo.
+secret:
+  # -- If true, render a Secret template from secret.data below. Intended
+  # for local/dev use only (e.g. `--set secret.create=true --set
+  # secret.data.databaseUrl=...`). Leave false and pre-provision
+  # `secret.name` out-of-band for staging/prod.
+  create: false
+  # -- Name of the Secret consumed by both Deployments. Defaults to
+  # "<fullname>-secrets" when empty.
+  name: ""
+  data:
+    databaseUrl: ""
+    redisUrl: ""
+
+api:
+  role: api
+  replicaCount: 2
+
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8080
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: ""
+
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+worker:
+  role: worker
+  replicaCount: 2
+
+  # -- Workers don't serve external traffic, but the binary still exposes
+  # /healthz, /readyz and /metrics on the same port, so a headless-style
+  # ClusterIP Service is still created for probes/Prometheus scraping.
+  service:
+    port: 8080
+    targetPort: 8080
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 2000m
+      memory: 1Gi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 75
+    targetMemoryUtilizationPercentage: ""
+
+  podDisruptionBudget:
+    enabled: true
+    # -- Exactly one of minAvailable / maxUnavailable should be set; the
+    # other must be left null.
+    minAvailable: 1
+    maxUnavailable: null
+
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# -- Optional ServiceMonitor for kube-prometheus-stack users. Requires the
+# monitoring.coreos.com/v1 CRDs to already be installed in-cluster.
+serviceMonitor:
+  enabled: false
+  namespace: ""
+  interval: 30s
+  scrapeTimeout: 10s
+  path: /metrics
+  labels: {}
+  additionalLabels: {}

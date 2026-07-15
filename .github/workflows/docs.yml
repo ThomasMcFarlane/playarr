@@ -1,0 +1,100 @@
+# =============================================================================
+# Docs
+# =============================================================================
+#
+# Builds and deploys the documentation site (MkDocs + Material) to GitHub
+# Pages whenever docs/** changes land on main.
+#
+# PREREQUISITE (repo setting, not something this workflow can do): GitHub
+# Pages must be enabled for this repository with Source = "GitHub Actions"
+# (Settings -> Pages). Until that's set, the deploy job will fail even
+# though the build succeeds.
+#
+# NOTE: no mkdocs.yml is committed at the repo root yet (not owned by any
+# in-flight scaffolding task at authoring time). Rather than reach outside
+# this workflow's scope to add one, the build job synthesizes a minimal
+# default at build time if none is found, so this workflow is real and
+# runnable today. If/when a real mkdocs.yml lands at the repo root (for
+# custom nav, theme, plugins, etc.), this workflow picks it up
+# automatically and the fallback step becomes a no-op.
+# =============================================================================
+
+name: Docs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: docs-deploy
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build docs site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install MkDocs + Material theme
+        run: pip install mkdocs mkdocs-material
+
+      - name: Ensure an mkdocs.yml exists (fallback default)
+        run: |
+          if [ -f mkdocs.yml ]; then
+            exit 0
+          fi
+          cat > mkdocs.yml <<'YAML'
+          site_name: Streamarr Docs
+          site_description: Streamarr backend and Playarr client documentation.
+          docs_dir: docs
+          theme:
+            name: material
+            palette:
+              - media: "(prefers-color-scheme: light)"
+                scheme: default
+                toggle:
+                  icon: material/brightness-7
+                  name: Switch to dark mode
+              - media: "(prefers-color-scheme: dark)"
+                scheme: slate
+                toggle:
+                  icon: material/brightness-4
+                  name: Switch to light mode
+          plugins:
+            - search
+          YAML
+          echo "::notice::No mkdocs.yml committed at repo root -- generated a minimal default for this build. Add a real one at the repo root for custom nav/theme."
+
+      - name: Build site
+        run: mkdocs build --strict --site-dir _site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

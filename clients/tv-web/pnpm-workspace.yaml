@@ -1,0 +1,20 @@
+packages:
+  - "packages/*"
+  - "apps/*"
+  - "web"
+
+allowBuilds:
+  esbuild: true
+
+# Single default catalog so every package in the workspace (libraries, TV app
+# shells, and the standalone web app) shares one resolved version of core
+# tooling and React. Package manifests reference these via `"catalog:"`.
+catalog:
+  typescript: ^5.6.3
+  react: ^18.3.1
+  react-dom: ^18.3.1
+  "@types/react": ^18.3.12
+  "@types/react-dom": ^18.3.1
+  "@types/node": ^22.10.2
+  vite: ^5.4.11
+  "@vitejs/plugin-react": ^4.3.4

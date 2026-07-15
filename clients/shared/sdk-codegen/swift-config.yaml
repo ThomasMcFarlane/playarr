@@ -1,0 +1,48 @@
+# openapi-generator config for the Swift SDK target.
+#
+# Consumed by scripts/gen-sdk.sh via:
+#   docker run --rm -v "$PWD:/local" openapitools/openapi-generator-cli generate \
+#     -i /local/backend/openapi/streamarr.yaml \
+#     -g swift5 \
+#     -c /local/clients/shared/sdk-codegen/swift-config.yaml \
+#     -o /local/clients/ios/StreamarrSDK
+#
+# Output lands in clients/ios/StreamarrSDK as a standalone Swift Package
+# (useSPMFileStructure below), which the iOS app target depends on as a
+# local SPM package dependency rather than vendoring generated files
+# directly into the app target -- keeps regeneration a clean directory
+# replace with no risk to hand-written app code.
+#
+# responseAs: AsyncAwait matches the rest of the client fleet's move away
+# from callback/Combine-based networking; urlsession (not alamofire) keeps
+# the generated package dependency-free, which matters more on iOS/tvOS
+# than elsewhere given App Store binary size and review scrutiny of
+# third-party networking stacks.
+
+projectName: StreamarrSDK
+podName: StreamarrSDK
+podVersion: 0.1.0
+podAuthors: Streamarr
+podSummary: Generated Streamarr backend API client for iOS and tvOS.
+podHomepage: https://github.com/streamarr/streamarr
+podDocumentationURL: https://github.com/streamarr/streamarr
+podLicense: MIT
+# Placeholder: intentionally not a real fetchable source until the SDK is
+# actually published as a versioned SPM/CocoaPods dependency. Until then
+# clients/ios consumes it as a local path package (see clients/ios/README
+# once that client lands).
+podSource: '{ :path => "." }'
+
+swiftPackagePath: StreamarrSDK
+useSPMFileStructure: true
+useClasses: false
+usesAsync: true
+responseAs: AsyncAwait
+library: urlsession
+
+nonPublicApi: false
+readonlyProperties: false
+useJsonEncodable: true
+generateModelAdditionalProperties: false
+hideGenericSwiftPackagePath: false
+swiftUseApiNamespace: true

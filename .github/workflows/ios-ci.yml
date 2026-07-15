@@ -1,0 +1,64 @@
+# =============================================================================
+# iOS Release
+# =============================================================================
+#
+# Release-track workflow for the iOS client. Triggered by pushing a tag
+# like `ios-v1.0.4`.
+#
+# NOTE: lightweight skeleton. clients/ios is currently a source-only Swift
+# Package skeleton (Package.swift, Sources/, a SwiftUI placeholder) with no
+# app target, signing configuration, or Xcode project wired up yet -- see
+# the iOS client shell scaffolding task. A plain SwiftPM package can't
+# produce a distributable, signed .ipa on its own; that needs either a thin
+# wrapping Xcode project/app target, or `xcodebuild` driving the package
+# directly with a real scheme + provisioning profile. The build/sign/
+# publish steps below are TODO placeholders for that reason. Xcode
+# selection IS a real step (doesn't depend on repo content). Replace the
+# placeholders with real `xcodebuild archive`/`fastlane ios beta` steps
+# once a signable app target exists. See ci.yml's ios-check job for the
+# PR-time `swift build` gate that already runs today.
+# =============================================================================
+
+name: iOS Release
+
+on:
+  push:
+    tags:
+      - 'ios-v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    name: Build & publish iOS release
+    runs-on: macos-latest
+    environment: release-ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      # TODO: once clients/ios has a signable app target (scheme
+      # "Playarr", matching the Justfile's ios-build recipe), replace with:
+      #   xcodebuild -scheme Playarr -configuration Release \
+      #     -archivePath build/Playarr.xcarchive archive
+      - name: Archive build (placeholder)
+        run: |
+          echo "TODO: xcodebuild archive for clients/ios (scheme Playarr) at tag ${GITHUB_REF_NAME}"
+
+      # TODO: export a signed .ipa. Requires importing a distribution
+      # certificate + provisioning profile (e.g. via secrets + a temporary
+      # keychain setup step, or `fastlane match`).
+      - name: Export & sign .ipa (placeholder)
+        run: |
+          echo "TODO: xcodebuild -exportArchive (or fastlane match for signing)"
+
+      # TODO: wire a Fastlane 'pilot'/'deliver' lane, or App Store Connect
+      # API upload action, to push to TestFlight. Requires an App Store
+      # Connect API key secret (issuer ID, key ID, .p8 contents).
+      - name: Publish to TestFlight (placeholder)
+        run: |
+          echo "TODO: bundle exec fastlane ios beta"
+          echo "Would upload the signed .ipa to TestFlight for tag ${GITHUB_REF_NAME}."

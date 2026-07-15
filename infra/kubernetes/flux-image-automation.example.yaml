@@ -1,0 +1,125 @@
+# ---------------------------------------------------------------------------
+# EXAMPLE ONLY - not wired into any Kustomization/HelmRelease in this repo.
+#
+# This file documents the SANCTIONED GitOps auto-update path for Streamarr
+# container images: Flux's image-reflector-controller +
+# image-automation-controller watch the registry, decide a new tag matches
+# policy, and commit the bump BACK INTO THIS GIT REPO (a values.yaml or
+# kustomize image tag, guarded by the `# {"$imagepolicy": ...}` marker
+# comments below). The normal Flux Kustomization/HelmRelease reconcile loop
+# then applies that commit like any other change - through the same review/
+# audit trail as a human-authored PR, if branch protection + PR-based
+# automation is used (see the ImageUpdateAutomation.spec.git.push section).
+#
+# What this deliberately does NOT do, and must never be made to do:
+#   - No component in this repo (API, worker, or otherwise) reaches out to
+#     the registry, calls the Kubernetes API to patch its own Deployment, or
+#     otherwise self-updates from inside the cluster. All image bumps are
+#     git commits, reviewed like any other change, applied by Flux's normal
+#     reconciliation - never a live in-cluster mutation initiated by the
+#     running workload itself.
+#   - No component auto-merges its own version bump PRs. Point
+#     `git.push.branch` at a side branch and open a PR for human/CI
+#     approval unless you have deliberately decided a given environment
+#     (e.g. dev only) should auto-commit straight to its branch.
+#
+# Prerequisites (not included here):
+#   - flux bootstrap already run against this repo (installs the
+#     source-controller, kustomize-controller, image-reflector-controller,
+#     image-automation-controller CRDs + controllers).
+#   - A Flux Kustomization (or HelmRelease, if using
+#     helm/streamarr directly) already reconciling
+#     infra/kubernetes/overlays/<env> (or the Helm release's values) into
+#     the cluster. That resource is NOT defined in this example file - it
+#     lives in whatever repo/path your Flux bootstrap points at.
+# ---------------------------------------------------------------------------
+
+---
+# Tells Flux which registry + repository to scan for new image tags.
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: streamarr
+  namespace: flux-system
+spec:
+  image: ghcr.io/streamarr/streamarr
+  interval: 5m
+  # If ghcr.io/streamarr/streamarr is private, reference a pull secret:
+  # secretRef:
+  #   name: ghcr-streamarr-pull
+
+---
+# Defines which tags are eligible and how to pick the "latest" one. This
+# chart/kustomize skeleton pins to semver releases only - no floating
+# "latest", "main", or unqualified digests are ever selected.
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: streamarr
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: streamarr
+  policy:
+    semver:
+      # Widen/narrow per environment if you run separate ImagePolicies for
+      # dev/staging/prod (e.g. dev tracks pre-releases, prod does not):
+      #   dev:     range: ">=0.1.0-0"
+      #   staging: range: ">=0.1.0"
+      #   prod:    range: ">=0.1.0"
+      range: ">=0.1.0"
+
+---
+# Watches for ImagePolicy resolutions and commits the resulting tag bump
+# back into this git repo, at the marked locations below.
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageUpdateAutomation
+metadata:
+  name: streamarr
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: streamarr
+    namespace: flux-system
+  git:
+    checkout:
+      ref:
+        branch: main
+    commit:
+      author:
+        name: fluxcdbot
+        email: fluxcdbot@users.noreply.github.com
+      messageTemplate: |
+        infra(image): bump streamarr to {{range .Updated.Images}}{{println .}}{{end}}
+    push:
+      # Recommended: push to a side branch and require a PR + review before
+      # this reaches `main`, rather than pushing straight to main. Swap for
+      # `branch: main` only for environments (e.g. a personal dev cluster)
+      # where direct-to-main auto-commits are an accepted tradeoff.
+      branch: flux-image-updates
+  update:
+    path: ./infra/kubernetes
+    strategy: Setters
+
+---
+# Example of the marker comments ImageUpdateAutomation looks for, using
+# Setters strategy. Add a comment exactly like this next to the image
+# reference Flux should manage. For the Helm chart, that's
+# helm/streamarr/values.yaml's `image.tag` field:
+#
+#   image:
+#     repository: ghcr.io/streamarr/streamarr
+#     tag: "0.1.0" # {"$imagepolicy": "flux-system:streamarr:tag"}
+#
+# For the kustomize skeleton, base/kustomization.yaml's `images.newTag`
+# field would carry the same marker:
+#
+#   images:
+#     - name: ghcr.io/streamarr/streamarr
+#       newTag: "0.1.0" # {"$imagepolicy": "flux-system:streamarr:tag"}
+#
+# Marker comments are NOT added to the real values.yaml/kustomization.yaml
+# in this repo by default - opt in per-environment deliberately, since it
+# changes who/what is allowed to author commits against that file.

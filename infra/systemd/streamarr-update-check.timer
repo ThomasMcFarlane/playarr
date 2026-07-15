@@ -1,0 +1,31 @@
+# ---------------------------------------------------------------------------
+# DISABLED BY DEFAULT. install.sh installs this unit file but deliberately
+# does not run `systemctl enable` or `systemctl start` on it - this file
+# being present in /etc/systemd/system is not the same as it being active.
+#
+# This timer only ever triggers streamarr-update-check.service, which is
+# itself check-only / read-only (see that unit's comments) - enabling this
+# timer cannot cause an unattended upgrade on its own. It is still shipped
+# opt-in rather than on-by-default so that:
+#   - operators on air-gapped/restricted-network hosts aren't surprised by
+#     unexpected outbound requests, and
+#   - the decision to even passively check for updates is an explicit,
+#     visible one per host.
+#
+# To opt in:
+#   sudo systemctl enable --now streamarr-update-check.timer
+# ---------------------------------------------------------------------------
+[Unit]
+Description=Daily Streamarr update check (timer - see streamarr-update-check.service)
+Documentation=https://github.com/streamarr/streamarr
+
+[Timer]
+OnCalendar=daily
+# Spread load away from midnight and catch up on missed runs (host was off)
+# without operators needing to think about it.
+RandomizedDelaySec=1h
+Persistent=true
+Unit=streamarr-update-check.service
+
+[Install]
+WantedBy=timers.target

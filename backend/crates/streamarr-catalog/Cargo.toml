@@ -1,0 +1,14 @@
+[package]
+name = "streamarr-catalog"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Read-optimized catalog query API: browse/search/get-by-id over the Work aggregate, cache-fronted."
+
+[dependencies]
+streamarr-model = { path = "../streamarr-model" }
+streamarr-db = { path = "../streamarr-db" }
+streamarr-cache = { path = "../streamarr-cache" }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

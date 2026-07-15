@@ -1,0 +1,18 @@
+[package]
+name = "streamarr-cache"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Cache + pub/sub abstraction for the Streamarr backend, with an in-memory (moka) implementation for single-node deployments and Redis/Postgres LISTEN-NOTIFY skeletons for multi-node."
+
+[dependencies]
+async-trait = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+moka = { workspace = true }
+# Backing store for the (stub, unimplemented) PostgresListenNotify pub/sub
+# implementation — LISTEN/NOTIFY is a Postgres-only mechanism, so this
+# crate depends on the driver directly rather than routing through
+# `streamarr-db`'s backend-agnostic `AnyPool`.
+sqlx = { workspace = true, features = ["postgres"] }

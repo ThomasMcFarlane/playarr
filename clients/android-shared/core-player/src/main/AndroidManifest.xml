@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Media3 direct-play/direct-stream/HLS/DASH playback needs network access. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+</manifest>

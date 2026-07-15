@@ -1,0 +1,81 @@
+# =============================================================================
+# TV Web Release
+# =============================================================================
+#
+# Release-track workflow for the smart-TV app shells in the tv-web pnpm
+# workspace (clients/tv-web/apps/{tv-tizen,tv-webos,tv-vidaa-fallback}).
+# Triggered by pushing a tag like `tv-web-v0.9.1`.
+#
+# NOTE: this is deliberately separate from web-ci.yml, which covers
+# clients/tv-web/web (the standalone browser app in the same pnpm
+# workspace) on its own `web-v*` tag -- the browser app and the smart-TV
+# app shells ship independently.
+#
+# Build steps below are TODO placeholders (the per-app build/package
+# scripts aren't defined yet), but the Node/pnpm toolchain setup steps ARE
+# real, since they don't depend on any repo content. Neither the Tizen
+# Studio CLI nor the webOS CLI is assumed to be available in any CI
+# runner image used here -- replace the placeholders with real `tizen
+# package` / `ares-package` invocations (self-hosted runner or a
+# container image with those SDKs preinstalled) once packaging is wired
+# up. See ci.yml's tv-web-check job for the PR-time lint/typecheck gate
+# that already runs against real source once clients/tv-web/** has
+# content.
+# =============================================================================
+
+name: TV Web Release
+
+on:
+  push:
+    tags:
+      - 'tv-web-v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    name: Build & publish TV web release
+    runs-on: ubuntu-latest
+    environment: release-tv-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # TODO: once clients/tv-web/apps/* have real build scripts, replace
+      # with:
+      #   pnpm install --frozen-lockfile
+      #   pnpm --filter ./apps/tv-tizen run build
+      #   pnpm --filter ./apps/tv-webos run build
+      #   pnpm --filter ./apps/tv-vidaa-fallback run build
+      - name: Install & build TV app shells (placeholder)
+        run: |
+          echo "TODO: pnpm install --frozen-lockfile && pnpm --filter ./apps/{tv-tizen,tv-webos,tv-vidaa-fallback} run build in clients/tv-web for tag ${GITHUB_REF_NAME}"
+
+      # TODO: package for Samsung Tizen via the Tizen Studio CLI, e.g.:
+      #   tizen package -t wgt -s <signing-profile> -- apps/tv-tizen/dist
+      - name: Package Tizen widget (placeholder)
+        run: |
+          echo "TODO: tizen package -t wgt for clients/tv-web/apps/tv-tizen (tag ${GITHUB_REF_NAME})"
+
+      # TODO: package for LG webOS via the webOS CLI, e.g.:
+      #   ares-package apps/tv-webos/dist -o out/
+      - name: Package webOS app (placeholder)
+        run: |
+          echo "TODO: ares-package for clients/tv-web/apps/tv-webos (tag ${GITHUB_REF_NAME})"
+
+      # TODO: the VIDAA fallback target is a plain web build (Hisense VIDAA
+      # has no dedicated packaging CLI); publish its static output to the
+      # CDN alongside/instead of a store submission.
+      # scripts/cdn-bundle-publish.sh is owned by the dev-scripts
+      # scaffolding task -- wire the real invocation here once it lands.
+      - name: Publish VIDAA fallback build (placeholder)
+        run: |
+          echo "TODO: bash scripts/cdn-bundle-publish.sh --target tv-vidaa-fallback --dist clients/tv-web/apps/tv-vidaa-fallback/dist"

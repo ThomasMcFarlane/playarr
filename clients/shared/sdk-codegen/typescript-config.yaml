@@ -1,0 +1,46 @@
+# openapi-generator config for the TypeScript SDK target -- "typescript-fetch" mode only.
+#
+# IMPORTANT: scripts/gen-sdk.sh has two TypeScript modes, and this file is
+# only consumed by one of them:
+#
+#   --ts-mode openapi-fetch (DEFAULT)
+#     Runs `openapi-typescript` (a Node CLI, not part of openapi-generator)
+#     to turn backend/openapi/streamarr.yaml into a pure `.d.ts` types file,
+#     which the already-published `openapi-fetch` runtime package (a ~2KB
+#     wrapper, added as a normal npm dependency, NOT generated) consumes via
+#     `createClient<paths>()`. openapi-typescript has no generator "config
+#     file" concept -- its options are CLI flags -- so this YAML file plays
+#     no role in that mode. This is the mode clients/tv-web/packages/api-client
+#     already documents itself as migrating to (see that package's
+#     src/index.ts header comment) and is therefore the default.
+#
+#   --ts-mode typescript-fetch
+#     Runs openapi-generator-cli's bundled `typescript-fetch` generator, which
+#     produces a fully generated request/response client (not just types).
+#     THIS file configures that mode. Use it if a fully generated client
+#     (rather than openapi-fetch's thin runtime + generated types split) is
+#     ever preferred -- e.g. for a consumer outside the tv-web pnpm workspace
+#     that wants a single self-contained npm package with no peer dependency
+#     on openapi-fetch.
+#
+# Package identity is kept in sync with clients/tv-web/packages/api-client's
+# package.json (@streamarr-tv/api-client) even though that package is
+# presently hand-written, so that switching modes later is a drop-in change
+# rather than a rename.
+
+npmName: "@streamarr-tv/api-client"
+npmVersion: 0.1.0
+npmRepository: "https://github.com/streamarr/streamarr"
+
+supportsES6: true
+typescriptThreePlus: true
+withInterfaces: true
+useSingleRequestParameter: true
+modelPropertyNaming: camelCase
+enumPropertyNaming: UPPERCASE
+stringEnums: true
+prefixParameterInterfaces: true
+platform: browser
+fileNaming: kebab-case
+withoutRuntimeChecks: false
+sortParamsByRequiredFlag: true

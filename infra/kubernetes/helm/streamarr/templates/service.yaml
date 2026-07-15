@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "streamarr.fullname" . }}-api
+  labels:
+    {{- include "streamarr.componentLabels" (dict "context" . "component" "api") | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.api.service.type }}
+  ports:
+    - port: {{ .Values.api.service.port }}
+      targetPort: {{ .Values.api.service.targetPort }}
+      protocol: TCP
+      name: http
+    - port: {{ get .Values.config "METRICS_PORT" | int }}
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+  selector:
+    {{- include "streamarr.componentSelectorLabels" (dict "context" . "component" "api") | nindent 4 }}
+---
+# Workers don't take Ingress/Service traffic for the application itself,
+# but they still need a stable ClusterIP so kube-proxy can route probe
+# traffic sanely and so the optional ServiceMonitor below has something to
+# select for /metrics scraping.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "streamarr.fullname" . }}-worker
+  labels:
+    {{- include "streamarr.componentLabels" (dict "context" . "component" "worker") | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: {{ .Values.worker.service.port }}
+      targetPort: {{ .Values.worker.service.targetPort }}
+      protocol: TCP
+      name: http
+    - port: {{ get .Values.config "METRICS_PORT" | int }}
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+  selector:
+    {{- include "streamarr.componentSelectorLabels" (dict "context" . "component" "worker") | nindent 4 }}

@@ -1,0 +1,111 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/streamarr-model",
+    "crates/streamarr-config",
+    "crates/streamarr-db",
+    "crates/streamarr-coordination",
+    "crates/streamarr-cache",
+    "crates/streamarr-arr-client",
+    "crates/streamarr-arr-sync",
+    "crates/streamarr-catalog",
+    "crates/streamarr-requests",
+    "crates/streamarr-tdarr-client",
+    "crates/streamarr-transcode",
+    "crates/streamarr-auth",
+    "crates/streamarr-telemetry",
+    "crates/streamarr-api",
+]
+
+# The workspace root manifest doubles as the `streamarr-bin` package: cargo
+# allows a manifest to declare both `[workspace]` and `[package]`, with the
+# package's crate root resolved relative to this file (`src/main.rs`). This
+# keeps the top-level binary out of `crates/` per the task's "consistent
+# either way" instruction while avoiding an extra nested workspace member.
+[package]
+name = "streamarr-bin"
+version = "0.1.0"
+edition = "2021"
+description = "Streamarr server entrypoint: boots the API/worker roles and hosts the `streamarr` CLI (update checks, etc)."
+default-run = "streamarr"
+
+[[bin]]
+name = "streamarr"
+path = "src/main.rs"
+
+[dependencies]
+streamarr-model = { path = "crates/streamarr-model" }
+streamarr-config = { path = "crates/streamarr-config" }
+streamarr-api = { path = "crates/streamarr-api" }
+streamarr-telemetry = { path = "crates/streamarr-telemetry" }
+axum = { workspace = true }
+tokio = { workspace = true }
+clap = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/streamarr/streamarr"
+
+# Centralised dependency versions so every member crate stays in lockstep.
+# Individual crates opt in with `dep = { workspace = true, features = [...] }`.
+[workspace.dependencies]
+# --- async runtime / core ---
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
+
+# --- serde / data ---
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# --- error handling ---
+thiserror = "1"
+anyhow = "1"
+
+# --- http client / server ---
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors"] }
+utoipa = { version = "5", features = ["axum_extras", "uuid", "chrono"] }
+utoipa-axum = "0.2"
+
+# --- db ---
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio",
+    "tls-rustls",
+    "macros",
+    "migrate",
+    "chrono",
+    "uuid",
+] }
+
+# --- cli ---
+clap = { version = "4", features = ["derive", "env"] }
+
+# --- auth ---
+jsonwebtoken = "9"
+
+# --- caching / concurrency ---
+moka = { version = "0.12", features = ["future"] }
+dashmap = "6"
+
+# --- telemetry ---
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter", "fmt"] }
+tracing-appender = "0.2"
+tracing-opentelemetry = "0.27"
+opentelemetry = "0.26"
+opentelemetry_sdk = { version = "0.26", features = ["rt-tokio"] }
+opentelemetry-otlp = "0.26"
+
+[workspace.lints.rust]
+unused_extern_crates = "warn"

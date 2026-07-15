@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: streamarr-staging
+
+resources:
+  - ../../base
+
+patches:
+  - target:
+      kind: Deployment
+      name: streamarr-api
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: Deployment
+      name: streamarr-worker
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+
+configMapGenerator:
+  - name: streamarr-config
+    behavior: merge
+    literals:
+      - APP_ENV=staging
+      - LOG_LEVEL=info
+
+# As in overlays/dev: DATABASE_URL / REDIS_URL should be supplied by a
+# secretGenerator pointed at an untracked env file, or base/secret.yaml
+# should be dropped from `resources` (via a patch removing it, or by
+# forking base/kustomization.yaml's resource list) in favour of a
+# cluster-managed Secret from Sealed Secrets / External Secrets Operator.

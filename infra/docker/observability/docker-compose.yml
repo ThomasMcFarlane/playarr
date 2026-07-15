@@ -1,0 +1,77 @@
+# ==============================================================================
+# Streamarr -- optional Prometheus + Grafana observability overlay.
+#
+# Run as its OWN compose project (not merged with `-f` onto the base
+# stack): it joins the base stack's `streamarr-net` network as `external`
+# so it can scrape whichever base file (docker-compose.dev.yml,
+# docker-compose.ci.yml, or docker-compose.prod.yml) happens to be running,
+# without caring which one that is or duplicating its service
+# definitions. Running it as a separate project also sidesteps a real
+# Compose gotcha: combining `-f infra/docker/docker-compose.dev.yml -f
+# infra/docker/observability/docker-compose.yml` would resolve THIS file's
+# relative bind-mount paths (./prometheus/prometheus.yml etc.) against the
+# FIRST file's directory, not this one's -- so don't do that.
+#
+# Prerequisite: start a base stack first (it creates the `streamarr-net`
+# network this file expects to already exist):
+#   docker compose -f infra/docker/docker-compose.dev.yml up -d
+#
+# Then, from anywhere:
+#   docker compose -f infra/docker/observability/docker-compose.yml up -d
+#
+# Grafana: http://localhost:3000 (default admin/admin, change on first
+# login -- see GF_SECURITY_ADMIN_PASSWORD below for a non-interactive
+# override). Prometheus UI: http://localhost:9091 (remapped from its
+# in-container default of 9090 to avoid colliding with
+# docker-compose.ci.yml's streamarr service, which publishes its own
+# metrics port on host 9090 -- see ../docker-compose.ci.yml).
+# ==============================================================================
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: streamarr-obs-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9091:9090"
+    restart: unless-stopped
+    networks:
+      - streamarr-net
+
+  grafana:
+    image: grafana/grafana-oss:11.2.0
+    container_name: streamarr-obs-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - streamarr-net
+
+networks:
+  # Not created here -- must already exist, created by whichever base
+  # compose file (dev/ci/prod) is currently running. See header comment.
+  streamarr-net:
+    name: streamarr-net
+    external: true
+
+volumes:
+  prometheus_data:
+  grafana_data:

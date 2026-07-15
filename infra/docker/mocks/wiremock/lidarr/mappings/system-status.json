@@ -1,0 +1,38 @@
+{
+  "name": "lidarr-system-status",
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/v1/system/status"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "appName": "Lidarr",
+      "instanceName": "streamarr-mock-lidarr",
+      "version": "2.9.7.4283",
+      "buildTime": "2026-01-01T00:00:00Z",
+      "isDebug": false,
+      "isProduction": true,
+      "isAdmin": false,
+      "isUserInteractive": false,
+      "startupPath": "/app/lidarr/bin",
+      "appData": "/config",
+      "osName": "linux",
+      "osVersion": "wiremock-mock",
+      "isNetCore": true,
+      "isLinux": true,
+      "isOsx": false,
+      "isWindows": false,
+      "isDocker": true,
+      "mode": "console",
+      "branch": "master",
+      "authentication": "none",
+      "sqliteVersion": "3.45.0",
+      "migrationVersion": 90,
+      "urlBase": "",
+      "runtimeVersion": "8.0.0",
+      "runtimeName": "netCore"
+    }
+  }
+}

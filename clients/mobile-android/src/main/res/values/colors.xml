@@ -1,0 +1,6 @@
+<resources>
+    <!-- Mirrors StreamarrPalette.SurfaceDark in core-designsystem; kept in
+         sync manually since XML resources can't reference Kotlin constants.
+         Used only for the pre-Compose window background / splash screen. -->
+    <color name="streamarr_surface">#141218</color>
+</resources>

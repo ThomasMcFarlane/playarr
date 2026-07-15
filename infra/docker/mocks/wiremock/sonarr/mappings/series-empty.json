@@ -1,0 +1,12 @@
+{
+  "name": "sonarr-series-list",
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/v3/series"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": []
+  }
+}

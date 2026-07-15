@@ -1,0 +1,17 @@
+[package]
+name = "streamarr-requests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The MediaRequest domain type and request lifecycle service: users asking for something to be added, and that request being approved/rejected/submitted to a source *arr instance/fulfilled."
+
+[dependencies]
+streamarr-model = { path = "../streamarr-model" }
+streamarr-db = { path = "../streamarr-db" }
+async-trait = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

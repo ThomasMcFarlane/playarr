@@ -1,0 +1,24 @@
+{
+  "name": "@streamarr-tv/device-auth",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RFC 8628 OAuth 2.0 Device Authorization Grant client, shared by the webOS/Tizen/VIDAA-fallback TV apps and reused as the Web approver-UI logic.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "catalog:"
+  }
+}

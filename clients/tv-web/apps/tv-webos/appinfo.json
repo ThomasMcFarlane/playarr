@@ -1,0 +1,18 @@
+{
+  "id": "com.streamarr.tv",
+  "version": "0.1.0",
+  "vendor": "Streamarr",
+  "type": "web",
+  "main": "index.html",
+  "title": "Streamarr",
+  "icon": "icon.png",
+  "largeIcon": "icon.png",
+  "bgImage": "splash.png",
+  "splashBackground": "splash.png",
+  "iconColor": "#000000",
+  "uiRevision": "2",
+  "resolution": "1920x1080",
+  "disableBackHistoryAPI": false,
+  "requiredPermissions": ["network.internet"],
+  "appDescription": "Streamarr -- browse and play your media library on the big screen."
+}

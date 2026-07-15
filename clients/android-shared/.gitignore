@@ -1,0 +1,16 @@
+# Build outputs
+build/
+*/build/
+.gradle/
+.kotlin/
+
+# Local machine config (SDK path, signing overrides) -- never portable, never committed
+local.properties
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Gradle wrapper distribution cache, if ever pointed somewhere local
+gradle/wrapper/dists/

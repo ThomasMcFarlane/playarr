@@ -1,0 +1,27 @@
+Streamarr ({{ .Chart.AppVersion }}) has been deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+API:
+  Service:   {{ include "streamarr.fullname" . }}-api ({{ .Values.api.service.type }}, port {{ .Values.api.service.port }})
+  Replicas:  {{ if .Values.api.autoscaling.enabled }}{{ .Values.api.autoscaling.minReplicas }}-{{ .Values.api.autoscaling.maxReplicas }} (HPA){{ else }}{{ .Values.api.replicaCount }} (fixed){{ end }}
+
+Worker:
+  Replicas:  {{ if .Values.worker.autoscaling.enabled }}{{ .Values.worker.autoscaling.minReplicas }}-{{ .Values.worker.autoscaling.maxReplicas }} (HPA){{ else }}{{ .Values.worker.replicaCount }} (fixed){{ end }}
+  PDB:       {{ if .Values.worker.podDisruptionBudget.enabled }}enabled{{ else }}disabled{{ end }}
+
+{{- if not .Values.secret.create }}
+
+NOTE: secret.create is false. Make sure a Secret named
+"{{ include "streamarr.secretName" . }}" exists in this namespace with
+DATABASE_URL and REDIS_URL keys before pods will become Ready - see
+infra/kubernetes/README.md for provisioning options.
+{{- end }}
+
+{{- if .Values.serviceMonitor.enabled }}
+
+Prometheus scraping is enabled via a ServiceMonitor (requires the
+kube-prometheus-stack / Prometheus Operator CRDs).
+{{- end }}
+
+Check rollout status with:
+  kubectl rollout status deployment/{{ include "streamarr.fullname" . }}-api -n {{ .Release.Namespace }}
+  kubectl rollout status deployment/{{ include "streamarr.fullname" . }}-worker -n {{ .Release.Namespace }}

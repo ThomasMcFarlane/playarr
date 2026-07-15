@@ -1,0 +1,189 @@
+# ==============================================================================
+# Streamarr -- local dev dependency stack (Tier 2: docker-compose, per
+# docs/architecture/adr/0001-storage-engine.md's tier table).
+#
+# This file intentionally does NOT run the `streamarr` binary itself: the
+# backend/ Rust workspace doesn't have a Dockerfile-buildable release yet.
+# Run the server on the host instead (`just backend-run`, i.e.
+# `cargo run --bin streamarr`) pointed at the Postgres instance this stack
+# publishes on localhost:5432, while the *arr apps + Tdarr run here as
+# supervised sibling containers.
+#
+# Once backend/ has a real release, `just dev-up` (see ../../Justfile) is
+# expected to keep pointing at this exact file -- see
+# docker-compose.ci.yml for the equivalent stack WITH the streamarr binary
+# wired in (used by CI, where the binary always exists by build time).
+#
+# Usage:
+#   docker compose -f infra/docker/docker-compose.dev.yml up -d
+#   docker compose -f infra/docker/docker-compose.dev.yml down
+#
+# All *arr apps + Tdarr share a single `/data` volume (media_dev) mounted
+# at the SAME container path in every service. This is the TRaSH-guides
+# hardlink-friendly layout: Sonarr/Radarr/Lidarr/Readarr can hardlink a
+# completed download directly into the library directory (instead of a
+# slow cross-filesystem copy) only when both paths resolve inside the same
+# mounted volume. Streamarr itself will need this same /data mount once it
+# joins this stack, for the same reason.
+# ==============================================================================
+
+x-linuxserver-env: &linuxserver-env
+  PUID: ${PUID:-1000}
+  PGID: ${PGID:-1000}
+  TZ: ${TZ:-Etc/UTC}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: streamarr-dev-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-streamarr}
+      POSTGRES_USER: ${POSTGRES_USER:-streamarr}
+      # Dev-only default password for a Postgres instance that is not
+      # reachable outside this compose network unless you also publish
+      # the port to a non-loopback interface. Override via a .env file
+      # for anything beyond a throwaway local checkout.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-streamarr_dev_only}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-streamarr} -d ${POSTGRES_DB:-streamarr}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - streamarr-net
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: streamarr-dev-sonarr
+    restart: unless-stopped
+    environment:
+      <<: *linuxserver-env
+    volumes:
+      - sonarr_dev_config:/config
+      - media_dev:/data
+    ports:
+      - "8989:8989"
+    networks:
+      - streamarr-net
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: streamarr-dev-radarr
+    restart: unless-stopped
+    environment:
+      <<: *linuxserver-env
+    volumes:
+      - radarr_dev_config:/config
+      - media_dev:/data
+    ports:
+      - "7878:7878"
+    networks:
+      - streamarr-net
+
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:latest
+    container_name: streamarr-dev-lidarr
+    restart: unless-stopped
+    environment:
+      <<: *linuxserver-env
+    volumes:
+      - lidarr_dev_config:/config
+      - media_dev:/data
+    ports:
+      - "8686:8686"
+    networks:
+      - streamarr-net
+
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: streamarr-dev-bazarr
+    restart: unless-stopped
+    environment:
+      <<: *linuxserver-env
+    volumes:
+      - bazarr_dev_config:/config
+      - media_dev:/data
+    ports:
+      - "6767:6767"
+    networks:
+      - streamarr-net
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: streamarr-dev-prowlarr
+    restart: unless-stopped
+    environment:
+      <<: *linuxserver-env
+    volumes:
+      - prowlarr_dev_config:/config
+    ports:
+      - "9696:9696"
+    networks:
+      - streamarr-net
+
+  readarr:
+    # Readarr has no LSIO "stable" tag as of this writing -- `develop` is
+    # the tag LinuxServer actively publishes and is what upstream Readarr
+    # itself recommends until a stable release cuts. Pin to a specific
+    # digest/tag once one exists if you need reproducibility beyond "dev
+    # stack, latest develop build".
+    image: lscr.io/linuxserver/readarr:develop
+    container_name: streamarr-dev-readarr
+    restart: unless-stopped
+    environment:
+      <<: *linuxserver-env
+    volumes:
+      - readarr_dev_config:/config
+      - media_dev:/data
+    ports:
+      - "8787:8787"
+    networks:
+      - streamarr-net
+
+  tdarr:
+    image: haveagitgat/tdarr:latest
+    container_name: streamarr-dev-tdarr
+    restart: unless-stopped
+    environment:
+      <<: *linuxserver-env
+      UMASK_SET: "002"
+      serverIP: "0.0.0.0"
+      serverPort: "8266"
+      webUIPort: "8265"
+      internalNode: "true"
+      inContainer: "true"
+      ffmpegVersion: "6"
+      nodeName: "streamarr-dev-tdarr-internal"
+    volumes:
+      - tdarr_dev_server:/app/server
+      - tdarr_dev_configs:/app/configs
+      - tdarr_dev_logs:/app/logs
+      - media_dev:/data
+    ports:
+      - "8265:8265"
+      - "8266:8266"
+    networks:
+      - streamarr-net
+
+networks:
+  streamarr-net:
+    name: streamarr-net
+
+volumes:
+  postgres_dev_data:
+  sonarr_dev_config:
+  radarr_dev_config:
+  lidarr_dev_config:
+  bazarr_dev_config:
+  prowlarr_dev_config:
+  readarr_dev_config:
+  tdarr_dev_server:
+  tdarr_dev_configs:
+  tdarr_dev_logs:
+  media_dev:

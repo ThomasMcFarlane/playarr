@@ -1,0 +1,12 @@
+{
+  "name": "radarr-movie-list",
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/v3/movie"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": []
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "prowlarr-indexer-list",
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/v1/indexer"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": []
+  }
+}

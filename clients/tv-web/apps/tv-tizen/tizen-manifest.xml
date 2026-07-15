@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Tizen TV web-application manifest (W3C widget config + Tizen namespace
+  extensions). Tizen Studio's packaging tools (`tizen build-web` /
+  `tizen package`) conventionally read this from `config.xml` at the
+  project root; it is named `tizen-manifest.xml` here per this scaffold's
+  spec. Rename (or symlink) to `config.xml` when wiring up a real Tizen
+  Studio project -- see README.md for the packaging gap.
+-->
+<widget xmlns="http://www.w3.org/ns/widgets"
+        xmlns:tizen="http://tizen.org/ns/widgets"
+        id="https://streamarr.tv/tizen/app"
+        version="0.1.0"
+        viewmodes="maximized">
+
+  <tizen:application id="StrmarrTV1.Streamarr"
+                      package="StrmarrTV1"
+                      required_version="6.0"/>
+
+  <tizen:profile name="tv"/>
+
+  <name>Streamarr</name>
+  <icon src="icon.png"/>
+  <content src="index.html"/>
+
+  <feature name="http://tizen.org/feature/screen.size.all"/>
+
+  <tizen:privilege name="http://tizen.org/privilege/internet"/>
+  <tizen:privilege name="http://tizen.org/privilege/network.get"/>
+
+  <tizen:setting screen-orientation="landscape"
+                  context-menu="disable"
+                  background-support="disable"
+                  encryption="disable"
+                  install-location="auto"
+                  hwkey-event="enable"/>
+
+  <!-- Samsung Smart TV-specific metadata: opt into the native seek/dialog UX for AVPlay-backed playback. -->
+  <tizen:metadata key="http://samsung.com/tv/metadata/use.dialog" value="true"/>
+</widget>

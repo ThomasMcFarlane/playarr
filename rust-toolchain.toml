@@ -1,0 +1,14 @@
+# Pins the toolchain used to build every crate in backend/ (the Streamarr
+# Rust workspace). `rustup` reads this automatically whenever a `cargo`
+# command is run anywhere under this repo, so all contributors and CI jobs
+# build with the same compiler regardless of what they have installed
+# globally.
+#
+# All workspace crates target `edition = "2021"` (set per-crate in their
+# own Cargo.toml / inherited from `[workspace.package]` in
+# backend/Cargo.toml) -- that is a Cargo manifest setting, not a toolchain
+# one, but is called out here since the two are chosen together.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+profile = "default"

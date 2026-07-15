@@ -1,0 +1,3 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Compose theme + shared components; no manifest entries of its own. -->
+</manifest>

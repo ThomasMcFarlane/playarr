@@ -1,0 +1,55 @@
+# openapi-generator config for the Kotlin SDK target.
+#
+# Consumed by scripts/gen-sdk.sh via:
+#   docker run --rm -v "$PWD:/local" openapitools/openapi-generator-cli generate \
+#     -i /local/backend/openapi/streamarr.yaml \
+#     -g kotlin \
+#     -c /local/clients/shared/sdk-codegen/kotlin-config.yaml \
+#     -o /local/clients/android-shared/sdk
+#
+# Output lands in clients/android-shared/sdk -- a self-contained Gradle
+# module the android-shared owner wires into settings.gradle.kts via
+# `include(":sdk")`. It is deliberately generated into its own module rather
+# than directly into an existing hand-written module, so regeneration is a
+# clean `rm -rf` + regenerate with no risk of clobbering hand-written code.
+#
+# Library choice: jvm-retrofit2 + kotlinx_serialization + coroutines is the
+# standard combo for a modern Android networking stack -- Retrofit for the
+# request/response plumbing, kotlinx.serialization instead of
+# Gson/Moshi/Jackson to avoid a reflection-based (or annotation-processor
+# heavy) serializer, and suspend functions instead of callback/RxJava
+# interfaces since both the mobile and TV UI modules are Compose +
+# coroutines-based per docs/architecture/overview.md.
+
+packageName: com.streamarr.sdk
+apiPackage: com.streamarr.sdk.api
+modelPackage: com.streamarr.sdk.model
+invokerPackage: com.streamarr.sdk.client
+
+groupId: com.streamarr
+artifactId: streamarr-sdk
+artifactVersion: 0.1.0
+
+library: jvm-retrofit2
+serializationLibrary: kotlinx_serialization
+dateLibrary: kotlinx-datetime
+useCoroutines: true
+collectionType: list
+
+sourceFolder: src/main/kotlin
+enumPropertyNaming: UPPERCASE
+parcelizeModels: false
+serializableModel: false
+
+# Generated `equals`/`hashCode`/`toString` on models; keep models immutable
+# (`val`, not `var`) since they only ever represent server responses.
+generateRoomModels: false
+useSettingsGradle: false
+
+additionalProperties:
+  # Surfaced here (rather than only above) because some openapi-generator
+  # versions only pick these two up from additionalProperties rather than
+  # the top-level key for the kotlin generator -- keeping both is a
+  # deliberate belt-and-braces move, not a duplication mistake.
+  moshiCodeGen: false
+  omitGradleWrapper: true

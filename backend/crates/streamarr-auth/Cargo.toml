@@ -1,0 +1,18 @@
+[package]
+name = "streamarr-auth"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Policy evaluation, JWT issuance/verification, and the RFC 8628 device authorization flow for limited-input (TV) clients."
+
+[dependencies]
+streamarr-model = { path = "../streamarr-model" }
+streamarr-db = { path = "../streamarr-db" }
+async-trait = { workspace = true }
+jsonwebtoken = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

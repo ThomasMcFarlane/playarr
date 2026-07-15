@@ -1,0 +1,38 @@
+{
+  "name": "readarr-system-status",
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/v1/system/status"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "appName": "Readarr",
+      "instanceName": "streamarr-mock-readarr",
+      "version": "0.4.13.2755",
+      "buildTime": "2026-01-01T00:00:00Z",
+      "isDebug": false,
+      "isProduction": true,
+      "isAdmin": false,
+      "isUserInteractive": false,
+      "startupPath": "/app/readarr/bin",
+      "appData": "/config",
+      "osName": "linux",
+      "osVersion": "wiremock-mock",
+      "isNetCore": true,
+      "isLinux": true,
+      "isOsx": false,
+      "isWindows": false,
+      "isDocker": true,
+      "mode": "console",
+      "branch": "develop",
+      "authentication": "none",
+      "sqliteVersion": "3.45.0",
+      "migrationVersion": 60,
+      "urlBase": "",
+      "runtimeVersion": "8.0.0",
+      "runtimeName": "netCore"
+    }
+  }
+}

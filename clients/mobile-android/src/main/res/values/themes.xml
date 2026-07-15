@@ -1,0 +1,22 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        The real theme (color scheme, typography) is applied by
+        `StreamarrTheme` in Compose, see core-designsystem. This XML
+        theme only needs to cover the pre-Compose window chrome: status
+        bar/system bar treatment and the splash-screen theme below, per
+        the androidx.core.splashscreen contract.
+    -->
+    <style name="Theme.Streamarr" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/streamarr_surface</item>
+    </style>
+
+    <style name="Theme.Streamarr.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/streamarr_surface</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Streamarr</item>
+    </style>
+
+</resources>

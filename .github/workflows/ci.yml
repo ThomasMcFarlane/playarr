@@ -1,0 +1,294 @@
+# =============================================================================
+# Streamarr CI
+# =============================================================================
+#
+# Single CI workflow for pull requests and pushes to `main`. A `changes` job
+# runs dorny/paths-filter once and every platform-specific check job is
+# gated on its boolean output, so a PR that only touches the iOS client
+# doesn't pay for a Rust/Android/tv-web build.
+#
+# BRANCH PROTECTION -- READ THIS BEFORE CONFIGURING REQUIRED STATUS CHECKS:
+#   Only the terminal `ci-required` job should ever be added as a "required
+#   status check" in this repo's branch protection settings. Do NOT mark
+#   `backend-check`, `android-check`, `ios-check`, `tv-web-check`, or
+#   `openapi-contract-check` as required themselves.
+#
+#   Those jobs are conditional (`if: needs.changes.outputs.<platform> ==
+#   'true'`). When a job is skipped by its own `if:`, GitHub reports its
+#   status as "skipped", not "success" -- and a required check that a PR's
+#   file set can cause to never run at all is a well-known way to
+#   permanently block merges (the check just sits pending forever). GitHub
+#   pages team maintains the recommended pattern is a single always-run
+#   aggregator job, which is what `ci-required` is here: it `needs` every
+#   other job, runs unconditionally (`if: always()`), and explicitly maps
+#   skipped -> pass while failure/cancelled -> fail. That makes it the only
+#   job that is guaranteed to always report a final pass/fail for any PR,
+#   regardless of which paths changed, so it's the only one safe to require.
+# =============================================================================
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Detect which platform(s) a PR/push touches, so downstream jobs can
+  # skip themselves when irrelevant. Directory names below reflect the
+  # monorepo layout as defined by the in-flight scaffolding tasks for each
+  # component -- update these globs here if a component's directory layout
+  # changes.
+  # ---------------------------------------------------------------------
+  changes:
+    name: Detect changed platforms
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      android: ${{ steps.filter.outputs.android }}
+      ios: ${{ steps.filter.outputs.ios }}
+      tv-web: ${{ steps.filter.outputs.tv-web }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'backend/**'
+            android:
+              # NOTE: as of authoring time, CODEOWNERS and Justfile assume a
+              # single `clients/android/` root, but the Android client shell
+              # task's approved scope is three sibling directories directly
+              # under `clients/`. Following the latter here since it's the
+              # more specific/authoritative source for the actual layout;
+              # reconcile with CODEOWNERS/Justfile if that turns out stale.
+              - 'clients/mobile-android/**'
+              - 'clients/tv-android/**'
+              - 'clients/android-shared/**'
+            ios:
+              - 'clients/ios/**'
+            tv-web:
+              - 'clients/tv-web/**'
+
+  # ---------------------------------------------------------------------
+  # Backend (Rust workspace under backend/)
+  # ---------------------------------------------------------------------
+  backend-check:
+    name: Backend checks (fmt, clippy, test, deny)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend -> target
+
+      - name: cargo fmt -- --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy (warnings denied)
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: cargo test
+        run: cargo test --workspace --all-features
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      - name: cargo deny check
+        run: cargo deny check
+
+  # ---------------------------------------------------------------------
+  # Android (Gradle multi-module project spanning clients/mobile-android,
+  # clients/tv-android, clients/android-shared)
+  # ---------------------------------------------------------------------
+  android-check:
+    name: Android build
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # ASSUMPTION: the Gradle root (settings.gradle.kts + gradlew) lives at
+      # clients/, as the common parent that can reference all three sibling
+      # module directories (mobile-android, tv-android, android-shared)
+      # without cross-directory include() gymnastics. Adjust
+      # working-directory here if the Android client shell task lands the
+      # wrapper somewhere else (e.g. inside clients/mobile-android/).
+      - name: Gradle build (all modules)
+        working-directory: clients
+        run: ./gradlew build
+
+  # ---------------------------------------------------------------------
+  # iOS (Swift Package under clients/ios)
+  # ---------------------------------------------------------------------
+  ios-check:
+    name: iOS build
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: swift build
+        working-directory: clients/ios
+        run: swift build
+
+  # ---------------------------------------------------------------------
+  # tv-web (pnpm workspace under clients/tv-web -- packages/*, apps/*, web/)
+  # ---------------------------------------------------------------------
+  tv-web-check:
+    name: tv-web lint & typecheck
+    needs: changes
+    if: needs.changes.outputs.tv-web == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: clients/tv-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: clients/tv-web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # These delegate to the workspace root's own scripts (see
+      # clients/tv-web/package.json: "lint": "pnpm -r --if-present run
+      # lint", "typecheck": "pnpm -r run typecheck"), which is exactly a
+      # recursive `pnpm -r lint` / `pnpm -r typecheck` across every package
+      # under packages/* and apps/* and web/.
+      - name: Lint (recursive)
+        run: pnpm run lint
+
+      - name: Typecheck (recursive)
+        run: pnpm run typecheck
+
+  # ---------------------------------------------------------------------
+  # OpenAPI contract: regenerate the utoipa-derived spec and diff it
+  # against the committed copy. Delegates to scripts/openapi-diff-check.sh
+  # (owned by the dev-scripts scaffolding) so the regeneration/diff logic
+  # has exactly one implementation, used identically by CI and by
+  # contributors running it locally.
+  # ---------------------------------------------------------------------
+  openapi-contract-check:
+    name: OpenAPI contract diff
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend -> target
+
+      - name: Regenerate backend/openapi/streamarr.yaml and diff
+        run: |
+          if [ ! -x scripts/openapi-diff-check.sh ] && [ ! -f scripts/openapi-diff-check.sh ]; then
+            echo "::error::scripts/openapi-diff-check.sh not found. This script is expected to regenerate the utoipa-derived OpenAPI spec and diff it against the committed backend/openapi/streamarr.yaml, exiting non-zero on drift."
+            exit 1
+          fi
+          bash scripts/openapi-diff-check.sh
+
+  # ---------------------------------------------------------------------
+  # Terminal aggregator -- see the file header comment for why this is the
+  # only job that should be a required status check.
+  # ---------------------------------------------------------------------
+  ci-required:
+    name: ci-required
+    needs:
+      - changes
+      - backend-check
+      - android-check
+      - ios-check
+      - tv-web-check
+      - openapi-contract-check
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify no required job failed
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS_JSON" | jq .
+
+          fail=0
+          for job in changes backend-check android-check ios-check tv-web-check openapi-contract-check; do
+            result=$(echo "$NEEDS_JSON" | jq -r --arg j "$job" '.[$j].result // "missing"')
+            echo "Job '$job' result: $result"
+            case "$result" in
+              failure|cancelled)
+                fail=1
+                ;;
+              success|skipped)
+                ;;
+              *)
+                echo "::warning::Unexpected result '$result' for job '$job'"
+                fail=1
+                ;;
+            esac
+          done
+
+          if [ "$fail" -eq 1 ]; then
+            echo "::error::One or more required jobs failed or were cancelled."
+            exit 1
+          fi
+
+          echo "All required jobs passed or were skipped (not applicable to this change)."

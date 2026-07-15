@@ -1,0 +1,12 @@
+{
+  "name": "bazarr-providers-list",
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/providers"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "data": [] }
+  }
+}

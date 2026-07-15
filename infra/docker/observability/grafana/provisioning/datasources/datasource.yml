@@ -1,0 +1,16 @@
+# Grafana provisioning: auto-registers Prometheus as a datasource on
+# container start so a fresh `docker compose up` needs zero click-ops in
+# the Grafana UI before the dashboard in ../dashboards/ has data to show.
+# https://grafana.com/docs/grafana/latest/administration/provisioning/#datasources
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: streamarr-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: 15s

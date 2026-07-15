@@ -1,0 +1,12 @@
+{
+  "name": "lidarr-artist-list",
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/v1/artist"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": []
+  }
+}

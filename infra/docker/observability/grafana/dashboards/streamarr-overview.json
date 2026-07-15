@@ -1,0 +1,106 @@
+{
+  "uid": "streamarr-overview",
+  "title": "Streamarr Overview",
+  "description": "Minimal starter dashboard provisioned by infra/docker/observability. Intentionally scoped to the `up` metric only (guaranteed to exist for any Prometheus scrape target) rather than app-specific metric names, since backend/crates/streamarr-telemetry does not have its metric surface implemented yet -- extend this dashboard once real counters/histograms exist.",
+  "tags": ["streamarr"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Streamarr targets up",
+      "description": "Count of streamarr* scrape targets currently reporting healthy, by role label.",
+      "datasource": { "type": "prometheus", "uid": "streamarr-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(up{job=\"streamarr\"}) by (role)",
+          "legendFormat": "{{role}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Streamarr targets up over time",
+      "description": "Same series as the stat panel, plotted over the selected time range -- useful for spotting flapping/restarting nodes.",
+      "datasource": { "type": "prometheus", "uid": "streamarr-prometheus" },
+      "gridPos": { "h": 8, "w": 16, "x": 8, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(up{job=\"streamarr\"}) by (role)",
+          "legendFormat": "{{role}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Scrape health by instance",
+      "description": "Per-instance `up` value plus the last scrape duration, for quickly spotting which specific container is unreachable.",
+      "datasource": { "type": "prometheus", "uid": "streamarr-prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=\"streamarr\"}",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "scrape_duration_seconds{job=\"streamarr\"}",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    }
+  ]
+}

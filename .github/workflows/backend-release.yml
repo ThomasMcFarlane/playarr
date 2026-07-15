@@ -1,0 +1,205 @@
+# =============================================================================
+# Streamarr Backend Release
+# =============================================================================
+#
+# Triggered by pushing a tag like `backend-v1.4.2` (or a pre-release such as
+# `backend-v1.4.2-rc.1`). This workflow is scoped to the Rust backend
+# service only -- client releases are handled by their own per-platform
+# *-ci.yml workflows, and release-client-compat-bot.yml reacts to those tags
+# to keep backend/config/client-compatibility.toml in sync.
+#
+# Stages:
+#   1. build-binaries       - cross-compiled release binaries (x86_64 +
+#                              aarch64), attached to the GitHub Release.
+#   2. build-and-push-image - multi-arch (linux/amd64 + linux/arm64) Docker
+#                              image pushed to GHCR, signed with cosign
+#                              (keyless/OIDC), with an attached SBOM.
+#   3. publish-release      - creates the GitHub Release with the binaries.
+#      Gated behind the `release-backend` GitHub Environment -- configure
+#      that environment (Settings -> Environments -> release-backend) with
+#      required reviewers so a human approves before the release is
+#      published. This is the ONLY job gated that way; build-binaries and
+#      build-and-push-image run unattended so reviewers have real
+#      artifacts/a real image digest to inspect before approving.
+# =============================================================================
+
+name: Backend Release
+
+on:
+  push:
+    tags:
+      - 'backend-v*'
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-binaries:
+    name: Build binary (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend -> target
+          key: ${{ matrix.target }}
+
+      # cargo-zigbuild is used instead of a QEMU-backed `cross` image: it's
+      # faster and doesn't need Docker-in-Docker on the hosted runner. Swap
+      # for `cargo install cross && cross build` if zig linking ever
+      # becomes a problem for a particular dependency (e.g. one with a C
+      # build script zig can't handle).
+      - name: Install cargo-zigbuild
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+
+      - name: Build release binary
+        working-directory: backend
+        run: cargo zigbuild --release --target ${{ matrix.target }} --bin streamarr
+
+      - name: Package binary
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          bin_path="target/${{ matrix.target }}/release/streamarr"
+          mkdir -p dist
+          tar -C "$(dirname "$bin_path")" -czf "dist/streamarr-${{ matrix.target }}.tar.gz" "$(basename "$bin_path")"
+          shasum -a 256 "dist/streamarr-${{ matrix.target }}.tar.gz" > "dist/streamarr-${{ matrix.target }}.tar.gz.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: streamarr-${{ matrix.target }}
+          path: backend/dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  build-and-push-image:
+    name: Build & push multi-arch Docker image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # required for cosign keyless (OIDC) signing
+    outputs:
+      image: ${{ steps.image.outputs.name }}
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # GHCR/Docker repository names must be lowercase; github.repository
+      # isn't guaranteed to be (org/user names can be mixed case).
+      - name: Compute image name
+        id: image
+        run: |
+          echo "name=ghcr.io/$(echo '${{ github.repository_owner }}/streamarr-backend' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Docker metadata (semver + digest/sha tags)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=match,pattern=backend-v(.*),group=1
+            type=sha,format=long
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Dockerfile is owned by the Docker infra scaffolding (task-scoped to
+      # infra/). Build context is the repo root since the Dockerfile is
+      # expected to COPY backend/ (and possibly the workspace lockfile) in
+      # from there; the image does its own cross-arch compilation via
+      # buildx/QEMU, independent of the cargo-zigbuild binaries built above
+      # (those are for the bare-metal/systemd release path, not the image).
+      - name: Build and push
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/backend.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image (keyless/OIDC)
+        run: cosign sign --yes "${{ steps.image.outputs.name }}@${{ steps.push.outputs.digest }}"
+
+      - name: Generate SBOM (CycloneDX via syft)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ steps.image.outputs.name }}@${{ steps.push.outputs.digest }}
+          format: cyclonedx-json
+          output-file: sbom-backend.cdx.json
+
+      - name: Attach + sign SBOM
+        run: |
+          cosign attach sbom --sbom sbom-backend.cdx.json "${{ steps.image.outputs.name }}@${{ steps.push.outputs.digest }}"
+          cosign sign --yes --attachment-tag sbom "${{ steps.image.outputs.name }}@${{ steps.push.outputs.digest }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-backend
+          path: sbom-backend.cdx.json
+          retention-days: 90
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-binaries, build-and-push-image]
+    runs-on: ubuntu-latest
+    # Requires reviewer approval before running -- configure the
+    # `release-backend` environment's protection rules in repo Settings.
+    environment: release-backend
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: streamarr-*
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Backend ${{ github.ref_name }}
+          generate_release_notes: true
+          files: dist/**
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          body: |
+            Container image: `${{ needs.build-and-push-image.outputs.image }}@${{ needs.build-and-push-image.outputs.digest }}`
+
+            This image is signed (cosign, keyless/OIDC) and has an attached CycloneDX SBOM. Verify with:
+
+            ```
+            cosign verify --certificate-identity-regexp 'https://github.com/${{ github.repository }}/.*' \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              ${{ needs.build-and-push-image.outputs.image }}@${{ needs.build-and-push-image.outputs.digest }}
+            ```

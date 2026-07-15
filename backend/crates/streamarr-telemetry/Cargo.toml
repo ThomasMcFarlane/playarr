@@ -1,0 +1,27 @@
+[package]
+name = "streamarr-telemetry"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Logging, correlation, metrics, optional OpenTelemetry export, playback analytics collection, and diagnostics endpoints for the Streamarr backend."
+
+[dependencies]
+streamarr-model = { path = "../streamarr-model" }
+streamarr-config = { path = "../streamarr-config" }
+streamarr-db = { path = "../streamarr-db" }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+axum = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-appender = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+opentelemetry-otlp = { workspace = true }
+dashmap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }

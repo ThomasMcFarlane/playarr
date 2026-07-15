@@ -1,0 +1,95 @@
+# ==============================================================================
+# OPTIONAL OVERLAY -- automatic image updates via Watchtower
+# (https://containrrr.dev/watchtower/, image: containrrr/watchtower).
+#
+# This is opt-in and NOT part of the default stack for a reason: letting
+# something other than a human/CI pipeline swap your production binary out
+# from under you is a real availability and supply-chain risk, and directly
+# in tension with docs/architecture/overview.md's whole "one artifact per
+# release, self-update refused inside containers" design (see
+# backend.Dockerfile's `/.streamarr-container` marker -- Watchtower's
+# pull-and-recreate is the SANCTIONED replacement for that in-app self-
+# update path, precisely because it's driven by the image/tag lifecycle
+# instead of the running process patching itself).
+#
+# HOW TO LAYER THIS IN (it does nothing on its own -- `-f` it alongside a
+# base file that already defines the `streamarr-api`/`streamarr-worker`
+# services, i.e. docker-compose.prod.yml):
+#
+#   docker compose \
+#     -f infra/docker/docker-compose.prod.yml \
+#     -f infra/docker/docker-compose.watchtower.optional.yml \
+#     --profile standard up -d
+#
+# What this overlay does, precisely:
+#   1. Adds `com.centurylinklabs.watchtower.enable=true` to every
+#      `streamarr-*` service. Watchtower is started with `--label-enable`,
+#      so it polls/updates ONLY containers carrying this label -- Postgres,
+#      Redis, and Caddy are never touched, even though they're in the same
+#      compose project.
+#   2. Repins each `streamarr-*` service's `image:` from the exact
+#      `MAJOR.MINOR.PATCH` tag the base file defaults to (matching
+#      infra/kubernetes/helm/streamarr/Chart.yaml's appVersion pinning
+#      policy) to a floating `MAJOR.MINOR` tag instead. Watchtower re-pulls
+#      that SAME tag on its interval and recreates the container only if
+#      the registry digest changed -- i.e. it picks up new PATCH builds
+#      published under that minor tag, but a MINOR/MAJOR bump requires a
+#      human to edit `STREAMARR_MINOR_TAG` and redeploy. This assumes your
+#      release pipeline republishes patch releases to the same minor tag
+#      (e.g. both `0.1.4` and `0.1` point at the same digest after a patch
+#      release) -- adjust the tagging scheme on the publish side to match
+#      if it doesn't yet.
+#
+# CAVEAT: Watchtower updates containers directly via the Docker Engine
+# API (its own `docker pull` + recreate) -- it does not go through
+# `docker compose`. After it swaps an image, the running container's image
+# reference will disagree with what `docker compose up` would (re)build
+# from `build:` in the base file next time you run it by hand. Run
+# `docker compose pull && docker compose up -d` (or drop this overlay) to
+# reconcile compose's view before your next manual deploy.
+# ==============================================================================
+
+x-watchtower-pin: &watchtower-pin
+  image: ${STREAMARR_IMAGE:-ghcr.io/streamarr/streamarr}:${STREAMARR_MINOR_TAG:-0.1}
+  labels:
+    com.centurylinklabs.watchtower.enable: "true"
+
+services:
+  streamarr-api:
+    <<: *watchtower-pin
+
+  streamarr-api-2:
+    <<: *watchtower-pin
+
+  streamarr-worker:
+    <<: *watchtower-pin
+
+  streamarr-worker-2:
+    <<: *watchtower-pin
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    # containrrr/watchtower is the long-established, widely-published image
+    # for this tool; if you're reading this after mid-2026, confirm which
+    # fork/org is the actively maintained publisher before relying on it in
+    # production, and swap the image reference here accordingly.
+    command:
+      - "--interval"
+      - "300"
+      - "--label-enable"
+      - "--cleanup"
+      - "--include-restarting"
+      - "--rolling-restart"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      TZ: ${TZ:-Etc/UTC}
+      WATCHTOWER_NOTIFICATIONS: ${WATCHTOWER_NOTIFICATIONS:-}
+      WATCHTOWER_NOTIFICATION_URL: ${WATCHTOWER_NOTIFICATION_URL:-}
+    restart: unless-stopped
+    networks:
+      - streamarr-net
+
+networks:
+  streamarr-net:
+    name: streamarr-net

@@ -1,0 +1,38 @@
+{
+  "name": "prowlarr-system-status",
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/v1/system/status"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "appName": "Prowlarr",
+      "instanceName": "streamarr-mock-prowlarr",
+      "version": "1.24.3.4754",
+      "buildTime": "2026-01-01T00:00:00Z",
+      "isDebug": false,
+      "isProduction": true,
+      "isAdmin": false,
+      "isUserInteractive": false,
+      "startupPath": "/app/prowlarr/bin",
+      "appData": "/config",
+      "osName": "linux",
+      "osVersion": "wiremock-mock",
+      "isNetCore": true,
+      "isLinux": true,
+      "isOsx": false,
+      "isWindows": false,
+      "isDocker": true,
+      "mode": "console",
+      "branch": "master",
+      "authentication": "none",
+      "sqliteVersion": "3.45.0",
+      "migrationVersion": 40,
+      "urlBase": "",
+      "runtimeVersion": "8.0.0",
+      "runtimeName": "netCore"
+    }
+  }
+}

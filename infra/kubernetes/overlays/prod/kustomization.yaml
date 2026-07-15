@@ -1,0 +1,43 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: streamarr-prod
+
+resources:
+  - ../../base
+
+patches:
+  - target:
+      kind: Deployment
+      name: streamarr-api
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  - target:
+      kind: Deployment
+      name: streamarr-worker
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+
+configMapGenerator:
+  - name: streamarr-config
+    behavior: merge
+    literals:
+      - APP_ENV=production
+      - LOG_LEVEL=warn
+
+# Production MUST NOT ship with base/secret.yaml's empty placeholder.
+# Remove it from the resolved resource list (e.g. by re-declaring
+# `resources` here without relying on base/secret.yaml, or by using a
+# `$patch: delete` patch keyed on name+kind+apiVersion) and provision
+# DATABASE_URL / REDIS_URL via Sealed Secrets or External Secrets Operator
+# instead. Left as a base-inherited placeholder in this scaffold only so
+# `kustomize build overlays/prod` still renders end-to-end.
+#
+# Image tags in prod are bumped exclusively via the Flux
+# ImageUpdateAutomation flow described in
+# ../flux-image-automation.example.yaml - never by hand-editing this file
+# with a floating tag, and never by anything running inside the cluster.

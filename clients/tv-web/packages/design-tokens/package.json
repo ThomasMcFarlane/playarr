@@ -1,0 +1,24 @@
+{
+  "name": "@streamarr-tv/design-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal hand-authored design token set (color, spacing, type scale) as TypeScript constants. Style Dictionary will later generate per-platform output from a canonical token source -- see the note in src/index.ts.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "catalog:"
+  }
+}

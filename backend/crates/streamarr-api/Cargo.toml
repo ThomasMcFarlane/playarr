@@ -1,0 +1,27 @@
+[package]
+name = "streamarr-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The Streamarr Axum HTTP server: OpenAPI-annotated system routes, health/readiness, and the client-version-enforcement middleware."
+
+[dependencies]
+streamarr-model = { path = "../streamarr-model", features = ["openapi"] }
+streamarr-config = { path = "../streamarr-config" }
+streamarr-telemetry = { path = "../streamarr-telemetry" }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+utoipa = { workspace = true }
+utoipa-axum = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = "0.8"
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+tower = { workspace = true, features = ["util"] }

@@ -1,0 +1,24 @@
+{
+  "name": "bazarr-system-status",
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/system/status"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "data": {
+        "bazarr_version": "1.4.5",
+        "bazarr_directory": "/app/bazarr",
+        "bazarr_config_directory": "/config",
+        "sonarr_version": "",
+        "radarr_version": "",
+        "operating_system": "wiremock-mock",
+        "python_version": "3.11.0",
+        "start_time": 1767225600,
+        "package_version": ""
+      }
+    }
+  }
+}

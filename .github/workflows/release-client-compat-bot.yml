@@ -1,0 +1,131 @@
+# =============================================================================
+# Client Compatibility Bot
+# =============================================================================
+#
+# Runs whenever any *client* release tag is pushed -- any tag except the
+# `backend-v*` tags handled by backend-release.yml (e.g. `mobile-android-v2.3.0`,
+# `tv-android-v2.3.0`, `ios-v1.0.4`, `tv-web-v0.9.1`, `web-v1.1.0`).
+#
+# It opens a pull request against backend/config/client-compatibility.toml
+# updating the `version_floor` for whichever client just released, so the
+# backend's minimum-supported-client-version gate stays in sync with what's
+# actually shipped. Deciding the *new* floor is a policy call (e.g. "bump
+# the floor to match every release" vs "only bump on major/minor, never on
+# a patch") -- this workflow never pushes straight to main; it always opens
+# a PR for a human to review and merge.
+# =============================================================================
+
+name: Client Compatibility Bot
+
+on:
+  push:
+    tags:
+      - '*'
+      - '!backend-v*'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-compat-floor:
+    name: Propose client-compatibility.toml update
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine client + version from tag
+        id: parse
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          # Expected tag shape: <client>-v<semver>, e.g. mobile-android-v2.3.0,
+          # tv-android-v2.3.0, ios-v1.0.4, tv-web-v0.9.1, web-v1.1.0.
+          if [[ "$tag" != *-v* ]]; then
+            echo "::error::Tag '$tag' doesn't match the expected <client>-v<version> shape; nothing to do."
+            exit 1
+          fi
+          client="${tag%%-v*}"
+          version="${tag#"$client"-v}"
+          echo "client=${client}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Detected client release: client=${client} version=${version}"
+
+      # -----------------------------------------------------------------
+      # PLACEHOLDER: replace this inline script with a real one (Python,
+      # Node, or a small `xtask`/cargo-run helper living under scripts/)
+      # once the policy for moving a version floor is decided. A real
+      # implementation should at minimum:
+      #   1. Parse backend/config/client-compatibility.toml as TOML
+      #      (don't regex a config file long-term -- this is a stopgap).
+      #   2. Locate the [clients.<client>] table.
+      #   3. Decide the new version_floor per policy (e.g. only move it on
+      #      major/minor bumps, never automatically on a patch release).
+      #   4. Write the file back out preserving formatting/comments.
+      #
+      # This placeholder does a real, working (if naive) regex-based
+      # in-place edit so the PR step below has a concrete, correct diff to
+      # show reviewers rather than a no-op.
+      # -----------------------------------------------------------------
+      - name: Update version-floor (placeholder policy)
+        id: update
+        run: |
+          set -euo pipefail
+          client="${{ steps.parse.outputs.client }}"
+          version="${{ steps.parse.outputs.version }}"
+          file="backend/config/client-compatibility.toml"
+
+          if [ ! -f "$file" ]; then
+            echo "::error::$file not found; nothing to update. (Owned by the backend workspace scaffolding.)"
+            exit 1
+          fi
+
+          python3 - "$file" "$client" "$version" <<'PY'
+          import re
+          import sys
+
+          path, client, version = sys.argv[1:4]
+          with open(path, "r", encoding="utf-8") as f:
+              text = f.read()
+
+          if not re.search(rf"^\[clients\.{re.escape(client)}\]\s*$", text, re.MULTILINE):
+              print(f"No [clients.{client}] table in {path} yet; skipping (placeholder policy, needs a real implementation).")
+              sys.exit(0)
+
+          pattern = re.compile(
+              rf"(\[clients\.{re.escape(client)}\][^\[]*?version_floor\s*=\s*)\"[^\"]*\"",
+              re.MULTILINE | re.DOTALL,
+          )
+          new_text, count = pattern.subn(rf'\g<1>"{version}"', text, count=1)
+          if count == 0:
+              print(f"Could not find a version_floor key under [clients.{client}]; skipping (placeholder policy).")
+              sys.exit(0)
+
+          with open(path, "w", encoding="utf-8") as f:
+              f.write(new_text)
+          print(f"Updated [clients.{client}].version_floor -> {version}")
+          PY
+
+      - name: Open pull request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore(compat): bump ${{ steps.parse.outputs.client }} version-floor to ${{ steps.parse.outputs.version }}"
+          title: "chore(compat): bump ${{ steps.parse.outputs.client }} version-floor to ${{ steps.parse.outputs.version }}"
+          body: |
+            Automated update triggered by tag `${{ github.ref_name }}`.
+
+            This bumps `version_floor` for the **${{ steps.parse.outputs.client }}**
+            client in `backend/config/client-compatibility.toml` to
+            `${{ steps.parse.outputs.version }}`.
+
+            Please review before merging -- the placeholder logic in
+            `.github/workflows/release-client-compat-bot.yml` does a naive
+            regex replace and does not encode real version-floor policy
+            (e.g. whether a patch release should move the floor at all).
+          branch: "bot/client-compat/${{ steps.parse.outputs.client }}-${{ steps.parse.outputs.version }}"
+          base: main
+          labels: |
+            client-compatibility
+            automated

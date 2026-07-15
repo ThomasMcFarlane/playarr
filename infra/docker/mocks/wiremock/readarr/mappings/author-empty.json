@@ -1,0 +1,12 @@
+{
+  "name": "readarr-author-list",
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/v1/author"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": []
+  }
+}

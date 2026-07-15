@@ -1,0 +1,70 @@
+# ==============================================================================
+# Streamarr / Playarr monorepo .gitattributes
+# Standard line-ending normalization: text files are normalized to LF in the
+# repository and checked out as LF (Git handles per-OS checkout translation
+# only if you override it locally). Binary/media assets are marked so Git
+# never attempts diffing or line-ending conversion on them. No Git LFS rules
+# yet -- add them here if/when large binary assets need to be tracked.
+# ==============================================================================
+
+# Default: treat everything as text, normalize to LF, unless overridden below.
+* text=auto eol=lf
+
+# Explicit text types (kept LF regardless of platform).
+*.rs        text eol=lf
+*.toml      text eol=lf
+*.md        text eol=lf
+*.txt       text eol=lf
+*.json      text eol=lf
+*.jsonc     text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.ts        text eol=lf
+*.tsx       text eol=lf
+*.js        text eol=lf
+*.jsx       text eol=lf
+*.mjs       text eol=lf
+*.cjs       text eol=lf
+*.css       text eol=lf
+*.html      text eol=lf
+*.kt        text eol=lf
+*.kts       text eol=lf
+*.java      text eol=lf
+*.gradle    text eol=lf
+*.swift     text eol=lf
+*.sh        text eol=lf
+*.py        text eol=lf
+Justfile    text eol=lf
+Dockerfile  text eol=lf
+
+# Windows-only scripts keep CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary/media assets: never diff, never normalize line endings.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.pdf   binary
+*.jar   binary
+*.keystore    binary
+*.p12         binary
+*.mobileprovision binary
+*.ipa   binary
+*.apk   binary
+*.aab   binary
+*.wgt   binary
+*.ipk   binary
+*.tpk   binary
+
+# Let GitHub's linguist skip generated/vendored content in language stats
+# without needing a separate .gitattributes per client.
+*.lock linguist-generated=true

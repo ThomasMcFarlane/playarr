@@ -1,0 +1,96 @@
+name: Bug report
+description: Report a defect in the Streamarr backend or a Playarr client.
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please fill in as much
+        detail as you can -- it makes triage and reproduction much faster.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected component
+      description: Which part of Streamarr does this bug affect?
+      options:
+        - Backend (Rust/Axum API)
+        - Playarr Android (mobile)
+        - Playarr Android (TV)
+        - Playarr iOS
+        - Playarr Web
+        - Playarr TV Web (Tizen/webOS/VIDAA)
+        - Docs
+        - CI/CD / tooling
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: >
+        Server version (from the streamarr status endpoint or the Docker image
+        tag) and/or client app version where you saw this.
+      placeholder: "backend-v1.4.2 / mobile-android-v2.3.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear, concise description of the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps so a maintainer can reproduce this reliably.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: >
+        Server logs, client logcat/console output, or a request/response pair
+        (redact any tokens/secrets). This is automatically formatted as code,
+        no need for backticks.
+      render: shell
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS/device, browser, deployment method (Docker/bare metal/Kubernetes), etc.
+      placeholder: |
+        - OS: Ubuntu 22.04 / macOS 15 / Android 14 / iOS 18
+        - Deployment: Docker (ghcr.io/streamarr/streamarr-backend:backend-v1.4.2)
+        - Browser (if web/tv-web): Chrome 126
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and this hasn't already been reported.
+          required: true
+        - label: I'm running a supported (non-EOL) release.
+          required: false

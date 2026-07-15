@@ -1,0 +1,262 @@
+# ==============================================================================
+# Streamarr -- reference multi-node production stack (docker-compose native).
+#
+# This is a REFERENCE topology for operators who want more headroom than a
+# single systemd install (Tier 1) but don't want to run Kubernetes (Tier 3,
+# see ../kubernetes/helm/streamarr/). It deliberately mirrors the Helm
+# chart's contract (env var names, /healthz + /readyz, non-root uid 10001,
+# read-only root filesystem) so operating knowledge transfers between the
+# two -- see infra/docker/README.md for the full mapping.
+#
+# `docker compose up --scale` also works for ad-hoc capacity changes, but
+# this file uses named services + profiles for TIER SELECTION instead of
+# raw replica counts, so `docker compose config --services` tells you
+# exactly what a tier contains:
+#
+#   docker compose -f docker-compose.prod.yml up -d
+#     -> postgres, caddy, streamarr-api (2 replicas). API/browse traffic
+#        only -- no worker means no on-demand/background transcode
+#        capacity. The smallest useful tier.
+#
+#   docker compose -f docker-compose.prod.yml --profile standard up -d
+#     -> adds streamarr-worker (2 replicas): transcode + library-scan
+#        capacity. The tier most single-VPS/home-server operators want.
+#
+#   docker compose -f docker-compose.prod.yml --profile ha up -d
+#     -> adds Redis (shared cache/session store) plus one extra,
+#        independently-placed streamarr-api-2 / streamarr-worker-2 node
+#        each, on top of whatever --profile standard already added ('ha'
+#        implies wanting worker capacity too, so streamarr-worker carries
+#        both profiles -- see its `profiles:` list below). Pass both flags
+#        together for the full tier: `--profile standard --profile ha`.
+#
+# Secrets (DB password, etc.) are NEVER defaulted to a real value below --
+# every `${VAR:?...}` fails loudly if unset rather than silently starting
+# with a weak/blank credential. Provide them via a `.env` file (untracked;
+# see .gitignore) or your orchestrator's secret injection. Redis, when the
+# `ha` profile is active, is expected at `redis://redis:6379/0` -- set
+# STREAMARR_REDIS_URL to that (or leave unset; REDIS_URL is optional, see
+# infra/kubernetes/helm/streamarr/values.yaml's secret.data.redisUrl).
+#
+# Usage:
+#   docker compose -f infra/docker/docker-compose.prod.yml build
+#   docker compose -f infra/docker/docker-compose.prod.yml --profile standard --profile ha up -d
+# ==============================================================================
+
+x-streamarr-image: &streamarr-image
+  build:
+    context: ../..
+    dockerfile: infra/docker/backend.Dockerfile
+  image: ${STREAMARR_IMAGE:-ghcr.io/streamarr/streamarr}:${STREAMARR_IMAGE_TAG:-0.1.0}
+  pull_policy: build
+
+x-streamarr-env: &streamarr-env
+  APP_ENV: production
+  LOG_LEVEL: ${STREAMARR_LOG_LEVEL:-info}
+  LOG_FORMAT: json
+  METRICS_ENABLED: "true"
+  METRICS_PORT: "9090"
+  HTTP_PORT: "8080"
+  DATABASE_URL: postgres://streamarr:${STREAMARR_DB_PASSWORD:?Set STREAMARR_DB_PASSWORD (e.g. in a .env file) before starting the prod stack}@postgres:5432/streamarr
+  # Optional. Only meaningfully reachable when --profile ha has started the
+  # `redis` service; left blank otherwise (REDIS_URL is treated as
+  # optional throughout this repo's Streamarr contract -- see
+  # infra/kubernetes/helm/streamarr/values.yaml's secret.data.redisUrl).
+  REDIS_URL: ${STREAMARR_REDIS_URL:-}
+
+x-streamarr-hardening: &streamarr-hardening
+  # Mirrors the Helm chart's podSecurityContext/securityContext as closely
+  # as a single-host container runtime allows: non-root (the image already
+  # runs as uid/gid 10001 -- see backend.Dockerfile), read-only root
+  # filesystem with only /tmp writable, no new privileges.
+  read_only: true
+  security_opt:
+    - "no-new-privileges:true"
+  tmpfs:
+    - /tmp
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: streamarr
+      POSTGRES_USER: streamarr
+      POSTGRES_PASSWORD: ${STREAMARR_DB_PASSWORD:?Set STREAMARR_DB_PASSWORD (e.g. in a .env file) before starting the prod stack}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U streamarr -d streamarr"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - streamarr-net
+
+  # Optional shared cache / session store. Only started with --profile ha.
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    profiles: ["ha"]
+    volumes:
+      - redis_prod_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - streamarr-net
+
+  streamarr-api:
+    <<: [*streamarr-image, *streamarr-hardening]
+    command: ["serve", "--role", "api"]
+    environment:
+      <<: *streamarr-env
+      STREAMARR_ROLE: api
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8080"
+      - "9090"
+    networks:
+      - streamarr-net
+
+  # Second, independently-scheduled API node for the `ha` tier -- pin
+  # `deploy.placement.constraints` here (Swarm) or run it on a different
+  # Docker context/host entirely for real node-level redundancy; Compose
+  # alone can't schedule across hosts, so this service mostly documents
+  # the intended topology for a Swarm/Nomad-managed deployment of this
+  # same image.
+  streamarr-api-2:
+    <<: [*streamarr-image, *streamarr-hardening]
+    command: ["serve", "--role", "api"]
+    profiles: ["ha"]
+    environment:
+      <<: *streamarr-env
+      STREAMARR_ROLE: api
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8080"
+      - "9090"
+    networks:
+      - streamarr-net
+
+  streamarr-worker:
+    <<: [*streamarr-image, *streamarr-hardening]
+    command: ["serve", "--role", "worker"]
+    # Worker capacity is opted into by either the `standard` or `ha`
+    # profile, so `--profile ha` alone still gets a functioning stack
+    # without also having to remember `--profile standard`.
+    profiles: ["standard", "ha"]
+    environment:
+      <<: *streamarr-env
+      STREAMARR_ROLE: worker
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1024M
+        reservations:
+          cpus: "0.2"
+          memory: 256M
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8080"
+      - "9090"
+    networks:
+      - streamarr-net
+
+  streamarr-worker-2:
+    <<: [*streamarr-image, *streamarr-hardening]
+    command: ["serve", "--role", "worker"]
+    profiles: ["ha"]
+    environment:
+      <<: *streamarr-env
+      STREAMARR_ROLE: worker
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1024M
+        reservations:
+          cpus: "0.2"
+          memory: 256M
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8080"
+      - "9090"
+    networks:
+      - streamarr-net
+
+  # Reverse proxy / public edge. Only this service publishes host ports;
+  # everything else is internal-network-only. See ./prod/Caddyfile for the
+  # load-balancing + healthcheck config (real Caddy, not a placeholder).
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      STREAMARR_DOMAIN: ${STREAMARR_DOMAIN:-localhost}
+    volumes:
+      - ./prod/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    depends_on:
+      - streamarr-api
+    restart: unless-stopped
+    networks:
+      - streamarr-net
+      - streamarr-edge
+
+networks:
+  # Shared with docker-compose.dev.yml / docker-compose.ci.yml's network
+  # name on purpose: ../observability/docker-compose.yml joins this exact
+  # network (as `external: true`) to scrape streamarr-api/worker:9090
+  # regardless of which base stack is running.
+  streamarr-net:
+    name: streamarr-net
+  # Only Caddy sits on this one; it's what actually gets a published host
+  # port. Kept separate from streamarr-net so a compromised edge container
+  # doesn't get network-level visibility into Postgres/Redis beyond what
+  # streamarr-net already grants it (defense in depth, not a hard
+  # boundary -- Caddy IS on both networks because it must reach
+  # streamarr-api).
+  streamarr-edge:
+    name: streamarr-edge
+
+volumes:
+  postgres_prod_data:
+  redis_prod_data:
+  caddy_data:
+  caddy_config:

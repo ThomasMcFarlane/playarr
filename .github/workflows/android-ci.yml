@@ -1,0 +1,73 @@
+# =============================================================================
+# Android Release
+# =============================================================================
+#
+# Release-track workflow for the Android client family. Triggered by
+# pushing a tag like `android-v2.3.0` -- a combined release train covering
+# both publishable app modules (clients/mobile-android, clients/tv-android;
+# clients/android-shared is a library, not independently published).
+#
+# NOTE: this is intentionally a lightweight skeleton. The Android client
+# modules don't exist yet (see the Android client shell scaffolding task),
+# so the real build/sign/publish steps below are TODO placeholders showing
+# the intended shape of the pipeline (Fastlane -> Play Console) without
+# depending on Gradle/Fastlane/signing configuration that isn't written
+# yet. Toolchain setup steps (JDK, Gradle) ARE real since they don't depend
+# on repo content. Replace the placeholder steps with real
+# `bundle exec fastlane ...` lanes once the client apps land. See ci.yml's
+# android-check job for the PR-time build gate that already runs against
+# real Gradle output once clients/{mobile-android,tv-android,android-shared}
+# have content.
+# =============================================================================
+
+name: Android Release
+
+on:
+  push:
+    tags:
+      - 'android-v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    name: Build & publish (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    environment: release-android
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [mobile-android, tv-android]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # TODO: once clients/${{ matrix.module }} exists, replace with the
+      # real Gradle task, e.g.:
+      #   ./gradlew :${{ matrix.module }}:bundleRelease
+      - name: Build release bundle (placeholder)
+        run: |
+          echo "TODO: ./gradlew :${{ matrix.module }}:bundleRelease"
+          echo "Would build a release .aab for '${{ matrix.module }}' from tag ${GITHUB_REF_NAME}"
+
+      # TODO: sign the .aab with the release keystore, sourced from secrets
+      # (e.g. via r0adkll/sign-android-release or a Fastlane 'sign' lane).
+      - name: Sign release bundle (placeholder)
+        run: |
+          echo "TODO: sign clients/${{ matrix.module }}/build/outputs/bundle/release/*.aab"
+
+      # TODO: wire a Fastlane 'supply' lane (or google-github-actions
+      # upload-google-play-action) to push to the Play Console. Requires a
+      # GOOGLE_PLAY_SERVICE_ACCOUNT secret with Play Console API access,
+      # and a distinct Play Console app listing per module (mobile vs TV).
+      - name: Publish to Play Console (placeholder)
+        run: |
+          echo "TODO: bundle exec fastlane android deploy module:${{ matrix.module }} track:internal"
+          echo "Would upload the signed .aab for '${{ matrix.module }}' to the Play Console."

@@ -1,0 +1,241 @@
+# ==============================================================================
+# Streamarr -- CI dependency stack.
+#
+# Same service set as docker-compose.dev.yml (Postgres 16 + the *arr apps +
+# Tdarr), tuned for a CI runner rather than a human's laptop:
+#
+#   - No persistent named volumes: everything lives in tmpfs or an
+#     anonymous/ephemeral filesystem scoped to the container's own
+#     lifetime, so a CI job never inherits state from a previous run and
+#     never needs volume cleanup as a separate step.
+#   - Faster healthchecks (short interval/timeout, higher retry count, short
+#     start_period) so `docker compose up --wait` fails fast on a broken
+#     dependency instead of a human-scale 30s+ dev healthcheck cadence.
+#   - A `streamarr` service built from backend.Dockerfile, because CI is the
+#     one environment that always has a buildable backend/ checkout by the
+#     time this file runs -- unlike docker-compose.dev.yml, which
+#     deliberately excludes it (see that file's header comment).
+#
+# Usage (from repo root):
+#   docker compose -f infra/docker/docker-compose.ci.yml up -d --wait
+#   docker compose -f infra/docker/docker-compose.ci.yml down -v
+# ==============================================================================
+
+x-linuxserver-env: &linuxserver-env
+  PUID: ${PUID:-1000}
+  PGID: ${PGID:-1000}
+  TZ: Etc/UTC
+
+x-ci-healthcheck-defaults: &ci-healthcheck-defaults
+  interval: 3s
+  timeout: 3s
+  retries: 20
+  start_period: 5s
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: streamarr-ci-postgres
+    environment:
+      POSTGRES_DB: streamarr
+      POSTGRES_USER: streamarr
+      POSTGRES_PASSWORD: streamarr_ci_only
+      # Speeds up fsync in a throwaway CI container; never do this outside
+      # a stack that is destroyed at the end of every run.
+      POSTGRES_INITDB_ARGS: "--no-sync"
+      PGDATA: /var/lib/postgresql/data/pgdata
+    command: ["postgres", "-c", "fsync=off", "-c", "full_page_writes=off"]
+    tmpfs:
+      - /var/lib/postgresql/data:uid=999,gid=999
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U streamarr -d streamarr"]
+      <<: *ci-healthcheck-defaults
+    networks:
+      - streamarr-net
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: streamarr-ci-sonarr
+    environment:
+      <<: *linuxserver-env
+    tmpfs:
+      - /config
+    ports:
+      - "8989:8989"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8989/ping"]
+      <<: *ci-healthcheck-defaults
+    networks:
+      - streamarr-net
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: streamarr-ci-radarr
+    environment:
+      <<: *linuxserver-env
+    tmpfs:
+      - /config
+    ports:
+      - "7878:7878"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:7878/ping"]
+      <<: *ci-healthcheck-defaults
+    networks:
+      - streamarr-net
+
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:latest
+    container_name: streamarr-ci-lidarr
+    environment:
+      <<: *linuxserver-env
+    tmpfs:
+      - /config
+    ports:
+      - "8686:8686"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8686/ping"]
+      <<: *ci-healthcheck-defaults
+    networks:
+      - streamarr-net
+
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: streamarr-ci-bazarr
+    environment:
+      <<: *linuxserver-env
+    tmpfs:
+      - /config
+    ports:
+      - "6767:6767"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:6767/"]
+      <<: *ci-healthcheck-defaults
+    networks:
+      - streamarr-net
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: streamarr-ci-prowlarr
+    environment:
+      <<: *linuxserver-env
+    tmpfs:
+      - /config
+    ports:
+      - "9696:9696"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9696/ping"]
+      <<: *ci-healthcheck-defaults
+    networks:
+      - streamarr-net
+
+  readarr:
+    image: lscr.io/linuxserver/readarr:develop
+    container_name: streamarr-ci-readarr
+    environment:
+      <<: *linuxserver-env
+    tmpfs:
+      - /config
+    ports:
+      - "8787:8787"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8787/ping"]
+      <<: *ci-healthcheck-defaults
+    networks:
+      - streamarr-net
+
+  tdarr:
+    image: haveagitgat/tdarr:latest
+    container_name: streamarr-ci-tdarr
+    environment:
+      <<: *linuxserver-env
+      serverIP: "0.0.0.0"
+      serverPort: "8266"
+      webUIPort: "8265"
+      internalNode: "true"
+      inContainer: "true"
+      ffmpegVersion: "6"
+      nodeName: "streamarr-ci-tdarr-internal"
+    tmpfs:
+      - /app/server
+      - /app/configs
+      - /app/logs
+    ports:
+      - "8265:8265"
+      - "8266:8266"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8265/"]
+      <<: *ci-healthcheck-defaults
+    networks:
+      - streamarr-net
+
+  # The real binary, built fresh every CI run so the dependency stack above
+  # is always exercised against the current commit rather than a stale
+  # published tag. See infra/docker/backend.Dockerfile for the multi-stage
+  # build this triggers, and infra/docker/README.md for the env var
+  # contract (mirrors infra/kubernetes/helm/streamarr/values.yaml).
+  streamarr:
+    build:
+      context: ../..
+      dockerfile: infra/docker/backend.Dockerfile
+    image: streamarr:ci
+    container_name: streamarr-ci-streamarr
+    environment:
+      APP_ENV: ci
+      LOG_LEVEL: debug
+      LOG_FORMAT: json
+      METRICS_ENABLED: "true"
+      METRICS_PORT: "9090"
+      HTTP_PORT: "8080"
+      STREAMARR_ROLE: standalone
+      DATABASE_URL: postgres://streamarr:streamarr_ci_only@postgres:5432/streamarr
+      # Redis is optional per infra/kubernetes/helm/streamarr/values.yaml
+      # (REDIS_URL is wired unconditionally in the Deployment templates but
+      # defaults to an empty secret value there too); this dependency
+      # stack doesn't run one. Add a `redis:7-alpine` service here if/when
+      # the backend makes REDIS_URL a hard startup requirement.
+      REDIS_URL: ""
+      # NOTE: streamarr-arr-client's actual config schema isn't implemented
+      # yet (backend/crates/streamarr-arr-client is still a placeholder at
+      # the time this file was written) -- these *_BASE_URL names are a
+      # reasonable placeholder guess at the wiring, not a confirmed
+      # contract. Reconcile with whatever config surface
+      # streamarr-arr-client/streamarr-config actually expose once
+      # implemented (env vars, a mounted config file, or both).
+      SONARR_BASE_URL: http://sonarr:8989
+      RADARR_BASE_URL: http://radarr:7878
+      LIDARR_BASE_URL: http://lidarr:8686
+      BAZARR_BASE_URL: http://bazarr:6767
+      PROWLARR_BASE_URL: http://prowlarr:9696
+      READARR_BASE_URL: http://readarr:8787
+      TDARR_BASE_URL: http://tdarr:8265
+    depends_on:
+      postgres:
+        condition: service_healthy
+      sonarr:
+        condition: service_healthy
+      radarr:
+        condition: service_healthy
+      lidarr:
+        condition: service_healthy
+      bazarr:
+        condition: service_healthy
+      prowlarr:
+        condition: service_healthy
+      readarr:
+        condition: service_healthy
+      tdarr:
+        condition: service_healthy
+    tmpfs:
+      - /tmp
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      <<: *ci-healthcheck-defaults
+    networks:
+      - streamarr-net
+
+networks:
+  streamarr-net:
+    name: streamarr-ci-net

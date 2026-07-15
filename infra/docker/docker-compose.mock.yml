@@ -1,0 +1,90 @@
+# ==============================================================================
+# Streamarr -- fixture-based mocks of the *arr APIs for fast, client-only
+# dev/CI.
+#
+# docker-compose.dev.yml and docker-compose.ci.yml run the real Sonarr/
+# Radarr/Lidarr/Bazarr/Prowlarr/Readarr containers, which is correct for
+# testing Streamarr's actual integration against them but is slow to boot
+# (six .NET apps) and non-deterministic (each app's own SQLite state,
+# first-run migrations, etc). When the thing under test is Streamarr's own
+# code that CONSUMES those APIs -- streamarr-arr-client, streamarr-arr-sync,
+# streamarr-tdarr-client, or a Playarr client integration test -- none of
+# that matters; only the HTTP response shape does.
+#
+# This file replaces the six *arr containers with WireMock
+# (https://wiremock.org), one instance per app, each serving canned JSON
+# fixtures from mocks/wiremock/<app>/mappings/*.json. Every mock listens on
+# the SAME service name and port the real app in docker-compose.dev.yml
+# uses, so pointing streamarr-arr-client at "http://sonarr:8989" (etc.)
+# works unchanged whether this file or docker-compose.dev.yml is running --
+# they are alternatives, not additions (don't run both at once; they'd
+# collide on service names/ports).
+#
+# Usage:
+#   docker compose -f infra/docker/docker-compose.mock.yml up -d
+#
+# To add/change a fixture, drop or edit a mapping file under
+# mocks/wiremock/<app>/mappings/ -- WireMock reloads its mapping directory
+# on container (re)start; no image rebuild needed. See
+# https://wiremock.org/docs/stubbing/ for the mapping JSON schema.
+# ==============================================================================
+
+x-wiremock-defaults: &wiremock-defaults
+  image: wiremock/wiremock:3.9.1
+  command: ["--global-response-templating", "--verbose"]
+  restart: unless-stopped
+  networks:
+    - streamarr-net
+
+services:
+  sonarr:
+    <<: *wiremock-defaults
+    container_name: streamarr-mock-sonarr
+    volumes:
+      - ./mocks/wiremock/sonarr:/home/wiremock
+    ports:
+      - "8989:8080"
+
+  radarr:
+    <<: *wiremock-defaults
+    container_name: streamarr-mock-radarr
+    volumes:
+      - ./mocks/wiremock/radarr:/home/wiremock
+    ports:
+      - "7878:8080"
+
+  lidarr:
+    <<: *wiremock-defaults
+    container_name: streamarr-mock-lidarr
+    volumes:
+      - ./mocks/wiremock/lidarr:/home/wiremock
+    ports:
+      - "8686:8080"
+
+  bazarr:
+    <<: *wiremock-defaults
+    container_name: streamarr-mock-bazarr
+    volumes:
+      - ./mocks/wiremock/bazarr:/home/wiremock
+    ports:
+      - "6767:8080"
+
+  prowlarr:
+    <<: *wiremock-defaults
+    container_name: streamarr-mock-prowlarr
+    volumes:
+      - ./mocks/wiremock/prowlarr:/home/wiremock
+    ports:
+      - "9696:8080"
+
+  readarr:
+    <<: *wiremock-defaults
+    container_name: streamarr-mock-readarr
+    volumes:
+      - ./mocks/wiremock/readarr:/home/wiremock
+    ports:
+      - "8787:8080"
+
+networks:
+  streamarr-net:
+    name: streamarr-mock-net

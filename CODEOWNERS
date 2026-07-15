@@ -1,0 +1,58 @@
+# CODEOWNERS for the Streamarr / Playarr monorepo.
+#
+# Currently a single-owner repo: every path resolves to @ThomasMcFarlane.
+# The per-directory sections below are NOT redundant with the catch-all --
+# they exist as a ready-made template for when individual components
+# (backend, a specific client, infra) get dedicated maintainers. At that
+# point, replace the relevant owner on the relevant section; more specific
+# rules further down the file override the catch-all for matching paths,
+# per GitHub's CODEOWNERS precedence rules (last matching pattern wins).
+#
+# Docs: https://docs.github.com/articles/about-code-owners
+
+# ------------------------------------------------------------------------
+# Default owner for everything not matched more specifically below.
+# ------------------------------------------------------------------------
+*                           @ThomasMcFarlane
+
+# ------------------------------------------------------------------------
+# Repo root / governance
+# ------------------------------------------------------------------------
+/.github/                  @ThomasMcFarlane
+/README.md                 @ThomasMcFarlane
+/CONTRIBUTING.md            @ThomasMcFarlane
+/LICENSE                   @ThomasMcFarlane
+/CODEOWNERS                @ThomasMcFarlane
+/Justfile                  @ThomasMcFarlane
+
+# ------------------------------------------------------------------------
+# Backend (Streamarr core: Rust workspace, API, workers, migrations)
+# ------------------------------------------------------------------------
+/backend/                  @ThomasMcFarlane
+/backend/crates/streamarr-api/        @ThomasMcFarlane
+/backend/crates/streamarr-auth/       @ThomasMcFarlane
+/backend/crates/streamarr-db/         @ThomasMcFarlane
+/backend/migrations/       @ThomasMcFarlane
+
+# ------------------------------------------------------------------------
+# Playarr clients
+# ------------------------------------------------------------------------
+/clients/                  @ThomasMcFarlane
+/clients/mobile-android/   @ThomasMcFarlane
+/clients/tv-android/       @ThomasMcFarlane
+/clients/android-shared/   @ThomasMcFarlane
+/clients/ios/              @ThomasMcFarlane
+/clients/tv-web/           @ThomasMcFarlane
+/clients/shared/           @ThomasMcFarlane
+
+# ------------------------------------------------------------------------
+# Infrastructure / deployment (systemd, Docker Compose, Kubernetes)
+# ------------------------------------------------------------------------
+/infra/                    @ThomasMcFarlane
+/infra/systemd/            @ThomasMcFarlane
+/infra/kubernetes/         @ThomasMcFarlane
+
+# ------------------------------------------------------------------------
+# Documentation
+# ------------------------------------------------------------------------
+/docs/                     @ThomasMcFarlane

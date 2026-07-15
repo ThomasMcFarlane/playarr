@@ -1,0 +1,17 @@
+# Grafana provisioning: tells Grafana to load every dashboard JSON file
+# under ../../grafana/dashboards (mounted into the container at
+# /var/lib/grafana/dashboards by ../../docker-compose.yml) on startup.
+# https://grafana.com/docs/grafana/latest/administration/provisioning/#dashboards
+apiVersion: 1
+
+providers:
+  - name: streamarr
+    orgId: 1
+    folder: Streamarr
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

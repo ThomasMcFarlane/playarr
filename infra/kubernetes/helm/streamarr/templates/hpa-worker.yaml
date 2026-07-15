@@ -1,0 +1,48 @@
+{{- if .Values.worker.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "streamarr.fullname" . }}-worker
+  labels:
+    {{- include "streamarr.componentLabels" (dict "context" . "component" "worker") | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "streamarr.fullname" . }}-worker
+  minReplicas: {{ .Values.worker.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.worker.autoscaling.maxReplicas }}
+  metrics:
+    {{- if .Values.worker.autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.worker.autoscaling.targetCPUUtilizationPercentage }}
+    {{- end }}
+    {{- if .Values.worker.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.worker.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- end }}
+  # Queue-depth-driven scaling (recommended for bursty worker load) needs a
+  # custom/external metrics adapter (e.g. KEDA, or the Prometheus Adapter
+  # fed by the /metrics this chart already exposes). Once one is installed,
+  # add an `External` or `Object` metric entry here instead of/alongside
+  # the Resource entries above, e.g.:
+  #
+  # - type: External
+  #   external:
+  #     metric:
+  #       name: streamarr_queue_depth
+  #       selector:
+  #         matchLabels:
+  #           queue: streamarr-jobs
+  #     target:
+  #       type: AverageValue
+  #       averageValue: "20"
+{{- end }}
