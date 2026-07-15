@@ -22,9 +22,11 @@
 //! changing any route; run the same test without the env var (as CI does)
 //! to confirm the checked-in file still matches.
 
+pub mod auth_extractor;
 pub mod catalog;
 pub mod error;
 pub mod health;
+pub mod login;
 pub mod oauth;
 pub mod playback;
 pub mod readiness;
@@ -45,6 +47,7 @@ use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
+pub use auth_extractor::{AdminUser, AuthUser};
 pub use error::{ApiError, ErrorBody};
 pub use playback::{InMemoryMediaFileLookup, MediaFileLookup, RepoBackedMediaFileLookup};
 pub use readiness::ReadinessState;
@@ -57,6 +60,7 @@ pub use version_gate::{ClientCompatibilityTable, VersionGateLayer};
     info(title = "Streamarr API", version = "0.1.0"),
     tags(
         (name = "system", description = "Process health, readiness, and version endpoints"),
+        (name = "auth", description = "Session login and access-token issuance"),
         (name = "oauth", description = "RFC 8628 OAuth 2.0 device authorization endpoints"),
         (name = "webhooks", description = "*arr webhook receiver"),
         (name = "catalog", description = "Catalog browse/search/detail"),
@@ -79,6 +83,7 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(version::version_handler))
         .routes(routes!(oauth::device_code_handler))
         .routes(routes!(oauth::device_token_handler))
+        .routes(routes!(login::login_handler))
         .routes(routes!(webhooks::arr_webhook_handler))
         .routes(routes!(catalog::browse_catalog_handler))
         .routes(routes!(catalog::get_work_handler))
@@ -100,12 +105,13 @@ pub fn openapi_spec() -> utoipa::openapi::OpenApi {
 /// constructs one of these from `streamarr_config::Config`; every field
 /// here is either `Arc<dyn Trait>` (when the owning crate defines a real
 /// trait boundary — `RequestRepo`, `DeviceFlowHandler`, `MediaFileLookup`,
-/// real in production via `RepoBackedMediaFileLookup`, real-but-in-memory
-/// in tests via `InMemoryMediaFileLookup`) or `Arc<ConcreteType>` (when it
-/// only exposes a concrete service struct — `CatalogService`,
-/// `RequestService`, `TranscodeOrchestrator`, `WebhookReceiver` — or is a
+/// `UserDirectory`, real in production via `RepoBackedMediaFileLookup`,
+/// real-but-in-memory in tests via `InMemoryMediaFileLookup`) or
+/// `Arc<ConcreteType>` (when it only exposes a concrete service struct —
+/// `CatalogService`, `RequestService`, `TranscodeOrchestrator`,
+/// `WebhookReceiver`, `JwtIssuer`, `RefreshTokenService` — or is a
 /// composition-root-owned type with no sibling implementation to abstract
-/// over yet — `SourceInstanceRegistry`).
+/// over yet — `SourceInstanceRegistry`, `InMemoryAdminRegistry`).
 #[derive(Clone)]
 pub struct AppState {
     pub readiness: ReadinessState,
@@ -118,6 +124,36 @@ pub struct AppState {
     pub webhook: Arc<streamarr_arr_sync::WebhookReceiver>,
     pub source_instances: Arc<SourceInstanceRegistry>,
     pub media_files: Arc<dyn MediaFileLookup>,
+    /// Verifies the `Authorization: Bearer <token>` header every
+    /// [`auth_extractor::AuthUser`]/[`auth_extractor::AdminUser`]
+    /// extraction depends on -- the same issuer instance
+    /// `POST /api/v1/auth/login` and the RFC 8628 device flow issue tokens
+    /// through, so a token from either path verifies here identically.
+    pub jwt: Arc<streamarr_auth::JwtIssuer>,
+    /// Interim, pending-real-persistence admin resolution -- see
+    /// `streamarr_auth::admin`'s doc comment. Backs
+    /// [`auth_extractor::AdminUser`]'s 403 check.
+    pub admin_registry: Arc<streamarr_auth::InMemoryAdminRegistry>,
+    /// The operator's configured login trust tier for `POST
+    /// /api/v1/auth/login` -- see `streamarr_auth::AuthMode`'s doc comment
+    /// for what each tier requires, and `streamarr-bin`'s `boot_api` for
+    /// how this pass resolves it (and the security implications of its
+    /// default) from `STREAMARR_AUTH_MODE`.
+    pub auth_mode: Arc<streamarr_auth::AuthMode>,
+    /// Resolves the `User`s participating in login -- see
+    /// `streamarr_auth::login::InMemoryUserDirectory`'s doc comment for why
+    /// this is in-memory pending real `UserRepo` persistence.
+    pub user_directory: Arc<dyn streamarr_auth::UserDirectory>,
+    /// Issues/rotates refresh-token families for `POST /api/v1/auth/login`
+    /// -- shared with the RFC 8628 device flow's own token issuance
+    /// (`device_flow` above wraps a clone of the same underlying service),
+    /// so both paths agree on `Device`/`Session` bookkeeping.
+    pub sessions: Arc<streamarr_auth::RefreshTokenService>,
+    /// Absolute lifetime of a refresh-token family minted by
+    /// `POST /api/v1/auth/login` -- see
+    /// `streamarr_auth::refresh::RefreshTokenRecord::expires_at`'s doc
+    /// comment for why this is fixed at issuance rather than sliding.
+    pub refresh_ttl: chrono::Duration,
     /// Stable-for-process-lifetime identifier for this node, threaded into
     /// `TranscodeSession::owning_node_id` so a segment request in a
     /// multi-node deployment can be routed back to whichever node actually
@@ -282,6 +318,7 @@ mod tests {
         assert!(json.contains("/api/system/version"));
         assert!(json.contains("/api/v1/oauth/device/code"));
         assert!(json.contains("/api/v1/oauth/token"));
+        assert!(json.contains("/api/v1/auth/login"));
         assert!(json.contains("/webhooks/{instance_id}"));
         assert!(json.contains("/api/v1/catalog"));
         assert!(json.contains("/api/v1/catalog/{id}"));

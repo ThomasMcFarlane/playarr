@@ -134,3 +134,32 @@ impl From<streamarr_auth::device_flow::DeviceFlowError> for ApiError {
         }
     }
 }
+
+impl From<streamarr_auth::LoginError> for ApiError {
+    fn from(err: streamarr_auth::LoginError) -> Self {
+        use streamarr_auth::LoginError;
+        match err {
+            // The caller's request was malformed for the operator's
+            // configured trust tier (e.g. no credentials at all under
+            // `AuthMode::FullAccount`) -- a client bug, not a failed auth
+            // attempt, so `400` fits better than `401`.
+            LoginError::CredentialsRequired | LoginError::PinRequired => {
+                Self::bad_request(err.to_string())
+            }
+            // A real, failed authentication attempt -- deliberately mapped
+            // to the same `401`/`unauthorized` code regardless of which
+            // specific reason it was, so a response never tells an
+            // attacker which part of a guess was wrong (matches
+            // `evaluate_login`'s own "without leaking which part was
+            // wrong" behavior for unknown-username vs. wrong-password).
+            LoginError::UntrustedNetwork
+            | LoginError::InvalidCredentials
+            | LoginError::InvalidPin
+            | LoginError::AccountDisabled => {
+                Self::new(StatusCode::UNAUTHORIZED, "unauthorized", err.to_string())
+            }
+            LoginError::Directory(message) => Self::internal(message),
+            LoginError::Session(inner) => Self::internal(inner.to_string()),
+        }
+    }
+}

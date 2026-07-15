@@ -7,7 +7,11 @@
 //! - `api`/`all`: serves the full Axum router built by
 //!   [`streamarr_api::build_router`], with a real [`streamarr_api::AppState`]
 //!   behind it (catalog, requests, transcode orchestrator, device-flow auth,
-//!   webhook receiver).
+//!   session login, webhook receiver). Every mutating request-management
+//!   route requires a verified `Authorization: Bearer <token>` (see
+//!   `streamarr_api::auth_extractor`); `auth_mode_from_env`/
+//!   `default_admin_user_id_from_env` below resolve this deployment's login
+//!   trust tier and default admin identity.
 //! - `worker`/`all`: spawns the arr-sync reconciliation pollers (one per
 //!   configured `SourceInstance`) and the Tdarr background dispatch loop
 //!   (gated by [`streamarr_coordination::ClusterCoordinator`] leader
@@ -232,6 +236,176 @@ fn generated_dev_jwt_secret() -> String {
     )
 }
 
+/// Resolves the id of the single default/admin user a fresh single-node
+/// deployment gets, from `STREAMARR_DEFAULT_ADMIN_USER_ID`. Falls back to a
+/// boot-lifetime-only generated id, mirroring [`generated_dev_jwt_secret`]'s
+/// fallback above -- fine for local/dev use, but every session issued
+/// before a restart is orphaned anyway (the in-memory `RefreshTokenStore`/
+/// `DeviceAuthorizationStore` don't survive a restart either), so a real
+/// deployment that wants a stable admin identity across restarts should set
+/// this explicitly.
+fn default_admin_user_id_from_env() -> uuid::Uuid {
+    match std::env::var("STREAMARR_DEFAULT_ADMIN_USER_ID") {
+        Ok(raw) => match uuid::Uuid::parse_str(&raw) {
+            Ok(id) => id,
+            Err(err) => {
+                tracing::warn!(
+                    value = %raw,
+                    %err,
+                    "STREAMARR_DEFAULT_ADMIN_USER_ID is not a valid UUID; generating a \
+                     boot-lifetime id instead"
+                );
+                uuid::Uuid::new_v4()
+            }
+        },
+        Err(_) => {
+            tracing::warn!(
+                "STREAMARR_DEFAULT_ADMIN_USER_ID not set; generating a boot-lifetime default \
+                 admin user id. Set it explicitly for any deployment where the admin identity \
+                 must be stable across restarts."
+            );
+            uuid::Uuid::new_v4()
+        }
+    }
+}
+
+/// Resolves the operator's configured login trust tier
+/// (`STREAMARR_AUTH_MODE` -- `trusted-network` (the default) or
+/// `full-account`) for `POST /api/v1/auth/login`. See
+/// [`trusted_network_auth_mode`]'s doc comment for the real security
+/// tradeoff the default makes for a fresh deployment.
+///
+/// `full-account` mode is wired at the type level -- `evaluate_login`
+/// fully implements it -- but this pass provisions no user with a known,
+/// usable password (there is no user-provisioning tool; the only seeded
+/// `User`, `admin_user_id`, gets a random, never-recorded password hash),
+/// so flipping to `full-account` today leaves a fresh deployment with no
+/// way to log in at all until real `User` persistence and a provisioning
+/// path exist. Documented here as a known follow-up gap, not silently
+/// papered over.
+fn auth_mode_from_env(admin_user_id: uuid::Uuid) -> streamarr_auth::AuthMode {
+    use streamarr_auth::AuthMode;
+
+    match std::env::var("STREAMARR_AUTH_MODE") {
+        Ok(value) if value == "full-account" => {
+            tracing::warn!(
+                "STREAMARR_AUTH_MODE=full-account: POST /api/v1/auth/login now requires a \
+                 username/password for every login, but no user with a known password is \
+                 provisioned in this pass (no UserRepo/admin-provisioning tool exists yet) -- \
+                 nobody can log in until one is. Use trusted-network (the default) until real \
+                 user provisioning lands."
+            );
+            AuthMode::FullAccount
+        }
+        Ok(value) if value == "trusted-network" => trusted_network_auth_mode(admin_user_id),
+        Ok(other) => {
+            tracing::warn!(
+                value = %other,
+                "unrecognized STREAMARR_AUTH_MODE (expected trusted-network or full-account); \
+                 falling back to trusted-network"
+            );
+            trusted_network_auth_mode(admin_user_id)
+        }
+        Err(_) => trusted_network_auth_mode(admin_user_id),
+    }
+}
+
+/// The RFC 1918 private-address ranges plus loopback -- what "trusted home
+/// LAN" actually means. This, not `0.0.0.0/0`, is the default allowlist
+/// [`trusted_network_auth_mode`] builds when `STREAMARR_TRUSTED_NETWORK_CIDR`
+/// is unset: a request whose source IP is outside every private range (i.e.
+/// arrived over the public internet, including through an operator's own
+/// unintentional port-forward/UPnP exposure) is *not* auto-logged-in as
+/// admin just because it reached the socket.
+const DEFAULT_TRUSTED_NETWORK_CIDRS: &[&str] = &[
+    "10.0.0.0/8",
+    "172.16.0.0/12",
+    "192.168.0.0/16",
+    "127.0.0.1/32",
+    "::1/128",
+];
+
+/// Builds the `AuthMode::TrustedNetwork` mode this pass defaults every
+/// fresh deployment to: `STREAMARR_TRUSTED_NETWORK_CIDR`, if set, replaces
+/// [`DEFAULT_TRUSTED_NETWORK_CIDRS`] with that single custom range; either
+/// way, every request whose source IP falls inside the resulting allowlist
+/// auto-logs in as `admin_user_id`, with zero credentials.
+///
+/// **Security implications of the default (RFC 1918 + loopback):** anyone
+/// who can reach this server from inside the household/office network --
+/// not just from this one machine -- becomes an authenticated admin with
+/// zero credentials. That's the correct, zero-setup default for the
+/// box-under-your-TV single-node deployment this project is primarily built
+/// for, and it deliberately does *not* extend that trust to the public
+/// internet the way a `0.0.0.0/0` default would -- a stray port-forward or
+/// UPnP mapping should not silently hand out admin to the entire internet.
+/// It is still not a substitute for real per-user auth on a shared or
+/// untrusted LAN (guest wifi, a dorm/apartment building network, etc):
+/// anyone else on that same private range is just as trusted as the
+/// operator. For those cases, narrow `STREAMARR_TRUSTED_NETWORK_CIDR` to
+/// the actual trusted subnet, switch to `STREAMARR_AUTH_MODE=full-account`
+/// (see that mode's own documented gap above), or put a real authenticating
+/// reverse proxy in front of it.
+fn trusted_network_auth_mode(admin_user_id: uuid::Uuid) -> streamarr_auth::AuthMode {
+    use streamarr_auth::{AuthMode, TrustedNetwork};
+
+    let configured_cidr = std::env::var("STREAMARR_TRUSTED_NETWORK_CIDR").ok();
+    let cidrs: Vec<String> = match &configured_cidr {
+        Some(cidr) => vec![cidr.clone()],
+        None => DEFAULT_TRUSTED_NETWORK_CIDRS
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+    };
+
+    let allowlist: Vec<TrustedNetwork> = cidrs
+        .iter()
+        .filter_map(|cidr| match cidr.parse() {
+            Ok(network) => Some(TrustedNetwork {
+                network,
+                auto_login_user_id: admin_user_id,
+            }),
+            Err(_) => {
+                tracing::warn!(cidr = %cidr, "invalid CIDR in trusted-network allowlist; skipping it");
+                None
+            }
+        })
+        .collect();
+
+    // An empty allowlist (every configured/default CIDR failed to parse)
+    // would deny every login attempt outright, including the operator's
+    // own -- fail open to the same private-range default rather than
+    // leaving a fresh deployment silently unreachable.
+    let allowlist = if allowlist.is_empty() {
+        tracing::warn!(
+            "trusted-network allowlist ended up empty after parsing; falling back to the \
+             private-range default so the deployment stays reachable"
+        );
+        DEFAULT_TRUSTED_NETWORK_CIDRS
+            .iter()
+            .map(|cidr| TrustedNetwork {
+                network: cidr
+                    .parse()
+                    .expect("DEFAULT_TRUSTED_NETWORK_CIDRS entries are valid CIDRs"),
+                auto_login_user_id: admin_user_id,
+            })
+            .collect()
+    } else {
+        allowlist
+    };
+
+    tracing::warn!(
+        cidrs = ?cidrs,
+        admin_user_id = %admin_user_id,
+        "STREAMARR_AUTH_MODE=trusted-network (the default): every request whose source IP \
+         falls inside this allowlist auto-logs in as the default admin user with zero \
+         credentials -- see trusted_network_auth_mode's doc comment for the real security \
+         implications before exposing this server beyond a genuinely trusted network"
+    );
+
+    AuthMode::TrustedNetwork { allowlist }
+}
+
 async fn boot_api(
     config: &Config,
     pool: DbPool,
@@ -243,9 +417,9 @@ async fn boot_api(
         RepoBackedMediaFileLookup, VersionGateLayer, VersionState,
     };
     use streamarr_auth::{
-        DashMapDeviceFlowHandler, DeviceFlowConfig, DeviceFlowHandler,
-        InMemoryDeviceAuthorizationStore, InMemoryRefreshTokenStore, JwtIssuer,
-        RefreshTokenService, RefreshTokenStore,
+        DashMapDeviceFlowHandler, DeviceFlowConfig, DeviceFlowHandler, InMemoryAdminRegistry,
+        InMemoryDeviceAuthorizationStore, InMemoryRefreshTokenStore, InMemoryUserDirectory,
+        JwtIssuer, RefreshTokenService, RefreshTokenStore, UserDirectory,
     };
     use streamarr_db::repo::{SqlxDeviceRepo, SqlxMediaFileRepo, SqlxRenditionRepo, SqlxWorkRepo};
     use streamarr_db::{DeviceRepo, MediaFileRepo, RenditionRepo, WorkRepo};
@@ -304,10 +478,14 @@ async fn boot_api(
         chrono::Duration::minutes(15),
     ));
     let refresh_store: Arc<dyn RefreshTokenStore> = Arc::new(InMemoryRefreshTokenStore::new());
-    let refresh = Arc::new(RefreshTokenService::new(refresh_store, device_repo, jwt));
+    let refresh = Arc::new(RefreshTokenService::new(
+        refresh_store,
+        device_repo,
+        jwt.clone(),
+    ));
     let device_flow: Arc<dyn DeviceFlowHandler> = Arc::new(DashMapDeviceFlowHandler::new(
         Arc::new(InMemoryDeviceAuthorizationStore::new()),
-        refresh,
+        refresh.clone(),
         DeviceFlowConfig {
             code_ttl: chrono::Duration::minutes(10),
             polling_interval: chrono::Duration::seconds(5),
@@ -316,6 +494,35 @@ async fn boot_api(
             refresh_ttl: chrono::Duration::days(30),
         },
     ));
+
+    // -- Interim admin/policy + login wiring -- see
+    // `streamarr_auth::admin` and
+    // `streamarr_auth::login::InMemoryUserDirectory`'s doc comments for
+    // why these are deliberately small, in-memory stand-ins rather than
+    // real `User`/`Policy` persistence, and `auth_mode_from_env`'s doc
+    // comment for the real security tradeoff this deployment's default
+    // makes.
+    let admin_user_id = default_admin_user_id_from_env();
+    let admin_user = streamarr_model::User {
+        id: admin_user_id,
+        username: "admin".to_string(),
+        display_name: "Default Admin".to_string(),
+        email: None,
+        // No real password-based login story exists for this seeded user
+        // in this pass -- see `auth_mode_from_env`'s doc comment. The hash
+        // is a random, never-recorded value purely so `User::password_hash`
+        // holds *something* well-formed, not a real, usable credential.
+        password_hash: streamarr_model::Sensitive::new(streamarr_auth::login::hash_password(
+            &uuid::Uuid::new_v4().to_string(),
+        )),
+        policy_id: uuid::Uuid::new_v4(),
+        created_at: chrono::Utc::now(),
+        disabled: false,
+    };
+    let user_directory: Arc<dyn UserDirectory> =
+        Arc::new(InMemoryUserDirectory::from_users([admin_user]));
+    let admin_registry = Arc::new(InMemoryAdminRegistry::from_ids([admin_user_id]));
+    let auth_mode = Arc::new(auth_mode_from_env(admin_user_id));
 
     // TODO: `_webhook_rx` should be handed to the reconciliation pollers
     // `boot_worker` spawns per `SourceInstance`, so a webhook received by
@@ -341,6 +548,12 @@ async fn boot_api(
         webhook,
         source_instances,
         media_files,
+        jwt,
+        admin_registry,
+        auth_mode,
+        user_directory,
+        sessions: refresh,
+        refresh_ttl: chrono::Duration::days(30),
         node_id: uuid::Uuid::new_v4().to_string(),
     };
     let version_gate = VersionGateLayer::new(compatibility_table);
@@ -355,7 +568,16 @@ async fn boot_api(
     // traffic to a port nothing is listening on yet.
     readiness.set_ready(true);
 
-    axum::serve(listener, router).await?;
+    // `POST /api/v1/auth/login`'s `AuthMode::TrustedNetwork` tier needs the
+    // caller's real source IP (`ConnectInfo`) to decide whether to
+    // auto-login -- `into_make_service_with_connect_info` is what actually
+    // populates that extractor; plain `axum::serve(listener, router)` would
+    // leave it unpopulated and every trusted-network login would 401.
+    axum::serve(
+        listener,
+        router.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }
 

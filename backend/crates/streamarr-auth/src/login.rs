@@ -13,6 +13,7 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
+use dashmap::DashMap;
 use ipnet::IpNet;
 use streamarr_model::{Device, Session, User};
 use uuid::Uuid;
@@ -135,6 +136,60 @@ impl PasswordVerifier for Argon2PasswordVerifier {
         Argon2::default()
             .verify_password(candidate.as_bytes(), &parsed)
             .is_ok()
+    }
+}
+
+/// Real (not a mock), thread-safe, in-process [`UserDirectory`] -- the same
+/// "in-memory is a legitimate choice pending real persistence" idiom as
+/// [`crate::refresh::InMemoryRefreshTokenStore`] and
+/// [`crate::device_flow::InMemoryDeviceAuthorizationStore`]. There is no
+/// `UserRepo`/`users` table anywhere in this workspace yet (see this
+/// module's doc comment); the composition root (`streamarr-bin`'s
+/// `boot_api`) seeds one of these with whatever `User`s a fresh
+/// single-node deployment needs (today: exactly one, the default/admin
+/// user backing `AuthMode::TrustedNetwork`'s auto-login) rather than
+/// leaving [`evaluate_login`] with no `UserDirectory` to resolve a `User`
+/// against at all.
+///
+/// TODO(persistence): once a real `UserRepo`/`users` table exists, replace
+/// this with a repo-backed `UserDirectory` implementation; `evaluate_login`
+/// itself doesn't need to change, it only depends on the trait.
+#[derive(Default)]
+pub struct InMemoryUserDirectory {
+    by_id: DashMap<Uuid, User>,
+    by_username: DashMap<String, Uuid>,
+}
+
+impl InMemoryUserDirectory {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn from_users(users: impl IntoIterator<Item = User>) -> Self {
+        let directory = Self::default();
+        for user in users {
+            directory.insert(user);
+        }
+        directory
+    }
+
+    pub fn insert(&self, user: User) {
+        self.by_username.insert(user.username.clone(), user.id);
+        self.by_id.insert(user.id, user);
+    }
+}
+
+#[async_trait]
+impl UserDirectory for InMemoryUserDirectory {
+    async fn find_by_username(&self, username: &str) -> Result<Option<User>, LoginError> {
+        Ok(self
+            .by_username
+            .get(username)
+            .and_then(|id| self.by_id.get(&id).map(|entry| entry.clone())))
+    }
+
+    async fn find_by_id(&self, id: Uuid) -> Result<Option<User>, LoginError> {
+        Ok(self.by_id.get(&id).map(|entry| entry.clone()))
     }
 }
 
@@ -475,5 +530,32 @@ mod tests {
         )
         .await;
         assert!(matches!(err, Err(LoginError::AccountDisabled)));
+    }
+
+    #[tokio::test]
+    async fn in_memory_user_directory_finds_by_id_and_username() {
+        let directory = InMemoryUserDirectory::new();
+        let alice = user("alice", "hunter2", false);
+        let alice_id = alice.id;
+        directory.insert(alice);
+
+        assert_eq!(
+            directory.find_by_id(alice_id).await.unwrap().map(|u| u.id),
+            Some(alice_id)
+        );
+        assert_eq!(
+            directory
+                .find_by_username("alice")
+                .await
+                .unwrap()
+                .map(|u| u.id),
+            Some(alice_id)
+        );
+        assert!(directory
+            .find_by_id(Uuid::new_v4())
+            .await
+            .unwrap()
+            .is_none());
+        assert!(directory.find_by_username("ghost").await.unwrap().is_none());
     }
 }

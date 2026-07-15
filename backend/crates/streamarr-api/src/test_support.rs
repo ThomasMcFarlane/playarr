@@ -11,15 +11,15 @@ use std::sync::Arc;
 use axum::Router;
 use chrono::{Duration, Utc};
 use streamarr_auth::{
-    DashMapDeviceFlowHandler, DeviceFlowConfig, DeviceFlowHandler,
-    InMemoryDeviceAuthorizationStore, InMemoryRefreshTokenStore, JwtIssuer, RefreshTokenService,
-    RefreshTokenStore,
+    DashMapDeviceFlowHandler, DeviceFlowConfig, DeviceFlowHandler, InMemoryAdminRegistry,
+    InMemoryDeviceAuthorizationStore, InMemoryRefreshTokenStore, InMemoryUserDirectory, JwtIssuer,
+    RefreshTokenService, RefreshTokenStore, TrustedNetwork, UserDirectory,
 };
 use streamarr_cache::{CacheAndPubSub, InMemory};
 use streamarr_catalog::CatalogService;
 use streamarr_db::repo::{SqlxDeviceRepo, SqlxMediaFileRepo, SqlxRenditionRepo, SqlxWorkRepo};
 use streamarr_db::{DbPool, DeviceRepo, MediaFileRepo, RenditionRepo, WorkRepo};
-use streamarr_model::{Availability, Work, WorkKind};
+use streamarr_model::{Availability, Sensitive, User, Work, WorkKind};
 use streamarr_requests::{InMemoryRequestRepo, RequestRepo, RequestService};
 use streamarr_transcode::{ActiveSessionCounter, TranscodeOrchestrator};
 use uuid::Uuid;
@@ -38,11 +38,39 @@ pub struct TestState {
     pub device_flow: Arc<dyn DeviceFlowHandler>,
     pub work_repo: Arc<dyn WorkRepo>,
     pub media_file_repo: Arc<dyn MediaFileRepo>,
+    /// Same `InMemoryAdminRegistry` `app.admin_registry` wraps, exposed here
+    /// as its concrete type (rather than only reachable through `app`) so
+    /// tests can call [`InMemoryAdminRegistry::add`] to mint an admin
+    /// caller for approve/reject-as-admin test cases.
+    pub admin_registry: Arc<InMemoryAdminRegistry>,
+    /// The id of the one `User` seeded into `app.user_directory` and bound
+    /// to `app.auth_mode`'s trusted-network auto-login -- what
+    /// `POST /api/v1/auth/login` resolves to for any source IP in tests
+    /// (the seeded `AuthMode::TrustedNetwork` allowlist is `0.0.0.0/0`).
+    pub default_user_id: Uuid,
     /// Kept alive for `TestState`'s lifetime so `WebhookReceiver::handle`'s
     /// `try_send` has a live receiver to enqueue onto, mirroring how a real
     /// deployment's reconciliation poller holds the other end open. Never
     /// read directly by tests -- see [`crate::AppState::webhook`].
     _trigger_rx: tokio::sync::mpsc::Receiver<streamarr_arr_sync::RefetchRequest>,
+}
+
+/// Issues a real, verifiable access token for `user_id` via
+/// `state.app.jwt` -- the same [`JwtIssuer`] every `AuthUser`/`AdminUser`
+/// extraction in the router under test verifies against. Tests that need
+/// an *admin* caller should also call
+/// `state.admin_registry.add(user_id)` first.
+pub fn mint_access_token(state: &TestState, user_id: Uuid) -> String {
+    state
+        .app
+        .jwt
+        .issue_access_token(user_id, Uuid::new_v4(), Uuid::new_v4())
+        .expect("issue test access token")
+}
+
+/// `Authorization` header value for [`mint_access_token`]'s output.
+pub fn bearer_header(token: &str) -> String {
+    format!("Bearer {token}")
 }
 
 fn test_version_gate() -> VersionGateLayer {
@@ -120,10 +148,14 @@ pub async fn test_state() -> (Router, TestState) {
         Duration::minutes(15),
     ));
     let refresh_store: Arc<dyn RefreshTokenStore> = Arc::new(InMemoryRefreshTokenStore::new());
-    let refresh = Arc::new(RefreshTokenService::new(refresh_store, device_repo, jwt));
+    let refresh = Arc::new(RefreshTokenService::new(
+        refresh_store,
+        device_repo,
+        jwt.clone(),
+    ));
     let device_flow: Arc<dyn DeviceFlowHandler> = Arc::new(DashMapDeviceFlowHandler::new(
         Arc::new(InMemoryDeviceAuthorizationStore::new()),
-        refresh,
+        refresh.clone(),
         DeviceFlowConfig {
             code_ttl: Duration::minutes(10),
             // Zero interval so back-to-back polls in a test don't trip
@@ -133,6 +165,34 @@ pub async fn test_state() -> (Router, TestState) {
             refresh_ttl: Duration::days(30),
         },
     ));
+
+    // Interim admin/policy + login wiring -- see `streamarr_auth::admin`
+    // and `streamarr_auth::login::InMemoryUserDirectory`'s doc comments.
+    // The seeded `AuthMode::TrustedNetwork` allowlist is deliberately
+    // `0.0.0.0/0` (every source IP) so `POST /api/v1/auth/login` tests
+    // don't need to fake a specific source address to succeed; tests that
+    // specifically exercise the CIDR restriction construct their own
+    // `AuthMode` inline instead of using this default.
+    let default_user_id = Uuid::new_v4();
+    let default_user = User {
+        id: default_user_id,
+        username: "test-default".to_string(),
+        display_name: "Test Default User".to_string(),
+        email: None,
+        password_hash: Sensitive::new(streamarr_auth::login::hash_password("test-only-password")),
+        policy_id: Uuid::new_v4(),
+        created_at: Utc::now(),
+        disabled: false,
+    };
+    let user_directory: Arc<dyn UserDirectory> =
+        Arc::new(InMemoryUserDirectory::from_users([default_user]));
+    let admin_registry = Arc::new(InMemoryAdminRegistry::new());
+    let auth_mode = Arc::new(streamarr_auth::AuthMode::TrustedNetwork {
+        allowlist: vec![TrustedNetwork {
+            network: "0.0.0.0/0".parse().expect("0.0.0.0/0 is a valid CIDR"),
+            auto_login_user_id: default_user_id,
+        }],
+    });
 
     let (trigger_tx, trigger_rx) = tokio::sync::mpsc::channel(16);
     let webhook = Arc::new(streamarr_arr_sync::WebhookReceiver::new(trigger_tx));
@@ -157,6 +217,12 @@ pub async fn test_state() -> (Router, TestState) {
         webhook,
         source_instances: source_instances.clone(),
         media_files: media_files.clone() as Arc<dyn MediaFileLookup>,
+        jwt,
+        admin_registry: admin_registry.clone(),
+        auth_mode,
+        user_directory,
+        sessions: refresh,
+        refresh_ttl: Duration::days(30),
         node_id: "test-node".to_string(),
     };
 
@@ -168,6 +234,8 @@ pub async fn test_state() -> (Router, TestState) {
             app,
             source_instances,
             media_files,
+            admin_registry,
+            default_user_id,
             device_flow,
             work_repo,
             media_file_repo,
