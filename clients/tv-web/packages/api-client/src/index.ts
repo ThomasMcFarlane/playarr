@@ -78,6 +78,10 @@ export type OAuthErrorBody = components["schemas"]["OAuthErrorBody"];
 export type VersionEnvelope = components["schemas"]["VersionEnvelope"];
 export type CompatibilityEntry = components["schemas"]["CompatibilityEntry"];
 
+export type SourceKind = components["schemas"]["SourceKind"];
+export type SourceInstanceRequest = components["schemas"]["SourceInstanceRequest"];
+export type SourceInstanceResponse = components["schemas"]["SourceInstanceResponse"];
+
 /** RFC 6749 §5.2 grant type Streamarr's `/api/v1/oauth/token` requires for the device flow. */
 export const DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
 
@@ -145,6 +149,11 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/requests", method: "POST" },
   { schemaPath: "/api/v1/requests/{id}/approve", method: "POST" },
   { schemaPath: "/api/v1/requests/{id}/reject", method: "POST" },
+  // Admin-only (403, not just 401, for a non-admin caller) -- see
+  // backend/crates/streamarr-api/src/admin.rs.
+  { schemaPath: "/api/v1/admin/source-instances", method: "POST" },
+  { schemaPath: "/api/v1/admin/source-instances", method: "GET" },
+  { schemaPath: "/api/v1/admin/source-instances/{id}", method: "DELETE" },
 ];
 
 function isProtectedOperation(schemaPath: string, method: string): boolean {
@@ -328,6 +337,33 @@ export class ApiClient {
   async rejectRequest(id: string, body: DecideRequestBody): Promise<MediaRequest> {
     return this.unwrap(
       await this.raw.POST("/api/v1/requests/{id}/reject", { params: { path: { id } }, body })
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // admin (source instances) -- registering the *arr apps Streamarr talks
+  // to. All three operations are admin-gated (401 with no/invalid token,
+  // 403 for a valid-but-non-admin caller).
+  // ---------------------------------------------------------------------
+
+  async listSourceInstances(): Promise<SourceInstanceResponse[]> {
+    return this.unwrap(await this.raw.GET("/api/v1/admin/source-instances", {}));
+  }
+
+  /**
+   * Registers a new *arr connection, or updates one in place when
+   * `body.id` is set. The server confirms the instance is actually
+   * reachable (a real HTTP call to it) before accepting -- expect this to
+   * take a second or two, and to reject (502) a wrong URL/key immediately
+   * rather than silently accepting it.
+   */
+  async createSourceInstance(body: SourceInstanceRequest): Promise<SourceInstanceResponse> {
+    return this.unwrap(await this.raw.POST("/api/v1/admin/source-instances", { body }));
+  }
+
+  async deleteSourceInstance(id: string): Promise<void> {
+    this.assertOk(
+      await this.raw.DELETE("/api/v1/admin/source-instances/{id}", { params: { path: { id } } })
     );
   }
 

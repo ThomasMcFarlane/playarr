@@ -52,6 +52,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/source-instances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every currently-registered `*arr` connection. */
+        get: operations["list_source_instances_handler"];
+        put?: never;
+        /**
+         * Registers a new `*arr` connection, or updates an existing one in place
+         *     when `id` is set. Confirms the instance is actually reachable with the
+         *     given `base_url`/`api_key` before accepting it.
+         */
+        post: operations["create_source_instance_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/source-instances/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * De-registers a `*arr` connection. `arr-sync` stops polling it on its
+         *     next reconciliation tick; already-imported catalog data is untouched.
+         */
+        delete: operations["delete_source_instance_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -516,6 +558,53 @@ export interface components {
             episodes: components["schemas"]["EpisodeDetailSchema"][];
             season: components["schemas"]["Season"];
         };
+        /**
+         * @description Request body for registering (or re-registering, by re-POSTing with the
+         *     same `id` you got back) a `*arr` connection. `api_key` is write-only --
+         *     it is never echoed back in [`SourceInstanceResponse`].
+         */
+        SourceInstanceRequest: {
+            api_key: string;
+            base_url: string;
+            best_effort?: boolean;
+            /** Format: int64 */
+            default_quality_profile_id?: number | null;
+            default_root_folder_id?: string | null;
+            enabled_for_requests?: boolean;
+            /**
+             * Format: uuid
+             * @description Omit to create a new instance (a fresh id is assigned and returned);
+             *     set to an id from a prior response to update that same instance in
+             *     place (e.g. to rotate its API key).
+             */
+            id?: string | null;
+            kind: components["schemas"]["SourceKind"];
+            name: string;
+            /** Format: int32 */
+            priority?: number;
+        };
+        /**
+         * @description The redacted, admin-facing projection of [`SourceInstance`] -- see that
+         *     type's own doc comment for why it isn't `ToSchema`-derived directly
+         *     (it carries the API key). `api_key` is never included, not even
+         *     redacted-looking -- the field simply doesn't exist on the response.
+         */
+        SourceInstanceResponse: {
+            base_url: string;
+            best_effort: boolean;
+            /** Format: int64 */
+            default_quality_profile_id?: number | null;
+            default_root_folder_id?: string | null;
+            enabled_for_requests: boolean;
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["SourceKind"];
+            name: string;
+            /** Format: int32 */
+            priority: number;
+        };
+        /** @enum {string} */
+        SourceKind: "sonarr" | "radarr" | "lidarr" | "bazarr" | "prowlarr" | "readarr";
         SubmitRequestBody: {
             kind: components["schemas"]["WorkKind"];
             note?: string | null;
@@ -692,6 +781,120 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["VersionEnvelope"];
                 };
+            };
+        };
+    };
+    list_source_instances_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All registered source instances */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceInstanceResponse"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_source_instance_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceInstanceRequest"];
+            };
+        };
+        responses: {
+            /** @description Registered (or updated) and confirmed reachable */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceInstanceResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description base_url/api_key rejected, or the instance could not be reached */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_source_instance_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Source instance id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed (or was already absent) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
