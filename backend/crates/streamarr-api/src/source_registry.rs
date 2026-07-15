@@ -4,14 +4,20 @@
 //! [`SourceInstance`] by id rather than by kind), and `streamarr-bin`'s
 //! worker boot sequence (which reconciliation pollers to spawn).
 //!
-//! There is genuinely no persistence for [`SourceInstance`] configuration
-//! anywhere in the workspace yet -- it isn't one of `streamarr-db`'s repo
-//! traits. This registry is a real, thread-safe, in-process store -- not a
-//! mock -- that starts empty and is populated via
-//! [`SourceInstanceRegistry::upsert`]; a follow-up pass that adds a
-//! `SourceInstanceRepo`/admin API can populate this from storage at startup
-//! (or replace it outright). TODO(persistence): see above -- wiring
-//! `streamarr-bin` to hydrate this from configuration is deferred.
+//! This registry is a real, thread-safe, in-process store -- not a mock --
+//! that starts empty and is populated via [`SourceInstanceRegistry::upsert`].
+//! It is the fast in-memory read path only: the durable copy of the same
+//! data lives behind `streamarr_db::SourceInstanceRepo`
+//! (`AppState::source_instance_repo`), which every write in `admin.rs` goes
+//! through *before* this registry, and which `streamarr-bin`'s `boot_api`
+//! reads from to hydrate this registry on every boot -- so a registered
+//! `*arr` connection survives a restart even though this type itself still
+//! holds nothing durable. This registry also still exclusively owns the
+//! per-poller trigger-sender bookkeeping ([`SyncTriggerError`]/
+//! [`SourceInstanceRegistry::trigger_sync`]/
+//! [`SourceInstanceRegistry::register_trigger`]), which is inherently
+//! runtime-only (a live channel into a currently-running
+//! `ReconciliationPoller`) and has no durable counterpart to hydrate from.
 
 use std::sync::Arc;
 

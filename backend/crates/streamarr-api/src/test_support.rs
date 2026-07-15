@@ -17,8 +17,12 @@ use streamarr_auth::{
 };
 use streamarr_cache::{CacheAndPubSub, InMemory};
 use streamarr_catalog::CatalogService;
-use streamarr_db::repo::{SqlxDeviceRepo, SqlxMediaFileRepo, SqlxRenditionRepo, SqlxWorkRepo};
-use streamarr_db::{DbPool, DeviceRepo, MediaFileRepo, RenditionRepo, WorkRepo};
+use streamarr_db::repo::{
+    SqlxDeviceRepo, SqlxMediaFileRepo, SqlxRenditionRepo, SqlxSourceInstanceRepo, SqlxWorkRepo,
+};
+use streamarr_db::{
+    DbPool, DeviceRepo, MediaFileRepo, RenditionRepo, SourceInstanceRepo, WorkRepo,
+};
 use streamarr_model::{Availability, Sensitive, User, Work, WorkKind};
 use streamarr_transcode::{ActiveSessionCounter, TranscodeOrchestrator};
 use uuid::Uuid;
@@ -115,6 +119,8 @@ pub async fn test_state() -> (Router, TestState) {
     let device_repo: Arc<dyn DeviceRepo> = Arc::new(SqlxDeviceRepo::new(pool.clone()));
     let rendition_repo: Arc<dyn RenditionRepo> = Arc::new(SqlxRenditionRepo::new(pool.clone()));
     let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(SqlxMediaFileRepo::new(pool.clone()));
+    let source_instance_repo: Arc<dyn SourceInstanceRepo> =
+        Arc::new(SqlxSourceInstanceRepo::new(pool.clone()));
     let cache: Arc<dyn CacheAndPubSub> = Arc::new(InMemory::new());
 
     let catalog = Arc::new(CatalogService::new(
@@ -206,6 +212,7 @@ pub async fn test_state() -> (Router, TestState) {
         device_flow: device_flow.clone(),
         webhook,
         source_instances: source_instances.clone(),
+        source_instance_repo,
         media_files: media_files.clone() as Arc<dyn MediaFileLookup>,
         jwt,
         admin_registry: admin_registry.clone(),

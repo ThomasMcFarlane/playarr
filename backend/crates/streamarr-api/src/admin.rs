@@ -140,6 +140,21 @@ pub async fn create_source_instance_handler(
         ))
     })?;
 
+    // Write-through: the durable repo first, so a failed persist never
+    // leaves `source_instances`' in-memory cache claiming something that
+    // isn't actually saved to disk -- see `AppState::source_instance_repo`'s
+    // doc comment.
+    state
+        .source_instance_repo
+        .upsert(&instance)
+        .await
+        .map_err(|err| {
+            ApiError::internal(format!(
+                "failed to persist source instance {}: {err}",
+                instance.id
+            ))
+        })?;
+
     state.source_instances.upsert(instance.clone());
 
     tracing::info!(
@@ -194,9 +209,24 @@ pub async fn delete_source_instance_handler(
     State(state): State<AppState>,
     _admin: AdminUser,
     Path(id): Path<Uuid>,
-) -> axum::http::StatusCode {
+) -> Result<axum::http::StatusCode, ApiError> {
+    // Same write-through-first ordering as create, and the same repo --
+    // see `AppState::source_instance_repo`'s doc comment. A `NotFound` from
+    // the repo is not a caller-facing failure here: deleting an
+    // already-absent row is exactly as much a no-op as
+    // `SourceInstanceRegistry::remove` already treats it (that method
+    // returns `Option` and callers here have never checked it either).
+    match state.source_instance_repo.delete(id).await {
+        Ok(()) | Err(streamarr_db::DbError::NotFound) => {}
+        Err(err) => {
+            return Err(ApiError::internal(format!(
+                "failed to delete source instance {id}: {err}"
+            )))
+        }
+    }
+
     state.source_instances.remove(id);
-    axum::http::StatusCode::NO_CONTENT
+    Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
 /// Asks this source instance's running `ReconciliationPoller` to do a full

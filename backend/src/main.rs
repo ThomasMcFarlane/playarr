@@ -110,10 +110,13 @@ async fn serve() -> anyhow::Result<()> {
     let active_sessions = streamarr_transcode::ActiveSessionCounter::new();
     // Composition-root-owned registry of configured *arr `SourceInstance`s,
     // shared between the API's request-submission/webhook routes and the
-    // worker's reconciliation-poller spawner — see
-    // `streamarr_api::SourceInstanceRegistry`'s doc comment for why this
-    // starts empty (no persistence/admin API for source instance config
-    // exists yet anywhere in the workspace).
+    // worker's reconciliation-poller spawner. Starts empty here -- it's
+    // `boot_api` that hydrates it from the real `SourceInstanceRepo`
+    // (persisted `SourceInstance` rows) right before constructing
+    // `AppState`, so a restart no longer forgets every registered
+    // instance. See `streamarr_api::SourceInstanceRegistry`'s doc comment
+    // for the split between this fast in-memory read path and the durable
+    // repo behind it.
     let source_instances = Arc::new(streamarr_api::SourceInstanceRegistry::new());
 
     // `streamarr-telemetry`'s own docs are explicit that `init` above only
@@ -471,8 +474,10 @@ async fn boot_api(
         InMemoryDeviceAuthorizationStore, InMemoryRefreshTokenStore, InMemoryUserDirectory,
         JwtIssuer, RefreshTokenService, RefreshTokenStore, UserDirectory,
     };
-    use streamarr_db::repo::{SqlxDeviceRepo, SqlxMediaFileRepo, SqlxRenditionRepo, SqlxWorkRepo};
-    use streamarr_db::{DeviceRepo, MediaFileRepo, RenditionRepo, WorkRepo};
+    use streamarr_db::repo::{
+        SqlxDeviceRepo, SqlxMediaFileRepo, SqlxRenditionRepo, SqlxSourceInstanceRepo, SqlxWorkRepo,
+    };
+    use streamarr_db::{DeviceRepo, MediaFileRepo, RenditionRepo, SourceInstanceRepo, WorkRepo};
     use streamarr_model::VersionEnvelope;
 
     let compatibility_table = ClientCompatibilityTable::from_toml_str(CLIENT_COMPATIBILITY_TOML)?;
@@ -497,6 +502,45 @@ async fn boot_api(
     let device_repo: Arc<dyn DeviceRepo> = Arc::new(SqlxDeviceRepo::new(pool.clone()));
     let rendition_repo: Arc<dyn RenditionRepo> = Arc::new(SqlxRenditionRepo::new(pool.clone()));
     let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(SqlxMediaFileRepo::new(pool.clone()));
+    let source_instance_repo: Arc<dyn SourceInstanceRepo> =
+        Arc::new(SqlxSourceInstanceRepo::new(pool.clone()));
+
+    // Hydrate the in-memory `SourceInstanceRegistry` from whatever's
+    // actually durable *before* it's handed to the router (and, via
+    // `boot_worker`, the reconciliation-poller spawner) -- this is the
+    // actual fix for "registered *arr connections don't survive a
+    // restart": previously the registry always started empty and the only
+    // way in was `POST /api/v1/admin/source-instances` on the running
+    // process. Read-then-upsert, not a bulk "replace" -- keeps this in
+    // step with `admin.rs`'s handlers, which write through the same repo.
+    match source_instance_repo.list_all().await {
+        Ok(instances) => {
+            let hydrated_count = instances.len();
+            for instance in instances {
+                source_instances.upsert(instance);
+            }
+            if hydrated_count == 0 {
+                tracing::info!(
+                    "no persisted source instances found in the database; \
+                     SourceInstanceRegistry starts empty"
+                );
+            } else {
+                tracing::info!(
+                    hydrated_count,
+                    "hydrated SourceInstanceRegistry from persisted source instances"
+                );
+            }
+        }
+        Err(err) => {
+            tracing::error!(
+                %err,
+                "failed to load persisted source instances from the database; \
+                 SourceInstanceRegistry starts with whatever it already had (likely empty) -- \
+                 previously-registered *arr connections may be unavailable until this is \
+                 investigated"
+            );
+        }
+    }
 
     let media_files: Arc<dyn streamarr_api::MediaFileLookup> =
         Arc::new(RepoBackedMediaFileLookup::new(media_file_repo.clone()));
@@ -587,6 +631,7 @@ async fn boot_api(
         device_flow,
         webhook,
         source_instances,
+        source_instance_repo,
         media_files,
         jwt,
         admin_registry,
@@ -712,10 +757,10 @@ async fn boot_worker(
         spawned_instance_ids.insert(instance.id);
     }
 
-    // `SourceInstanceRegistry` has no persistence yet (see its own doc
-    // comment) and `POST /api/v1/admin/source-instances` (`admin.rs`'s
+    // `POST /api/v1/admin/source-instances` (`admin.rs`'s
     // `create_source_instance_handler`) only ever upserts into the shared
-    // registry -- it never signals this worker. Without this loop, a
+    // registry (and, write-through, the `SourceInstanceRepo` behind it) --
+    // it never signals this worker directly. Without this loop, a
     // SourceInstance registered after the snapshot above would silently
     // never get a poller and never sync until the process restarted. This
     // is a cheap in-memory `DashMap` read, not a network/DB call, so a 10s
@@ -726,9 +771,14 @@ async fn boot_worker(
     // in the same process, e.g. `docker-compose.standalone.yml`). Split
     // `api`/`worker`-role deployments (Postgres tiers 2/3) run this
     // function in a *different* process than the one serving the admin
-    // endpoint, each with its own empty registry -- that gap needs real
-    // `SourceInstance` DB persistence, not a bigger poll interval, and is
-    // still open.
+    // endpoint, each with its own registry -- and unlike `boot_api`
+    // (which hydrates its registry from `SourceInstanceRepo` before
+    // serving), this function does not hydrate its own from the database
+    // at all yet, even though the repo/persistence now exists. A
+    // worker-only process's registry stays empty (so it spawns no
+    // pollers) until this loop is also wired to read from the repo -- a
+    // smaller follow-up now that persistence exists, not the bigger
+    // "no persistence exists anywhere" gap this note used to describe.
     {
         let source_instances = source_instances.clone();
         let work_repo = work_repo.clone();

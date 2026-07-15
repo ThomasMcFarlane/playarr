@@ -110,7 +110,8 @@ pub fn openapi_spec() -> utoipa::openapi::OpenApi {
 /// constructs one of these from `streamarr_config::Config`; every field
 /// here is either `Arc<dyn Trait>` (when the owning crate defines a real
 /// trait boundary — `DeviceFlowHandler`, `MediaFileLookup`,
-/// `UserDirectory`, real in production via `RepoBackedMediaFileLookup`,
+/// `UserDirectory`, `SourceInstanceRepo`, real in production via
+/// `RepoBackedMediaFileLookup`/`SqlxSourceInstanceRepo`,
 /// real-but-in-memory in tests via `InMemoryMediaFileLookup`) or
 /// `Arc<ConcreteType>` (when it only exposes a concrete service struct —
 /// `CatalogService`, `TranscodeOrchestrator`,
@@ -126,6 +127,21 @@ pub struct AppState {
     pub device_flow: Arc<dyn streamarr_auth::DeviceFlowHandler>,
     pub webhook: Arc<streamarr_arr_sync::WebhookReceiver>,
     pub source_instances: Arc<SourceInstanceRegistry>,
+    /// The real, durable persistence layer behind `source_instances`'
+    /// in-memory cache. `source_instances` stays the fast in-memory read
+    /// path for every request-hot lookup, and still exclusively owns the
+    /// per-poller trigger-sender bookkeeping (`SyncTriggerError`/
+    /// `trigger_sync`/`register_trigger`) -- that's inherently
+    /// runtime-only state (a live `mpsc::Sender` into a currently-running
+    /// `ReconciliationPoller`) that can never be persisted. Every write
+    /// (`admin.rs`'s create/delete handlers) goes through this repo
+    /// *first* and `source_instances` second, so a failed write never
+    /// leaves the in-memory registry claiming something that isn't
+    /// actually durable; `streamarr-bin`'s `boot_api` also uses this to
+    /// hydrate `source_instances` from the database on every boot, which
+    /// is the actual fix for registered `*arr` connections not surviving
+    /// a restart.
+    pub source_instance_repo: Arc<dyn streamarr_db::SourceInstanceRepo>,
     pub media_files: Arc<dyn MediaFileLookup>,
     /// Verifies the `Authorization: Bearer <token>` header every
     /// [`auth_extractor::AuthUser`]/[`auth_extractor::AdminUser`]

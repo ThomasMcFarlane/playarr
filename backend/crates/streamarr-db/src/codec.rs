@@ -19,7 +19,7 @@ use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
 use streamarr_model::media::LeafRef;
 use streamarr_model::{
     Availability, ExternalProvider, PlayMethod, PlaybackEventKind, ProducedBy, RenditionStatus,
-    StopReason, TranscodeReason, WorkKind,
+    SourceKind, StopReason, TranscodeReason, WorkKind,
 };
 use uuid::Uuid;
 
@@ -91,6 +91,32 @@ pub(crate) fn work_kind_from_str(raw: &str) -> Result<WorkKind, DbError> {
         "artist" => Ok(WorkKind::Artist),
         "author" => Ok(WorkKind::Author),
         other => Err(decode_err(format!("unknown work kind {other:?}"))),
+    }
+}
+
+/// `SourceKind`'s own serde-derived `snake_case` wire form, reused verbatim
+/// for storage (same convention as `work_kind_to_str`/`work_kind_from_str`
+/// above) rather than inventing a separate storage encoding.
+pub(crate) fn source_kind_to_str(kind: SourceKind) -> &'static str {
+    match kind {
+        SourceKind::Sonarr => "sonarr",
+        SourceKind::Radarr => "radarr",
+        SourceKind::Lidarr => "lidarr",
+        SourceKind::Bazarr => "bazarr",
+        SourceKind::Prowlarr => "prowlarr",
+        SourceKind::Readarr => "readarr",
+    }
+}
+
+pub(crate) fn source_kind_from_str(raw: &str) -> Result<SourceKind, DbError> {
+    match raw {
+        "sonarr" => Ok(SourceKind::Sonarr),
+        "radarr" => Ok(SourceKind::Radarr),
+        "lidarr" => Ok(SourceKind::Lidarr),
+        "bazarr" => Ok(SourceKind::Bazarr),
+        "prowlarr" => Ok(SourceKind::Prowlarr),
+        "readarr" => Ok(SourceKind::Readarr),
+        other => Err(decode_err(format!("unknown source kind {other:?}"))),
     }
 }
 

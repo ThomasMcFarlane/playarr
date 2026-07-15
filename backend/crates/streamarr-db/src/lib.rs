@@ -14,4 +14,4 @@ pub mod repo;
 
 pub use error::DbError;
 pub use pool::{connect, run_migrations, DbPool, POSTGRES_MIGRATIONS, SQLITE_MIGRATIONS};
-pub use repo::{DeviceRepo, MediaFileRepo, RenditionRepo, WorkRepo};
+pub use repo::{DeviceRepo, MediaFileRepo, RenditionRepo, SourceInstanceRepo, WorkRepo};

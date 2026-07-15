@@ -11,9 +11,11 @@
 mod device;
 mod media_file;
 mod rendition;
+mod source_instance;
 mod work;
 
 pub use device::{DeviceRepo, SqlxDeviceRepo};
 pub use media_file::{MediaFileRepo, SqlxMediaFileRepo};
 pub use rendition::{RenditionRepo, SqlxRenditionRepo};
+pub use source_instance::{SourceInstanceRepo, SqlxSourceInstanceRepo};
 pub use work::{SqlxWorkRepo, WorkRepo};
