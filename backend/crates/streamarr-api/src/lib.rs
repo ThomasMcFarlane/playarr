@@ -44,6 +44,7 @@ use std::sync::Arc;
 
 use axum::extract::FromRef;
 use axum::Router;
+use tower_http::cors::CorsLayer;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
@@ -196,6 +197,22 @@ impl FromRef<AppState> for VersionState {
 /// listener `streamarr-bin` serves when it isn't running this router at
 /// all. `/api/system/health` and `/api/system/ready` are unaffected by
 /// this — both keep working exactly as before.
+///
+/// CORS is wide open (`CorsLayer::permissive` -- any origin/method/header,
+/// no credentials) by design, not an oversight: this API is Bearer-token
+/// authenticated, never cookie/session-authenticated, so there is no CSRF
+/// surface a stricter origin allow-list would actually protect (the token
+/// itself is the access control; a browser page on an unrelated origin
+/// still can't produce a valid one). Every first-party client -- the Web
+/// app, and any of the TV-web shells if they're ever served over HTTP
+/// rather than loaded as a packaged app -- is "an arbitrary operator-run
+/// instance's browser client" per the architecture's own stated principle
+/// (`docs/architecture/overview.md`), so there's no single "the" origin to
+/// allow-list in the first place. Layered outermost (after `version_gate`
+/// in this builder chain, which axum applies innermost-first) so a
+/// preflight `OPTIONS` request is answered before it ever reaches
+/// auth/version-gate logic that would otherwise reject it for having no
+/// `Authorization` header.
 pub fn build_router(
     state: AppState,
     version_gate: VersionGateLayer,
@@ -211,7 +228,10 @@ pub fn build_router(
                 async move { readiness::readiness_handler(axum::extract::State(readiness)).await }
             }),
         );
-    (router.layer(version_gate), api)
+    (
+        router.layer(version_gate).layer(CorsLayer::permissive()),
+        api,
+    )
 }
 
 #[cfg(test)]
