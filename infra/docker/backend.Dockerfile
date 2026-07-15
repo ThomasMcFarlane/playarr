@@ -7,8 +7,9 @@
 # `streamarr-bin`, `[[bin]] name = "streamarr"`) into a slim, non-root
 # runtime image. Per docs/architecture/overview.md ("the single-role-gated-
 # binary principle"), this is the ONLY binary Streamarr ships: the same
-# image runs standalone, `--role api`, or `--role worker` depending on the
-# `serve` subcommand's arguments, which is what lets docker-compose.ci.yml,
+# image runs role `all`, `api`, or `worker` depending on the STREAMARR_ROLE
+# *environment variable* -- `serve` itself takes no CLI arguments (see
+# backend/src/main.rs) -- which is what lets docker-compose.ci.yml,
 # docker-compose.prod.yml, and the Helm chart under infra/kubernetes/ all
 # deploy from one artifact.
 #
@@ -22,11 +23,12 @@
 # accordingly -- do not change this Dockerfile to assume a different context
 # without updating every compose file that references it.
 #
-# Port/env contract mirrors infra/kubernetes/helm/streamarr/values.yaml
-# (ConfigMap keys APP_ENV/LOG_LEVEL/LOG_FORMAT/METRICS_ENABLED/METRICS_PORT/
-# HTTP_PORT and the STREAMARR_ROLE env var) so the same container behaves
-# identically whether it is started by `docker run`, docker-compose, or a
-# Kubernetes Pod. See infra/docker/README.md for the full rationale.
+# Env contract is the real one streamarr-config::Config::from_env reads
+# (see backend/crates/streamarr-config/src/lib.rs): DATABASE_URL, REDIS_URL,
+# STREAMARR_ROLE, STREAMARR_LOG, STREAMARR_HTTP_BIND_ADDR,
+# STREAMARR_METRICS_BIND_ADDR, STREAMARR_OTLP_ENDPOINT -- the same names
+# whether started by `docker run`, docker-compose, or a Kubernetes Pod. See
+# infra/docker/README.md for the full rationale.
 # ==============================================================================
 
 ARG RUST_VERSION=1
@@ -122,30 +124,36 @@ COPY --from=builder --chown=streamarr:streamarr /build/out/streamarr /app/stream
 WORKDIR /app
 USER streamarr:streamarr
 
-# Non-secret runtime config. Keys deliberately match
-# infra/kubernetes/helm/streamarr/values.yaml's `config:` ConfigMap block
-# so the same env var names work whether Streamarr is started by
-# docker-compose or a Kubernetes Deployment. DATABASE_URL and (optionally)
-# REDIS_URL are intentionally NOT set here -- they are secret-shaped and
-# always supplied by the caller (docker-compose environment/.env, a
-# Kubernetes Secret, etc.), never baked into the image.
-ENV APP_ENV=production \
-    LOG_LEVEL=info \
-    LOG_FORMAT=json \
-    METRICS_ENABLED=true \
-    METRICS_PORT=9090 \
+# Non-secret runtime config. These are the actual env vars
+# streamarr-config::Config::from_env reads (verified against
+# backend/crates/streamarr-config/src/lib.rs) -- not a set of
+# conveniently-named vars the binary silently ignores. DATABASE_URL and
+# (optionally) REDIS_URL are intentionally NOT set here -- they are
+# secret-shaped and always supplied by the caller (docker-compose
+# environment/.env, a Kubernetes Secret, etc.), never baked into the image.
+#
+# HTTP_PORT/METRICS_PORT below are a Dockerfile-local convenience only (used
+# by HEALTHCHECK's curl command), not read by the binary itself -- keep
+# them in sync with the port numbers embedded in
+# STREAMARR_HTTP_BIND_ADDR/STREAMARR_METRICS_BIND_ADDR if either changes.
+ENV STREAMARR_ROLE=all \
+    STREAMARR_LOG=info \
+    STREAMARR_HTTP_BIND_ADDR=0.0.0.0:8080 \
+    STREAMARR_METRICS_BIND_ADDR=0.0.0.0:9090 \
     HTTP_PORT=8080 \
-    STREAMARR_ROLE=standalone \
+    METRICS_PORT=9090 \
     RUST_BACKTRACE=0
 
 EXPOSE 8080
 EXPOSE 9090
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-# `serve` with no --role resolves to the STANDALONE role set (API + worker
-# + coordinator no-op) per docs/architecture/overview.md -- the right
-# default for a single `docker run`. Compose files override `command:` to
-# pass `--role api` / `--role worker` for split-role deployments.
+# `Role::All` runs both the API router and the worker background loops in
+# one process -- the right default for a single `docker run`. Compose files
+# override the STREAMARR_ROLE *environment variable* (never a CLI flag --
+# `serve` takes none, see `backend/src/main.rs`) to `api`/`worker` for
+# split-role deployments; `command:` stays `["/app/streamarr", "serve"]`
+# unchanged in every case.
 CMD ["/app/streamarr", "serve"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

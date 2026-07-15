@@ -14,7 +14,7 @@ consumer NAS/ARM hardware, a small docker-compose deployment, and a
 horizontally scaled Kubernetes cluster. All three tiers need a relational
 store for the same schema — library metadata, users, sessions, policies,
 transcode job state, cluster membership — and the persistence layer has to
-be chosen once, early, because the domain layer (`streamarr-core`) and every
+be chosen once, early, because the domain layer (`streamarr-model`) and every
 crate above it will be written against whatever abstraction is chosen here.
 
 Three shapes of solution were on the table:
@@ -105,42 +105,80 @@ Streamarr uses a **dual-backend storage engine, selected via `sqlx`**:
   `postgres` service in `docker-compose.prod.yml`, or an in-cluster/managed
   Postgres referenced by the Helm chart's `values.yaml`).
 
-Implementation shape in `streamarr-db`:
+Implementation shape in `streamarr-db` (as actually built — see that
+crate's `src/pool.rs`, `src/codec.rs`, and `src/repo/*.rs`):
 
-- `sqlx` is used for both backends, with the `sqlite` and `postgres`
-  Cargo features both compiled into every release binary (this is a
-  runtime-selected backend, not a build-time one — the same binary must be
-  able to run against either, because Tier 1 → Tier 2/3 migration is a
-  supported upgrade path).
-- A `Database` trait in `streamarr-db` abstracts the operations the rest of
-  the codebase needs (`transaction`, `migrate`, typed query helpers) so
-  callers in `streamarr-core`-dependent crates do not match on backend at
-  every call site.
-- Backend-specific SQL divergence (upsert syntax, `RETURNING` support
-  differences, JSON function names, autoincrement semantics) is isolated
-  inside `streamarr-db`'s query implementations, not leaked upward.
-  Application code is written against the trait, not raw SQL strings, for
-  anything that differs between engines.
-- Migrations are maintained as **parallel migration sets**
-  (`crates/streamarr-db/migrations/sqlite/` and
-  `crates/streamarr-db/migrations/postgres/`), applied via `sqlx::migrate!`
-  per backend at startup. They are kept schema-equivalent by convention and
-  checked in CI by running the full test suite against both backends on
-  every change.
-- Backend selection is a config value (`database.backend: sqlite | postgres`
-  plus connection parameters), defaulted per tier by the install tooling
-  (the systemd installer defaults to `sqlite`; the docker-compose and Helm
-  templates default to `postgres` pointed at the bundled/referenced Postgres
-  service) but overridable — an advanced Tier 1 user who already runs
-  Postgres for other reasons may point a single-node install at it.
+- `DbPool` is a single concrete type alias, `sqlx::AnyPool` — not a
+  hand-rolled `Database` trait. `sqlx::Any` dispatches to whichever driver
+  is compiled in (the `sqlite`/`postgres` Cargo features, both enabled in
+  every release binary — this is a runtime-selected backend, not a
+  build-time one, because Tier 1 → Tier 2/3 migration is a supported
+  upgrade path) based on the connection URL's scheme, once
+  `sqlx::any::install_default_drivers()` has registered them.
+- `sqlx::Any`'s own placeholder syntax is *not* translated between engines
+  the way an ORM query builder's would be: text bound for `Any` is passed
+  straight through to whichever concrete driver backs the connection, so it
+  must already be in that driver's native style (`?` for SQLite, `$1, $2,
+  ...` for Postgres). Each repository (`SqlxWorkRepo`, `SqlxDeviceRepo`,
+  `SqlxRenditionRepo`, `SqlxMediaFileRepo`) detects which backend it's
+  actually talking to once, at construction, via a `Backend::detect` helper
+  that reads the scheme off the pool's connect URL, then `match`es on that
+  `Backend` to pick between two hardcoded SQL strings per query. There is
+  no single trait method (`transaction`/`migrate`/typed query helpers)
+  hiding this — every repo does its own backend `match`, by design, so a
+  reader never has to trust an abstraction to know which SQL text a given
+  query actually sends.
+- A second, related portability gap this ADR didn't anticipate: `sqlx::Any`'s
+  own type system only encodes/decodes `bool`/`i16`/`i32`/`i64`/`f32`/`f64`/
+  `String`/`Vec<u8>` — there is no `Uuid` or `chrono` support at the `Any`
+  layer, and SQLite's bridge into `Any` has no mapping at all for a
+  `BOOLEAN`-affinity column. `streamarr-db::codec` is the one place every
+  repository maps its domain types to one of those primitives: UUIDs and
+  timestamps round-trip as `TEXT` (RFC 3339 with millisecond precision for
+  timestamps, parsed back with `chrono`), booleans as `INTEGER` `0`/`1`
+  rather than a native `BOOLEAN` column, and domain enums as short
+  snake_case strings. This keeps the mapping from drifting between the
+  `sqlite`/`postgres` query bodies that use it, at the cost of every row
+  read/write going through an explicit encode/decode step rather than
+  sqlx's native type support.
+- Migrations are maintained as **parallel migration sets**, embedded at
+  compile time via `sqlx::migrate!` from `backend/migrations/sqlite/` and
+  `backend/migrations/postgres/` (workspace-root-relative — not nested
+  inside `streamarr-db`'s own crate directory), and run automatically at
+  process startup (`streamarr_db::run_migrations`, called from
+  `backend/src/main.rs`'s `connect_and_migrate`) rather than requiring a
+  separate `migrate` subcommand. The two sets are schema-equivalent for the
+  tables both backends need, but are **not** migration-number-aligned 1:1:
+  Postgres has two migrations with no SQLite counterpart at all
+  (`0003_cluster_leader.sql`, `0004_cache_entries.sql`) for the two things
+  that are genuinely Postgres-only (see the next bullet and
+  [`distributed-design.md`](../distributed-design.md)).
+- Backend selection is purely a function of `DATABASE_URL`'s scheme (a
+  `sqlite:...` value resolves `streamarr_config::DeploymentTier::SingleNode`;
+  `postgres://`/`postgresql://` resolves one of the two multi-node tiers,
+  further split on whether `REDIS_URL` is also set) — there is no separate
+  `database.backend` config key to keep in sync with it.
 - Anything that is genuinely Postgres-only and has no reasonable SQLite
-  substitute — advisory-lock-based leader election in
-  `PostgresCoordinator`, for instance — is not forced into the `Database`
-  trait at all. It lives in its own crate (`streamarr-cluster`) with an
-  explicit `SingleNodeCoordinator` no-op counterpart for Tier 1, rather than
-  being faked with a lowest-common-denominator abstraction that would
-  compromise the Postgres implementation to accommodate SQLite. See
+  substitute — advisory-lock-based leader election and the `cluster_leader`
+  heartbeat table, in `PostgresCoordinator` — is not forced into
+  `streamarr-db`'s `AnyPool`-based repositories at all. It lives in its own
+  crate, `streamarr-coordination`, with an explicit `SingleNodeCoordinator`
+  no-op counterpart for Tier 1, rather than being faked with a
+  lowest-common-denominator abstraction that would compromise the Postgres
+  implementation to accommodate SQLite. See
   [`distributed-design.md`](../distributed-design.md).
+- **Known gap:** "both backends get real test coverage" is aspirational,
+  not yet fully true. `cargo test --workspace --all-features` runs on
+  every change and gives SQLite paths real coverage (an in-memory
+  `sqlite::memory:` pool, migrated for real), but
+  Postgres-only logic (`PostgresCoordinator`'s advisory locks,
+  `PostgresListenNotify`) is unit-tested against the literal SQL text and
+  local in-process state it produces, not against a live Postgres server —
+  see `streamarr-coordination`'s own test module doc comment for why that
+  was a deliberate choice (connection-failure behaviour to a closed port is
+  environment-dependent and was a source of flaky tests) rather than an
+  oversight. A live-Postgres integration suite is a documented follow-up,
+  not something this pass claims already exists.
 
 ## Consequences
 
@@ -161,19 +199,27 @@ Implementation shape in `streamarr-db`:
 
 **Negative / accepted costs**
 
-- **Two query surfaces to test.** Every non-trivial query path needs test
-  coverage against both SQLite and Postgres, roughly doubling the storage
-  layer's test matrix and CI time for `streamarr-db`.
+- **Two query surfaces to test — and, as of this pass, only one of them is
+  actually exercised in CI.** Every non-trivial query path needs test
+  coverage against both SQLite and Postgres in principle, but today only
+  the SQLite path gets that (a real, migrated, in-memory pool in every
+  repo's test module); the Postgres-specific branches inside each repo's
+  `match self.backend` are exercised by `cargo check`/compilation and, for
+  `PostgresCoordinator`/`PostgresListenNotify`, by SQL-text assertions
+  against a `connect_lazy` pool — not by a live Postgres server anywhere in
+  this workspace's test suite yet. See the "Known gap" note above.
 - **Two migration sets to write and keep in sync.** A schema change is not
   "add one migration," it is "add two migrations that must remain
-  semantically equivalent," which is extra author and review overhead on
-  every schema change.
+  semantically equivalent" (except for the small number of genuinely
+  Postgres-only tables, which only get a Postgres migration), which is
+  extra author and review overhead on every schema change.
 - **Backend-specific features are either avoided or isolated.** Postgres
   capabilities with no SQLite equivalent (`LISTEN`/`NOTIFY`, advisory locks,
-  richer `JSONB` querying) cannot be used inside the shared `Database`
-  trait; they have to live in Postgres-only code paths (as
-  `PostgresCoordinator` already does), which means some features are simply
-  unavailable, or behave differently, on Tier 1.
+  richer `JSONB` querying) cannot be used inside `streamarr-db`'s
+  `AnyPool`-based repositories; they have to live in Postgres-only crates/
+  code paths (as `streamarr-coordination::PostgresCoordinator` and
+  `streamarr-cache::PostgresListenNotify` already do), which means some
+  features are simply unavailable, or behave differently, on Tier 1.
 - **Tier-1-to-Tier-2/3 migration requires an explicit data export/import
   step** (SQLite → Postgres), rather than "just point at a bigger Postgres,"
   since there is no shared storage between the two engines. This is

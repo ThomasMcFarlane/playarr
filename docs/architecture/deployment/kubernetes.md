@@ -1,162 +1,242 @@
 # Deploying Streamarr: Kubernetes (Tier 3 — scaled cluster)
 
-Tier 3 is for operators running Streamarr as real shared infrastructure:
-autoscaled API capacity, a dedicated worker pool for background transcode
-work, and a Postgres instance that is expected to already exist as
-cluster-managed or externally managed infrastructure rather than something
-the chart provisions ad hoc. It uses `PostgresCoordinator` for cluster
-coordination, with gossip membership available as an opt-in for large
-clusters (see [`../distributed-design.md`](../distributed-design.md)).
+Tier 3 is for operators running Streamarr as shared infrastructure:
+autoscaled API capacity, a separate worker pool for background transcode
+work, and a Postgres instance that already exists as cluster-managed or
+externally managed infrastructure — the chart never provisions Postgres
+itself. Coordination uses `PostgresCoordinator`
+(`backend/crates/streamarr-coordination`) automatically, the same as any
+other deployment whose `DATABASE_URL` is a `postgres://`/`postgresql://`
+URL (see [`../distributed-design.md`](../distributed-design.md) and
+[ADR 0001](../adr/0001-storage-engine.md)) — there is no
+Kubernetes-specific coordination mode, and no gossip-membership
+implementation exists in the codebase today.
 
-## The Helm chart
+## Two deployment paths
 
-The infra tier ships a Helm chart at `deploy/helm/streamarr/`:
+`infra/kubernetes/` ships two independent ways to deploy, meant to be
+picked one per cluster/environment rather than layered on top of each
+other:
 
-- `deploy/helm/streamarr/Chart.yaml` — chart metadata, `appVersion` pinned
-  to the Streamarr release the chart's default `values.yaml` targets.
-- `deploy/helm/streamarr/values.yaml` — the configurable surface: image
-  tag, replica counts per role, Postgres connection (either a `postgresql`
-  subchart dependency for clusters that want the chart to provision
-  Postgres, or `postgresql.external.connectionString` to point at an
-  already-managed instance), ingress host/TLS config, resource
-  requests/limits per role, and the `library.roots` persistent-volume
-  claims media is mounted from.
-- `deploy/helm/streamarr/templates/` — templates rendering, per role, a
-  `Deployment` (`api-deployment.yaml`, `worker-deployment.yaml`,
-  `coordinator-deployment.yaml` — though `coordinator` is frequently just
-  the `api` role set with `COORDINATOR` included rather than a fourth pool;
-  see the role-set discussion in [`../overview.md`](../overview.md)), a
-  `Service` and `Ingress` for the `api` role, an `HorizontalPodAutoscaler`
-  for the `api` and `worker` `Deployments`, a `ConfigMap` for
-  non-secret config, and a `Secret` template consuming
-  externally-supplied database credentials (never generating or storing
-  secrets in the chart itself).
+1. **`helm/streamarr/`** — a real Helm chart: autoscaling for both roles,
+   a PodDisruptionBudget for the worker pool, and an optional Prometheus
+   `ServiceMonitor`. This is the more complete path and what the rest of
+   this document focuses on.
+2. **`base/` + `overlays/{dev,staging,prod}/`** — a plain kustomize
+   skeleton for teams that don't want a Helm release object in-cluster.
+   Deliberately minimal — no HorizontalPodAutoscaler/PodDisruptionBudget/
+   ServiceMonitor equivalents yet.
 
-Representative shape of the `api` `Deployment` template:
+Both paths deploy the same two workloads from the same image
+(`ghcr.io/streamarr/streamarr`, built from `infra/docker/backend.Dockerfile`):
+a `streamarr-api` Deployment (`STREAMARR_ROLE=api`) behind a `ClusterIP`
+Service, and a separate `streamarr-worker` Deployment
+(`STREAMARR_ROLE=worker`) behind its own headless `ClusterIP` Service used
+only for probe/metrics routing. **Neither Deployment overrides the
+container's command or args** — the image's default
+`CMD ["/app/streamarr", "serve"]` (from `backend.Dockerfile`) runs
+unchanged; role selection is entirely the `STREAMARR_ROLE` environment
+variable, matching how `serve` actually works in `backend/src/main.rs`
+today (the `serve` subcommand itself takes no `--role`, or any other,
+flag). Tier 2's `docker-compose.prod.yml` used to override `command:` with
+a nonexistent `--role` flag — see [`docker-compose.md`](docker-compose.md)
+for that (since-fixed) history; it now follows the same
+env-var-only-selects-role pattern as this chart.
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {{ include "streamarr.fullname" . }}-api
-spec:
-  replicas: {{ .Values.api.replicaCount }}
-  selector:
-    matchLabels:
-      app.kubernetes.io/component: api
-  template:
-    spec:
-      containers:
-        - name: streamarr
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          args: ["serve", "--role", "api"]
-          env:
-            - name: STREAMARR_DATABASE_BACKEND
-              value: postgres
-            - name: STREAMARR_DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "streamarr.fullname" . }}-db
-                  key: connectionString
-          readinessProbe:
-            httpGet: { path: /api/system/health, port: 8443 }
-          livenessProbe:
-            httpGet: { path: /api/system/health, port: 8443 }
+Both roles expose the same two ports from the same binary:
+
+| Port | Purpose |
+|------|---------|
+| `8080` (`http`) | Application traffic (`api`) / probe-only (`worker`) |
+| `9090` (`metrics`) | Prometheus `/metrics` |
+
+and the same two probe paths, both real, tested routes in `streamarr-api`
+(`backend/crates/streamarr-api/src/lib.rs`):
+
+| Path | Used by |
+|------|---------|
+| `/healthz` | `livenessProbe` |
+| `/readyz` | `readinessProbe` |
+
+There is **no Ingress or Gateway API resource** anywhere in this chart or
+the kustomize skeleton — fronting the `streamarr-api` Service with an
+ingress controller/gateway of your choice is left entirely to the cluster
+operator.
+
+## The Helm chart (`infra/kubernetes/helm/streamarr/`)
+
+```
+helm/streamarr/
+  Chart.yaml               # name=streamarr, appVersion="0.1.0", no subchart dependencies
+  values.yaml                # image, probes, config (ConfigMap), secret, api.*, worker.*, serviceMonitor
+  templates/
+    _helpers.tpl              # name/label/selector helpers
+    deployment-api.yaml        # STREAMARR_ROLE=api
+    deployment-worker.yaml     # STREAMARR_ROLE=worker
+    hpa-api.yaml                 # HorizontalPodAutoscaler for the api Deployment
+    hpa-worker.yaml               # HorizontalPodAutoscaler for the worker Deployment
+    service.yaml                    # ClusterIP for api, headless ClusterIP for worker
+    pdb-worker.yaml                   # PodDisruptionBudget for the worker Deployment
+    configmap.yaml                      # non-secret config (values.config), consumed via envFrom
+    secret.yaml                           # opt-in Secret placeholder for DATABASE_URL/REDIS_URL
+    serviceaccount.yaml                     # ServiceAccount (values.serviceAccount.create)
+    servicemonitor.yaml                       # optional, values.serviceMonitor.enabled
+    NOTES.txt                                   # helm install post-install summary
 ```
 
-The `worker` `Deployment` template is identical apart from
-`args: ["serve", "--role", "worker"]` and its own `HorizontalPodAutoscaler`
-tuned against queue depth (background Tdarr job backlog) rather than the
-`api` pool's CPU/request-rate-based scaling — background work and on-demand
-API traffic are deliberately scaled on different signals, matching the
-split described in
-[`../overview.md`](../overview.md#the-tdarr-background-vs-on-demand-transcode-split).
+Representative shape of the `api` Deployment template
+(`templates/deployment-api.yaml`):
+
+```yaml
+containers:
+  - name: streamarr-api
+    image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+    env:
+      - name: STREAMARR_ROLE
+        value: {{ .Values.api.role | quote }}   # "api"
+      - name: DATABASE_URL
+        valueFrom: { secretKeyRef: { name: <secret.name>, key: DATABASE_URL } }
+      - name: REDIS_URL
+        valueFrom: { secretKeyRef: { name: <secret.name>, key: REDIS_URL } }
+    envFrom:
+      - configMapRef: { name: <configmap-name> }   # STREAMARR_LOG/STREAMARR_HTTP_BIND_ADDR/STREAMARR_METRICS_BIND_ADDR
+    ports:
+      - { name: http, containerPort: 8080 }
+      - { name: metrics, containerPort: 9090 }
+    readinessProbe: { httpGet: { path: /readyz, port: 8080 } }
+    livenessProbe:  { httpGet: { path: /healthz, port: 8080 } }
+```
+
+The `worker` Deployment template is identical apart from
+`STREAMARR_ROLE: worker` and its own `HorizontalPodAutoscaler`
+(`hpa-worker.yaml` carries a commented example of wiring in an `External`
+queue-depth metric via KEDA/Prometheus Adapter once one is installed — CPU
+utilization is the only real scaling target today).
+
+### `DATABASE_URL`/`REDIS_URL` are always Secret-sourced
+
+Both Deployments read `DATABASE_URL` and `REDIS_URL` exclusively via
+`secretKeyRef` against a Secret named `secret.name` (defaults to
+`<release-fullname>-secrets`) — they are never accepted as plain values in
+`values.yaml`. `secret.create: false` (the default) assumes that Secret
+already exists in the target namespace, provisioned out-of-band (External
+Secrets Operator, Sealed Secrets, Vault, or a manual `kubectl create
+secret generic ... --from-literal=DATABASE_URL=... --from-literal=REDIS_URL=...`);
+pods sit in `CreateContainerConfigError` until it does, which is
+intentional — `helm install --wait` timing out beats silently starting
+with an empty `DATABASE_URL`. `secret.create: true` (e.g. `--set
+secret.create=true --set secret.data.databaseUrl=...`) renders the Secret
+from `values.yaml` instead, for local/dev use only — don't commit real
+credentials there.
+
+There is **no bundled Postgres subchart dependency** of any kind
+(`Chart.yaml` declares none): this chart never provisions a database
+itself. Be aware that `streamarr-config` resolves the deployment tier from
+`DATABASE_URL`'s URL scheme alone — pointing more than one `api`/`worker`
+pod at a non-Postgres URL (e.g. a shared `sqlite:` path) is a real
+misconfiguration hazard the chart does nothing to prevent.
+
+### Config keys, and the manual sync a fixed bug left behind
+
+`values.yaml`'s non-secret `config:` block (`STREAMARR_LOG: "info"`,
+`STREAMARR_HTTP_BIND_ADDR: "0.0.0.0:8080"`,
+`STREAMARR_METRICS_BIND_ADDR: "0.0.0.0:9090"`) is rendered into a
+ConfigMap and consumed via `envFrom` — these are the real names
+`streamarr-config::Config::from_env` reads (`backend/crates/streamarr-config`).
+An earlier pass of this chart instead shipped `APP_ENV`/`LOG_LEVEL`/
+`LOG_FORMAT`/`METRICS_ENABLED`/`METRICS_PORT`/`HTTP_PORT`, none of which
+the binary read at all; fixed.
+
+The container/Service port fields (`containerPort`/`port` in
+`deployment-{api,worker}.yaml` and `service.yaml`) can't reference
+`STREAMARR_METRICS_BIND_ADDR` directly — it's a full socket address
+string (`"0.0.0.0:9090"`), and Kubernetes port fields need a plain
+integer — so a separate top-level `metricsPort: 9090` value exists
+specifically for that (same reasoning as `probes.port: 8080` for the HTTP
+side, which already existed). **Nothing derives one from the other**:
+`metricsPort`/`probes.port` and the port numbers embedded in
+`config.STREAMARR_METRICS_BIND_ADDR`/`STREAMARR_HTTP_BIND_ADDR` must be
+kept in sync by hand if either changes. (An earlier pass had the port
+fields read `{{ get .Values.config "METRICS_PORT" | int }}` directly,
+which broke when that ConfigMap key was renamed to the real
+`STREAMARR_METRICS_BIND_ADDR` name above — fixed by introducing
+`metricsPort` as its own value.)
+
+### Autoscaling, PDB, ServiceMonitor
+
+- `api.autoscaling`/`worker.autoscaling` (both `enabled: true` by default)
+  render a `HorizontalPodAutoscaler` each: `api` targets 70% CPU
+  utilization between 2–6 replicas; `worker` targets 75% CPU between 1–8
+  replicas.
+- `worker.podDisruptionBudget.enabled: true` renders a PDB with
+  `minAvailable: 1` by default, so voluntary disruptions (node drains,
+  cluster upgrades) never take every worker offline at once.
+- `serviceMonitor.enabled: false` by default; set `true` on clusters
+  running kube-prometheus-stack (or any Prometheus Operator install) to
+  scrape both `api` and `worker` `metrics` Service ports at `/metrics`.
+  Requires the `monitoring.coreos.com/v1` CRDs to already be installed —
+  the template does not check for them, so enabling this on a cluster
+  without the Operator fails `helm install`/`upgrade`.
 
 ## Installing
 
 ```bash
-helm repo add streamarr https://charts.streamarr.dev
-helm install streamarr streamarr/streamarr \
+helm install streamarr infra/kubernetes/helm/streamarr \
   --namespace streamarr --create-namespace \
   -f my-values.yaml
 ```
 
-or, from a checkout of this repository, directly against the chart path:
-
-```bash
-helm install streamarr deploy/helm/streamarr \
-  --namespace streamarr --create-namespace \
-  -f my-values.yaml
-```
-
-`my-values.yaml` at minimum sets `postgresql.external.connectionString` (or
-`postgresql.enabled: true` to use the bundled subchart for smaller
-clusters), `ingress.host`, and `library.roots` persistent volume claims.
-Database migrations run automatically as part of the `api` pods' startup
-sequence on first rollout, identically to Tiers 1 and 2 (same
-`sqlx::migrate!` mechanism from [ADR 0001](../adr/0001-storage-engine.md)).
-
-## Coordination and session affinity at this tier
-
-`PostgresCoordinator` handles leader election (scheduler, migration runner)
-across however many `api`/`worker` pods are running, via the shared
-Postgres instance every Tier 3 deployment already has, per
-[`../distributed-design.md`](../distributed-design.md). Clusters large
-enough that per-node Postgres heartbeat writes become a meaningful load can
-opt into gossip-based membership (`cluster.membership: gossip` in
-`values.yaml`, translated to the `streamarr` config's
-`cluster.membership` field) without changing how leadership itself is
-elected.
-
-On-demand transcode session affinity uses the signed-redirect mechanism by
-default (works with any ingress controller unmodified). Where the cluster's
-ingress controller supports session-affinity cookies (e.g. NGINX Ingress's
-`nginx.ingress.kubernetes.io/affinity: cookie` annotation), the chart's
-`ingress.sessionAffinity: true` value adds that annotation as an
-optimisation on top — both mechanisms are described in full in
-[`../distributed-design.md`](../distributed-design.md).
+There is no published chart repository yet — install directly from a
+checkout of this repository, as above. `my-values.yaml` at minimum needs
+`secret.name` (or `secret.create=true` for local/dev) pointing at a Secret
+holding `DATABASE_URL`/`REDIS_URL`. `values.yaml`'s `image.tag` is pinned
+to `Chart.yaml`'s `appVersion` (`"0.1.0"`) by convention — the Deployment
+templates render `image.tag | default .Chart.AppVersion`, so even an
+empty `image.tag` falls back to a real pinned version, never `latest`.
+Database migrations run automatically as part of pod startup, identically
+to Tiers 1 and 2 (`sqlx::migrate!`, per [ADR 0001](../adr/0001-storage-engine.md)).
+`terminationGracePeriodSeconds: 30` plus a `preStopSleepSeconds: 15` sleep
+in each container's `preStop` hook gives in-flight requests/jobs time to
+drain, and the load balancer/kube-proxy time to notice a pod is
+terminating, before SIGTERM.
 
 ## Self-update story: GitOps/Flux only — never self-updating
 
 Kubernetes is the one tier where Streamarr **never** updates itself, by
-design, with no opt-in escape hatch equivalent to Tier 1's `streamarr
-update` or Tier 2's Watchtower overlay. A running pod does not check for,
-download, or apply a new version of itself under any configuration — the
-only way a Tier 3 deployment's image tag changes is through the cluster's
-own GitOps reconciliation.
+design — there is no opt-in escape hatch equivalent to Tier 1's
+`streamarr update` subcommand or Tier 2's Watchtower overlay (and, per
+[`systemd.md`](systemd.md#self-update-story-opt-in-check-only-and-today-largely-stubbed),
+that subcommand's real update logic is still a stub everywhere it exists
+today, so this tier isn't giving up much by not having it). No component
+in this repository reaches out to the registry, calls the Kubernetes API
+to patch its own workload, or otherwise self-updates from inside the
+cluster.
 
-The chart is designed to be driven by FluxCD (ArgoCD works equivalently;
-Flux is the reference path documented here):
+`infra/kubernetes/flux-image-automation.example.yaml` documents the
+sanctioned path — **an example file, not wired into any live Flux
+Kustomization/HelmRelease in this repository**:
 
-- `deploy/gitops/streamarr-helmrelease.yaml` — a Flux `HelmRelease`
-  pointing at the chart with a `values.yaml` override checked into the
-  cluster's Git repository (the source of truth for what's actually
-  running), reconciled by `helm-controller` whenever that file changes in
-  Git.
-- `deploy/gitops/streamarr-imagepolicy.yaml` — a Flux `ImageRepository` +
-  `ImagePolicy` pair, watching the `streamarr/streamarr` registry and
-  selecting new tags matching a configured policy (e.g. semver range,
-  respecting the release/apiVersion contract in
-  [`../../versioning-policy.md`](../../versioning-policy.md)).
-- `deploy/gitops/streamarr-imageupdate.yaml` — an `ImageUpdateAutomation`
-  that, when new tags matching the policy appear, opens a commit against
-  the `HelmRelease`'s `image.tag` value in Git — **not** against the live
-  cluster directly.
+- An `ImageRepository` watching `ghcr.io/streamarr/streamarr` for new
+  tags (5 minute interval).
+- An `ImagePolicy` selecting the highest tag matching a semver range
+  (`>=0.1.0` in the example — narrow this per environment, e.g. dev
+  tracking pre-releases and prod not).
+- An `ImageUpdateAutomation` that commits the resulting tag bump back into
+  *this git repository* (recommended to a side branch,
+  `flux-image-updates`, behind a PR — not straight to `main`) at whatever
+  file carries a `# {"$imagepolicy": "flux-system:streamarr:tag"}` marker
+  comment next to an image reference. For the Helm chart, that's
+  `values.yaml`'s `image.tag` field; for the kustomize skeleton, it's
+  `base/kustomization.yaml`'s `images[].newTag`. **Neither file in this
+  repo carries that marker comment by default** — adding it is a
+  deliberate, per-environment opt-in, since it changes who/what is
+  allowed to author commits against that file.
 
-The result is that every version change to a Tier 3 deployment exists as a
-Git commit before it ever exists as a running pod: reviewable, revertable
-with `git revert`, and auditable through normal Git history rather than
-through cluster state that could differ from what's declared. This is
-treated as a hard requirement rather than a preference, because Tier 3 is
-explicitly the tier for shared, higher-stakes infrastructure where an
-unreviewed, unattended version change is the failure mode GitOps exists to
-prevent — the opposite tradeoff from Tier 1, where the entire point is
-minimising the operational burden on a single unattended box with nobody
-watching a Git history for it.
-
-Operators who want automatic-but-reviewed rollout can configure Flux's
-`ImageUpdateAutomation` to auto-commit and auto-merge tag bumps matching a
-narrow policy (e.g. patch releases only); anything wider than that is a
-cluster-operator policy decision made in their own Flux configuration, not
-something `deploy/helm/streamarr` or the `streamarr` binary itself decides
-on their behalf.
+None of this is wired into a running Flux `Kustomization`/`HelmRelease` in
+this repository — a Flux bootstrap, plus a reconciling `Kustomization`/
+`HelmRelease` pointing at `infra/kubernetes/overlays/<env>` (or the Helm
+release's values), are prerequisites this example file assumes but
+doesn't provide. The result, once wired up, is that every version change
+to a Tier 3 deployment exists as a Git commit before it ever exists as a
+running pod — reviewable and revertable with `git revert`, rather than
+cluster state that could differ from what's declared in Git.

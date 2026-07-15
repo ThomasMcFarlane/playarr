@@ -13,64 +13,51 @@ compose file here assume.
 | File | Purpose |
 |---|---|
 | `backend.Dockerfile` | Multi-stage Rust build (`cargo-chef` for layer caching) of the `streamarr` binary from `backend/Cargo.toml`'s workspace, into a slim non-root runtime image. |
-| `docker-compose.dev.yml` | Local dev dependency stack: Postgres 16 + Sonarr/Radarr/Lidarr/Bazarr/Prowlarr/Readarr/Tdarr. No `streamarr` service (see below). |
+| `docker-compose.dev.yml` | Local dev stack: Postgres 16 + Sonarr/Radarr/Lidarr/Bazarr/Prowlarr/Readarr/Tdarr, plus a real `streamarr` service (`STREAMARR_ROLE=all`) built from `backend.Dockerfile`. |
 | `docker-compose.ci.yml` | Same dependency stack, tuned for CI (tmpfs instead of named volumes, fast healthchecks), plus a `streamarr` service built from `backend.Dockerfile`. |
 | `docker-compose.mock.yml` | WireMock stand-ins for the six *arr APIs (`mocks/wiremock/<app>/mappings/*.json`), same service names/ports as `docker-compose.dev.yml`, for fast tests of code that consumes those APIs without booting six real .NET apps. |
 | `docker-compose.prod.yml` | Reference multi-node stack: role-split `streamarr-api`/`streamarr-worker` behind Caddy (`prod/Caddyfile`), Postgres, optional Redis, profile-gated tiers. |
 | `docker-compose.watchtower.optional.yml` | Opt-in overlay: label-scoped automatic image updates for `streamarr-*` services only. Layer with `-f`; does nothing standalone. |
 | `observability/docker-compose.yml` | Optional Prometheus + Grafana overlay. Its own compose project; joins the base stack's `streamarr-net` network. |
 
-## Why `docker-compose.dev.yml` has no `streamarr` service
+## Real config contract (verified against `backend/crates/streamarr-config/src/lib.rs`)
 
-Per the task this file was scaffolded from: `backend/` did not have a
-Dockerfile-buildable release at the time this compose file was written.
-`docker-compose.ci.yml` (which always builds fresh from the current commit)
-and `docker-compose.prod.yml` (which builds/pulls a tagged release) both
-already wire the real binary in. Once `backend/` is buildable and a human
-wants `docker-compose.dev.yml` to include it too, add a service there
-following the pattern already used in `docker-compose.ci.yml`.
+This directory was originally scaffolded before any backend code existed,
+against assumptions borrowed from the Helm chart. Both have since been
+reconciled against the real `streamarr-config::Config::from_env` and
+`backend/src/main.rs`, and two real bugs that drift caused were fixed:
+`docker-compose.prod.yml` was passing a `command: ["serve", "--role",
+"api"]` override, but `serve` takes no CLI arguments at all -- role
+selection is entirely via the `STREAMARR_ROLE` *environment variable*
+(fixed: the override now just re-asserts the image's own default `["serve"]`).
+`backend.Dockerfile`/`docker-compose.ci.yml` defaulted `STREAMARR_ROLE` to
+`standalone`, which `Role::parse` rejects outright (only `all`/`api`/`worker`
+are valid) -- the container would have refused to boot as shipped (fixed to
+`all`).
 
-## Assumptions made, and where they came from
-
-`backend/`'s own crates (`streamarr-config`, `streamarr-api`,
-`streamarr-telemetry`, etc.) were all still `//! placeholder, filled in
-next` stubs when this directory was written — there was no running code to
-introspect for the real port numbers, env var names, or health-check
-paths. Rather than inventing a contract from scratch, every value below was
-taken from **`infra/kubernetes/helm/streamarr/`**, a sibling scaffold
-already completed (against, presumably, the same shared design) by the
-time this directory was written, cross-checked against
-`docs/architecture/overview.md` and `docs/architecture/adr/0001-storage-engine.md`.
-Flagging this explicitly because it is an assumption, not a confirmed
-contract:
-
-- **App HTTP port: `8080`, not `8096`.** The task this directory was
-  scaffolded from asked for "an 8096-style app port." `infra/kubernetes/helm/streamarr/values.yaml`
-  (`probes.port`, `config.HTTP_PORT`) and every Deployment template there
-  already committed to **`8080`** as the real value. Internal consistency
-  between the Helm chart and this directory was judged more valuable than
-  literal adherence to "8096-style" (which read as an approximate/
-  evocative description — "a Jellyfin-like single web port" — rather than
-  a hard number, since the metrics port was given as an exact `9090` in
-  the same sentence and 8080 was not similarly hedged in the sibling
-  scaffold). **If `8096` was in fact intended as the literal port number,
-  reconcile it in both places** — `backend.Dockerfile`'s `ENV HTTP_PORT`/
-  `EXPOSE` plus every compose file's `HTTP_PORT`/port mappings here, and
-  `infra/kubernetes/helm/streamarr/values.yaml`'s `probes.port`/
-  `config.HTTP_PORT` — since the Helm chart was written first, changing it
-  is out of this directory's scope (`infra/kubernetes/` is owned by a
-  different task).
-- **Env var names** (`APP_ENV`, `LOG_LEVEL`, `LOG_FORMAT`,
-  `METRICS_ENABLED`, `METRICS_PORT`, `HTTP_PORT`, `STREAMARR_ROLE`,
-  `DATABASE_URL`, `REDIS_URL`) are copied verbatim from the Helm chart's
-  ConfigMap/Secret templates.
-- **Health/readiness paths** (`/healthz`, `/readyz`) and the metrics path
-  (`/metrics`, from `serviceMonitor.path`'s default) are likewise from the
-  Helm chart.
-- **CLI shape** (`streamarr serve --role <api|worker|...>`, defaulting to
-  the `STANDALONE` role set when `--role` is omitted) is from
-  `docs/architecture/overview.md`'s "single-role-gated-binary principle"
-  section, not from actual `backend/src/main.rs` (which didn't exist yet).
+- **App HTTP port: `8080`, metrics port: `9090`.** Confirmed as the real
+  defaults in `streamarr-config::Config::from_env` (`STREAMARR_HTTP_BIND_ADDR`
+  defaults to `0.0.0.0:8080`, `STREAMARR_METRICS_BIND_ADDR` to `0.0.0.0:9090`).
+  Every compose file's `HTTP_PORT`/`METRICS_PORT` (Dockerfile-local
+  convenience vars used only by `HEALTHCHECK`'s curl command, not read by
+  the binary) are kept in sync with these by hand -- there's no single
+  source of truth deriving one from the other, so if either changes,
+  update both.
+- **Env var names**: the binary reads `DATABASE_URL`, `REDIS_URL`,
+  `STREAMARR_ROLE`, `STREAMARR_LOG`, `STREAMARR_HTTP_BIND_ADDR`,
+  `STREAMARR_METRICS_BIND_ADDR`, `STREAMARR_OTLP_ENDPOINT` -- nothing else.
+  `STREAMARR_HTTP_BIND_ADDR`/`STREAMARR_METRICS_BIND_ADDR` are full socket
+  addresses (`"0.0.0.0:8080"`), not bare port numbers. Earlier drafts of
+  these compose files used `APP_ENV`/`LOG_LEVEL`/`LOG_FORMAT`/
+  `METRICS_ENABLED`/`HTTP_PORT`/`METRICS_PORT` as if the binary read them
+  directly -- it never did; those names are now only used where noted above
+  as Dockerfile-local shell convenience, not application config.
+- **Health/readiness paths** (`/healthz`, `/readyz`) confirmed real against
+  `streamarr-api`'s router.
+- **CLI shape**: `streamarr serve` (no arguments; `serve` is also the
+  default when no subcommand is given at all) and `streamarr update
+  [--check] [--yes] [--channel <stable|beta|nightly>]`, confirmed against
+  `backend/src/main.rs`. There is no `--role` flag anywhere.
 - **Non-root UID/GID `10001`** and **read-only-root-filesystem-compatible**
   (only `/tmp` is writable; no `/config`/`/data` volume declared) match the
   Helm chart's `podSecurityContext`/`securityContext` and the fact that its
@@ -120,15 +107,21 @@ Every compose file here was checked with `docker compose -f <file> config
 pull anything) rather than `up`. Re-run the same command after editing any
 of these files.
 
-## Known gaps / follow-ups for whoever owns `backend/` next
+## Known gaps
 
-1. Confirm or correct the `HTTP_PORT=8080` vs "8096-style" question above.
-2. Confirm `/healthz`, `/readyz`, `/metrics` are the real route paths once
-   `streamarr-api` is implemented (currently a placeholder crate).
-3. Confirm the `serve --role <role>` CLI shape and `STREAMARR_ROLE` env
-   binding once `streamarr-cli`/`backend/src/main.rs` exist.
-4. Define `streamarr-arr-client`'s real config surface and reconcile the
-   `*_BASE_URL` env vars guessed in `docker-compose.ci.yml`.
-5. `docker-compose.dev.yml` doesn't seed the *arr apps with anything (no
-   indexers, no download client, no API keys) — that's `scripts/dev-seed.sh`'s
-   job per the `Justfile`'s `dev-seed` recipe, owned by a different task.
+1. `streamarr-arr-client` is configured via `SourceInstance` database rows
+   (added through the API, not env vars) -- `docker-compose.ci.yml`'s
+   `*_BASE_URL` env vars aren't read by the binary at all. They're
+   currently harmless (no code reads them, so they're not misleading
+   anyone into thinking config changed something it didn't) but are also
+   not doing anything; remove or replace with a real `SourceInstance`
+   seeding step in `scripts/dev-seed.sh` once one exists.
+2. `docker-compose.dev.yml` doesn't seed the *arr apps with anything (no
+   indexers, no download client, no API keys) or register any
+   `SourceInstance` with Streamarr itself -- that's `scripts/dev-seed.sh`'s
+   job per the `Justfile`'s `dev-seed` recipe; nothing currently invokes it
+   automatically when the stack comes up.
+3. `streamarr update --check` (systemd's `streamarr-update-check.service`,
+   and the same CLI path in a container) is currently a stub in
+   `backend/src/main.rs` -- it always reports "up to date," no real network
+   call against a release feed exists yet.

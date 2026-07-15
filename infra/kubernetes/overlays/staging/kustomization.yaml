@@ -26,8 +26,7 @@ configMapGenerator:
   - name: streamarr-config
     behavior: merge
     literals:
-      - APP_ENV=staging
-      - LOG_LEVEL=info
+      - STREAMARR_LOG=info
 
 # As in overlays/dev: DATABASE_URL / REDIS_URL should be supplied by a
 # secretGenerator pointed at an untracked env file, or base/secret.yaml

@@ -1,11 +1,17 @@
 # Auth Modes
 
-Streamarr's authentication model spans a deliberate spectrum from "no login
-at all, on your own network" to "fully managed multi-user accounts with
-remote access." It is not one auth system with optional bits switched off —
-it is three named trust tiers, each a coherent, supported configuration in
-its own right, selected by the server operator and encoded in a `Policy`
-that every request is evaluated against.
+Streamarr's authentication model spans a deliberate spectrum from "no
+credentials at all, on your own network" to "real per-user accounts." It is
+encoded as a single operator-wide setting, `streamarr_auth::AuthMode`, with
+three variants — each a coherent, supported login tier, not one system with
+optional bits switched off. `AuthMode` governs *authentication* (who, if
+anyone, a request gets to become), resolved by
+`streamarr_auth::login::evaluate_login`. A separate module,
+`streamarr_auth::policy`, governs *authorization* (what an already-identified
+user is allowed to do) via a `Policy`. See ["What's actually wired up
+today"](#whats-actually-wired-up-today) below for how much of each is live
+in `streamarr-api` right now — there's a real, important gap between "this
+logic exists and is tested" and "this is enforced on a live request path."
 
 ## Why a spectrum, not one model
 
@@ -14,188 +20,270 @@ Streamarr runs across all three deployment tiers in
 different at each end: a household running a single NAS on their own LAN
 should not be forced through account creation and password policies just to
 watch something in their own living room, but a server operator sharing
-their library with friends over the internet needs real accounts, real
-sessions, and real revocation. Forcing everyone into the heavier model is
-the single most common complaint about self-hosted media servers that only
-offer one auth posture; forcing everyone into the lighter model makes the
-software unsafe to expose to the internet at all. Streamarr supports both,
-explicitly, as first-class configurations.
+their library with friends over the internet needs real accounts and real
+sessions. Forcing everyone into the heavier model is the single most common
+complaint about self-hosted media servers that only offer one auth posture;
+forcing everyone into the lighter model makes the software unsafe to expose
+to the internet at all. Streamarr supports both, explicitly, as first-class
+configurations.
 
-## The three trust tiers
+## The three trust tiers (`AuthMode`)
 
-| Tier | Name | Login required? | Typical deployment |
-|---|---|---|---|
-| 0 | **Open Household** | No | Tier 1 systemd install, LAN-only, single family |
-| 1 | **Managed Household** | PIN/profile only | Tier 1 or 2, multiple people in one household, parental controls |
-| 2 | **Full Multi-User** | Username/password or OAuth | Tier 2/3, remote access, shared with people outside the household |
+| Variant | Login required? | Typical deployment |
+|---|---|---|
+| `AuthMode::TrustedNetwork { allowlist }` — **the default** | No credentials; auto-login by source IP | Tier 1 systemd install, LAN-only, single household |
+| `AuthMode::ManagedProfiles` | PIN only | Multiple people in one household, "who's watching" style |
+| `AuthMode::FullAccount` | Username + password | Remote access, shared with people outside the household |
 
-### Tier 0 — Open Household (`TrustTier::Open`)
+Set server-wide via `STREAMARR_AUTH_MODE` — `trusted-network` (the default;
+also the fallback when the variable is unset or holds an unrecognized
+value) or `full-account`. There is currently no `STREAMARR_AUTH_MODE` value
+that selects `ManagedProfiles` from `backend/src/main.rs`'s composition
+root, even though the mode itself is fully implemented and tested in
+`streamarr-auth` — wiring a config value (or a way to select it per
+profile) to it is a small follow-up, not a design gap. All three tiers
+funnel a successful login through the same `RefreshTokenService`, so every
+tier ultimately hands the client the same access + refresh token pair via
+`POST /api/v1/auth/login`.
 
-No login wall. There is a single implicit identity for the whole household,
-comparable to a Plex "Home" with no PINs set. Every client on the LAN that
-can reach the server can browse and play. This tier exists because the
-majority of Tier 1 installs are a single NAS serving a single household on
-its own network, and account creation is pure friction for that case with
-no meaningful security benefit — anyone who can reach the server on the LAN
-already has physical/network access to the box.
+### `AuthMode::TrustedNetwork` — the default
 
-Remote access is disabled by default under this tier (`allow_remote_access`
-defaults to `false`) precisely because there is no identity boundary to
-protect once the server is reachable from the open internet.
+Every request whose source IP falls inside a configured CIDR range
+auto-logs-in as that range's single bound user id, with zero credentials
+required; a source IP outside every range is denied outright (`401
+untrusted_network`) — this mode never falls back to a password prompt.
+Unless `STREAMARR_TRUSTED_NETWORK_CIDR` is set (which replaces the whole
+list with that one custom range), the default allowlist is the RFC 1918
+private-address ranges plus loopback:
 
-### Tier 1 — Managed Household (`TrustTier::Managed`)
+```
+10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.1/32, ::1/128
+```
 
-Multiple local profiles under one household (comparable to Netflix
-profiles), each with an optional PIN rather than a full password. No
-external-facing account system, no email verification, no password reset
-flow — the household is still one trust boundary, but individual family
-members get separate watch history, resume state, and per-profile parental
-controls (a `parental_control_default: RatingLimit` on the profile, e.g.
-capping a kids' profile to `PG` content). This is the tier most home-theatre
-setups with children land on.
+— **not** `0.0.0.0/0`. This is a deliberate choice: anyone who can reach the
+server from inside the household/office network becomes an authenticated
+admin with zero credentials, which is the correct, zero-setup default for
+the box-under-your-TV single-node deployment this project is primarily
+built for — but it deliberately does *not* extend that trust to the public
+internet the way a `0.0.0.0/0` default would (a stray port-forward or UPnP
+mapping should not silently hand out admin to the entire internet). It is
+still not a substitute for real per-user auth on a shared or untrusted LAN
+(guest wifi, a dorm/apartment building network): anyone else on that same
+private range is just as trusted as the operator. For those cases, narrow
+`STREAMARR_TRUSTED_NETWORK_CIDR` to the actual trusted subnet, switch to
+`AuthMode::FullAccount` (see its documented gap below), or put a real
+authenticating reverse proxy in front of the server. See
+`trusted_network_auth_mode`'s doc comment in `backend/src/main.rs` for the
+full writeup this section summarizes.
 
-### Tier 2 — Full Multi-User (`TrustTier::Strict`)
+The user every trusted-network login resolves to is whichever id
+`STREAMARR_DEFAULT_ADMIN_USER_ID` names (or a boot-lifetime-random id if
+unset — every session issued before a restart is then orphaned, which
+today is a non-issue only because sessions don't survive a restart
+either; see below).
 
-Real accounts: username/password (bcrypt/argon2-hashed) or OAuth against an
-external identity provider, per-user API keys, invite-based or open
-registration, remote access enabled, full session and audit logging. This
-is the tier for a server operator running Streamarr as shared
-infrastructure — the "give three friends and your parents a login" case —
-where a compromised or shared credential for one person must not expose
-anyone else's account, and access needs to be revocable per-user without
-affecting the rest of the household.
+### `AuthMode::ManagedProfiles`
+
+A fixed set of profiles switched between with a short PIN — "who's
+watching" style. There is no separate PIN field on `User`: a managed
+profile's PIN *is* its `password_hash`, verified through the exact same
+Argon2id check as a full-account password (`Argon2PasswordVerifier`), just
+a deliberately short secret by convention. Provisioning a profile with a
+known PIN is a user-provisioning concern outside `streamarr-auth`'s current
+scope — see the persistence gap below.
+
+### `AuthMode::FullAccount`
+
+Ordinary username + password, Argon2id-hashed
+(`streamarr_auth::login::hash_password` / `Argon2PasswordVerifier`) —
+correct and fully unit-tested at the `evaluate_login` level, not a stub.
+**Known gap, documented directly in `backend/src/main.rs`'s
+`auth_mode_from_env`:** flipping `STREAMARR_AUTH_MODE=full-account` today
+leaves a fresh deployment with **no way to log in at all**. There is no
+user-provisioning tool and no persisted `UserRepo`; the only seeded `User`
+(the trusted-network default admin) gets a random, never-recorded password
+hash — specifically so it *can't* be logged into by password. Real `User`
+persistence and a provisioning path (an admin CLI command, a first-run
+setup flow, etc.) are required before this mode is usable in practice, and
+the server logs a loud `tracing::warn!` to this effect at boot if it's
+selected.
+
+## What's actually wired up today
+
+The three tiers above are all real, tested login-resolution logic. What
+sits behind each trust boundary, and what happens after a successful
+login, has some real gaps worth being explicit about rather than implying
+a fully-built system:
+
+- **No persisted `User`/`Policy` store.** `streamarr_auth::InMemoryUserDirectory`
+  (real, not a mock — see its own doc comment) is the only `UserDirectory`
+  implementation anywhere in the workspace; there is no `UserRepo` in
+  `streamarr-db`, no `users` table in either migration set, and no
+  `PolicyRepo`/`policies` table at all. Accounts do not survive a process
+  restart and are not shared across nodes in a multi-node deployment.
+- **`Policy`-based authorization is implemented but not evaluated on any
+  request path yet.** `streamarr_auth::policy::DefaultPolicyEvaluator` is a
+  real, fully unit-tested implementation of every rule in the "The `Policy`
+  struct" section below — but no handler in `streamarr-api` currently
+  constructs an `AccessContext` and calls it. The only authorization check
+  actually enforced today is the binary admin/non-admin check described
+  next.
+- **"Admin" is a flat id set, not `Policy.is_admin`.** The request
+  approve/reject endpoints (the only endpoints today that require more
+  than "logged in") are gated by an `AdminUser` Axum extractor
+  (`streamarr-api::auth_extractor`), which checks
+  `streamarr_auth::admin::InMemoryAdminRegistry::is_admin(user_id)` — a
+  real, thread-safe, in-process set of admin user ids, seeded at boot with
+  the trusted-network default admin's id — rather than loading and
+  evaluating an actual `Policy`. There is nowhere to load one *from* yet.
+  See that registry's own module doc comment for the intended follow-up
+  once `PolicyRepo` exists.
+- **Refresh tokens and RFC 8628 device-authorization state are in-memory,
+  not database rows.** `RefreshTokenService` stores each device's current
+  token family in `InMemoryRefreshTokenStore` (a `DashMap`), and
+  `DashMapDeviceFlowHandler` stores pending device/user code pairs in
+  `InMemoryDeviceAuthorizationStore`. Both are real, working
+  implementations, not test doubles — login, refresh, and device pairing
+  all genuinely function — but neither survives a restart or is visible to
+  a second node in a multi-node deployment.
+- **There is no HTTP endpoint to approve or deny a pending device-pairing
+  code.** `DeviceFlowHandler::approve_user_code`/`deny_user_code` are fully
+  implemented and unit-tested, but `streamarr-api::oauth` only wires up
+  `POST /api/v1/oauth/device/code` and `POST /api/v1/oauth/token` (the
+  TV-side start/poll calls) — the "a logged-in human, on a phone or
+  laptop, enters the code and approves it" step described below has no
+  corresponding route yet. The device flow is therefore only exercisable
+  today by calling `approve_user_code` directly (as this crate's own tests
+  do), not through the public API.
+
+None of this is silently papered over in code — every in-memory store above
+documents its own "real, not a mock, but pending real persistence" status
+directly in its module doc comment, with a `TODO(persistence)` pointing at
+what should replace it.
 
 ## The `Policy` struct
 
-Trust tier is the headline setting, but it is one field on a broader
-`Policy` that the server evaluates on every authenticated request.
-`Policy` is resolved per-deployment by default (server-wide config) and can
-be overridden per-user where the field says so:
+`Policy` governs *authorization*, not login trust tier — it's evaluated
+once a request already carries an identified `User` (`User::policy_id`
+names which `Policy` applies to them), judging what that user is allowed to
+do. Real shape, from `streamarr-model`:
 
 ```rust
 pub struct Policy {
-    /// The trust tier this deployment (or user) operates under.
-    pub trust_tier: TrustTier,
+    pub id: Uuid,
+    pub name: String,
 
-    /// Managed-tier profiles may require a PIN before switching into them.
-    pub require_pin: bool,
+    /// Work/library root ids this policy grants browse/playback access to.
+    /// An empty list means "no explicit library grants" (all-deny by
+    /// default, not all-allow) — pair with `is_admin` for the superuser
+    /// bypass.
+    pub library_allow: Vec<Uuid>,
+    /// Absolute or root-relative folder paths hidden regardless of
+    /// `library_allow` (e.g. a folder with pre-release content).
+    pub blocked_folders: Vec<String>,
+    /// Content-rating ceiling, e.g. `"PG-13"`.
+    pub max_rating: Option<String>,
+    pub blocked_tags: Vec<String>,
+    pub allowed_tags: Vec<String>,
 
-    /// Whether this server accepts connections from outside the LAN at all.
-    /// Defaults to `false` under `Open`, `true` under `Managed`/`Strict`.
-    pub allow_remote_access: bool,
+    pub can_transcode: bool,
+    pub can_download: bool,
+    pub can_delete: bool,
+    pub can_share_public: bool,
 
-    /// Access token (JWT) lifetime, in seconds.
-    pub session_ttl_seconds: u32,
-
-    /// Refresh token lifetime, in seconds.
-    pub refresh_ttl_seconds: u32,
-
-    /// Cap on concurrent active sessions per identity. `None` = unlimited.
+    pub device_allow: Vec<ClientPlatform>,
     pub max_concurrent_sessions: Option<u32>,
+    /// `None` = no schedule restriction (always allowed). `Some(vec)` with
+    /// an empty vec means "never allowed" — an explicit lockout.
+    pub access_schedule: Option<Vec<AccessWindow>>,
 
-    /// Whether the RFC 8628 device-authorization flow is available for
-    /// pairing TV clients that cannot reasonably accept text input.
-    pub allow_device_pairing: bool,
-
-    /// Strict tier only: require a verified email before an account can
-    /// authenticate.
-    pub require_email_verification: bool,
-
-    /// Strict tier only: who can create a new account.
-    pub registration_mode: RegistrationMode, // Closed | InviteOnly | Open
-
-    /// Default content-rating ceiling for new/managed profiles.
-    pub parental_control_default: RatingLimit,
-
-    /// Strict tier only: minimum password strength requirements.
-    pub password_policy: PasswordPolicy,
-}
-
-pub struct PasswordPolicy {
-    pub min_length: u8,
-    pub require_mixed_case: bool,
-    pub require_digit_or_symbol: bool,
+    /// Bypasses every other field on this struct.
+    pub is_admin: bool,
 }
 ```
 
-`Policy` is loaded once at startup from server config, cached, and
-re-evaluated per request against the authenticated identity (if any) rather
-than baked into issued tokens, so an operator can tighten or loosen policy
-(e.g. lower `max_concurrent_sessions`, flip `allow_remote_access` off) and
-have it take effect immediately without forcing every client to
-re-authenticate.
+`streamarr_auth::policy::DefaultPolicyEvaluator::evaluate` checks these in
+cheapest/most-decisive-first order (admin bypass, library allow-list,
+blocked folder prefix match, rating ceiling, blocked/allowed tags, device
+allow-list, concurrent-session cap, then the access-schedule window scan,
+which is the most expensive check) and returns `PolicyDecision::Allow` or
+`Deny(DenyReason)` — real, tested logic. There is no `trust_tier`,
+`allow_remote_access`, `session_ttl_seconds`/`refresh_ttl_seconds`,
+`allow_device_pairing`, `require_email_verification`, `registration_mode`,
+`parental_control_default`, or `password_policy` field on `Policy` — those
+would-be fields either don't exist in the real model, or the concern they'd
+express is handled elsewhere (JWT/refresh TTLs are constructor parameters
+to `JwtIssuer`/passed to `RefreshTokenService::issue`, not per-`Policy`
+config; there's no registration flow, password-strength policy, or email
+verification anywhere in the workspace yet).
 
 ## RFC 8628 device flow for TV pairing
 
-Three of the seven Playarr clients (Android TV, webOS, Tizen — and the
-VIDAA fallback path, see [`clients/vidaa.md`](clients/vidaa.md)) run on
-devices where typing a password with a remote control is a genuinely bad
-experience. For these, Streamarr implements the OAuth 2.0 Device
-Authorization Grant ([RFC 8628](https://www.rfc-editor.org/rfc/rfc8628)),
-gated by `Policy.allow_device_pairing` (on by default under Managed and
-Strict tiers; irrelevant under Open, since there's nothing to pair against).
+For platforms where typing a password with a remote control is a genuinely
+bad experience, Streamarr implements the OAuth 2.0 Device Authorization
+Grant ([RFC 8628](https://www.rfc-editor.org/rfc/rfc8628)) — real, working,
+JSON-over-HTTP endpoints (not form-urlencoded, and not the `/api/auth/...`
+paths an earlier draft of this doc used):
 
-Flow:
-
-1. **TV requests a device code.**
+1. **The device requests a code:**
 
    ```http
-   POST /api/auth/device/authorize
-   Content-Type: application/x-www-form-urlencoded
+   POST /api/v1/oauth/device/code
+   Content-Type: application/json
 
-   client_id=streamarr-tv
+   {"client_platform": "tv-webos"}
    ```
 
-   Response:
+   Response (`DeviceCodeResponse`):
 
    ```json
    {
-     "device_code": "GmRhmhcxhwAzkoEqiMEg_DnyEysNkuNhszIySk9eS",
-     "user_code": "WDJB-MJHT",
-     "verification_uri": "https://streamarr.example.com/link",
-     "verification_uri_complete": "https://streamarr.example.com/link?code=WDJB-MJHT",
+     "device_code": "3fa85f64...c9563b2a2",
+     "user_code": "WXYZ-2349",
+     "verification_uri": "https://streamarr.example/link",
+     "verification_uri_complete": "https://streamarr.example/link?user_code=WXYZ-2349",
      "expires_in": 600,
      "interval": 5
    }
    ```
 
-2. **TV displays `user_code`** (and, where the platform supports rendering
+   `expires_in`/`interval` are configuration (`DeviceFlowConfig::code_ttl`/
+   `polling_interval`), not hardcoded — `backend/src/main.rs` wires them to
+   10 minutes and 5 seconds respectively today.
+
+2. **The device displays `user_code`** (and, where the platform can render
    one, a QR code encoding `verification_uri_complete`) and begins polling.
 
-3. **User completes pairing on a phone or laptop** — either by scanning the
-   QR code or by navigating to `verification_uri` and typing `user_code` —
-   authenticates normally for their trust tier (PIN under Managed,
-   password/OAuth under Strict), and approves the pairing request.
+3. **A logged-in human, on a separate device, approves it.** RFC 8628
+   itself doesn't specify this step's transport, and — as noted under
+   ["What's actually wired up today"](#whats-actually-wired-up-today) above
+   — Streamarr has no HTTP route for it yet. `streamarr_auth::DeviceFlowHandler::approve_user_code(user_code, user_id)` /
+   `deny_user_code(user_code)` implement the logic; nothing in
+   `streamarr-api` calls them outside tests.
 
-4. **TV polls for a token:**
+4. **The device polls for a token:**
 
    ```http
-   POST /api/auth/device/token
-   Content-Type: application/x-www-form-urlencoded
+   POST /api/v1/oauth/token
+   Content-Type: application/json
 
-   grant_type=urn:ietf:params:oauth:grant-type:device_code
-   device_code=GmRhmhcxhwAzkoEqiMEg_DnyEysNkuNhszIySk9eS
-   client_id=streamarr-tv
+   {"grant_type": "urn:ietf:params:oauth:grant-type:device_code", "device_code": "3fa85f64...c9563b2a2"}
    ```
 
-   While pending:
-
-   ```json
-   { "error": "authorization_pending" }
-   ```
-
-   If the TV polls faster than `interval` seconds, the server responds with
-   `{"error": "slow_down"}`, which the client must treat as "increase the
-   polling interval by 5 seconds," per the RFC. If `expires_in` elapses
-   unapproved, subsequent polls return `{"error": "expired_token"}` and the
-   client must restart the flow. On approval, the poll succeeds:
+   While pending, `400` with `{"error": "authorization_pending"}`. Polling
+   faster than `interval` seconds gets `{"error": "slow_down"}`, which per
+   RFC 8628 §3.5 the client must treat as "increase the polling interval by
+   5 seconds" — enforced server-side (`DashMapDeviceFlowHandler::poll_token`
+   actually widens `interval_seconds` and rejects premature polls), not
+   just advisory. Once `expires_in` elapses unapproved, `{"error":
+   "expired_token"}`. On approval, the poll succeeds:
 
    ```json
    {
-     "access_token": "eyJhbGciOiJFZERTQSJ9...",
-     "refresh_token": "8xLOxBtZp8...",
+     "access_token": "eyJhbGciOiJIUzI1NiJ9...",
      "token_type": "Bearer",
-     "expires_in": 900
+     "expires_in": 900,
+     "refresh_token": "3fa85f64...c9563b2a2..."
    }
    ```
 
@@ -205,53 +293,69 @@ Access tokens are short-lived JWTs; long-lived state lives in an opaque
 refresh token, never in the JWT itself, so revocation doesn't depend on
 waiting out a long-lived token's expiry.
 
-**Access token** — JWT, signed EdDSA (Ed25519) in preference to HS256 where
-key distribution allows it (multi-node deployments verify tokens
-independently without sharing a symmetric secret over an insecure channel),
-default lifetime 15 minutes (`Policy.session_ttl_seconds`), claims:
+**Access token** — JWT, **HS256** (HMAC-SHA256, via the `jsonwebtoken`
+crate's `JwtIssuer`), not EdDSA — a single shared secret
+(`STREAMARR_JWT_SECRET`, at least 32 bytes; falls back to a
+boot-lifetime-generated secret with a loud warning if unset) signs and
+verifies every token, which is sufficient today because there is exactly
+one process type (the combined `streamarr` binary) doing both; splitting
+issuance and verification across services that shouldn't share a symmetric
+secret would be the reason to move to an asymmetric algorithm, and hasn't
+come up yet. Default lifetime 15 minutes. Real claims
+(`AccessTokenClaims`):
 
 ```json
 {
-  "sub": "usr_01hz8k9q3f",
-  "household_id": "hh_01hz8k9q3f",
-  "trust_tier": "strict",
-  "role": "member",
-  "apiv": 17,
+  "sub": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "device_id": "9d3b1f4a-...",
+  "session_id": "6c1e2a90-...",
+  "iss": "streamarr",
   "iat": 1752537600,
   "exp": 1752538500
 }
 ```
 
-The `apiv` claim records the `apiVersion` the client authenticated with, so
-the versioning-enforcement middleware (see
-[`docs/versioning-policy.md`](../versioning-policy.md)) can reason about a
-client's capability without re-parsing headers on every request.
+`sub` is the user id; `device_id`/`session_id` ride along so a handler can
+reason about `Policy::device_allow`/`max_concurrent_sessions` or per-device
+revocation without a second lookup. There is no `household_id`,
+`trust_tier`, `role`, or `apiv` claim — client-version enforcement is a
+separate concern, handled by `streamarr-api`'s version-gate middleware
+against request headers, not carried in the token.
 
-**Refresh token** — an opaque, cryptographically random 256-bit value,
-never a JWT. Only its SHA-256 hash is stored server-side (in the
-`refresh_tokens` table: `token_hash`, `user_id`, `device_id`, `issued_at`,
-`expires_at`, `rotated_from`, `revoked_at`). Default lifetime 30 days
-(`Policy.refresh_ttl_seconds`, tunable — TV pairing sessions are typically
-issued a longer-lived refresh token than a browser session, since re-pairing
-a TV is a much worse experience than re-logging-in on the web).
+**Refresh token** — an opaque, cryptographically random 256-bit value (two
+concatenated UUIDv4s, hex-encoded — `streamarr_auth::secret::opaque_token`),
+never a JWT. Only its SHA-256 hash is stored server-side
+(`streamarr_auth::secret::hash_token` — a fast, unsalted hash, deliberately:
+the input is already high-entropy random data, not a human-chosen secret,
+so there's nothing for an attacker holding the hash to dictionary-guess).
+**As of this pass that storage is `InMemoryRefreshTokenStore`, not a
+`refresh_tokens` database table** — see the gap noted above. Default
+lifetime 30 days, fixed at issuance (not extended by rotation): the device
+must complete a full login again after 30 days regardless of activity.
 
-Refresh is **rotate-on-use with reuse detection**: every call to
-`/api/auth/token/refresh` consumes the presented refresh token, issues a
-brand-new access token *and* a brand-new refresh token, and records the new
-token's `rotated_from` pointing at the old one's hash. If a refresh token
-that has already been rotated away is ever presented again, the server
-treats this as a signal of token theft (a copy of an old token being
-replayed), immediately revokes the entire token *chain* for that device
-(walking `rotated_from` back to the root), and forces the device to
-re-authenticate from scratch. This bounds the blast radius of a leaked
-refresh token to the window before its next legitimate use, rather than
-its full 30-day lifetime.
+Refresh is **rotate-on-use with reuse detection**, but the mechanism is a
+per-device *token family* with a hash set, not a linked `rotated_from`
+chain: each `RefreshTokenRecord` tracks `current_hash` (the one valid
+token) plus `used_hashes` (every hash the family has ever had, including
+the current one). Presenting the current hash rotates it — the old hash
+stays in `used_hashes`, a fresh token is minted, and `current_hash` moves
+to its hash. Presenting a hash that's in `used_hashes` but isn't
+`current_hash` is reuse — evidence the token was copied and is being
+replayed out-of-band — and the *entire* family is immediately marked
+`revoked`, rejecting every future presentation (including of the
+legitimately-current token) until the device completes a fresh login via
+a brand-new `RefreshTokenService::issue` call. Presenting a hash that has
+never belonged to this family at all is just `RefreshError::UnknownToken`
+— not proof of compromise, and doesn't revoke anything.
 
-Revocation (logout, "sign out this device," account suspension, or the
-reuse-detection path above) is a `revoked_at` write on the refresh token
-row; access tokens are not individually revocable by design (they're
-short-lived enough — 15 minutes — that revocation-on-refresh plus a short
-TTL is the accepted tradeoff against the operational cost of a
-revocation-checking cache on every request). `max_concurrent_sessions`, when
-set, is enforced at refresh-token issuance: issuing a new one past the cap
-revokes the oldest active session for that identity.
+There is currently no dedicated HTTP endpoint wrapping
+`RefreshTokenService::rotate` in `streamarr-api` — `POST
+/api/v1/auth/login` and the device flow's `POST /api/v1/oauth/token` are
+the two live paths that call into refresh-token issuance
+(`RefreshTokenService::issue`); a rotation/refresh-grant HTTP route is a
+documented follow-up, not something this pass wired up. `max_concurrent_sessions`,
+when a real `Policy` is loaded and evaluated (see the gap above), is
+enforced by `streamarr_auth::policy::DefaultPolicyEvaluator` at the point
+of the *authorization* check, not by refresh-token issuance evicting the
+oldest session — there's no session-eviction-on-issuance logic anywhere in
+`streamarr-auth` today.

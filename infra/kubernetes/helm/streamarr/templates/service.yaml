@@ -15,7 +15,7 @@ spec:
       targetPort: {{ .Values.api.service.targetPort }}
       protocol: TCP
       name: http
-    - port: {{ get .Values.config "METRICS_PORT" | int }}
+    - port: {{ .Values.metricsPort }}
       targetPort: metrics
       protocol: TCP
       name: metrics
@@ -44,7 +44,7 @@ spec:
       targetPort: {{ .Values.worker.service.targetPort }}
       protocol: TCP
       name: http
-    - port: {{ get .Values.config "METRICS_PORT" | int }}
+    - port: {{ .Values.metricsPort }}
       targetPort: metrics
       protocol: TCP
       name: metrics

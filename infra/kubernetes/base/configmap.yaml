@@ -4,10 +4,12 @@ metadata:
   name: streamarr-config
   labels:
     app.kubernetes.io/name: streamarr
+# Keys are the real env vars streamarr-config::Config::from_env reads --
+# see backend/crates/streamarr-config/src/lib.rs. STREAMARR_HTTP_BIND_ADDR/
+# STREAMARR_METRICS_BIND_ADDR are full socket addresses ("host:port"), not
+# bare port numbers -- keep them in sync manually with any port numbers
+# used elsewhere in this kustomize tree (Service/container port fields).
 data:
-  APP_ENV: "production"
-  LOG_LEVEL: "info"
-  LOG_FORMAT: "json"
-  METRICS_ENABLED: "true"
-  METRICS_PORT: "9090"
-  HTTP_PORT: "8080"
+  STREAMARR_LOG: "info"
+  STREAMARR_HTTP_BIND_ADDR: "0.0.0.0:8080"
+  STREAMARR_METRICS_BIND_ADDR: "0.0.0.0:9090"

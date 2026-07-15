@@ -1,217 +1,319 @@
 # Roadmap
 
-This roadmap is organised as **waves**, not sprints or calendar phases. A
-wave is a position in the project's **dependency graph**: everything in
-Wave *N* can start once its prerequisites in earlier waves have landed,
-regardless of how much calendar time that takes or how many waves are
-being worked concurrently. Waves overlap in practice — Wave 4's deployment
-infra and Wave 6's TV clients can, and do, proceed in parallel once their
-respective Wave-1/Wave-5 prerequisites are met, even though Wave 6 is
-numbered after Wave 4. The numbering reflects *what depends on what*, not
-*what happens when*.
+This document was originally written as a forward-looking plan: seven waves
+in a dependency graph, describing work not yet started. It is no longer
+that. Wave 1 and the bulk of Waves 2–7 are now built and in the tree — this
+is a rewrite of the same document as a **status report**, organised by the
+same wave/workstream structure so it still doubles as an index of what each
+workstream produced and where to find it. The wave numbering is kept for
+that indexing value, not because there's a remaining plan to sequence.
 
-Each workstream below is tagged:
+Each item below is marked:
 
-- **Agent-dispatchable** — narrowly scoped, has a clear contract to build
-  against (a trait signature, an existing API spec, a fixed set of sibling
-  files it must not touch), and can be handed to an independent, parallel
-  agent with minimal ongoing steering. This is the default mode of building
-  this project — see
-  [`architecture/overview.md`](architecture/overview.md#why-this-is-a-monorepo).
-- **Continuous single-owner** — touches shared abstractions other
-  workstreams depend on, requires judgement calls that ripple outward
-  (changing a trait signature, a schema, a coordination primitive), or is
-  performance/correctness-sensitive in a way that benefits from one
-  consistent hand across many iterations rather than parallel independent
-  attempts. These are kept as ongoing, singly-owned work even while
-  everything downstream of them is parallelised.
+- **Built** — real, working code exists for this, doing substantially what
+  the item describes (paths given so you can go read it).
+- **Partial** — real code exists, but a meaningful piece of the original
+  scope is missing, stubbed, or diverged in shape.
+- **Deferred** — nothing built yet, with the reason it was deliberately left
+  out rather than attempted and abandoned.
+
+The original **Agent-dispatchable** / **Continuous single-owner** tags are
+kept where a workstream is still open (Partial/Deferred items, and the
+"next-highest-value work" section) since that tagging is still how new work
+on this codebase should be scoped and handed out.
 
 ## Wave 1 — Foundations
 
-*Nothing meaningful can be agent-dispatched in parallel until this wave's
-core abstractions exist and are stable enough to build against.*
-
-- **Crate skeleton and the single-role-gated binary.** `streamarr-core`
-  domain types, the `RoleSet` bitflag and `streamarr-cli` entry point,
-  workspace `Cargo.toml` wiring. **Continuous single-owner** — every other
-  crate's shape depends on decisions made here.
-- **The dual-backend storage engine.** `streamarr-db`, the `Database`
-  trait, SQLite and Postgres migration sets, per
-  [ADR 0001](architecture/adr/0001-storage-engine.md). **Continuous
-  single-owner** — a schema or trait change here has to ripple through
-  every crate that persists anything, so it needs one consistent hand
-  early, before there's a large surface depending on it.
-- **The OpenAPI spec skeleton.** `crates/streamarr-api/openapi.yaml` scaffolded
-  with the core resource shapes (library items, users, sessions,
-  `system-version`), even before every endpoint is implemented — this is
-  the contract every client-facing workstream in later waves generates
-  against. **Continuous single-owner** while the shape is unstable;
-  individual endpoint additions become agent-dispatchable once the spec's
-  conventions are established.
+- **Crate skeleton and the single-role-gated binary.** **Built**, under
+  different names than originally sketched: there is no `streamarr-core`
+  crate or `RoleSet` bitflag. Domain types live in `streamarr-model`
+  (`Work`, `User`, `Session`, `Device`, `MediaFile`, `Rendition`, ...);
+  role-gating is `streamarr-config::Role` (`All` / `Api` / `Worker`, read
+  from `STREAMARR_ROLE`) plus `DeploymentTier`; the single binary is
+  `streamarr-bin` (package name), producing the `streamarr` binary from
+  `backend/src/main.rs`, a real `clap` CLI with subcommands. Functionally
+  equivalent to the planned design (one binary, gated by role at startup),
+  just simpler than a bitflag.
+- **The dual-backend storage engine.** **Built.** `streamarr-db` genuinely
+  supports both SQLite and Postgres via `sqlx`, auto-detecting the backend
+  from the connection URL scheme (`Backend::from_database_url`), with
+  separate embedded migration sets under `backend/migrations/sqlite/` and
+  `backend/migrations/postgres/` (currently 5 and 8 migrations
+  respectively — Postgres has extra migrations for cluster-leader and cache
+  tables that SQLite's single-node deployments don't need). Real
+  `WorkRepo`, `DeviceRepo`, `RenditionRepo`, and `MediaFileRepo` traits with
+  Sqlx-backed implementations, per [ADR 0001](architecture/adr/0001-storage-engine.md).
+- **The OpenAPI spec.** **Built**, and further along than "skeleton": it
+  is not hand-maintained at all. `backend/openapi/streamarr.yaml` is
+  generated from `#[utoipa::path]` annotations on every real handler
+  (`streamarr-api::openapi_spec()`), with a checked-in drift test
+  (`openapi_spec_matches_checked_in_file`) that fails CI if the file and the
+  live route annotations disagree. Every route in the section below is
+  real and reflected in this spec — there's no separate "planned" spec to
+  reconcile against.
 
 ## Wave 2 — Platform Services
 
-*Depends on Wave 1's domain types, storage engine, and API spec skeleton
-existing.*
-
-- **Auth engine.** `streamarr-auth`: `Policy`, the three trust tiers, JWT +
-  refresh token rotation, the RFC 8628 device flow — see
-  [`architecture/auth-modes.md`](architecture/auth-modes.md). **Continuous
-  single-owner** — security-sensitive, and every client's session-handling
-  code depends on this contract being right the first time rather than
-  iterated on in parallel.
-- **`ClusterCoordinator`.** `streamarr-cluster`: the trait,
-  `SingleNodeCoordinator`, `PostgresCoordinator` (advisory locks +
-  heartbeat), gossip as an opt-in — see
-  [`architecture/distributed-design.md`](architecture/distributed-design.md).
-  **Continuous single-owner** for the trait and `PostgresCoordinator`;
-  gossip membership is **agent-dispatchable** as an additive, opt-in
-  implementation once the trait is frozen.
-- **arr-ecosystem adapters.** `streamarr-arr`: one adapter per wrapped
-  application (Sonarr, Radarr, Prowlarr, Bazarr). **Agent-dispatchable, one
-  agent per adapter** — each adapter talks to one external REST API,
-  normalises into `streamarr-core` types, and has essentially no
-  interaction with its sibling adapters.
-- **Metadata scanning.** `streamarr-metadata`: library scanning, metadata
-  agents, artwork fetch/cache. **Agent-dispatchable** once
-  `streamarr-core`'s library item types are stable — largely independent
-  of auth and clustering work happening in the same wave.
+- **Auth engine.** **Built** for the mechanism, **Partial/Deferred** for
+  persistence. `streamarr-auth` has real JWT access-token issuance and
+  verification, real refresh-token rotation, and a real RFC 8628 device
+  flow (`DeviceFlowHandler`, `DashMapDeviceFlowHandler`). All three trust
+  tiers from `docs/architecture/auth-modes.md` exist as `AuthMode`
+  variants (`TrustedNetwork`, `ManagedProfiles`, `FullAccount`) with real
+  login-resolution logic, and a real `PolicyEvaluator`/`DefaultPolicyEvaluator`
+  for authorization decisions. Bearer-token enforcement is real and wired
+  into every route that needs it: `streamarr-api::auth_extractor`'s
+  `AuthUser`/`AdminUser` are genuine Axum `FromRequestParts` extractors
+  that reject a missing/invalid/expired token with a real 401 (and a
+  non-admin token with a real 403) before the handler body runs — see e.g.
+  the Web admin request-approval screen
+  (`clients/tv-web/web/src/pages/Admin.tsx`) exercising exactly this path.
+  **Deferred: no persisted `UserRepo`/`PolicyRepo`.** `UserDirectory` and
+  the admin registry are both real trait boundaries, but their only
+  implementations today are `InMemoryUserDirectory`/`InMemoryAdminRegistry`
+  — there is no Sqlx-backed user or policy table, so accounts and
+  permissions don't survive a restart. **Deferred: `FullAccount` login has
+  no provisioning story.** The login-time verification path for
+  `AuthMode::FullAccount` is real, but nothing in the API creates a user —
+  there's no register/signup endpoint anywhere in `streamarr-api`; a
+  comment in `login.rs` explicitly scopes user provisioning as
+  "out-of-scope" for that module. Both are deferred because they need a
+  real persistence/admin-tooling design decision, not because they're hard.
+- **`ClusterCoordinator`.** **Built** for the two shipped implementations,
+  **Deferred** for gossip. `streamarr-coordination` (not `streamarr-cluster`)
+  has a real `ClusterCoordinator` trait with two real implementations:
+  `SingleNodeCoordinator` (correct-by-construction, no contention) and
+  `PostgresCoordinator` (genuine `pg_try_advisory_lock`/`pg_advisory_unlock`
+  mutual exclusion plus a `cluster_leader` heartbeat table for leader
+  election, per `backend/migrations/postgres/0003_cluster_leader.sql`).
+  **Deferred:** gossip-based membership as an opt-in additive layer was
+  never started — there is no gossip code anywhere in the workspace. Not
+  needed yet: nothing currently deployed exceeds a Postgres-coordinated
+  cluster's needs.
+- **arr-ecosystem adapters.** **Built**, and broader than planned:
+  `streamarr-arr-client` (not `streamarr-arr`) has one real adapter each
+  for Sonarr, Radarr, Prowlarr, Bazarr, **and** Lidarr and Readarr (music
+  and books, beyond the original four-adapter scope), all over a shared
+  `http.rs` client.
+- **Metadata scanning.** **Built, but architecturally different from the
+  plan.** There is no standalone `streamarr-metadata` crate doing its own
+  independent library scanning/artwork fetch. Instead, `streamarr-arr-sync`
+  polls and receives webhooks from the wrapped *arr apps
+  (`poller.rs`/`webhook.rs`) and reconciles their already-scanned metadata
+  into `streamarr-model::Work`/`MediaFile` rows (`media_sync.rs`), while
+  `streamarr-catalog` serves the read-side browse/search/detail API on top.
+  This is a deliberate, reasonable shape for a server that wraps Sonarr/
+  Radarr/etc. rather than replacing them — those apps already do metadata
+  scanning, so Streamarr consumes their output instead of duplicating it.
+  One real gap versus even this narrower scope: artwork (`ImageAsset`) is
+  stored as a URL reference passed through from the source app, with no
+  server-side fetch/cache/proxy pipeline of its own.
 
 ## Wave 3 — Media Pipeline
 
-*Depends on Wave 1's storage engine and Wave 2's cluster coordinator
-(for session-affinity bookkeeping).*
-
-- **On-demand transcode session manager.** `streamarr-transcode`: ffmpeg
-  process supervision, HLS/DASH packaging, the DRM license endpoints
-  (Widevine, FairPlay, PlayReady), session-to-node affinity routing per
-  [`architecture/distributed-design.md`](architecture/distributed-design.md).
-  **Continuous single-owner** — latency-sensitive, shares mutable
-  process-lifecycle state, and mistakes here are directly user-visible as
-  broken playback.
-- **Background transcode dispatch.** `streamarr-tdarr`: job queueing and
-  dispatch against a Tdarr-compatible worker pool, checkpointed progress.
-  **Continuous single-owner** initially (shares scheduling concerns with
-  the coordinator's leadership responsibilities), becoming
-  **agent-dispatchable** for individual codec/preset profile additions once
-  the dispatch core is stable.
+- **On-demand transcode session manager.** **Partial.** `streamarr-transcode`
+  has a real `TranscodeOrchestrator` implementing the planned three-step
+  decision order (direct-play → existing rendition → spawn on-demand
+  transcode), real ffmpeg HLS argument construction
+  (`build_ffmpeg_hls_args`), and session state in whatever
+  `streamarr-cache::CacheAndPubSub` backend is configured (in-memory or
+  Redis). **Deferred: DRM license endpoints (Widevine, FairPlay, PlayReady)
+  do not exist** — there is no license-serving code anywhere in the
+  transcode crate or the OpenAPI spec, despite being named explicitly in
+  the original plan. **Deferred: session-to-node affinity routing** for
+  multi-node deployments also isn't built — `TranscodeSession` state is
+  stored, but nothing routes a follow-up request for an in-progress session
+  back to the node running it. Both are deferred because they only matter
+  once a real multi-node/DRM-required deployment exists to drive the
+  design, and neither has one yet.
+- **Background transcode dispatch.** **Built.** A real `TdarrDispatcher`
+  (in `streamarr-transcode`) hands work off through `streamarr-tdarr-client`,
+  a genuine typed client for Tdarr's REST v2 API (`x-api-key` auth, node/
+  worker-capacity queries, file-scan requests). **Deferred:** checkpointed
+  progress tracking across dispatcher restarts, mentioned in the original
+  plan, isn't implemented — a restart currently loses in-flight job
+  progress rather than resuming it.
 
 ## Wave 4 — Deployment Infra
 
-*Depends on Wave 1's binary/role-gating shape being stable enough to
-target; does not depend on Waves 2/3 being feature-complete, since infra
-scaffolding only needs to know how the binary is invoked, not everything it
-can do yet.*
+All three tiers are **Built** as real, checked-in files (not just
+scaffolding), with paths shifted from the original plan's `infra/`
+sketch to what's actually there:
 
-- **systemd tier.** `infra/systemd/streamarr.service`, the installer, the
-  opt-in update timer — see
-  [`architecture/deployment/systemd.md`](architecture/deployment/systemd.md).
-  **Agent-dispatchable.**
-- **docker-compose tier.** `docker-compose.prod.yml`, `.env.example`, the
-  Watchtower overlay — see
-  [`architecture/deployment/docker-compose.md`](architecture/deployment/docker-compose.md).
-  **Agent-dispatchable.**
-- **Kubernetes tier.** `deploy/helm/streamarr/`, the Flux GitOps manifests
-  under `deploy/gitops/` — see
-  [`architecture/deployment/kubernetes.md`](architecture/deployment/kubernetes.md).
-  **Agent-dispatchable.**
+- **systemd tier.** `infra/systemd/streamarr.service`, `install.sh`,
+  `streamarr.env.example`, and an update-check timer/service pair
+  (`streamarr-update-check.timer`/`.service`) — the opt-in update timer
+  from the plan is real.
+- **docker-compose tier.** `infra/docker/docker-compose.{dev,prod,ci,mock}.yml`
+  plus `docker-compose.watchtower.optional.yml` for the opt-in
+  auto-update overlay, and a real `backend.Dockerfile`.
+- **Kubernetes tier.** `infra/kubernetes/` has both a real Helm chart
+  (`helm/streamarr/Chart.yaml`+`values.yaml`) and a plain Kustomize
+  `base/`+`overlays/{dev,staging,prod}` set, plus an example Flux
+  image-automation manifest — narrower than the plan's implied full
+  `deploy/gitops/` tree (one example file, not a maintained GitOps
+  directory), but the base/overlay/chart structure itself is real.
 
-These three are dispatched as fully independent parallel agents in
-practice — each tier's infra files reference the same binary and the same
-config shape but never touch each other's files, which is exactly the
-monorepo-with-disciplined-directory-ownership pattern described in
-[`architecture/overview.md`](architecture/overview.md#why-this-is-a-monorepo).
+**Deferred (explicitly, not a gap in this pass): no live docker-compose
+end-to-end proof.** All three tiers' files exist and are internally
+consistent, but nothing in this environment has actually run
+`docker compose up` against them to confirm a real boot — that requires
+starting real services, which this pass deliberately did not do. Treat the
+compose/Helm/systemd files as "should work, unverified end-to-end" until
+someone runs them for real.
 
 ## Wave 5 — Client Foundations
 
-*Depends on Wave 1's OpenAPI spec being complete enough to generate real
-clients against, and benefits from (but doesn't strictly require) Wave 2's
-auth flow being implemented, since every client needs to authenticate.*
-
-- **Web client / TV shell.** `clients/tv-shell/` and `clients/web/` — see
-  [`architecture/clients/web.md`](architecture/clients/web.md). Treated as
-  a **Wave 5 priority ahead of its Wave 6 siblings** because it is the base
-  every TV-web client in Wave 6 builds on; landing it late would block
-  webOS, Tizen, and the VIDAA fallback simultaneously. **Continuous
-  single-owner** for the shared shell and player/platform-adapter
-  interfaces; individual screens/components are **agent-dispatchable**
-  once those interfaces exist.
-- **Android Mobile.** `clients/android/core/`, `clients/android/playback/`,
-  `clients/android/mobile/` — see
-  [`architecture/clients/android-mobile.md`](architecture/clients/android-mobile.md).
-  **Agent-dispatchable** once the OpenAPI spec is stable enough to generate
-  a Kotlin client from.
-- **iOS.** `clients/ios/StreamarrKit/`, the app target — see
-  [`architecture/clients/ios.md`](architecture/clients/ios.md).
-  **Agent-dispatchable**, source-scaffoldable without Xcode installed in a
-  given environment (see the gap noted in that doc and in
-  `clients/ios/README.md`), independent of the Android work in this same
-  wave.
+- **Web client / TV shell.** **Built**, as one merged monorepo rather than
+  the originally separate `clients/tv-shell/`/`clients/web/`:
+  `clients/tv-web/` has a standalone web app (`web/`), three TV app shells
+  under `apps/` (see Wave 6), and shared packages for domain logic
+  (`domain`), the TV UI kit (`ui-tv`), a real generated API client
+  (`api-client`, see below), design tokens, device-auth, spatial navigation,
+  and two player adapters (`player-shaka`, `player-avplay`).
+- **Client SDK codegen.** **Partial**, and this is a real, worth-knowing
+  divergence: only the **TypeScript** client is actually generated and
+  committed as generated output — `clients/tv-web/packages/api-client`'s
+  `pnpm run generate` runs `openapi-typescript` against
+  `backend/openapi/streamarr.yaml` for real, and `src/generated/schema.ts`
+  is that real generated file. **Kotlin and Swift codegen are configured
+  but never executed**: `clients/shared/sdk-codegen/{kotlin,swift}-config.yaml`
+  and `scripts/gen-sdk.sh` are real `openapi-generator` configs pointing at
+  output directories (`clients/android-shared/sdk`,
+  `clients/ios/StreamarrSDK`) that don't exist in the tree. Android and iOS
+  instead ship **hand-written mirrors** of the OpenAPI schemas
+  (`StreamarrHttpClient.kt`'s models, `OpenAPISchemas.swift`), written by
+  reading the spec directly — a deliberate choice documented in
+  `OpenAPISchemas.swift`'s own comment (the generic Swift5 generator
+  doesn't produce correct `Codable` conformances for several `oneOf`
+  schemas), not an oversight. Regenerating for real is still available any
+  time via `scripts/gen-sdk.sh`.
+- **Android Mobile.** **Built.** `clients/android-shared/` (core-auth,
+  core-data, core-domain, core-designsystem, core-player, core-update) plus
+  `clients/mobile-android/` for the app shell, including a real
+  request-management screen (`RequestsScreen.kt`) over the request-lifecycle
+  API.
+- **iOS.** **Built**, within the documented environment constraint:
+  `clients/ios/Sources/StreamarrKit/` and `StreamarrApp/` are real Swift
+  source, including request-management UI (`RequestsView.swift`/
+  `RequestsViewModel.swift`). **Deferred: no Xcode project layer** — the
+  package is real SPM source but there's no `.xcodeproj`/real App target,
+  documented explicitly in `clients/ios/README.md` as a consequence of
+  Xcode not being installed in the environment this was built in
+  (`xcodebuild` errors immediately without a real Xcode install). This is
+  an environment limitation, not unfinished application logic.
 
 ## Wave 6 — TV Clients
 
-*Depends on Wave 5's Web/TV-shell codebase existing (webOS, Tizen, and the
-VIDAA fallback are thin adapters on top of it) and on Wave 5's Android
-Mobile modules (Android TV shares `core/`/`playback/` with it).*
+- **Android TV.** **Built.** `clients/tv-android/` shares
+  `android-shared`'s core modules, including its own request-management
+  screen (`RequestsScreen.kt`).
+- **webOS.** **Built.** `clients/tv-web/apps/tv-webos/`, a real adapter
+  over the shared TV shell using `player-shaka`.
+- **Tizen.** **Built.** `clients/tv-web/apps/tv-tizen/`, using the
+  `player-avplay` adapter for Samsung's `AVPlay`.
+- **VIDAA fallback.** **Built** as scoped: `clients/tv-web/apps/tv-vidaa-fallback/`
+  exists as the optional PWA sideload reusing the shared TV shell, per the
+  original "not a build workstream in the conventional sense" framing —
+  there is still no native VIDAA app, by design.
 
-- **Android TV.** `clients/android/tv/` — see
-  [`architecture/clients/android-tv.md`](architecture/clients/android-tv.md).
-  **Agent-dispatchable**, largely a D-pad-aware UI layer over Wave 5's
-  shared Android modules.
-- **webOS.** `clients/webos/` — see
-  [`architecture/clients/webos.md`](architecture/clients/webos.md).
-  **Agent-dispatchable**, a platform-bridge adapter over the Wave 5 TV
-  shell.
-- **Tizen.** `clients/tizen/` — see
-  [`architecture/clients/tizen.md`](architecture/clients/tizen.md).
-  **Agent-dispatchable**, a platform-bridge-plus-player adapter (`AVPlay`)
-  over the Wave 5 TV shell.
-- **VIDAA fallback.** No native client — Cast/AirPlay from Wave 5 clients,
-  plus the optional unsupported PWA sideload reusing the Wave 5 TV shell
-  build as-is. See [`architecture/clients/vidaa.md`](architecture/clients/vidaa.md)
-  for the feasibility verdict. **Not a build workstream** in the
-  conventional sense — the work here is the ToS re-verification process
-  attached to the sideload path, which is **continuous single-owner**
-  (a standing, recurring check, not a one-time deliverable) if and only if
-  that fallback is ever promoted beyond best-effort.
+All four TV surfaces (plus webOS/Tizen/VIDAA) share `VersionBanner.tsx`
+for the simple, non-blocking check-on-launch update nag described in
+[`versioning-policy.md`](versioning-policy.md).
 
 ## Wave 7 — Hardening and Versioning Rollout
 
-*Depends on every client in Waves 5–6 existing (there is nothing to enforce
-compatibility across until multiple real clients exist) and on Wave 1's
-`apiVersion` scaffolding being wired through the API layer.*
+- **Versioning enforcement middleware + CI compatibility matrix.**
+  **Partial**, and substantially narrower than originally planned — see
+  [`versioning-policy.md`](versioning-policy.md) for the full detail. In
+  short: the `version_gate` middleware is real Tower plumbing genuinely
+  layered over the whole router, and `GET /api/system/version` is real and
+  unauthenticated, but the middleware's actual floor comparison is a
+  documented stub that always passes (no request has ever been rejected),
+  and the endpoint's `compatibility` array is currently always empty (the
+  TOML-to-wire mapping hasn't been written). **There is no pinned-fixture
+  CI compatibility matrix, no N-2 promise, and no per-`apiVersion`
+  enforcement** — those were never built; `api_version` today is an
+  uncompared, informational string.
+- **Per-platform update mechanism wiring.** **Built**, per-platform, and
+  for real: Android's `core-update` module drives Play's In-App Updates API
+  for real (`AppUpdateCoordinator` over Play Core, `resolveUpdateAction`
+  choosing Flexible/Immediate); iOS's `AppUpdateEvaluator` computes a real
+  UX state (though, as documented in its own comments, it has zero
+  enforcement power — Apple prohibits OTA code execution) plus a secondary,
+  display-only App Store Lookup client; Web has a real, working service-
+  worker-driven OTA path (`sw.js` + `build-manifest.json` polling) that can
+  actually deliver a new bundle without a store review; webOS/Tizen/VIDAA
+  correctly have no OTA path and instead show `VersionBanner`. All of this
+  is real, working client code — its only real limitation is the empty
+  `compatibility` array noted above, which means none of it can currently
+  see real floor/deprecation data from a live server.
+- **Security review and docs finalisation.** **Partial.** No dedicated
+  security-review pass across auth/DRM/deployment defaults has been done —
+  there's no DRM to review yet (see Wave 3), and auth's persistence gaps
+  (Wave 2) are still open. Docs finalisation is what this very document and
+  `versioning-policy.md` are: a targeted reconciliation pass, not a full
+  sweep of every doc in `docs/architecture/` (e.g. `auth-modes.md` still
+  describes a planned `apiv` JWT claim that doesn't exist in the real code
+  — out of scope for this pass, but a known, undone piece of the same
+  cleanup).
 
-- **Versioning enforcement middleware + CI compatibility matrix.** The
-  `426`/deprecation-header middleware, the `system-version` endpoint, the
-  pinned-fixture compatibility CI job — see
-  [`versioning-policy.md`](versioning-policy.md). **Continuous
-  single-owner** — this is the mechanism every other workstream's release
-  cadence depends on being correct; getting the N-2 enforcement wrong
-  breaks compatibility promises silently across the whole client fleet.
-- **Per-platform update mechanism wiring.** Play In-App Updates
-  integration, the iOS Lookup-API interstitial, the Web/VIDAA
-  service-worker OTA path, and documenting the webOS/Tizen no-OTA
-  resubmission reality in each client's release process — see the
-  per-platform table in [`versioning-policy.md`](versioning-policy.md).
-  **Agent-dispatchable, one agent per platform** — each platform's update
-  mechanism is implemented entirely within that platform's own client
-  directory against the shared `system-version` contract from Wave 1.
-- **Security review and docs finalisation.** A final pass across auth,
-  DRM license endpoints, and the deployment tiers' default configurations,
-  plus bringing `docs/` fully in sync with whatever changed during Waves
-  1–6. **Continuous single-owner** for the security pass itself; docs
-  finalisation is **agent-dispatchable** per doc subtree, mirroring how
-  this very docs tree was built.
+## What's deferred, and why
 
-## How to read this if you're picking up work
+Consolidated from the wave-by-wave detail above, for anyone scanning for
+"what's not here yet":
 
-If you're an agent (or a person) about to start a workstream: check which
-wave it's in, confirm the prerequisite waves' relevant pieces actually
-exist in the tree yet (not just "the wave number is lower" — a Wave 6 TV
-client genuinely cannot start meaningfully before Wave 5's TV shell has
-landed, wave numbering exists precisely to make that dependency explicit),
-and if it's tagged agent-dispatchable, treat your slice of the directory
-tree as yours alone for the duration of the task — the whole point of the
-tagging in this document is that agent-dispatchable work should be
-handed out at exactly this granularity, not bundled into bigger,
-harder-to-parallelise chunks.
+- **No persisted `UserRepo`/`PolicyRepo`.** Real trait boundaries, only
+  in-memory implementations. Needs a real persistence design decision.
+- **`FullAccount` login has no provisioning story.** Login verification
+  exists; nothing creates a user via the API.
+- **No Chromecast/AirPlay, push notifications, offline downloads, or deep
+  linking**, on any client. None of this exists in the client trees at all
+  — not attempted yet, not partially built.
+- **No DRM (Widevine/FairPlay/PlayReady) license endpoints.** Named in the
+  original Wave 3 plan, never implemented.
+- **No live docker-compose (or Helm/systemd) end-to-end boot proof.** The
+  files are real and internally consistent; nothing has started the real
+  services to confirm they actually come up together. Deliberately not
+  attempted in this pass — starting real services is out of scope for a
+  docs-reconciliation task.
+- **No real device testing or store submissions**, for any client (Google
+  Play, App Store, LG Content Store, Samsung Seller Office). None of this
+  environment has the accounts, signing credentials, or physical/virtual
+  devices such testing needs.
+- **No gossip-based cluster membership**, no DRM as above, no session-to-
+  node transcode affinity routing, no checkpointed Tdarr dispatch progress,
+  no server-side artwork fetch/cache pipeline. All smaller, genuinely
+  deferred pieces of otherwise-built workstreams — see Waves 2–3 above for
+  which.
+- **No `apiVersion` enforcement or CI compatibility matrix.** See
+  `versioning-policy.md` — the whole originally-planned enforcement layer
+  is unbuilt; what exists is unenforced plumbing plus independent
+  client-side evaluators with nothing real to evaluate against yet.
+
+## Realistic next-highest-value work
+
+In rough priority order, based on what would unblock the most other
+deferred work or close the biggest real gap:
+
+1. **Wire `client-compatibility.toml` into `VersionEnvelope.compatibility`
+   and implement the version-gate's real comparison.** This single change
+   makes every already-built client-side update evaluator (Android, iOS,
+   Web, all three TV shells) start working against real data — it's the
+   highest-leverage remaining piece precisely because the client side is
+   already fully built and just waiting on real server data.
+2. **A real, persisted `UserRepo`/`PolicyRepo` plus a `FullAccount`
+   provisioning (signup) endpoint.** Unblocks any deployment that isn't
+   pure `TrustedNetwork`/`ManagedProfiles`, and is the one piece of the
+   auth engine that's an actual functional gap rather than a nice-to-have.
+3. **A real docker-compose boot, run against the actual services.** Cheap
+   to do, high-confidence payoff — turns "should work" into "confirmed
+   works" for the deployment tier most people will actually try first.
+4. **DRM license endpoints**, once a concrete deployment needs protected
+   playback — not urgent in the abstract, but currently the single largest
+   named gap against the original media-pipeline scope.
+5. **Kotlin/Swift SDK codegen, for real**, replacing the hand-written
+   mirrors once `scripts/gen-sdk.sh`'s output has been reviewed for the
+   `oneOf`-schema issues that motivated hand-writing them in the first
+   place — lower urgency than the above since the hand-written mirrors are
+   real, working code today, not a blocker.

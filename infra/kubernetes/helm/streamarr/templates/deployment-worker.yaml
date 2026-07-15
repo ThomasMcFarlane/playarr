@@ -71,7 +71,7 @@ spec:
               containerPort: {{ .Values.probes.port }}
               protocol: TCP
             - name: metrics
-              containerPort: {{ get .Values.config "METRICS_PORT" | int }}
+              containerPort: {{ .Values.metricsPort }}
               protocol: TCP
           readinessProbe:
             httpGet:

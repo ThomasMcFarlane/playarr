@@ -8,19 +8,35 @@ exception to statelessness — on-demand transcode sessions.
 
 ## Statelessness requirements
 
-Every `--role api` process must be interchangeable with every other
-`--role api` process from the point of view of an incoming request, with
+Every `STREAMARR_ROLE=api` process must be interchangeable with every other
+`STREAMARR_ROLE=api` process from the point of view of an incoming request, with
 exactly one documented exception (transcode session affinity, below). This
 is the property that makes horizontal scaling, rolling deploys, and pod
 eviction in Kubernetes safe rather than something that silently drops
 requests or corrupts state. Concretely:
 
-- **No durable state lives in process memory.** Users, sessions (playback
-  position, watch history), policies, refresh tokens, library metadata, and
-  transcode job state all live in the database (SQLite at Tier 1, Postgres
-  at Tiers 2/3). An API node that receives a request has everything it
-  needs to answer it by reading the database; it does not need to have
-  "seen" the client before.
+- **No durable state lives in process memory — this is the target, and is
+  true today for devices and library/catalog data, but not yet for
+  everything.** `Device` rows, `Work`/`MediaFile`/`Rendition` catalog data,
+  and playback analytics all really do live in the database (SQLite at
+  Tier 1, Postgres at Tiers 2/3) via real `streamarr-db` repositories, so an
+  API node handling a request for those doesn't need to have "seen" the
+  client before. **`User` accounts, `Policy` records, refresh-token
+  secrets, and RFC 8628 device-authorization state do not yet** — there is
+  no `UserRepo`/`PolicyRepo` in `streamarr-db`, and no `users`/`sessions`/
+  `refresh_tokens`/`policies` table in either migration set. `streamarr-auth`'s
+  `InMemoryUserDirectory`, `InMemoryAdminRegistry`, `InMemoryRefreshTokenStore`,
+  and `InMemoryDeviceAuthorizationStore` are real, working, thread-safe
+  implementations (not mocks) that make the login/refresh/device-pairing
+  flows fully functional *within one process's lifetime* — but that state
+  does not survive a restart and is not visible to a second node, which
+  directly violates the interchangeability property this section otherwise
+  describes. See [`auth-modes.md`](auth-modes.md) for what this means
+  concretely for each `AuthMode`. This is the single biggest asterisk on
+  "Streamarr is stateless above the database" as of this pass, and a
+  multi-node deployment should not be run against `AuthMode::FullAccount`
+  or expect device-pairing approvals to work across nodes until real
+  persistence lands here.
 - **Ephemeral, non-durable state (rate limiting, short-lived caches) is
   either per-node with a short TTL and no cross-node consistency
   requirement, or lives in a shared store when correctness genuinely
@@ -35,7 +51,7 @@ requests or corrupts state. Concretely:
   that another node might need to serve — anything a differently-routed
   request might need must be reachable from the database or object storage,
   not assumed to be on "the node that handled it last time."
-- **Background work is resumable, not owned.** A `--role worker` process
+- **Background work is resumable, not owned.** A `STREAMARR_ROLE=worker` process
   that dies mid-job (background Tdarr transcode, library scan) leaves
   checkpointed progress in the database; any other worker process can pick
   the job back up. Nothing about a background job assumes it will finish on
@@ -48,97 +64,120 @@ concrete, immediate playback failure.
 
 ## The `ClusterCoordinator` design
 
-Multi-node deployments need exactly one thing that single-node deployments
-don't: agreement about which node is allowed to do work that must not run
-twice concurrently (issuing scheduled maintenance jobs, running database
-migrations on startup, owning certain singleton background loops). This is
-abstracted behind a `ClusterCoordinator` trait in `streamarr-cluster`:
+Multi-node deployments need two related but distinct things that
+single-node deployments don't: mutual exclusion (don't let two nodes run
+the same short-lived unit of work concurrently) and leader election (let
+exactly one node own a longer-lived singleton responsibility until it dies
+or gives it up). Both are abstracted behind one `ClusterCoordinator` trait
+in `streamarr-coordination`, sharing a trait because they share a backend
+and both are needed by `backend/src/main.rs`'s worker composition: the
+background Tdarr dispatch loop campaigns for leadership of the
+`"transcode-dispatcher"` role (via the `run_while_leader` helper — campaign,
+then keep renewing the lease every `ttl / 2` for as long as the loop runs)
+so only one node in a multi-node deployment ever dispatches to Tdarr, while
+each arr-sync reconciliation poller instead takes a short-lived `try_lock`
+scoped to its own source instance (`arr-sync:<source_instance_id>`) around
+each individual poll pass, so two nodes can't overlap reconciling the same
+*arr instance concurrently — every node runs its own poller loop, but a
+lock (not an election) keeps any single pass from double-running:
 
 ```rust
 #[async_trait]
 pub trait ClusterCoordinator: Send + Sync {
-    /// Register this node in the cluster, returning its assigned node_id.
-    async fn register_node(&self, roles: RoleSet, address: SocketAddr) -> Result<NodeId>;
+    /// Non-blocking attempt to acquire a named, TTL-bounded exclusive
+    /// lock. `Ok(None)` (not an error) means someone else holds it.
+    async fn try_lock(&self, key: &str, ttl: Duration) -> Result<Option<LockGuard>, CoordinationError>;
 
-    /// Attempt to acquire leadership for a named responsibility
-    /// (e.g. "scheduler", "migration-runner"). Returns true if this node
-    /// now holds it.
-    async fn try_acquire_leadership(&self, responsibility: &str) -> Result<bool>;
+    /// Attempts to become leader for `role`. Non-blocking: returns whether
+    /// *this call* won or renewed leadership.
+    async fn campaign_leader(&self, role: &str, ttl: Duration) -> Result<bool, CoordinationError>;
 
-    /// Renew this node's leadership claim / liveness heartbeat. Must be
-    /// called more often than the staleness threshold or leadership (and
-    /// node membership) will be considered lost.
-    async fn renew_heartbeat(&self, node_id: NodeId) -> Result<()>;
+    /// Extends this node's existing leadership of `role`. Returns
+    /// `Ok(false)` (not an error) if leadership was lost.
+    async fn renew_leadership(&self, role: &str, ttl: Duration) -> Result<bool, CoordinationError>;
 
-    /// Whether this node currently holds leadership for a responsibility.
-    fn is_leader(&self, responsibility: &str) -> bool;
-
-    /// Current known cluster membership (for admin/status endpoints and
-    /// for peer-aware routing, e.g. transcode session affinity below).
-    async fn list_nodes(&self) -> Result<Vec<ClusterNode>>;
+    /// Cheap, local, non-blocking read of the last-known outcome of
+    /// campaign/renew for `role` — does not itself contact the backend.
+    fn is_leader(&self, role: &str) -> bool;
 }
 ```
 
+There is no `register_node`, `list_nodes`, `NodeId`, or `ClusterNode` on
+this trait — cluster *membership* (as opposed to leadership of one named
+role) is not something `ClusterCoordinator` tracks at all; see the "Known
+gap" note under `PostgresCoordinator` below.
+
 ### `SingleNodeCoordinator` (Tier 1)
 
-A no-op implementation used whenever the process's `RoleSet` is
-`STANDALONE` and no peers are configured. `try_acquire_leadership` always
-returns `true` immediately (there is only ever one node, so it is trivially
-the leader of everything), `list_nodes` returns a single entry for itself,
-and `renew_heartbeat` is a cheap no-op. This exists so that every code path
-that depends on `ClusterCoordinator` — the scheduler, the migration runner —
-can be written once against the trait and just work at Tier 1 without an
-`if standalone` branch scattered through calling code.
+The in-process implementation used for `DeploymentTier::SingleNode`.
+`try_lock` is a **real** lock — a `tokio::sync::Mutex` per key — so it
+genuinely serialises concurrent tasks within this one process; it is not a
+no-op. `campaign_leader`/`renew_leadership`/`is_leader` *are* trivially and
+permanently `true` for every role, because a single node has no peers to
+lose an election to. This exists so that every code path that depends on
+`ClusterCoordinator` can be written once against the trait and just work at
+Tier 1 without an `if standalone` branch scattered through calling code.
 
 ### `PostgresCoordinator` (Tiers 2/3, default)
 
-The default multi-node implementation, requiring only the Postgres database
-every Tier 2/3 deployment already has — no separate coordination service.
-Two mechanisms:
+The multi-node implementation, requiring only the Postgres database every
+Tier 2/3 deployment already has — no separate coordination service. Two
+separate mechanisms, not one:
 
-- **Leader election via advisory locks.** Each named responsibility maps to
-  a stable 64-bit lock key (a hash of the responsibility name).
-  `try_acquire_leadership` calls `pg_try_advisory_lock(key)`; the first node
-  to successfully acquire it holds leadership for that responsibility until
-  it releases the lock or its session ends (including on crash — Postgres
-  releases session-level advisory locks automatically when the holding
-  connection dies, so a crashed leader doesn't require an explicit failover
-  timeout for lock-holding purposes).
-- **Membership and health via a heartbeat table.** A `cluster_nodes` table
-  (`node_id`, `role_set`, `address`, `last_heartbeat`, `registered_at`) is
-  upserted by each node on a fixed interval (default 5 seconds). A node is
-  considered live if `last_heartbeat` is within a staleness threshold
-  (default 15 seconds — three missed heartbeats); `list_nodes` filters on
-  this. This table is what other subsystems (notably transcode session
-  routing, below) query to know which nodes currently exist and what roles
-  they hold, independent of advisory-lock leadership.
+- **Mutual exclusion (`try_lock`) via session-level advisory locks.**
+  `SELECT pg_try_advisory_lock(hashtext($1))`, keyed by a hash of the lock
+  name; the returned `LockGuard` releases it (`pg_advisory_unlock`,
+  hashing the same key, on the *same* connection) when dropped, or
+  automatically when Postgres notices the holding session/connection has
+  died — so a crashed lock-holder doesn't require an explicit failover
+  timeout for lock-holding purposes. `ttl` is accepted by the trait for
+  both implementations but not enforced by the coordinator itself — Tier
+  1's `SingleNodeCoordinator` doesn't enforce it either; a caller that
+  needs a hard bound wraps the guarded work in its own
+  `tokio::time::timeout`.
+- **Leader election (`campaign_leader`/`renew_leadership`) via a
+  `cluster_leader` table** — not advisory locks; this is a second,
+  independent mechanism, not a variant of the first. The table is
+  `(role, node_id, expires_at)`, upserted with:
+  ```sql
+  INSERT INTO cluster_leader (role, node_id, expires_at)
+  VALUES ($1, $2, now() + $3::interval)
+  ON CONFLICT (role) DO UPDATE
+  SET node_id = excluded.node_id, expires_at = excluded.expires_at
+  WHERE cluster_leader.expires_at < now()
+     OR cluster_leader.node_id = excluded.node_id
+  RETURNING node_id
+  ```
+  A campaign only succeeds (returns a row) if the existing lease has
+  expired or is already owned by the same `node_id`; renewal is a plain
+  `UPDATE ... WHERE role = $1 AND node_id = $2 AND expires_at > now()`
+  that silently affects zero rows once the lease has lapsed (the caller
+  must treat that as leadership lost, not retry). `is_leader` never
+  touches Postgres — it's a synchronous read of the local cache of the
+  most recent campaign/renew outcome, so it can be stale by up to one
+  renewal interval under backend unavailability.
 
-### Gossip (opt-in, Tier 3 only)
-
-For large Kubernetes clusters, hammering Postgres with per-second heartbeat
-upserts from every node is unnecessary overhead once cluster size grows.
-A SWIM-style gossip membership protocol is supported as an **opt-in**
-alternative membership layer (`cluster.membership: gossip` in config,
-feature-gated behind `streamarr-cluster`'s `gossip` Cargo feature) — nodes
-discover and health-check each other peer-to-peer instead of through the
-heartbeat table, reducing to a periodic reconciliation write against
-Postgres rather than a constant one. Leader election for named
-responsibilities still goes through `PostgresCoordinator`'s advisory locks
-regardless of which membership layer is active — gossip only replaces
-*membership/liveness*, not the small amount of true mutual-exclusion
-Streamarr needs. This is off by default; `PostgresCoordinator`'s heartbeat
-table is more than sufficient for the node counts most Tier 3 deployments
-actually run, and gossip adds an operational surface (a peer-to-peer
-protocol with its own failure modes) that isn't worth taking on until
-cluster size actually demands it.
+**Known gap: there is no cluster membership table, and `list_nodes` doesn't
+exist.** `cluster_leader` only answers "who currently leads role X" — there
+is no `cluster_nodes` heartbeat table, no periodic per-node liveness
+upsert, and no way to enumerate which nodes currently exist or what roles
+they hold. An earlier draft of this document also proposed an opt-in
+SWIM-style gossip membership layer for large Tier 3 clusters as an
+alternative to a heartbeat table; neither the heartbeat table nor gossip
+was ever built. There is no `streamarr-cluster` crate (coordination lives
+in `streamarr-coordination`) and no `gossip` Cargo feature anywhere in the
+workspace. This is corrected here rather than left in as if it existed;
+membership tracking is a real gap for anything that would need it (e.g.
+routing a request to a specific *other* node by address), not something
+this pass built and forgot to document.
 
 ## Three-tier deployment table
 
 | Tier | Node count | DB backend | Coordinator | Session affinity needed? |
 |---|---|---|---|---|
 | 1 — systemd | 1 | SQLite | `SingleNodeCoordinator` | No — one node, trivially affine |
-| 2 — docker-compose | 1–3 | Postgres | `PostgresCoordinator` (heartbeat) | Yes, once >1 node |
-| 3 — Kubernetes | 3+ (autoscaled) | Postgres | `PostgresCoordinator` (heartbeat, gossip opt-in) | Yes, always |
+| 2 — docker-compose | 1–3 | Postgres | `PostgresCoordinator` (advisory locks + `cluster_leader`) | Yes, once >1 node |
+| 3 — Kubernetes | 3+ (autoscaled) | Postgres | `PostgresCoordinator` (advisory locks + `cluster_leader`) | Yes, always |
 
 This is the same table introduced in [`overview.md`](overview.md); it's
 repeated here because every row's implication for coordinator and affinity
@@ -148,67 +187,60 @@ behaviour is the subject of this document.
 
 On-demand transcode sessions (see [`overview.md`](overview.md#the-tdarr-background-vs-on-demand-transcode-split))
 are the one deliberate exception to full statelessness. When a client
-requests playback of a file it can't direct-play, the API node that
-receives that request spawns a supervised `ffmpeg` process *on itself*,
-writing HLS/DASH segments to a local, node-scoped disk cache. That `ffmpeg`
-process and its segment cache are real, physical state tied to one specific
-machine — there is no cheap way to make "an in-flight transcode" relocatable
-mid-session.
+requests playback of a file it can't direct-play,
+`streamarr_transcode::TranscodeOrchestrator::spawn_on_demand_transcode`
+spawns a supervised `ffmpeg` process on whichever node received the
+request, writing its segmented output to a local, per-session directory
+under that node's own filesystem. That `ffmpeg` process and its output
+directory are real, physical state tied to one specific machine — there is
+no cheap way to make "an in-flight transcode" relocatable mid-session.
 
-To make this safe in a multi-node deployment, the session store records the
-owning node explicitly:
+The session record itself — `TranscodeSession { id, media_file_id, profile,
+owning_node_id, current_segment, expires_at }` — is **not** a durable SQL
+table. It lives in whichever `streamarr_cache::CacheAndPubSub`
+implementation the deployment is wired with (moka in-process at Tier 1;
+Redis or Postgres `LISTEN`/`NOTIFY` at Tiers 2/3), keyed
+`transcode-session:<id>`, with the cache entry's own TTL set from
+`expires_at` — an idle session expires passively once its TTL lapses,
+there is no separate active reaper process or `"transcode-reaper"`
+leadership role sweeping a table. `owning_node_id` is a plain `String`
+(whatever the composition root generates as this process's node identity
+at boot — see `backend/src/main.rs`), not a foreign key into a membership
+table, because (per the section above) no such table exists.
 
-```sql
-CREATE TABLE transcode_sessions (
-    session_id      UUID PRIMARY KEY,
-    node_id         UUID NOT NULL REFERENCES cluster_nodes(node_id),
-    library_item_id UUID NOT NULL,
-    started_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    last_segment_at TIMESTAMPTZ,
-    client_profile  JSONB NOT NULL
-);
-```
-
-Routing subsequent segment requests back to the owning node is handled one
-of two ways depending on deployment tier, both implemented in
-`streamarr-transcode`:
-
-- **Signed redirect (default, works behind any load balancer/ingress).**
-  The node that starts a session returns its own address in an
-  `X-Streamarr-Node` header (and, for HTTP clients that follow redirects
-  transparently, a `307` to `https://<owning-node-address>/...`) on the
-  initial playback-start response. The client then requests all subsequent
-  segments directly against that address for the lifetime of the session.
-  This requires each node to be independently addressable (true at Tier
-  2/3 by design — every node has its own address in `cluster_nodes`), and
-  works with any ingress/load balancer configuration without requiring the
-  ingress itself to understand session affinity.
-- **Sticky routing at the ingress (Tier 3 optional).** Where the Kubernetes
-  ingress supports session-affinity cookies (see
-  [`deployment/kubernetes.md`](deployment/kubernetes.md)), a
-  `streamarr-session` cookie scoped to the transcode session ID can be used
-  instead, letting the ingress itself route consistently without every
-  client needing to handle the redirect. This is an optimisation, not a
-  requirement — the signed-redirect path always works and is the fallback.
+**Known gap: routing a segment request to the owning node is not
+implemented.** `GET /api/v1/playback/{media_file_id}` (the endpoint that
+runs the direct-play/existing-rendition/on-demand-transcode decision) is
+implemented and does construct a `TranscodeSession` tagged with the
+spawning node's id, but the well-known-convention URL it returns
+(`/api/v1/media/sessions/{session_id}/playlist.m3u8`) is not itself a route
+this workspace serves yet — there is no `X-Streamarr-Node` header, no `307`
+redirect, and no `streamarr-session` sticky-routing cookie; see the
+`TODO(streaming)` on `streamarr_api::playback::PlaybackInfoResponse`. A
+single-node deployment doesn't need this (there's only ever one node to
+route to); a multi-node deployment does, and it's an open follow-up rather
+than something this pass built. `streamarr-transcode`'s own code already
+anticipates the gap this creates: `TranscodeOrchestrator::expire_session`
+can only actually kill the `ffmpeg` process when called on the node that
+owns it (it keeps a `HashMap<Uuid, Child>` of only the sessions *this*
+instance spawned); expiring a session from a different node today removes
+its cache entry but has no way to reach into the owning node's process
+table — a cross-node signal (e.g. a `CacheAndPubSub::publish` on a
+per-node control channel) is called out in that module's own code comments
+as the needed follow-up once multi-node on-demand transcode is actually
+exercised end-to-end.
 
 **Node death mid-session is not migrated.** If the owning node dies while a
 transcode session is active, the session dies with it: the `ffmpeg` process
-and its segment cache are gone, and there is no way to hand a live encoding
-process to another node. The client observes this as a stalled/failed
-segment fetch, and the correct and only recovery is for the client to
-restart playback from its last known position, which negotiates a **new**
-transcode session that a (possibly different, currently healthy) node will
-own. This is an accepted, documented tradeoff, not an oversight — treating
-transcode sessions as relocatable would require either shared, sub-second
-replicated encoder state (impractical) or pausing/resuming raw `ffmpeg`
-process state across machines (not a thing `ffmpeg` supports). Background
-Tdarr jobs, by contrast, genuinely are relocatable, because they checkpoint
-progress in the database rather than existing only as in-flight process
-state — see the background-vs-on-demand split in
+and its output directory are gone, and there is no way to hand a live
+encoding process to another node. The correct and only recovery is for the
+client to restart playback from its last known position, negotiating a
+**new** transcode session that a (possibly different, currently healthy)
+node will own. This is an accepted, documented tradeoff, not an oversight —
+treating transcode sessions as relocatable would require either shared,
+sub-second replicated encoder state (impractical) or pausing/resuming raw
+`ffmpeg` process state across machines (not a thing `ffmpeg` supports).
+Background Tdarr jobs, by contrast, genuinely are relocatable, because they
+checkpoint progress in the database rather than existing only as in-flight
+process state — see the background-vs-on-demand split in
 [`overview.md`](overview.md).
-
-Stale `transcode_sessions` rows (owning node's last heartbeat past the
-staleness threshold, or `last_segment_at` past a per-session idle timeout)
-are reaped by whichever node currently holds the `"transcode-reaper"`
-leadership responsibility via `ClusterCoordinator`, so dead sessions don't
-accumulate indefinitely in the table.

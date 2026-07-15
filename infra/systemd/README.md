@@ -40,23 +40,29 @@ journalctl -u streamarr.service -f
 sudo systemctl enable --now streamarr-update-check.timer
 ```
 
-## Design assumptions made while scaffolding
+## Config contract (verified against `backend/crates/streamarr-config/src/lib.rs` and `backend/src/main.rs`)
 
-These mirror the assumptions documented in `../kubernetes/README.md` so the
-two deployment paths stay consistent:
+These mirror the same real contract documented in `../docker/README.md` so
+all three deployment paths configure the binary identically. Two real bugs
+this drifted into (invalid role value, wrong update-check CLI invocation)
+have been fixed:
 
 - Binary name `streamarr`, installed to `/usr/local/bin/streamarr`.
 - `STREAMARR_ROLE=all` is hardcoded into `streamarr.service` itself (it
   comes after `EnvironmentFile=` so it always wins over anything set in
-  `streamarr.env` - see the comment in that file). If the real binary uses
-  a different env var name or accepts different role values, update both
-  `streamarr.service` and `streamarr.env.example` together.
-- `streamarr update check --log-only` is assumed to be the real binary's
-  check-only update subcommand/flag. If the actual CLI surface differs,
-  update `streamarr-update-check.service`'s `ExecStart=` - it is the only
-  line that assumes this.
-- Config/env var names in `streamarr.env.example` (`APP_ENV`, `LOG_LEVEL`,
-  `LOG_FORMAT`, `METRICS_ENABLED`, `METRICS_PORT`, `HTTP_PORT`) match
+  `streamarr.env` - see the comment in that file). `Role::parse` only
+  accepts `all`/`api`/`worker` -- there is no CLI `--role` flag, `serve`
+  takes no arguments at all.
+- `streamarr update --check` is the real binary's check-only invocation
+  (`--check` is a flag on the `update` subcommand, confirmed against
+  `backend/src/main.rs`'s `Command::Update`) -- there is no nested `check`
+  subcommand and no `--log-only` flag. `check_for_update()` is currently a
+  stub (always reports "up to date," no real release-feed network call
+  yet), so this unit runs and exits 0 every time regardless, but the
+  invocation itself is now correct for when that lands.
+- Config/env var names in `streamarr.env.example` (`STREAMARR_LOG`,
+  `STREAMARR_HTTP_BIND_ADDR`, `STREAMARR_METRICS_BIND_ADDR`) are the real
+  ones `Config::from_env` reads, matching
   `helm/streamarr/values.yaml`'s `config` block exactly, so the two
   deployment paths configure the binary identically.
 - `WorkingDirectory=/var/lib/streamarr` is assumed to be an acceptable

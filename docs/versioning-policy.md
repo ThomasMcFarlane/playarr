@@ -1,225 +1,262 @@
 # Versioning Policy
 
-Streamarr and every Playarr client are versioned by **two deliberately
-decoupled numbers**. Conflating them — as many projects do by treating a
-SemVer bump as automatically meaning "the API changed" — breaks down the
-moment you have seven clients on wildly different update cadences and three
-platforms (webOS, Tizen, and iOS) that cannot self-update at all. This
-document is the full compatibility contract: what the two numbers mean, how
-a client discovers them, how the server enforces them, how each platform
-actually gets updated, and how the promise that old clients keep working is
-enforced in CI rather than left as a hope.
+This document describes the **real, current** version-negotiation contract
+between Streamarr and its clients — what `GET /api/system/version` actually
+returns today, what the version-gate middleware actually enforces (and does
+not yet enforce), and the update mechanism each client platform actually
+implements in its own source tree. It is written against the code, not
+against a plan: earlier drafts of this document described a more elaborate
+integer `apiVersion`/`apiVersionFloor` scheme with an N-2 backward-compatibility
+promise and a CI-enforced fixture matrix. None of that exists in the codebase.
+What exists instead is real, wired, tested plumbing whose enforcement half is
+an intentional stub — that distinction matters, and this document tries to be
+explicit about it everywhere below rather than describing the stub as if it
+were live.
 
-## The two version numbers
+## `GET /api/system/version`
 
-- **Release version (SemVer)** — e.g. `2.4.1`. Human-facing: what's in the
-  changelog, what a store listing shows, what a git tag matches. Bumped on
-  every release, following normal SemVer semantics for the *product* (major
-  for breaking user-facing behaviour, minor for features, patch for fixes).
-  It is **not** a reliable signal for whether the wire contract changed —
-  a patch release can ship with no API change at all, and a minor release
-  might.
-- **`apiVersion`** — a single incrementing non-negative integer, e.g. `17`.
-  Bumped **only** when the HTTP API's wire contract changes in a way that
-  matters to a client: a new required field, a changed response shape, a
-  removed endpoint, a changed auth flow. Many SemVer releases in a row can
-  share the same `apiVersion` if none of them touch the wire contract; a
-  single SemVer release can bump `apiVersion` exactly once even if it
-  contains several contract changes, since they all ship together and a
-  client either speaks the new contract or it doesn't — there's no
-  meaningful in-between state to version separately.
+Defined in [`backend/crates/streamarr-api/src/version.rs`](../backend/crates/streamarr-api/src/version.rs),
+mounted like any other route in `api_router()` with no auth extractor — it is
+genuinely unauthenticated, so a client can ask "what version are you" before
+it has a session. The response body is `streamarr_model::VersionEnvelope`,
+documented in [`backend/openapi/streamarr.yaml`](../backend/openapi/streamarr.yaml)
+as the `VersionEnvelope`/`CompatibilityEntry` schemas. The OpenAPI file is
+generated from the handler's `#[utoipa::path]` annotation and drift-checked
+in CI (`openapi_spec_matches_checked_in_file`), not hand-maintained, so the
+wire shape below is not going to silently drift from the spec.
 
-`apiVersion` is the number every enforcement decision in this document is
-made against. SemVer is what humans read; `apiVersion` is what the
-middleware checks.
-
-## The `system-version` endpoint
-
-Every Streamarr server exposes its version information, unauthenticated,
-at:
-
-```http
-GET /api/system/version
-```
+The real shape, as returned by a fresh checkout today:
 
 ```json
 {
-  "release": "2.4.1",
-  "apiVersion": 17,
-  "apiVersionFloor": 15,
-  "apiVersionDeprecated": [15, 16],
-  "buildCommit": "a1b2c3d4e5f6",
-  "buildDate": "2026-06-30T00:00:00Z",
-  "tier": "kubernetes"
+  "server_version": "0.1.0",
+  "api_version": "1",
+  "build_sha": null,
+  "compatibility": []
 }
 ```
 
-Field meanings:
-
 | Field | Meaning |
 |---|---|
-| `release` | This server's SemVer release version. |
-| `apiVersion` | The current, latest `apiVersion` this server speaks. |
-| `apiVersionFloor` | The minimum `apiVersion` this server will still accept requests from. Requests below this are rejected — see enforcement below. Enforced as `apiVersion - 2` (the N-2 promise, below). |
-| `apiVersionDeprecated` | The `apiVersion` values that still work but are past their recommended-fresh window and will emit deprecation warnings — always `[apiVersionFloor, apiVersion - 1]` inclusive of the floor itself, since a version at the floor is, by definition, on borrowed time. |
-| `buildCommit` / `buildDate` | Diagnostic/support metadata, not used in any compatibility decision. |
-| `tier` | Which deployment tier this server is running as (`systemd`, `docker-compose`, or `kubernetes`) — informational, surfaced in client diagnostics/support screens. |
+| `server_version` | The server's own product version string. Sourced from `[server].version` in `backend/config/client-compatibility.toml` — there is no separate versioning source for this. |
+| `api_version` | A free-form **string** (not an integer), sourced from `[server].apiVersion` in the same file. Purely descriptive today: no code anywhere, backend or client, parses or compares it. It is surfaced as informational metadata only — see e.g. `bundle-manifest.ts`'s optional `apiVersion` field, whose own comment calls it "informational only today". |
+| `build_sha` | `option_env!("STREAMARR_BUILD_SHA")` at build time; `null` unless that env var was set for the build. |
+| `compatibility` | A `CompatibilityEntry[]`, one row per platform. **Always an empty array in the current build** — see below. |
 
-Every client fetches this endpoint before or alongside authentication (it
-requires no auth, deliberately, so a client can show a useful
-"incompatible server" or "update required" message even before login
-succeeds) and caches it for the session.
+**There is no `apiVersionFloor`, no `apiVersionDeprecated` list, and no
+per-request `X-Streamarr-Api-Version` header.** `api_version` is not used in
+any compatibility decision by any code in this repository today.
 
-## Enforcement middleware behaviour
+## The compatibility table that *should* fill `compatibility`, and doesn't yet
 
-Every authenticated (and most unauthenticated) API request carries the
-client's `apiVersion`, sent as a request header:
+`backend/config/client-compatibility.toml` is the real, checked-in source of
+per-platform floors — one section per `streamarr_model::ClientPlatform`
+(`android-mobile`, `android-tv`, `ios`, `web`, `tv-webos`, `tv-tizen`,
+`tv-vidaa`). Its schema is intentionally split in two, because Android and
+everything else key off different notions of "version":
 
-```http
-X-Streamarr-Api-Version: 16
+```toml
+[android-mobile]
+latestVersionCode = 100
+minSupportedVersionCode = 80
+deprecatedBelowVersionCode = 90
+sunset = "2026-12-31"
+
+[web]
+latestVersion = "1.0.0"
+minSupported = "0.9.0"
+deprecatedBelow = "0.9.0"
+sunset = "2026-12-31"
 ```
 
-(Authenticated requests additionally carry the `apiv` claim inside the
-access-token JWT, per [`architecture/auth-modes.md`](architecture/auth-modes.md);
-the middleware trusts the explicit header over the JWT claim when both are
-present, since a client might legitimately be running a newer build than
-the token it was issued under, e.g. immediately after a hot-reload/OTA
-update on the Web client.)
+Android platforms (`android-mobile`, `android-tv`) gate on Android's own
+monotonic `versionCode` integer; every other platform gates on a SemVer-shaped
+version string. `ClientCompatibilityTable` in
+[`version_gate.rs`](../backend/crates/streamarr-api/src/version_gate.rs)
+parses this with an untagged `ClientEntry` enum so both shapes deserialize
+correctly, and a test (`shipped_client_compatibility_toml_parses`) pins the
+checked-in file against that struct so the two can't silently drift apart.
 
-`streamarr-api`'s versioning middleware, run before route handling, applies
-this logic on every request:
+**This table is consumed today only by the version-gate middleware's config
+loader — it is not projected into the `VersionEnvelope.compatibility` array
+served by `GET /api/system/version`.** `backend/src/main.rs` builds the
+envelope with `compatibility: Vec::new()` and says so explicitly in a
+comment: the mapping from the TOML's mixed version-code/SemVer shape into the
+wire's flat, all-string `CompatibilityEntry` shape hasn't been written yet,
+because it's waiting on the same version-comparison logic the middleware
+itself is stubbed on (see below). **Practical consequence: no client can
+currently learn its own floor from a real running server.** Every client-side
+evaluator described further down gets an empty list back and treats its own
+platform as having no row to enforce against.
 
-1. **No header present at all** → treated as `apiVersion = 0` (a
-   pre-versioning legacy client, or a caller sending raw HTTP without going
-   through a real client). Once `apiVersionFloor > 0` — true for any server
-   that has ever shipped a single breaking contract change — this always
-   falls into case 2 below.
-2. **`apiVersion < apiVersionFloor`** → the request is rejected outright
-   with **`426 Upgrade Required`**:
+## Version-gate middleware: real plumbing, stubbed comparison
 
-   ```http
-   HTTP/1.1 426 Upgrade Required
-   Content-Type: application/json
+[`version_gate.rs`](../backend/crates/streamarr-api/src/version_gate.rs)
+implements a genuine `tower::Layer`/`tower::Service` pair, and it is really
+layered over the whole router in `build_router` (`(router.layer(version_gate), api)`
+in `streamarr-api::lib.rs`) — every request really does pass through it, not
+just the ones that happen to need it.
 
-   {
-     "error": "api_version_too_old",
-     "message": "This client's API version (12) is no longer supported. The server requires at least 15.",
-     "apiVersionFloor": 15,
-     "apiVersionCurrent": 17
-   }
-   ```
+It reads two request headers, **not** an `apiVersion` header:
 
-   No downstream handler runs; the client is expected to show a hard
-   update-required screen, using the per-platform mechanism in the table
-   below.
-3. **`apiVersionFloor <= apiVersion < apiVersion` (current)** → the request
-   is processed **normally**, but the response carries deprecation
-   signalling headers so the client can proactively nudge the user before
-   they hit the hard floor:
+```http
+X-Streamarr-Client-Platform: android-mobile
+X-Streamarr-Client-Version: 2.4.1
+```
 
-   ```http
-   Deprecation: true
-   Sunset: 2026-10-01T00:00:00Z
-   X-Streamarr-Api-Version-Current: 17
-   ```
+Its `evaluate()` function is a deliberate, documented stub:
 
-   `Sunset` is computed from the server's configured deprecation window
-   (default 90 days from when a given `apiVersion` was superseded) and
-   updated as the server's own `apiVersion` advances further — it is a
-   moving estimate of when that client's version will cross the
-   N-2 floor, not a fixed date set once.
-4. **`apiVersion == apiVersion` (current)** → normal processing, no extra
-   headers. This is the steady-state case for an up-to-date client.
+> The floor *comparison* in `evaluate` is deliberately a stub that always
+> passes: Android's version-code comparison and the other platforms' SemVer
+> comparison are different, non-trivial parsing problems, and shipping the
+> middleware's plumbing correctly... matters more right now than the
+> comparison logic itself.
 
-The middleware is written once in `streamarr-api` and applied to every
-route uniformly (including the unauthenticated `system-version` endpoint
-itself is exempt, by necessity — a client has to be able to ask "what
-version are you" without already speaking a compatible `apiVersion`).
+Concretely: `evaluate()` reads both headers, ignores their values, and always
+returns `Pass`. **No request has ever been rejected by this middleware in a
+real deployment.** The `426 Upgrade Required` response path
+(`upgrade_required_response`, real JSON body `{"error": "client_upgrade_required",
+"minimum_version": ...}` plus an RFC 7231 `Upgrade: streamarr-client/<version>`
+header) is fully implemented and unit-tested, but its only caller
+(`VersionGateDecision::Reject`) is currently unreachable dead code
+(`#[allow(dead_code)]`) — it is ready for the day the per-platform comparison
+lands, not a path any client can hit today.
 
-## Per-platform update mechanism
+There is no `apiv` JWT claim, no N-2 backward-compatibility promise, and no
+per-`apiVersion` floor anywhere in the server. (`docs/architecture/auth-modes.md`
+still describes a planned `apiv` claim; that document is out of scope for
+this pass, but be aware the same kind of drift exists there.)
 
-Whether a `426`/deprecation signal actually reaches the user as "please
-update" depends entirely on what update mechanism that platform supports —
-this is the concrete reason the two-number scheme and the enforcement
-window exist at all, since some platforms genuinely cannot update on
-demand. Full detail lives in each client's own architecture doc; this table
-is the cross-platform summary:
+## Real per-platform update mechanisms
 
-| Platform | Update mechanism | OTA? | Notes |
-|---|---|---|---|
-| Android Mobile / Android TV | Google Play **In-App Updates API** | No code-level OTA, but in-app-triggered store update | **Flexible** mode (background download, user-chosen install) for the deprecation window; escalates to **Immediate** mode (blocking full-screen update flow) once `apiVersion` is at or below the floor. See [`architecture/clients/android-mobile.md`](architecture/clients/android-mobile.md). |
-| iOS | Client polls the **App Store Lookup API**, shows an in-app interstitial | **No OTA whatsoever** — Apple prohibits it | Soft, dismissible interstitial during the deprecation window; hard, undismissible interstitial once below the floor. Always deep-links to the App Store listing, since that's the only place an update can be obtained. See [`architecture/clients/ios.md`](architecture/clients/ios.md). |
-| Web | Versioned service worker + CDN-hosted build manifest | **Yes, full OTA** | New deploys publish a new manifest entry; the service worker detects it and prompts (or, once below the floor, forces) a reload to activate the new bundle. See [`architecture/clients/web.md`](architecture/clients/web.md). |
-| VIDAA | Same mechanism as Web, **only** on the optional unsupported PWA sideload path | Best-effort OTA, unsupported | Not applicable to the (nonexistent) native VIDAA app — there isn't one. Relying on this as an update channel carries a standing obligation to re-verify VIDAA's ToS every release; see [`architecture/clients/vidaa.md`](architecture/clients/vidaa.md). |
-| webOS | Full **LG Content Store** resubmission | **No OTA loophole** | Every release, including patches, requires a new `.ipk` and a full LG review cycle. See [`architecture/clients/webos.md`](architecture/clients/webos.md). |
-| Tizen | Full **Samsung Seller Office** resubmission | **No OTA loophole** | Every release, including patches, requires a new signed `.wgt` and a full Samsung certification cycle. See [`architecture/clients/tizen.md`](architecture/clients/tizen.md). |
+Two of the headers above (`X-Streamarr-Client-Platform` /
+`X-Streamarr-Client-Version`) are genuinely sent on every request by the
+Android and iOS clients today; the Web/TV-web client has the plumbing to send
+them (`@streamarr-tv/api-client`'s `defaultHeaders`) but no call site
+currently populates them. Since the gate is a stub regardless, this has no
+behavioural effect yet — it's noted here for accuracy, not as a bug report.
 
-The `apiVersionFloor`/deprecation-window sizing (default 90 days,
-configurable per deployment) is chosen with the **slowest** row in this
-table in mind — a store-resubmission-only platform (webOS, Tizen) or a
-review-gated platform (iOS) needs enough runway between "your version is
-now deprecated" and "your version is now rejected" to realistically get a
-new build through review and adopted by users, not just enough runway for
-an OTA-capable platform like Web to patch itself.
+### Android Mobile / Android TV — `clients/android-shared/core-update/`
 
-## The N-2 backward-compatibility promise
+- **`VersionComparator`** — a small, deliberately-not-full-SemVer numeric
+  comparator: splits on `.`, compares components as integers, ignores build
+  metadata (`+...`) and pre-release suffixes (`-beta.1`), and treats a
+  missing or non-numeric component as `0`.
+- **`UpdateAvailabilityEvaluator.evaluate()`** — looks up this platform's row
+  in `VersionEnvelope.compatibility` (empty today, so this always resolves to
+  `UpdateSeverity.None` against a real server) and would return
+  `Required(minSupportedVersion)` if below the floor,
+  `Recommended(latestVersion)` if below latest but at/above the floor, else
+  `None`.
+- **`AppUpdateCoordinator`** — a real, non-stubbed wrapper over Play Core's
+  `AppUpdateManager` (`requestAppUpdateInfo`, `startUpdateFlowForResult`,
+  `requestCompleteUpdate`). This genuinely drives Google Play's **In-App
+  Updates API**.
+- **`resolveUpdateAction()`** — starts a real update flow only when *both*
+  the server's severity *and* Play's own `updateAvailability` signal agree an
+  update exists: `Required` maps to `AppUpdateType.IMMEDIATE` (blocking),
+  `Recommended` maps to `AppUpdateType.FLEXIBLE` (background).
 
-**The server supports the current `apiVersion` and the two immediately
-preceding it (`apiVersionFloor = apiVersion - 2`).** A client that hasn't
-been updated across up to two consecutive contract-breaking release cycles
-still works — reads, writes, playback, auth, everything — against a
-current server, receiving deprecation headers as a warning rather than
-failures. Only a client more than two contract-breaking changes behind gets
-rejected with `426`.
+### iOS — `clients/ios/Sources/StreamarrKit/Update/`
 
-This number is chosen deliberately, not arbitrarily: two is enough slack to
-absorb the realistic worst case in the platform table above — an iOS or
-webOS/Tizen release stuck in review, or a user who simply hasn't updated —
-across a couple of server-side contract changes, without Streamarr having
-to indefinitely support every `apiVersion` it has ever shipped, which would
-make the server codebase's request-handling logic accumulate unbounded
-branching for old contract shapes forever.
+- **`AppUpdateEvaluator.evaluate()`** — the same style of numeric comparator
+  (`compareVersions`), producing `.upToDate` / `.softNudge(latestVersion:)` /
+  `.blocked(minSupportedVersion:)` from a `CompatibilityEntry`. One notable
+  cross-platform inconsistency: a non-numeric component sorts as `-1` here
+  (strictly below any parsed `0`), whereas Android's and the TypeScript
+  comparator (below) both treat it as `0` — a minor, independently-written
+  discrepancy worth knowing about, not a deliberate design choice.
+- This evaluator has **zero enforcement power**, and its own doc comment says
+  so explicitly: Apple prohibits an iOS app from executing code outside what
+  App Review approved, so there is no such thing as OTA on this platform.
+  The evaluator can only choose which UI to show (none, a dismissible nudge,
+  or a blocking-but-inert interstitial); real enforcement, if ever needed,
+  has to happen server-side.
+- **`AppStoreLookupClient`** — a secondary, **display-only** source hitting
+  Apple's public iTunes Lookup API, explicitly documented as *not* the
+  compatibility source of truth, and expected to be throttled to roughly
+  once a day by its caller.
+- Worth noting: the scaffold's fallback installed-version constant (`"0.1.0"`,
+  in `InstalledAppVersion.swift`) would currently evaluate as `.blocked`
+  against the checked-in `[ios] minSupported = "0.8.0"` in
+  `client-compatibility.toml` — but since the live `compatibility` array is
+  empty, that never actually surfaces outside unit tests against a
+  hand-built fixture.
 
-### Enforcement in CI
+### Web — `clients/tv-web/web/`
 
-The N-2 promise is treated as a tested guarantee, not a policy statement
-trusted to hold by convention:
+`useAppUpdate`/`appUpdate.ts` implements **two independent, both-real**
+mechanisms:
 
-- **Pinned contract fixtures.** Every time `apiVersion` is bumped, the
-  outgoing (about-to-be-superseded) request/response fixtures are frozen
-  and checked in under
-  `tests/compat/apiVersion-<N>/*.json` — real recorded request bodies and
-  their expected response shapes for that `apiVersion`. These fixtures are
-  never edited after being frozen; a schema change that would alter them
-  is exactly the kind of change that should have bumped `apiVersion`
-  instead.
-- **Compatibility matrix job.** CI runs every currently-in-window fixture
-  set (`apiVersion` through `apiVersion - 2`, i.e. whatever the live
-  `apiVersionFloor` currently is) against the **current** server build on
-  every PR. A PR that breaks any fixture inside the N-2 window fails CI
-  outright; a PR that breaks a fixture *older* than the window is expected
-  (that's exactly what falling out of the window means) and the job drops
-  that fixture set from the matrix as part of the same change that
-  advances `apiVersionFloor`.
-- **Explicit floor-bump commits.** `apiVersionFloor` is a value checked
-  into `crates/streamarr-api/src/version.rs`, not derived automatically
-  from `apiVersion - 2` at build time. Advancing it is always its own
-  reviewed commit with a changelog entry, so "the floor moved and a
-  platform fell out of support" is always a deliberate, visible, reviewable
-  decision rather than something that happens silently as a side effect of
-  an unrelated `apiVersion` bump three releases later.
-- **Client-SDK matrix tests.** The generated client SDKs (Kotlin, Swift,
-  TypeScript — see
-  [`architecture/overview.md`](architecture/overview.md#why-this-is-a-monorepo))
-  are versioned per `apiVersion` alongside the server fixtures. CI compiles
-  and runs each client SDK's integration test suite at `apiVersion`,
-  `apiVersion - 1`, and `apiVersion - 2` against the current server build,
-  catching compile- or runtime-level breakage in generated client code
-  within the promised window, not just raw JSON shape drift.
+1. **OTA bundle delivery.** `/build-manifest.json` is polled every 15
+   minutes plus on focus/visibility change, and compared against the
+   bundle's own baked-in `__APP_VERSION__` via `isNewerBundleAvailable`. A
+   versioned service worker (`web/public/sw.js`) precaches the new bundle on
+   `install` but deliberately does **not** call `self.skipWaiting()`
+   unconditionally — it only activates once the page posts `SKIP_WAITING`,
+   either because the viewer clicked "reload now" on a dismissible toast, or
+   because of mechanism 2 below. This is the one genuinely OTA-capable
+   client update path in the whole system.
+2. **Compatibility check.** `evaluateClientVersion()` (from
+   `@streamarr-tv/domain`'s `version-check.ts`) computes a tri-state
+   `"supported" | "deprecated" | "unsupported"` against
+   `VersionEnvelope.compatibility`; `"unsupported"` forces an **automatic,
+   non-dismissible** reload rather than merely offering one.
 
-A change that would require moving `apiVersionFloor` forward by more than
-one step in a single PR, or that breaks a fixture inside the current
-window without an accompanying floor-bump commit, is treated as a CI
-failure requiring either a design change or an explicit, reviewed decision
-to shorten the compatibility window for that release — never a silent
-merge.
+Since `compatibility` is always `[]` from the real server today, and since no
+call site currently sets the platform/version headers for this client either,
+mechanism 2 cannot currently fire against a real deployment — only mechanism
+1 (the CDN-manifest OTA path) is exercisable today.
+
+### webOS / Tizen / VIDAA fallback — `VersionBanner.tsx`
+
+All three TV shells share the `tv-web`/`ui-tv` codebase and render the same
+[`VersionBanner`](../clients/tv-web/packages/ui-tv/src/screens/VersionBanner.tsx):
+a simple, non-blocking (`pointerEvents: "none"`), check-on-launch banner shown
+whenever `evaluateClientVersion` returns `"deprecated"` or `"unsupported"`,
+telling the viewer to update via their TV's app store. Unlike Web, there is no
+forced-reload path here, because these platforms have no OTA mechanism at
+all: webOS and Tizen require a full store resubmission and review cycle for
+every release, including patches, and VIDAA has no native app at all (only
+the optional, unsupported PWA sideload reusing the Web build). As with the
+other clients, this banner currently has nothing real to react to against a
+live server, since the compatibility array it reads is always empty.
+
+## Automation: the client-compatibility bump bot
+
+[`.github/workflows/release-client-compat-bot.yml`](../.github/workflows/release-client-compat-bot.yml)
+triggers on any client release tag (`mobile-android-v*`, `tv-android-v*`,
+`ios-v*`, `tv-web-v*`, `web-v*` — anything except `backend-v*`) and opens a
+PR proposing a version-floor bump in `client-compatibility.toml`; it never
+pushes to `main` directly. It is explicitly, self-documented, a placeholder
+today: its update step does a naive regex replace written against a
+`[clients.<name>].version_floor` shape that **does not match** the real
+file's actual per-platform table names and fields (`[android-mobile]` /
+`minSupportedVersionCode`, etc.), so in practice it currently no-ops with a
+"skipping" log line rather than proposing a real change. Deciding the actual
+floor-bump policy (bump on every release? only on major/minor?) is called out
+in the workflow's own comments as still undecided.
+
+There is no pinned-fixture compatibility matrix, no per-`apiVersion` frozen
+request/response fixtures under `tests/compat/`, and no client-SDK
+compile/run matrix test at `apiVersion`/`apiVersion - 1`/`apiVersion - 2` —
+none of that exists. The only CI safety net in this area today is
+`openapi_spec_matches_checked_in_file` in `streamarr-api`, and that only
+checks that the checked-in OpenAPI spec still matches the live
+`#[utoipa::path]` annotations — a schema-drift check on the *current* spec,
+not a backward-compatibility promise across old client builds.
+
+## What this adds up to today
+
+No version number is enforced server-side yet. Every "you're out of date"
+signal a user could see today is produced entirely client-side, by each
+platform independently polling `GET /api/system/version` and comparing
+locally against its own copy of the compatibility rules — and even that
+can't fire against a real deployment yet, because the compatibility array the
+server actually serves is always empty. What is real: the version-gate
+middleware's request plumbing, the `CompatibilityEntry` wire schema, the
+`client-compatibility.toml` config format, and every platform's own
+evaluator/UI. What is not real yet: the TOML-to-wire-envelope mapping, the
+middleware's actual floor comparison, and any backward-compatibility promise
+enforced in CI. Update this document in the same change that removes any one
+of these stubs, rather than letting it drift the way its previous draft did.

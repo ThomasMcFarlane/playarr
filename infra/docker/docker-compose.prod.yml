@@ -51,12 +51,14 @@ x-streamarr-image: &streamarr-image
   pull_policy: build
 
 x-streamarr-env: &streamarr-env
-  APP_ENV: production
-  LOG_LEVEL: ${STREAMARR_LOG_LEVEL:-info}
-  LOG_FORMAT: json
-  METRICS_ENABLED: "true"
-  METRICS_PORT: "9090"
-  HTTP_PORT: "8080"
+  # The real env vars streamarr-config::Config::from_env reads (see
+  # backend/crates/streamarr-config/src/lib.rs) -- not APP_ENV/LOG_LEVEL/
+  # LOG_FORMAT/METRICS_ENABLED/METRICS_PORT/HTTP_PORT, none of which the
+  # binary actually reads (a prior pass invented those against a
+  # docs-described-but-never-implemented config surface).
+  STREAMARR_LOG: ${STREAMARR_LOG_LEVEL:-info}
+  STREAMARR_HTTP_BIND_ADDR: 0.0.0.0:8080
+  STREAMARR_METRICS_BIND_ADDR: 0.0.0.0:9090
   DATABASE_URL: postgres://streamarr:${STREAMARR_DB_PASSWORD:?Set STREAMARR_DB_PASSWORD (e.g. in a .env file) before starting the prod stack}@postgres:5432/streamarr
   # Optional. Only meaningfully reachable when --profile ha has started the
   # `redis` service; left blank otherwise (REDIS_URL is treated as
@@ -113,7 +115,11 @@ services:
 
   streamarr-api:
     <<: [*streamarr-image, *streamarr-hardening]
-    command: ["serve", "--role", "api"]
+    # `serve` takes no CLI arguments (see backend/src/main.rs) -- role
+    # selection is entirely via the STREAMARR_ROLE environment variable set
+    # below. This matches the image's own default CMD; kept explicit here
+    # for clarity, not because it differs from it.
+    command: ["serve"]
     environment:
       <<: *streamarr-env
       STREAMARR_ROLE: api
@@ -143,7 +149,11 @@ services:
   # same image.
   streamarr-api-2:
     <<: [*streamarr-image, *streamarr-hardening]
-    command: ["serve", "--role", "api"]
+    # `serve` takes no CLI arguments (see backend/src/main.rs) -- role
+    # selection is entirely via the STREAMARR_ROLE environment variable set
+    # below. This matches the image's own default CMD; kept explicit here
+    # for clarity, not because it differs from it.
+    command: ["serve"]
     profiles: ["ha"]
     environment:
       <<: *streamarr-env
@@ -167,7 +177,11 @@ services:
 
   streamarr-worker:
     <<: [*streamarr-image, *streamarr-hardening]
-    command: ["serve", "--role", "worker"]
+    # `serve` takes no CLI arguments (see backend/src/main.rs) -- role
+    # selection is entirely via the STREAMARR_ROLE environment variable set
+    # below. This matches the image's own default CMD; kept explicit here
+    # for clarity, not because it differs from it.
+    command: ["serve"]
     # Worker capacity is opted into by either the `standard` or `ha`
     # profile, so `--profile ha` alone still gets a functioning stack
     # without also having to remember `--profile standard`.
@@ -195,7 +209,11 @@ services:
 
   streamarr-worker-2:
     <<: [*streamarr-image, *streamarr-hardening]
-    command: ["serve", "--role", "worker"]
+    # `serve` takes no CLI arguments (see backend/src/main.rs) -- role
+    # selection is entirely via the STREAMARR_ROLE environment variable set
+    # below. This matches the image's own default CMD; kept explicit here
+    # for clarity, not because it differs from it.
+    command: ["serve"]
     profiles: ["ha"]
     environment:
       <<: *streamarr-env

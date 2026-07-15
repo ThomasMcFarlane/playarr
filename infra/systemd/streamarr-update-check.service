@@ -10,18 +10,20 @@ User=streamarr
 Group=streamarr
 EnvironmentFile=-/etc/streamarr/streamarr.env
 
-# --check-only (or equivalent) MUST exit non-zero only on a real error
-# (network failure, malformed response) - "update available" is logged,
-# not treated as a failure, so this unit's own success/failure state stays
-# a meaningful health signal in `systemctl status`.
+# `update --check` is a flag on the `update` subcommand, not a nested
+# subcommand of its own -- see backend/src/main.rs's Command::Update.
 #
-# This performs a read-only version check against the configured update
-# feed and logs the result to the journal (`journalctl -u
-# streamarr-update-check.service`). It never downloads, installs, restarts,
-# or otherwise mutates the running deployment - upgrading stays a human
-# (or CI/CD, e.g. the Flux GitOps path used for the Kubernetes deployment;
-# see ../kubernetes/flux-image-automation.example.yaml) decision.
-ExecStart=/usr/local/bin/streamarr update check --log-only
+# KNOWN GAP: check_for_update() in backend/src/main.rs is currently a stub
+# (always reports "up to date", no real network call against any release
+# feed yet) -- this unit runs and exits 0 every time, but isn't yet a real
+# update signal. Once real release-feed checking lands, this performs a
+# read-only version check and logs the result to the journal (`journalctl
+# -u streamarr-update-check.service`). It never downloads, installs,
+# restarts, or otherwise mutates the running deployment either way -
+# upgrading stays a human (or CI/CD, e.g. the Flux GitOps path used for the
+# Kubernetes deployment; see ../kubernetes/flux-image-automation.example.yaml)
+# decision.
+ExecStart=/usr/local/bin/streamarr update --check
 
 # Hardening, same posture as streamarr.service.
 NoNewPrivileges=true

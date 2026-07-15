@@ -28,8 +28,7 @@ configMapGenerator:
   - name: streamarr-config
     behavior: merge
     literals:
-      - APP_ENV=development
-      - LOG_LEVEL=debug
+      - STREAMARR_LOG=debug
 
 # DATABASE_URL / REDIS_URL for dev: replace base/secret.yaml's empty
 # stringData with real values from an untracked, gitignored local file,

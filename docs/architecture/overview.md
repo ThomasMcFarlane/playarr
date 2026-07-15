@@ -31,34 +31,42 @@ and a Playarr client only exists in service of some Streamarr server.
 Streamarr ships as **one compiled binary**, `streamarr`, regardless of
 deployment tier. There is no separate `streamarr-api`, `streamarr-worker`,
 and `streamarr-coordinator` executable to build, version, and keep in sync.
-Instead, the binary exposes a `serve` subcommand that takes a `--role` flag
-(or a `roles:` list in its config file), and every subsystem — the HTTP API,
-the library scanner, the on-demand transcode manager, the Tdarr background
-work dispatcher, the cluster coordinator — checks a `RoleSet` bitflag at
-startup before it registers routes or spawns background tasks:
+Instead, the binary (default subcommand `serve`; a separate `update`
+subcommand checks/applies binary updates out-of-band) reads a
+`STREAMARR_ROLE` environment variable at startup, resolved by
+`streamarr_config::Role` into one of three values, and every subsystem that
+registers HTTP routes or spawns background tasks checks it before doing so:
 
 ```rust
-bitflags::bitflags! {
-    pub struct Role: u8 {
-        const API         = 0b0000_0001;
-        const WORKER      = 0b0000_0010;
-        const COORDINATOR = 0b0000_0100;
-        const EDGE        = 0b0000_1000;
-    }
+pub enum Role {
+    /// Everything in one process. The default, and the only sane choice
+    /// for DeploymentTier::SingleNode.
+    All,
+    Api,
+    Worker,
 }
 
-pub const STANDALONE: Role = Role::API
-    .union(Role::WORKER)
-    .union(Role::COORDINATOR);
+impl Role {
+    pub fn runs_api(self) -> bool { matches!(self, Role::All | Role::Api) }
+    pub fn runs_worker(self) -> bool { matches!(self, Role::All | Role::Worker) }
+}
 ```
 
-A single-node install (systemd tier) runs one process with the `STANDALONE`
-role set — API, transcode worker, and coordinator (a no-op in this case) all
-in the same process, because there is nothing to coordinate with. A
-Kubernetes deployment runs many processes from the *identical* binary, each
-started with a narrower role: a `Deployment` of `--role api` pods behind a
-`Service`, a separate `Deployment` of `--role worker` pods for transcoding,
-and `--role coordinator` participating in leader election.
+A single-node install (systemd tier) runs one process with `STREAMARR_ROLE`
+unset (which defaults to `all`) — the Axum API, the arr-sync reconciliation
+pollers, and the Tdarr background dispatcher all run as tasks in the same
+process. A Kubernetes deployment can instead run several processes from the
+*identical* binary: some started with `STREAMARR_ROLE=api` (serving the
+Axum router) and others with `STREAMARR_ROLE=worker` (running the pollers
+and dispatcher plus a minimal `/healthz` listener, no public API router).
+There is no separate "coordinator" or "edge" role — cluster coordination
+isn't something a process opts into via role, it's a trait
+(`streamarr_coordination::ClusterCoordinator`) every `api`/`worker` process
+constructs the same way at boot, picking `SingleNodeCoordinator` or
+`PostgresCoordinator` based on `streamarr_config::DeploymentTier` (itself
+*derived* from whether `DATABASE_URL`/`REDIS_URL` point at Postgres/Redis,
+not a separately configured tier flag) — see
+[`distributed-design.md`](distributed-design.md).
 
 This buys three things deliberately:
 
@@ -71,10 +79,11 @@ This buys three things deliberately:
    is invoked and pointing it at Postgres instead of SQLite — not swapping
    in different software.
 3. **Role gating is a compile-time-visible runtime check, not a build
-   feature.** Every crate that registers HTTP routes or spawns a background
-   task takes a `&RoleSet` and asserts membership before doing so, so it is
-   always obvious from reading the code which roles a given subsystem needs,
-   without maintaining parallel Cargo feature matrices.
+   feature.** The composition root (`backend/src/main.rs`'s `serve`
+   function) checks `Role::runs_api()`/`Role::runs_worker()` before spawning
+   the API router or the background tasks, so it is always obvious from
+   reading the code which roles a given subsystem needs, without maintaining
+   parallel Cargo feature matrices.
 
 Role gating is a runtime concern; it does not fork the binary's feature
 flags. Cargo features are reserved for genuinely optional *build-time*
@@ -92,7 +101,7 @@ rejected.
 |---|---|---|---|---|---|
 | 1 — systemd | NAS, mini-PC, Raspberry Pi 4/5, home server | 1 | SQLite | `SingleNodeCoordinator` (no-op) | [`deployment/systemd.md`](deployment/systemd.md) |
 | 2 — docker-compose | Small VPS or home server, fixed handful of containers | 1–3 | Postgres | `PostgresCoordinator` (advisory locks) | [`deployment/docker-compose.md`](deployment/docker-compose.md) |
-| 3 — Kubernetes | Managed or self-hosted cluster, autoscaled | 3+ | Postgres | `PostgresCoordinator`, gossip opt-in | [`deployment/kubernetes.md`](deployment/kubernetes.md) |
+| 3 — Kubernetes | Managed or self-hosted cluster, autoscaled | 3+ | Postgres | `PostgresCoordinator` | [`deployment/kubernetes.md`](deployment/kubernetes.md) |
 
 Tier 1 is the default and the one the majority of users will run: it must
 work with zero external dependencies, survive an unattended reboot, and not
@@ -105,28 +114,36 @@ tiers possible without a data migration story beyond "point at Postgres."
 
 ## Crate layout
 
-The server is a Cargo workspace under `crates/`. Each crate has one job and
-depends downward, never sideways into a peer's internals:
+The server is a Cargo workspace rooted at `backend/`: library crates live
+under `backend/crates/`, and the binary entrypoint doubles as the workspace
+root package — `streamarr-bin` (binary name `streamarr`), whose crate root
+is `backend/src/main.rs`, not a separate `crates/streamarr-bin/` directory
+(the root manifest declares both `[workspace]` and `[package]`; cargo
+supports that). Each crate has one job and depends downward, never sideways
+into a peer's internals:
 
 | Crate | Responsibility |
 |---|---|
-| `streamarr-core` | Shared domain types (library item, user, session, policy) with no I/O. Everything else depends on this; it depends on nothing in-workspace. |
-| `streamarr-db` | The `sqlx`-based dual-backend storage engine (SQLite + Postgres). See [ADR 0001](adr/0001-storage-engine.md). Owns migrations and the `Database` trait. |
-| `streamarr-auth` | Trust tiers, `Policy`, JWT issuance/verification, refresh token rotation, RFC 8628 device flow. See [`auth-modes.md`](auth-modes.md). |
-| `streamarr-cluster` | The `ClusterCoordinator` trait and its `SingleNode` / `Postgres` / gossip implementations. See [`distributed-design.md`](distributed-design.md). |
-| `streamarr-arr` | Adapter clients for the wrapped *arr ecosystem (Sonarr, Radarr, Prowlarr, Bazarr) — see "The arr-wrapping approach" below. |
-| `streamarr-metadata` | Library scanning, metadata agents, artwork fetch/cache. |
-| `streamarr-transcode` | The on-demand transcode session manager (ffmpeg process supervision, HLS/DASH packaging, session-to-node affinity). |
-| `streamarr-tdarr` | Background transcode/optimisation job dispatch against a Tdarr-compatible worker pool. |
-| `streamarr-session` | Playback session and device state: what's playing, on which device, at what position, and (for TV clients) device-pairing state. |
-| `streamarr-api` | The axum HTTP surface: route registration gated by `RoleSet`, request/response types generated from the OpenAPI spec, versioning-middleware enforcement (see [`versioning-policy.md`](../versioning-policy.md)). |
-| `streamarr-cli` | The `streamarr` binary entry point: argument parsing, config loading, role resolution, subcommands (`serve`, `update`, `migrate`, `admin`). |
+| `streamarr-model` | Domain types shared across the backend (library items, `User`, `Session`, `Policy`, `Device`, ...) with no I/O. Everything else depends on this; it depends on nothing in-workspace. |
+| `streamarr-config` | Env-driven configuration (`Config::from_env`), hand-rolled on `std::env` rather than a config framework — loaded before telemetry exists, so config errors must be reportable with nothing fancier than `Display`. Also owns `Role` (`all`/`api`/`worker`) and `DeploymentTier` (derived from whether `DATABASE_URL`/`REDIS_URL` point at Postgres/Redis). |
+| `streamarr-db` | The `sqlx`-based dual-backend storage engine (SQLite + Postgres, via `sqlx::AnyPool`). See [ADR 0001](adr/0001-storage-engine.md). Owns migrations and the repository traits (`WorkRepo`, `DeviceRepo`, `RenditionRepo`, `MediaFileRepo`). |
+| `streamarr-coordination` | The `ClusterCoordinator` trait and its `SingleNodeCoordinator` / `PostgresCoordinator` implementations. See [`distributed-design.md`](distributed-design.md). |
+| `streamarr-cache` | Cache + pub/sub abstraction (`CacheAndPubSub`): in-memory (moka) for single-node, Redis or Postgres `LISTEN`/`NOTIFY` for multi-node. |
+| `streamarr-arr-client` | Typed HTTP clients for the wrapped *arr apps: Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, Readarr. |
+| `streamarr-arr-sync` | Webhook-as-signal, poll-as-truth reconciliation between Streamarr's catalog and the configured *arr source instances — see "The arr-wrapping approach" below. |
+| `streamarr-catalog` | Read-optimised catalog query API: browse/search/get-by-id over the `Work` aggregate, cache-fronted. |
+| `streamarr-requests` | The `MediaRequest` domain type and request lifecycle: users asking for something to be added, approved/rejected/submitted to a source *arr instance. |
+| `streamarr-tdarr-client` | Typed client for Tdarr's REST v2 API — the background transcode pipeline. |
+| `streamarr-transcode` | Playback-time transcode decision-making (direct-play / existing-rendition / on-demand-transcode ordering) plus the background Tdarr dispatch loop. See "The Tdarr background-vs-on-demand transcode split" below. |
+| `streamarr-auth` | Trust tiers (`AuthMode`), `Policy` evaluation, JWT issuance/verification, refresh-token rotation, RFC 8628 device flow. See [`auth-modes.md`](auth-modes.md). |
+| `streamarr-telemetry` | Logging, correlation IDs, metrics, optional OpenTelemetry export, playback analytics collection, diagnostics endpoints. |
+| `streamarr-api` | The Axum HTTP surface: system routes, auth (`/api/v1/auth/login`, `/api/v1/oauth/...`), catalog, playback, requests, webhooks — handlers are annotated with `utoipa`, so `backend/openapi/streamarr.yaml` is *generated from* the code, not the other way around. Versioning-middleware enforcement (see [`versioning-policy.md`](../versioning-policy.md)). |
 
-`streamarr-core` sits at the bottom of the dependency graph on purpose:
+`streamarr-model` sits at the bottom of the dependency graph on purpose:
 domain types must be usable by the DB layer, the API layer, and background
 workers alike without any of them pulling in the others' dependencies (an
-API handler should never need to link `streamarr-tdarr`'s worker-pool client
-just because it imports a shared type).
+API handler should never need to link `streamarr-transcode`'s ffmpeg
+supervision just because it imports a shared type).
 
 ## The arr-wrapping approach
 
@@ -136,22 +153,32 @@ ecosystem (Sonarr for TV, Radarr for movies, Prowlarr for indexers, Bazarr
 for subtitles). Reinventing it would be years of work duplicating mature,
 actively maintained software for no user benefit.
 
-Instead, `streamarr-arr` treats each *arr application as a managed external
-service: Streamarr can supervise it as a subprocess/sidecar (systemd and
-docker-compose tiers) or point at an existing externally-run instance
-(common in Kubernetes, where a *arr app might already be a separate
-`Deployment`), and talks to it over its existing REST API using an adapter
-that normalises each app's data model into `streamarr-core` types. The user
-sees one coherent Streamarr UI and one auth session; underneath, requests
-like "add this series to my watchlist and acquire it" are translated into
-Sonarr API calls, and Streamarr's library scanner treats the *arr app's
-managed download directory as just another library root to index once files
-land.
+Instead, `streamarr-arr-client` provides typed HTTP clients over each *arr
+app's existing REST API (wherever that instance is actually running — an
+existing externally-managed install, most commonly), and `streamarr-arr-sync`
+reconciles Streamarr's own catalog against it: a webhook, where the *arr app
+is configured to send one, is only a *signal to reconcile sooner* — the
+reconciliation itself always polls and diffs the *arr app's own state rather
+than trusting a webhook payload as authoritative ("webhook-as-signal,
+poll-as-truth," per that crate's own doc comment) — writing the normalised
+result into `streamarr-model` types (`Work`, `MediaFile`, ...) via
+`streamarr-db`. The user sees one coherent Streamarr UI and one auth session;
+underneath, requests like "add this series to my watchlist and acquire it"
+are translated into Sonarr API calls.
 
 This keeps Streamarr's own scope disciplined: it owns *library and
 playback*, not acquisition. The *arr apps keep their own UIs available for
 power users who want them directly; Streamarr is additive, not a fork or a
 replacement.
+
+**Known gap:** which *arr instances to reconcile against is not yet
+persisted or admin-configurable anywhere in the workspace — the request
+lifecycle's `SourceInstanceLookup` seam and the webhook receiver's
+`instance_id` lookup are both backed by `streamarr-api::SourceInstanceRegistry`,
+a real, thread-safe, in-process registry that starts empty every boot and
+has no admin API to populate it yet (see that type's own doc comment). A
+fresh deployment currently needs its source instances wired in by whoever
+builds the composition root, not configured through the running server.
 
 ## The Tdarr background-vs-on-demand transcode split
 
@@ -159,22 +186,29 @@ Streamarr treats "transcode a video" as two unrelated problems with
 unrelated latency, resource, and failure-mode requirements, and refuses to
 let one code path serve both:
 
-- **Background transcoding** (`streamarr-tdarr`) is library-wide
-  optimisation: re-encoding a library toward more efficient codecs (e.g.
-  H.264 → HEVC/AV1) or fixing container issues, queued against a pool of
-  Tdarr-compatible worker nodes, low priority, fully resumable, and allowed
-  to take hours. Progress is checkpointed in the database, so a worker node
-  dying mid-job just means the job gets picked up by another worker; nothing
-  about it is latency-sensitive.
+- **Background transcoding** (`streamarr-transcode`'s `TdarrDispatcher`,
+  talking to a Tdarr worker pool over `streamarr-tdarr-client`) is
+  library-wide optimisation: re-encoding a library toward more efficient
+  codecs (e.g. H.264 → HEVC/AV1) or fixing container issues, queued against
+  a pool of Tdarr-compatible worker nodes, low priority, fully resumable,
+  and allowed to take hours. Progress is checkpointed in the database, so a
+  worker node dying mid-job just means the job gets picked up by another
+  worker; nothing about it is latency-sensitive.
 - **On-demand transcoding** (`streamarr-transcode`) is what happens the
   moment someone presses play and their device can't direct-play the source
   (wrong codec, insufficient bandwidth, no hardware decode support). This
-  spins up a supervised `ffmpeg` process *right now*, packages it as
-  HLS/DASH segments, and must start producing playable segments in low
-  single-digit seconds. It is inherently ephemeral and — critically — pinned
-  to the node that started it (see the session-affinity discussion in
+  spins up a supervised `ffmpeg` process *right now*, tracked as a
+  `TranscodeSession` tagged with the owning node's id. It is inherently
+  ephemeral and — critically — pinned to the node that started it (see the
+  session-affinity discussion in
   [`distributed-design.md`](distributed-design.md)); if that node dies, the
-  session dies with it and the client has to restart playback.
+  session dies with it and the client has to restart playback. **Known
+  gap:** `GET /api/v1/playback/{media_file_id}` implements the
+  direct-play/existing-rendition/on-demand-transcode *decision* and returns
+  a well-known-convention URL for the chosen mode, but actually serving
+  bytes at that URL (range requests for direct-play, HLS playlist/segment
+  serving for the transcode paths) is not implemented yet — see the
+  `TODO(streaming)` on `PlaybackInfoResponse` in `streamarr-api`.
 
 Sharing infrastructure between these two would compromise both: background
 jobs would either starve on-demand playback of CPU, or on-demand playback
@@ -232,8 +266,9 @@ incidental:
    that adopts it can land in the same commit/PR, reviewed together. Across
    repos, that relationship has to be tracked out-of-band and is where
    version-skew bugs come from.
-2. **One OpenAPI spec, generated clients for everyone.** The spec lives in
-   `crates/streamarr-api/openapi.yaml`; Kotlin, Swift, and TypeScript client
+2. **One OpenAPI spec, generated clients for everyone.** The spec is
+   generated from `utoipa`-annotated handlers in `streamarr-api` into
+   `backend/openapi/streamarr.yaml`; Kotlin, Swift, and TypeScript client
    stubs are generated from it in CI for the respective clients. That
    generation step is trivial in-repo and painful to keep synchronised
    across repos with independent release cadences.
@@ -253,6 +288,38 @@ incidental:
 The cost — a bigger checkout, and CI that has to be selective about what it
 rebuilds per change — is accepted deliberately in exchange for the coupling
 guarantees above.
+
+## Known gaps as of this pass
+
+The docs under `docs/architecture/` describe both what's built and, where
+relevant, what isn't yet — called out explicitly rather than glossed over.
+The recurring theme across the backend today is: the domain types and the
+trait boundaries they'll eventually persist through already exist, but a
+few of the concrete persistence layers behind those traits don't yet, so
+some real, working functionality is currently backed by an in-process store
+that resets on restart and doesn't survive/coordinate across a multi-node
+deployment. Concretely:
+
+- **No persisted `User`/`Policy` store.** `streamarr-auth::InMemoryUserDirectory`
+  and `streamarr-auth::InMemoryAdminRegistry` are real, working
+  implementations, not mocks — but there is no `UserRepo`/`PolicyRepo` in
+  `streamarr-db`, so accounts and admin status don't survive a restart and
+  aren't shared across nodes in a multi-node deployment. See
+  [`auth-modes.md`](auth-modes.md) for the direct consequence this has for
+  `AuthMode::FullAccount`.
+- **Refresh tokens and RFC 8628 device-authorization state are in-memory.**
+  `RefreshTokenService`/`DashMapDeviceFlowHandler` work correctly within one
+  process's lifetime; a restart or a second node cannot see the other's
+  sessions.
+- **No persisted `SourceInstance` configuration** — see "The arr-wrapping
+  approach" above.
+- **On-demand transcode segment/playlist serving is not implemented** — see
+  "The Tdarr background-vs-on-demand transcode split" above.
+
+None of this is silently papered over in code: every one of the in-memory
+stores above documents its own "not a mock, but pending real persistence"
+status directly in its module doc comment, with a `TODO(persistence)`
+pointing at what should replace it.
 
 ## Where to go next
 

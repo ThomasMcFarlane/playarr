@@ -180,13 +180,14 @@ services:
     image: streamarr:ci
     container_name: streamarr-ci-streamarr
     environment:
-      APP_ENV: ci
-      LOG_LEVEL: debug
-      LOG_FORMAT: json
-      METRICS_ENABLED: "true"
-      METRICS_PORT: "9090"
-      HTTP_PORT: "8080"
-      STREAMARR_ROLE: standalone
+      # The real env vars streamarr-config::Config::from_env reads (see
+      # backend/crates/streamarr-config/src/lib.rs) -- Role::All is the only
+      # valid single-container role; "standalone" is rejected by Role::parse
+      # and the container refuses to boot.
+      STREAMARR_LOG: debug
+      STREAMARR_HTTP_BIND_ADDR: 0.0.0.0:8080
+      STREAMARR_METRICS_BIND_ADDR: 0.0.0.0:9090
+      STREAMARR_ROLE: all
       DATABASE_URL: postgres://streamarr:streamarr_ci_only@postgres:5432/streamarr
       # Redis is optional per infra/kubernetes/helm/streamarr/values.yaml
       # (REDIS_URL is wired unconditionally in the Deployment templates but

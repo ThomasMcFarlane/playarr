@@ -26,8 +26,7 @@ configMapGenerator:
   - name: streamarr-config
     behavior: merge
     literals:
-      - APP_ENV=production
-      - LOG_LEVEL=warn
+      - STREAMARR_LOG=warn
 
 # Production MUST NOT ship with base/secret.yaml's empty placeholder.
 # Remove it from the resolved resource list (e.g. by re-declaring
