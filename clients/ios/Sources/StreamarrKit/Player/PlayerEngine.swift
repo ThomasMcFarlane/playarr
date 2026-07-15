@@ -3,11 +3,11 @@ import AVKit
 import Combine
 import Observation
 
-/// Everything `PlayerEngine.load(_:)` needs to start playing one
-/// `MediaFile`/`Rendition` — resolved by the caller (typically
-/// `PlayerViewModel`) from a `Work`/`MediaFile` pair plus whichever
-/// `Rendition.url` (or the original file's direct-play URL) the server
-/// selected for `PlayMethod`.
+/// Everything `PlayerEngine.load(_:)` needs to start playing one media
+/// file — resolved by the caller (typically `PlayerViewModel`) from
+/// `StreamarrAPIClient.playbackInfo(mediaFileID:...)`'s
+/// `PlaybackInfoResponse.url` (direct-play file URL or HLS manifest URL,
+/// per `PlaybackInfoResponse.mode`).
 public struct PlayableItem: Identifiable, Equatable, Sendable {
     public let id: UUID
     public let streamURL: URL
@@ -33,10 +33,12 @@ public struct PlayableItem: Identifiable, Equatable, Sendable {
     }
 }
 
-/// Client-side playback state machine. Deliberately distinct from
-/// `PlaybackSession`/`PlaybackEventKind` in `Models/PlaybackSession.swift`
-/// (the *server-tracked* record) — this is purely "what is the local
-/// `AVPlayer` doing right now".
+/// Client-side playback state machine — purely "what is the local
+/// `AVPlayer` doing right now". The current OpenAPI spec has no
+/// server-tracked playback-session/progress-reporting endpoints yet (only
+/// the direct-play/transcode negotiation in `GET
+/// /api/v1/playback/{media_file_id}`), so there is no separate
+/// server-side session type to stay distinct from here.
 public enum PlayerPlaybackState: Equatable, Sendable {
     case idle
     case loading

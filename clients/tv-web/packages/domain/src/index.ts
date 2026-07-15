@@ -1,127 +1,93 @@
 /**
  * @streamarr-tv/domain
  *
- * Shared TypeScript domain types for the Streamarr TV & web clients.
- * These mirror the canonical domain types owned by `streamarr-model` (the
- * backend Rust workspace's domain crate). This package is hand-written for
- * now; once the backend exposes an OpenAPI schema, `packages/api-client`
- * will generate its request/response types directly and this package will
- * likely narrow down to only the types that don't round-trip the API
- * (e.g. purely client-local state).
+ * As foretold by this package's original placeholder comment: now that
+ * `@streamarr-tv/api-client` generates real wire types straight off
+ * `backend/openapi/streamarr.yaml` (`Work`, `MediaRequest`, `PlaybackInfo`,
+ * `ClientPlatform`, ...), this package has narrowed down to what's left --
+ * client-local concepts that don't round-trip the API. Right now that's
+ * exactly one thing: where to find the API. Import wire-shape types
+ * directly from `@streamarr-tv/api-client` instead of from here.
  */
 
-/** Platforms a Streamarr client can run on. Used for session/device tagging. */
-export type ClientPlatform =
-  | "web"
-  | "webos"
-  | "tizen"
-  | "vidaa"
-  | "ios"
-  | "android"
-  | "roku";
+/** Default Streamarr API origin for local development. */
+export const DEFAULT_API_BASE_URL = "http://localhost:8080";
 
-/** Generic envelope wrapping every versioned API payload. */
-export interface VersionEnvelope<TData> {
-  /** Semantic version of the API contract that produced this payload, e.g. "1.4.0". */
-  apiVersion: string;
-  /** Monotonically increasing schema revision for this payload's shape. */
-  schemaVersion: number;
-  data: TData;
+/** Query param TV apps (no keyboard input) can be launched with to point at a non-default API origin. */
+export const API_BASE_URL_QUERY_PARAM = "apiBaseUrl";
+
+/**
+ * Path (relative to the app's own base, see `import.meta.env.BASE_URL`) of an
+ * optional operator-editable JSON file shipped alongside the built TV app
+ * bundle -- e.g. dropped onto the device/USB image post-install, no rebuild
+ * required. Absent by default; see each TV app's README for how to provide one.
+ */
+export const RUNTIME_CONFIG_FILE_NAME = "streamarr-config.json";
+
+/** Shape of the optional runtime config file above. */
+export interface RuntimeConfigFile {
+  apiBaseUrl?: string;
 }
 
-/** A page of results plus enough metadata to fetch adjacent pages. */
-export interface PaginatedResult<TItem> {
-  items: TItem[];
-  total: number;
-  page: number;
-  pageSize: number;
+/** The one setting every Streamarr client needs: which operator-run instance to talk to. */
+export interface AppSettings {
+  apiBaseUrl: string;
 }
 
-export type WorkKind = "movie" | "series" | "season" | "episode" | "special";
-
-export interface WorkArtwork {
-  posterUrl?: string;
-  backdropUrl?: string;
-  thumbUrl?: string;
-  logoUrl?: string;
+export interface ResolveApiBaseUrlOptions {
+  /** e.g. `window.location.search`. Defaults to `window.location.search` when `window` exists. */
+  search?: string;
+  /** Injectable for tests / non-browser runtimes. Defaults to global `fetch`. */
+  fetchImpl?: typeof fetch;
+  /** Where to look for a runtime config file. Pass `null` to skip the lookup entirely (e.g. on the web app, which has a real Settings UI instead). */
+  configFileUrl?: string | null;
 }
 
-/** A single piece of media metadata: a movie, a series, or an episode within one. */
-export interface Work {
-  id: string;
-  kind: WorkKind;
-  title: string;
-  sortTitle: string;
-  overview?: string;
-  releaseYear?: number;
-  runtimeSeconds?: number;
-  genres: string[];
-  /** Set for `season`/`episode` kinds: the series (or season) this belongs to. */
-  parentWorkId?: string;
-  seasonNumber?: number;
-  episodeNumber?: number;
-  artwork: WorkArtwork;
-  createdAt: string;
-  updatedAt: string;
+/**
+ * Resolves the API base URL for a client that has no keyboard input to type
+ * one in (the three TV app shells): an explicit `?apiBaseUrl=...` query
+ * param wins, then an optional operator-provided runtime config JSON file
+ * shipped next to the app bundle, then `DEFAULT_API_BASE_URL`. Never throws
+ * -- a missing/unreachable config file is the expected common case in dev
+ * and just falls through to the next option.
+ */
+export async function resolveApiBaseUrl(options: ResolveApiBaseUrlOptions = {}): Promise<string> {
+  const search = options.search ?? (typeof window !== "undefined" ? window.location.search : "");
+  const fromQuery = new URLSearchParams(search).get(API_BASE_URL_QUERY_PARAM);
+  if (fromQuery) return fromQuery;
+
+  const fetchImpl = options.fetchImpl ?? (typeof fetch !== "undefined" ? fetch : undefined);
+  const configFileUrl = options.configFileUrl === undefined ? RUNTIME_CONFIG_FILE_NAME : options.configFileUrl;
+
+  if (fetchImpl && configFileUrl) {
+    try {
+      const response = await fetchImpl(configFileUrl, { cache: "no-store" });
+      if (response.ok) {
+        const json = (await response.json()) as RuntimeConfigFile;
+        if (json.apiBaseUrl) return json.apiBaseUrl;
+      }
+    } catch {
+      // No config file shipped, or unreachable -- expected in dev. Fall through to the default.
+    }
+  }
+
+  return DEFAULT_API_BASE_URL;
 }
 
-export type MediaContainer = "mp4" | "mkv" | "webm" | "ts" | "hls" | "dash";
+const STORED_API_BASE_URL_KEY = "streamarr:apiBaseUrl";
 
-/** A concrete encoded/muxed file (or manifest) backing a `Work`, ready to stream. */
-export interface MediaFile {
-  id: string;
-  workId: string;
-  container: MediaContainer;
-  videoCodec: string;
-  audioCodec: string;
-  resolutionWidth: number;
-  resolutionHeight: number;
-  bitrateKbps: number;
-  durationSeconds: number;
-  sizeBytes: number;
-  drmProtected: boolean;
-  /** Absolute or origin-relative URL to the playable manifest/file. */
-  streamUrl: string;
-  createdAt: string;
+/** Reads the operator-entered API base URL persisted by the web app's Settings page, if any. */
+export function getStoredApiBaseUrl(): string | undefined {
+  if (typeof localStorage === "undefined") return undefined;
+  return localStorage.getItem(STORED_API_BASE_URL_KEY) ?? undefined;
 }
 
-export type PlaybackSessionState =
-  | "starting"
-  | "buffering"
-  | "playing"
-  | "paused"
-  | "ended"
-  | "error";
-
-/** Server-tracked record of a client's playback progress, used for resume-across-devices. */
-export interface PlaybackSession {
-  id: string;
-  workId: string;
-  mediaFileId: string;
-  clientPlatform: ClientPlatform;
-  deviceId: string;
-  userId: string;
-  positionSeconds: number;
-  state: PlaybackSessionState;
-  startedAt: string;
-  updatedAt: string;
-}
-
-export type MediaRequestStatus =
-  | "pending"
-  | "approved"
-  | "rejected"
-  | "fulfilled";
-
-/** A user-submitted request for a `Work` to be added to the library (surfaced in the web Admin UI). */
-export interface MediaRequest {
-  id: string;
-  requestedByUserId: string;
-  title: string;
-  kind: WorkKind;
-  releaseYear?: number;
-  status: MediaRequestStatus;
-  note?: string;
-  createdAt: string;
-  updatedAt: string;
+/** Persists (or, given an empty string, clears) the web app's operator-entered API base URL. */
+export function setStoredApiBaseUrl(value: string): void {
+  if (typeof localStorage === "undefined") return;
+  if (value) {
+    localStorage.setItem(STORED_API_BASE_URL_KEY, value);
+  } else {
+    localStorage.removeItem(STORED_API_BASE_URL_KEY);
+  }
 }

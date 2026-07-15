@@ -2,7 +2,7 @@
   "name": "@streamarr-tv/api-client",
   "version": "0.1.0",
   "private": true,
-  "description": "Thin hand-written fetch wrapper for the Streamarr API. Placeholder for the future openapi-typescript + openapi-fetch generated client -- keeps the same shape (baseUrl config, typed request helper) so the generated client can drop in later with minimal call-site churn.",
+  "description": "Real typed client for the Streamarr API, generated from backend/openapi/streamarr.yaml with openapi-typescript (types) + openapi-fetch (thin typed fetch wrapper). `src/generated/schema.ts` is generated output (run `pnpm run generate` to refresh it against the spec); `src/index.ts` is a hand-written ApiClient wrapper over it, and `src/hooks.ts` (subpath export `./react`) holds shared React data-fetching hooks reused by the TV app shells and the standalone web app.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -10,18 +10,36 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/hooks.d.ts",
+      "import": "./dist/hooks.js"
     }
   },
   "files": ["dist"],
   "scripts": {
+    "generate": "openapi-typescript ../../../../backend/openapi/streamarr.yaml -o src/generated/schema.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@streamarr-tv/domain": "workspace:*"
+    "openapi-fetch": "^0.13.4"
+  },
+  "peerDependencies": {
+    "react": "^18.3.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
-    "typescript": "catalog:"
+    "@types/react": "catalog:",
+    "openapi-typescript": "^7.4.4",
+    "react": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "^2.1.8"
   }
 }

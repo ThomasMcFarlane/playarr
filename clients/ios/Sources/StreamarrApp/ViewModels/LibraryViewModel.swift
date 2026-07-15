@@ -2,40 +2,63 @@ import Foundation
 import Observation
 import StreamarrKit
 
+/// View model for `LibraryView` — the catalog browse/search screen. Backed
+/// entirely by the real `GET /api/v1/catalog` and `GET
+/// /api/v1/catalog/search` endpoints (see `backend/openapi/streamarr.yaml`).
+/// There is no "libraries" (source instance) listing endpoint in the real
+/// spec, so — unlike the Wave-1 placeholder — this no longer offers a
+/// library picker, only the `kind`/`sort` filters the real `browse_catalog`
+/// query params actually support.
 @MainActor
 @Observable
 public final class LibraryViewModel {
-    public private(set) var libraries: [SourceInstance] = []
+    public enum LoadState: Equatable, Sendable {
+        case idle
+        case loading
+        case loaded
+        case empty
+        case failed(String)
+    }
+
+    public private(set) var loadState: LoadState = .idle
     public private(set) var works: [Work] = []
-    public var selectedLibraryID: UUID?
-    public private(set) var isLoading = false
-    public private(set) var errorMessage: String?
+    public private(set) var total: Int64?
+    public var selectedKind: WorkKind?
+    public var searchText: String = ""
 
     private let apiClient: StreamarrAPIClient
+    private let pageSize = 50
 
     public init(apiClient: StreamarrAPIClient) {
         self.apiClient = apiClient
     }
 
-    public func loadLibraries() async {
+    /// Loads (or reloads) the current page: a catalog search if
+    /// `searchText` is non-empty, otherwise a filtered/sorted browse.
+    public func load() async {
+        loadState = .loading
+        let trimmedQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            libraries = try await apiClient.fetchLibraries()
+            if trimmedQuery.isEmpty {
+                let page = try await apiClient.browseCatalog(
+                    kind: selectedKind,
+                    genre: nil,
+                    tag: nil,
+                    sort: "title",
+                    limit: pageSize,
+                    offset: 0
+                )
+                works = page.items
+                total = page.total
+            } else {
+                works = try await apiClient.searchCatalog(query: trimmedQuery, limit: pageSize)
+                total = nil
+            }
+            loadState = works.isEmpty ? .empty : .loaded
+        } catch let error as APIError {
+            loadState = .failed(error.displayMessage)
         } catch {
-            errorMessage = String(describing: error)
+            loadState = .failed(error.localizedDescription)
         }
-    }
-
-    public func loadWorks(page: Int = 1, pageSize: Int = 50) async {
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            works = try await apiClient.fetchWorks(libraryID: selectedLibraryID, page: page, pageSize: pageSize)
-        } catch {
-            errorMessage = String(describing: error)
-        }
-    }
-
-    public func dismissError() {
-        errorMessage = nil
     }
 }

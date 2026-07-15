@@ -5,16 +5,16 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Kotlin mirror of `streamarr-model::music`. Music: [Artist] detail
- * attached to a [Work] of kind [WorkKind.Artist], with [Album] and [Track]
- * children.
+ * Kotlin mirror of the `Album`/`Track`/`AlbumType` schemas in
+ * `backend/openapi/streamarr.yaml`. Music works (kind [WorkKind.Artist])
+ * attach a list of [AlbumDetail] (`album` plus its `tracks`) under
+ * `WorkDetailSchema.children` -- see [WorkChildren.Artist].
+ *
+ * There is no standalone `Artist` schema in the real spec (unlike the
+ * Wave-1 placeholder this replaced): an artist `Work`'s own fields
+ * (title, overview, images, ...) are all a client needs beyond
+ * [Album]/[Track].
  */
-@Serializable
-data class Artist(
-    val workId: String,
-    val disambiguation: String? = null,
-)
-
 @Serializable
 enum class AlbumType {
     @SerialName("studio") Studio,

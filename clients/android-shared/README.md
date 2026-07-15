@@ -133,37 +133,65 @@ See `gradle/libs.versions.toml` for the full, real, resolved version set
 everything else). Every version in it was resolved against the live Google
 Maven / Maven Central metadata at build time, not from memory.
 
-## What mirrors the backend
+## What mirrors the backend (updated for the real OpenAPI spec)
 
-`core-data`'s model package (`io.streamarr.shared.data.model`) is a
-deliberate, field-for-field Kotlin mirror of the Rust
-`backend/crates/streamarr-model` crate (`Work`, `MediaFile`, `Rendition`,
-`PlaybackSession`, `PlaybackEvent`, `Series`/`Season`/`Episode`,
-`Artist`/`Album`/`Track`, `Author`/`Book`, `Policy`, and a client-safe
-`UserProfile`/`Device` projection of `User`/`Device` that drops the
-server-only secret fields). Serde's wire representation for Rust's
-externally-tagged enums with data-carrying variants (`ExternalProvider::Other`,
-`TranscodeReason::Other`, `StopReason::Other`) and the adjacently-tagged
-`LeafRef`/internally-tagged-plus-flatten `PlaybackEventKind` is reproduced
-exactly via hand-written `KSerializer`s, not approximated.
+`core-data`'s `StreamarrApi` (`data/remote/StreamarrApi.kt`) is now a real,
+hand-written Retrofit client checked field-for-field against
+`backend/openapi/streamarr.yaml`: all 13 paths (system health/ready/version,
+catalog list/get/search, requests list/create/approve/reject,
+playback-info, webhooks), typed against that spec's actual schemas, not an
+inferred/guessed surface. `core-data`'s model package
+(`io.streamarr.shared.data.model`) mirrors exactly the schemas that spec
+defines (`Work`, `CatalogPage`, `WorkDetail`/`WorkChildren`,
+`Season`/`Episode`, `Album`/`Track`, `Book`, `MediaRequest`/`RequestTarget`,
+`PlaybackInfoResponse`, `VersionEnvelope`) rather than a broader
+`streamarr-model` crate mirror that included concepts (`MediaFile`,
+`Rendition`, `Policy`, `UserProfile`/`Device`, playback-session analytics)
+the real API surface doesn't actually expose yet. Serde's wire
+representation for the spec's `oneOf`/externally- and internally-tagged
+schemas (`ExternalProvider::Other`, `WorkChildrenSchema`'s mixed
+unit/tuple variants, `RequestTargetDto`'s `#[serde(tag = "target_kind")]`
+shape) is reproduced exactly via hand-written `KSerializer`s, verified
+against literal spec-shaped JSON in `core-data`'s unit tests, not
+approximated. The Kotlin-to-wire-field mapping is a global
+`JsonNamingStrategy.SnakeCase` on `StreamarrHttpClient.json` (camelCase
+Kotlin properties, snake_case JSON) rather than a `@SerialName` on every
+field.
 
-`core-auth`'s RFC 8628 device-flow shapes
-(`DeviceAuthorizationResponse`/`TokenResponse`/`DevicePollResult`) and the
-`DeviceAuthApi` endpoint paths/field names come directly from the worked
-example in `docs/architecture/auth-modes.md`.
+`core-auth`'s RFC 8628 device-flow endpoints (`POST /api/v1/oauth/device/code`,
+`POST /api/v1/oauth/token`) and error codes
+(`authorization_pending`/`slow_down`/`expired_token`/`access_denied`) come
+directly from `backend/openapi/streamarr.yaml`'s `oauth` tag, including the
+real JSON (not form-urlencoded) request bodies and the `client_platform`
+enum field (no free-form `client_id`).
+
+The operator server base URL is a runtime-configurable,
+`DataStore`-backed setting (`core-data`'s `ServerConfigStore`, default
+`http://10.0.2.2:8080` for the Android emulator's host-loopback
+convention) surfaced on each app's Settings screen, not a value baked into
+the build via `BuildConfig`. Both apps ship a network security config
+permitting cleartext HTTP, since a self-hosted Streamarr instance is
+commonly plain HTTP on a home LAN.
 
 ## Known gaps / not implemented
 
-- No `streamarr-api` OpenAPI spec exists yet to generate a real client
-  from, so `core-data`'s `StreamarrApi` and `core-auth`'s `DeviceAuthApi`
-  are hand-written, best-effort placeholders — see the KDoc atop
-  `StreamarrApi.kt`. They are real, compiling, Retrofit-shaped interfaces
-  against inferred endpoint paths, not stubs with no bodies, but the exact
-  paths/DTOs will need reconciling against the real OpenAPI spec once
-  `streamarr-api` publishes one.
-- No unit/instrumented tests were written (test dependencies and source
-  sets are wired and ready — `testImplementation(libs.junit4)` etc. — but
-  no `src/test` files exist yet).
+- The real spec has no endpoint that maps a work/episode/track/book to the
+  `MediaFile`/`media_file_id` that `GET /api/v1/playback/{media_file_id}`
+  expects (there is no `MediaFile` schema in the spec at all yet). Each
+  app's `WorkDetailScreen` uses the tapped leaf's own id (or the work's own
+  id for a movie) as a best-effort stand-in, documented in that file's
+  KDoc, until the catalog schema exposes real media-file identifiers.
+- `POST /api/v1/requests` and its `/approve`/`/reject`/list siblings are
+  fully typed in `StreamarrApi` and `core-data`'s models (so the SDK's
+  spec coverage is complete) but have no dedicated screen yet, since
+  neither app has an admin/request-approval surface to hang one off.
+- Catalog search (`GET /api/v1/catalog/search`) is wired through
+  `core-domain`'s `SearchCatalogUseCase` but has no dedicated search
+  screen yet.
+- No instrumented (`androidTest`) tests were written; `core-data`/`core-auth`
+  unit tests decode literal spec-shaped JSON and exercise the RFC 8628
+  error-code mapping against a fake `DeviceAuthApi`, but nothing in this
+  pass could be verified against a live server (it wasn't running).
 - No app icon/banner artwork beyond simple placeholder vector drawables.
 - Release-build signing config is the AGP default debug-keystore fallback;
   no real release signing config exists (correctly out of scope for a

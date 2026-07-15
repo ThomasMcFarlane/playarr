@@ -29,6 +29,7 @@ import io.streamarr.mobile.ui.screens.HomeScreen
 import io.streamarr.mobile.ui.screens.LibraryScreen
 import io.streamarr.mobile.ui.screens.PlayerScreen
 import io.streamarr.mobile.ui.screens.SettingsScreen
+import io.streamarr.mobile.ui.screens.WorkDetailScreen
 
 private data class BottomNavDestination(
     val route: Routes,
@@ -54,10 +55,17 @@ fun StreamarrNavHost(navController: NavHostController) {
             modifier = Modifier.padding(innerPadding),
         ) {
             composable<Routes.Home> {
-                HomeScreen(onWorkClick = { work -> navController.navigateToWorkPlayback(work.id) })
+                HomeScreen(onWorkClick = { work -> navController.navigate(Routes.WorkDetail(workId = work.id)) })
             }
             composable<Routes.Library> {
-                LibraryScreen(onWorkClick = { work -> navController.navigateToWorkPlayback(work.id) })
+                LibraryScreen(onWorkClick = { work -> navController.navigate(Routes.WorkDetail(workId = work.id)) })
+            }
+            composable<Routes.WorkDetail> { backStackEntry ->
+                val route: Routes.WorkDetail = backStackEntry.toRoute()
+                WorkDetailScreen(
+                    workId = route.workId,
+                    onPlayMediaFile = { mediaFileId -> navController.navigate(Routes.Player(mediaFileId = mediaFileId)) },
+                )
             }
             composable<Routes.Player> { backStackEntry ->
                 val route: Routes.Player = backStackEntry.toRoute()
@@ -68,16 +76,6 @@ fun StreamarrNavHost(navController: NavHostController) {
             }
         }
     }
-}
-
-/**
- * Placeholder navigation from a catalog tile straight into the player.
- * A real flow would land on a work-detail screen first (season/media-file
- * picker) rather than assuming `work.id` is itself a playable media file
- * id -- left as a follow-up once `GetWorkDetailsUseCase` has a screen.
- */
-private fun NavHostController.navigateToWorkPlayback(workId: String) {
-    navigate(Routes.Player(mediaFileId = workId))
 }
 
 @Composable

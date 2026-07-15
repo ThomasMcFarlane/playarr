@@ -19,7 +19,9 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@streamarr-tv/api-client": "workspace:*",
     "@streamarr-tv/design-tokens": "workspace:*",
+    "@streamarr-tv/device-auth": "workspace:*",
     "@streamarr-tv/domain": "workspace:*",
     "@streamarr-tv/player-core": "workspace:*",
     "@streamarr-tv/spatial-nav": "workspace:*"

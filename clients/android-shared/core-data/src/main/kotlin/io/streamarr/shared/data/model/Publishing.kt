@@ -4,14 +4,13 @@ import java.time.LocalDate
 import kotlinx.serialization.Serializable
 
 /**
- * Kotlin mirror of `streamarr-model::publishing`. Books: [Author] detail
- * attached to a [Work] of kind [WorkKind.Author], with [Book] children.
+ * Kotlin mirror of the `Book` schema in `backend/openapi/streamarr.yaml`.
+ * Book works (kind [WorkKind.Author]) attach a bare list of [Book] under
+ * `WorkDetailSchema.children` -- see [WorkChildren.Author]. There is no
+ * standalone `Author` schema in the real spec (unlike the Wave-1
+ * placeholder this replaced): an author `Work`'s own fields (title,
+ * overview, images, ...) are all a client needs beyond [Book].
  */
-@Serializable
-data class Author(
-    val workId: String,
-)
-
 @Serializable
 data class Book(
     val id: String,

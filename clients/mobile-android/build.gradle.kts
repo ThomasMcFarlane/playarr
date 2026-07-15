@@ -20,10 +20,11 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Placeholder dev default; a real build swaps this per-flavor/per-environment
-        // rather than pointing release builds at a developer's LAN. 10.0.2.2 is the
-        // standard Android-emulator alias for the host machine's localhost.
-        buildConfigField("String", "STREAMARR_BASE_URL", "\"http://10.0.2.2:8080/\"")
+        // No STREAMARR_BASE_URL buildConfigField: the server base URL is a
+        // runtime-configurable, DataStore-backed setting now (see
+        // core-data's ServerConfigStore + the Settings screen), not a
+        // value baked into the build -- a client must be able to point at
+        // an arbitrary operator-run instance.
     }
 
     buildTypes {

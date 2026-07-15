@@ -12,6 +12,9 @@ sealed interface Routes {
     @Serializable data object Home : Routes
     @Serializable data object Library : Routes
 
+    /** `GET /api/v1/catalog/{id}` -- a work's full kind-specific child tree, reached by tapping a catalog tile. */
+    @Serializable data class WorkDetail(val workId: String) : Routes
+
     /** `mediaFileId == null` renders the "nothing playing" placeholder state. */
     @Serializable data class Player(val mediaFileId: String? = null) : Routes
 

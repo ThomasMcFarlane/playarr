@@ -8,35 +8,51 @@ import StreamarrKit
 /// `apiClient`) — keeps `APIClient`/`DeviceFlowClient` construction and
 /// base-URL/token wiring in one place instead of scattered through the
 /// view layer.
+///
+/// `serverBaseURL` is the one piece of app configuration that has to be
+/// user-settable: Streamarr is operator-run software, so this client can
+/// never hardcode a single host. It's backed by `UserDefaults` (see
+/// `serverBaseURLDefaultsKey`) so the value survives relaunch, and defaults
+/// to `http://localhost:8080` for local development against a
+/// same-machine/simulator-accessible backend. `SettingsView` is the one
+/// place in the UI that changes it.
 @MainActor
 @Observable
 public final class AppEnvironment {
+    static let serverBaseURLDefaultsKey = "com.streamarr.ios.serverBaseURL"
+    static let defaultServerBaseURL = URL(string: "http://localhost:8080")!
+
     public private(set) var apiClient: StreamarrAPIClient
-    public let deviceFlowClient: DeviceFlowClient
-    public private(set) var currentUser: User?
+    public private(set) var deviceFlowClient: DeviceFlowClient
+    public private(set) var isSignedIn = false
 
     public var serverBaseURL: URL {
-        didSet { rebuildAPIClient() }
+        didSet {
+            guard serverBaseURL != oldValue else { return }
+            userDefaults.set(serverBaseURL.absoluteString, forKey: Self.serverBaseURLDefaultsKey)
+            rebuildClients()
+        }
     }
 
+    @ObservationIgnored private let userDefaults: UserDefaults
     @ObservationIgnored private let tokenStore: InMemoryTokenStore
 
-    public init(serverBaseURL: URL = URL(string: "https://streamarr.local")!) {
-        self.serverBaseURL = serverBaseURL
+    public init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+
+        let storedURLString = userDefaults.string(forKey: Self.serverBaseURLDefaultsKey)
+        let resolvedURL = storedURLString.flatMap(URL.init(string:)) ?? Self.defaultServerBaseURL
+        self.serverBaseURL = resolvedURL
 
         let tokenStore = InMemoryTokenStore()
         self.tokenStore = tokenStore
 
         self.apiClient = APIClient(
-            configuration: APIClientConfiguration(baseURL: serverBaseURL),
+            configuration: APIClientConfiguration(baseURL: resolvedURL),
             tokenProvider: tokenStore
         )
-
         self.deviceFlowClient = DeviceFlowClient(
-            configuration: DeviceFlowConfiguration(
-                authorizationServerURL: serverBaseURL,
-                clientID: "streamarr-ios"
-            )
+            configuration: DeviceFlowConfiguration(baseURL: resolvedURL)
         )
     }
 
@@ -45,21 +61,21 @@ public final class AppEnvironment {
     /// holding it only in memory — see `InMemoryTokenStore` below.
     public func setSession(accessToken: String, refreshToken: String?) async {
         await tokenStore.update(accessToken: accessToken, refreshToken: refreshToken)
-    }
-
-    public func setCurrentUser(_ user: User?) {
-        currentUser = user
+        isSignedIn = true
     }
 
     public func signOut() async {
         await tokenStore.clear()
-        currentUser = nil
+        isSignedIn = false
     }
 
-    private func rebuildAPIClient() {
+    private func rebuildClients() {
         apiClient = APIClient(
             configuration: APIClientConfiguration(baseURL: serverBaseURL),
             tokenProvider: tokenStore
+        )
+        deviceFlowClient = DeviceFlowClient(
+            configuration: DeviceFlowConfiguration(baseURL: serverBaseURL)
         )
     }
 }
@@ -92,7 +108,7 @@ actor InMemoryTokenStore: AccessTokenProviding {
         // TODO: exchange `refreshToken` via the OAuth refresh grant once
         // the token endpoint contract is finalized server-side.
         guard let accessToken else {
-            throw APIError.unauthorized
+            throw APIError.unauthorized(nil)
         }
         return accessToken
     }

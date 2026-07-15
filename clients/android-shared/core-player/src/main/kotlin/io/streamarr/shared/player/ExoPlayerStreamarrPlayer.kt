@@ -2,6 +2,7 @@ package io.streamarr.shared.player
 
 import android.content.Context
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
@@ -59,9 +60,20 @@ class ExoPlayerStreamarrPlayer private constructor(
         })
     }
 
-    override fun prepare(mediaUrl: String, startPositionMs: Long) {
+    override fun prepare(mediaUrl: String, format: StreamFormat, startPositionMs: Long) {
         _state.update { PlaybackState() }
-        rawPlayer.setMediaItem(MediaItem.fromUri(mediaUrl), startPositionMs)
+        val mediaItem = MediaItem.Builder()
+            .setUri(mediaUrl)
+            .apply {
+                // Forces Media3's HLS extractor for on-demand transcode
+                // session URLs, which don't necessarily end in `.m3u8`
+                // (see `PlaybackInfoResponse.url`'s KDoc) -- without this,
+                // Media3 falls back to sniffing the URL/response
+                // Content-Type, which isn't reliable for those.
+                if (format == StreamFormat.Hls) setMimeType(MimeTypes.APPLICATION_M3U8)
+            }
+            .build()
+        rawPlayer.setMediaItem(mediaItem, startPositionMs)
         rawPlayer.prepare()
     }
 

@@ -1,0 +1,194 @@
+package io.streamarr.shared.data.remote
+
+import io.streamarr.shared.data.model.Availability
+import io.streamarr.shared.data.model.CatalogPage
+import io.streamarr.shared.data.model.ExternalProvider
+import io.streamarr.shared.data.model.MediaRequest
+import io.streamarr.shared.data.model.PlaybackMode
+import io.streamarr.shared.data.model.PlaybackInfoResponse
+import io.streamarr.shared.data.model.RequestStatus
+import io.streamarr.shared.data.model.RequestTarget
+import io.streamarr.shared.data.model.Work
+import io.streamarr.shared.data.model.WorkChildren
+import io.streamarr.shared.data.model.WorkDetail
+import io.streamarr.shared.data.model.WorkKind
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * Decodes literal snake_case JSON shaped exactly like
+ * `backend/openapi/streamarr.yaml`'s schemas (not just symmetric
+ * encode-then-decode round trips) through [StreamarrHttpClient.json], so a
+ * mistake in [io.streamarr.shared.data.remote] `wireName()`/naming-strategy
+ * plumbing, or in a hand-rolled `KSerializer`, fails here instead of only
+ * against a live server this task can't run.
+ */
+class StreamarrJsonModelTest {
+
+    private val json = StreamarrHttpClient.json
+
+    @Test
+    fun `decodes a Work with snake_case fields via the naming strategy, not explicit SerialName`() {
+        val work = json.decodeFromString(
+            Work.serializer(),
+            """
+            {
+              "id": "11111111-1111-1111-1111-111111111111",
+              "kind": "movie",
+              "external_refs": [{"provider": "tmdb", "external_id": "603"}],
+              "title": "Sample Movie Kilo",
+              "sort_title": "Matrix, The",
+              "overview": "A hacker learns the truth.",
+              "images": [{"kind": "poster", "url": "https://example.com/poster.jpg", "width": 500, "height": 750}],
+              "genres": ["Action", "Sci-Fi"],
+              "tags": [],
+              "added_at": "2026-01-01T00:00:00Z",
+              "monitored": true,
+              "availability": "available"
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals("Matrix, The", work.sortTitle)
+        assertEquals(WorkKind.Movie, work.kind)
+        assertEquals(Availability.Available, work.availability)
+        assertEquals(ExternalProvider.Tmdb, work.externalRefs.single().provider)
+        assertEquals("603", work.externalRefs.single().externalId)
+    }
+
+    @Test
+    fun `decodes an Other ExternalProvider as a single-key object`() {
+        val work = json.decodeFromString(
+            Work.serializer(),
+            """
+            {
+              "id": "1", "kind": "author", "external_refs": [{"provider": {"other": "anidb"}, "external_id": "42"}],
+              "title": "t", "sort_title": "t", "images": [], "genres": [], "tags": [],
+              "added_at": "2026-01-01T00:00:00Z", "monitored": false, "availability": "unknown"
+            }
+            """.trimIndent(),
+        )
+        val provider = work.externalRefs.single().provider
+        assertTrue(provider is ExternalProvider.Other)
+        assertEquals("anidb", (provider as ExternalProvider.Other).name)
+    }
+
+    @Test
+    fun `decodes CatalogPage`() {
+        val page = json.decodeFromString(
+            CatalogPage.serializer(),
+            """{"items": [], "total": 0}""",
+        )
+        assertTrue(page.items.isEmpty())
+        assertEquals(0L, page.total)
+    }
+
+    @Test
+    fun `decodes WorkDetail with WorkChildren Movie as a bare string`() {
+        val detail = json.decodeFromString(workDetailSerializer, """{"work": $movieWorkJson, "children": "Movie"}""")
+        assertEquals(WorkChildren.Movie, detail.children)
+    }
+
+    @Test
+    fun `decodes WorkDetail with WorkChildren Series as a single-key object of SeasonDetailSchema`() {
+        val detail = json.decodeFromString(
+            workDetailSerializer,
+            """
+            {
+              "work": $movieWorkJson,
+              "children": {
+                "Series": [
+                  {
+                    "season": {"id": "s1", "series_work_id": "w1", "season_number": 1, "monitored": true, "availability": "available"},
+                    "episodes": [
+                      {"id": "e1", "season_id": "s1", "episode_number": 1, "title": "Pilot", "monitored": true, "availability": "available"}
+                    ]
+                  }
+                ]
+              }
+            }
+            """.trimIndent(),
+        )
+        val children = detail.children
+        assertTrue(children is WorkChildren.Series)
+        children as WorkChildren.Series
+        assertEquals(1, children.seasons.size)
+        assertEquals(1, children.seasons.single().season.seasonNumber)
+        assertEquals("Pilot", children.seasons.single().episodes.single().title)
+    }
+
+    @Test
+    fun `decodes WorkChildren Author as a bare list of Book, not a wrapped Author object`() {
+        val detail = json.decodeFromString(
+            workDetailSerializer,
+            """
+            {
+              "work": $movieWorkJson,
+              "children": {"Author": [{"id": "b1", "author_work_id": "w1", "title": "Sample Title", "monitored": true, "availability": "available"}]}
+            }
+            """.trimIndent(),
+        )
+        val children = detail.children
+        assertTrue(children is WorkChildren.Author)
+        children as WorkChildren.Author
+        assertEquals("Sample Title", children.books.single().title)
+    }
+
+    @Test
+    fun `decodes a MediaRequest with an existing_work RequestTarget`() {
+        val request = json.decodeFromString(
+            MediaRequest.serializer(),
+            """
+            {
+              "id": "r1", "requested_by": "u1", "kind": "movie",
+              "target": {"target_kind": "existing_work", "work_id": "w1"},
+              "status": "pending",
+              "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"
+            }
+            """.trimIndent(),
+        )
+        assertEquals(RequestStatus.Pending, request.status)
+        val target = request.target
+        assertTrue(target is RequestTarget.ExistingWork)
+        assertEquals("w1", (target as RequestTarget.ExistingWork).workId)
+    }
+
+    @Test
+    fun `decodes a MediaRequest with an external RequestTarget`() {
+        val request = json.decodeFromString(
+            MediaRequest.serializer(),
+            """
+            {
+              "id": "r1", "requested_by": "u1", "kind": "series",
+              "target": {"target_kind": "external", "external_ref": {"provider": "tvdb", "external_id": "999"}},
+              "status": "approved",
+              "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"
+            }
+            """.trimIndent(),
+        )
+        val target = request.target
+        assertTrue(target is RequestTarget.External)
+        assertEquals("999", (target as RequestTarget.External).externalRef.externalId)
+    }
+
+    @Test
+    fun `decodes PlaybackInfoResponse for both direct and hls modes`() {
+        val direct = json.decodeFromString(PlaybackInfoResponse.serializer(), """{"mode": "direct", "url": "/stream/a"}""")
+        assertEquals(PlaybackMode.Direct, direct.mode)
+
+        val hls = json.decodeFromString(PlaybackInfoResponse.serializer(), """{"mode": "hls", "url": "/hls/a.m3u8"}""")
+        assertEquals(PlaybackMode.Hls, hls.mode)
+    }
+
+    companion object {
+        private val workDetailSerializer = WorkDetail.serializer()
+        private val movieWorkJson = """
+            {
+              "id": "w1", "kind": "movie", "external_refs": [], "title": "t", "sort_title": "t",
+              "images": [], "genres": [], "tags": [], "added_at": "2026-01-01T00:00:00Z",
+              "monitored": true, "availability": "available"
+            }
+        """.trimIndent()
+    }
+}

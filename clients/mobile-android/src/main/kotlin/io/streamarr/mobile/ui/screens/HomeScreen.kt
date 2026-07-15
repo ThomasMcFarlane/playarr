@@ -28,6 +28,7 @@ import io.streamarr.shared.data.model.ImageKind
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.designsystem.component.PosterCard
 import io.streamarr.shared.designsystem.component.SectionHeader
+import io.streamarr.shared.domain.model.StreamarrError
 import io.streamarr.shared.domain.model.StreamarrResult
 import io.streamarr.shared.domain.usecase.BrowseLibraryUseCase
 import javax.inject.Inject
@@ -36,16 +37,25 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+/**
+ * `GET /api/v1/catalog` result, distinguishing "still loading" / "loaded
+ * (possibly empty)" / "call failed". Unlike the Wave-1 placeholder's bare
+ * `isLoading: Boolean` + list, a [Failure] no longer silently collapses
+ * into the same "empty shelf" UI as a genuinely empty catalog.
+ */
+sealed interface HomeUiState {
+    data object Loading : HomeUiState
+    data class Content(val works: List<Work>) : HomeUiState
+    data class Failure(val message: String) : HomeUiState
+}
+
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val browseLibraryUseCase: BrowseLibraryUseCase,
 ) : ViewModel() {
 
-    private val _recentlyAdded = MutableStateFlow<List<Work>>(emptyList())
-    val recentlyAdded: StateFlow<List<Work>> = _recentlyAdded.asStateFlow()
-
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
+    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     init {
         refresh()
@@ -53,14 +63,20 @@ class HomeViewModel @Inject constructor(
 
     fun refresh() {
         viewModelScope.launch {
-            _isLoading.value = true
-            when (val result = browseLibraryUseCase()) {
-                is StreamarrResult.Success -> _recentlyAdded.value = result.value
-                is StreamarrResult.Failure -> _recentlyAdded.value = emptyList() // surfaced via isLoading settling with an empty shelf
+            _uiState.value = HomeUiState.Loading
+            // sort=recent: this shelf is "Recently Added", not the server's default title sort.
+            _uiState.value = when (val result = browseLibraryUseCase(sort = "recent")) {
+                is StreamarrResult.Success -> HomeUiState.Content(result.value)
+                is StreamarrResult.Failure -> HomeUiState.Failure(result.error.toUserMessage())
             }
-            _isLoading.value = false
         }
     }
+}
+
+private fun StreamarrError.toUserMessage(): String = when (this) {
+    is StreamarrError.Network -> "Can't reach the Streamarr server. Check the server address in Settings."
+    is StreamarrError.Http -> "Server error ($code)."
+    is StreamarrError.Unknown -> "Something went wrong loading your library."
 }
 
 @Composable
@@ -69,34 +85,43 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
-    val recentlyAdded by viewModel.recentlyAdded.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
 
     Column(modifier = modifier.fillMaxSize()) {
         SectionHeader(title = stringResource(R.string.home_recently_added))
 
-        when {
-            isLoading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        when (val current = uiState) {
+            is HomeUiState.Loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
-            recentlyAdded.isEmpty() -> Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+            is HomeUiState.Failure -> Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
                 Text(
-                    text = stringResource(R.string.home_empty_state),
+                    text = current.message,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.error,
                 )
             }
-            else -> LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(recentlyAdded, key = { it.id }) { work ->
-                    PosterCard(
-                        title = work.title,
-                        imageUrl = work.images.firstOrNull { it.kind == ImageKind.Poster }?.url,
-                        onClick = { onWorkClick(work) },
-                        modifier = Modifier.width(120.dp),
+            is HomeUiState.Content -> if (current.works.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = stringResource(R.string.home_empty_state),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+            } else {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(current.works, key = { it.id }) { work ->
+                        PosterCard(
+                            title = work.title,
+                            imageUrl = work.images.firstOrNull { it.kind == ImageKind.Poster }?.url,
+                            onClick = { onWorkClick(work) },
+                            modifier = Modifier.width(120.dp),
+                        )
+                    }
                 }
             }
         }

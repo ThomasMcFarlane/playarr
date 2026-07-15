@@ -3,12 +3,14 @@ import SwiftUI
 
 struct HomeView: View {
     let viewModel: HomeViewModel
+    let apiClient: StreamarrAPIClient
 
     var body: some View {
         NavigationStack {
             content
                 .navigationTitle("Home")
                 .task { await viewModel.load() }
+                .refreshable { await viewModel.load() }
         }
     }
 
@@ -26,33 +28,45 @@ struct HomeView: View {
             )
         case .loaded:
             List {
-                if !viewModel.continueWatching.isEmpty {
-                    Section("Continue Watching") {
-                        ForEach(viewModel.continueWatching) { session in
-                            LabeledContent(session.workID.uuidString, value: Self.formatted(session.positionSeconds))
-                        }
-                    }
-                }
                 Section("Recently Added") {
                     if viewModel.recentlyAdded.isEmpty {
                         Text("Nothing here yet.")
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(viewModel.recentlyAdded) { work in
-                            Text(work.title)
+                            NavigationLink {
+                                WorkDetailView(
+                                    viewModel: WorkDetailViewModel(apiClient: apiClient, workID: work.id),
+                                    apiClient: apiClient
+                                )
+                            } label: {
+                                WorkRow(work: work)
+                            }
                         }
                     }
                 }
             }
         }
     }
+}
 
-    private static func formatted(_ seconds: Double) -> String {
-        let totalSeconds = Int(seconds)
-        return String(format: "%02d:%02d", totalSeconds / 60, totalSeconds % 60)
+/// Shared list-row layout for a `Work`, used by both `HomeView` and
+/// `LibraryView`.
+struct WorkRow: View {
+    let work: Work
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(work.title)
+                .font(.body)
+            Text(work.kind.rawValue.capitalized + " · " + work.availability.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
 #Preview {
-    HomeView(viewModel: HomeViewModel(apiClient: PreviewAPIClient()))
+    let apiClient = PreviewAPIClient()
+    HomeView(viewModel: HomeViewModel(apiClient: apiClient), apiClient: apiClient)
 }

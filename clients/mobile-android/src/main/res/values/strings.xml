@@ -17,9 +17,18 @@
     <string name="library_filter_books">Books</string>
 
     <string name="player_no_media">No media selected</string>
+    <string name="player_retry">Retry</string>
+
+    <string name="work_detail_play">Play</string>
+    <string name="work_detail_season">Season %1$d</string>
+    <string name="work_detail_untitled">Untitled</string>
+    <string name="work_detail_episode_number">Episode %1$d</string>
+    <string name="work_detail_track_number">Track %1$d</string>
 
     <string name="settings_server">Server</string>
     <string name="settings_server_url">Server address</string>
+    <string name="settings_server_url_hint">e.g. http://10.0.2.2:8080 for the emulator, or your host machine\'s LAN IP for a physical device.</string>
+    <string name="settings_save">Save</string>
     <string name="settings_account">Account</string>
     <string name="settings_sign_out">Sign out</string>
     <string name="settings_about">About</string>

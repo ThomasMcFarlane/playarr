@@ -19,11 +19,11 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import io.streamarr.tv.BuildConfig
 import io.streamarr.tv.R
 import io.streamarr.shared.auth.DeviceAuthClient
 import io.streamarr.shared.auth.TokenStore
-import io.streamarr.shared.auth.model.DeviceAuthorizationResponse
+import io.streamarr.shared.auth.model.ClientPlatform
+import io.streamarr.shared.auth.model.DeviceCodeResponse
 import io.streamarr.shared.auth.model.DevicePollResult
 import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
@@ -58,8 +58,8 @@ class PairingViewModel @Inject constructor(
     fun startPairing() {
         _state.value = PairingUiState.Requesting
         viewModelScope.launch {
-            val authorization: DeviceAuthorizationResponse = try {
-                deviceAuthClient.requestDeviceCode(clientId = BuildConfig.DEVICE_AUTH_CLIENT_ID)
+            val authorization: DeviceCodeResponse = try {
+                deviceAuthClient.requestDeviceCode(clientPlatform = ClientPlatform.AndroidTv)
             } catch (e: Exception) {
                 _state.value = PairingUiState.Failed(e.message ?: "Couldn't reach the server", canRetry = true)
                 return@launch
@@ -72,7 +72,6 @@ class PairingViewModel @Inject constructor(
 
             deviceAuthClient.pollUntilResolved(
                 deviceCode = authorization.deviceCode,
-                clientId = BuildConfig.DEVICE_AUTH_CLIENT_ID,
                 initialIntervalSeconds = authorization.interval,
             ).collect { result ->
                 when (result) {

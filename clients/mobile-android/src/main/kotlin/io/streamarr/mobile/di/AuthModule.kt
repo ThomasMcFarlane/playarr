@@ -13,9 +13,13 @@ import dagger.hilt.components.SingletonComponent
 import io.streamarr.mobile.BuildConfig
 import io.streamarr.shared.auth.remote.AuthHttpClient
 import io.streamarr.shared.auth.remote.DeviceAuthApi
+import io.streamarr.shared.data.config.ServerConfigStore
 import javax.inject.Singleton
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 
-private const val TOKEN_DATASTORE_FILE_NAME = "streamarr_auth_tokens"
+/** Backs both `core-auth`'s `TokenStore` and `core-data`'s `ServerConfigStore` -- see [provideDeviceAuthApi]'s KDoc. */
+private const val CLIENT_PREFS_DATASTORE_FILE_NAME = "streamarr_client_prefs"
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -23,18 +27,26 @@ object AuthModule {
 
     @Provides
     @Singleton
-    fun provideTokenDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
+    fun provideClientPrefsDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
         PreferenceDataStoreFactory.create(
-            produceFile = { context.preferencesDataStoreFile(TOKEN_DATASTORE_FILE_NAME) },
+            produceFile = { context.preferencesDataStoreFile(CLIENT_PREFS_DATASTORE_FILE_NAME) },
         )
 
+    /**
+     * [baseUrlProvider] reads [ServerConfigStore] (itself backed by the
+     * same `DataStore<Preferences>` singleton as `TokenStore`) rather than
+     * a fixed `BuildConfig` value, so a base URL saved from the Settings
+     * screen takes effect on the very next pairing request.
+     */
     @Provides
     @Singleton
-    fun provideDeviceAuthApi(): DeviceAuthApi =
-        AuthHttpClient.create(baseUrl = BuildConfig.STREAMARR_BASE_URL, enableHttpLogging = BuildConfig.DEBUG)
+    fun provideDeviceAuthApi(serverConfigStore: ServerConfigStore): DeviceAuthApi = AuthHttpClient.create(
+        baseUrlProvider = { runBlocking { serverConfigStore.baseUrl.first() } },
+        enableHttpLogging = BuildConfig.DEBUG,
+    )
 
-    // DeviceAuthClient and TokenStore are not provided here: both carry
-    // `@Inject constructor(...)` over dependencies already bound above
-    // (DeviceAuthApi, DataStore<Preferences>), so Hilt constructs them
-    // directly without an explicit @Provides.
+    // DeviceAuthClient, TokenStore, and ServerConfigStore are not provided
+    // here: all three carry `@Inject constructor(...)` over dependencies
+    // already bound above (DeviceAuthApi, DataStore<Preferences>), so Hilt
+    // constructs them directly without an explicit @Provides.
 }

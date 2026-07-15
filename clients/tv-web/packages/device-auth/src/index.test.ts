@@ -1,0 +1,169 @@
+import { describe, expect, it, vi } from "vitest";
+import { ApiClient } from "@streamarr-tv/api-client";
+import { pollDeviceToken, pollForToken, requestDeviceCode } from "./index";
+
+function mockFetch(handler: (request: Request) => Response | Promise<Response>) {
+  return vi.fn(async (request: Request) => handler(request));
+}
+
+function jsonResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+const BASE_URL = "http://localhost:8080";
+
+describe("requestDeviceCode", () => {
+  it("posts the real DeviceCodeRequest shape and normalizes the response to camelCase", async () => {
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch(async (request) => {
+        expect(await request.json()).toEqual({ client_platform: "tv-tizen" });
+        return jsonResponse(200, {
+          device_code: "dc-1",
+          user_code: "WXYZ-1234",
+          verification_uri: "https://streamarr.example/link",
+          verification_uri_complete: "https://streamarr.example/link?code=WXYZ-1234",
+          expires_in: 900,
+          interval: 5,
+        });
+      }),
+    });
+
+    const response = await requestDeviceCode(client, "tv-tizen");
+    expect(response).toEqual({
+      deviceCode: "dc-1",
+      userCode: "WXYZ-1234",
+      verificationUri: "https://streamarr.example/link",
+      verificationUriComplete: "https://streamarr.example/link?code=WXYZ-1234",
+      expiresInSeconds: 900,
+      intervalSeconds: 5,
+    });
+  });
+});
+
+describe("pollDeviceToken", () => {
+  const cases: Array<[string, "authorization_pending" | "slow_down" | "expired_token" | "access_denied"]> = [
+    ["authorization_pending", "authorization_pending"],
+    ["slow_down", "slow_down"],
+    ["expired_token", "expired_token"],
+    ["access_denied", "access_denied"],
+  ];
+
+  it.each(cases)("maps RFC 8628 error code %s to status %s", async (errorCode, expectedStatus) => {
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch(() => jsonResponse(400, { error: errorCode })),
+    });
+
+    const result = await pollDeviceToken(client, "dc-1");
+    expect(result).toEqual({ status: expectedStatus });
+  });
+
+  it("maps an unrecognized error (e.g. unsupported_grant_type) to the generic error status", async () => {
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch(() => jsonResponse(400, { error: "unsupported_grant_type" })),
+    });
+
+    const result = await pollDeviceToken(client, "dc-1");
+    expect(result).toEqual({ status: "error", error: "unsupported_grant_type" });
+  });
+
+  it("returns a success result with the real TokenResponseSchema fields on 200", async () => {
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch(() =>
+        jsonResponse(200, {
+          access_token: "at-1",
+          refresh_token: "rt-1",
+          token_type: "Bearer",
+          expires_in: 3600,
+        })
+      ),
+    });
+
+    const result = await pollDeviceToken(client, "dc-1");
+    expect(result).toEqual({
+      status: "success",
+      accessToken: "at-1",
+      refreshToken: "rt-1",
+      tokenType: "Bearer",
+      expiresInSeconds: 3600,
+    });
+  });
+
+  it("rethrows non-OAuth errors (e.g. a 500) instead of swallowing them", async () => {
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch(() => new Response(null, { status: 500, statusText: "Internal Server Error" })),
+    });
+
+    await expect(pollDeviceToken(client, "dc-1")).rejects.toMatchObject({ status: 500 });
+  });
+});
+
+describe("pollForToken", () => {
+  it("keeps polling through authorization_pending and slow_down, then resolves on success", async () => {
+    // Note: a real `slow_down` response bumps the interval by 5s per RFC 8628 §3.5,
+    // so this test's own polling loop takes a bit over 5s wall-clock -- give it headroom.
+    let call = 0;
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch(() => {
+        call += 1;
+        if (call === 1) return jsonResponse(400, { error: "authorization_pending" });
+        if (call === 2) return jsonResponse(400, { error: "slow_down" });
+        return jsonResponse(200, {
+          access_token: "at-final",
+          refresh_token: "rt-final",
+          token_type: "Bearer",
+          expires_in: 3600,
+        });
+      }),
+    });
+
+    const onPending = vi.fn();
+    const result = await pollForToken(
+      client,
+      { deviceCode: "dc-1", userCode: "U", verificationUri: "v", verificationUriComplete: "v", expiresInSeconds: 60, intervalSeconds: 0 },
+      { onPending }
+    );
+
+    expect(result.accessToken).toBe("at-final");
+    expect(call).toBe(3);
+    expect(onPending).toHaveBeenCalledTimes(1);
+  }, 10_000);
+
+  it("throws once the device code expires", async () => {
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch(() => jsonResponse(400, { error: "authorization_pending" })),
+    });
+
+    await expect(
+      pollForToken(
+        client,
+        { deviceCode: "dc-1", userCode: "U", verificationUri: "v", verificationUriComplete: "v", expiresInSeconds: 0, intervalSeconds: 0 },
+        {}
+      )
+    ).rejects.toThrow(/expired/i);
+  });
+
+  it("throws when the user denies the request", async () => {
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch(() => jsonResponse(400, { error: "access_denied" })),
+    });
+
+    await expect(
+      pollForToken(
+        client,
+        { deviceCode: "dc-1", userCode: "U", verificationUri: "v", verificationUriComplete: "v", expiresInSeconds: 60, intervalSeconds: 0 },
+        {}
+      )
+    ).rejects.toThrow(/denied/i);
+  });
+});

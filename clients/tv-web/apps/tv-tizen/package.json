@@ -12,6 +12,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@streamarr-tv/api-client": "workspace:*",
+    "@streamarr-tv/domain": "workspace:*",
     "@streamarr-tv/player-avplay": "workspace:*",
     "@streamarr-tv/player-core": "workspace:*",
     "@streamarr-tv/ui-tv": "workspace:*",

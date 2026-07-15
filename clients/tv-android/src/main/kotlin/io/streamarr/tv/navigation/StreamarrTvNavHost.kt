@@ -22,6 +22,7 @@ import io.streamarr.tv.ui.screens.LibraryScreen
 import io.streamarr.tv.ui.screens.PairingScreen
 import io.streamarr.tv.ui.screens.PlayerScreen
 import io.streamarr.tv.ui.screens.SettingsScreen
+import io.streamarr.tv.ui.screens.WorkDetailScreen
 
 /**
  * Root NavHost, gated by the RFC 8628 pairing state (see
@@ -68,10 +69,17 @@ fun StreamarrTvNavHost(
                     )
                 }
                 composable<Routes.Home> {
-                    HomeScreen(onWorkClick = { work -> navController.navigate(Routes.Player(mediaFileId = work.id)) })
+                    HomeScreen(onWorkClick = { work -> navController.navigate(Routes.WorkDetail(workId = work.id)) })
                 }
                 composable<Routes.Library> {
-                    LibraryScreen(onWorkClick = { work -> navController.navigate(Routes.Player(mediaFileId = work.id)) })
+                    LibraryScreen(onWorkClick = { work -> navController.navigate(Routes.WorkDetail(workId = work.id)) })
+                }
+                composable<Routes.WorkDetail> { backStackEntry ->
+                    val route: Routes.WorkDetail = backStackEntry.toRoute()
+                    WorkDetailScreen(
+                        workId = route.workId,
+                        onPlayMediaFile = { mediaFileId -> navController.navigate(Routes.Player(mediaFileId = mediaFileId)) },
+                    )
                 }
                 composable<Routes.Player> { backStackEntry ->
                     val route: Routes.Player = backStackEntry.toRoute()

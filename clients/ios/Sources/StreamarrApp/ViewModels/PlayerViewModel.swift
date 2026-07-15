@@ -5,17 +5,30 @@ import Observation
 import StreamarrKit
 
 /// View model for `PlayerView`. Binds a `PlayerEngine` (default:
-/// `AVPlayerEngine`, injectable for tests/previews) to a server-tracked
-/// `PlaybackSession`, translating engine state changes into `@Observable`
-/// properties the view reads, and view actions (play/pause/seek/stop) into
-/// both engine calls and `StreamarrAPIClient` playback-event calls.
+/// `AVPlayerEngine`, injectable for tests/previews) to the real playback
+/// pipeline: calls `GET /api/v1/playback/{media_file_id}` first to get the
+/// server's direct-play/transcode decision (`PlaybackInfoResponse`), then
+/// configures the engine with whatever URL it returns, per
+/// `PlaybackInfoResponse.mode` (`.direct` or `.hls`) — the engine itself
+/// doesn't need to branch on that (`AVPlayer`/`AVURLAsset` play an HLS
+/// `.m3u8` URL exactly like a direct file URL), but it's kept around on
+/// this view model so the UI can show *why* something is (or isn't)
+/// transcoding.
 @MainActor
 @Observable
 public final class PlayerViewModel {
+    public enum LoadState: Equatable, Sendable {
+        case idle
+        case loadingPlaybackInfo
+        case playing
+        case failed(String)
+    }
+
+    public private(set) var loadState: LoadState = .idle
     public private(set) var engineState: PlayerPlaybackState = .idle
     public private(set) var currentTime: Double = 0
     public private(set) var duration: Double = 0
-    public private(set) var session: PlaybackSession?
+    public private(set) var playbackMode: PlaybackMode?
     public private(set) var errorMessage: String?
 
     /// Exposed purely so `PlayerView` can hand it to SwiftUI's
@@ -33,26 +46,39 @@ public final class PlayerViewModel {
         bind()
     }
 
-    public func start(work: Work, mediaFile: MediaFile, deviceID: UUID, streamURL: URL) async {
+    /// Calls the real playback-negotiation endpoint for `mediaFileID`, then
+    /// loads and starts the returned URL in the local `PlayerEngine`.
+    /// `title` is display-only (the API has nothing else to show while
+    /// negotiating/loading).
+    public func play(mediaFileID: UUID, title: String) async {
+        loadState = .loadingPlaybackInfo
+        errorMessage = nil
         do {
-            let session = try await apiClient.startPlaybackSession(
-                workID: work.id,
-                mediaFileID: mediaFile.id,
-                deviceID: deviceID
+            let info = try await apiClient.playbackInfo(
+                mediaFileID: mediaFileID,
+                containers: ["mp4", "mov", "m4v"],
+                videoCodecs: ["h264", "hevc"],
+                audioCodecs: ["aac", "ac3", "eac3"],
+                maxBitrateBps: nil,
+                profile: nil
             )
-            self.session = session
+            playbackMode = info.mode
 
-            let item = PlayableItem(
-                id: mediaFile.id,
-                streamURL: streamURL,
-                title: work.title,
-                startPositionSeconds: session.positionSeconds
-            )
+            guard let streamURL = apiClient.resolvedURL(forPath: info.url) else {
+                throw APIError.invalidResponse
+            }
+
+            let item = PlayableItem(id: mediaFileID, streamURL: streamURL, title: title)
             try await engine.load(item)
             duration = engine.duration
             engine.play()
+            loadState = .playing
+        } catch let error as APIError {
+            errorMessage = error.displayMessage
+            loadState = .failed(error.displayMessage)
         } catch {
-            errorMessage = String(describing: error)
+            errorMessage = error.localizedDescription
+            loadState = .failed(error.localizedDescription)
         }
     }
 
@@ -69,15 +95,10 @@ public final class PlayerViewModel {
         await engine.seek(to: seconds)
     }
 
-    public func stop(reason: StopReason) async {
+    public func stop() {
         engine.stop()
-        guard let session else { return }
-        do {
-            try await apiClient.endPlaybackSession(id: session.id, stopReason: reason)
-        } catch {
-            errorMessage = String(describing: error)
-        }
-        self.session = nil
+        loadState = .idle
+        playbackMode = nil
     }
 
     // MARK: - Private

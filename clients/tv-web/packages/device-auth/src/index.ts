@@ -4,40 +4,37 @@
  * OAuth 2.0 Device Authorization Grant client (RFC 8628 --
  * https://datatracker.ietf.org/doc/html/rfc8628). This is how the TV apps
  * (webOS, Tizen, VIDAA fallback) authenticate: the TV displays a short
- * user code, the viewer approves it on a second device (phone/laptop) --
- * the Web app's approver UI reuses `requestDeviceCode`/`pollDeviceToken`
- * against the same endpoints for that side of the flow.
+ * user code, the viewer approves it on a second device (phone/laptop).
+ *
+ * Wired against the real Streamarr endpoints (`POST /api/v1/oauth/device/code`,
+ * `POST /api/v1/oauth/token`) via `@streamarr-tv/api-client`'s `ApiClient` --
+ * both are plain JSON endpoints (not the form-urlencoded body RFC 8628's
+ * examples use), and the device-code request carries a `client_platform`
+ * enum rather than a generic OAuth `client_id`/`scope` pair, so callers pass
+ * an already-configured `ApiClient` in rather than a bespoke endpoint config.
  */
+import { ApiError, DEVICE_CODE_GRANT_TYPE } from "@streamarr-tv/api-client";
+import type { ApiClient, ClientPlatform, OAuthErrorBody } from "@streamarr-tv/api-client";
 
-export interface DeviceAuthorizationConfig {
-  /** RFC 8628 §3.1 device authorization endpoint. */
-  deviceAuthorizationEndpoint: string;
-  /** RFC 8628 §3.4 / RFC 6749 §3.2 token endpoint. */
-  tokenEndpoint: string;
-  clientId: string;
-  scope?: string;
-  fetchImpl?: typeof fetch;
-}
+export { DEVICE_CODE_GRANT_TYPE };
+export type { ClientPlatform };
 
-/** RFC 8628 §3.2 device authorization response. */
+/** RFC 8628 §3.2 device authorization response, normalized to camelCase for callers. */
 export interface DeviceCodeResponse {
   deviceCode: string;
   userCode: string;
   verificationUri: string;
-  /** RFC 8628 §3.3.1: verification URI with the user code pre-filled, if the server supports it. */
-  verificationUriComplete?: string;
+  verificationUriComplete: string;
   expiresInSeconds: number;
-  /** Minimum seconds the client must wait between polling requests. Defaults to 5 if the server omits it. */
   intervalSeconds: number;
 }
 
 export interface DeviceTokenSuccess {
   status: "success";
   accessToken: string;
-  refreshToken?: string;
+  refreshToken: string;
   tokenType: string;
   expiresInSeconds: number;
-  scope?: string;
 }
 
 /** RFC 8628 §3.5 polling error codes, modeled as a discriminated union instead of thrown exceptions. */
@@ -56,7 +53,6 @@ export interface DeviceTokenDenied {
 export interface DeviceTokenError {
   status: "error";
   error: string;
-  description?: string;
 }
 
 export type DeviceTokenResult =
@@ -67,108 +63,68 @@ export type DeviceTokenResult =
   | DeviceTokenDenied
   | DeviceTokenError;
 
-interface RawDeviceCodeResponse {
-  device_code: string;
-  user_code: string;
-  verification_uri: string;
-  verification_uri_complete?: string;
-  expires_in: number;
-  interval?: number;
-}
-
-interface RawTokenResponse {
-  access_token?: string;
-  refresh_token?: string;
-  token_type?: string;
-  expires_in?: number;
-  scope?: string;
-  error?: string;
-  error_description?: string;
+function isOAuthErrorBody(body: unknown): body is OAuthErrorBody {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    "error" in body &&
+    typeof (body as { error: unknown }).error === "string"
+  );
 }
 
 /** RFC 8628 §3.1: request a device code + user code pair to start the flow. */
 export async function requestDeviceCode(
-  config: DeviceAuthorizationConfig
+  client: ApiClient,
+  clientPlatform: ClientPlatform
 ): Promise<DeviceCodeResponse> {
-  const fetchImpl = config.fetchImpl ?? fetch;
-  const body = new URLSearchParams({ client_id: config.clientId });
-  if (config.scope) body.set("scope", config.scope);
-
-  const response = await fetchImpl(config.deviceAuthorizationEndpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Accept: "application/json",
-    },
-    body: body.toString(),
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Device authorization request failed: ${response.status} ${response.statusText}`
-    );
-  }
-
-  const raw = (await response.json()) as RawDeviceCodeResponse;
+  const raw = await client.requestDeviceCode({ client_platform: clientPlatform });
   return {
     deviceCode: raw.device_code,
     userCode: raw.user_code,
     verificationUri: raw.verification_uri,
     verificationUriComplete: raw.verification_uri_complete,
     expiresInSeconds: raw.expires_in,
-    intervalSeconds: raw.interval ?? 5,
+    intervalSeconds: raw.interval,
   };
 }
 
-/** RFC 8628 §3.4: a single poll attempt against the token endpoint. Does not loop -- see `pollForToken`. */
-export async function pollDeviceToken(
-  config: DeviceAuthorizationConfig,
-  deviceCode: string
-): Promise<DeviceTokenResult> {
-  const fetchImpl = config.fetchImpl ?? fetch;
-  const body = new URLSearchParams({
-    grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-    device_code: deviceCode,
-    client_id: config.clientId,
-  });
-
-  const response = await fetchImpl(config.tokenEndpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Accept: "application/json",
-    },
-    body: body.toString(),
-  });
-
-  const raw = (await response.json().catch(() => ({}))) as RawTokenResponse;
-
-  if (response.ok && raw.access_token) {
+/**
+ * RFC 8628 §3.4: a single poll attempt against the token endpoint. Does not
+ * loop -- see `pollForToken`. Maps every one of the spec's §3.5 error codes
+ * (`authorization_pending` | `slow_down` | `expired_token` | `access_denied`)
+ * plus RFC 6749 §5.2's `unsupported_grant_type` (surfaced as `"error"`) to a
+ * result variant instead of throwing, so callers don't need a try/catch to
+ * drive the polling loop.
+ */
+export async function pollDeviceToken(client: ApiClient, deviceCode: string): Promise<DeviceTokenResult> {
+  try {
+    const raw = await client.requestDeviceToken({
+      grant_type: DEVICE_CODE_GRANT_TYPE,
+      device_code: deviceCode,
+    });
     return {
       status: "success",
       accessToken: raw.access_token,
       refreshToken: raw.refresh_token,
-      tokenType: raw.token_type ?? "Bearer",
-      expiresInSeconds: raw.expires_in ?? 0,
-      scope: raw.scope,
+      tokenType: raw.token_type,
+      expiresInSeconds: raw.expires_in,
     };
-  }
-
-  switch (raw.error) {
-    case "authorization_pending":
-      return { status: "authorization_pending" };
-    case "slow_down":
-      return { status: "slow_down" };
-    case "expired_token":
-      return { status: "expired_token" };
-    case "access_denied":
-      return { status: "access_denied" };
-    default:
-      return {
-        status: "error",
-        error: raw.error ?? "unknown_error",
-        description: raw.error_description,
-      };
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 400 && isOAuthErrorBody(err.body)) {
+      switch (err.body.error) {
+        case "authorization_pending":
+          return { status: "authorization_pending" };
+        case "slow_down":
+          return { status: "slow_down" };
+        case "expired_token":
+          return { status: "expired_token" };
+        case "access_denied":
+          return { status: "access_denied" };
+        default:
+          return { status: "error", error: err.body.error };
+      }
+    }
+    throw err;
   }
 }
 
@@ -184,7 +140,7 @@ export interface PollForTokenOptions {
  * is denied, or the device code expires.
  */
 export async function pollForToken(
-  config: DeviceAuthorizationConfig,
+  client: ApiClient,
   deviceCodeResponse: DeviceCodeResponse,
   options: PollForTokenOptions = {}
 ): Promise<DeviceTokenSuccess> {
@@ -199,7 +155,7 @@ export async function pollForToken(
 
     await sleep(intervalSeconds * 1000, options.signal);
 
-    const result = await pollDeviceToken(config, deviceCodeResponse.deviceCode);
+    const result = await pollDeviceToken(client, deviceCodeResponse.deviceCode);
 
     switch (result.status) {
       case "success":
@@ -215,7 +171,7 @@ export async function pollForToken(
       case "access_denied":
         throw new Error("The user denied the device authorization request.");
       case "error":
-        throw new Error(result.description ?? result.error);
+        throw new Error(`Device token request failed: ${result.error}`);
     }
   }
 

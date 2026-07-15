@@ -1,6 +1,7 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 import { HomePage } from "./pages/Home";
 import { LibraryPage } from "./pages/Library";
+import { WorkDetailPage } from "./pages/WorkDetail";
 import { PlayerPage } from "./pages/Player";
 import { SettingsPage } from "./pages/Settings";
 import { AdminPage } from "./pages/Admin";
@@ -8,16 +9,16 @@ import { AdminPage } from "./pages/Admin";
 const NAV_LINKS = [
   { to: "/", label: "Home", end: true },
   { to: "/library", label: "Library" },
-  { to: "/player", label: "Player" },
   { to: "/settings", label: "Settings" },
   { to: "/admin", label: "Admin" },
 ] as const;
 
 /**
- * Placeholder top-level routing for the standalone web app. `Admin` is
- * reserved for the future request-management UI (approve/reject
- * `MediaRequest`s) per the plan; it's routed and stubbed now so the nav
- * shape is real even before that screen is built out.
+ * Top-level routing for the standalone web app. `/player` now takes a
+ * `:mediaFileId` param -- reached from a title's detail page rather than a
+ * standalone nav link, since playback always starts from a specific work.
+ * `Admin` hosts the real request-management UI (approve/reject
+ * `MediaRequest`s against `GET/POST /api/v1/requests`).
  */
 export function App() {
   return (
@@ -50,7 +51,8 @@ export function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/library" element={<LibraryPage />} />
-          <Route path="/player" element={<PlayerPage />} />
+          <Route path="/library/:workId" element={<WorkDetailPage />} />
+          <Route path="/player/:mediaFileId" element={<PlayerPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/admin" element={<AdminPage />} />
         </Routes>

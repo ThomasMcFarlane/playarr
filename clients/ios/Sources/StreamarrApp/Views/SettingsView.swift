@@ -7,7 +7,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Server") {
+                Section {
                     TextField("Server URL", text: $viewModel.serverBaseURLText)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -16,18 +16,22 @@ struct SettingsView: View {
                     Button("Save") {
                         viewModel.applyServerURL()
                     }
+                } header: {
+                    Text("Server")
+                } footer: {
+                    Text("Defaults to http://localhost:8080. Point this at whichever Streamarr server instance you run.")
                 }
 
                 Section("Account") {
-                    if let user = viewModel.currentUser {
-                        LabeledContent("Signed in as", value: user.displayName)
+                    if viewModel.isSignedIn {
+                        LabeledContent("Status", value: "Signed in")
                         Button("Sign Out", role: .destructive) {
                             Task { await viewModel.signOut() }
                         }
-                    } else if let deviceAuth = viewModel.deviceAuthorization {
+                    } else if let deviceCode = viewModel.deviceCode {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Go to \(deviceAuth.verificationURI.absoluteString)")
-                            Text("and enter code: \(deviceAuth.userCode)")
+                            Text("Go to \(deviceCode.verificationUri)")
+                            Text("and enter code: \(deviceCode.userCode)")
                                 .font(.title3.monospaced())
                         }
                     } else {

@@ -1,7 +1,8 @@
 import type { RefObject } from "react";
-import type { Work } from "@streamarr-tv/domain";
+import type { Work } from "@streamarr-tv/api-client";
 import { color, radius, spacing, typeScale } from "@streamarr-tv/design-tokens";
 import { useFocusable } from "../SpatialNavContext";
+import { pickImage } from "../lib/images";
 
 export interface BrowseRow {
   id: string;
@@ -62,6 +63,7 @@ interface WorkTileProps {
 
 function WorkTile({ work, onSelect }: WorkTileProps) {
   const { ref, isFocused } = useFocusable(`work-tile-${work.id}`, "browse-row");
+  const thumbUrl = pickImage(work.images, "thumb") ?? pickImage(work.images, "poster");
 
   return (
     <button
@@ -76,7 +78,7 @@ function WorkTile({ work, onSelect }: WorkTileProps) {
         border: isFocused ? `3px solid ${color.focus.ring}` : "3px solid transparent",
         outline: "none",
         backgroundColor: color.background.raised,
-        backgroundImage: work.artwork.thumbUrl ? `url(${work.artwork.thumbUrl})` : undefined,
+        backgroundImage: thumbUrl ? `url(${thumbUrl})` : undefined,
         backgroundSize: "cover",
         backgroundPosition: "center",
         transform: isFocused ? "scale(1.08)" : "scale(1)",
@@ -87,9 +89,7 @@ function WorkTile({ work, onSelect }: WorkTileProps) {
         textAlign: "left",
       }}
     >
-      {!work.artwork.thumbUrl && (
-        <span style={{ fontSize: typeScale.body.fontSize }}>{work.title}</span>
-      )}
+      {!thumbUrl && <span style={{ fontSize: typeScale.body.fontSize }}>{work.title}</span>}
     </button>
   );
 }

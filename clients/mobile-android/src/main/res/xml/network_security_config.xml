@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Streamarr is self-hosted: an operator's server (see core-data's
+  ServerConfigStore/the Settings screen) is very commonly plain HTTP on a
+  home LAN with no TLS certificate, not a public HTTPS host. The emulator
+  dev default (http://10.0.2.2:8080) is itself cleartext. Android 9+
+  (API 28+, this app's targetSdk) blocks cleartext traffic to every domain
+  by default, which would otherwise make every request fail with
+  "CLEARTEXT communication ... not permitted" regardless of what the
+  operator configures in Settings. This mirrors how other self-hosted
+  media clients (Jellyfin, Plex) handle the same constraint.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

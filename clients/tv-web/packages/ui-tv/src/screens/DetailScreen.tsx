@@ -1,7 +1,8 @@
 import type { RefObject } from "react";
-import type { Work } from "@streamarr-tv/domain";
+import type { Work } from "@streamarr-tv/api-client";
 import { color, radius, spacing, typeScale } from "@streamarr-tv/design-tokens";
 import { useFocusable } from "../SpatialNavContext";
+import { pickImage } from "../lib/images";
 
 export interface DetailScreenProps {
   work: Work;
@@ -11,13 +12,15 @@ export interface DetailScreenProps {
 
 /** Full-bleed backdrop + synopsis + a focusable "Play" action. Skeleton, no real layout system yet. */
 export function DetailScreen({ work, onPlay, onBack }: DetailScreenProps) {
+  const backdropUrl = pickImage(work.images, "backdrop") ?? pickImage(work.images, "poster");
+
   return (
     <div
       style={{
         position: "relative",
         minHeight: "100%",
         backgroundColor: color.background.base,
-        backgroundImage: work.artwork.backdropUrl ? `url(${work.artwork.backdropUrl})` : undefined,
+        backgroundImage: backdropUrl ? `url(${backdropUrl})` : undefined,
         backgroundSize: "cover",
         backgroundPosition: "center",
       }}

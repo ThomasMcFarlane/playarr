@@ -1,16 +1,16 @@
 package io.streamarr.shared.data.remote
 
-import io.streamarr.shared.data.model.Device
-import io.streamarr.shared.data.model.Episode
-import io.streamarr.shared.data.model.MediaFile
-import io.streamarr.shared.data.model.PlaybackEvent
-import io.streamarr.shared.data.model.PlaybackSession
-import io.streamarr.shared.data.model.Policy
-import io.streamarr.shared.data.model.Season
-import io.streamarr.shared.data.model.UserProfile
+import io.streamarr.shared.data.model.CatalogPage
+import io.streamarr.shared.data.model.DecideRequestBody
+import io.streamarr.shared.data.model.MediaRequest
+import io.streamarr.shared.data.model.PlaybackInfoResponse
+import io.streamarr.shared.data.model.SubmitRequestBody
 import io.streamarr.shared.data.model.VersionEnvelope
 import io.streamarr.shared.data.model.Work
-import kotlinx.serialization.Serializable
+import io.streamarr.shared.data.model.WorkDetail
+import kotlinx.serialization.json.JsonElement
+import okhttp3.ResponseBody
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -18,77 +18,126 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 /**
- * Hand-written placeholder for the Streamarr HTTP API surface.
+ * Real, typed Retrofit client for every path in `backend/openapi/streamarr.yaml`
+ * *except* the RFC 8628 device-authorization endpoints, which stay on
+ * `core-auth`'s `DeviceAuthApi` (see that interface's KDoc for why -- a
+ * device legitimately needs those two calls before it has any access
+ * token, hence before it has any business constructing an authenticated
+ * [StreamarrApi]).
  *
- * Per `docs/architecture/overview.md`, the source of truth for this
- * contract is `crates/streamarr-api/openapi.yaml`, and CI generates Kotlin
- * client stubs from it for every Playarr client. **This interface exists
- * so `core-data`, `core-domain`, and the app modules have something real
- * to compile and inject against before that codegen pipeline exists** — it
- * should be deleted and replaced wholesale by the generated client once
- * `streamarr-api` ships its first OpenAPI spec, not incrementally patched
- * to match it forever.
+ * Hand-written rather than run through `openapi-generator-cli`: this
+ * project's hand-rolled `KSerializer`s for the spec's externally/internally
+ * tagged `oneOf` schemas (`ExternalProvider`, `WorkChildren`,
+ * `RequestTarget`) already reproduce serde's exact wire shapes, and
+ * every method below is checked field-for-field against the spec, so a
+ * generated client would either need heavy post-generation patching for
+ * those types or a custom template -- not worth the codegen dependency for
+ * 13 paths. This is the **replacement** for the Wave-1 placeholder that
+ * used to live at this same file path (`/api/works`, `/api/me`, `/api/playback/sessions`,
+ * ... paths that were never real).
  *
- * Endpoint paths and shapes are inferred from `streamarr-model` and
- * `docs/architecture/auth-modes.md` (the only parts of the contract
- * documented so far); see `core-auth.DeviceAuthApi` for the RFC 8628
- * device-pairing endpoints, which live on this same host but are kept in
- * `core-auth` since they're usable before a session token exists.
+ * This is deliberately one flat interface (not split per-tag) to mirror
+ * how `StreamarrHttpClient.create` hands out exactly one Retrofit-backed
+ * implementation per app process.
  */
 interface StreamarrApi {
+
+    // ---- system ------------------------------------------------------------
+
+    /**
+     * `GET /api/system/health` -- 200 iff the process is alive; no response
+     * body either way, so this returns the raw, unconverted
+     * [ResponseBody] rather than running an empty body through the JSON
+     * converter (which would fail trying to decode zero bytes).
+     */
+    @GET("api/system/health")
+    suspend fun health(): Response<ResponseBody>
+
+    /** `GET /api/system/ready` -- 200 ready / 503 not ready; see [health] for why the return type is raw. */
+    @GET("api/system/ready")
+    suspend fun ready(): Response<ResponseBody>
 
     @GET("api/system/version")
     suspend fun getVersion(): VersionEnvelope
 
-    @GET("api/me")
-    suspend fun getCurrentUser(): UserProfile
+    // ---- catalog -------------------------------------------------------------
 
-    @GET("api/me/policy")
-    suspend fun getCurrentPolicy(): Policy
-
-    @GET("api/me/devices")
-    suspend fun listDevices(): List<Device>
-
-    @GET("api/works")
-    suspend fun listWorks(
+    /**
+     * `GET /api/v1/catalog`. [kind] is the lowercase wire value of
+     * [io.streamarr.shared.data.model.WorkKind] (e.g. `"movie"`, see
+     * [io.streamarr.shared.data.model.WorkKind.wireName]); [sort] is
+     * `"title"` (server default when omitted) or `"recent"`.
+     */
+    @GET("api/v1/catalog")
+    suspend fun browseCatalog(
         @Query("kind") kind: String? = null,
-        @Query("cursor") cursor: String? = null,
-        @Query("limit") limit: Int? = null,
-    ): WorkPage
+        @Query("genre") genre: String? = null,
+        @Query("tag") tag: String? = null,
+        @Query("sort") sort: String? = null,
+        @Query("limit") limit: Long? = null,
+        @Query("offset") offset: Long? = null,
+    ): CatalogPage
 
-    @GET("api/works/{workId}")
-    suspend fun getWork(@Path("workId") workId: String): Work
+    @GET("api/v1/catalog/search")
+    suspend fun searchCatalog(
+        @Query("q") query: String,
+        @Query("limit") limit: Long? = null,
+    ): List<Work>
 
-    @GET("api/works/{workId}/seasons")
-    suspend fun listSeasons(@Path("workId") workId: String): List<Season>
+    /** `GET /api/v1/catalog/{id}` -- a work and its full kind-specific child tree. */
+    @GET("api/v1/catalog/{id}")
+    suspend fun getWork(@Path("id") id: String): WorkDetail
 
-    @GET("api/seasons/{seasonId}/episodes")
-    suspend fun listEpisodes(@Path("seasonId") seasonId: String): List<Episode>
+    // ---- requests ------------------------------------------------------------
 
-    @GET("api/works/{workId}/media-files")
-    suspend fun listMediaFiles(@Path("workId") workId: String): List<MediaFile>
+    /** [userId] narrows to that user's own requests (any status); omitted lists every request still `Pending`. */
+    @GET("api/v1/requests")
+    suspend fun listRequests(@Query("user_id") userId: String? = null): List<MediaRequest>
 
-    @POST("api/playback/sessions")
-    suspend fun startPlaybackSession(@Body request: StartPlaybackSessionRequest): PlaybackSession
+    @POST("api/v1/requests")
+    suspend fun submitRequest(@Body body: SubmitRequestBody): MediaRequest
 
-    @POST("api/playback/sessions/{sessionId}/events")
-    suspend fun recordPlaybackEvent(
-        @Path("sessionId") sessionId: String,
-        @Body event: PlaybackEvent,
-    )
+    @POST("api/v1/requests/{id}/approve")
+    suspend fun approveRequest(@Path("id") id: String, @Body body: DecideRequestBody): MediaRequest
+
+    @POST("api/v1/requests/{id}/reject")
+    suspend fun rejectRequest(@Path("id") id: String, @Body body: DecideRequestBody): MediaRequest
+
+    // ---- playback --------------------------------------------------------------
+
+    /**
+     * `GET /api/v1/playback/{media_file_id}` -- the direct-play-vs-transcode
+     * negotiation this whole endpoint exists for. [containers]/[videoCodecs]/[audioCodecs]
+     * are comma-separated capability lists the calling device can play
+     * (e.g. `"mp4"`, `"h264"`); [profile] names a transcode target profile
+     * (server defaults to `"h264-720p-4mbps"` when omitted/unrecognized).
+     * Non-2xx (404 unknown id, 503 no transcode capacity) surfaces as an
+     * [retrofit2.HttpException] from this suspend call, same as every
+     * other non-`Response`-wrapped method here.
+     */
+    @GET("api/v1/playback/{media_file_id}")
+    suspend fun getPlaybackInfo(
+        @Path("media_file_id") mediaFileId: String,
+        @Query("containers") containers: String? = null,
+        @Query("video_codecs") videoCodecs: String? = null,
+        @Query("audio_codecs") audioCodecs: String? = null,
+        @Query("max_bitrate_bps") maxBitrateBps: Long? = null,
+        @Query("profile") profile: String? = null,
+    ): PlaybackInfoResponse
+
+    // ---- webhooks --------------------------------------------------------------
+
+    /**
+     * `POST /webhooks/{instance_id}` -- receives *arr webhook payloads.
+     * This is a server-to-server endpoint in normal operation (Sonarr/Radarr/etc.
+     * call it, not a Streamarr client app); it's included here only so
+     * this SDK's coverage of the spec is complete and real -- no screen in
+     * this app calls it. [payload]'s schema is `{}` (arbitrary JSON) in
+     * the spec, hence [JsonElement] rather than a concrete DTO.
+     */
+    @POST("webhooks/{instance_id}")
+    suspend fun sendWebhook(
+        @Path("instance_id") instanceId: String,
+        @Body payload: JsonElement,
+    ): Response<ResponseBody>
 }
-
-/** Cursor-paginated envelope; every `GET` list endpoint follows this shape. */
-@Serializable
-data class WorkPage(
-    val items: List<Work>,
-    val nextCursor: String? = null,
-)
-
-/** Body for `POST /api/playback/sessions` — the server assigns `id`/`startedAt` and returns the full session. */
-@Serializable
-data class StartPlaybackSessionRequest(
-    val mediaFileId: String,
-    val clientPlatform: String,
-    val clientVersion: String,
-)

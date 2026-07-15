@@ -26,6 +26,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.streamarr.shared.data.model.Work
+import io.streamarr.shared.domain.model.StreamarrError
 import io.streamarr.shared.domain.model.StreamarrResult
 import io.streamarr.shared.domain.usecase.BrowseLibraryUseCase
 import io.streamarr.tv.R
@@ -35,26 +36,35 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+/** See `mobile-android`'s `HomeScreen.kt` `HomeUiState` for why this isn't a bare `isLoading: Boolean` + list. */
+sealed interface TvHomeUiState {
+    data object Loading : TvHomeUiState
+    data class Content(val works: List<Work>) : TvHomeUiState
+    data class Failure(val message: String) : TvHomeUiState
+}
+
 @HiltViewModel
 class TvHomeViewModel @Inject constructor(
     private val browseLibraryUseCase: BrowseLibraryUseCase,
 ) : ViewModel() {
 
-    private val _recentlyAdded = MutableStateFlow<List<Work>>(emptyList())
-    val recentlyAdded: StateFlow<List<Work>> = _recentlyAdded.asStateFlow()
-
-    private val _isLoading = MutableStateFlow(true)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    private val _uiState = MutableStateFlow<TvHomeUiState>(TvHomeUiState.Loading)
+    val uiState: StateFlow<TvHomeUiState> = _uiState.asStateFlow()
 
     init {
         viewModelScope.launch {
-            when (val result = browseLibraryUseCase()) {
-                is StreamarrResult.Success -> _recentlyAdded.value = result.value
-                is StreamarrResult.Failure -> _recentlyAdded.value = emptyList()
+            _uiState.value = when (val result = browseLibraryUseCase(sort = "recent")) {
+                is StreamarrResult.Success -> TvHomeUiState.Content(result.value)
+                is StreamarrResult.Failure -> TvHomeUiState.Failure(result.error.toUserMessage())
             }
-            _isLoading.value = false
         }
     }
+}
+
+private fun StreamarrError.toUserMessage(): String = when (this) {
+    is StreamarrError.Network -> "Can't reach the Streamarr server. Check the server address in Settings."
+    is StreamarrError.Http -> "Server error ($code)."
+    is StreamarrError.Unknown -> "Something went wrong loading your library."
 }
 
 /** Home row of d-pad-focusable [Card]s -- the TV equivalent of mobile's `HomeScreen` poster shelf. */
@@ -64,8 +74,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     viewModel: TvHomeViewModel = hiltViewModel(),
 ) {
-    val works by viewModel.recentlyAdded.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
 
     Column(modifier = modifier.fillMaxSize().padding(top = 32.dp)) {
         Text(
@@ -74,19 +83,25 @@ fun HomeScreen(
             modifier = Modifier.padding(horizontal = 48.dp, vertical = 16.dp),
         )
 
-        when {
-            isLoading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        when (val current = uiState) {
+            is TvHomeUiState.Loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
-            works.isEmpty() -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(text = stringResource(R.string.home_empty_state), style = MaterialTheme.typography.bodyLarge)
+            is TvHomeUiState.Failure -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(text = current.message, style = MaterialTheme.typography.bodyLarge)
             }
-            else -> LazyRow(
-                contentPadding = PaddingValues(horizontal = 48.dp),
-                horizontalArrangement = Arrangement.spacedBy(20.dp),
-            ) {
-                items(works, key = { it.id }) { work ->
-                    TvPosterCard(work = work, onClick = { onWorkClick(work) })
+            is TvHomeUiState.Content -> if (current.works.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(text = stringResource(R.string.home_empty_state), style = MaterialTheme.typography.bodyLarge)
+                }
+            } else {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 48.dp),
+                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                ) {
+                    items(current.works, key = { it.id }) { work ->
+                        TvPosterCard(work = work, onClick = { onWorkClick(work) })
+                    }
                 }
             }
         }

@@ -1,48 +1,50 @@
 import Foundation
 
-// MARK: - Placeholder notice
+// MARK: - Generated-client notice
 //
-// This file is a hand-written stand-in for the client `openapi-generator`
-// (`-g swift5`) will eventually produce from `backend/openapi/`'s spec.
-// That spec doesn't exist in the tree yet, so there is nothing to generate
-// against. Until it does:
+// `StreamarrAPIClient`/`APIClient` below is a real, working, async/await
+// `URLSession`-based client for every operation in
+// `backend/openapi/streamarr.yaml` *except* the two RFC 8628 OAuth device
+// flow endpoints (`POST /api/v1/oauth/device/code`, `POST
+// /api/v1/oauth/token`), which live in `Auth/DeviceFlowClient.swift`
+// instead — that's a deliberate split, not a gap: the device flow has its
+// own unauthenticated, polling-with-backoff shape that doesn't fit this
+// client's "one call in, one typed result (or typed error) out" pattern,
+// and `DeviceFlowClient` already existed as the app's dedicated component
+// for it. Together the two components cover all 13 paths / 15 operations
+// in the spec:
+//   - system: GET /api/system/health, /ready, /version
+//   - catalog: GET /api/v1/catalog, /api/v1/catalog/search,
+//     /api/v1/catalog/{id}
+//   - requests: GET+POST /api/v1/requests, POST .../{id}/approve,
+//     POST .../{id}/reject
+//   - playback: GET /api/v1/playback/{media_file_id}
+//   - webhooks: POST /webhooks/{instance_id}
+//   - oauth (in DeviceFlowClient.swift): POST /api/v1/oauth/device/code,
+//     POST /api/v1/oauth/token
 //
-//   1. `StreamarrAPIClient` below is the protocol the rest of the app
-//      (view models in `StreamarrApp/ViewModels`) codes against — never
-//      `APIClient` the concrete class directly — so swapping in generated
-//      code later is a one-line dependency-injection change, not a
-//      call-site rewrite.
-//   2. `APIClient` is a real, working `URLSession`-based implementation of
-//      that protocol, with the request/response plumbing (auth headers,
-//      JSON coding, error mapping) a generated client would also need.
-//   3. Once `backend/openapi/openapi.yaml` (or `.json`) exists, run
-//      something like:
-//        openapi-generator-cli generate \
-//          -g swift5 -i backend/openapi/openapi.yaml \
-//          -o clients/ios/Sources/StreamarrKit/Generated \
-//          --additional-properties=library=urlsession,responseAs=AsyncAwait
-//      add the generated folder as a second target (or source group) in
-//      `Package.swift`, make its generated client type conform to
-//      `StreamarrAPIClient`, and delete this file's hand-rolled `APIClient`
-//      (keep the protocol).
+// Request/response Codable types live in `OpenAPISchemas.swift` in this
+// same directory — see that file's header for how they were produced and
+// checked against the spec/backend source.
 
-/// Configuration for talking to one Streamarr server instance.
+/// Configuration for talking to one Streamarr server instance. `baseURL` is
+/// the one thing that must be user-configurable per the architecture
+/// principle that a client points at an arbitrary operator-run instance —
+/// see `AppEnvironment` in `StreamarrApp` for the UserDefaults-backed
+/// setting that drives this.
 public struct APIClientConfiguration: Sendable {
     public var baseURL: URL
-    public var apiVersion: String
     public var clientPlatform: ClientPlatform
     public var clientVersion: String
     public var urlSessionConfiguration: URLSessionConfiguration
 
     public init(
         baseURL: URL,
-        apiVersion: String = "v1",
         clientPlatform: ClientPlatform = .ios,
         clientVersion: String = "0.1.0",
         urlSessionConfiguration: URLSessionConfiguration = .default
     ) {
         self.baseURL = baseURL
-        self.apiVersion = apiVersion
         self.clientPlatform = clientPlatform
         self.clientVersion = clientVersion
         self.urlSessionConfiguration = urlSessionConfiguration
@@ -53,44 +55,116 @@ public struct APIClientConfiguration: Sendable {
 /// requests. `DeviceFlowClient` (see `Auth/DeviceFlowClient.swift`)
 /// produces the initial token pair; a concrete conformer typically
 /// persists it in the Keychain and refreshes it before it expires.
+///
+/// No route in the current spec is documented as requiring
+/// authentication yet (see `SubmitRequestBody.requestedBy`'s `TODO(auth)`
+/// in the spec: there's no auth-extraction middleware in this pass), but
+/// every request still attaches whatever bearer token is available so the
+/// client is ready the moment that middleware lands server-side, without
+/// another client-side change.
 public protocol AccessTokenProviding: Sendable {
     func currentAccessToken() async -> Sensitive<String>?
     func refreshAccessToken() async throws -> Sensitive<String>
 }
 
+/// Errors this client can throw. Status-code-specific cases carry the
+/// server's `{"error": "<code>", "message": "<...>"}` body (see
+/// `APIErrorBody` in `OpenAPISchemas.swift`) when the body decoded as one,
+/// so callers/UI can show the real server-provided message rather than a
+/// generic one.
 public enum APIError: Error, Sendable {
     case invalidBaseURL
     case transport(Error)
     case invalidResponse
-    case http(status: Int, body: Data?)
     case decoding(Error)
-    case unauthorized
-    case notImplemented(String)
+    case unauthorized(APIErrorBody?)
+    /// `404` — e.g. `GET /api/v1/catalog/{id}` for an unknown work,
+    /// `GET /api/v1/playback/{media_file_id}` for an unknown media file,
+    /// `POST /webhooks/{instance_id}` for an unknown source instance.
+    case notFound(APIErrorBody?)
+    /// `409` — approve/reject on a request that's no longer `Pending`.
+    case conflict(APIErrorBody?)
+    /// `422` — `POST /api/v1/requests` with no configured/usable source
+    /// instance for the requested kind.
+    case unprocessableEntity(APIErrorBody?)
+    /// `503` — `GET /api/v1/playback/{media_file_id}` with no on-demand
+    /// transcode capacity available on this node.
+    case serviceUnavailable(APIErrorBody?)
+    /// Any other non-2xx status not covered above.
+    case http(status: Int, body: APIErrorBody?, rawBody: Data?)
+
+    /// A message worth showing a user, preferring the server's own
+    /// `message` field when one was decoded.
+    public var displayMessage: String {
+        switch self {
+        case .invalidBaseURL: return "The server URL isn't valid."
+        case .transport(let error): return error.localizedDescription
+        case .invalidResponse: return "The server sent back a response we couldn't understand."
+        case .decoding: return "The server's response didn't match what this app expected."
+        case .unauthorized(let body): return body?.message ?? "You're not signed in."
+        case .notFound(let body): return body?.message ?? "That wasn't found."
+        case .conflict(let body): return body?.message ?? "That request already changed state."
+        case .unprocessableEntity(let body): return body?.message ?? "The server couldn't fulfil that."
+        case .serviceUnavailable(let body): return body?.message ?? "The server can't handle that right now."
+        case .http(let status, let body, _): return body?.message ?? "The server returned an unexpected error (\(status))."
+        }
+    }
 }
 
-/// The shape of the Streamarr HTTP API this app depends on, independent of
-/// how a request actually gets made. See the placeholder notice above.
+/// The shape of the Streamarr HTTP API this app depends on (minus the
+/// OAuth device flow — see the header note above), independent of how a
+/// request actually gets made.
 public protocol StreamarrAPIClient: Sendable {
-    func fetchVersionEnvelope() async throws -> VersionEnvelope
+    /// The server this client is configured to talk to — exposed so
+    /// callers can resolve server-relative URLs the API hands back (e.g.
+    /// `PlaybackInfoResponse.url`) without needing their own copy of it.
+    var baseURL: URL { get }
 
-    func fetchLibraries() async throws -> [SourceInstance]
-    func fetchWorks(libraryID: UUID?, page: Int, pageSize: Int) async throws -> [Work]
-    func fetchWork(id: UUID) async throws -> Work
-    func fetchSeries(workID: UUID) async throws -> Series
-    func fetchSeasons(seriesID: UUID) async throws -> [Season]
-    func fetchEpisodes(seasonID: UUID) async throws -> [Episode]
-    func fetchMediaFiles(workID: UUID) async throws -> [MediaFile]
-    func fetchContinueWatching(limit: Int) async throws -> [PlaybackSession]
+    // System
+    func fetchHealth() async throws
+    func fetchReadiness() async throws
+    func fetchVersion() async throws -> VersionEnvelope
 
-    func startPlaybackSession(workID: UUID, mediaFileID: UUID, deviceID: UUID) async throws -> PlaybackSession
-    func recordPlaybackEvent(_ event: PlaybackEvent) async throws
-    func endPlaybackSession(id: UUID, stopReason: StopReason) async throws
+    // Catalog
+    func browseCatalog(
+        kind: WorkKind?,
+        genre: String?,
+        tag: String?,
+        sort: String?,
+        limit: Int?,
+        offset: Int?
+    ) async throws -> CatalogPage
 
-    func fetchCurrentUser() async throws -> User
+    func searchCatalog(query: String, limit: Int?) async throws -> [Work]
+    func fetchWork(id: UUID) async throws -> WorkDetail
+
+    // Requests
+    func listRequests(userID: UUID?) async throws -> [MediaRequest]
+    func submitRequest(_ body: SubmitRequestBody) async throws -> MediaRequest
+    func approveRequest(id: UUID, body: DecideRequestBody) async throws -> MediaRequest
+    func rejectRequest(id: UUID, body: DecideRequestBody) async throws -> MediaRequest
+
+    // Playback
+    func playbackInfo(
+        mediaFileID: UUID,
+        containers: [String],
+        videoCodecs: [String],
+        audioCodecs: [String],
+        maxBitrateBps: Int64?,
+        profile: String?
+    ) async throws -> PlaybackInfoResponse
+
+    // Webhooks — primarily for admin/debug tooling; a normal client screen
+    // has no reason to POST here (this is the *arr apps' job), but it's
+    // wired for completeness against the spec.
+    func sendWebhook(instanceID: UUID, payload: Data) async throws
+
+    /// Resolves a possibly-relative URL string (as returned by
+    /// `PlaybackInfoResponse.url`) against `baseURL`.
+    func resolvedURL(forPath path: String) -> URL?
 }
 
-/// Hand-written `URLSession`-backed implementation of `StreamarrAPIClient`.
-/// See the placeholder notice at the top of this file.
+/// Real, working `URLSession`-backed implementation of `StreamarrAPIClient`.
 public final class APIClient: StreamarrAPIClient {
     private let configuration: APIClientConfiguration
     private let session: URLSession
@@ -106,108 +180,110 @@ public final class APIClient: StreamarrAPIClient {
         self.configuration = configuration
         self.session = session ?? URLSession(configuration: configuration.urlSessionConfiguration)
         self.tokenProvider = tokenProvider
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        self.decoder = decoder
-
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        self.encoder = encoder
+        self.decoder = StreamarrJSONCoding.makeDecoder()
+        self.encoder = StreamarrJSONCoding.makeEncoder()
     }
 
-    // MARK: StreamarrAPIClient
+    public var baseURL: URL { configuration.baseURL }
 
-    public func fetchVersionEnvelope() async throws -> VersionEnvelope {
-        try await get("/version")
+    // MARK: System
+
+    public func fetchHealth() async throws {
+        try await sendNoBody(path: "/api/system/health", method: "GET")
     }
 
-    public func fetchLibraries() async throws -> [SourceInstance] {
-        try await get(versionedPath("/libraries"))
+    public func fetchReadiness() async throws {
+        try await sendNoBody(path: "/api/system/ready", method: "GET")
     }
 
-    public func fetchWorks(libraryID: UUID? = nil, page: Int = 1, pageSize: Int = 50) async throws -> [Work] {
-        var query = [
-            URLQueryItem(name: "page", value: String(page)),
-            URLQueryItem(name: "page_size", value: String(pageSize))
-        ]
-        if let libraryID {
-            query.append(URLQueryItem(name: "source_instance_id", value: libraryID.uuidString))
-        }
-        return try await get(versionedPath("/works"), query: query)
+    public func fetchVersion() async throws -> VersionEnvelope {
+        try await get("/api/system/version")
     }
 
-    public func fetchWork(id: UUID) async throws -> Work {
-        try await get(versionedPath("/works/\(id.uuidString)"))
+    // MARK: Catalog
+
+    public func browseCatalog(
+        kind: WorkKind? = nil,
+        genre: String? = nil,
+        tag: String? = nil,
+        sort: String? = nil,
+        limit: Int? = nil,
+        offset: Int? = nil
+    ) async throws -> CatalogPage {
+        var query: [URLQueryItem] = []
+        if let kind { query.append(URLQueryItem(name: "kind", value: kind.rawValue)) }
+        if let genre { query.append(URLQueryItem(name: "genre", value: genre)) }
+        if let tag { query.append(URLQueryItem(name: "tag", value: tag)) }
+        if let sort { query.append(URLQueryItem(name: "sort", value: sort)) }
+        if let limit { query.append(URLQueryItem(name: "limit", value: String(limit))) }
+        if let offset { query.append(URLQueryItem(name: "offset", value: String(offset))) }
+        return try await get("/api/v1/catalog", query: query)
     }
 
-    public func fetchSeries(workID: UUID) async throws -> Series {
-        try await get(versionedPath("/works/\(workID.uuidString)/series"))
+    public func searchCatalog(query searchQuery: String, limit: Int? = nil) async throws -> [Work] {
+        var query = [URLQueryItem(name: "q", value: searchQuery)]
+        if let limit { query.append(URLQueryItem(name: "limit", value: String(limit))) }
+        return try await get("/api/v1/catalog/search", query: query)
     }
 
-    public func fetchSeasons(seriesID: UUID) async throws -> [Season] {
-        try await get(versionedPath("/series/\(seriesID.uuidString)/seasons"))
+    public func fetchWork(id: UUID) async throws -> WorkDetail {
+        try await get("/api/v1/catalog/\(id.uuidString)")
     }
 
-    public func fetchEpisodes(seasonID: UUID) async throws -> [Episode] {
-        try await get(versionedPath("/seasons/\(seasonID.uuidString)/episodes"))
+    // MARK: Requests
+
+    public func listRequests(userID: UUID? = nil) async throws -> [MediaRequest] {
+        var query: [URLQueryItem] = []
+        if let userID { query.append(URLQueryItem(name: "user_id", value: userID.uuidString)) }
+        return try await get("/api/v1/requests", query: query)
     }
 
-    public func fetchMediaFiles(workID: UUID) async throws -> [MediaFile] {
-        try await get(versionedPath("/works/\(workID.uuidString)/media-files"))
+    public func submitRequest(_ body: SubmitRequestBody) async throws -> MediaRequest {
+        try await post("/api/v1/requests", body: body, expectedStatuses: [200, 201])
     }
 
-    public func fetchContinueWatching(limit: Int = 20) async throws -> [PlaybackSession] {
-        try await get(versionedPath("/playback/continue-watching"), query: [
-            URLQueryItem(name: "limit", value: String(limit))
-        ])
+    public func approveRequest(id: UUID, body: DecideRequestBody) async throws -> MediaRequest {
+        try await post("/api/v1/requests/\(id.uuidString)/approve", body: body)
     }
 
-    public func startPlaybackSession(workID: UUID, mediaFileID: UUID, deviceID: UUID) async throws -> PlaybackSession {
-        struct Body: Encodable {
-            let workID: UUID
-            let mediaFileID: UUID
-            let deviceID: UUID
-
-            enum CodingKeys: String, CodingKey {
-                case workID = "work_id"
-                case mediaFileID = "media_file_id"
-                case deviceID = "device_id"
-            }
-        }
-        return try await post(
-            versionedPath("/playback/sessions"),
-            body: Body(workID: workID, mediaFileID: mediaFileID, deviceID: deviceID)
-        )
+    public func rejectRequest(id: UUID, body: DecideRequestBody) async throws -> MediaRequest {
+        try await post("/api/v1/requests/\(id.uuidString)/reject", body: body)
     }
 
-    public func recordPlaybackEvent(_ event: PlaybackEvent) async throws {
-        let _: EmptyResponse = try await post(versionedPath("/playback/events"), body: event)
+    // MARK: Playback
+
+    public func playbackInfo(
+        mediaFileID: UUID,
+        containers: [String] = [],
+        videoCodecs: [String] = [],
+        audioCodecs: [String] = [],
+        maxBitrateBps: Int64? = nil,
+        profile: String? = nil
+    ) async throws -> PlaybackInfoResponse {
+        var query: [URLQueryItem] = []
+        if !containers.isEmpty { query.append(URLQueryItem(name: "containers", value: containers.joined(separator: ","))) }
+        if !videoCodecs.isEmpty { query.append(URLQueryItem(name: "video_codecs", value: videoCodecs.joined(separator: ","))) }
+        if !audioCodecs.isEmpty { query.append(URLQueryItem(name: "audio_codecs", value: audioCodecs.joined(separator: ","))) }
+        if let maxBitrateBps { query.append(URLQueryItem(name: "max_bitrate_bps", value: String(maxBitrateBps))) }
+        if let profile { query.append(URLQueryItem(name: "profile", value: profile)) }
+        return try await get("/api/v1/playback/\(mediaFileID.uuidString)", query: query)
     }
 
-    public func endPlaybackSession(id: UUID, stopReason: StopReason) async throws {
-        struct Body: Encodable {
-            let stopReason: StopReason
+    // MARK: Webhooks
 
-            enum CodingKeys: String, CodingKey {
-                case stopReason = "stop_reason"
-            }
-        }
-        let _: EmptyResponse = try await post(
-            versionedPath("/playback/sessions/\(id.uuidString)/stop"),
-            body: Body(stopReason: stopReason)
-        )
+    public func sendWebhook(instanceID: UUID, payload: Data) async throws {
+        var request = try makeRequest(path: "/webhooks/\(instanceID.uuidString)", method: "POST", query: [])
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = payload
+        await attachAuth(&request)
+        _ = try await sendRaw(request, expectedStatuses: [202])
     }
 
-    public func fetchCurrentUser() async throws -> User {
-        try await get(versionedPath("/users/me"))
+    public func resolvedURL(forPath path: String) -> URL? {
+        URL(string: path, relativeTo: configuration.baseURL)?.absoluteURL
     }
 
     // MARK: - Request plumbing
-
-    private func versionedPath(_ path: String) -> String {
-        "/\(configuration.apiVersion)\(path)"
-    }
 
     private func get<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
         var request = try makeRequest(path: path, method: "GET", query: query)
@@ -215,17 +291,31 @@ public final class APIClient: StreamarrAPIClient {
         return try await send(request)
     }
 
-    private func post<Body: Encodable, T: Decodable>(_ path: String, body: Body) async throws -> T {
+    private func post<Body: Encodable, T: Decodable>(
+        _ path: String,
+        body: Body,
+        expectedStatuses: Set<Int> = [200]
+    ) async throws -> T {
         var request = try makeRequest(path: path, method: "POST", query: [])
         try attachBody(body, to: &request)
         await attachAuth(&request)
-        return try await send(request)
+        return try await send(request, expectedStatuses: expectedStatuses)
+    }
+
+    private func sendNoBody(path: String, method: String, query: [URLQueryItem] = []) async throws {
+        var request = try makeRequest(path: path, method: method, query: query)
+        await attachAuth(&request)
+        _ = try await sendRaw(request, expectedStatuses: Set(200..<300))
     }
 
     private func makeRequest(path: String, method: String, query: [URLQueryItem]) throws -> URLRequest {
         guard var components = URLComponents(url: configuration.baseURL, resolvingAgainstBaseURL: false) else {
             throw APIError.invalidBaseURL
         }
+        // `path` is always a literal, absolute API path (e.g.
+        // "/api/v1/catalog") — appending (not replacing) `components.path`
+        // preserves a `baseURL` that itself has a path component (e.g. an
+        // operator serving Streamarr behind a reverse-proxy prefix).
         components.path += path
         if !query.isEmpty {
             components.queryItems = query
@@ -256,7 +346,19 @@ public final class APIClient: StreamarrAPIClient {
         request.setValue("Bearer \(token.exposeSecret())", forHTTPHeaderField: "Authorization")
     }
 
-    private func send<T: Decodable>(_ request: URLRequest) async throws -> T {
+    private func send<T: Decodable>(_ request: URLRequest, expectedStatuses: Set<Int> = [200]) async throws -> T {
+        let data = try await sendRaw(request, expectedStatuses: expectedStatuses)
+        do {
+            return try decoder.decode(T.self, from: data)
+        } catch {
+            throw APIError.decoding(error)
+        }
+    }
+
+    /// Performs the request, validates the status code, and returns the raw
+    /// body — the one place every status-code-to-`APIError` mapping lives.
+    @discardableResult
+    private func sendRaw(_ request: URLRequest, expectedStatuses: Set<Int>) async throws -> Data {
         let data: Data
         let response: URLResponse
         do {
@@ -269,24 +371,24 @@ public final class APIClient: StreamarrAPIClient {
             throw APIError.invalidResponse
         }
 
-        switch httpResponse.statusCode {
-        case 200..<300:
-            break
-        case 401:
-            throw APIError.unauthorized
-        default:
-            throw APIError.http(status: httpResponse.statusCode, body: data)
+        if expectedStatuses.contains(httpResponse.statusCode) {
+            return data
         }
 
-        do {
-            return try decoder.decode(T.self, from: data)
-        } catch {
-            throw APIError.decoding(error)
+        let errorBody = try? decoder.decode(APIErrorBody.self, from: data)
+        switch httpResponse.statusCode {
+        case 401:
+            throw APIError.unauthorized(errorBody)
+        case 404:
+            throw APIError.notFound(errorBody)
+        case 409:
+            throw APIError.conflict(errorBody)
+        case 422:
+            throw APIError.unprocessableEntity(errorBody)
+        case 503:
+            throw APIError.serviceUnavailable(errorBody)
+        default:
+            throw APIError.http(status: httpResponse.statusCode, body: errorBody, rawBody: data)
         }
     }
 }
-
-/// Decodes successfully from any body (including an empty one) — used for
-/// endpoints whose response the app doesn't need, typically `204 No
-/// Content`.
-struct EmptyResponse: Decodable {}

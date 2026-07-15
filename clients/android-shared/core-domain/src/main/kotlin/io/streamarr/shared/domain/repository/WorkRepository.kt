@@ -1,10 +1,10 @@
 package io.streamarr.shared.domain.repository
 
-import io.streamarr.shared.data.model.Episode
-import io.streamarr.shared.data.model.MediaFile
-import io.streamarr.shared.data.model.Season
+import io.streamarr.shared.data.model.CatalogPage
 import io.streamarr.shared.data.model.Work
+import io.streamarr.shared.data.model.WorkDetail
 import io.streamarr.shared.data.model.WorkKind
+import io.streamarr.shared.data.model.wireName
 import io.streamarr.shared.data.remote.StreamarrApi
 import javax.inject.Inject
 
@@ -16,32 +16,49 @@ import javax.inject.Inject
  * unit-tested against a fake, and so a future offline-cache-backed
  * implementation can be swapped in via DI without touching any call site.
  * [DefaultWorkRepository] is the only implementation today; it is a thin
- * pass-through to [StreamarrApi].
+ * pass-through to [StreamarrApi]'s `catalog`-tagged endpoints.
  */
 interface WorkRepository {
-    suspend fun listWorks(kind: WorkKind? = null): List<Work>
-    suspend fun getWork(workId: String): Work
-    suspend fun listSeasons(workId: String): List<Season>
-    suspend fun listEpisodes(seasonId: String): List<Episode>
-    suspend fun listMediaFiles(workId: String): List<MediaFile>
+    /** `GET /api/v1/catalog`. */
+    suspend fun browseCatalog(
+        kind: WorkKind? = null,
+        genre: String? = null,
+        tag: String? = null,
+        sort: String? = null,
+        limit: Long? = null,
+        offset: Long? = null,
+    ): CatalogPage
+
+    /** `GET /api/v1/catalog/search`. */
+    suspend fun searchCatalog(query: String, limit: Long? = null): List<Work>
+
+    /** `GET /api/v1/catalog/{id}` -- the work plus its full kind-specific child tree. */
+    suspend fun getWork(workId: String): WorkDetail
 }
 
 class DefaultWorkRepository @Inject constructor(
     private val api: StreamarrApi,
 ) : WorkRepository {
 
-    override suspend fun listWorks(kind: WorkKind?): List<Work> =
-        api.listWorks(kind = kind?.name?.lowercase()).items
+    override suspend fun browseCatalog(
+        kind: WorkKind?,
+        genre: String?,
+        tag: String?,
+        sort: String?,
+        limit: Long?,
+        offset: Long?,
+    ): CatalogPage = api.browseCatalog(
+        kind = kind?.wireName(),
+        genre = genre,
+        tag = tag,
+        sort = sort,
+        limit = limit,
+        offset = offset,
+    )
 
-    override suspend fun getWork(workId: String): Work =
+    override suspend fun searchCatalog(query: String, limit: Long?): List<Work> =
+        api.searchCatalog(query = query, limit = limit)
+
+    override suspend fun getWork(workId: String): WorkDetail =
         api.getWork(workId)
-
-    override suspend fun listSeasons(workId: String): List<Season> =
-        api.listSeasons(workId)
-
-    override suspend fun listEpisodes(seasonId: String): List<Episode> =
-        api.listEpisodes(seasonId)
-
-    override suspend fun listMediaFiles(workId: String): List<MediaFile> =
-        api.listMediaFiles(workId)
 }

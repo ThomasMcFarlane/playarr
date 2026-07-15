@@ -20,10 +20,12 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "STREAMARR_BASE_URL", "\"http://10.0.2.2:8080/\"")
-        // Distinct from mobile-android's client_id: the RFC 8628 device-pairing
-        // flow (auth-modes.md) identifies which Playarr client is pairing.
-        buildConfigField("String", "DEVICE_AUTH_CLIENT_ID", "\"streamarr-tv\"")
+        // No STREAMARR_BASE_URL/DEVICE_AUTH_CLIENT_ID buildConfigFields:
+        // the server base URL is a runtime-configurable, DataStore-backed
+        // setting now (see core-data's ServerConfigStore + the Settings
+        // screen), and the real oauth/device/code request body identifies
+        // the pairing client by `client_platform` (an enum), not a
+        // free-form `client_id` string -- see core-auth's DeviceCodeRequest.
     }
 
     buildTypes {

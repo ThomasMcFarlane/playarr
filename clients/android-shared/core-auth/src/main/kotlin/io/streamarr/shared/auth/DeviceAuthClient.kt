@@ -1,8 +1,11 @@
 package io.streamarr.shared.auth
 
-import io.streamarr.shared.auth.model.DeviceAuthorizationResponse
+import io.streamarr.shared.auth.model.ClientPlatform
+import io.streamarr.shared.auth.model.DeviceCodeRequest
+import io.streamarr.shared.auth.model.DeviceCodeResponse
 import io.streamarr.shared.auth.model.DevicePollResult
-import io.streamarr.shared.auth.model.DeviceTokenErrorBody
+import io.streamarr.shared.auth.model.DeviceTokenRequest
+import io.streamarr.shared.auth.model.OAuthErrorBody
 import io.streamarr.shared.auth.remote.DeviceAuthApi
 import java.io.IOException
 import javax.inject.Inject
@@ -12,21 +15,23 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.Json
 
 /**
- * Drives the RFC 8628 device-pairing flow described in
- * `docs/architecture/auth-modes.md` end to end. The two methods the task
- * spec calls for -- request a device code, poll for a token -- are
- * [requestDeviceCode] and [pollOnce]; [pollUntilResolved] is a convenience
- * wrapper around [pollOnce] implementing the required backoff behaviour
- * (RFC 8628 §3.5) so `tv-android`'s pairing screen doesn't reimplement it.
+ * Drives the RFC 8628 device-pairing flow against the real
+ * `POST /api/v1/oauth/device/code` / `POST /api/v1/oauth/token` endpoints
+ * end to end, including the real `authorization_pending` / `slow_down` /
+ * `expired_token` / `access_denied` error codes from
+ * `backend/openapi/streamarr.yaml`. [requestDeviceCode] and [pollOnce] are
+ * the two calls; [pollUntilResolved] is a convenience wrapper around
+ * [pollOnce] implementing the required backoff behaviour (RFC 8628 §3.5)
+ * so `tv-android`'s pairing screen doesn't reimplement it.
  */
 class DeviceAuthClient @Inject constructor(
     private val api: DeviceAuthApi,
 ) {
     private val errorBodyJson = Json { ignoreUnknownKeys = true }
 
-    /** Step 1: begin pairing. See [DeviceAuthorizationResponse] for what to show the user. */
-    suspend fun requestDeviceCode(clientId: String): DeviceAuthorizationResponse =
-        api.requestDeviceCode(clientId)
+    /** Step 1: begin pairing. See [DeviceCodeResponse] for what to show the user. */
+    suspend fun requestDeviceCode(clientPlatform: ClientPlatform): DeviceCodeResponse =
+        api.requestDeviceCode(DeviceCodeRequest(clientPlatform = clientPlatform))
 
     /**
      * Step 2, one attempt: poll once for whether pairing has completed.
@@ -35,9 +40,9 @@ class DeviceAuthClient @Inject constructor(
      * RFC 8628 §3.5 -- polling faster than the granted `interval` risks
      * the server rate-limiting the device entirely.
      */
-    suspend fun pollOnce(deviceCode: String, clientId: String): DevicePollResult {
+    suspend fun pollOnce(deviceCode: String): DevicePollResult {
         val response = try {
-            api.pollForToken(deviceCode = deviceCode, clientId = clientId)
+            api.pollForToken(DeviceTokenRequest(deviceCode = deviceCode))
         } catch (e: IOException) {
             return DevicePollResult.Failed(e.message ?: "Network error while polling for token")
         }
@@ -49,7 +54,7 @@ class DeviceAuthClient @Inject constructor(
 
         val errorBody = response.errorBody()?.string()
         val errorCode = errorBody
-            ?.let { runCatching { errorBodyJson.decodeFromString(DeviceTokenErrorBody.serializer(), it) }.getOrNull() }
+            ?.let { runCatching { errorBodyJson.decodeFromString(OAuthErrorBody.serializer(), it) }.getOrNull() }
             ?.error
 
         return when (errorCode) {
@@ -58,6 +63,9 @@ class DeviceAuthClient @Inject constructor(
             "expired_token" -> DevicePollResult.Expired
             "access_denied" -> DevicePollResult.Denied
             null -> DevicePollResult.Failed("HTTP ${response.code()}")
+            // Covers `unsupported_grant_type` (should never happen -- this
+            // client always sends the fixed device-code grant type) and any
+            // future/unrecognized error code the server might add.
             else -> DevicePollResult.Failed(errorCode)
         }
     }
@@ -72,13 +80,12 @@ class DeviceAuthClient @Inject constructor(
      */
     fun pollUntilResolved(
         deviceCode: String,
-        clientId: String,
-        initialIntervalSeconds: Int,
+        initialIntervalSeconds: Long,
     ): Flow<DevicePollResult> = flow {
         var intervalSeconds = initialIntervalSeconds
         while (true) {
             delay(intervalSeconds * 1000L)
-            val result = pollOnce(deviceCode, clientId)
+            val result = pollOnce(deviceCode)
             emit(result)
             when (result) {
                 is DevicePollResult.AuthorizationPending -> Unit // keep polling at the same interval
@@ -89,6 +96,6 @@ class DeviceAuthClient @Inject constructor(
     }
 
     private companion object {
-        const val SLOW_DOWN_INCREMENT_SECONDS = 5
+        const val SLOW_DOWN_INCREMENT_SECONDS = 5L
     }
 }

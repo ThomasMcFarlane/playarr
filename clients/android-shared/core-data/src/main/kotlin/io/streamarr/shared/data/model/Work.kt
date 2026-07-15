@@ -113,3 +113,11 @@ data class Work(
     val monitored: Boolean,
     val availability: Availability,
 )
+
+/** The wire value this [WorkKind] is filtered/matched by, e.g. in `GET /api/v1/catalog?kind=`. */
+fun WorkKind.wireName(): String = when (this) {
+    WorkKind.Movie -> "movie"
+    WorkKind.Series -> "series"
+    WorkKind.Artist -> "artist"
+    WorkKind.Author -> "author"
+}

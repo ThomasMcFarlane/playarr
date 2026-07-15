@@ -4,11 +4,27 @@ import androidx.media3.common.Player
 import kotlinx.coroutines.flow.StateFlow
 
 /**
+ * Which container/transport [StreamarrPlayer.prepare]'s `mediaUrl` is,
+ * mirroring `io.streamarr.shared.data.model.PlaybackMode` (the real
+ * `GET /api/v1/playback/{media_file_id}` response's `mode` field) without
+ * this module depending on `core-data` -- see `core-data`'s
+ * `StreamarrHttpClient` KDoc for the same module-independence rationale
+ * applied here. Callers map the server's decision onto this before calling
+ * [StreamarrPlayer.prepare].
+ */
+enum class StreamFormat {
+    /** A direct-play/direct-stream source-file URL; Media3 infers container from the URL/response headers. */
+    Direct,
+
+    /** An HLS (`.m3u8`) manifest URL; forced explicitly (see [ExoPlayerStreamarrPlayer]) rather than URL-sniffed. */
+    Hls,
+}
+
+/**
  * Thin wrapper interface around Media3/ExoPlayer that `mobile-android` and
- * `tv-android` both drive to play a
- * [io.streamarr.shared.data.model.MediaFile] or
- * [io.streamarr.shared.data.model.Rendition]. Kept as an interface (rather
- * than exposing [androidx.media3.exoplayer.ExoPlayer] directly) so:
+ * `tv-android` both drive to play whatever
+ * `GET /api/v1/playback/{media_file_id}` resolved. Kept as an interface
+ * (rather than exposing [androidx.media3.exoplayer.ExoPlayer] directly) so:
  *
  * - Both apps get identical playback semantics without duplicating
  *   ExoPlayer configuration (track selection, buffering policy, error
@@ -32,11 +48,14 @@ interface StreamarrPlayer {
     val rawPlayer: Player
 
     /**
-     * Loads and begins buffering [mediaUrl] (a direct-play source URL or an
-     * HLS/DASH manifest URL for a [io.streamarr.shared.data.model.Rendition]),
-     * seeking to [startPositionMs] (resume position) before playback starts.
+     * Loads and begins buffering [mediaUrl], seeking to [startPositionMs]
+     * (resume position) before playback starts. [format] is the real
+     * direct-play-vs-transcode decision branch: [StreamFormat.Hls] forces
+     * Media3's HLS extractor regardless of what [mediaUrl] looks like
+     * (some `on-demand` transcode session URLs don't end in `.m3u8`),
+     * while [StreamFormat.Direct] lets Media3 infer the container itself.
      */
-    fun prepare(mediaUrl: String, startPositionMs: Long = 0L)
+    fun prepare(mediaUrl: String, format: StreamFormat = StreamFormat.Direct, startPositionMs: Long = 0L)
 
     fun play()
     fun pause()

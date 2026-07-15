@@ -12,20 +12,28 @@ clients/tv-web/
   pnpm-workspace.yaml   workspace package globs + shared version catalog
   tsconfig.base.json    shared compiler options, extended by every package
   packages/             platform-agnostic shared libraries
-    domain/              shared TS types mirroring streamarr-model's domain types
-    api-client/           hand-written fetch wrapper -- future openapi-fetch drop-in
-    device-auth/          RFC 8628 OAuth device-authorization-grant client
-    design-tokens/        color/spacing/type-scale constants (pre-Style-Dictionary)
-    spatial-nav/          platform-agnostic d-pad/remote focus engine
-    player-core/           PlaybackEngine interface + DRM config shape
-    player-shaka/          Shaka Player adapter (real shaka-player dependency)
-    player-avplay/         Tizen webapis.avplay adapter (local .d.ts, no Tizen SDK here)
-    ui-tv/                shared Browse/Detail/Player screen skeletons (React)
+    api-client/            real typed client generated from backend/openapi/streamarr.yaml
+                            (openapi-typescript + openapi-fetch), plus shared React
+                            data-fetching hooks at the "./react" subpath export
+    domain/                client-local config only now (API base URL resolution/storage)
+                            -- wire types live in api-client, generated off the real spec
+    device-auth/           RFC 8628 OAuth device-authorization-grant client, wired to the
+                            real POST /api/v1/oauth/device/code + /api/v1/oauth/token
+    design-tokens/         color/spacing/type-scale constants (pre-Style-Dictionary)
+    spatial-nav/            platform-agnostic d-pad/remote focus engine
+    player-core/             PlaybackEngine interface + DRM config shape
+    player-shaka/            Shaka Player adapter (real shaka-player dependency)
+    player-avplay/           Tizen webapis.avplay adapter (local .d.ts, no Tizen SDK here)
+    ui-tv/                  Browse/Detail/Player/Pairing screens + data-wired containers
+                            (BrowseScreenContainer/DetailScreenContainer/
+                            PlayerScreenContainer/PairingScreenContainer) and the
+                            top-level TvApp screen router, all consumed by the 3 TV shells
   apps/                  thin per-platform TV shells
-    tv-webos/              webOS app shell (ui-tv + player-shaka)
-    tv-tizen/               Tizen app shell (ui-tv + player-avplay)
-    tv-vidaa-fallback/      VIDAA PWA shell (ui-tv + player-shaka)
-  web/                    standalone Vite + React app (Home/Library/Player/Settings/Admin)
+    tv-webos/               webOS app shell (TvApp + player-shaka)
+    tv-tizen/                Tizen app shell (TvApp + player-avplay)
+    tv-vidaa-fallback/       VIDAA PWA shell (TvApp + player-shaka)
+  web/                    standalone Vite + React app (Home/Library/WorkDetail/Player/
+                          Settings/Admin), wired to the same real API endpoints
 ```
 
 ## Package naming & versioning
@@ -43,6 +51,9 @@ whole workspace.
 pnpm install              # install everything (workspace + catalog resolution)
 pnpm -r run build         # typecheck + build every package/app, in dependency order
 pnpm -r run typecheck     # tsc --noEmit everywhere
+pnpm -r --if-present run test   # vitest suites (api-client, device-auth) against mocked HTTP
+pnpm --filter @streamarr-tv/api-client run generate   # regenerate src/generated/schema.ts
+                                                        # from backend/openapi/streamarr.yaml
 pnpm --filter @streamarr-tv/web run dev     # Vite dev server for the standalone web app
 pnpm --filter @streamarr-tv/app-webos run dev   # etc., per app
 ```

@@ -38,6 +38,10 @@ dependencies {
     // depending on Hilt or running annotation processing.
     implementation(libs.javax.inject)
 
+    // ServerConfigStore's operator-base-URL setting (see data/config/) is
+    // DataStore-backed, mirroring core-auth's TokenStore.
+    implementation(libs.androidx.datastore.preferences)
+
     testImplementation(libs.junit4)
     testImplementation(libs.kotlinx.coroutines.core)
 }

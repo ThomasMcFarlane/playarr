@@ -7,11 +7,18 @@ import io.streamarr.shared.domain.model.runCatchingStreamarr
 import io.streamarr.shared.domain.repository.WorkRepository
 import javax.inject.Inject
 
-/** Lists the catalog, optionally narrowed to one [WorkKind] -- the query behind Home/Library grids. */
+/** `GET /api/v1/catalog` -- the query behind Home/Library grids, optionally narrowed/sorted. */
 class BrowseLibraryUseCase @Inject constructor(
     private val workRepository: WorkRepository,
 ) {
-    suspend operator fun invoke(kind: WorkKind? = null): StreamarrResult<List<Work>> = runCatchingStreamarr {
-        workRepository.listWorks(kind)
+    suspend operator fun invoke(
+        kind: WorkKind? = null,
+        genre: String? = null,
+        tag: String? = null,
+        sort: String? = null,
+        limit: Long? = null,
+        offset: Long? = null,
+    ): StreamarrResult<List<Work>> = runCatchingStreamarr {
+        workRepository.browseCatalog(kind = kind, genre = genre, tag = tag, sort = sort, limit = limit, offset = offset).items
     }
 }

@@ -1,0 +1,4 @@
+{
+  "_comment": "Operator-editable runtime config, read by @streamarr-tv/domain's resolveApiBaseUrl() on app startup. This TV has no keyboard, so this file (or a ?apiBaseUrl=... launch query param, which takes priority) is how an operator points the app at their own Streamarr instance instead of localhost. Edit apiBaseUrl below and reinstall/redeploy this file alongside the app bundle -- no rebuild required.",
+  "apiBaseUrl": "http://localhost:8080"
+}
