@@ -86,6 +86,15 @@ pub struct AlterWorkerLimitRequest {
     pub worker_limit: i32,
 }
 
+// TODO: no retry/backoff policy yet. Every method here makes exactly one
+// HTTP attempt and surfaces a transient network blip (or a Tdarr node that
+// is momentarily overloaded, which is common right after `alter-worker-limit`
+// throttles it) as an immediate `TdarrClientError::Request`. Callers that
+// need resilience (e.g. `streamarr-transcode`'s completion-polling loop)
+// currently have to implement their own retry wrapper around this client.
+// Deferred because the right policy (bounded retries with jitter on
+// idempotent GETs, no blind retries on POSTs that trigger a scan) depends on
+// call-site semantics this crate shouldn't assume.
 pub struct TdarrClient {
     http: reqwest::Client,
     base_url: String,

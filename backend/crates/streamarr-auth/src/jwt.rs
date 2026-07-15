@@ -58,6 +58,13 @@ impl JwtIssuer {
         }
     }
 
+    /// The configured access-token TTL, e.g. so a token-response builder
+    /// elsewhere in this crate can populate `expires_in` without
+    /// duplicating the value this issuer was constructed with.
+    pub fn access_ttl(&self) -> Duration {
+        self.access_ttl
+    }
+
     pub fn issue_access_token(
         &self,
         user_id: Uuid,

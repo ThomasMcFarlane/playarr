@@ -1,0 +1,1123 @@
+openapi: 3.1.0
+info:
+  title: Streamarr API
+  description: 'The Streamarr Axum HTTP server: OpenAPI-annotated system routes, health/readiness, and the client-version-enforcement middleware.'
+  license:
+    name: MIT
+    identifier: MIT
+  version: 0.1.0
+paths:
+  /api/system/health:
+    get:
+      tags:
+      - system
+      operationId: health_handler
+      responses:
+        '200':
+          description: The process is alive and serving HTTP requests
+  /api/system/ready:
+    get:
+      tags:
+      - system
+      operationId: readiness_handler
+      responses:
+        '200':
+          description: Ready to serve traffic
+        '503':
+          description: Not ready yet (or no longer ready)
+  /api/system/version:
+    get:
+      tags:
+      - system
+      operationId: version_handler
+      responses:
+        '200':
+          description: Server version and client compatibility table
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionEnvelope'
+  /api/v1/catalog:
+    get:
+      tags:
+      - catalog
+      operationId: browse_catalog_handler
+      parameters:
+      - name: kind
+        in: query
+        required: false
+        schema:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/WorkKind'
+      - name: genre
+        in: query
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: tag
+        in: query
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: sort
+        in: query
+        description: '`"title"` (default) or `"recent"`.'
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int64
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int64
+      responses:
+        '200':
+          description: A page of catalog works
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogPageSchema'
+  /api/v1/catalog/search:
+    get:
+      tags:
+      - catalog
+      operationId: search_catalog_handler
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int64
+      responses:
+        '200':
+          description: Matching works
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Work'
+  /api/v1/catalog/{id}:
+    get:
+      tags:
+      - catalog
+      operationId: get_work_handler
+      parameters:
+      - name: id
+        in: path
+        description: Work id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: A work and its full kind-specific tree
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkDetailSchema'
+        '404':
+          description: No work with this id
+  /api/v1/oauth/device/code:
+    post:
+      tags:
+      - oauth
+      operationId: device_code_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceCodeRequest'
+        required: true
+      responses:
+        '200':
+          description: Device/user code pair issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceCodeResponseSchema'
+  /api/v1/oauth/token:
+    post:
+      tags:
+      - oauth
+      operationId: device_token_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceTokenRequest'
+        required: true
+      responses:
+        '200':
+          description: Access/refresh token pair
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponseSchema'
+        '400':
+          description: authorization_pending | slow_down | expired_token | access_denied | unsupported_grant_type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthErrorBody'
+  /api/v1/playback/{media_file_id}:
+    get:
+      tags:
+      - playback
+      operationId: playback_info_handler
+      parameters:
+      - name: media_file_id
+        in: path
+        description: MediaFile id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: containers
+        in: query
+        description: Comma-separated container names the client can play, e.g. `"mp4"`.
+        required: false
+        schema:
+          type: string
+      - name: video_codecs
+        in: query
+        description: Comma-separated video codecs the client can play, e.g. `"h264"`.
+        required: false
+        schema:
+          type: string
+      - name: audio_codecs
+        in: query
+        description: |-
+          Comma-separated audio codecs the client can play; informational
+          only today -- see `TranscodeOrchestrator::can_direct_play`'s docs.
+        required: false
+        schema:
+          type: string
+      - name: max_bitrate_bps
+        in: query
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+      - name: profile
+        in: query
+        description: |-
+          Target rendition profile name if a transcode is needed; defaults to
+          `"h264-720p-4mbps"` (an unrecognized name still resolves to a sane
+          default -- see `TranscodeTargetProfile::resolve`).
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      responses:
+        '200':
+          description: Direct-play URL or HLS manifest URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybackInfoResponse'
+        '404':
+          description: Unknown media_file_id
+        '503':
+          description: No on-demand transcode capacity available on this node
+  /api/v1/requests:
+    get:
+      tags:
+      - requests
+      operationId: list_requests_handler
+      parameters:
+      - name: user_id
+        in: query
+        description: |-
+          When set, lists this user's own requests (any status); when absent,
+          lists every request still `Pending` an admin decision.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+          format: uuid
+      responses:
+        '200':
+          description: Requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MediaRequestSchema'
+    post:
+      tags:
+      - requests
+      operationId: submit_request_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitRequestBody'
+        required: true
+      responses:
+        '201':
+          description: Request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaRequestSchema'
+        '422':
+          description: No configured/usable source instance for this kind
+  /api/v1/requests/{id}/approve:
+    post:
+      tags:
+      - requests
+      operationId: approve_request_handler
+      parameters:
+      - name: id
+        in: path
+        description: Request id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideRequestBody'
+        required: true
+      responses:
+        '200':
+          description: Request approved and submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaRequestSchema'
+        '404':
+          description: Request not found
+        '409':
+          description: Request is not Pending
+  /api/v1/requests/{id}/reject:
+    post:
+      tags:
+      - requests
+      operationId: reject_request_handler
+      parameters:
+      - name: id
+        in: path
+        description: Request id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideRequestBody'
+        required: true
+      responses:
+        '200':
+          description: Request rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaRequestSchema'
+        '404':
+          description: Request not found
+        '409':
+          description: Request is not Pending
+  /webhooks/{instance_id}:
+    post:
+      tags:
+      - webhooks
+      operationId: arr_webhook_handler
+      parameters:
+      - name: instance_id
+        in: path
+        description: Configured SourceInstance id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+        required: true
+      responses:
+        '202':
+          description: Signal parsed and enqueued for the reconciliation poller
+        '400':
+          description: Payload has no recognizable eventType
+        '404':
+          description: Unknown source_instance_id
+components:
+  schemas:
+    Album:
+      type: object
+      required:
+      - id
+      - artist_work_id
+      - title
+      - album_type
+      - monitored
+      - availability
+      properties:
+        album_type:
+          $ref: '#/components/schemas/AlbumType'
+        artist_work_id:
+          type: string
+          format: uuid
+        availability:
+          $ref: '#/components/schemas/Availability'
+        id:
+          type: string
+          format: uuid
+        monitored:
+          type: boolean
+        release_date:
+          type:
+          - string
+          - 'null'
+          format: date
+        title:
+          type: string
+    AlbumDetailSchema:
+      type: object
+      required:
+      - album
+      - tracks
+      properties:
+        album:
+          $ref: '#/components/schemas/Album'
+        tracks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Track'
+    AlbumType:
+      type: string
+      enum:
+      - studio
+      - live
+      - compilation
+      - ep
+      - single
+      - soundtrack
+    Availability:
+      type: string
+      description: |-
+        Where in the availability pipeline a `Work` (or a leaf under it) is
+        sitting. This intentionally mirrors the *arr apps' own state machine
+        (queued/downloading/imported) but is normalized into one shared enum so
+        catalog and playback code doesn't need to know which *arr produced it.
+      enum:
+      - unknown
+      - pending
+      - processing
+      - partially_available
+      - available
+      - deleted
+    Book:
+      type: object
+      required:
+      - id
+      - author_work_id
+      - title
+      - monitored
+      - availability
+      properties:
+        author_work_id:
+          type: string
+          format: uuid
+        availability:
+          $ref: '#/components/schemas/Availability'
+        id:
+          type: string
+          format: uuid
+        isbn:
+          type:
+          - string
+          - 'null'
+        monitored:
+          type: boolean
+        release_date:
+          type:
+          - string
+          - 'null'
+          format: date
+        series_name:
+          type:
+          - string
+          - 'null'
+        series_position:
+          type:
+          - number
+          - 'null'
+          format: float
+        title:
+          type: string
+    CatalogPageSchema:
+      type: object
+      description: |-
+        Doc-only mirror of [`streamarr_catalog::CatalogPage`] -- the real type
+        already derives `Serialize` (and is what handlers actually return), it
+        just has no `ToSchema` (`streamarr-catalog` doesn't depend on `utoipa`).
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Work'
+        total:
+          type:
+          - integer
+          - 'null'
+          format: int64
+    ClientPlatform:
+      type: string
+      description: |-
+        Every first-party client surface Streamarr ships. Kept as a closed enum
+        (rather than a free-form string) so the compatibility table, the
+        `X-Streamarr-Client-Platform` header parser, and policy's
+        `device_allow` list all agree on the same finite set.
+      enum:
+      - android-mobile
+      - android-tv
+      - ios
+      - web
+      - tv-webos
+      - tv-tizen
+      - tv-vidaa
+    CompatibilityEntry:
+      type: object
+      description: |-
+        One platform's row in the compatibility table: what the latest client
+        build is, the floor below which the version-gate middleware rejects
+        requests outright, and the floor below which it should nag-but-allow.
+      required:
+      - platform
+      - latest_version
+      - min_supported_version
+      properties:
+        deprecated_below:
+          type:
+          - string
+          - 'null'
+        latest_version:
+          type: string
+        min_supported_version:
+          type: string
+        platform:
+          $ref: '#/components/schemas/ClientPlatform'
+        sunset:
+          type:
+          - string
+          - 'null'
+          description: |-
+            RFC 3339 timestamp after which `min_supported_version` will be
+            ratcheted up; surfaced to clients so they can warn users ahead of
+            time rather than being cut off with no notice.
+    DecideRequestBody:
+      type: object
+      required:
+      - decided_by
+      properties:
+        decided_by:
+          type: string
+          format: uuid
+        reason:
+          type:
+          - string
+          - 'null'
+    DeviceCodeRequest:
+      type: object
+      required:
+      - client_platform
+      properties:
+        client_platform:
+          $ref: '#/components/schemas/ClientPlatform'
+    DeviceCodeResponseSchema:
+      type: object
+      description: |-
+        Doc-only mirror of [`DeviceCodeResponse`] (that type has no `ToSchema`;
+        handlers still return it directly, serialized for real).
+      required:
+      - device_code
+      - user_code
+      - verification_uri
+      - verification_uri_complete
+      - expires_in
+      - interval
+      properties:
+        device_code:
+          type: string
+        expires_in:
+          type: integer
+          format: int64
+        interval:
+          type: integer
+          format: int64
+        user_code:
+          type: string
+        verification_uri:
+          type: string
+        verification_uri_complete:
+          type: string
+    DeviceTokenRequest:
+      type: object
+      required:
+      - grant_type
+      - device_code
+      properties:
+        device_code:
+          type: string
+        grant_type:
+          type: string
+          description: |-
+            Must be [`DEVICE_CODE_GRANT_TYPE`] -- any other value is rejected
+            with `unsupported_grant_type` before the device code is even looked
+            up, per RFC 6749 §5.2.
+    Episode:
+      type: object
+      required:
+      - id
+      - season_id
+      - episode_number
+      - monitored
+      - availability
+      properties:
+        air_date:
+          type:
+          - string
+          - 'null'
+          format: date
+        availability:
+          $ref: '#/components/schemas/Availability'
+        episode_number:
+          type: integer
+          format: int32
+        id:
+          type: string
+          format: uuid
+        monitored:
+          type: boolean
+        overview:
+          type:
+          - string
+          - 'null'
+        runtime_minutes:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+        season_id:
+          type: string
+          format: uuid
+        title:
+          type:
+          - string
+          - 'null'
+    ExternalProvider:
+      oneOf:
+      - type: string
+        enum:
+        - tmdb
+      - type: string
+        enum:
+        - tvdb
+      - type: string
+        enum:
+        - imdb
+      - type: string
+        enum:
+        - music_brainz_artist
+      - type: string
+        enum:
+        - music_brainz_release_group
+      - type: string
+        enum:
+        - goodreads
+      - type: string
+        enum:
+        - isbn
+      - type: string
+        enum:
+        - asin
+      - type: object
+        description: |-
+          Escape hatch for providers we don't have a first-class variant for
+          yet (e.g. AniDB, Discogs) without needing a migration to add one.
+        required:
+        - other
+        properties:
+          other:
+            type: string
+            description: |-
+              Escape hatch for providers we don't have a first-class variant for
+              yet (e.g. AniDB, Discogs) without needing a migration to add one.
+      description: |-
+        A cross-reference to the identifier this `Work` (or one of its source
+        records) is known by in an external catalog/metadata provider.
+    ExternalRef:
+      type: object
+      required:
+      - provider
+      - external_id
+      properties:
+        external_id:
+          type: string
+        provider:
+          $ref: '#/components/schemas/ExternalProvider'
+    ImageAsset:
+      type: object
+      required:
+      - kind
+      - url
+      properties:
+        height:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+        kind:
+          $ref: '#/components/schemas/ImageKind'
+        url:
+          type: string
+        width:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+    ImageKind:
+      type: string
+      enum:
+      - poster
+      - backdrop
+      - banner
+      - logo
+      - thumb
+    MediaRequestSchema:
+      type: object
+      description: Doc-only mirror of [`MediaRequest`] -- see [`RequestStatusSchema`].
+      required:
+      - id
+      - requested_by
+      - kind
+      - target
+      - status
+      - created_at
+      - updated_at
+      properties:
+        created_at:
+          type: string
+          format: date-time
+        decided_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/WorkKind'
+        note:
+          type:
+          - string
+          - 'null'
+        requested_by:
+          type: string
+          format: uuid
+        source_instance_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        status:
+          $ref: '#/components/schemas/RequestStatusSchema'
+        target:
+          $ref: '#/components/schemas/RequestTargetDto'
+        updated_at:
+          type: string
+          format: date-time
+    OAuthErrorBody:
+      type: object
+      required:
+      - error
+      properties:
+        error:
+          type: string
+          description: |-
+            One of RFC 8628 §3.5's four device-flow error codes, or RFC 6749
+            §5.2's `unsupported_grant_type`.
+    PlaybackInfoResponse:
+      type: object
+      description: |-
+        TODO(streaming): `url` today is a well-known, stable path convention
+        (`/api/v1/media/{media_file_id}/stream` for direct-play,
+        `/api/v1/media/renditions/{rendition_id}/playlist.m3u8` for a ready
+        rendition, `/api/v1/media/sessions/{session_id}/playlist.m3u8` for a
+        freshly spawned on-demand session) rather than a route this crate
+        actually serves yet -- implementing byte-range/HLS-segment serving at
+        those paths is out of this endpoint's scope (this endpoint only makes
+        the direct-play/existing-rendition/on-demand-transcode *decision*).
+      required:
+      - mode
+      - url
+      properties:
+        mode:
+          $ref: '#/components/schemas/PlaybackMode'
+        url:
+          type: string
+    PlaybackMode:
+      type: string
+      enum:
+      - direct
+      - hls
+    RequestStatusSchema:
+      type: string
+      description: |-
+        Doc-only mirror of [`streamarr_requests::RequestStatus`] -- the real
+        type has no `ToSchema` (`streamarr-requests` doesn't depend on
+        `utoipa`); handlers still serialize the real `MediaRequest` directly,
+        this is only referenced from `#[utoipa::path]` `responses(...)`.
+      enum:
+      - pending
+      - approved
+      - rejected
+      - submitted
+      - available
+      - failed
+    RequestTargetDto:
+      oneOf:
+      - type: object
+        required:
+        - work_id
+        - target_kind
+        properties:
+          target_kind:
+            type: string
+            enum:
+            - existing_work
+          work_id:
+            type: string
+            format: uuid
+      - type: object
+        required:
+        - external_ref
+        - target_kind
+        properties:
+          external_ref:
+            $ref: '#/components/schemas/ExternalRef'
+          target_kind:
+            type: string
+            enum:
+            - external
+      description: |-
+        Wire-compatible mirror of [`RequestTarget`]: real `Deserialize` (used to
+        extract the actual request body) and `ToSchema` (used for OpenAPI docs).
+        Kept in lock-step with `RequestTarget`'s own `#[serde(tag =
+        "target_kind")]` shape so it round-trips identically.
+    Season:
+      type: object
+      required:
+      - id
+      - series_work_id
+      - season_number
+      - monitored
+      - availability
+      properties:
+        availability:
+          $ref: '#/components/schemas/Availability'
+        id:
+          type: string
+          format: uuid
+        monitored:
+          type: boolean
+        overview:
+          type:
+          - string
+          - 'null'
+        season_number:
+          type: integer
+          format: int32
+        series_work_id:
+          type: string
+          format: uuid
+        title:
+          type:
+          - string
+          - 'null'
+    SeasonDetailSchema:
+      type: object
+      required:
+      - season
+      - episodes
+      properties:
+        episodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Episode'
+        season:
+          $ref: '#/components/schemas/Season'
+    SubmitRequestBody:
+      type: object
+      required:
+      - requested_by
+      - kind
+      - target
+      properties:
+        kind:
+          $ref: '#/components/schemas/WorkKind'
+        note:
+          type:
+          - string
+          - 'null'
+        requested_by:
+          type: string
+          format: uuid
+          description: |-
+            TODO(auth): once these routes run behind auth middleware that
+            extracts the caller from a verified access token (see
+            `streamarr_auth::jwt`), `requested_by` should come from that instead
+            of the request body -- no such middleware exists in this pass yet.
+        target:
+          $ref: '#/components/schemas/RequestTargetDto'
+    TokenResponseSchema:
+      type: object
+      description: Doc-only mirror of [`TokenResponse`]; see [`DeviceCodeResponseSchema`].
+      required:
+      - access_token
+      - token_type
+      - expires_in
+      - refresh_token
+      properties:
+        access_token:
+          type: string
+        expires_in:
+          type: integer
+          format: int64
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+    Track:
+      type: object
+      required:
+      - id
+      - album_id
+      - disc_number
+      - track_number
+      - title
+      - availability
+      properties:
+        album_id:
+          type: string
+          format: uuid
+        availability:
+          $ref: '#/components/schemas/Availability'
+        disc_number:
+          type: integer
+          format: int32
+          minimum: 0
+        duration_seconds:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        track_number:
+          type: integer
+          format: int32
+          minimum: 0
+    VersionEnvelope:
+      type: object
+      description: Response body for `GET /api/system/version`.
+      required:
+      - server_version
+      - api_version
+      - compatibility
+      properties:
+        api_version:
+          type: string
+        build_sha:
+          type:
+          - string
+          - 'null'
+        compatibility:
+          type: array
+          items:
+            $ref: '#/components/schemas/CompatibilityEntry'
+        server_version:
+          type: string
+    Work:
+      type: object
+      description: |-
+        The aggregate root for anything in the catalog. A movie is a `Work` of
+        kind `Movie` with no children; a series/artist/author is a `Work` whose
+        children (seasons, albums, books) live in their own tables keyed by
+        `Work::id`.
+      required:
+      - id
+      - kind
+      - external_refs
+      - title
+      - sort_title
+      - images
+      - genres
+      - tags
+      - added_at
+      - monitored
+      - availability
+      properties:
+        added_at:
+          type: string
+          format: date-time
+        availability:
+          $ref: '#/components/schemas/Availability'
+        external_refs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExternalRef'
+        genres:
+          type: array
+          items:
+            type: string
+        id:
+          type: string
+          format: uuid
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImageAsset'
+        kind:
+          $ref: '#/components/schemas/WorkKind'
+        monitored:
+          type: boolean
+          description: |-
+            Whether Streamarr should actively track/request missing children of
+            this work (mirrors the *arr "monitored" concept).
+        overview:
+          type:
+          - string
+          - 'null'
+        sort_title:
+          type: string
+          description: |-
+            Normalized title used for alphabetical sort/browse ("Dark Knight,
+            The" rather than "The Test Film").
+        tags:
+          type: array
+          items:
+            type: string
+          description: |-
+            Free-form user/automation tags (distinct from `genres`, which come
+            from metadata providers); used by [`crate::Policy`] tag filters.
+        title:
+          type: string
+    WorkChildrenSchema:
+      oneOf:
+      - type: string
+        enum:
+        - Movie
+      - type: object
+        required:
+        - Series
+        properties:
+          Series:
+            type: array
+            items:
+              $ref: '#/components/schemas/SeasonDetailSchema'
+      - type: object
+        required:
+        - Artist
+        properties:
+          Artist:
+            type: array
+            items:
+              $ref: '#/components/schemas/AlbumDetailSchema'
+      - type: object
+        required:
+        - Author
+        properties:
+          Author:
+            type: array
+            items:
+              $ref: '#/components/schemas/Book'
+      description: |-
+        Doc-only mirror of `streamarr_catalog::WorkChildren`; see
+        [`CatalogPageSchema`].
+    WorkDetailSchema:
+      type: object
+      required:
+      - work
+      - children
+      properties:
+        children:
+          $ref: '#/components/schemas/WorkChildrenSchema'
+        work:
+          $ref: '#/components/schemas/Work'
+    WorkKind:
+      type: string
+      description: |-
+        The top-level taxonomy Streamarr understands. Deliberately small and
+        closed: everything else (season, album, book...) is a child of a `Work`
+        rather than a `Work` in its own right, because those children don't have
+        independent lifecycle/monitoring semantics at the top level.
+      enum:
+      - movie
+      - series
+      - artist
+      - author
+tags:
+- name: system
+  description: Process health, readiness, and version endpoints
+- name: oauth
+  description: RFC 8628 OAuth 2.0 device authorization endpoints
+- name: webhooks
+  description: '*arr webhook receiver'
+- name: catalog
+  description: Catalog browse/search/detail
+- name: requests
+  description: 'Media request lifecycle: submit/approve/reject/list'
+- name: playback
+  description: 'Playback negotiation: direct-play vs. transcode decision'

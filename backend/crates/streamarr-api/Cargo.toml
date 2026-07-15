@@ -9,10 +9,18 @@ description = "The Streamarr Axum HTTP server: OpenAPI-annotated system routes, 
 streamarr-model = { path = "../streamarr-model", features = ["openapi"] }
 streamarr-config = { path = "../streamarr-config" }
 streamarr-telemetry = { path = "../streamarr-telemetry" }
+streamarr-db = { path = "../streamarr-db", features = ["sqlite", "postgres"] }
+streamarr-cache = { path = "../streamarr-cache" }
+streamarr-catalog = { path = "../streamarr-catalog" }
+streamarr-requests = { path = "../streamarr-requests" }
+streamarr-transcode = { path = "../streamarr-transcode" }
+streamarr-auth = { path = "../streamarr-auth" }
+streamarr-arr-sync = { path = "../streamarr-arr-sync" }
+streamarr-arr-client = { path = "../streamarr-arr-client" }
 axum = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
-utoipa = { workspace = true }
+utoipa = { workspace = true, features = ["yaml"] }
 utoipa-axum = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
@@ -22,6 +30,10 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+async-trait = { workspace = true }
+dashmap = { workspace = true }
 
 [dev-dependencies]
 tower = { workspace = true, features = ["util"] }
+wiremock = "0.6"
+sqlx = { workspace = true, features = ["any", "sqlite"] }

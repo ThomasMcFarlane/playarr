@@ -1,5 +1,6 @@
 //! `streamarr-api` — the Axum HTTP server. Wires the OpenAPI-annotated
-//! system routes ([`health`], [`readiness`], [`version`]) through
+//! system routes ([`health`], [`readiness`], [`version`]) plus the real
+//! catalog/requests/oauth/webhooks/playback routes through
 //! `utoipa-axum`'s [`utoipa_axum::router::OpenApiRouter`] (so the route
 //! table and the OpenAPI spec can never drift apart — every
 //! `#[utoipa::path]`-annotated handler mounted via `routes!` contributes
@@ -10,22 +11,33 @@
 //!
 //! The OpenAPI spec is generated from the `#[utoipa::path]` annotations on
 //! each handler, not hand-maintained. [`openapi_spec`] returns the live
-//! `utoipa::openapi::OpenApi` value; to (re)write the checked-in spec:
+//! `utoipa::openapi::OpenApi` value; `tests::openapi_spec_matches_checked_in_file`
+//! is both the regeneration script and the drift check: run
 //!
-//! ```ignore
-//! let yaml = streamarr_api::openapi_spec().to_yaml().unwrap();
-//! std::fs::write("backend/openapi/streamarr.yaml", yaml).unwrap();
+//! ```text
+//! UPDATE_OPENAPI_SPEC=1 cargo test -p streamarr-api openapi_spec_matches_checked_in_file
 //! ```
 //!
-//! (Wire this as a `just openapi` recipe, or a `streamarr openapi export`
-//! CLI subcommand alongside `streamarr-bin`'s `update` subcommand, once
-//! either exists — the snippet above is the whole implementation either
-//! would need.)
+//! to (re)write `backend/openapi/streamarr.yaml` from the live spec after
+//! changing any route; run the same test without the env var (as CI does)
+//! to confirm the checked-in file still matches.
 
+pub mod catalog;
+pub mod error;
 pub mod health;
+pub mod oauth;
+pub mod playback;
 pub mod readiness;
+pub mod requests;
+pub mod source_registry;
 pub mod version;
 pub mod version_gate;
+pub mod webhooks;
+
+#[cfg(test)]
+pub mod test_support;
+
+use std::sync::Arc;
 
 use axum::extract::FromRef;
 use axum::Router;
@@ -33,14 +45,24 @@ use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
+pub use error::{ApiError, ErrorBody};
+pub use playback::{InMemoryMediaFileLookup, MediaFileLookup};
 pub use readiness::ReadinessState;
+pub use source_registry::SourceInstanceRegistry;
 pub use version::VersionState;
 pub use version_gate::{ClientCompatibilityTable, VersionGateLayer};
 
 #[derive(OpenApi)]
 #[openapi(
     info(title = "Streamarr API", version = "0.1.0"),
-    tags((name = "system", description = "Process health, readiness, and version endpoints"))
+    tags(
+        (name = "system", description = "Process health, readiness, and version endpoints"),
+        (name = "oauth", description = "RFC 8628 OAuth 2.0 device authorization endpoints"),
+        (name = "webhooks", description = "*arr webhook receiver"),
+        (name = "catalog", description = "Catalog browse/search/detail"),
+        (name = "requests", description = "Media request lifecycle: submit/approve/reject/list"),
+        (name = "playback", description = "Playback negotiation: direct-play vs. transcode decision")
+    )
 )]
 pub struct ApiDoc;
 
@@ -55,6 +77,17 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(health::health_handler))
         .routes(routes!(readiness::readiness_handler))
         .routes(routes!(version::version_handler))
+        .routes(routes!(oauth::device_code_handler))
+        .routes(routes!(oauth::device_token_handler))
+        .routes(routes!(webhooks::arr_webhook_handler))
+        .routes(routes!(catalog::browse_catalog_handler))
+        .routes(routes!(catalog::get_work_handler))
+        .routes(routes!(catalog::search_catalog_handler))
+        .routes(routes!(requests::submit_request_handler))
+        .routes(routes!(requests::list_requests_handler))
+        .routes(routes!(requests::approve_request_handler))
+        .routes(routes!(requests::reject_request_handler))
+        .routes(routes!(playback::playback_info_handler))
 }
 
 pub fn openapi_spec() -> utoipa::openapi::OpenApi {
@@ -62,10 +95,32 @@ pub fn openapi_spec() -> utoipa::openapi::OpenApi {
     api
 }
 
+/// Every service/repository handle the real routes in this crate depend
+/// on. `streamarr-bin`'s `boot_api` is the composition root that
+/// constructs one of these from `streamarr_config::Config`; every field
+/// here is either `Arc<dyn Trait>` (when the owning crate defines a real
+/// trait boundary — `RequestRepo`, `DeviceFlowHandler`) or `Arc<ConcreteType>`
+/// (when it only exposes a concrete service struct — `CatalogService`,
+/// `RequestService`, `TranscodeOrchestrator`, `WebhookReceiver` — or is a
+/// composition-root-owned type with no sibling implementation to abstract
+/// over yet — `SourceInstanceRegistry`, `InMemoryMediaFileLookup`).
 #[derive(Clone)]
 pub struct AppState {
     pub readiness: ReadinessState,
     pub version: VersionState,
+    pub catalog: Arc<streamarr_catalog::CatalogService>,
+    pub requests: Arc<streamarr_requests::RequestService>,
+    pub request_repo: Arc<dyn streamarr_requests::RequestRepo>,
+    pub transcode: Arc<streamarr_transcode::TranscodeOrchestrator>,
+    pub device_flow: Arc<dyn streamarr_auth::DeviceFlowHandler>,
+    pub webhook: Arc<streamarr_arr_sync::WebhookReceiver>,
+    pub source_instances: Arc<SourceInstanceRegistry>,
+    pub media_files: Arc<InMemoryMediaFileLookup>,
+    /// Stable-for-process-lifetime identifier for this node, threaded into
+    /// `TranscodeSession::owning_node_id` so a segment request in a
+    /// multi-node deployment can be routed back to whichever node actually
+    /// holds the ffmpeg process.
+    pub node_id: String,
 }
 
 impl FromRef<AppState> for ReadinessState {
@@ -86,11 +141,31 @@ impl FromRef<AppState> for VersionState {
 /// directly; the `OpenApi` value is what [`openapi_spec`] also exposes
 /// standalone for spec regeneration/tests that don't want to boot a real
 /// router.
+///
+/// Also mounts bare `/healthz` and `/readyz` aliases for
+/// [`health::health_handler`]/[`readiness::readiness_handler`], outside the
+/// OpenAPI-tracked route table (they're container/orchestrator liveness
+/// probe conventions, not public API surface) — `infra/docker/backend.Dockerfile`'s
+/// `HEALTHCHECK` curls `/healthz` regardless of role, so the full API
+/// router needs to answer it too, not just the worker-only minimal
+/// listener `streamarr-bin` serves when it isn't running this router at
+/// all. `/api/system/health` and `/api/system/ready` are unaffected by
+/// this — both keep working exactly as before.
 pub fn build_router(
     state: AppState,
     version_gate: VersionGateLayer,
 ) -> (Router, utoipa::openapi::OpenApi) {
+    let readiness_for_alias = state.readiness.clone();
     let (router, api) = api_router().with_state(state).split_for_parts();
+    let router = router
+        .route("/healthz", axum::routing::get(health::health_handler))
+        .route(
+            "/readyz",
+            axum::routing::get(move || {
+                let readiness = readiness_for_alias.clone();
+                async move { readiness::readiness_handler(axum::extract::State(readiness)).await }
+            }),
+        );
     (router.layer(version_gate), api)
 }
 
@@ -102,36 +177,9 @@ mod tests {
     use streamarr_model::VersionEnvelope;
     use tower::ServiceExt;
 
-    fn test_state() -> AppState {
-        AppState {
-            readiness: ReadinessState::new(),
-            version: VersionState {
-                envelope: VersionEnvelope {
-                    server_version: "0.1.0".to_string(),
-                    api_version: "1".to_string(),
-                    build_sha: None,
-                    compatibility: vec![],
-                },
-            },
-        }
-    }
-
-    fn test_version_gate() -> VersionGateLayer {
-        VersionGateLayer::new(
-            ClientCompatibilityTable::from_toml_str(
-                r#"
-[server]
-version = "0.1.0"
-apiVersion = "1"
-"#,
-            )
-            .unwrap(),
-        )
-    }
-
     #[tokio::test]
     async fn health_endpoint_returns_200() {
-        let (router, _api) = build_router(test_state(), test_version_gate());
+        let (router, _state) = test_support::test_state().await;
         let response = router
             .oneshot(
                 Request::builder()
@@ -145,10 +193,52 @@ apiVersion = "1"
     }
 
     #[tokio::test]
+    async fn healthz_alias_returns_200() {
+        let (router, _state) = test_support::test_state().await;
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri("/healthz")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn readyz_alias_reflects_state() {
+        let (router, state) = test_support::test_state().await;
+        let not_ready = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/readyz")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(not_ready.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+        state.app.readiness.set_ready(true);
+        let ready = router
+            .oneshot(
+                Request::builder()
+                    .uri("/readyz")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(ready.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
     async fn readiness_endpoint_reflects_state() {
-        let state = test_state();
-        state.readiness.set_ready(true);
-        let (router, _api) = build_router(state, test_version_gate());
+        let (router, state) = test_support::test_state().await;
+        state.app.readiness.set_ready(true);
         let response = router
             .oneshot(
                 Request::builder()
@@ -163,7 +253,7 @@ apiVersion = "1"
 
     #[tokio::test]
     async fn version_endpoint_returns_envelope_json() {
-        let (router, _api) = build_router(test_state(), test_version_gate());
+        let (router, _state) = test_support::test_state().await;
         let response = router
             .oneshot(
                 Request::builder()
@@ -183,10 +273,43 @@ apiVersion = "1"
     }
 
     #[test]
-    fn openapi_spec_includes_system_paths() {
+    fn openapi_spec_includes_every_route_group() {
         let spec = openapi_spec();
         let json = serde_json::to_string(&spec).unwrap();
         assert!(json.contains("/api/system/health"));
         assert!(json.contains("/api/system/version"));
+        assert!(json.contains("/api/v1/oauth/device/code"));
+        assert!(json.contains("/api/v1/oauth/token"));
+        assert!(json.contains("/webhooks/{instance_id}"));
+        assert!(json.contains("/api/v1/catalog"));
+        assert!(json.contains("/api/v1/catalog/{id}"));
+        assert!(json.contains("/api/v1/catalog/search"));
+        assert!(json.contains("/api/v1/requests"));
+        assert!(json.contains("/api/v1/requests/{id}/approve"));
+        assert!(json.contains("/api/v1/requests/{id}/reject"));
+        assert!(json.contains("/api/v1/playback/{media_file_id}"));
+    }
+
+    /// Regenerates (with `UPDATE_OPENAPI_SPEC=1`) or verifies (without it)
+    /// `backend/openapi/streamarr.yaml` against the live utoipa spec. This
+    /// is the "small #[test]" the crate doc comment describes as the
+    /// regeneration mechanism.
+    #[test]
+    fn openapi_spec_matches_checked_in_file() {
+        let yaml = openapi_spec().to_yaml().expect("serialize OpenAPI to YAML");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../openapi/streamarr.yaml");
+
+        if std::env::var("UPDATE_OPENAPI_SPEC").is_ok() {
+            std::fs::write(&path, &yaml).expect("write backend/openapi/streamarr.yaml");
+            return;
+        }
+
+        let checked_in = std::fs::read_to_string(&path).unwrap_or_default();
+        assert_eq!(
+            checked_in, yaml,
+            "backend/openapi/streamarr.yaml is out of date with the live utoipa spec; \
+             regenerate with `UPDATE_OPENAPI_SPEC=1 cargo test -p streamarr-api openapi_spec_matches_checked_in_file`"
+        );
     }
 }

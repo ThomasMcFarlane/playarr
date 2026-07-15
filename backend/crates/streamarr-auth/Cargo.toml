@@ -16,3 +16,20 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+dashmap = { workspace = true }
+# CIDR parsing/matching for the trusted-network trust tier (`login`).
+ipnet = "2"
+# Refresh-token secret hashing (`refresh`) -- fast general-purpose hashing
+# is deliberate here (see `secret::hash_token`'s doc comment), unlike the
+# slow, salted Argon2id used for password/PIN verification below.
+sha2 = "0.10"
+hex = "0.4"
+# Password/PIN verification for the `login` module's tiers 2 and 3.
+argon2 = "0.5"
+# `argon2`/`password-hash` re-export `rand_core::OsRng` but don't turn on
+# the feature that makes it available; declaring the same dependency
+# directly with `getrandom` enabled unifies with their copy and unlocks it.
+rand_core = { version = "0.6", features = ["getrandom"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }

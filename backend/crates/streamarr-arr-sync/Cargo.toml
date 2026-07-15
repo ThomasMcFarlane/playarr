@@ -9,6 +9,7 @@ description = "Webhook-as-signal, poll-as-truth reconciliation between Streamarr
 streamarr-model = { path = "../streamarr-model" }
 streamarr-db = { path = "../streamarr-db" }
 streamarr-coordination = { path = "../streamarr-coordination" }
+streamarr-arr-client = { path = "../streamarr-arr-client" }
 tokio = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
@@ -16,3 +17,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+async-trait = { workspace = true }
+
+[dev-dependencies]
+wiremock = "0.6"

@@ -17,10 +17,12 @@
 //! API (via `streamarr-arr-client`) is slower to notice a change but can't
 //! drift the same way.
 
+pub mod arr_client;
 pub mod poller;
 pub mod webhook;
 
-pub use poller::{PollError, ReconciliationPoller};
+pub use arr_client::{work_kind_and_provider, ArrClient, RemoteWork};
+pub use poller::{PollError, ReconciliationPoller, SyncOp};
 pub use webhook::{
     parse_webhook_signal, RefetchRequest, WebhookError, WebhookReceiver, WebhookSignal,
 };

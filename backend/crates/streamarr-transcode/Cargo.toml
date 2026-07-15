@@ -9,9 +9,15 @@ description = "Playback transcode decision-making: direct-play/existing-renditio
 streamarr-model = { path = "../streamarr-model" }
 streamarr-db = { path = "../streamarr-db" }
 streamarr-tdarr-client = { path = "../streamarr-tdarr-client" }
+streamarr-cache = { path = "../streamarr-cache" }
 tokio = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+async-trait = { workspace = true }
+wiremock = "0.6"

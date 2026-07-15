@@ -3,6 +3,12 @@
 //! node an SSE/websocket client is connected to) codes against one trait
 //! regardless of `streamarr_config::DeploymentTier`.
 //!
+//! Three implementations ship here: [`InMemory`] (moka + local
+//! broadcast, for [`streamarr_config::DeploymentTier::SingleNode`]),
+//! [`Redis`] (for [`streamarr_config::DeploymentTier::MultiNodePostgresRedis`]),
+//! and [`PostgresListenNotify`] (`LISTEN`/`NOTIFY` plus a table-backed
+//! cache, for [`streamarr_config::DeploymentTier::MultiNodePostgres`]).
+//!
 //! Get/set/delete and publish/subscribe are combined on one trait
 //! ([`CacheAndPubSub`]) rather than split into two, because every
 //! implementation here backs both with the same connection/resource (one
@@ -10,6 +16,7 @@
 //! Postgres connection for `LISTEN`/`NOTIFY`), so splitting the trait would
 //! only push that coupling into every call site instead of removing it.
 
+mod channel_registry;
 mod in_memory;
 mod postgres_listen_notify;
 mod redis;

@@ -18,6 +18,19 @@ pub struct ReadarrAuthor {
     pub path: String,
 }
 
+/// A book as Readarr's `/api/v1/book` endpoint returns it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReadarrBook {
+    pub id: i64,
+    pub title: String,
+    /// Goodreads (or other configured metadata provider) book id.
+    #[serde(rename = "foreignBookId")]
+    pub foreign_book_id: String,
+    #[serde(rename = "authorId")]
+    pub author_id: i64,
+    pub monitored: bool,
+}
+
 pub struct ReadarrClient {
     http: reqwest::Client,
     base_url: String,
@@ -56,6 +69,36 @@ impl ReadarrClient {
         )
         .await
     }
+
+    /// `GET /api/v1/book` — every book Readarr currently tracks, across all
+    /// authors.
+    pub async fn list_books(&self) -> Result<Vec<ReadarrBook>, ArrClientError> {
+        get_json(
+            &self.http,
+            "readarr",
+            &self.base_url,
+            &self.api_key,
+            "/api/v1/book",
+        )
+        .await
+    }
+
+    /// `GET /api/v1/book?authorId={id}` — the books belonging to one
+    /// author, e.g. to populate an author detail view without pulling
+    /// Readarr's entire catalog.
+    pub async fn list_books_for_author(
+        &self,
+        author_id: i64,
+    ) -> Result<Vec<ReadarrBook>, ArrClientError> {
+        get_json(
+            &self.http,
+            "readarr",
+            &self.base_url,
+            &self.api_key,
+            &format!("/api/v1/book?authorId={author_id}"),
+        )
+        .await
+    }
 }
 
 #[async_trait]
@@ -73,5 +116,171 @@ impl ArrConnector for ReadarrClient {
             "/api/v1/system/status",
         )
         .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+    use wiremock::matchers::{header, method, path, query_param};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn list_authors_parses_response_and_sends_api_key() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/author"))
+            .and(header("X-Api-Key", "test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {
+                    "id": 1,
+                    "authorName": "Ursula K. Le Guin",
+                    "foreignAuthorId": "874602",
+                    "monitored": true,
+                    "path": "/books/Ursula K. Le Guin"
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = ReadarrClient::new(server.uri(), "test-key");
+        let authors = client
+            .list_authors()
+            .await
+            .expect("list_authors should succeed against a healthy mock");
+
+        assert_eq!(authors.len(), 1);
+        assert_eq!(authors[0].author_name, "Ursula K. Le Guin");
+    }
+
+    #[tokio::test]
+    async fn get_author_parses_single_response() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/author/5"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": 5,
+                "authorName": "Sample Author",
+                "foreignAuthorId": "58610",
+                "monitored": true,
+                "path": "/books/Sample Author"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = ReadarrClient::new(server.uri(), "test-key");
+        let author = client
+            .get_author(5)
+            .await
+            .expect("get_author should succeed against a healthy mock");
+
+        assert_eq!(author.id, 5);
+        assert_eq!(author.author_name, "Sample Author");
+    }
+
+    #[tokio::test]
+    async fn list_books_parses_response() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/book"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {
+                    "id": 200,
+                    "title": "Sample Title",
+                    "foreignBookId": "234225",
+                    "authorId": 5,
+                    "monitored": true
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = ReadarrClient::new(server.uri(), "test-key");
+        let books = client
+            .list_books()
+            .await
+            .expect("list_books should succeed against a healthy mock");
+
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].title, "Sample Title");
+        assert_eq!(books[0].author_id, 5);
+    }
+
+    #[tokio::test]
+    async fn list_books_for_author_filters_by_query_param() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/book"))
+            .and(query_param("authorId", "5"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {
+                    "id": 200,
+                    "title": "Sample Title",
+                    "foreignBookId": "234225",
+                    "authorId": 5,
+                    "monitored": true
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = ReadarrClient::new(server.uri(), "test-key");
+        let books = client
+            .list_books_for_author(5)
+            .await
+            .expect("list_books_for_author should succeed against a healthy mock");
+
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].author_id, 5);
+    }
+
+    #[tokio::test]
+    async fn health_check_surfaces_401_as_unexpected_status() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/system/status"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("Unauthorized"))
+            .mount(&server)
+            .await;
+
+        let client = ReadarrClient::new(server.uri(), "wrong-key");
+        let err = client
+            .health_check()
+            .await
+            .expect_err("a 401 status should surface as an error, not Ok");
+
+        match err {
+            ArrClientError::UnexpectedStatus { app, status, .. } => {
+                assert_eq!(app, "readarr");
+                assert_eq!(status, reqwest::StatusCode::UNAUTHORIZED);
+            }
+            other => panic!("expected UnexpectedStatus, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn list_authors_surfaces_500_as_unexpected_status() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/author"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("Internal Server Error"))
+            .mount(&server)
+            .await;
+
+        let client = ReadarrClient::new(server.uri(), "test-key");
+        let err = client
+            .list_authors()
+            .await
+            .expect_err("a 500 status should surface as an error, not panic");
+
+        match err {
+            ArrClientError::UnexpectedStatus { app, status, .. } => {
+                assert_eq!(app, "readarr");
+                assert_eq!(status, reqwest::StatusCode::INTERNAL_SERVER_ERROR);
+            }
+            other => panic!("expected UnexpectedStatus, got {other:?}"),
+        }
     }
 }

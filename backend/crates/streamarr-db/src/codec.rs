@@ -1,0 +1,253 @@
+//! String/JSON encodings shared by [`crate::repo`] and [`crate::analytics`]
+//! for the domain identifiers/enums that `sqlx::Any` cannot encode/decode
+//! natively.
+//!
+//! `DbPool` is `sqlx::AnyPool`, and the `Any` driver's own type system
+//! (`sqlx_core::any::types`) only has `Encode`/`Decode` impls for
+//! `bool`/`i16`/`i32`/`i64`/`f32`/`f64`/`String`/`&str`/`Vec<u8>`/`&[u8]` —
+//! there is no `Uuid` or `chrono` support at the `Any` layer (those only
+//! exist for the concrete `Postgres`/`Sqlite`/`MySql` types), and obviously
+//! no support for this crate's own domain enums. Every repository/store maps
+//! its domain type to one of those primitives here, in one place, so the
+//! mapping can't drift between the `sqlite`/`postgres` query bodies that use
+//! it.
+
+use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
+use streamarr_model::{
+    Availability, ExternalProvider, PlayMethod, PlaybackEventKind, ProducedBy, RenditionStatus,
+    StopReason, TranscodeReason, WorkKind,
+};
+use uuid::Uuid;
+
+use crate::error::DbError;
+
+/// Builds a `DbError::Backend(sqlx::Error::Decode(..))` for a column value
+/// that doesn't parse back into its domain type (corrupt/foreign data,
+/// schema drift) — the sqlx `Decode` error variant is exactly this failure
+/// mode, so we reuse it rather than adding a parallel `DbError` case.
+pub(crate) fn decode_err(msg: impl Into<String>) -> DbError {
+    DbError::Backend(sqlx::Error::Decode(msg.into().into()))
+}
+
+pub(crate) fn parse_uuid(raw: &str) -> Result<Uuid, DbError> {
+    Uuid::parse_str(raw).map_err(|e| decode_err(format!("invalid uuid {raw:?}: {e}")))
+}
+
+/// Booleans are stored (and bound/read) as `INTEGER` `0`/`1`, never as a SQL
+/// `BOOLEAN` column decoded through `sqlx::Any`'s `bool` support. This isn't
+/// just a portability nicety: `sqlx-sqlite`'s bridge into `Any` has no
+/// mapping at all for a `BOOLEAN`-affinity column (`sqlx_core::Error::
+/// AnyDriverError("Any driver does not support the SQLite type
+/// SqliteTypeInfo(Bool)")`) — it fails converting *every* row that touches
+/// such a column, not just when a caller asks to decode that column as
+/// `bool`. Postgres's own bridge does support native `boolean`, but keeping
+/// one representation for both engines (rather than branching per backend)
+/// keeps this file — and every row-mapping function that uses it — backend
+/// agnostic.
+pub(crate) fn bool_to_i64(value: bool) -> i64 {
+    value as i64
+}
+
+pub(crate) fn bool_from_i64(value: i64) -> bool {
+    value != 0
+}
+
+pub(crate) fn format_datetime(at: DateTime<Utc>) -> String {
+    at.to_rfc3339_opts(SecondsFormat::Millis, true)
+}
+
+pub(crate) fn parse_datetime(raw: &str) -> Result<DateTime<Utc>, DbError> {
+    DateTime::parse_from_rfc3339(raw)
+        .map(|dt| dt.with_timezone(&Utc))
+        .map_err(|e| decode_err(format!("invalid timestamp {raw:?}: {e}")))
+}
+
+pub(crate) fn format_date(day: NaiveDate) -> String {
+    day.format("%Y-%m-%d").to_string()
+}
+
+pub(crate) fn parse_date(raw: &str) -> Result<NaiveDate, DbError> {
+    NaiveDate::parse_from_str(raw, "%Y-%m-%d")
+        .map_err(|e| decode_err(format!("invalid date {raw:?}: {e}")))
+}
+
+pub(crate) fn work_kind_to_str(kind: WorkKind) -> &'static str {
+    match kind {
+        WorkKind::Movie => "movie",
+        WorkKind::Series => "series",
+        WorkKind::Artist => "artist",
+        WorkKind::Author => "author",
+    }
+}
+
+pub(crate) fn work_kind_from_str(raw: &str) -> Result<WorkKind, DbError> {
+    match raw {
+        "movie" => Ok(WorkKind::Movie),
+        "series" => Ok(WorkKind::Series),
+        "artist" => Ok(WorkKind::Artist),
+        "author" => Ok(WorkKind::Author),
+        other => Err(decode_err(format!("unknown work kind {other:?}"))),
+    }
+}
+
+pub(crate) fn availability_to_str(availability: Availability) -> &'static str {
+    match availability {
+        Availability::Unknown => "unknown",
+        Availability::Pending => "pending",
+        Availability::Processing => "processing",
+        Availability::PartiallyAvailable => "partially_available",
+        Availability::Available => "available",
+        Availability::Deleted => "deleted",
+    }
+}
+
+pub(crate) fn availability_from_str(raw: &str) -> Result<Availability, DbError> {
+    match raw {
+        "unknown" => Ok(Availability::Unknown),
+        "pending" => Ok(Availability::Pending),
+        "processing" => Ok(Availability::Processing),
+        "partially_available" => Ok(Availability::PartiallyAvailable),
+        "available" => Ok(Availability::Available),
+        "deleted" => Ok(Availability::Deleted),
+        other => Err(decode_err(format!("unknown availability {other:?}"))),
+    }
+}
+
+/// `ExternalProvider` round-trips through a single TEXT column: the closed
+/// variants use their own snake_case name, and `Other(label)` is prefixed
+/// (`"other:<label>"`) rather than needing a second nullable column.
+pub(crate) fn provider_to_str(provider: &ExternalProvider) -> String {
+    match provider {
+        ExternalProvider::Tmdb => "tmdb".to_string(),
+        ExternalProvider::Tvdb => "tvdb".to_string(),
+        ExternalProvider::Imdb => "imdb".to_string(),
+        ExternalProvider::MusicBrainzArtist => "music_brainz_artist".to_string(),
+        ExternalProvider::MusicBrainzReleaseGroup => "music_brainz_release_group".to_string(),
+        ExternalProvider::Goodreads => "goodreads".to_string(),
+        ExternalProvider::Isbn => "isbn".to_string(),
+        ExternalProvider::Asin => "asin".to_string(),
+        ExternalProvider::Other(label) => format!("other:{label}"),
+    }
+}
+
+pub(crate) fn provider_from_str(raw: &str) -> ExternalProvider {
+    match raw {
+        "tmdb" => ExternalProvider::Tmdb,
+        "tvdb" => ExternalProvider::Tvdb,
+        "imdb" => ExternalProvider::Imdb,
+        "music_brainz_artist" => ExternalProvider::MusicBrainzArtist,
+        "music_brainz_release_group" => ExternalProvider::MusicBrainzReleaseGroup,
+        "goodreads" => ExternalProvider::Goodreads,
+        "isbn" => ExternalProvider::Isbn,
+        "asin" => ExternalProvider::Asin,
+        other => ExternalProvider::Other(other.strip_prefix("other:").unwrap_or(other).to_string()),
+    }
+}
+
+pub(crate) fn rendition_status_to_str(status: RenditionStatus) -> &'static str {
+    match status {
+        RenditionStatus::Queued => "queued",
+        RenditionStatus::Processing => "processing",
+        RenditionStatus::Ready => "ready",
+        RenditionStatus::Failed => "failed",
+        RenditionStatus::Expired => "expired",
+    }
+}
+
+pub(crate) fn rendition_status_from_str(raw: &str) -> Result<RenditionStatus, DbError> {
+    match raw {
+        "queued" => Ok(RenditionStatus::Queued),
+        "processing" => Ok(RenditionStatus::Processing),
+        "ready" => Ok(RenditionStatus::Ready),
+        "failed" => Ok(RenditionStatus::Failed),
+        "expired" => Ok(RenditionStatus::Expired),
+        other => Err(decode_err(format!("unknown rendition status {other:?}"))),
+    }
+}
+
+pub(crate) fn produced_by_to_str(produced_by: ProducedBy) -> &'static str {
+    match produced_by {
+        ProducedBy::Tdarr => "tdarr",
+        ProducedBy::OnDemand => "on_demand",
+    }
+}
+
+pub(crate) fn produced_by_from_str(raw: &str) -> Result<ProducedBy, DbError> {
+    match raw {
+        "tdarr" => Ok(ProducedBy::Tdarr),
+        "on_demand" => Ok(ProducedBy::OnDemand),
+        other => Err(decode_err(format!("unknown produced_by {other:?}"))),
+    }
+}
+
+pub(crate) fn play_method_to_str(method: PlayMethod) -> &'static str {
+    match method {
+        PlayMethod::DirectPlay => "direct_play",
+        PlayMethod::DirectStream => "direct_stream",
+        PlayMethod::Transcode => "transcode",
+    }
+}
+
+pub(crate) fn play_method_from_str(raw: &str) -> Result<PlayMethod, DbError> {
+    match raw {
+        "direct_play" => Ok(PlayMethod::DirectPlay),
+        "direct_stream" => Ok(PlayMethod::DirectStream),
+        "transcode" => Ok(PlayMethod::Transcode),
+        other => Err(decode_err(format!("unknown play method {other:?}"))),
+    }
+}
+
+pub(crate) fn transcode_reason_to_str(reason: &TranscodeReason) -> String {
+    match reason {
+        TranscodeReason::ContainerNotSupported => "container_not_supported".to_string(),
+        TranscodeReason::VideoCodecNotSupported => "video_codec_not_supported".to_string(),
+        TranscodeReason::AudioCodecNotSupported => "audio_codec_not_supported".to_string(),
+        TranscodeReason::VideoBitrateExceedsLimit => "video_bitrate_exceeds_limit".to_string(),
+        TranscodeReason::ResolutionExceedsLimit => "resolution_exceeds_limit".to_string(),
+        TranscodeReason::SubtitleBurnInRequired => "subtitle_burn_in_required".to_string(),
+        TranscodeReason::ServerPolicy => "server_policy".to_string(),
+        TranscodeReason::Other(label) => format!("other:{label}"),
+    }
+}
+
+// `TranscodeReason`/`StopReason` currently only ever flow *into* the
+// database — `AnalyticsStore`'s trait surface (`record_session_start`,
+// `close_session`, `rollup_day`, `get_daily_stats`) never reads a full
+// `PlaybackSession` row back out, so there's no decode (`_from_str`)
+// counterpart to `transcode_reason_to_str`/`stop_reason_to_str` here yet.
+// Add one, following the `Result<T, DbError>`-returning pattern used by
+// `work_kind_from_str`/`availability_from_str` above, alongside whichever
+// future `AnalyticsStore` method first needs to reconstruct a
+// `PlaybackSession`.
+
+pub(crate) fn stop_reason_to_str(reason: &StopReason) -> String {
+    match reason {
+        StopReason::Completed => "completed".to_string(),
+        StopReason::UserStopped => "user_stopped".to_string(),
+        StopReason::Error => "error".to_string(),
+        StopReason::DeviceDisconnected => "device_disconnected".to_string(),
+        StopReason::SessionRevoked => "session_revoked".to_string(),
+        StopReason::ConcurrentLimitExceeded => "concurrent_limit_exceeded".to_string(),
+        StopReason::IdleTimeout => "idle_timeout".to_string(),
+        StopReason::Other(label) => format!("other:{label}"),
+    }
+}
+
+/// The `#[serde(tag = "kind")]` discriminant `PlaybackEventKind` already
+/// uses for its own snake_case JSON tag — reused verbatim for the
+/// `playback_events.kind` column so the column stays a human-readable,
+/// independently-queryable mirror of the JSON `payload` column.
+pub(crate) fn playback_event_kind_discriminant(kind: &PlaybackEventKind) -> &'static str {
+    match kind {
+        PlaybackEventKind::Start => "start",
+        PlaybackEventKind::Pause { .. } => "pause",
+        PlaybackEventKind::Resume { .. } => "resume",
+        PlaybackEventKind::Seek { .. } => "seek",
+        PlaybackEventKind::BufferStart { .. } => "buffer_start",
+        PlaybackEventKind::BufferEnd { .. } => "buffer_end",
+        PlaybackEventKind::BitrateChange { .. } => "bitrate_change",
+        PlaybackEventKind::Heartbeat { .. } => "heartbeat",
+        PlaybackEventKind::Stop { .. } => "stop",
+        PlaybackEventKind::Error { .. } => "error",
+    }
+}

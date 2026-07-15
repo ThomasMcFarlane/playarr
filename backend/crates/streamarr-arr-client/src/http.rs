@@ -64,3 +64,61 @@ pub(crate) async fn get_status(
         Err(ArrClientError::UnexpectedStatus { app, status, body })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn get_json_maps_malformed_body_to_decode_error() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/broken"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("not json"))
+            .mount(&server)
+            .await;
+
+        let http = build_http_client();
+        let api_key = Sensitive::new("test-key".to_string());
+
+        let err = get_json::<serde_json::Value>(&http, "sonarr", &server.uri(), &api_key, "/broken")
+            .await
+            .expect_err("a non-JSON 200 body should surface as a Decode error, not panic");
+
+        match err {
+            ArrClientError::Decode { app, .. } => assert_eq!(app, "sonarr"),
+            other => panic!("expected Decode, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn get_status_maps_connection_failure_to_request_error() {
+        // Port 1 (tcpmux) is a privileged port no unprivileged process binds
+        // in a test sandbox, so nothing answers and the request fails at
+        // the transport layer (connection refused) rather than getting an
+        // HTTP response at all — exercising the `#[from] reqwest::Error`
+        // path distinct from `UnexpectedStatus`. Unlike starting-then-
+        // dropping a `MockServer`, this doesn't race another test's server
+        // being handed the same now-free port.
+        let http = build_http_client();
+        let api_key = Sensitive::new("test-key".to_string());
+
+        let err = get_status(
+            &http,
+            "sonarr",
+            "http://127.0.0.1:1",
+            &api_key,
+            "/api/v3/system/status",
+        )
+        .await
+        .expect_err("an unreachable host should surface as a transport error, not panic");
+
+        assert!(
+            matches!(err, ArrClientError::Request(_)),
+            "expected Request, got {err:?}"
+        );
+    }
+}

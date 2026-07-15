@@ -7,6 +7,7 @@
 //! split stays contained here.
 
 pub mod analytics;
+mod codec;
 pub mod error;
 pub mod pool;
 pub mod repo;

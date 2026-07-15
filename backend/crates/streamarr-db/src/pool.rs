@@ -54,3 +54,60 @@ pub async fn run_migrations(pool: &DbPool, is_postgres: bool) -> Result<(), DbEr
     migrator.run(pool).await?;
     Ok(())
 }
+
+/// Which concrete engine a [`DbPool`] is actually talking to.
+///
+/// `DbPool` is `sqlx::AnyPool` so every crate outside `streamarr-db` can
+/// depend on one pool type — but `sqlx::Any`'s query layer does *not*
+/// translate placeholder syntax between engines (unlike, say, an ORM query
+/// builder): text bound for `Any` is passed straight through to whichever
+/// concrete driver is behind the connection, so it must already be in that
+/// driver's native placeholder style (`?` for SQLite, `$1, $2, ...` for
+/// Postgres). Repositories detect the backend once at construction time
+/// (see `Backend::detect`) and pick the matching SQL text per query.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Backend {
+    Sqlite,
+    Postgres,
+}
+
+impl Backend {
+    /// Reads the scheme off the pool's connect URL — available synchronously
+    /// via `Pool::connect_options()` without acquiring a live connection —
+    /// and classifies it. Defaults to `Sqlite` for anything that isn't
+    /// recognizably Postgres, matching `run_migrations`'s own
+    /// `is_postgres`-else-sqlite convention.
+    pub(crate) fn detect(pool: &DbPool) -> Self {
+        let scheme = pool
+            .connect_options()
+            .database_url
+            .scheme()
+            .to_ascii_lowercase();
+        if scheme.starts_with("postgres") {
+            Backend::Postgres
+        } else {
+            Backend::Sqlite
+        }
+    }
+}
+
+/// Test-only helper shared by `crate::repo`/`crate::analytics` unit tests: a
+/// migrated, in-memory SQLite-backed [`DbPool`].
+///
+/// Pinned to `max_connections(1)` deliberately — SQLite's `:memory:`
+/// database is private to the connection that opened it, so a pool with more
+/// than one connection would let some queries silently land on a second,
+/// empty/unmigrated database.
+#[cfg(test)]
+pub(crate) async fn test_sqlite_pool() -> DbPool {
+    sqlx::any::install_default_drivers();
+    let pool = AnyPoolOptions::new()
+        .max_connections(1)
+        .connect("sqlite::memory:")
+        .await
+        .expect("connect in-memory sqlite pool");
+    run_migrations(&pool, false)
+        .await
+        .expect("run sqlite migrations");
+    pool
+}

@@ -10,13 +10,27 @@
 
 pub mod device_flow;
 pub mod jwt;
+pub mod login;
 pub mod policy;
+pub mod refresh;
+mod secret;
+#[cfg(test)]
+mod test_support;
 
 pub use device_flow::{
-    DeviceAuthorization, DeviceAuthorizationStatus, DeviceCodeResponse, DeviceFlowError,
-    DeviceFlowHandler, TokenError, TokenResponse,
+    DashMapDeviceFlowHandler, DeviceAuthorization, DeviceAuthorizationStatus,
+    DeviceAuthorizationStore, DeviceCodeResponse, DeviceFlowConfig, DeviceFlowError,
+    DeviceFlowHandler, InMemoryDeviceAuthorizationStore, TokenError, TokenResponse,
 };
 pub use jwt::{AccessTokenClaims, JwtError, JwtIssuer};
+pub use login::{
+    evaluate_login, Argon2PasswordVerifier, AuthMode, Credentials, LoginContext, LoginError,
+    LoginOutcome, PasswordVerifier, PinAttempt, TrustedNetwork, UserDirectory,
+};
 pub use policy::{
     AccessContext, DefaultPolicyEvaluator, DenyReason, PolicyDecision, PolicyEvaluator,
+};
+pub use refresh::{
+    InMemoryRefreshTokenStore, RefreshError, RefreshTokenRecord, RefreshTokenService,
+    RefreshTokenStore,
 };

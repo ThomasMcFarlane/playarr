@@ -22,11 +22,11 @@ mod radarr;
 mod readarr;
 mod sonarr;
 
-pub use bazarr::{BazarrClient, BazarrSeries};
-pub use lidarr::{LidarrArtist, LidarrClient};
+pub use bazarr::{BazarrClient, BazarrSeries, BazarrSubtitleLanguage, BazarrWantedEpisode};
+pub use lidarr::{LidarrAlbum, LidarrArtist, LidarrClient};
 pub use prowlarr::{ProwlarrClient, ProwlarrIndexer};
 pub use radarr::{RadarrClient, RadarrMovie};
-pub use readarr::{ReadarrAuthor, ReadarrClient};
+pub use readarr::{ReadarrAuthor, ReadarrBook, ReadarrClient};
 pub use sonarr::{SonarrClient, SonarrSeries};
 
 use async_trait::async_trait;
