@@ -3,6 +3,7 @@ import {
   describeApiError,
   type ExternalProvider,
   type MediaRequest,
+  type RequestStatus,
   type SourceInstanceRequest,
   type SourceInstanceResponse,
   type SourceKind,
@@ -78,109 +79,111 @@ function SourceInstancesSection() {
     }
   }
 
-  const inputStyle: React.CSSProperties = {
-    background: "#1a1a1a",
-    border: "1px solid #2a2a2a",
-    color: "#ffffff",
-    padding: "0.4rem 0.6rem",
-    borderRadius: 4,
-  };
-
   return (
-    <section style={{ marginBottom: "3rem" }}>
-      <h2>Source instances</h2>
-      <p style={{ color: "#a0a0a0", maxWidth: 640 }}>
+    <section className="section">
+      <h2 className="section-title">Source instances</h2>
+      <p className="muted" style={{ maxWidth: 640, marginBottom: "1rem" }}>
         The Sonarr/Radarr/Lidarr/Bazarr/Prowlarr/Readarr instances Streamarr treats as a source of
         catalog/download truth. Registering one confirms it's actually reachable before accepting it.
       </p>
 
-      {error && <p style={{ color: "#e74c3c", marginTop: "1rem" }}>{error}</p>}
+      <div className="card">
+        {error && <p className="error-text" style={{ marginBottom: "1rem" }}>{error}</p>}
 
-      {instances !== null && instances.length > 0 && (
-        <table style={{ width: "100%", marginTop: "1rem", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ textAlign: "left", borderBottom: "1px solid #2a2a2a" }}>
-              <th style={{ padding: "0.5rem" }}>Kind</th>
-              <th style={{ padding: "0.5rem" }}>Name</th>
-              <th style={{ padding: "0.5rem" }}>Base URL</th>
-              <th style={{ padding: "0.5rem" }}>Requests</th>
-              <th style={{ padding: "0.5rem" }} />
-            </tr>
-          </thead>
-          <tbody>
-            {instances.map((instance) => (
-              <tr key={instance.id} style={{ borderBottom: "1px solid #1a1a1a" }}>
-                <td style={{ padding: "0.5rem" }}>{instance.kind}</td>
-                <td style={{ padding: "0.5rem" }}>{instance.name}</td>
-                <td style={{ padding: "0.5rem" }}>{instance.base_url}</td>
-                <td style={{ padding: "0.5rem" }}>{instance.enabled_for_requests ? "enabled" : "disabled"}</td>
-                <td style={{ padding: "0.5rem" }}>
-                  <button
-                    type="button"
-                    disabled={deletingId === instance.id}
-                    onClick={() => void handleDelete(instance.id)}
-                  >
-                    Remove
-                  </button>
-                </td>
+        {instances !== null && instances.length > 0 && (
+          <table className="table" style={{ marginBottom: "1.5rem" }}>
+            <thead>
+              <tr>
+                <th>Kind</th>
+                <th>Name</th>
+                <th>Base URL</th>
+                <th>Requests</th>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      {instances !== null && instances.length === 0 && (
-        <p style={{ color: "#a0a0a0", marginTop: "1rem" }}>No source instances registered yet.</p>
-      )}
+            </thead>
+            <tbody>
+              {instances.map((instance) => (
+                <tr key={instance.id}>
+                  <td style={{ textTransform: "capitalize" }}>{instance.kind}</td>
+                  <td>{instance.name}</td>
+                  <td className="muted">{instance.base_url}</td>
+                  <td>
+                    <span className={`badge ${instance.enabled_for_requests ? "badge-success" : "badge-neutral"}`}>
+                      {instance.enabled_for_requests ? "enabled" : "disabled"}
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      disabled={deletingId === instance.id}
+                      onClick={() => void handleDelete(instance.id)}
+                    >
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {instances !== null && instances.length === 0 && (
+          <p className="muted" style={{ marginBottom: "1.5rem" }}>
+            No source instances registered yet.
+          </p>
+        )}
 
-      <form
-        onSubmit={(e) => void handleSubmit(e)}
-        style={{ marginTop: "1.5rem", display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}
-      >
-        <select
-          value={form.kind}
-          onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value as SourceKind }))}
-          style={inputStyle}
+        <form
+          onSubmit={(e) => void handleSubmit(e)}
+          style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}
         >
-          {SOURCE_KINDS.map((kind) => (
-            <option key={kind} value={kind}>
-              {kind}
-            </option>
-          ))}
-        </select>
-        <input
-          placeholder="Name (e.g. My Radarr)"
-          value={form.name}
-          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-          required
-          style={inputStyle}
-        />
-        <input
-          placeholder="Base URL (e.g. http://192.168.1.10:7878)"
-          value={form.base_url}
-          onChange={(e) => setForm((f) => ({ ...f, base_url: e.target.value }))}
-          required
-          style={{ ...inputStyle, minWidth: 260 }}
-        />
-        <input
-          type="password"
-          placeholder="API key"
-          value={form.api_key}
-          onChange={(e) => setForm((f) => ({ ...f, api_key: e.target.value }))}
-          required
-          style={inputStyle}
-        />
-        <label style={{ color: "#a0a0a0", display: "flex", alignItems: "center", gap: "0.35rem" }}>
+          <select
+            className="input"
+            value={form.kind}
+            onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value as SourceKind }))}
+          >
+            {SOURCE_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {kind}
+              </option>
+            ))}
+          </select>
           <input
-            type="checkbox"
-            checked={form.enabled_for_requests}
-            onChange={(e) => setForm((f) => ({ ...f, enabled_for_requests: e.target.checked }))}
+            className="input"
+            placeholder="Name (e.g. My Radarr)"
+            value={form.name}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            required
           />
-          Enabled for requests
-        </label>
-        <button type="submit" disabled={submitting}>
-          {submitting ? "Testing connection..." : "Add & test connection"}
-        </button>
-      </form>
+          <input
+            className="input"
+            placeholder="Base URL (e.g. http://192.168.1.10:7878)"
+            value={form.base_url}
+            onChange={(e) => setForm((f) => ({ ...f, base_url: e.target.value }))}
+            required
+            style={{ minWidth: 260 }}
+          />
+          <input
+            type="password"
+            className="input"
+            placeholder="API key"
+            value={form.api_key}
+            onChange={(e) => setForm((f) => ({ ...f, api_key: e.target.value }))}
+            required
+          />
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={form.enabled_for_requests}
+              onChange={(e) => setForm((f) => ({ ...f, enabled_for_requests: e.target.checked }))}
+            />
+            Enabled for requests
+          </label>
+          <button type="submit" className="btn btn-primary" disabled={submitting}>
+            {submitting ? "Testing connection..." : "Add & test connection"}
+          </button>
+        </form>
+      </div>
     </section>
   );
 }
@@ -198,6 +201,17 @@ function targetLabel(request: MediaRequest, workTitles: Record<string, string>):
   return `${providerLabel(provider)}:${externalId}`;
 }
 
+function statusBadgeClass(status: RequestStatus): string {
+  switch (status) {
+    case "approved":
+      return "badge-success";
+    case "rejected":
+      return "badge-warning";
+    default:
+      return "badge-neutral";
+  }
+}
+
 /**
  * Request management: approve/reject user-submitted `MediaRequest`s, backed
  * by the real `GET/POST /api/v1/requests`, `POST /api/v1/requests/{id}/approve`,
@@ -213,8 +227,8 @@ function targetLabel(request: MediaRequest, workTitles: Record<string, string>):
  */
 export function AdminPage() {
   return (
-    <div style={{ padding: "2rem", color: "#ffffff" }}>
-      <h1>Admin</h1>
+    <div className="page">
+      <h1 className="page-title">Admin</h1>
       <SourceInstancesSection />
       <RequestsSection />
     </div>
@@ -288,55 +302,61 @@ function RequestsSection() {
   }
 
   return (
-    <section>
-      <h2>Requests</h2>
-      <p style={{ color: "#a0a0a0", maxWidth: 560 }}>
+    <section className="section">
+      <h2 className="section-title">Requests</h2>
+      <p className="muted" style={{ maxWidth: 560, marginBottom: "1rem" }}>
         Review and approve/reject pending <code>MediaRequest</code>s.
       </p>
 
-      {error && <p style={{ color: "#e74c3c", marginTop: "1rem" }}>{error}</p>}
-      {requests === null && !error && <p style={{ color: "#a0a0a0", marginTop: "1rem" }}>Loading...</p>}
-      {requests !== null && requests.length === 0 && (
-        <p style={{ color: "#a0a0a0", marginTop: "1rem" }}>No pending requests.</p>
-      )}
+      <div className="card">
+        {error && <p className="error-text" style={{ marginBottom: "1rem" }}>{error}</p>}
+        {requests === null && !error && <p className="muted">Loading...</p>}
+        {requests !== null && requests.length === 0 && <p className="muted">No pending requests.</p>}
 
-      {requests !== null && requests.length > 0 && (
-        <table style={{ width: "100%", marginTop: "1.5rem", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ textAlign: "left", borderBottom: "1px solid #2a2a2a" }}>
-              <th style={{ padding: "0.5rem" }}>Target</th>
-              <th style={{ padding: "0.5rem" }}>Kind</th>
-              <th style={{ padding: "0.5rem" }}>Status</th>
-              <th style={{ padding: "0.5rem" }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {requests.map((request) => (
-              <tr key={request.id} style={{ borderBottom: "1px solid #1a1a1a" }}>
-                <td style={{ padding: "0.5rem" }}>{targetLabel(request, workTitles)}</td>
-                <td style={{ padding: "0.5rem" }}>{request.kind}</td>
-                <td style={{ padding: "0.5rem" }}>{request.status}</td>
-                <td style={{ padding: "0.5rem", display: "flex", gap: "0.5rem" }}>
-                  <button
-                    type="button"
-                    disabled={request.status !== "pending" || busyId === request.id}
-                    onClick={() => void decide(request.id, "approve")}
-                  >
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    disabled={request.status !== "pending" || busyId === request.id}
-                    onClick={() => void decide(request.id, "reject")}
-                  >
-                    Reject
-                  </button>
-                </td>
+        {requests !== null && requests.length > 0 && (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Target</th>
+                <th>Kind</th>
+                <th>Status</th>
+                <th>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {requests.map((request) => (
+                <tr key={request.id}>
+                  <td>{targetLabel(request, workTitles)}</td>
+                  <td style={{ textTransform: "capitalize" }}>{request.kind}</td>
+                  <td>
+                    <span className={`badge ${statusBadgeClass(request.status)}`}>{request.status}</span>
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={request.status !== "pending" || busyId === request.id}
+                        onClick={() => void decide(request.id, "approve")}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm"
+                        disabled={request.status !== "pending" || busyId === request.id}
+                        onClick={() => void decide(request.id, "reject")}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </section>
   );
 }

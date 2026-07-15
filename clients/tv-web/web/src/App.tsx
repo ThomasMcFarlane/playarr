@@ -33,33 +33,27 @@ export function App() {
   const appUpdate = useAppUpdate(client, "web");
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+    <div className="app-shell">
       <UpdateToast state={appUpdate} />
-      <nav
-        style={{
-          display: "flex",
-          gap: "1.5rem",
-          padding: "1rem 1.5rem",
-          borderBottom: "1px solid #2a2a2a",
-        }}
-      >
-        {NAV_LINKS.map((link) => (
-          <NavLink
-            key={link.to}
-            to={link.to}
-            end={"end" in link ? link.end : false}
-            style={({ isActive }) => ({
-              color: isActive ? "#ffffff" : "#a0a0a0",
-              textDecoration: "none",
-              fontWeight: isActive ? 600 : 400,
-            })}
-          >
-            {link.label}
-          </NavLink>
-        ))}
-      </nav>
+      <header className="app-header">
+        <span className="app-logo">
+          <span className="app-logo-accent">Stream</span>arr
+        </span>
+        <nav className="app-nav">
+          {NAV_LINKS.map((link) => (
+            <NavLink
+              key={link.to}
+              to={link.to}
+              end={"end" in link ? link.end : false}
+              className={({ isActive }) => `nav-link${isActive ? " is-active" : ""}`}
+            >
+              {link.label}
+            </NavLink>
+          ))}
+        </nav>
+      </header>
 
-      <main style={{ flex: 1 }}>
+      <main className="app-main">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/library" element={<LibraryPage />} />

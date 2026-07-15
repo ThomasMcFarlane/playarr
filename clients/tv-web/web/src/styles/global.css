@@ -1,0 +1,448 @@
+/*
+ * Global stylesheet for the standalone Web app.
+ *
+ * Values here mirror @streamarr-tv/design-tokens (see that package's own
+ * doc comment: it's a hand-authored placeholder token set until a real
+ * tokens.json -> Style Dictionary pipeline lands). Kept as plain CSS custom
+ * properties rather than a runtime CSS-in-JS dependency so every page can
+ * use them from plain <style> attributes and plain class names alike.
+ */
+
+:root {
+  --color-bg-base: #000000;
+  --color-bg-elevated: #121212;
+  --color-bg-raised: #1e1e1e;
+  --color-bg-overlay: rgba(0, 0, 0, 0.72);
+
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #b3b3b3;
+  --color-text-disabled: #5c5c5c;
+
+  --color-brand: #e50914;
+  --color-brand-hover: #f6121d;
+  --color-brand-pressed: #b00610;
+
+  --color-border: #2a2a2a;
+  --color-border-strong: #3a3a3a;
+
+  --color-success: #2ecc71;
+  --color-warning: #f5a623;
+  --color-error: #e74c3c;
+  --color-info: #3498db;
+
+  --color-focus-ring: #ffffff;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji";
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: var(--color-brand);
+  color: #ffffff;
+}
+
+/* Layout */
+
+.page {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.page-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+}
+
+.section-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.section {
+  margin-bottom: 3rem;
+}
+
+.muted {
+  color: var(--color-text-secondary);
+}
+
+.hint {
+  color: var(--color-text-disabled);
+  font-size: 0.8rem;
+}
+
+.error-text {
+  color: var(--color-error);
+}
+
+.success-text {
+  color: var(--color-success);
+}
+
+/* Cards */
+
+.card {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1.5rem;
+}
+
+/* Buttons */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1.3rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.btn-primary {
+  background: var(--color-brand);
+  color: #ffffff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-brand-hover);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--color-brand-pressed);
+}
+
+.btn-secondary {
+  background: transparent;
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--color-border-strong);
+}
+
+.btn-danger {
+  background: transparent;
+  border-color: var(--color-border);
+  color: var(--color-error);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: rgba(231, 76, 60, 0.12);
+  border-color: var(--color-error);
+}
+
+.btn-ghost {
+  padding: 0.4rem 0.6rem;
+  color: var(--color-text-secondary);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
+.btn-sm {
+  padding: 0.35rem 0.8rem;
+  font-size: 0.8rem;
+}
+
+/* Forms */
+
+.input {
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-raised);
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-brand);
+}
+
+.input::placeholder {
+  color: var(--color-text-disabled);
+}
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.checkbox-label input[type="checkbox"] {
+  accent-color: var(--color-brand);
+  width: 16px;
+  height: 16px;
+}
+
+/* Tables */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table td {
+  padding: 0.7rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.9rem;
+  vertical-align: middle;
+}
+
+.table tr:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Badges */
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.badge-success {
+  background: rgba(46, 204, 113, 0.15);
+  color: var(--color-success);
+}
+
+.badge-warning {
+  background: rgba(245, 166, 35, 0.15);
+  color: var(--color-warning);
+}
+
+.badge-neutral {
+  background: rgba(179, 179, 179, 0.15);
+  color: var(--color-text-secondary);
+}
+
+/* Poster grid (Home / Library) */
+
+.poster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 1.5rem 1.25rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.poster-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.poster-art {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-bg-raised);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  transition:
+    transform 0.18s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.18s ease;
+}
+
+.poster-card:hover .poster-art,
+.poster-card:focus-within .poster-art {
+  transform: scale(1.045);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6);
+}
+
+.poster-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.poster-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: linear-gradient(160deg, #1e1e1e, #0a0a0a);
+}
+
+.poster-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.poster-meta {
+  font-size: 0.75rem;
+  color: var(--color-text-disabled);
+  text-transform: capitalize;
+}
+
+/* App shell */
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1.5rem;
+  height: 60px;
+  background: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.app-logo {
+  display: flex;
+  align-items: baseline;
+  gap: 0.05rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding-right: 1.5rem;
+  margin-right: 0.5rem;
+  border-right: 1px solid var(--color-border);
+}
+
+.app-logo-accent {
+  color: var(--color-brand);
+}
+
+.app-nav {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.nav-link {
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.nav-link:hover {
+  color: var(--color-text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.nav-link.is-active {
+  color: var(--color-text-primary);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.app-main {
+  flex: 1;
+}

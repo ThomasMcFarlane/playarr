@@ -57,22 +57,24 @@ export function PlayerPage() {
   }, [playbackState, client]);
 
   return (
-    <div style={{ padding: "2rem", color: "#ffffff" }}>
-      <h1>Player</h1>
+    <div className="page">
+      <h1 className="page-title">Player</h1>
 
       {(playbackState.status === "loading" || playbackState.status === "idle") && (
-        <p style={{ color: "#a0a0a0" }}>Preparing playback...</p>
+        <p className="muted">Preparing playback...</p>
       )}
       {playbackState.status === "error" && (
-        <p style={{ color: "#e74c3c" }}>Could not start playback ({playbackState.message}).</p>
+        <p className="error-text">Could not start playback ({playbackState.message}).</p>
       )}
-      {playbackState.status === "empty" && (
-        <p style={{ color: "#a0a0a0" }}>No playable source was returned for this title.</p>
-      )}
+      {playbackState.status === "empty" && <p className="muted">No playable source was returned for this title.</p>}
 
       {/* eslint-disable-next-line jsx-a11y/media-has-caption -- captions not modeled by the backend yet */}
-      <video ref={videoRef} controls style={{ width: "100%", maxWidth: 960, background: "#000" }} />
-      <p style={{ color: "#5c5c5c", fontSize: "0.875rem" }}>
+      <video
+        ref={videoRef}
+        controls
+        style={{ width: "100%", maxWidth: 960, background: "#000", borderRadius: 8 }}
+      />
+      <p className="hint" style={{ marginTop: "0.75rem" }}>
         engine state: {engineState?.state ?? "not initialized"}
         {engineState?.error ? ` -- ${engineState.error.message}` : ""}
       </p>

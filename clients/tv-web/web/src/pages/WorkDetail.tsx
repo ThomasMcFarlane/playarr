@@ -55,22 +55,16 @@ export function WorkDetailPage() {
   }
 
   return (
-    <div style={{ padding: "2rem", color: "#ffffff" }}>
-      <button
-        type="button"
-        onClick={() => navigate(-1)}
-        style={{ background: "none", border: "none", color: "#a0a0a0", cursor: "pointer", padding: 0, marginBottom: "1rem" }}
-      >
+    <div className="page">
+      <button type="button" className="btn btn-ghost" onClick={() => navigate(-1)} style={{ marginBottom: "1rem" }}>
         &larr; Back
       </button>
 
-      {(state.status === "loading" || state.status === "idle") && <p style={{ color: "#a0a0a0" }}>Loading...</p>}
+      {(state.status === "loading" || state.status === "idle") && <p className="muted">Loading...</p>}
 
-      {state.status === "error" && (
-        <p style={{ color: "#e74c3c" }}>Could not load this title ({state.message}).</p>
-      )}
+      {state.status === "error" && <p className="error-text">Could not load this title ({state.message}).</p>}
 
-      {state.status === "empty" && <p style={{ color: "#a0a0a0" }}>This title has no details available.</p>}
+      {state.status === "empty" && <p className="muted">This title has no details available.</p>}
 
       {state.status === "ready" && (() => {
         const { work, media_file_id: mediaFileId } = state.data;
@@ -87,26 +81,17 @@ export function WorkDetailPage() {
                 style={{ width: "100%", maxWidth: 960, borderRadius: 8, marginBottom: "1.5rem" }}
               />
             )}
-            <h1 style={{ marginBottom: "0.25rem" }}>{work.title}</h1>
-            <p style={{ color: "#5c5c5c", fontSize: "0.875rem", textTransform: "capitalize" }}>
+            <h1 style={{ marginBottom: "0.25rem", fontSize: "1.75rem", fontWeight: 700 }}>{work.title}</h1>
+            <p className="hint" style={{ textTransform: "capitalize", marginBottom: "0.75rem" }}>
               {work.kind} &middot; {availabilityLabel(work.availability)}
             </p>
-            <p style={{ color: "#a0a0a0", maxWidth: 640 }}>{work.overview ?? "No synopsis available."}</p>
+            <p className="muted" style={{ maxWidth: 640 }}>
+              {work.overview ?? "No synopsis available."}
+            </p>
 
-            <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginTop: "1rem" }}>
+            <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginTop: "1.25rem" }}>
               {canPlay && (
-                <Link
-                  to={`/player/${mediaFileId}`}
-                  style={{
-                    display: "inline-block",
-                    padding: "0.5rem 1.5rem",
-                    borderRadius: 6,
-                    backgroundColor: "#e50914",
-                    color: "#ffffff",
-                    textDecoration: "none",
-                    fontWeight: 600,
-                  }}
-                >
+                <Link to={`/player/${mediaFileId}`} className="btn btn-primary">
                   Play
                 </Link>
               )}
@@ -116,16 +101,7 @@ export function WorkDetailPage() {
                   type="button"
                   disabled={requestStatus === "submitting" || requestStatus === "submitted"}
                   onClick={() => void submitRequest(work.kind, work.id)}
-                  style={{
-                    padding: "0.5rem 1.5rem",
-                    borderRadius: 6,
-                    border: "1px solid #2a2a2a",
-                    background: canPlay ? "transparent" : "#e50914",
-                    color: "#ffffff",
-                    fontWeight: 600,
-                    cursor: requestStatus === "submitting" || requestStatus === "submitted" ? "default" : "pointer",
-                    opacity: requestStatus === "submitting" || requestStatus === "submitted" ? 0.7 : 1,
-                  }}
+                  className={`btn ${canPlay ? "btn-secondary" : "btn-primary"}`}
                 >
                   {requestStatusLabel(requestStatus)}
                 </button>
@@ -135,14 +111,10 @@ export function WorkDetailPage() {
             {showRequest && (
               <div style={{ marginTop: "0.75rem", maxWidth: 360 }}>
                 {requestStatus === "submitted" && (
-                  <p style={{ color: "#2ecc71", marginTop: "0.5rem" }}>
-                    Requested -- an admin can review it from the Admin page.
-                  </p>
+                  <p className="success-text">Requested -- an admin can review it from the Admin page.</p>
                 )}
                 {requestStatus === "error" && requestError && (
-                  <p style={{ color: "#e74c3c", marginTop: "0.5rem" }}>
-                    Could not submit this request ({requestError}).
-                  </p>
+                  <p className="error-text">Could not submit this request ({requestError}).</p>
                 )}
               </div>
             )}

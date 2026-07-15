@@ -41,75 +41,57 @@ export function SettingsPage() {
   }
 
   return (
-    <div style={{ padding: "2rem", color: "#ffffff" }}>
-      <h1>Settings</h1>
-      <p style={{ color: "#a0a0a0", maxWidth: 560 }}>
-        Point this app at your own Streamarr instance. Every operator runs their own server, so
-        there is no baked-in default beyond <code>{DEFAULT_API_BASE_URL}</code> for local development.
-      </p>
+    <div className="page">
+      <h1 className="page-title">Settings</h1>
 
-      <form onSubmit={handleSave} style={{ display: "flex", gap: "0.5rem", maxWidth: 480, marginTop: "1rem" }}>
-        <label htmlFor="api-base-url" style={{ display: "none" }}>
-          API base URL
-        </label>
-        <input
-          id="api-base-url"
-          type="text"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder={DEFAULT_API_BASE_URL}
-          style={{
-            flex: 1,
-            padding: "0.5rem 0.75rem",
-            borderRadius: 6,
-            border: "1px solid #2a2a2a",
-            background: "#121212",
-            color: "#ffffff",
-          }}
-        />
-        <button
-          type="submit"
-          style={{
-            padding: "0.5rem 1rem",
-            borderRadius: 6,
-            border: "none",
-            background: "#e50914",
-            color: "#ffffff",
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          Save
-        </button>
-      </form>
-
-      <button
-        type="button"
-        onClick={() => void handleTestConnection()}
-        disabled={testState.status === "testing"}
-        style={{
-          marginTop: "0.75rem",
-          padding: "0.4rem 0.9rem",
-          borderRadius: 6,
-          border: "1px solid #2a2a2a",
-          background: "transparent",
-          color: "#ffffff",
-          cursor: "pointer",
-        }}
-      >
-        {testState.status === "testing" ? "Testing..." : "Test connection"}
-      </button>
-
-      {testState.status === "success" && (
-        <p style={{ color: "#2ecc71", marginTop: "0.5rem" }}>
-          Connected -- server {testState.version.server_version} (API {testState.version.api_version}).
+      <div className="card" style={{ maxWidth: 560 }}>
+        <h2 className="section-title">Server connection</h2>
+        <p className="muted" style={{ marginBottom: "1rem" }}>
+          Point this app at your own Streamarr instance. Every operator runs their own server, so
+          there is no baked-in default beyond <code>{DEFAULT_API_BASE_URL}</code> for local development.
         </p>
-      )}
-      {testState.status === "error" && (
-        <p style={{ color: "#e74c3c", marginTop: "0.5rem" }}>Could not connect ({testState.message}).</p>
-      )}
 
-      <p style={{ color: "#5c5c5c", fontSize: "0.875rem", marginTop: "2rem", maxWidth: 560 }}>
+        <form onSubmit={handleSave} style={{ display: "flex", gap: "0.5rem" }}>
+          <label htmlFor="api-base-url" style={{ display: "none" }}>
+            API base URL
+          </label>
+          <input
+            id="api-base-url"
+            type="text"
+            className="input"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder={DEFAULT_API_BASE_URL}
+            style={{ flex: 1 }}
+          />
+          <button type="submit" className="btn btn-primary">
+            Save
+          </button>
+        </form>
+
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={() => void handleTestConnection()}
+          disabled={testState.status === "testing"}
+          style={{ marginTop: "0.75rem" }}
+        >
+          {testState.status === "testing" ? "Testing..." : "Test connection"}
+        </button>
+
+        {testState.status === "success" && (
+          <p className="success-text" style={{ marginTop: "0.5rem" }}>
+            Connected -- server {testState.version.server_version} (API {testState.version.api_version}).
+          </p>
+        )}
+        {testState.status === "error" && (
+          <p className="error-text" style={{ marginTop: "0.5rem" }}>
+            Could not connect ({testState.message}).
+          </p>
+        )}
+      </div>
+
+      <p className="hint" style={{ marginTop: "1.5rem", maxWidth: 560 }}>
         The TV apps (webOS, Tizen, VIDAA) have no keyboard to type a URL into: they resolve theirs from
         a <code>?apiBaseUrl=...</code> launch query param or an operator-editable{" "}
         <code>streamarr-config.json</code> file shipped alongside the app bundle, falling back to{" "}

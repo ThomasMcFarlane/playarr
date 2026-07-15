@@ -1,6 +1,6 @@
-import { Link } from "react-router-dom";
 import { useCatalogBrowse } from "@streamarr-tv/api-client/react";
 import { useApiClient } from "../lib/ApiClientProvider";
+import { WorkCard } from "../components/WorkCard";
 
 /** Standalone web app landing page: a "recently added" shelf off the real catalog endpoint. */
 export function HomePage() {
@@ -8,17 +8,17 @@ export function HomePage() {
   const state = useCatalogBrowse(client, { sort: "recent", limit: 12 });
 
   return (
-    <div style={{ padding: "2rem", color: "#ffffff" }}>
-      <h1>Streamarr</h1>
+    <div className="page">
+      <h1 className="page-title">Streamarr</h1>
 
-      {state.status === "loading" && <p style={{ color: "#a0a0a0" }}>Loading recently added titles...</p>}
+      {state.status === "loading" && <p className="muted">Loading recently added titles...</p>}
 
       {state.status === "error" && (
-        <p style={{ color: "#e74c3c" }}>Could not load recently added titles ({state.message}).</p>
+        <p className="error-text">Could not load recently added titles ({state.message}).</p>
       )}
 
       {state.status === "empty" && (
-        <p style={{ color: "#a0a0a0", maxWidth: 560 }}>
+        <p className="muted" style={{ maxWidth: 560 }}>
           Nothing has been added to your library yet. Once your Streamarr instance has media, it will
           show up here.
         </p>
@@ -26,22 +26,12 @@ export function HomePage() {
 
       {state.status === "ready" && (
         <>
-          <h2 style={{ fontSize: "1.1rem", color: "#a0a0a0", fontWeight: 400 }}>Recently added</h2>
-          <ul
-            style={{
-              display: "grid",
-              gap: "1rem",
-              gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
-              listStyle: "none",
-              padding: 0,
-            }}
-          >
+          <h2 className="section-title muted" style={{ fontWeight: 400 }}>
+            Recently added
+          </h2>
+          <ul className="poster-grid">
             {state.data.items.map((work) => (
-              <li key={work.id}>
-                <Link to={`/library/${work.id}`} style={{ color: "#ffffff", textDecoration: "none" }}>
-                  {work.title}
-                </Link>
-              </li>
+              <WorkCard key={work.id} work={work} />
             ))}
           </ul>
         </>

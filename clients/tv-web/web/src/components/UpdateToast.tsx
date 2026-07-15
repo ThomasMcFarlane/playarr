@@ -18,6 +18,7 @@ export function UpdateToast({ state }: UpdateToastProps) {
   return (
     <div
       role="status"
+      className="card"
       style={{
         position: "fixed",
         bottom: "1.5rem",
@@ -28,41 +29,19 @@ export function UpdateToast({ state }: UpdateToastProps) {
         alignItems: "center",
         gap: "0.75rem",
         padding: "0.75rem 1rem",
-        borderRadius: 8,
-        backgroundColor: "#1e1e1e",
-        border: "1px solid #2a2a2a",
-        color: "#ffffff",
         boxShadow: "0 4px 16px rgba(0, 0, 0, 0.4)",
       }}
     >
       <span>A new version of Streamarr is available.</span>
-      <button
-        type="button"
-        onClick={state.reloadNow}
-        style={{
-          padding: "0.35rem 0.9rem",
-          borderRadius: 6,
-          border: "none",
-          background: "#e50914",
-          color: "#ffffff",
-          fontWeight: 600,
-          cursor: "pointer",
-        }}
-      >
+      <button type="button" className="btn btn-primary btn-sm" onClick={state.reloadNow}>
         Reload
       </button>
       <button
         type="button"
+        className="btn btn-ghost"
         onClick={state.dismiss}
         aria-label="Dismiss"
-        style={{
-          background: "none",
-          border: "none",
-          color: "#a0a0a0",
-          cursor: "pointer",
-          fontSize: "1rem",
-          padding: "0 0.25rem",
-        }}
+        style={{ fontSize: "1rem", padding: "0 0.25rem" }}
       >
         &times;
       </button>
