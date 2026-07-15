@@ -423,7 +423,7 @@ components:
         tracks:
           type: array
           items:
-            $ref: '#/components/schemas/Track'
+            $ref: '#/components/schemas/TrackDetailSchema'
     AlbumType:
       type: string
       enum:
@@ -486,6 +486,21 @@ components:
           format: float
         title:
           type: string
+    BookDetailSchema:
+      type: object
+      description: |-
+        Doc-only mirror of `streamarr_catalog::BookDetail`; see
+        [`EpisodeDetailSchema`].
+      required:
+      - book
+      properties:
+        book:
+          $ref: '#/components/schemas/Book'
+        media_file_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
     CatalogPageSchema:
       type: object
       description: |-
@@ -649,6 +664,22 @@ components:
           type:
           - string
           - 'null'
+    EpisodeDetailSchema:
+      type: object
+      description: |-
+        Doc-only mirror of `streamarr_catalog::EpisodeDetail` -- the resolved
+        `MediaFile` id (via `MediaFileRepo::find_by_leaf`) that plays this
+        episode, `None` when no file has synced for it yet.
+      required:
+      - episode
+      properties:
+        episode:
+          $ref: '#/components/schemas/Episode'
+        media_file_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
     ExternalProvider:
       oneOf:
       - type: string
@@ -891,7 +922,7 @@ components:
         episodes:
           type: array
           items:
-            $ref: '#/components/schemas/Episode'
+            $ref: '#/components/schemas/EpisodeDetailSchema'
         season:
           $ref: '#/components/schemas/Season'
     SubmitRequestBody:
@@ -969,6 +1000,21 @@ components:
           type: integer
           format: int32
           minimum: 0
+    TrackDetailSchema:
+      type: object
+      description: |-
+        Doc-only mirror of `streamarr_catalog::TrackDetail`; see
+        [`EpisodeDetailSchema`].
+      required:
+      - track
+      properties:
+        media_file_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        track:
+          $ref: '#/components/schemas/Track'
     VersionEnvelope:
       type: object
       description: Response body for `GET /api/system/version`.
@@ -1082,7 +1128,7 @@ components:
           Author:
             type: array
             items:
-              $ref: '#/components/schemas/Book'
+              $ref: '#/components/schemas/BookDetailSchema'
       description: |-
         Doc-only mirror of `streamarr_catalog::WorkChildren`; see
         [`CatalogPageSchema`].
@@ -1094,6 +1140,15 @@ components:
       properties:
         children:
           $ref: '#/components/schemas/WorkChildrenSchema'
+        media_file_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: |-
+            The resolved `MediaFile` id for a movie's own leaf (`LeafRef::Work`);
+            always `None` for series/artist/author works, whose playable leaves
+            are their children instead -- see `streamarr_catalog::WorkDetail`.
         work:
           $ref: '#/components/schemas/Work'
     WorkKind:

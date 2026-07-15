@@ -13,6 +13,10 @@
 //! it.
 
 use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
+// `LeafRef` isn't re-exported at the `streamarr_model` crate root (unlike
+// `MediaFile`/`Rendition`/etc.) — imported via its module path rather than
+// adding that export, since `streamarr-model` is outside this crate's scope.
+use streamarr_model::media::LeafRef;
 use streamarr_model::{
     Availability, ExternalProvider, PlayMethod, PlaybackEventKind, ProducedBy, RenditionStatus,
     StopReason, TranscodeReason, WorkKind,
@@ -231,6 +235,37 @@ pub(crate) fn stop_reason_to_str(reason: &StopReason) -> String {
         StopReason::IdleTimeout => "idle_timeout".to_string(),
         StopReason::Other(label) => format!("other:{label}"),
     }
+}
+
+/// `LeafRef` round-trips through a single TEXT column, the same way
+/// `ExternalProvider` does (see `provider_to_str`/`provider_from_str`
+/// above): the data-less `Work` variant is its own bare discriminant
+/// string, and each data-carrying variant is `"<discriminant>:<uuid>"`
+/// (e.g. `"episode:3fa85f64-..."`) rather than needing a second nullable id
+/// column.
+pub(crate) fn leaf_ref_to_str(leaf_ref: &LeafRef) -> String {
+    match leaf_ref {
+        LeafRef::Work => "work".to_string(),
+        LeafRef::Episode(id) => format!("episode:{id}"),
+        LeafRef::Track(id) => format!("track:{id}"),
+        LeafRef::Book(id) => format!("book:{id}"),
+    }
+}
+
+pub(crate) fn leaf_ref_from_str(raw: &str) -> Result<LeafRef, DbError> {
+    if raw == "work" {
+        return Ok(LeafRef::Work);
+    }
+    if let Some(id) = raw.strip_prefix("episode:") {
+        return Ok(LeafRef::Episode(parse_uuid(id)?));
+    }
+    if let Some(id) = raw.strip_prefix("track:") {
+        return Ok(LeafRef::Track(parse_uuid(id)?));
+    }
+    if let Some(id) = raw.strip_prefix("book:") {
+        return Ok(LeafRef::Book(parse_uuid(id)?));
+    }
+    Err(decode_err(format!("unknown leaf ref {raw:?}")))
 }
 
 /// The `#[serde(tag = "kind")]` discriminant `PlaybackEventKind` already

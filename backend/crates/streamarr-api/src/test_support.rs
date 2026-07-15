@@ -11,19 +11,20 @@ use std::sync::Arc;
 use axum::Router;
 use chrono::{Duration, Utc};
 use streamarr_auth::{
-    DashMapDeviceFlowHandler, DeviceFlowConfig, DeviceFlowHandler, InMemoryDeviceAuthorizationStore,
-    InMemoryRefreshTokenStore, JwtIssuer, RefreshTokenService, RefreshTokenStore,
+    DashMapDeviceFlowHandler, DeviceFlowConfig, DeviceFlowHandler,
+    InMemoryDeviceAuthorizationStore, InMemoryRefreshTokenStore, JwtIssuer, RefreshTokenService,
+    RefreshTokenStore,
 };
 use streamarr_cache::{CacheAndPubSub, InMemory};
 use streamarr_catalog::CatalogService;
-use streamarr_db::repo::{SqlxDeviceRepo, SqlxRenditionRepo, SqlxWorkRepo};
-use streamarr_db::{DbPool, DeviceRepo, RenditionRepo, WorkRepo};
+use streamarr_db::repo::{SqlxDeviceRepo, SqlxMediaFileRepo, SqlxRenditionRepo, SqlxWorkRepo};
+use streamarr_db::{DbPool, DeviceRepo, MediaFileRepo, RenditionRepo, WorkRepo};
 use streamarr_model::{Availability, Work, WorkKind};
 use streamarr_requests::{InMemoryRequestRepo, RequestRepo, RequestService};
 use streamarr_transcode::{ActiveSessionCounter, TranscodeOrchestrator};
 use uuid::Uuid;
 
-use crate::playback::InMemoryMediaFileLookup;
+use crate::playback::{InMemoryMediaFileLookup, MediaFileLookup};
 use crate::requests::HealthCheckArrPusher;
 use crate::source_registry::SourceInstanceRegistry;
 use crate::version::VersionState;
@@ -36,6 +37,7 @@ pub struct TestState {
     pub media_files: Arc<InMemoryMediaFileLookup>,
     pub device_flow: Arc<dyn DeviceFlowHandler>,
     pub work_repo: Arc<dyn WorkRepo>,
+    pub media_file_repo: Arc<dyn MediaFileRepo>,
     /// Kept alive for `TestState`'s lifetime so `WebhookReceiver::handle`'s
     /// `try_send` has a live receiver to enqueue onto, mirroring how a real
     /// deployment's reconciliation poller holds the other end open. Never
@@ -86,9 +88,15 @@ pub async fn test_state() -> (Router, TestState) {
     let work_repo: Arc<dyn WorkRepo> = Arc::new(SqlxWorkRepo::new(pool.clone()));
     let device_repo: Arc<dyn DeviceRepo> = Arc::new(SqlxDeviceRepo::new(pool.clone()));
     let rendition_repo: Arc<dyn RenditionRepo> = Arc::new(SqlxRenditionRepo::new(pool.clone()));
+    let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(SqlxMediaFileRepo::new(pool.clone()));
     let cache: Arc<dyn CacheAndPubSub> = Arc::new(InMemory::new());
 
-    let catalog = Arc::new(CatalogService::new(work_repo.clone(), cache.clone(), pool));
+    let catalog = Arc::new(CatalogService::new(
+        work_repo.clone(),
+        media_file_repo.clone(),
+        cache.clone(),
+        pool,
+    ));
 
     let request_repo: Arc<dyn RequestRepo> = Arc::new(InMemoryRequestRepo::new());
     let source_instances = Arc::new(SourceInstanceRegistry::new());
@@ -101,7 +109,9 @@ pub async fn test_state() -> (Router, TestState) {
     let transcode = Arc::new(
         TranscodeOrchestrator::new(rendition_repo, cache, ActiveSessionCounter::new())
             .with_ffmpeg_binary("/usr/bin/true")
-            .with_output_root(std::env::temp_dir().join(format!("streamarr-api-test-{}", Uuid::new_v4()))),
+            .with_output_root(
+                std::env::temp_dir().join(format!("streamarr-api-test-{}", Uuid::new_v4())),
+            ),
     );
 
     let jwt = Arc::new(JwtIssuer::new(
@@ -146,7 +156,7 @@ pub async fn test_state() -> (Router, TestState) {
         device_flow: device_flow.clone(),
         webhook,
         source_instances: source_instances.clone(),
-        media_files: media_files.clone(),
+        media_files: media_files.clone() as Arc<dyn MediaFileLookup>,
         node_id: "test-node".to_string(),
     };
 
@@ -160,6 +170,7 @@ pub async fn test_state() -> (Router, TestState) {
             media_files,
             device_flow,
             work_repo,
+            media_file_repo,
             _trigger_rx: trigger_rx,
         },
     )

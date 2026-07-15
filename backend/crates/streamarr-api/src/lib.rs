@@ -46,7 +46,7 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
 pub use error::{ApiError, ErrorBody};
-pub use playback::{InMemoryMediaFileLookup, MediaFileLookup};
+pub use playback::{InMemoryMediaFileLookup, MediaFileLookup, RepoBackedMediaFileLookup};
 pub use readiness::ReadinessState;
 pub use source_registry::SourceInstanceRegistry;
 pub use version::VersionState;
@@ -99,11 +99,13 @@ pub fn openapi_spec() -> utoipa::openapi::OpenApi {
 /// on. `streamarr-bin`'s `boot_api` is the composition root that
 /// constructs one of these from `streamarr_config::Config`; every field
 /// here is either `Arc<dyn Trait>` (when the owning crate defines a real
-/// trait boundary — `RequestRepo`, `DeviceFlowHandler`) or `Arc<ConcreteType>`
-/// (when it only exposes a concrete service struct — `CatalogService`,
+/// trait boundary — `RequestRepo`, `DeviceFlowHandler`, `MediaFileLookup`,
+/// real in production via `RepoBackedMediaFileLookup`, real-but-in-memory
+/// in tests via `InMemoryMediaFileLookup`) or `Arc<ConcreteType>` (when it
+/// only exposes a concrete service struct — `CatalogService`,
 /// `RequestService`, `TranscodeOrchestrator`, `WebhookReceiver` — or is a
 /// composition-root-owned type with no sibling implementation to abstract
-/// over yet — `SourceInstanceRegistry`, `InMemoryMediaFileLookup`).
+/// over yet — `SourceInstanceRegistry`).
 #[derive(Clone)]
 pub struct AppState {
     pub readiness: ReadinessState,
@@ -115,7 +117,7 @@ pub struct AppState {
     pub device_flow: Arc<dyn streamarr_auth::DeviceFlowHandler>,
     pub webhook: Arc<streamarr_arr_sync::WebhookReceiver>,
     pub source_instances: Arc<SourceInstanceRegistry>,
-    pub media_files: Arc<InMemoryMediaFileLookup>,
+    pub media_files: Arc<dyn MediaFileLookup>,
     /// Stable-for-process-lifetime identifier for this node, threaded into
     /// `TranscodeSession::owning_node_id` so a segment request in a
     /// multi-node deployment can be routed back to whichever node actually
@@ -297,8 +299,8 @@ mod tests {
     #[test]
     fn openapi_spec_matches_checked_in_file() {
         let yaml = openapi_spec().to_yaml().expect("serialize OpenAPI to YAML");
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../openapi/streamarr.yaml");
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../openapi/streamarr.yaml");
 
         if std::env::var("UPDATE_OPENAPI_SPEC").is_ok() {
             std::fs::write(&path, &yaml).expect("write backend/openapi/streamarr.yaml");

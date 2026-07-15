@@ -59,6 +59,43 @@ impl MediaFileLookup for InMemoryMediaFileLookup {
     }
 }
 
+/// The real, production [`MediaFileLookup`]: delegates to `streamarr-db`'s
+/// [`streamarr_db::MediaFileRepo`], which `arr-sync` now actually populates
+/// (see `streamarr_arr_sync::media_sync`). Replaces the once-necessary
+/// [`InMemoryMediaFileLookup`] in `AppState` now that a real repo exists;
+/// `InMemoryMediaFileLookup` is kept only for tests, which want to seed a
+/// `MediaFile` without a real database.
+///
+/// A lookup miss and a real backend error both collapse to `None` here
+/// because [`MediaFileLookup::get`] has no room for an error variant (the
+/// handler already turns `None` into a 404, which is the right response for
+/// both cases from a caller's perspective) — but a backend error is still
+/// logged at `warn`, since silently treating "the database is unreachable"
+/// the same as "no such media file" would otherwise be surprising to debug.
+pub struct RepoBackedMediaFileLookup {
+    repo: std::sync::Arc<dyn streamarr_db::MediaFileRepo>,
+}
+
+impl RepoBackedMediaFileLookup {
+    pub fn new(repo: std::sync::Arc<dyn streamarr_db::MediaFileRepo>) -> Self {
+        Self { repo }
+    }
+}
+
+#[async_trait]
+impl MediaFileLookup for RepoBackedMediaFileLookup {
+    async fn get(&self, id: Uuid) -> Option<MediaFile> {
+        match self.repo.get_by_id(id).await {
+            Ok(media_file) => Some(media_file),
+            Err(streamarr_db::DbError::NotFound) => None,
+            Err(err) => {
+                tracing::warn!(media_file_id = %id, error = %err, "media file lookup failed");
+                None
+            }
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
 pub struct PlaybackQuery {
     /// Comma-separated container names the client can play, e.g. `"mp4"`.
@@ -190,8 +227,8 @@ mod tests {
     use crate::test_support::test_state;
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
-    use streamarr_model::media::LeafRef;
     use std::path::PathBuf;
+    use streamarr_model::media::LeafRef;
     use tower::ServiceExt;
 
     fn media_file() -> MediaFile {
@@ -277,5 +314,61 @@ mod tests {
         let info: PlaybackInfoResponse = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(info.mode, PlaybackMode::Hls);
         assert!(info.url.contains("/sessions/"));
+    }
+
+    /// `RepoBackedMediaFileLookup` is a thin adapter, but it is the one
+    /// piece of this fix with no coverage anywhere else: `streamarr-db`'s
+    /// own tests prove `MediaFileRepo::get_by_id` works, and the handler
+    /// tests above only ever exercise `InMemoryMediaFileLookup`. This
+    /// proves the two are actually wired together correctly end-to-end
+    /// against a real (in-memory) database, not just that each half
+    /// compiles.
+    #[tokio::test]
+    async fn repo_backed_lookup_resolves_a_persisted_media_file() {
+        use streamarr_db::repo::SqlxMediaFileRepo;
+        use streamarr_db::{run_migrations, MediaFileRepo};
+
+        // Not `streamarr_db::connect` (a 10-connection pool): SQLite's
+        // `:memory:` database is private *per connection*, so a pool with
+        // more than one connection would run migrations against one
+        // connection and this test's queries against another, empty,
+        // unmigrated database. `streamarr-db`'s own tests hit the same
+        // thing and fix it the same way (see its `test_sqlite_pool`
+        // helper, `pub(crate)` there so unavailable here).
+        sqlx::any::install_default_drivers();
+        let pool = sqlx::any::AnyPoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        run_migrations(&pool, false).await.unwrap();
+
+        let file = media_file();
+        // `media_files.work_id` has a real FK to `works(id)` (SQLite
+        // enforces it here), so a parent row must exist first -- seeded
+        // directly since `WorkRepo` is a different crate boundary this
+        // test has no need to exercise.
+        sqlx::query(
+            "INSERT INTO works (id, kind, title, sort_title, added_at, availability) \
+             VALUES (?, 'movie', 'Test Movie', 'Test Movie', '2026-01-01T00:00:00Z', 'available')",
+        )
+        .bind(file.work_id.to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let repo: std::sync::Arc<dyn MediaFileRepo> =
+            std::sync::Arc::new(SqlxMediaFileRepo::new(pool));
+        repo.create(&file).await.unwrap();
+
+        let lookup = RepoBackedMediaFileLookup::new(repo);
+
+        let found = lookup.get(file.id).await;
+        assert_eq!(found.as_ref().map(|f| f.id), Some(file.id));
+        assert_eq!(found.unwrap().path, file.path);
+
+        // A miss must be `None`, not a panic/error surfaced to the caller —
+        // this is the behavior the playback handler's 404 depends on.
+        assert!(lookup.get(Uuid::new_v4()).await.is_none());
     }
 }

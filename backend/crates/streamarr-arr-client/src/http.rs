@@ -84,9 +84,10 @@ mod tests {
         let http = build_http_client();
         let api_key = Sensitive::new("test-key".to_string());
 
-        let err = get_json::<serde_json::Value>(&http, "sonarr", &server.uri(), &api_key, "/broken")
-            .await
-            .expect_err("a non-JSON 200 body should surface as a Decode error, not panic");
+        let err =
+            get_json::<serde_json::Value>(&http, "sonarr", &server.uri(), &api_key, "/broken")
+                .await
+                .expect_err("a non-JSON 200 body should surface as a Decode error, not panic");
 
         match err {
             ArrClientError::Decode { app, .. } => assert_eq!(app, "sonarr"),

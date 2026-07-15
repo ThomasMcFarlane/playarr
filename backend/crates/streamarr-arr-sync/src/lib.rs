@@ -9,6 +9,11 @@
 //! - [`poller`] is the actual source of truth: [`poller::ReconciliationPoller`]
 //!   runs a scheduled full pass per source instance, and drains
 //!   `RefetchRequest`s to fast-path specific entities in between passes.
+//! - [`media_sync`] is the file-level counterpart: once a pass reconciles a
+//!   `Work`'s catalog identity, [`media_sync::MediaSync`] fetches that same
+//!   entity's file data (episode/movie/track/book files) and upserts real
+//!   `MediaFile` rows, resolving each *arr app's numeric child id to a
+//!   Streamarr `Uuid` along the way — see that module's doc comment.
 //!
 //! This split exists because *arr webhook payloads are thinly documented
 //! and drift across app versions — treating them as ground truth would
@@ -18,10 +23,12 @@
 //! drift the same way.
 
 pub mod arr_client;
+pub mod media_sync;
 pub mod poller;
 pub mod webhook;
 
 pub use arr_client::{work_kind_and_provider, ArrClient, RemoteWork};
+pub use media_sync::{MediaSync, MediaSyncError};
 pub use poller::{PollError, ReconciliationPoller, SyncOp};
 pub use webhook::{
     parse_webhook_signal, RefetchRequest, WebhookError, WebhookReceiver, WebhookSignal,

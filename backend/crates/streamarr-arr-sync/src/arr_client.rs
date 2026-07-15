@@ -6,8 +6,8 @@
 //! it came from.
 
 use streamarr_arr_client::{
-    ArrClientError, BazarrClient, LidarrArtist, LidarrClient, ProwlarrClient, ReadarrAuthor,
-    ReadarrClient, RadarrClient, RadarrMovie, SonarrClient, SonarrSeries,
+    ArrClientError, BazarrClient, LidarrArtist, LidarrClient, ProwlarrClient, RadarrClient,
+    RadarrMovie, ReadarrAuthor, ReadarrClient, SonarrClient, SonarrSeries,
 };
 use streamarr_model::{Availability, ExternalProvider, SourceInstance, SourceKind, WorkKind};
 
@@ -25,6 +25,16 @@ pub struct RemoteWork {
     /// call) — `Work::external_refs` is keyed by metadata provider, not by
     /// *arr instance, so that's what has to survive here.
     pub external_id: String,
+    /// The source app's own internal numeric id for this entity (Sonarr
+    /// `seriesId` / Radarr `movieId` / Lidarr `artistId` / Readarr
+    /// `authorId`). Unlike `external_id`, this one *is* kept around (rather
+    /// than only appearing transiently in a webhook payload/`get_*` call
+    /// argument): `crate::media_sync::MediaSync` needs it to call the
+    /// per-app file-listing endpoints (`list_episodes`/`list_episode_files`/
+    /// `list_albums_for_artist`/`list_track_files`/`list_books_for_author`/
+    /// `list_book_files`), which are keyed by the app's own id, not our
+    /// internal `Work::id` or the metadata-provider `external_id`.
+    pub source_id: i64,
     pub title: String,
     pub sort_title: String,
     pub monitored: bool,
@@ -39,6 +49,7 @@ pub struct RemoteWork {
 fn map_sonarr(series: &SonarrSeries) -> RemoteWork {
     RemoteWork {
         external_id: series.tvdb_id.to_string(),
+        source_id: series.id,
         title: series.title.clone(),
         sort_title: series.sort_title.clone(),
         monitored: series.monitored,
@@ -53,6 +64,7 @@ fn map_sonarr(series: &SonarrSeries) -> RemoteWork {
 fn map_radarr(movie: &RadarrMovie) -> RemoteWork {
     RemoteWork {
         external_id: movie.tmdb_id.to_string(),
+        source_id: movie.id,
         title: movie.title.clone(),
         sort_title: movie.sort_title.clone(),
         monitored: movie.monitored,
@@ -69,6 +81,7 @@ fn map_radarr(movie: &RadarrMovie) -> RemoteWork {
 fn map_lidarr(artist: &LidarrArtist) -> RemoteWork {
     RemoteWork {
         external_id: artist.foreign_artist_id.clone(),
+        source_id: artist.id,
         title: artist.artist_name.clone(),
         // Lidarr's artist DTO has no distinct sort-title field.
         sort_title: artist.artist_name.clone(),
@@ -80,6 +93,7 @@ fn map_lidarr(artist: &LidarrArtist) -> RemoteWork {
 fn map_readarr(author: &ReadarrAuthor) -> RemoteWork {
     RemoteWork {
         external_id: author.foreign_author_id.clone(),
+        source_id: author.id,
         title: author.author_name.clone(),
         sort_title: author.author_name.clone(),
         monitored: author.monitored,
@@ -146,12 +160,9 @@ impl ArrClient {
     /// there's nothing to list onto the `Work` aggregate for those.
     pub async fn list_all(&self) -> Result<Vec<RemoteWork>, ArrClientError> {
         match self {
-            ArrClient::Sonarr(client) => Ok(client
-                .list_series()
-                .await?
-                .iter()
-                .map(map_sonarr)
-                .collect()),
+            ArrClient::Sonarr(client) => {
+                Ok(client.list_series().await?.iter().map(map_sonarr).collect())
+            }
             ArrClient::Radarr(client) => {
                 Ok(client.list_movies().await?.iter().map(map_radarr).collect())
             }
@@ -217,6 +228,7 @@ mod tests {
             monitored: true,
             has_file: true,
             path: "/movies/example-movie".to_string(),
+            movie_file: None,
         };
         let remote = map_radarr(&movie);
         assert_eq!(remote.external_id, "999");
@@ -233,6 +245,7 @@ mod tests {
             monitored: true,
             has_file: false,
             path: "/movies/unreleased".to_string(),
+            movie_file: None,
         };
         let remote = map_radarr(&movie);
         assert_eq!(remote.availability, Some(Availability::Pending));
@@ -248,6 +261,7 @@ mod tests {
             monitored: false,
             has_file: false,
             path: "/movies/ignored".to_string(),
+            movie_file: None,
         };
         let remote = map_radarr(&movie);
         assert_eq!(remote.availability, Some(Availability::Unknown));

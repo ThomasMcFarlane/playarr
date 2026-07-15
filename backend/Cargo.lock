@@ -2602,6 +2602,7 @@ dependencies = [
  "chrono",
  "serde",
  "serde_json",
+ "sqlx",
  "streamarr-arr-client",
  "streamarr-coordination",
  "streamarr-db",

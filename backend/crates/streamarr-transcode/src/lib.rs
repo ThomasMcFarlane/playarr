@@ -222,7 +222,12 @@ pub fn build_ffmpeg_hls_args(
             .to_string_lossy()
             .into_owned(),
     );
-    args.push(output_dir.join("playlist.m3u8").to_string_lossy().into_owned());
+    args.push(
+        output_dir
+            .join("playlist.m3u8")
+            .to_string_lossy()
+            .into_owned(),
+    );
 
     args
 }
@@ -1032,13 +1037,10 @@ mod tests {
         async fn spawn_creates_a_lookupable_session_and_expire_removes_it() {
             let repo = Arc::new(FakeRenditionRepo::default());
             let counter = ActiveSessionCounter::new();
-            let orchestrator = TranscodeOrchestrator::new(
-                repo,
-                Arc::new(InMemory::new()),
-                counter.clone(),
-            )
-            .with_ffmpeg_binary("/usr/bin/true")
-            .with_output_root(unique_tmp_dir());
+            let orchestrator =
+                TranscodeOrchestrator::new(repo, Arc::new(InMemory::new()), counter.clone())
+                    .with_ffmpeg_binary("/usr/bin/true")
+                    .with_output_root(unique_tmp_dir());
 
             let media_file = sample_media_file();
             let session = orchestrator
@@ -1075,10 +1077,7 @@ mod tests {
         async fn lookup_of_unknown_session_is_none() {
             let orchestrator = test_orchestrator(Arc::new(FakeRenditionRepo::default()));
             assert_eq!(
-                orchestrator
-                    .lookup_session(Uuid::new_v4())
-                    .await
-                    .unwrap(),
+                orchestrator.lookup_session(Uuid::new_v4()).await.unwrap(),
                 None
             );
         }
@@ -1268,8 +1267,7 @@ mod tests {
             counter.increment();
             let (_tx, events_rx) = mpsc::channel(1);
 
-            let dispatcher =
-                TdarrDispatcher::new(tdarr, repo, counter, events_rx, test_config());
+            let dispatcher = TdarrDispatcher::new(tdarr, repo, counter, events_rx, test_config());
 
             dispatcher.check_and_apply_throttle().await.unwrap();
 
@@ -1306,8 +1304,7 @@ mod tests {
             counter.increment();
             let (_tx, events_rx) = mpsc::channel(1);
 
-            let dispatcher =
-                TdarrDispatcher::new(tdarr, repo, counter, events_rx, test_config());
+            let dispatcher = TdarrDispatcher::new(tdarr, repo, counter, events_rx, test_config());
 
             dispatcher.check_and_apply_throttle().await.unwrap();
 
@@ -1337,13 +1334,8 @@ mod tests {
             config.throttle_check_interval = Duration::from_secs(3600);
 
             let (tx, events_rx) = mpsc::channel(1);
-            let dispatcher = TdarrDispatcher::new(
-                tdarr,
-                repo,
-                ActiveSessionCounter::new(),
-                events_rx,
-                config,
-            );
+            let dispatcher =
+                TdarrDispatcher::new(tdarr, repo, ActiveSessionCounter::new(), events_rx, config);
 
             let handle = tokio::spawn(dispatcher.run());
 

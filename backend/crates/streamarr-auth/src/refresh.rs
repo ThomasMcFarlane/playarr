@@ -318,7 +318,10 @@ mod tests {
             .unwrap();
 
         assert_ne!(first.refresh_token, second.refresh_token);
-        assert_eq!(session.id, rotated_session.id, "session id stays stable across rotation");
+        assert_eq!(
+            session.id, rotated_session.id,
+            "session id stays stable across rotation"
+        );
         assert_eq!(session.user_id, user_id);
     }
 
@@ -337,12 +340,16 @@ mod tests {
             .unwrap();
 
         // Replaying the now-retired first token is theft evidence.
-        let reuse = service.rotate(session.device_id, &first.refresh_token).await;
+        let reuse = service
+            .rotate(session.device_id, &first.refresh_token)
+            .await;
         assert!(matches!(reuse, Err(RefreshError::ReuseDetected)));
 
         // The whole family is revoked -- even the legitimately-current
         // second token is now rejected.
-        let after_revocation = service.rotate(session.device_id, &second.refresh_token).await;
+        let after_revocation = service
+            .rotate(session.device_id, &second.refresh_token)
+            .await;
         assert!(matches!(after_revocation, Err(RefreshError::FamilyRevoked)));
     }
 
@@ -360,7 +367,9 @@ mod tests {
 
         // An unrecognized token alone isn't proof of compromise -- the
         // real one still works afterward.
-        let legit = service.rotate(session.device_id, &first.refresh_token).await;
+        let legit = service
+            .rotate(session.device_id, &first.refresh_token)
+            .await;
         assert!(legit.is_ok());
     }
 
@@ -380,7 +389,9 @@ mod tests {
             .await
             .unwrap();
 
-        let result = service.rotate(session.device_id, &first.refresh_token).await;
+        let result = service
+            .rotate(session.device_id, &first.refresh_token)
+            .await;
         assert!(matches!(result, Err(RefreshError::Expired)));
     }
 

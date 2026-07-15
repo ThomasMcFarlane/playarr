@@ -5,7 +5,14 @@ use streamarr_model::Sensitive;
 use crate::http::{build_http_client, get_json, get_status};
 use crate::{ArrClientError, ArrConnector};
 
-/// A movie as Radarr's `/api/v3/movie` endpoint returns it.
+/// A movie as Radarr's `/api/v3/movie` endpoint returns it. Unlike Sonarr
+/// (episode files are a separate `/api/v3/episodefile` resource joined by
+/// `episodeFileId`), Radarr embeds the imported file directly on the movie
+/// as `movieFile` when `hasFile` is true — Radarr only ever has at most one
+/// file per movie, so there's no separate list-by-parent-id endpoint to
+/// call. This previously deserialized into an implicit ignored field
+/// (unmapped JSON keys are dropped silently by serde by default) rather
+/// than a typed one; `movie_file` now captures it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RadarrMovie {
     pub id: i64,
@@ -18,6 +25,76 @@ pub struct RadarrMovie {
     #[serde(rename = "hasFile")]
     pub has_file: bool,
     pub path: String,
+    /// Absent/null when `has_file` is false. `Option<T>` fields are
+    /// missing-key-tolerant under serde's default derive, so this parses
+    /// fine whether Radarr omits the key entirely or sends `null`.
+    #[serde(rename = "movieFile")]
+    pub movie_file: Option<RadarrMovieFile>,
+}
+
+/// The nested `quality.quality` object on Radarr's quality-bearing
+/// resources.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RadarrQualityInfo {
+    pub id: i64,
+    pub name: String,
+    pub source: String,
+    pub resolution: i64,
+}
+
+/// The nested `quality.revision` object — repack/proper tracking.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RadarrRevision {
+    pub version: i64,
+    pub real: i64,
+    #[serde(rename = "isRepack")]
+    pub is_repack: bool,
+}
+
+/// The `quality` object embedded in a movie file.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RadarrQuality {
+    pub quality: RadarrQualityInfo,
+    pub revision: RadarrRevision,
+}
+
+/// The `mediaInfo` object embedded in a movie file — ffprobe-derived
+/// codec/bitrate detail. Radarr omits or nulls individual fields it
+/// couldn't determine, so everything here is optional.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RadarrMediaInfo {
+    #[serde(rename = "audioCodec")]
+    pub audio_codec: Option<String>,
+    #[serde(rename = "audioBitrate")]
+    pub audio_bitrate: Option<i64>,
+    #[serde(rename = "audioChannels")]
+    pub audio_channels: Option<f64>,
+    #[serde(rename = "videoCodec")]
+    pub video_codec: Option<String>,
+    #[serde(rename = "videoBitrate")]
+    pub video_bitrate: Option<i64>,
+    pub resolution: Option<String>,
+    #[serde(rename = "runTime")]
+    pub run_time: Option<String>,
+}
+
+/// The `movieFile` object Radarr embeds on a movie once a file is
+/// imported — a hand-picked subset (identity, path, size, quality/media
+/// detail) rather than Radarr's full resource (custom formats, edition,
+/// original file path, indexer flags, etc).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RadarrMovieFile {
+    pub id: i64,
+    #[serde(rename = "movieId")]
+    pub movie_id: i64,
+    #[serde(rename = "relativePath")]
+    pub relative_path: String,
+    pub path: String,
+    pub size: i64,
+    pub quality: RadarrQuality,
+    /// Absent on files Radarr hasn't run media analysis on yet.
+    #[serde(rename = "mediaInfo")]
+    pub media_info: Option<RadarrMediaInfo>,
 }
 
 pub struct RadarrClient {
@@ -144,6 +221,83 @@ mod tests {
         assert_eq!(movie.id, 7);
         assert_eq!(movie.title, "Sample Seven");
         assert!(!movie.has_file);
+        assert!(
+            movie.movie_file.is_none(),
+            "a movie with hasFile: false and no movieFile key should parse to None, not error"
+        );
+    }
+
+    #[tokio::test]
+    async fn get_movie_parses_embedded_movie_file_with_quality_and_media_info() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/movie/1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": 1,
+                "title": "Orbit",
+                "sortTitle": "heat",
+                "tmdbId": 949,
+                "monitored": true,
+                "hasFile": true,
+                "path": "/movies/Orbit (1995)",
+                "movieFile": {
+                    "id": 30,
+                    "movieId": 1,
+                    "relativePath": "Orbit (1995) Bluray-1080p.mkv",
+                    "path": "/movies/Orbit (1995)/Orbit (1995) Bluray-1080p.mkv",
+                    "size": 12_345_678_900i64,
+                    "quality": {
+                        "quality": {
+                            "id": 7,
+                            "name": "Bluray-1080p",
+                            "source": "bluray",
+                            "resolution": 1080
+                        },
+                        "revision": {
+                            "version": 1,
+                            "real": 0,
+                            "isRepack": false
+                        }
+                    },
+                    "mediaInfo": {
+                        "audioCodec": "DTS",
+                        "audioBitrate": 1_509_000,
+                        "audioChannels": 6.0,
+                        "videoCodec": "x264",
+                        "videoBitrate": 8_000_000,
+                        "resolution": "1920x1080",
+                        "runTime": "2:50:00"
+                    }
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let client = RadarrClient::new(server.uri(), "test-key");
+        let movie = client
+            .get_movie(1)
+            .await
+            .expect("get_movie should succeed against a healthy mock");
+
+        let movie_file = movie
+            .movie_file
+            .as_ref()
+            .expect("movieFile should be present when hasFile is true");
+        assert_eq!(movie_file.id, 30);
+        assert_eq!(movie_file.movie_id, 1);
+        assert_eq!(
+            movie_file.path,
+            "/movies/Orbit (1995)/Orbit (1995) Bluray-1080p.mkv"
+        );
+        assert_eq!(movie_file.size, 12_345_678_900);
+        assert_eq!(movie_file.quality.quality.name, "Bluray-1080p");
+        let media_info = movie_file
+            .media_info
+            .as_ref()
+            .expect("mediaInfo should be present");
+        assert_eq!(media_info.audio_codec.as_deref(), Some("DTS"));
+        assert_eq!(media_info.video_codec.as_deref(), Some("x264"));
+        assert_eq!(media_info.video_bitrate, Some(8_000_000));
     }
 
     #[tokio::test]

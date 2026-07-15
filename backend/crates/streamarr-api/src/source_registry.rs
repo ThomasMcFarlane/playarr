@@ -50,7 +50,10 @@ impl SourceInstanceRegistry {
     /// `streamarr-bin`'s worker boot sequence iterates to spawn one
     /// `ReconciliationPoller` per instance.
     pub fn all(&self) -> Vec<SourceInstance> {
-        self.by_id.iter().map(|entry| entry.value().clone()).collect()
+        self.by_id
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect()
     }
 }
 

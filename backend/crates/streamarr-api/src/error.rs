@@ -102,9 +102,11 @@ impl From<streamarr_requests::RequestError> for ApiError {
                 "source_instance_not_configured",
                 err.to_string(),
             ),
-            RequestError::ArrPush(inner) => {
-                Self::new(StatusCode::BAD_GATEWAY, "arr_push_failed", inner.to_string())
-            }
+            RequestError::ArrPush(inner) => Self::new(
+                StatusCode::BAD_GATEWAY,
+                "arr_push_failed",
+                inner.to_string(),
+            ),
         }
     }
 }

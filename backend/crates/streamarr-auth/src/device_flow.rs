@@ -177,19 +177,25 @@ impl InMemoryDeviceAuthorizationStore {
 #[async_trait]
 impl DeviceAuthorizationStore for InMemoryDeviceAuthorizationStore {
     async fn insert(&self, authorization: DeviceAuthorization) {
-        self.by_user_code
-            .insert(authorization.user_code.clone(), authorization.device_code.clone());
+        self.by_user_code.insert(
+            authorization.user_code.clone(),
+            authorization.device_code.clone(),
+        );
         self.by_device_code
             .insert(authorization.device_code.clone(), authorization);
     }
 
     async fn get_by_device_code(&self, device_code: &str) -> Option<DeviceAuthorization> {
-        self.by_device_code.get(device_code).map(|entry| entry.clone())
+        self.by_device_code
+            .get(device_code)
+            .map(|entry| entry.clone())
     }
 
     async fn get_by_user_code(&self, user_code: &str) -> Option<DeviceAuthorization> {
         let device_code = self.by_user_code.get(user_code)?.clone();
-        self.by_device_code.get(&device_code).map(|entry| entry.clone())
+        self.by_device_code
+            .get(&device_code)
+            .map(|entry| entry.clone())
     }
 
     async fn update(&self, authorization: DeviceAuthorization) {

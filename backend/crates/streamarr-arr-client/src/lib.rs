@@ -23,11 +23,23 @@ mod readarr;
 mod sonarr;
 
 pub use bazarr::{BazarrClient, BazarrSeries, BazarrSubtitleLanguage, BazarrWantedEpisode};
-pub use lidarr::{LidarrAlbum, LidarrArtist, LidarrClient};
+pub use lidarr::{
+    LidarrAlbum, LidarrArtist, LidarrClient, LidarrMediaInfo, LidarrQuality, LidarrQualityInfo,
+    LidarrRevision, LidarrTrackFile,
+};
 pub use prowlarr::{ProwlarrClient, ProwlarrIndexer};
-pub use radarr::{RadarrClient, RadarrMovie};
-pub use readarr::{ReadarrAuthor, ReadarrBook, ReadarrClient};
-pub use sonarr::{SonarrClient, SonarrSeries};
+pub use radarr::{
+    RadarrClient, RadarrMediaInfo, RadarrMovie, RadarrMovieFile, RadarrQuality, RadarrQualityInfo,
+    RadarrRevision,
+};
+pub use readarr::{
+    ReadarrAuthor, ReadarrBook, ReadarrBookFile, ReadarrClient, ReadarrQuality, ReadarrQualityInfo,
+    ReadarrRevision,
+};
+pub use sonarr::{
+    SonarrClient, SonarrEpisode, SonarrEpisodeFile, SonarrMediaInfo, SonarrQuality,
+    SonarrQualityInfo, SonarrRevision, SonarrSeries,
+};
 
 use async_trait::async_trait;
 

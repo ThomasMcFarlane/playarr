@@ -12,11 +12,12 @@ use std::time::Duration;
 
 use chrono::Utc;
 use streamarr_coordination::ClusterCoordinator;
-use streamarr_db::WorkRepo;
+use streamarr_db::{DbPool, MediaFileRepo, WorkRepo};
 use streamarr_model::{Availability, ExternalProvider, ExternalRef, SourceKind, Work, WorkKind};
 use uuid::Uuid;
 
 use crate::arr_client::{work_kind_and_provider, ArrClient, RemoteWork};
+use crate::media_sync::MediaSync;
 use crate::webhook::RefetchRequest;
 
 #[derive(Debug, thiserror::Error)]
@@ -59,6 +60,13 @@ pub struct ReconciliationPoller {
     arr_client: ArrClient,
     poll_interval: Duration,
     work_repo: Arc<dyn WorkRepo>,
+    /// Fetches each reconciled `Work`'s file-level data (episode/movie/
+    /// track/book files) and upserts `MediaFile` rows -- see
+    /// [`crate::media_sync`]'s doc comment. Best-effort per work (see
+    /// [`Self::sync_media_files`]): a file-sync failure for one work never
+    /// fails the whole reconciliation pass, since the catalog identity sync
+    /// above is this poller's primary responsibility.
+    media_sync: MediaSync,
     coordinator: Arc<dyn ClusterCoordinator>,
     trigger_rx: tokio::sync::mpsc::Receiver<RefetchRequest>,
 }
@@ -71,6 +79,8 @@ impl ReconciliationPoller {
         arr_client: ArrClient,
         poll_interval: Duration,
         work_repo: Arc<dyn WorkRepo>,
+        media_file_repo: Arc<dyn MediaFileRepo>,
+        pool: DbPool,
         coordinator: Arc<dyn ClusterCoordinator>,
         trigger_rx: tokio::sync::mpsc::Receiver<RefetchRequest>,
     ) -> Self {
@@ -80,6 +90,7 @@ impl ReconciliationPoller {
             arr_client,
             poll_interval,
             work_repo,
+            media_sync: MediaSync::new(pool, media_file_repo),
             coordinator,
             trigger_rx,
         }
@@ -174,6 +185,15 @@ impl ReconciliationPoller {
             .list_all()
             .await
             .map_err(|err| PollError::Client(err.to_string()))?;
+        // Built before `diff_works` consumes `remote`: `SyncOp`'s `Work`
+        // carries the metadata-provider `external_id` (via
+        // `Work::external_refs`) but not the *arr app's own numeric id, so
+        // this is the only place that id is still available once ops are
+        // computed -- see `Self::sync_media_files`.
+        let source_ids: HashMap<String, i64> = remote
+            .iter()
+            .map(|r| (r.external_id.clone(), r.source_id))
+            .collect();
 
         let local = self.list_all_local(work_kind).await?;
 
@@ -186,7 +206,9 @@ impl ReconciliationPoller {
             "reconciliation diff computed"
         );
 
-        self.apply_ops(ops).await
+        self.apply_ops(&ops).await?;
+        self.sync_media_files(&ops, &provider, &source_ids).await;
+        Ok(())
     }
 
     /// A targeted re-fetch for one entity, triggered by a webhook signal
@@ -244,7 +266,15 @@ impl ReconciliationPoller {
             None => SyncOp::Insert(new_work(work_kind, provider, &remote)),
         };
 
-        self.apply_ops(vec![op]).await
+        let ops = vec![op];
+        self.apply_ops(&ops).await?;
+        // `id` here is already the *arr app's own numeric id (it's exactly
+        // what was passed to `ArrClient::get_one` above) -- no
+        // external_id -> source_id lookup needed, unlike `reconcile_all`.
+        if let Some(SyncOp::Insert(work) | SyncOp::Update(work)) = ops.first() {
+            self.sync_media_file(work.id, id).await;
+        }
+        Ok(())
     }
 
     /// Pages through `WorkRepo::list_by_kind` until it runs out of results.
@@ -264,18 +294,75 @@ impl ReconciliationPoller {
         Ok(all)
     }
 
-    async fn apply_ops(&self, ops: Vec<SyncOp>) -> Result<(), PollError> {
+    async fn apply_ops(&self, ops: &[SyncOp]) -> Result<(), PollError> {
         for op in ops {
             match op {
                 SyncOp::Insert(work) | SyncOp::Update(work) => {
-                    self.work_repo.upsert(&work).await?;
+                    self.work_repo.upsert(work).await?;
                 }
                 SyncOp::Delete(id) => {
-                    self.work_repo.delete(id).await?;
+                    self.work_repo.delete(*id).await?;
                 }
             }
         }
         Ok(())
+    }
+
+    /// After a full pass's ops have been applied, runs
+    /// [`MediaSync::sync_work`] for every inserted/updated `Work`, resolving
+    /// each one's *arr numeric id via `source_ids` (keyed by the same
+    /// metadata-provider `external_id` `Work::external_refs` carries).
+    /// Best-effort: a single work's file-sync failure is logged and skipped
+    /// rather than failing the pass -- the next scheduled pass retries it,
+    /// and every other work in this pass still gets synced.
+    async fn sync_media_files(
+        &self,
+        ops: &[SyncOp],
+        provider: &ExternalProvider,
+        source_ids: &HashMap<String, i64>,
+    ) {
+        for op in ops {
+            let work = match op {
+                SyncOp::Insert(work) | SyncOp::Update(work) => work,
+                SyncOp::Delete(_) => continue,
+            };
+            let Some(external_id) = work
+                .external_refs
+                .iter()
+                .find(|r| &r.provider == provider)
+                .map(|r| r.external_id.as_str())
+            else {
+                continue;
+            };
+            let Some(&arr_source_id) = source_ids.get(external_id) else {
+                continue;
+            };
+            self.sync_media_file(work.id, arr_source_id).await;
+        }
+    }
+
+    /// Runs [`MediaSync::sync_work`] for one work, logging (rather than
+    /// propagating) a failure -- see [`Self::sync_media_files`]'s doc
+    /// comment for why this is deliberately non-fatal.
+    async fn sync_media_file(&self, work_id: Uuid, arr_source_id: i64) {
+        if let Err(err) = self
+            .media_sync
+            .sync_work(
+                &self.arr_client,
+                work_id,
+                arr_source_id,
+                self.source_instance_id,
+            )
+            .await
+        {
+            tracing::warn!(
+                source_instance_id = %self.source_instance_id,
+                work_id = %work_id,
+                error = %err,
+                "file-level media sync failed for this work; catalog metadata was still synced, \
+                 will retry on the next reconciliation pass"
+            );
+        }
     }
 }
 
@@ -355,7 +442,11 @@ fn diff_works(
                     ops.push(SyncOp::Update(merged));
                 }
             }
-            None => ops.push(SyncOp::Insert(new_work(kind, provider.clone(), &remote_work))),
+            None => ops.push(SyncOp::Insert(new_work(
+                kind,
+                provider.clone(),
+                &remote_work,
+            ))),
         }
     }
 
@@ -407,6 +498,10 @@ mod tests {
     fn remote(external_id: &str, title: &str, monitored: bool) -> RemoteWork {
         RemoteWork {
             external_id: external_id.to_string(),
+            // Not exercised by `diff_works`/`merge_work` (only
+            // `crate::media_sync::MediaSync` reads it) -- a fixed
+            // placeholder is fine for every test in this module.
+            source_id: 0,
             title: title.to_string(),
             sort_title: title.to_lowercase(),
             monitored,
@@ -419,7 +514,12 @@ mod tests {
     #[test]
     fn diff_inserts_new_remote_entities() {
         let remote_list = vec![remote("100", "New Show", true)];
-        let ops = diff_works(WorkKind::Series, &ExternalProvider::Tvdb, remote_list, vec![]);
+        let ops = diff_works(
+            WorkKind::Series,
+            &ExternalProvider::Tvdb,
+            remote_list,
+            vec![],
+        );
 
         assert_eq!(ops.len(), 1);
         match &ops[0] {
@@ -467,7 +567,12 @@ mod tests {
         )];
         let remote_list = vec![remote("300", "New Title", true)];
 
-        let ops = diff_works(WorkKind::Series, &ExternalProvider::Tvdb, remote_list, local);
+        let ops = diff_works(
+            WorkKind::Series,
+            &ExternalProvider::Tvdb,
+            remote_list,
+            local,
+        );
 
         assert_eq!(ops.len(), 1);
         match &ops[0] {
@@ -494,7 +599,12 @@ mod tests {
         )];
         let remote_list = vec![remote("400", "Stable Show", true)];
 
-        let ops = diff_works(WorkKind::Series, &ExternalProvider::Tvdb, remote_list, local);
+        let ops = diff_works(
+            WorkKind::Series,
+            &ExternalProvider::Tvdb,
+            remote_list,
+            local,
+        );
 
         assert!(ops.is_empty());
     }
@@ -628,7 +738,10 @@ mod tests {
             matching.sort_by(|a, b| a.id.cmp(&b.id));
             let start = offset.max(0) as usize;
             let end = (start + limit.max(0) as usize).min(matching.len());
-            Ok(matching.get(start..end).map(|s| s.to_vec()).unwrap_or_default())
+            Ok(matching
+                .get(start..end)
+                .map(|s| s.to_vec())
+                .unwrap_or_default())
         }
 
         async fn upsert(&self, work: &Work) -> Result<(), DbError> {
@@ -686,7 +799,10 @@ mod tests {
             let mut offset = 0i64;
             let mut collected = Vec::new();
             loop {
-                let page = repo.list_by_kind(WorkKind::Movie, 200, offset).await.unwrap();
+                let page = repo
+                    .list_by_kind(WorkKind::Movie, 200, offset)
+                    .await
+                    .unwrap();
                 let got = page.len() as i64;
                 collected.extend(page);
                 if got < 200 {
@@ -800,8 +916,36 @@ mod tests {
 
     use streamarr_arr_client::SonarrClient;
     use streamarr_coordination::SingleNodeCoordinator;
+    use streamarr_db::repo::SqlxMediaFileRepo;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    /// A fresh, migrated, in-memory SQLite `DbPool` for
+    /// `ReconciliationPoller::new`'s `media_sync` half -- these tests all
+    /// exercise `WorkRepo` through the hand-rolled `InMemoryWorkRepo` fake
+    /// above (not this pool), so a real `MediaFileRepo`/pool is only here to
+    /// satisfy the constructor; `crate::media_sync`'s own tests cover the
+    /// file-sync behavior this pool would actually back.
+    async fn test_pool() -> DbPool {
+        static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let url = format!("sqlite://streamarr_arr_sync_poller_test_{n}?mode=memory&cache=shared");
+
+        sqlx::any::install_default_drivers();
+        let pool: DbPool = sqlx::any::AnyPoolOptions::new()
+            .max_connections(1)
+            .connect(&url)
+            .await
+            .expect("open in-memory sqlite pool");
+        streamarr_db::run_migrations(&pool, false)
+            .await
+            .expect("run real embedded sqlite migrations");
+        pool
+    }
+
+    async fn media_file_repo(pool: DbPool) -> Arc<dyn MediaFileRepo> {
+        Arc::new(SqlxMediaFileRepo::new(pool))
+    }
 
     #[tokio::test]
     async fn reconcile_all_inserts_updates_and_deletes_against_a_mocked_sonarr() {
@@ -859,6 +1003,7 @@ mod tests {
             to_be_deleted,
         ]));
         let arr_client = ArrClient::Sonarr(SonarrClient::new(mock_server.uri(), "test-api-key"));
+        let pool = test_pool().await;
         let coordinator: Arc<dyn ClusterCoordinator> = Arc::new(SingleNodeCoordinator::new());
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
 
@@ -868,6 +1013,8 @@ mod tests {
             arr_client,
             Duration::from_secs(3600),
             repo.clone() as Arc<dyn WorkRepo>,
+            media_file_repo(pool.clone()).await,
+            pool,
             coordinator,
             rx,
         );
@@ -875,8 +1022,14 @@ mod tests {
         poller.reconcile_all().await.unwrap();
 
         let snapshot = repo.snapshot();
-        assert_eq!(snapshot.len(), 2, "expected Renamed Show + Brand New Show, got {snapshot:?}");
-        assert!(snapshot.iter().any(|w| w.title == "Renamed Show" && w.id == existing.id));
+        assert_eq!(
+            snapshot.len(),
+            2,
+            "expected Renamed Show + Brand New Show, got {snapshot:?}"
+        );
+        assert!(snapshot
+            .iter()
+            .any(|w| w.title == "Renamed Show" && w.id == existing.id));
         assert!(snapshot.iter().any(|w| w.title == "Brand New Show"));
         assert!(!snapshot.iter().any(|w| w.id == to_be_deleted_id));
     }
@@ -901,6 +1054,7 @@ mod tests {
 
         let repo = Arc::new(InMemoryWorkRepo::default());
         let arr_client = ArrClient::Sonarr(SonarrClient::new(mock_server.uri(), "test-api-key"));
+        let pool = test_pool().await;
         let coordinator: Arc<dyn ClusterCoordinator> = Arc::new(SingleNodeCoordinator::new());
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
 
@@ -910,6 +1064,8 @@ mod tests {
             arr_client,
             Duration::from_secs(3600),
             repo.clone() as Arc<dyn WorkRepo>,
+            media_file_repo(pool.clone()).await,
+            pool,
             coordinator,
             rx,
         );
@@ -954,6 +1110,7 @@ mod tests {
 
         let repo = Arc::new(InMemoryWorkRepo::default());
         let arr_client = ArrClient::Sonarr(SonarrClient::new(mock_server.uri(), "test-api-key"));
+        let pool = test_pool().await;
         let coordinator: Arc<dyn ClusterCoordinator> = Arc::new(SingleNodeCoordinator::new());
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
 
@@ -963,6 +1120,8 @@ mod tests {
             arr_client,
             Duration::from_secs(3600),
             repo.clone() as Arc<dyn WorkRepo>,
+            media_file_repo(pool.clone()).await,
+            pool,
             coordinator,
             rx,
         );

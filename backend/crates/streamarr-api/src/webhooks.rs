@@ -101,9 +101,7 @@ mod tests {
                     .method("POST")
                     .uri(format!("/webhooks/{instance_id}"))
                     .header("content-type", "application/json")
-                    .body(Body::from(
-                        r#"{"eventType":"SeriesAdd","series":{"id":1}}"#,
-                    ))
+                    .body(Body::from(r#"{"eventType":"SeriesAdd","series":{"id":1}}"#))
                     .unwrap(),
             )
             .await

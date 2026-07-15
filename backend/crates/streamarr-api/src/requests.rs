@@ -108,9 +108,7 @@ impl From<RequestTargetDto> for RequestTarget {
     fn from(dto: RequestTargetDto) -> Self {
         match dto {
             RequestTargetDto::ExistingWork { work_id } => RequestTarget::ExistingWork { work_id },
-            RequestTargetDto::External { external_ref } => {
-                RequestTarget::External { external_ref }
-            }
+            RequestTargetDto::External { external_ref } => RequestTarget::External { external_ref },
         }
     }
 }
@@ -309,7 +307,9 @@ mod tests {
     #[tokio::test]
     async fn submit_then_list_pending_round_trips() {
         let (router, state) = test_state().await;
-        state.source_instances.upsert(source_instance(SourceKind::Radarr));
+        state
+            .source_instances
+            .upsert(source_instance(SourceKind::Radarr));
 
         let requested_by = Uuid::new_v4();
         let body = serde_json::json!({

@@ -27,7 +27,8 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use streamarr_cache::CacheAndPubSub;
-use streamarr_db::{DbError, DbPool, WorkRepo};
+use streamarr_db::{DbError, DbPool, MediaFileRepo, WorkRepo};
+use streamarr_model::media::LeafRef;
 use streamarr_model::{Album, Book, Episode, Season, Track, Work, WorkKind};
 use uuid::Uuid;
 
@@ -91,12 +92,30 @@ pub struct CatalogPage {
     pub total: Option<i64>,
 }
 
+/// An [`Episode`] plus the resolved id of the [`streamarr_model::MediaFile`]
+/// that plays it (via [`streamarr_db::MediaFileRepo::find_by_leaf`],
+/// `LeafRef::Episode(episode.id)`), or `None` when no file has synced for
+/// this episode yet.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EpisodeDetail {
+    pub episode: Episode,
+    pub media_file_id: Option<Uuid>,
+}
+
 /// A season plus its episodes, as returned inside [`WorkDetail`] for a
 /// `WorkKind::Series` work.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SeasonDetail {
     pub season: Season,
-    pub episodes: Vec<Episode>,
+    pub episodes: Vec<EpisodeDetail>,
+}
+
+/// A [`Track`] plus its resolved `media_file_id` (`LeafRef::Track(track.id)`);
+/// see [`EpisodeDetail`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrackDetail {
+    pub track: Track,
+    pub media_file_id: Option<Uuid>,
 }
 
 /// An album plus its tracks, as returned inside [`WorkDetail`] for a
@@ -104,7 +123,15 @@ pub struct SeasonDetail {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AlbumDetail {
     pub album: Album,
-    pub tracks: Vec<Track>,
+    pub tracks: Vec<TrackDetail>,
+}
+
+/// A [`Book`] plus its resolved `media_file_id` (`LeafRef::Book(book.id)`);
+/// see [`EpisodeDetail`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BookDetail {
+    pub book: Book,
+    pub media_file_id: Option<Uuid>,
 }
 
 /// The kind-specific "full tree" hanging off a [`Work`] in
@@ -115,7 +142,7 @@ pub enum WorkChildren {
     Movie,
     Series(Vec<SeasonDetail>),
     Artist(Vec<AlbumDetail>),
-    Author(Vec<Book>),
+    Author(Vec<BookDetail>),
 }
 
 /// [`CatalogService::get_by_id`]'s result: the `Work` aggregate root plus
@@ -127,6 +154,12 @@ pub enum WorkChildren {
 pub struct WorkDetail {
     pub work: Work,
     pub children: WorkChildren,
+    /// The resolved `MediaFile` id for this work's own leaf
+    /// (`LeafRef::Work`) -- only ever populated for a `WorkKind::Movie`
+    /// work, since that's the only kind whose file *is* the work itself
+    /// rather than one of its children (see [`streamarr_model::media::LeafRef`]).
+    /// `None` for every other kind, and for a movie with no file synced yet.
+    pub media_file_id: Option<Uuid>,
 }
 
 /// Upper bound on how many rows [`CatalogService::browse`]/`search` scan
@@ -170,6 +203,13 @@ fn work_detail_cache_key(id: Uuid) -> String {
 /// `streamarr-arr-sync` exists) rather than the primary invalidation path.
 pub struct CatalogService {
     work_repo: Arc<dyn WorkRepo>,
+    /// Resolves each playable leaf's `media_file_id` in
+    /// [`CatalogService::get_by_id`] (`MediaFileRepo::find_by_leaf`) — kept
+    /// distinct from `work_repo` the same way `streamarr-db` keeps
+    /// `MediaFileRepo` distinct from `WorkRepo` (see that trait's doc
+    /// comment): a `MediaFile` is leaf-level, not part of the `Work`
+    /// aggregate.
+    media_file_repo: Arc<dyn MediaFileRepo>,
     cache: Arc<dyn CacheAndPubSub>,
     /// Backs only the season/episode/album/track/book "full tree" lookups
     /// in [`CatalogService::get_by_id`] — every `Work` row itself is always
@@ -179,9 +219,15 @@ pub struct CatalogService {
 }
 
 impl CatalogService {
-    pub fn new(work_repo: Arc<dyn WorkRepo>, cache: Arc<dyn CacheAndPubSub>, pool: DbPool) -> Self {
+    pub fn new(
+        work_repo: Arc<dyn WorkRepo>,
+        media_file_repo: Arc<dyn MediaFileRepo>,
+        cache: Arc<dyn CacheAndPubSub>,
+        pool: DbPool,
+    ) -> Self {
         Self {
             work_repo,
+            media_file_repo,
             cache,
             pool,
         }
@@ -328,6 +374,14 @@ impl CatalogService {
             Err(other) => return Err(CatalogError::Db(other)),
         };
 
+        // Only a movie's file points straight at the `Work` itself
+        // (`LeafRef::Work`) -- every other kind's playable leaves are its
+        // children, resolved individually below.
+        let media_file_id = match work.kind {
+            WorkKind::Movie => self.media_file_id_for_leaf(work.id, LeafRef::Work).await?,
+            _ => None,
+        };
+
         let children = match work.kind {
             WorkKind::Movie => WorkChildren::Movie,
             WorkKind::Series => WorkChildren::Series(self.seasons_for_series(work.id).await?),
@@ -335,7 +389,11 @@ impl CatalogService {
             WorkKind::Author => WorkChildren::Author(self.books_for_author(work.id).await?),
         };
 
-        let detail = WorkDetail { work, children };
+        let detail = WorkDetail {
+            work,
+            children,
+            media_file_id,
+        };
 
         if let Ok(bytes) = serde_json::to_vec(&detail) {
             self.cache
@@ -344,6 +402,21 @@ impl CatalogService {
         }
 
         Ok(detail)
+    }
+
+    /// Resolves the `MediaFile` id for one leaf via
+    /// `MediaFileRepo::find_by_leaf`, `None` when no file has synced for it
+    /// yet.
+    async fn media_file_id_for_leaf(
+        &self,
+        work_id: Uuid,
+        leaf_ref: LeafRef,
+    ) -> Result<Option<Uuid>, CatalogError> {
+        Ok(self
+            .media_file_repo
+            .find_by_leaf(work_id, leaf_ref)
+            .await?
+            .map(|f| f.id))
     }
 
     async fn seasons_for_series(
@@ -372,13 +445,17 @@ impl CatalogService {
                     &row.try_get::<String, _>("availability")?,
                 )?,
             };
-            let episodes = self.episodes_for_season(id).await?;
+            let episodes = self.episodes_for_season(series_work_id, id).await?;
             seasons.push(SeasonDetail { season, episodes });
         }
         Ok(seasons)
     }
 
-    async fn episodes_for_season(&self, season_id: Uuid) -> Result<Vec<Episode>, CatalogError> {
+    async fn episodes_for_season(
+        &self,
+        series_work_id: Uuid,
+        season_id: Uuid,
+    ) -> Result<Vec<EpisodeDetail>, CatalogError> {
         let rows = sqlx::query(
             "SELECT id, episode_number, title, overview, air_date, runtime_minutes, monitored, availability \
              FROM episodes WHERE season_id = ? ORDER BY episode_number ASC",
@@ -393,8 +470,9 @@ impl CatalogService {
                 Some(raw) => Some(codec::parse_date(&raw)?),
                 None => None,
             };
-            episodes.push(Episode {
-                id: codec::parse_uuid(&row.try_get::<String, _>("id")?)?,
+            let id = codec::parse_uuid(&row.try_get::<String, _>("id")?)?;
+            let episode = Episode {
+                id,
                 season_id,
                 episode_number: row.try_get::<i64, _>("episode_number")? as i32,
                 title: row.try_get("title")?,
@@ -407,6 +485,13 @@ impl CatalogService {
                 availability: codec::availability_from_str(
                     &row.try_get::<String, _>("availability")?,
                 )?,
+            };
+            let media_file_id = self
+                .media_file_id_for_leaf(series_work_id, LeafRef::Episode(id))
+                .await?;
+            episodes.push(EpisodeDetail {
+                episode,
+                media_file_id,
             });
         }
         Ok(episodes)
@@ -442,13 +527,17 @@ impl CatalogService {
                     &row.try_get::<String, _>("availability")?,
                 )?,
             };
-            let tracks = self.tracks_for_album(id).await?;
+            let tracks = self.tracks_for_album(artist_work_id, id).await?;
             albums.push(AlbumDetail { album, tracks });
         }
         Ok(albums)
     }
 
-    async fn tracks_for_album(&self, album_id: Uuid) -> Result<Vec<Track>, CatalogError> {
+    async fn tracks_for_album(
+        &self,
+        artist_work_id: Uuid,
+        album_id: Uuid,
+    ) -> Result<Vec<TrackDetail>, CatalogError> {
         let rows = sqlx::query(
             "SELECT id, disc_number, track_number, title, duration_seconds, availability \
              FROM tracks WHERE album_id = ? ORDER BY disc_number ASC, track_number ASC",
@@ -459,8 +548,9 @@ impl CatalogService {
 
         let mut tracks = Vec::with_capacity(rows.len());
         for row in rows {
-            tracks.push(Track {
-                id: codec::parse_uuid(&row.try_get::<String, _>("id")?)?,
+            let id = codec::parse_uuid(&row.try_get::<String, _>("id")?)?;
+            let track = Track {
+                id,
                 album_id,
                 disc_number: row.try_get::<i64, _>("disc_number")? as u32,
                 track_number: row.try_get::<i64, _>("track_number")? as u32,
@@ -471,12 +561,22 @@ impl CatalogService {
                 availability: codec::availability_from_str(
                     &row.try_get::<String, _>("availability")?,
                 )?,
+            };
+            let media_file_id = self
+                .media_file_id_for_leaf(artist_work_id, LeafRef::Track(id))
+                .await?;
+            tracks.push(TrackDetail {
+                track,
+                media_file_id,
             });
         }
         Ok(tracks)
     }
 
-    async fn books_for_author(&self, author_work_id: Uuid) -> Result<Vec<Book>, CatalogError> {
+    async fn books_for_author(
+        &self,
+        author_work_id: Uuid,
+    ) -> Result<Vec<BookDetail>, CatalogError> {
         let rows = sqlx::query(
             "SELECT id, title, isbn, release_date, series_name, series_position, monitored, availability \
              FROM books WHERE author_work_id = ? ORDER BY release_date ASC",
@@ -487,12 +587,13 @@ impl CatalogService {
 
         let mut books = Vec::with_capacity(rows.len());
         for row in rows {
+            let id = codec::parse_uuid(&row.try_get::<String, _>("id")?)?;
             let release_date = match row.try_get::<Option<String>, _>("release_date")? {
                 Some(raw) => Some(codec::parse_date(&raw)?),
                 None => None,
             };
-            books.push(Book {
-                id: codec::parse_uuid(&row.try_get::<String, _>("id")?)?,
+            let book = Book {
+                id,
                 author_work_id,
                 title: row.try_get("title")?,
                 isbn: row.try_get("isbn")?,
@@ -505,6 +606,13 @@ impl CatalogService {
                 availability: codec::availability_from_str(
                     &row.try_get::<String, _>("availability")?,
                 )?,
+            };
+            let media_file_id = self
+                .media_file_id_for_leaf(author_work_id, LeafRef::Book(id))
+                .await?;
+            books.push(BookDetail {
+                book,
+                media_file_id,
             });
         }
         Ok(books)
@@ -543,9 +651,11 @@ mod tests {
 
     use async_trait::async_trait;
     use chrono::{Duration as ChronoDuration, Utc};
+    use std::path::PathBuf;
     use streamarr_cache::InMemory;
+    use streamarr_db::repo::SqlxMediaFileRepo;
     use streamarr_model::{
-        Availability, ExternalProvider, ExternalRef, ImageAsset, ImageKind, WorkKind,
+        Availability, ExternalProvider, ExternalRef, ImageAsset, ImageKind, MediaFile, WorkKind,
     };
 
     use super::*;
@@ -796,8 +906,38 @@ mod tests {
         Arc::new(TestWorkRepo::new(pool))
     }
 
+    fn media_file_repo(pool: DbPool) -> Arc<dyn MediaFileRepo> {
+        Arc::new(SqlxMediaFileRepo::new(pool))
+    }
+
     fn service(pool: DbPool, repo: Arc<dyn WorkRepo>) -> CatalogService {
-        CatalogService::new(repo, Arc::new(InMemory::new()), pool)
+        CatalogService::new(
+            repo,
+            media_file_repo(pool.clone()),
+            Arc::new(InMemory::new()),
+            pool,
+        )
+    }
+
+    /// Inserts a real `media_files` row (via the real production
+    /// `SqlxMediaFileRepo`, not a fake) so a `get_by_id` test can assert
+    /// `media_file_id` actually resolves once a file has "synced".
+    async fn seed_media_file(pool: &DbPool, work_id: Uuid, leaf_ref: LeafRef) -> Uuid {
+        let repo = media_file_repo(pool.clone());
+        let file = MediaFile {
+            id: Uuid::new_v4(),
+            work_id,
+            leaf_ref,
+            path: PathBuf::from("/media/file.mkv"),
+            container: "mkv".to_string(),
+            codec: "h264".to_string(),
+            bitrate: Some(4_000_000),
+            size_bytes: 123_456,
+            source_instance_id: Uuid::new_v4(),
+            source_file_id: Some("1".to_string()),
+        };
+        repo.create(&file).await.expect("seed media file");
+        file.id
     }
 
     fn movie(title: &str, sort_title: &str, genres: &[&str], added_days_ago: i64) -> Work {
@@ -1109,13 +1249,69 @@ mod tests {
         let detail = svc.get_by_id(show_id).await.unwrap();
 
         assert_eq!(detail.work.id, show_id);
+        // A series' own `media_file_id` is always `None` -- its playable
+        // leaves are its episodes, not the `Work` itself.
+        assert_eq!(detail.media_file_id, None);
         match detail.children {
             WorkChildren::Series(seasons) => {
                 assert_eq!(seasons.len(), 1);
                 assert_eq!(seasons[0].season.season_number, 1);
                 assert_eq!(seasons[0].episodes.len(), 2);
-                assert_eq!(seasons[0].episodes[0].title.as_deref(), Some("Pilot"));
-                assert_eq!(seasons[0].episodes[1].title.as_deref(), Some("Episode Two"));
+                assert_eq!(
+                    seasons[0].episodes[0].episode.title.as_deref(),
+                    Some("Pilot")
+                );
+                assert_eq!(
+                    seasons[0].episodes[1].episode.title.as_deref(),
+                    Some("Episode Two")
+                );
+                // Neither episode has a synced `MediaFile` yet.
+                assert_eq!(seasons[0].episodes[0].media_file_id, None);
+                assert_eq!(seasons[0].episodes[1].media_file_id, None);
+            }
+            other => panic!("expected WorkChildren::Series, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn get_by_id_resolves_episode_media_file_id_once_synced() {
+        let pool = test_pool().await;
+        let repo = work_repo(pool.clone());
+        let show = series("Synced Show", "Synced Show");
+        let show_id = show.id;
+        repo.upsert(&show).await.unwrap();
+
+        let season_id = insert_season(&pool, show_id, 1, "Season One").await;
+        insert_episode(&pool, season_id, 1, "Pilot").await;
+        insert_episode(&pool, season_id, 2, "Episode Two").await;
+
+        let episode_row =
+            sqlx::query("SELECT id FROM episodes WHERE season_id = ? AND episode_number = 1")
+                .bind(season_id.to_string())
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let episode_id =
+            codec::parse_uuid(&episode_row.try_get::<String, _>("id").unwrap()).unwrap();
+        let media_file_id = seed_media_file(&pool, show_id, LeafRef::Episode(episode_id)).await;
+
+        let svc = service(pool, repo);
+        let detail = svc.get_by_id(show_id).await.unwrap();
+
+        match detail.children {
+            WorkChildren::Series(seasons) => {
+                let pilot = seasons[0]
+                    .episodes
+                    .iter()
+                    .find(|e| e.episode.id == episode_id)
+                    .expect("pilot episode present");
+                assert_eq!(pilot.media_file_id, Some(media_file_id));
+                let episode_two = seasons[0]
+                    .episodes
+                    .iter()
+                    .find(|e| e.episode.id != episode_id)
+                    .expect("second episode present");
+                assert_eq!(episode_two.media_file_id, None);
             }
             other => panic!("expected WorkChildren::Series, got {other:?}"),
         }
@@ -1139,11 +1335,13 @@ mod tests {
         let svc = service(pool, repo);
         let detail = svc.get_by_id(artist_id).await.unwrap();
 
+        assert_eq!(detail.media_file_id, None);
         match detail.children {
             WorkChildren::Artist(albums) => {
                 assert_eq!(albums.len(), 1);
                 assert_eq!(albums[0].tracks.len(), 2);
-                assert_eq!(albums[0].tracks[0].track_number, 1);
+                assert_eq!(albums[0].tracks[0].track.track_number, 1);
+                assert_eq!(albums[0].tracks[0].media_file_id, None);
             }
             other => panic!("expected WorkChildren::Artist, got {other:?}"),
         }
@@ -1166,7 +1364,10 @@ mod tests {
         let detail = svc.get_by_id(author_id).await.unwrap();
 
         match detail.children {
-            WorkChildren::Author(books) => assert_eq!(books.len(), 2),
+            WorkChildren::Author(books) => {
+                assert_eq!(books.len(), 2);
+                assert!(books.iter().all(|b| b.media_file_id.is_none()));
+            }
             other => panic!("expected WorkChildren::Author, got {other:?}"),
         }
     }
@@ -1182,6 +1383,23 @@ mod tests {
         let svc = service(pool, repo);
         let detail = svc.get_by_id(film_id).await.unwrap();
         assert!(matches!(detail.children, WorkChildren::Movie));
+        assert_eq!(detail.media_file_id, None);
+    }
+
+    #[tokio::test]
+    async fn get_by_id_resolves_movie_media_file_id_once_synced() {
+        let pool = test_pool().await;
+        let repo = work_repo(pool.clone());
+        let film = movie("Synced Movie", "Synced Movie", &[], 0);
+        let film_id = film.id;
+        repo.upsert(&film).await.unwrap();
+
+        let media_file_id = seed_media_file(&pool, film_id, LeafRef::Work).await;
+
+        let svc = service(pool, repo);
+        let detail = svc.get_by_id(film_id).await.unwrap();
+        assert!(matches!(detail.children, WorkChildren::Movie));
+        assert_eq!(detail.media_file_id, Some(media_file_id));
     }
 
     #[tokio::test]
@@ -1237,7 +1455,7 @@ mod real_work_repo_integration {
 
     use chrono::Utc;
     use streamarr_cache::InMemory;
-    use streamarr_db::repo::SqlxWorkRepo;
+    use streamarr_db::repo::{SqlxMediaFileRepo, SqlxWorkRepo};
     use streamarr_model::{Availability, ExternalProvider, ExternalRef, WorkKind};
     use uuid::Uuid;
 
@@ -1280,7 +1498,9 @@ mod real_work_repo_integration {
             .await
             .expect("upsert via real SqlxWorkRepo");
 
-        let svc = CatalogService::new(repo, Arc::new(InMemory::new()), pool);
+        let media_file_repo: Arc<dyn MediaFileRepo> =
+            Arc::new(SqlxMediaFileRepo::new(pool.clone()));
+        let svc = CatalogService::new(repo, media_file_repo, Arc::new(InMemory::new()), pool);
 
         let page = svc.browse(BrowseQuery::default()).await.expect("browse");
         assert_eq!(page.items.len(), 1);

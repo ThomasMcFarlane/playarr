@@ -4,15 +4,16 @@
 //! `streamarr-catalog`/`streamarr-requests`/etc. stay testable behind
 //! mocks and don't need to know which of SQLite/Postgres backs them.
 //!
-//! The `Sqlx*` implementations exist to show the intended wiring (which
-//! pool, which query shape) but their method bodies are `unimplemented!()`
-//! for now — filling them in is downstream work, not part of getting the
-//! trait shapes right.
+//! Each trait has a real `Sqlx*` implementation backed by [`crate::DbPool`]
+//! (`sqlx::AnyPool`), with per-backend (SQLite/Postgres) SQL text selected
+//! at construction time via `Backend::detect` — see any `Sqlx*Repo::new`.
 
 mod device;
+mod media_file;
 mod rendition;
 mod work;
 
 pub use device::{DeviceRepo, SqlxDeviceRepo};
+pub use media_file::{MediaFileRepo, SqlxMediaFileRepo};
 pub use rendition::{RenditionRepo, SqlxRenditionRepo};
 pub use work::{SqlxWorkRepo, WorkRepo};

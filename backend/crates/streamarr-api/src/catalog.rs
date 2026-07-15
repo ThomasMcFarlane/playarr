@@ -58,18 +58,46 @@ pub struct CatalogPageSchema {
     pub total: Option<i64>,
 }
 
+/// Doc-only mirror of `streamarr_catalog::EpisodeDetail` -- the resolved
+/// `MediaFile` id (via `MediaFileRepo::find_by_leaf`) that plays this
+/// episode, `None` when no file has synced for it yet.
+#[derive(Serialize, ToSchema)]
+#[allow(dead_code)]
+pub struct EpisodeDetailSchema {
+    pub episode: Episode,
+    pub media_file_id: Option<Uuid>,
+}
+
 #[derive(Serialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SeasonDetailSchema {
     pub season: Season,
-    pub episodes: Vec<Episode>,
+    pub episodes: Vec<EpisodeDetailSchema>,
+}
+
+/// Doc-only mirror of `streamarr_catalog::TrackDetail`; see
+/// [`EpisodeDetailSchema`].
+#[derive(Serialize, ToSchema)]
+#[allow(dead_code)]
+pub struct TrackDetailSchema {
+    pub track: Track,
+    pub media_file_id: Option<Uuid>,
 }
 
 #[derive(Serialize, ToSchema)]
 #[allow(dead_code)]
 pub struct AlbumDetailSchema {
     pub album: Album,
-    pub tracks: Vec<Track>,
+    pub tracks: Vec<TrackDetailSchema>,
+}
+
+/// Doc-only mirror of `streamarr_catalog::BookDetail`; see
+/// [`EpisodeDetailSchema`].
+#[derive(Serialize, ToSchema)]
+#[allow(dead_code)]
+pub struct BookDetailSchema {
+    pub book: Book,
+    pub media_file_id: Option<Uuid>,
 }
 
 /// Doc-only mirror of `streamarr_catalog::WorkChildren`; see
@@ -80,7 +108,7 @@ pub enum WorkChildrenSchema {
     Movie,
     Series(Vec<SeasonDetailSchema>),
     Artist(Vec<AlbumDetailSchema>),
-    Author(Vec<Book>),
+    Author(Vec<BookDetailSchema>),
 }
 
 #[derive(Serialize, ToSchema)]
@@ -88,6 +116,10 @@ pub enum WorkChildrenSchema {
 pub struct WorkDetailSchema {
     pub work: Work,
     pub children: WorkChildrenSchema,
+    /// The resolved `MediaFile` id for a movie's own leaf (`LeafRef::Work`);
+    /// always `None` for series/artist/author works, whose playable leaves
+    /// are their children instead -- see `streamarr_catalog::WorkDetail`.
+    pub media_file_id: Option<Uuid>,
 }
 
 #[utoipa::path(

@@ -153,9 +153,7 @@ async fn connect_and_migrate(config: &Config) -> anyhow::Result<DbPool> {
 /// `streamarr_config::DeploymentTier`'s own three-way split: in-process for
 /// single-node, Postgres `LISTEN`/`NOTIFY` for multi-node-without-Redis,
 /// real Redis for the fully horizontally-scaled tier.
-async fn build_cache(
-    config: &Config,
-) -> anyhow::Result<Arc<dyn streamarr_cache::CacheAndPubSub>> {
+async fn build_cache(config: &Config) -> anyhow::Result<Arc<dyn streamarr_cache::CacheAndPubSub>> {
     match config.deployment_tier {
         DeploymentTier::SingleNode => Ok(Arc::new(streamarr_cache::InMemory::new())),
         DeploymentTier::MultiNodePostgresRedis => {
@@ -184,9 +182,9 @@ async fn build_coordinator(
     config: &Config,
 ) -> anyhow::Result<Arc<dyn streamarr_coordination::ClusterCoordinator>> {
     match config.deployment_tier {
-        DeploymentTier::SingleNode => {
-            Ok(Arc::new(streamarr_coordination::SingleNodeCoordinator::new()))
-        }
+        DeploymentTier::SingleNode => Ok(Arc::new(
+            streamarr_coordination::SingleNodeCoordinator::new(),
+        )),
         DeploymentTier::MultiNodePostgres | DeploymentTier::MultiNodePostgresRedis => {
             let pg_pool = sqlx::postgres::PgPoolOptions::new()
                 .connect(&config.database_url)
@@ -241,15 +239,16 @@ async fn boot_api(
     active_sessions: streamarr_transcode::ActiveSessionCounter,
 ) -> anyhow::Result<()> {
     use streamarr_api::{
-        build_router, AppState, ClientCompatibilityTable, InMemoryMediaFileLookup, ReadinessState,
-        VersionGateLayer, VersionState,
+        build_router, AppState, ClientCompatibilityTable, ReadinessState,
+        RepoBackedMediaFileLookup, VersionGateLayer, VersionState,
     };
     use streamarr_auth::{
-        DashMapDeviceFlowHandler, DeviceFlowConfig, DeviceFlowHandler, InMemoryDeviceAuthorizationStore,
-        InMemoryRefreshTokenStore, JwtIssuer, RefreshTokenService, RefreshTokenStore,
+        DashMapDeviceFlowHandler, DeviceFlowConfig, DeviceFlowHandler,
+        InMemoryDeviceAuthorizationStore, InMemoryRefreshTokenStore, JwtIssuer,
+        RefreshTokenService, RefreshTokenStore,
     };
-    use streamarr_db::repo::{SqlxDeviceRepo, SqlxRenditionRepo, SqlxWorkRepo};
-    use streamarr_db::{DeviceRepo, RenditionRepo, WorkRepo};
+    use streamarr_db::repo::{SqlxDeviceRepo, SqlxMediaFileRepo, SqlxRenditionRepo, SqlxWorkRepo};
+    use streamarr_db::{DeviceRepo, MediaFileRepo, RenditionRepo, WorkRepo};
     use streamarr_model::VersionEnvelope;
     use streamarr_requests::{InMemoryRequestRepo, RequestRepo, RequestService};
 
@@ -274,9 +273,14 @@ async fn boot_api(
     let work_repo: Arc<dyn WorkRepo> = Arc::new(SqlxWorkRepo::new(pool.clone()));
     let device_repo: Arc<dyn DeviceRepo> = Arc::new(SqlxDeviceRepo::new(pool.clone()));
     let rendition_repo: Arc<dyn RenditionRepo> = Arc::new(SqlxRenditionRepo::new(pool.clone()));
+    let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(SqlxMediaFileRepo::new(pool.clone()));
+
+    let media_files: Arc<dyn streamarr_api::MediaFileLookup> =
+        Arc::new(RepoBackedMediaFileLookup::new(media_file_repo.clone()));
 
     let catalog = Arc::new(streamarr_catalog::CatalogService::new(
         work_repo,
+        media_file_repo,
         cache.clone(),
         pool,
     ));
@@ -324,8 +328,6 @@ async fn boot_api(
     let (webhook_tx, _webhook_rx) = tokio::sync::mpsc::channel(256);
     let webhook = Arc::new(streamarr_arr_sync::WebhookReceiver::new(webhook_tx));
 
-    let media_files = Arc::new(InMemoryMediaFileLookup::new());
-
     let state = AppState {
         readiness: readiness.clone(),
         version: VersionState {
@@ -369,13 +371,14 @@ async fn boot_worker(
     active_sessions: streamarr_transcode::ActiveSessionCounter,
 ) -> anyhow::Result<Vec<tokio::task::JoinHandle<()>>> {
     use streamarr_arr_sync::{ArrClient, ReconciliationPoller};
-    use streamarr_db::repo::{SqlxRenditionRepo, SqlxWorkRepo};
-    use streamarr_db::{RenditionRepo, WorkRepo};
+    use streamarr_db::repo::{SqlxMediaFileRepo, SqlxRenditionRepo, SqlxWorkRepo};
+    use streamarr_db::{MediaFileRepo, RenditionRepo, WorkRepo};
     use streamarr_telemetry::correlation::spawn::spawn_traced;
 
     let mut handles = Vec::new();
 
     let work_repo: Arc<dyn WorkRepo> = Arc::new(SqlxWorkRepo::new(pool.clone()));
+    let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(SqlxMediaFileRepo::new(pool.clone()));
     let configured_instances = source_instances.all();
     if configured_instances.is_empty() {
         tracing::info!(
@@ -397,6 +400,8 @@ async fn boot_worker(
             arr_client,
             Duration::from_secs(300),
             work_repo.clone(),
+            media_file_repo.clone(),
+            pool.clone(),
             coordinator.clone(),
             refetch_rx,
         );
@@ -429,7 +434,8 @@ async fn boot_worker(
             active_sessions,
             events_rx,
             streamarr_transcode::TdarrDispatcherConfig {
-                tdarr_db_id: std::env::var("TDARR_DB_ID").unwrap_or_else(|_| "streamarr".to_string()),
+                tdarr_db_id: std::env::var("TDARR_DB_ID")
+                    .unwrap_or_else(|_| "streamarr".to_string()),
                 default_profile: "h264-720p-4mbps".to_string(),
                 worker_process: "transcodecpu".to_string(),
                 default_worker_limit: 2,
