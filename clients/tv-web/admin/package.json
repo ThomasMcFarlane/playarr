@@ -1,0 +1,29 @@
+{
+  "name": "@streamarr-tv/admin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Streamarr's own admin web UI: Vite + React + TypeScript. Source-instance registration and user management -- the operator-facing control plane for the Streamarr server itself, co-hosted by streamarr-bin at its own origin. Distinct from Playarr Web (clients/tv-web/web), which is the consumer streaming client that connects to Streamarr.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "preview": "vite preview",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@streamarr-tv/api-client": "workspace:*",
+    "@streamarr-tv/device-auth": "workspace:*",
+    "@streamarr-tv/domain": "workspace:*",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

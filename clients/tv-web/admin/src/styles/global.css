@@ -1,0 +1,1802 @@
+/*
+ * Global stylesheet for the standalone Web app.
+ *
+ * Corrected to match the real, verified Sonarr/Radarr/Lidarr ("*arr")
+ * design language (Styles/Themes/dark.js + Styles/Variables/fonts.js --
+ * byte-identical between Sonarr and Radarr). Streamarr wraps that suite, so
+ * this app should read as a member of the same family: a real dark base
+ * (#202020/#2a2a2a/#333, not near-black), a persistent left sidebar instead
+ * of a top nav bar, Roboto at 14px body / 1.4286 line-height, and light
+ * (300-weight) large display type as the signature "big text stays thin"
+ * treatment.
+ *
+ * Values here mirror @streamarr-tv/design-tokens (see that package's own
+ * doc comment: there is no build-time import yet -- CSS custom properties
+ * are hand-kept in sync with the TS token values until a real
+ * tokens.json -> Style Dictionary pipeline lands). Kept as plain CSS custom
+ * properties rather than a runtime CSS-in-JS dependency so every page can
+ * use them from plain <style> attributes and plain class names alike.
+ */
+
+:root {
+  /* Backgrounds -- 3-tier elevation, matching the real theme exactly. */
+  --color-bg-base: #202020; /* page/base */
+  --color-bg-chrome: #2a2a2a; /* sidebar, top header, modals, popovers */
+  --color-bg-elevated: #2a2a2a; /* alias of chrome, kept for back-compat */
+  --color-bg-raised: #333333; /* cards, inputs, dropdown/menu panels */
+  --color-bg-input-disabled: #222222; /* read-only / disabled inputs */
+  --color-bg-overlay: rgba(0, 0, 0, 0.7); /* flat scrim, NOT a gradient */
+  /* A 4th elevation shade, confirmed live on Sonarr's real
+     `.PageToolbar-toolbar` (`rgb(38,38,38)`) -- sits between base and
+     chrome. Toolbar rows only (the View/Sort/Filter row under the page
+     header on Library) -- not a general-purpose token. */
+  --color-bg-toolbar: #262626;
+  /* Confirmed live: Sonarr's `--toolbarMenuItemHoverBackgroundColor`. */
+  --color-bg-menu-item-hover: #414141;
+
+  --color-text-primary: #cccccc;
+  --color-text-secondary: #999999; /* muted */
+  --color-text-disabled: #909293;
+  --color-text-help: #909293; /* help/hint text under fields */
+  --color-text-inverse: #ffffff; /* headings/labels on a colored surface */
+
+  /* Streamarr's own red identity -- now the app's PRIMARY brand/action
+     color: buttons, active states, checkboxes, focus rings, ::selection.
+     This is a deliberate departure from the real Sonarr/Radarr/Lidarr
+     theme, where each app's identity color stays nav-only and a shared
+     blue does all primary-action work -- see DESIGN.md Sec 3.2. Streamarr
+     and Playarr are products in their own right, not a skin of someone
+     else's shared *arr theme, so this one red now carries the brand
+     everywhere, not just the sidebar. */
+  --color-accent: #e5484d;
+  --color-accent-hover: #ef6469;
+  --color-accent-pressed: #c93a3e;
+
+  /* Deprecated alias. --color-brand used to be the *arr-shared blue
+     (#5d9cec) that did all primary-action work; that role now belongs to
+     --color-accent above. Kept pointing at --color-accent for one release
+     so any straggling var(--color-brand) reference doesn't silently go
+     stale, then delete both this variable and any remaining references. */
+  --color-brand: var(--color-accent);
+  --color-brand-hover: var(--color-accent-hover);
+  --color-brand-pressed: var(--color-accent-pressed);
+
+  --color-border: #858585; /* low visual weight for dividers/card borders */
+
+  /* Status/semantic. Success/warning/queue are still the shared *arr
+     values; --color-danger and --color-info are called out individually
+     below since both needed a deliberate decision once accent became the
+     primary color -- see DESIGN.md Sec 3.3/3.4. */
+  --color-success: #27c24c; /* success button/action bg */
+  --color-success-label: #00853d; /* success text/label */
+  --color-warning: #ffa500;
+  /* Pushed from the *arr-standard #f05050 to a darker, cooler #dc2626
+     (Tailwind red-600 territory) now that --color-accent's similar red is
+     the dominant brand color everywhere. #e5484d and the old #f05050 were
+     only ~7% apart in lightness and near-identical in hue, which read fine
+     when accent was confined to a 3px nav border but stops reading as
+     "stop"/"destructive" once red is the whole UI's primary color. See
+     DESIGN.md Sec 3.3. */
+  --color-danger: #dc2626;
+  /* Deliberately kept as its own standalone blue, no longer aliased to the
+     (now-red) primary. --color-info is a semantic color, not a brand
+     color, and staying blue keeps info badges/help icons legible and
+     distinct against an otherwise red-and-neutral UI. See DESIGN.md
+     Sec 3.4. */
+  --color-info: #5d9cec;
+  --color-queue: #7a43b6; /* active-download/queue/progress bars only */
+
+  /* Focus ring/glow are now re-based on the red primary instead of the old
+     shared blue. Input-focus-border/glow keep the real theme's "focus
+     border is a lighter tint of primary, not primary itself" pattern,
+     just re-derived from --color-accent-hover instead of a separate blue. */
+  --color-focus-ring: var(--color-accent);
+  --color-input-focus-border: var(--color-accent-hover);
+  --color-focus-glow: rgba(229, 72, 77, 0.55); /* --color-accent; alpha nudged down since red glows read "hotter" than blue at equal alpha */
+  --color-focus-glow-error: rgba(220, 38, 38, 0.6); /* --color-danger */
+  --color-focus-glow-warning: rgba(255, 165, 0, 0.6);
+
+  --shadow-color: #111111;
+  --card-shadow: 0 0 10px 1px var(--shadow-color);
+
+  /* Precise radii from the real theme -- deliberately NOT one uniform value. */
+  --radius-card: 3px;
+  --radius-button: 4px;
+  --radius-input: 4px;
+  --radius-badge: 2px;
+  --radius-pill: 9999px;
+  --radius-modal: 6px;
+  /* Generic aliases kept for back-compat with any existing var(--radius-*) usage. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --font-sans: Roboto, "open sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "Ubuntu Mono", Menlo, Monaco, Consolas, "Courier New", monospace;
+
+  --font-size-micro: 11px;
+  --font-size-caption: 12px;
+  --font-size-body: 14px;
+  --font-size-intermediate: 15px;
+  --font-size-large: 16px;
+  --line-height-base: 1.428571429; /* 20/14, the real theme's ratio */
+
+  --sidebar-width: 210px;
+  --header-height: 60px;
+  --content-padding: 20px;
+  --content-padding-sm: 10px;
+
+  --alpha-rail-width: 30px; /* matches the Sonarr-measured PageJumpBar width exactly */
+  --poster-status-strip-height: 5px; /* matches the Radarr-measured status strip height exactly */
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-base);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+/* ==========================================================================
+   App shell -- persistent left sidebar + content, side by side. This is the
+   single most recognizable "yep that's the *arr look" signature: replaces
+   the old top-nav-bar shell.
+   ========================================================================== */
+
+.app-shell {
+  /* `height: 100%` (bounded, inherited from the `html, body, #root {
+     height: 100% }` chain above), not `min-height: 100vh` -- `min-height`
+     lets this grow taller than the viewport to fit tall content (e.g. a
+     long Library table), which then scrolls the whole page including the
+     sidebar/header instead of just the content area. The real *arr apps
+     keep their sidebar and header fixed and only scroll the content pane;
+     `overflow: hidden` here plus `.app-main`'s own `overflow-y: auto`
+     below is what actually reproduces that. */
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: row;
+  background: var(--color-bg-base);
+}
+
+/* Fixed-width sidebar. Its own header zone (.sidebar-header) holds the logo
+   in a zone matching the sidebar's width, sitting flush against
+   .app-header on its right so the two together read as one continuous top
+   band across the app. */
+.sidebar {
+  flex: 0 0 var(--sidebar-width);
+  width: var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-chrome);
+  border-right: 1px solid rgba(133, 133, 133, 0.15);
+}
+
+.sidebar-header {
+  flex: 0 0 var(--header-height);
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+  padding: 0 1.25rem;
+  border-bottom: 1px solid rgba(133, 133, 133, 0.15);
+}
+
+.sidebar-nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.75rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 1.25rem;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-body);
+  font-weight: 500;
+  border-left: 3px solid transparent;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.sidebar-link-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-link:hover {
+  color: var(--color-accent);
+}
+
+.sidebar-link.is-active {
+  color: var(--color-accent);
+  background: var(--color-bg-raised);
+  border-left-color: var(--color-accent);
+}
+
+/* Accordion-in-sidebar group (e.g. Settings with children) -- the parent
+   item expands inline rather than opening a flyout. */
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.65rem 1.25rem;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-body);
+  font-weight: 500;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.sidebar-section-toggle:hover {
+  color: var(--color-accent);
+}
+
+.sidebar-section.is-open > .sidebar-section-toggle {
+  color: var(--color-text-primary);
+}
+
+.sidebar-section-items {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-section-items .sidebar-link {
+  padding-left: 3rem;
+  font-size: var(--font-size-caption);
+}
+
+/* Small colored numeric count badge slot for nav items with live status to
+   report (e.g. an "Activity"/"System" item). Streamarr has no live-status
+   feed yet -- this class exists so the sidebar visually supports the slot,
+   it's fine for it to go unused for now. */
+.sidebar-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 0.35rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-info);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  margin-left: auto;
+}
+
+.sidebar-badge-warning {
+  background: var(--color-warning);
+}
+
+.sidebar-badge-error {
+  background: var(--color-danger);
+}
+
+/* Content column: header (breadcrumb/page title) stacked over main. */
+.app-content {
+  flex: 1;
+  min-width: 0;
+  /* Flex items default to `min-height: auto`, which lets them grow to fit
+     tall content instead of respecting the parent's bounded height --
+     without this, `.app-main`'s `overflow-y: auto` below never actually
+     triggers. */
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  flex: 0 0 var(--header-height);
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1.5rem;
+  background: var(--color-bg-chrome);
+  border-bottom: 1px solid rgba(133, 133, 133, 0.15);
+}
+
+.app-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--color-text-inverse);
+}
+
+.app-logo-icon {
+  width: 2rem;
+  height: 2rem;
+  display: block;
+  flex: 0 0 auto;
+  border-radius: 0.48rem;
+  box-shadow: 0 7px 18px rgba(0, 0, 0, 0.24);
+}
+
+.app-logo-accent {
+  color: var(--color-accent);
+}
+
+/* ==========================================================================
+   Top nav (header bar): global search + user menu -- .app-header itself
+   (background/height/border) is defined above, unchanged.
+   ========================================================================== */
+
+.header-search {
+  position: relative;
+}
+
+.header-search-input {
+  min-width: 240px;
+}
+
+.header-search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: var(--color-bg-chrome);
+  border-radius: var(--radius-card);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.header-search-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.5rem 0.85rem;
+  color: var(--color-text-primary);
+  text-align: left;
+}
+
+.header-search-result:hover {
+  background: var(--color-bg-raised);
+}
+
+.header-search-empty {
+  padding: 0.6rem 0.85rem;
+  color: var(--color-text-help);
+  font-size: var(--font-size-caption);
+}
+
+.header-spacer {
+  flex: 1 1 auto;
+}
+
+.header-user-menu {
+  position: relative;
+}
+
+.header-user-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.5rem;
+  color: var(--color-text-primary);
+}
+
+.header-user-avatar {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: var(--font-size-body);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-user-name {
+  font-size: var(--font-size-body);
+  font-weight: 500;
+}
+
+.header-user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  min-width: 200px;
+  background: var(--color-bg-chrome);
+  border-radius: var(--radius-card);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+}
+
+.header-user-dropdown-header {
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid rgba(133, 133, 133, 0.15);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+}
+
+.header-user-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 0.9rem;
+  text-align: left;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-body);
+}
+
+.header-user-dropdown-item:hover {
+  color: var(--color-accent);
+}
+
+/* Fluid, edge-to-edge content area next to the fixed sidebar -- no centered
+   max-width column. */
+.app-main {
+  flex: 1;
+  min-height: 0;
+  padding: var(--content-padding);
+  overflow-y: auto;
+}
+
+@media (max-width: 720px) {
+  .app-main {
+    padding: var(--content-padding-sm);
+  }
+}
+
+/* ==========================================================================
+   Library page -- its own second-nav filter sidebar + poster grid + alpha
+   rail, replacing .app-main's default padding/scroll on this one route
+   only (every other page keeps .app-main untouched). See the redesign
+   spec's §3.1/§3.2 for exactly why this chain never scrolls horizontally:
+   every flex container here sets min-width: 0, and .poster-grid's own
+   auto-fill grid-template-columns (unchanged, defined below) can never be
+   wider than its container.
+   ========================================================================== */
+
+.app-main--library {
+  padding: 0;
+  overflow: hidden;
+}
+
+.library-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* The "second nav row" -- a horizontal toolbar directly under the app
+   header, matching the real Sonarr/Radarr `.PageToolbar-toolbar` exactly
+   (confirmed live: 60px tall, `#262626`, right-aligned View/Sort/Filter-
+   style dropdown menu buttons). This replaced an earlier, wrong first
+   attempt at this same request that used a persistent LEFT sidebar instead
+   -- the user was explicit that "second nav" meant this toolbar row, the
+   same place the real *arr apps put it, not a second sidebar. */
+.library-toolbar {
+  flex: 0 0 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.25rem;
+  background: var(--color-bg-toolbar);
+}
+
+.library-toolbar-menus {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+}
+
+/* Confirmed live against both real apps: a 1px divider, ~40px tall,
+   centered in the 60px toolbar row (Sonarr's `PageToolbarSeparator`). */
+.toolbar-separator {
+  width: 1px;
+  height: 40px;
+  align-self: center;
+  margin: 0 0.75rem;
+  background: rgba(133, 133, 133, 0.3);
+}
+
+.toolbar-menu {
+  position: relative;
+  height: 100%;
+}
+
+/* Icon-over-label, not icon-beside-label -- confirmed live on both real
+   apps' `ToolbarMenuButton`/`PageToolbarButton`. The button's own label
+   stays constant regardless of the active selection (see
+   `LibraryToolbarMenus`' doc comment); selection state shows only via the
+   checkmark inside the open panel. */
+.toolbar-menu-button {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0 0.9rem;
+  min-width: 60px;
+  color: var(--color-text-primary);
+  transition: color 0.15s ease;
+}
+
+.toolbar-menu-button:hover,
+.toolbar-menu-button.is-open {
+  color: var(--color-accent);
+}
+
+.toolbar-menu-button-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toolbar-menu-button-label {
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* Flat, square, no border/shadow -- confirmed live on Sonarr's real
+   `.MenuContent-menuContent` (elevation communicated purely by the flat
+   `--color-bg-raised` fill against the toolbar's darker background, not by
+   any shadow/border treatment). */
+.toolbar-menu-panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  min-width: 200px;
+  background: var(--color-bg-raised);
+}
+
+.toolbar-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.6rem 1.1rem;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.toolbar-menu-item:hover {
+  background: var(--color-bg-menu-item-hover);
+}
+
+.toolbar-menu-item-check {
+  flex: 0 0 14px;
+  color: var(--color-accent);
+  /* Reserves the checkmark's width on every row (not just the active one)
+     so the label column stays aligned -- matches the real app's
+     `visibility: hidden` (not removed) treatment on inactive rows. */
+  visibility: hidden;
+}
+
+.toolbar-menu-item.is-active .toolbar-menu-item-check {
+  visibility: visible;
+}
+
+.library-toolbar-count {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-body);
+}
+
+/* The non-scrolling wrapper -- .poster-grid-scroll is the only scroll
+   container in this subtree, and .alpha-rail sits outside it as a plain
+   flex sibling (position: static), which is the entire trick behind the
+   rail never moving when the grid scrolls. See the redesign spec's §3.2. */
+.library-content-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+.poster-grid-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--content-padding);
+}
+
+.alpha-rail {
+  flex: 0 0 var(--alpha-rail-width);
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--content-padding-sm) 0;
+}
+
+.alpha-rail-item {
+  width: var(--alpha-rail-width);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  text-align: center;
+}
+
+/* Deliberately Streamarr's own hover convention (brighten to accent) --
+   not Sonarr's own dim-on-hover, which the research itself flags as
+   inconsistent with every other interactive element in that app. */
+.alpha-rail-item:hover {
+  color: var(--color-accent);
+}
+
+.alpha-rail-item.is-current {
+  color: var(--color-accent);
+}
+
+/* Superseded by .sidebar-nav / .sidebar-link / .sidebar-link.is-active
+   above, which are now the primary nav. Kept only as a generic link style
+   for any incidental non-sidebar nav-like link (e.g. a breadcrumb). */
+.nav-link {
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius-button);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  font-size: var(--font-size-body);
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.nav-link:hover {
+  color: var(--color-text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.nav-link.is-active {
+  color: var(--color-text-primary);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ==========================================================================
+   Page-level typography
+   ========================================================================== */
+
+/* Fluid full-width block -- content padding lives on .app-main now, so this
+   no longer adds its own padding or a centered max-width column. */
+.page {
+  width: 100%;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--color-text-primary);
+  margin-bottom: 1.5rem;
+}
+
+/* Settings section headers / provider-list headings. */
+.section-title {
+  font-size: 21px;
+  font-weight: 400;
+  color: var(--color-text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.section {
+  margin-bottom: 3rem;
+}
+
+.muted {
+  color: var(--color-text-secondary);
+}
+
+.hint {
+  color: var(--color-text-help);
+  font-size: var(--font-size-caption);
+}
+
+.error-text {
+  color: var(--color-danger);
+}
+
+.success-text {
+  color: var(--color-success-label);
+}
+
+/* ==========================================================================
+   Cards
+   ========================================================================== */
+
+.card {
+  background: var(--color-bg-raised);
+  border: 1px solid rgba(133, 133, 133, 0.3);
+  border-radius: var(--radius-card);
+  padding: 1.5rem;
+  box-shadow: var(--card-shadow);
+}
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--radius-button);
+  border: 1px solid transparent;
+  font-weight: 500;
+  font-size: var(--font-size-body);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.btn-primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #ffffff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--color-accent-pressed);
+  border-color: var(--color-accent-pressed);
+}
+
+/* The real theme's "default" button: #333 bg / #393f45 border. */
+.btn-secondary {
+  background: var(--color-bg-raised);
+  border-color: #393f45;
+  color: var(--color-text-primary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #3c3c3c;
+  border-color: #454b52;
+}
+
+.btn-secondary:active:not(:disabled) {
+  background: #2c2c2c;
+}
+
+/* NEW */
+.btn-success {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: #ffffff;
+}
+
+.btn-success:hover:not(:disabled) {
+  background: #2ecc57;
+  border-color: #2ecc57;
+}
+
+/* NEW */
+.btn-warning {
+  background: #ff902b;
+  border-color: #ff902b;
+  color: #ffffff;
+}
+
+.btn-warning:hover:not(:disabled) {
+  background: #ffa348;
+  border-color: #ffa348;
+}
+
+/* Changed from an outline treatment (transparent bg / red text) to a solid
+   filled danger button, matching every other button kind in the real theme. */
+.btn-danger {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  color: #ffffff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #f36b6b;
+  border-color: #f36b6b;
+}
+
+.btn-ghost {
+  padding: 0.4rem 0.6rem;
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
+.btn-sm {
+  padding: 0.3rem 0.7rem;
+  font-size: var(--font-size-caption);
+}
+
+/* ==========================================================================
+   Forms
+   ========================================================================== */
+
+.input {
+  height: 35px;
+  padding: 0 0.75rem;
+  border-radius: var(--radius-input);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-raised);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+/* Colored glow ring on focus -- box-shadow based, not just a border color
+   change. Input-focus border is --color-accent-hover, a lighter tint of
+   the primary red rather than the primary color itself -- the same "tint,
+   not the color itself" pattern the real theme used with its blue
+   (#66afe9 vs #5d9cec), just re-based on red per DESIGN.md Sec 3.4. */
+.input:focus {
+  outline: none;
+  border-color: var(--color-input-focus-border);
+  box-shadow: 0 0 0 3px var(--color-focus-glow);
+}
+
+.input::placeholder {
+  color: var(--color-text-help);
+}
+
+.input:disabled,
+.input[readonly] {
+  background: var(--color-bg-input-disabled);
+  color: var(--color-text-disabled);
+}
+
+/* Validation-state glow variants -- apply alongside .input. */
+.input.is-error {
+  border-color: var(--color-danger);
+}
+
+.input.is-error:focus {
+  box-shadow: 0 0 0 3px var(--color-focus-glow-error);
+}
+
+.input.is-warning {
+  border-color: var(--color-warning);
+}
+
+.input.is-warning:focus {
+  box-shadow: 0 0 0 3px var(--color-focus-glow-warning);
+}
+
+/* Muted, small, above-the-input label for a vertical form field row --
+   label left-aligned above a full-width input, matching the real *arr
+   edit-modal form pattern (see DESIGN.md Sec 4.3). */
+.form-label {
+  display: block;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-caption);
+  font-weight: 500;
+  margin: 0 0 0.35rem;
+}
+
+/* Custom checkbox -- solid accent fill plus a white checkmark glyph when
+   checked. A fill-only checked state (no glyph) was tried first and
+   turned out not to read as "checked" at a glance -- too easy to confuse
+   with an unchecked box in a slightly different shade, especially for
+   anyone with reduced color contrast sensitivity. The checkmark is a
+   background-image (not a `::after` pseudo-element) because `<input>` is
+   a replaced element -- `::before`/`::after` don't reliably render on it
+   across browsers, but `background-image` always does. */
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-body);
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin: 0;
+  border-radius: var(--radius-badge);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg-raised);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 13px 13px;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.checkbox-label input[type="checkbox"]:checked {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='3.5 8.5 6.5 11.5 12.5 4.5'/%3E%3C/svg%3E");
+}
+
+.checkbox-label input[type="checkbox"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-focus-glow);
+}
+
+/* ==========================================================================
+   Tables (for any data-heavy table; provider-config lists should use the
+   .provider-grid / .provider-card set below instead of a table)
+   ========================================================================== */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  padding: 8px;
+  font-weight: 700;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-primary);
+  border: none;
+}
+
+.table td {
+  padding: 8px;
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-size-body);
+  vertical-align: middle;
+  transition: background-color 0.15s ease;
+}
+
+.table tr:hover td {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ==========================================================================
+   Badges / labels
+   ========================================================================== */
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-badge);
+  font-size: var(--font-size-caption);
+  font-weight: 700;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+/* Status-style labels (e.g. "continuing" / "ended") are pill-shaped in the
+   real theme -- apply alongside .badge. */
+.badge-pill {
+  border-radius: var(--radius-pill);
+}
+
+.badge-success {
+  background: rgba(39, 194, 76, 0.18);
+  color: var(--color-success-label);
+}
+
+.badge-warning {
+  background: rgba(255, 165, 0, 0.18);
+  color: var(--color-warning);
+}
+
+/* NEW */
+.badge-danger {
+  background: rgba(240, 80, 80, 0.18);
+  color: var(--color-danger);
+}
+
+.badge-neutral {
+  background: rgba(153, 153, 153, 0.18);
+  color: var(--color-text-secondary);
+}
+
+/* NEW: transcode/sync-in-progress, not success/info. */
+.badge-queue {
+  background: rgba(122, 67, 182, 0.2);
+  color: var(--color-queue);
+}
+
+/* ==========================================================================
+   Poster grid (Home / Library)
+   ========================================================================== */
+
+.poster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 1.5rem 1.25rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.poster-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.poster-card-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.poster-art {
+  position: relative;
+  /* ~1.4706:1 height:width -- the real *arr poster ratio (e.g. 250x368). */
+  aspect-ratio: 250 / 368;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: var(--color-bg-raised);
+  transition: box-shadow 0.18s ease;
+}
+
+.poster-card:hover .poster-art,
+.poster-card:focus-within .poster-art {
+  box-shadow: 0 0 12px #000000;
+  z-index: 2;
+}
+
+.poster-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.poster-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.75rem;
+  font-size: var(--font-size-caption);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: linear-gradient(160deg, #333333, #202020);
+}
+
+.poster-title {
+  font-size: var(--font-size-body);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.poster-meta {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-help);
+  text-transform: capitalize;
+}
+
+/* Sits between .poster-art and the caption lines -- a work's Availability
+   at a glance, colored via the existing semantic tokens (see PosterCard.tsx's
+   `statusStripClass` for the exact Availability -> class mapping). */
+.poster-status-strip {
+  height: var(--poster-status-strip-height);
+  width: 100%;
+  border-radius: 2px;
+}
+
+.poster-status-strip.is-available {
+  background: var(--color-success);
+}
+
+.poster-status-strip.is-partial {
+  background: var(--color-warning);
+}
+
+.poster-status-strip.is-pending {
+  background: var(--color-queue);
+}
+
+.poster-status-strip.is-deleted,
+.poster-status-strip.is-unknown {
+  background: var(--color-text-disabled);
+}
+
+/* Hover-reveal action pill, bottom-left over the poster art (e.g. Play). */
+.poster-action {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  background: rgba(32, 32, 32, 0.85);
+  color: var(--color-text-primary);
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+  pointer-events: none;
+}
+
+.poster-card:hover .poster-action,
+.poster-card:focus-within .poster-action {
+  opacity: 0.9;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* ==========================================================================
+   Work detail page -- read-only "same style as Sonarr/Radarr" item view.
+   Structure and proportions live-verified against real Radarr
+   (/movie/{tmdbId}) and Sonarr (/series/{slug}) detail pages: a full-width
+   backdrop hero (poster + title + two metadata rows + overview) followed by
+   a collapsible per-season/per-album accordion, not a generic form layout.
+   ========================================================================== */
+
+.work-detail-hero {
+  position: relative;
+  min-height: 320px;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+  background: var(--color-bg-raised);
+}
+
+.work-detail-hero-backdrop {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 20%;
+}
+
+.work-detail-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, rgba(26, 26, 26, 0.97) 0%, rgba(26, 26, 26, 0.9) 40%, rgba(26, 26, 26, 0.35) 75%, rgba(26, 26, 26, 0.05) 100%);
+}
+
+.work-detail-hero-content {
+  position: relative;
+  display: flex;
+  gap: 1.5rem;
+  padding: 1.5rem;
+}
+
+.work-detail-poster {
+  flex: 0 0 180px;
+  aspect-ratio: 250 / 368;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: var(--color-bg-raised);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.work-detail-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.work-detail-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+  justify-content: center;
+}
+
+.work-detail-title {
+  font-size: 28px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.work-detail-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-body);
+}
+
+.work-detail-facts-row {
+  display: flex;
+  align-items: baseline;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  color: var(--color-text-help);
+  font-size: var(--font-size-caption);
+}
+
+.work-detail-facts-row strong {
+  color: var(--color-text-secondary);
+  font-weight: 700;
+  margin-right: 0.35rem;
+}
+
+.work-detail-overview {
+  color: var(--color-text-secondary);
+  max-width: 70ch;
+  line-height: 1.5;
+  margin: 0.25rem 0 0;
+}
+
+.work-detail-accordion {
+  padding: 0;
+  overflow: hidden;
+}
+
+.work-detail-accordion-item + .work-detail-accordion-item {
+  border-top: 1px solid rgba(133, 133, 133, 0.15);
+}
+
+.work-detail-accordion-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.85rem 1.25rem;
+  background: transparent;
+  border: none;
+  color: var(--color-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.work-detail-accordion-header:hover {
+  background: var(--color-bg-menu-item-hover);
+}
+
+.work-detail-accordion-title {
+  font-weight: 600;
+}
+
+.work-detail-accordion-chevron {
+  margin-left: auto;
+  color: var(--color-text-help);
+}
+
+.work-detail-accordion-body {
+  padding: 0 1.25rem 1rem;
+}
+
+.work-detail-season {
+  padding: 1.25rem;
+}
+
+.work-detail-section-title {
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  margin: 0 0 0.75rem;
+}
+
+/* Pure CSS-triangle corner ribbon, top-right of the poster -- NOT an image
+   or a pill badge. Default is the danger red (e.g. "ended"/unavailable);
+   .corner-ribbon-neutral is a removed/deleted item. */
+.corner-ribbon {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 25px 25px 0;
+  border-color: transparent var(--color-danger) transparent transparent;
+  pointer-events: none;
+}
+
+.corner-ribbon-neutral {
+  border-color: transparent var(--color-text-disabled) transparent transparent;
+}
+
+/* Filled-vs-outline boolean toggle (the real theme's monitored/unmonitored
+   bookmark pattern). This class only provides the button chrome -- signal
+   the boolean state by swapping the icon asset itself (filled vs outline),
+   not by color alone. */
+.poster-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  background: rgba(32, 32, 32, 0.85);
+  color: var(--color-text-secondary);
+}
+
+.poster-toggle.is-active {
+  color: var(--color-accent);
+}
+
+/* ==========================================================================
+   Provider cards (Admin -> Source Instances, and any future provider-style
+   config list) -- a card grid, replacing a plain table.
+   ========================================================================== */
+
+.provider-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+}
+
+.provider-card {
+  width: 290px;
+  flex: 0 0 290px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: var(--color-bg-raised);
+  border: 1px solid rgba(133, 133, 133, 0.3);
+  border-radius: var(--radius-card);
+  padding: 1.25rem;
+  box-shadow: var(--card-shadow);
+}
+
+.provider-card-name {
+  font-size: 24px;
+  font-weight: 300;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.provider-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.5rem;
+}
+
+.provider-card-instance {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.provider-card-instance:hover {
+  border-color: var(--color-accent);
+}
+
+.provider-card-main {
+  display: flex;
+  width: 100%;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  color: inherit;
+  background: transparent;
+  border: 0;
+}
+
+.provider-card-status {
+  min-height: 1.2em;
+  overflow: hidden;
+  font-size: var(--font-size-caption);
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-card-instance > .provider-card-actions {
+  margin-top: 0;
+  padding: 0 1.25rem 1.25rem;
+}
+
+/* The main button opens the details modal while leaving the adjacent
+   per-instance sync action independently clickable. */
+.provider-card-clickable {
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background-color 0.15s ease;
+}
+
+.provider-card-clickable:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+/* The grid's dedicated "add new" tile -- same size/shape as a real card,
+   but a thin-bordered (not filled) box with a centered "+" glyph, per
+   DESIGN.md Sec 4.1. Clicking it opens the same modal used for viewing an
+   existing instance, in "create" mode. */
+.provider-card-add {
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px dashed rgba(133, 133, 133, 0.5);
+  box-shadow: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.provider-card-add:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-button);
+  background: var(--color-bg-base);
+  border: 1px solid rgba(133, 133, 133, 0.3);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.icon-btn:hover {
+  color: var(--color-text-primary);
+  background: #3c3c3c;
+}
+
+.icon-btn-danger:hover {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+/* ==========================================================================
+   Modal (Source Instances add/details, and any future click-into-detail
+   flow) -- a centered overlay panel, replacing an always-visible inline
+   form/icon-button pattern on a card grid. See DESIGN.md Sec 4.3.
+   ========================================================================== */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--content-padding);
+  background: var(--color-bg-overlay);
+}
+
+.modal {
+  width: 100%;
+  max-width: 480px;
+  max-height: calc(100vh - 2 * var(--content-padding));
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-chrome);
+  border-radius: var(--radius-modal);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+}
+
+.modal-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid rgba(133, 133, 133, 0.15);
+}
+
+.modal-title {
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modal-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+}
+
+.modal-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-detail-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid rgba(133, 133, 133, 0.15);
+  font-size: var(--font-size-body);
+}
+
+.modal-detail-row:last-child {
+  border-bottom: none;
+}
+
+/* Footer is explicitly not centered -- Delete (when present) is pinned far
+   left, isolated from the rest; the primary/rightmost-cluster buttons are
+   right-aligned -- matching the real *arr Download Clients edit modal. */
+.modal-footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid rgba(133, 133, 133, 0.15);
+}
+
+.modal-footer-left,
+.modal-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Type-first user permissions. Each Type is the bulk-select boundary;
+   only source instances capable of supplying that Type appear beneath it. */
+.permission-types {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.permission-type {
+  overflow: hidden;
+  border: 1px solid rgba(133, 133, 133, 0.25);
+  border-radius: var(--radius-card);
+  background: var(--color-bg-raised);
+}
+
+.permission-type-heading {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  color: var(--color-text-primary);
+}
+
+.permission-type-heading > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.permission-type-count {
+  color: var(--color-text-help);
+  font-size: var(--font-size-caption);
+  font-weight: 400;
+}
+
+.permission-library-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem 0.85rem 3.5rem;
+  border-top: 1px solid rgba(133, 133, 133, 0.15);
+}
+
+.permission-library {
+  min-width: 0;
+}
+
+.permission-library > span:first-of-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.permission-library-kind {
+  margin-left: auto;
+  font-size: var(--font-size-caption);
+  text-transform: capitalize;
+}
+
+.permission-type-heading input[type="checkbox"]:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+/* ==========================================================================
+   Detail page
+   ========================================================================== */
+
+.detail-banner {
+  position: relative;
+  height: 425px;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+/* Flat black scrim, NOT a gradient, laid over the backdrop for legibility. */
+.detail-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--color-bg-overlay);
+}
+
+.detail-banner-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 1.5rem;
+  width: 100%;
+  padding: var(--content-padding);
+}
+
+.detail-poster {
+  flex: 0 0 250px;
+  width: 250px;
+  height: 368px;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  box-shadow: var(--card-shadow);
+}
+
+.detail-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Deliberately thin at very large size -- the real *arr signature that
+   distinguishes it from typical bold-everything dark dashboards. */
+.detail-title {
+  font-size: 50px;
+  font-weight: 300;
+  color: var(--color-text-inverse);
+  margin: 0;
+}
+
+.detail-meta {
+  font-size: 18px;
+  font-weight: 300;
+  color: var(--color-text-primary);
+}
+
+.detail-overview {
+  font-size: var(--font-size-intermediate);
+  color: var(--color-text-primary);
+  line-height: var(--line-height-base);
+}
+
+/* Action buttons (Play/etc.) sit upper-right of the banner, not a separate
+   toolbar below it. */
+.detail-actions {
+  position: absolute;
+  top: var(--content-padding);
+  right: var(--content-padding);
+  z-index: 2;
+  display: flex;
+  gap: 0.75rem;
+}

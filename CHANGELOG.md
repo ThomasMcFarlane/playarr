@@ -16,6 +16,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Add authenticated direct-play, rendition, live-session, subtitle, chapter, metadata, thumbnail,
   playback-event, and administrator playback-session APIs.
 - Add Whisparr source support and persisted, administrator-managed Tdarr connection settings.
+- Add a dedicated Streamarr administrator web application for source instances, users, library
+  browsing, saved views, playlists, tasks, playback activity, and Tdarr configuration.
 
 ### Changed
 
@@ -25,11 +27,14 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   while retaining trusted-network authentication as an explicit opt-in.
 - Expand the checked-in OpenAPI contract and generated TypeScript API client for the new
   authentication, catalogue, playback, user, playlist, view, artwork, analytics, and Tdarr APIs.
+- Align the shared administrator design tokens with the established Sonarr, Radarr, and Lidarr
+  visual language.
 - Resolve remote media paths through configurable local mount roots and treat live transcode
   expiry as an idle timeout that advances while playback remains active.
 
 ### Fixed
 
+- Handle Whisparr site entries throughout the administrator library's work-kind labels.
 - Backfill missing Lidarr media files even when the source reports an unknown availability state.
 - Preserve client sessions across backend restarts and rotate expired access tokens through the
   newly exposed refresh endpoint.

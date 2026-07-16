@@ -1,0 +1,259 @@
+import { useEffect, useState } from "react";
+import { Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { TokenStore } from "@streamarr-tv/device-auth";
+import { SourceInstancesPage } from "./pages/SourceInstances";
+import { UsersPage } from "./pages/Users";
+import { LibraryPage } from "./pages/Library";
+import { WorkDetailPage } from "./pages/WorkDetail";
+import { TasksPage } from "./pages/Tasks";
+import { ActivityPage } from "./pages/Activity";
+import { TdarrPage } from "./pages/TdarrPage";
+import { ViewsPage } from "./pages/ViewsPage";
+import { ViewEditPage } from "./pages/ViewEditPage";
+import { PlaylistsPage } from "./pages/PlaylistsPage";
+import { PlaylistEditPage } from "./pages/PlaylistEditPage";
+import { LoginPage } from "./pages/Login";
+import { useEnsureSignedIn } from "./lib/ApiClientProvider";
+import { TopNav } from "./components/TopNav";
+
+const NAV_LINKS = [
+  { to: "/", label: "Source instances", end: true },
+  { to: "/users", label: "Users", end: false },
+] as const;
+
+/**
+ * "System" nav group -- a single accordion section (`.sidebar-section`,
+ * per DESIGN.md Sec 2.2) whose one child is Tasks, mirroring Sonarr/
+ * Radarr's own top-level "System" nav that nests "Tasks"/Activity under
+ * it rather than as a flat sidebar item. Neither client app had actually
+ * exercised this CSS (it existed unused, see DESIGN.md), so this is the
+ * first real usage of the accordion pattern.
+ */
+const SYSTEM_NAV_LINKS = [
+  { to: "/tasks", label: "Tasks", end: false },
+  { to: "/activity", label: "Activity", end: false },
+  { to: "/tdarr", label: "Tdarr", end: false },
+] as const;
+
+/**
+ * "Library" nav group -- a single accordion section, same shape as
+ * `SystemNavSection`/`SYSTEM_NAV_LINKS`. "Views" (named, saved filter+sort
+ * presets over the catalog -- see `streamarr_model::LibraryView`'s doc
+ * comment, surfaced to Playarr as Home screen shelves) is explicitly a
+ * sub-nav item of Library, not its own top-level section -- it was briefly
+ * shipped as a standalone "Views" accordion; that was wrong per the
+ * original request ("a 'Views' filter for libraries (new sub nav on the
+ * left)") and got called out directly.
+ */
+const LIBRARY_NAV_LINKS = [
+  { to: "/library", label: "Browse", end: false },
+  { to: "/views", label: "Views", end: false },
+  { to: "/playlists", label: "Playlists", end: false },
+] as const;
+
+/**
+ * Redirects to /login only once a real sign-in attempt (including
+ * redeeming a stored refresh token, not just checking the access token's
+ * own expiry) has actually failed -- see `ApiClientContextValue.
+ * ensureSignedIn`'s doc comment for the exact bug this fixes: an expired-
+ * but-refreshable access token used to bounce straight to `/login` every
+ * ~15 minutes without ever trying to refresh first, even though the
+ * refresh token was still valid the whole time.
+ *
+ * Renders nothing (not even a spinner -- this check is near-instant when
+ * the access token is already valid, the common case, and only briefly
+ * pending during an actual refresh round-trip) while `ensureSignedIn` is
+ * in flight, to avoid a login-page flash on every normal navigation.
+ */
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  const ensureSignedIn = useEnsureSignedIn();
+  const [status, setStatus] = useState<"checking" | "signed-in" | "signed-out">(() =>
+    new TokenStore().hasValidAccessToken() ? "signed-in" : "checking"
+  );
+
+  useEffect(() => {
+    if (status !== "checking") return;
+    let cancelled = false;
+    ensureSignedIn().then((ok) => {
+      if (!cancelled) setStatus(ok ? "signed-in" : "signed-out");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [status, ensureSignedIn]);
+
+  if (status === "checking") return null;
+  if (status === "signed-out") {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+  return <>{children}</>;
+}
+
+/** Small rotating chevron marking a `.sidebar-section-toggle`'s open/closed state. */
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{
+        marginLeft: "auto",
+        transform: open ? "rotate(90deg)" : "none",
+        transition: "transform 0.15s ease",
+      }}
+    >
+      <polyline points="9 6 15 12 9 18" />
+    </svg>
+  );
+}
+
+/**
+ * The "System" accordion nav group -- see `SYSTEM_NAV_LINKS`'s doc comment.
+ * Starts open whenever the current route is already one of its children
+ * (so a reload/direct link into /tasks doesn't hide its own nav item), and
+ * is otherwise toggled by clicking the section header.
+ */
+function SystemNavSection() {
+  const location = useLocation();
+  const startsActive = SYSTEM_NAV_LINKS.some((link) => location.pathname.startsWith(link.to));
+  const [open, setOpen] = useState(startsActive);
+
+  return (
+    <div className={`sidebar-section${open ? " is-open" : ""}`}>
+      <button type="button" className="sidebar-section-toggle" onClick={() => setOpen((o) => !o)}>
+        System
+        <ChevronIcon open={open} />
+      </button>
+      {open && (
+        <div className="sidebar-section-items">
+          {SYSTEM_NAV_LINKS.map(({ to, label, end }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              className={({ isActive }) => `sidebar-link${isActive ? " is-active" : ""}`}
+            >
+              {label}
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The "Library" accordion nav group -- see `LIBRARY_NAV_LINKS`'s doc
+ * comment. Mirrors `SystemNavSection` exactly (starts open whenever the
+ * current route is already one of its children, otherwise toggled by
+ * clicking the section header).
+ */
+function LibraryNavSection() {
+  const location = useLocation();
+  const startsActive = LIBRARY_NAV_LINKS.some((link) => location.pathname.startsWith(link.to));
+  const [open, setOpen] = useState(startsActive);
+
+  return (
+    <div className={`sidebar-section${open ? " is-open" : ""}`}>
+      <button type="button" className="sidebar-section-toggle" onClick={() => setOpen((o) => !o)}>
+        Library
+        <ChevronIcon open={open} />
+      </button>
+      {open && (
+        <div className="sidebar-section-items">
+          {LIBRARY_NAV_LINKS.map(({ to, label, end }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              className={({ isActive }) => `sidebar-link${isActive ? " is-active" : ""}`}
+            >
+              {label}
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Streamarr's own admin UI: source-instance registration and user
+ * management. Co-hosted by streamarr-bin at its own origin (see
+ * streamarr_api::build_router's `web_assets_dir`) -- this is the operator
+ * control plane, not a Playarr client (see clients/tv-web/web for that).
+ */
+export function App() {
+  const location = useLocation();
+
+  return (
+    <Routes>
+      <Route
+        path="/login"
+        element={new TokenStore().hasValidAccessToken() ? <Navigate to="/" replace /> : <LoginPage />}
+      />
+      <Route
+        path="/*"
+        element={
+          <RequireAuth>
+            <div className="app-shell">
+              <aside className="sidebar">
+                <div className="sidebar-header">
+                  <span className="app-logo">
+                    <img className="app-logo-icon" src="/streamarr-icon.svg" alt="" />
+                    <span className="app-logo-accent">Stream</span>arr
+                  </span>
+                </div>
+                <nav className="sidebar-nav">
+                  {NAV_LINKS.map(({ to, label, end }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      end={end}
+                      className={({ isActive }) => `sidebar-link${isActive ? " is-active" : ""}`}
+                    >
+                      {label}
+                    </NavLink>
+                  ))}
+                  <LibraryNavSection />
+                  <SystemNavSection />
+                </nav>
+              </aside>
+
+              <div className="app-content">
+                <header className="app-header">
+                  <TopNav />
+                </header>
+                <main
+                  className={`app-main${location.pathname.startsWith("/library") ? " app-main--library" : ""}`}
+                >
+                  <Routes>
+                    <Route path="/" element={<SourceInstancesPage />} />
+                    <Route path="/library" element={<LibraryPage />} />
+                    <Route path="/library/:id" element={<WorkDetailPage />} />
+                    <Route path="/users" element={<UsersPage />} />
+                    <Route path="/tasks" element={<TasksPage />} />
+                    <Route path="/activity" element={<ActivityPage />} />
+                    <Route path="/tdarr" element={<TdarrPage />} />
+                    <Route path="/views" element={<ViewsPage />} />
+                    <Route path="/views/new" element={<ViewEditPage />} />
+                    <Route path="/views/:id" element={<ViewEditPage />} />
+                    <Route path="/playlists" element={<PlaylistsPage />} />
+                    <Route path="/playlists/:id" element={<PlaylistEditPage />} />
+                  </Routes>
+                </main>
+              </div>
+            </div>
+          </RequireAuth>
+        }
+      />
+    </Routes>
+  );
+}
