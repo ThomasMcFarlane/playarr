@@ -41,6 +41,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Make Playarr Web responsive on mobile with safe-area-aware navigation, touch-sized controls,
+  stacked content regions, and phone-friendly library, detail, search, profile, settings, and
+  player layouts while preserving the existing desktop and television presentation.
 - Let Android TV builds configure their Playarr server at build time, use the television's
   system volume, and apply a stable 1920 by 1080 web viewport.
 - Require completed changes to be committed and pushed promptly as small, atomic Conventional
