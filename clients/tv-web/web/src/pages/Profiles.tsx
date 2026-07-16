@@ -266,7 +266,7 @@ export function ProfilesPage() {
           : undefined;
       continueToLogin(
         profile,
-        action === "settings" ? "/settings" : backTo,
+        action === "settings" ? "/settings" : "/",
         action === "settings"
           ? { backTo: "/profiles", navigationOrigin: settingsOrigin }
           : undefined
@@ -278,7 +278,7 @@ export function ProfilesPage() {
     try {
       await switchProfile(profile.id);
       if (action === "settings") openSettings();
-      else returnFromProfiles();
+      else navigate("/", { replace: true });
     } catch (error) {
       setLoadState({ status: "error", message: describeApiError(error) });
       setSwitchingId(null);
