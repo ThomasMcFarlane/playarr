@@ -611,7 +611,7 @@ impl MediaSync {
                 continue;
             };
             let album_id = self
-                .find_or_create_album(artist_work_id, album, album_title)
+                .find_or_create_album(artist_work_id, album, album_title, source_instance_id)
                 .await?;
             let disc_number = track.medium_number.max(1);
             let track_number = lidarr_track_number(&track).max(1);
@@ -816,6 +816,7 @@ impl MediaSync {
         artist_work_id: Uuid,
         album: &LidarrAlbum,
         title: &str,
+        source_instance_id: Uuid,
     ) -> Result<Uuid, MediaSyncError> {
         let select_sql = match self.backend {
             Backend::Sqlite => "SELECT id FROM albums WHERE artist_work_id = ? AND title = ?",
@@ -825,14 +826,14 @@ impl MediaSync {
             .select_uuid_str(select_sql, artist_work_id.to_string(), title)
             .await?
         {
-            self.update_album(id, album).await?;
+            self.update_album(id, album, source_instance_id).await?;
             return Ok(id);
         }
 
         let id = Uuid::new_v4();
         let album_type = lidarr_album_type(album);
         let release_date = lidarr_release_date(album.release_date.as_deref());
-        let images_json = serde_json::to_string(&lidarr_album_images(album))
+        let images_json = serde_json::to_string(&lidarr_album_images(album, source_instance_id))
             .map_err(streamarr_db::DbError::from)?;
         let insert_sql = match self.backend {
             Backend::Sqlite => {
@@ -861,8 +862,9 @@ impl MediaSync {
         &self,
         album_id: Uuid,
         album: &LidarrAlbum,
+        source_instance_id: Uuid,
     ) -> Result<(), MediaSyncError> {
-        let images_json = serde_json::to_string(&lidarr_album_images(album))
+        let images_json = serde_json::to_string(&lidarr_album_images(album, source_instance_id))
             .map_err(streamarr_db::DbError::from)?;
         let update_sql = match self.backend {
             Backend::Sqlite => {

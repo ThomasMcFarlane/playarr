@@ -20,9 +20,9 @@ use axum::extract::{Path, State};
 use axum::http::header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::Response;
-use streamarr_artwork::ArtworkCacheError;
+use streamarr_artwork::{ArtworkCacheError, CachedArtwork};
 use streamarr_catalog::WorkChildren;
-use streamarr_model::{ImageAsset, ImageKind, Work};
+use streamarr_model::{ImageAsset, ImageKind, Sensitive};
 use uuid::Uuid;
 
 use crate::auth_extractor::CatalogViewer;
@@ -103,8 +103,71 @@ fn source_url_from_images(
     Ok(url)
 }
 
-fn source_url(work: &Work, kind: ImageKind) -> Result<reqwest::Url, ApiError> {
+#[cfg(test)]
+fn source_url(work: &streamarr_model::Work, kind: ImageKind) -> Result<reqwest::Url, ApiError> {
     source_url_from_images(&work.images, &format!("work {}", work.id), kind)
+}
+
+enum ArtworkSource {
+    Public(reqwest::Url),
+    Arr {
+        cache_key: String,
+        url: reqwest::Url,
+        api_key: Sensitive<String>,
+    },
+}
+
+fn artwork_source_from_images(
+    state: &AppState,
+    images: &[ImageAsset],
+    owner: &str,
+    kind: ImageKind,
+) -> Result<ArtworkSource, ApiError> {
+    let raw = images
+        .iter()
+        .find(|image| image.kind == kind)
+        .map(|image| image.url.as_str())
+        .ok_or_else(|| {
+            ApiError::not_found(format!(
+                "{} artwork is not available for {owner}",
+                streamarr_artwork::image_kind_segment(kind),
+            ))
+        })?;
+
+    if let Some(locator) = streamarr_artwork::parse_arr_artwork_locator(raw) {
+        let instance = state
+            .source_instances
+            .get(locator.source_instance_id)
+            .ok_or_else(|| ApiError::internal("artwork source instance is not registered"))?;
+        let url =
+            streamarr_artwork::resolve_arr_artwork_url(&instance.base_url, instance.kind, &locator)
+                .ok_or_else(|| ApiError::internal("artwork source instance URL is invalid"))?;
+        return Ok(ArtworkSource::Arr {
+            cache_key: raw.to_string(),
+            url,
+            api_key: instance.api_key_encrypted,
+        });
+    }
+
+    source_url_from_images(images, owner, kind).map(ArtworkSource::Public)
+}
+
+async fn ensure_artwork_cached(
+    owner_id: Uuid,
+    kind: ImageKind,
+    source: ArtworkSource,
+) -> Result<CachedArtwork, ApiError> {
+    let cache = streamarr_artwork::shared();
+    match source {
+        ArtworkSource::Public(url) => Ok(cache.ensure_cached(owner_id, kind, &url).await?),
+        ArtworkSource::Arr {
+            cache_key,
+            url,
+            api_key,
+        } => Ok(cache
+            .ensure_cached_with_api_key(owner_id, kind, &cache_key, &url, &api_key)
+            .await?),
+    }
 }
 
 async fn artwork_response(
@@ -170,10 +233,13 @@ pub async fn work_artwork_handler(
     let kind = parse_image_kind(&kind)?;
     let allowed = viewer.allowed_libraries();
     let detail = state.catalog.get_by_id(work_id, allowed.as_deref()).await?;
-    let url = source_url(&detail.work, kind)?;
-    let cached = streamarr_artwork::shared()
-        .ensure_cached(work_id, kind, &url)
-        .await?;
+    let source = artwork_source_from_images(
+        &state,
+        &detail.work.images,
+        &format!("work {}", detail.work.id),
+        kind,
+    )?;
+    let cached = ensure_artwork_cached(work_id, kind, source).await?;
     artwork_response(&cached.path, cached.content_type, cached.url_hash, &headers).await
 }
 
@@ -217,14 +283,13 @@ pub async fn album_artwork_handler(
         .iter()
         .find(|album| album.album.id == album_id)
         .ok_or_else(|| ApiError::not_found(format!("album {album_id} was not found")))?;
-    let url = source_url_from_images(
+    let source = artwork_source_from_images(
+        &state,
         &album.album.images,
         &format!("album {}", album.album.id),
         kind,
     )?;
-    let cached = streamarr_artwork::shared()
-        .ensure_cached(album_id, kind, &url)
-        .await?;
+    let cached = ensure_artwork_cached(album_id, kind, source).await?;
     artwork_response(&cached.path, cached.content_type, cached.url_hash, &headers).await
 }
 
@@ -237,9 +302,9 @@ mod tests {
     };
     use axum::body::Body;
     use axum::http::Request;
-    use streamarr_model::{Availability, ImageAsset, WorkKind};
+    use streamarr_model::{Availability, ImageAsset, SourceInstance, SourceKind, Work, WorkKind};
     use tower::ServiceExt;
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::{header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn work_with_image(url: &str) -> Work {
@@ -392,5 +457,82 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(&bytes[..], [0xff, 0xd8, 0xff, 0xd9]);
+    }
+
+    #[tokio::test]
+    async fn arr_local_artwork_is_fetched_with_the_source_api_key() {
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/mediacover/artist/7/fanart.jpg"))
+            .and(header("X-Api-Key", "test-key"))
+            .respond_with(
+                ResponseTemplate::new(302)
+                    .insert_header("location", "/MediaCover/7/fanart-final.jpg"),
+            )
+            .expect(1)
+            .mount(&mock)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/MediaCover/7/fanart-final.jpg"))
+            .and(header("X-Api-Key", "test-key"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "image/jpeg")
+                    .set_body_bytes([0xff, 0xd8, 0xff, 0xd9]),
+            )
+            .expect(1)
+            .mount(&mock)
+            .await;
+
+        let (router, state) = test_state().await;
+        let work_id = seed_movie(&state, "Authenticated Artwork Fetch Test").await;
+        let source_instance_id = Uuid::new_v4();
+        state.source_instances.upsert(SourceInstance {
+            id: source_instance_id,
+            kind: SourceKind::Lidarr,
+            name: "Test Lidarr".to_string(),
+            base_url: mock.uri(),
+            api_key_encrypted: Sensitive::new("test-key".to_string()),
+            priority: 0,
+            default_root_folder_id: None,
+            default_quality_profile_id: None,
+            best_effort: false,
+        });
+        let mut work = state.work_repo.get(work_id).await.unwrap();
+        work.images = vec![ImageAsset {
+            kind: ImageKind::Backdrop,
+            url: streamarr_artwork::arr_artwork_locator(
+                source_instance_id,
+                "/MediaCover/7/fanart.jpg",
+            )
+            .unwrap(),
+            width: None,
+            height: None,
+        }];
+        state.work_repo.upsert(&work).await.unwrap();
+        seed_media_file(
+            &state,
+            work_id,
+            streamarr_model::media::LeafRef::Work,
+            source_instance_id,
+        )
+        .await;
+
+        let user_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user_id, vec![source_instance_id]).await;
+        let token = mint_access_token(&state, user_id);
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/v1/artwork/work/{work_id}/backdrop"))
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers().get(CONTENT_TYPE).unwrap(), "image/jpeg");
     }
 }

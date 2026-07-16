@@ -16,16 +16,27 @@
 use std::sync::Arc;
 
 use streamarr_artwork::ArtworkCache;
-use streamarr_model::Work;
+use streamarr_model::{SourceInstance, Work};
 
 #[derive(Clone)]
 pub struct ArtworkPrewarm {
     cache: Arc<ArtworkCache>,
+    source_instance: Option<SourceInstance>,
 }
 
 impl ArtworkPrewarm {
     pub fn new(cache: Arc<ArtworkCache>) -> Self {
-        Self { cache }
+        Self {
+            cache,
+            source_instance: None,
+        }
+    }
+
+    /// Binds the prewarmer to the poller's source so opaque local artwork
+    /// locators can be resolved and fetched with that instance's API key.
+    pub fn with_source_instance(mut self, source_instance: SourceInstance) -> Self {
+        self.source_instance = Some(source_instance);
+        self
     }
 
     /// Best-effort: an image that fails to download (source unreachable,
@@ -42,6 +53,52 @@ impl ArtworkPrewarm {
             return;
         }
         for image in &work.images {
+            if let Some(locator) = streamarr_artwork::parse_arr_artwork_locator(&image.url) {
+                let Some(instance) = self
+                    .source_instance
+                    .as_ref()
+                    .filter(|instance| instance.id == locator.source_instance_id)
+                else {
+                    tracing::warn!(
+                        work_id = %work.id,
+                        kind = ?image.kind,
+                        source_instance_id = %locator.source_instance_id,
+                        "artwork prewarm: local artwork belongs to a different source instance; skipping"
+                    );
+                    continue;
+                };
+                let Some(url) = streamarr_artwork::resolve_arr_artwork_url(
+                    &instance.base_url,
+                    instance.kind,
+                    &locator,
+                ) else {
+                    tracing::warn!(
+                        work_id = %work.id,
+                        kind = ?image.kind,
+                        "artwork prewarm: configured source URL is invalid; skipping"
+                    );
+                    continue;
+                };
+                if let Err(err) = self
+                    .cache
+                    .ensure_cached_with_api_key(
+                        work.id,
+                        image.kind,
+                        &image.url,
+                        &url,
+                        &instance.api_key_encrypted,
+                    )
+                    .await
+                {
+                    tracing::warn!(
+                        work_id = %work.id,
+                        kind = ?image.kind,
+                        error = %err,
+                        "authenticated artwork prewarm failed for this image"
+                    );
+                }
+                continue;
+            }
             let url = match reqwest::Url::parse(&image.url) {
                 Ok(url) => url,
                 Err(err) => {
@@ -70,9 +127,11 @@ impl ArtworkPrewarm {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use streamarr_model::{Availability, ImageAsset, ImageKind, WorkKind};
+    use streamarr_model::{
+        Availability, ImageAsset, ImageKind, Sensitive, SourceInstance, SourceKind, WorkKind,
+    };
     use uuid::Uuid;
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::{header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn sample_work(images: Vec<ImageAsset>) -> Work {
@@ -142,5 +201,74 @@ mod tests {
         let work = sample_work(vec![]);
         // Would panic on any unmocked HTTP call if this weren't a no-op.
         prewarm.prewarm_work(&work).await;
+    }
+
+    #[tokio::test]
+    async fn prewarm_work_fetches_arr_local_artwork_with_the_source_api_key() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/mediacover/artist/7/fanart.jpg"))
+            .and(header("X-Api-Key", "test-key"))
+            .respond_with(
+                ResponseTemplate::new(302)
+                    .insert_header("location", "/MediaCover/7/fanart-final.jpg"),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/MediaCover/7/fanart-final.jpg"))
+            .and(header("X-Api-Key", "test-key"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "image/jpeg")
+                    .set_body_bytes([0xff, 0xd8, 0xff, 0xd9]),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let temp_dir = std::env::temp_dir().join(format!(
+            "streamarr-arr-sync-authenticated-prewarm-test-{}",
+            Uuid::new_v4()
+        ));
+        // SAFETY (test-only): matches the existing isolated cache tests in
+        // this module; the value is removed before the test returns.
+        unsafe {
+            std::env::set_var("STREAMARR_ARTWORK_CACHE_DIR", &temp_dir);
+        }
+
+        let source_instance_id = Uuid::new_v4();
+        let source_instance = SourceInstance {
+            id: source_instance_id,
+            kind: SourceKind::Lidarr,
+            name: "Test Lidarr".to_string(),
+            base_url: server.uri(),
+            api_key_encrypted: Sensitive::new("test-key".to_string()),
+            priority: 0,
+            default_root_folder_id: None,
+            default_quality_profile_id: None,
+            best_effort: false,
+        };
+        let work = sample_work(vec![ImageAsset {
+            kind: ImageKind::Backdrop,
+            url: streamarr_artwork::arr_artwork_locator(
+                source_instance_id,
+                "/MediaCover/7/fanart.jpg",
+            )
+            .unwrap(),
+            width: None,
+            height: None,
+        }]);
+        let cache = Arc::new(ArtworkCache::new());
+        let prewarm = ArtworkPrewarm::new(cache.clone()).with_source_instance(source_instance);
+
+        prewarm.prewarm_work(&work).await;
+
+        assert!(cache.all_cached(work.id, &work.images).await);
+        unsafe {
+            std::env::remove_var("STREAMARR_ARTWORK_CACHE_DIR");
+        }
+        let _ = tokio::fs::remove_dir_all(temp_dir).await;
     }
 }

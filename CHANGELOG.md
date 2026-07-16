@@ -67,6 +67,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Fetch Lidarr-local artist posters, backdrops, banners, and logos through the authenticated
+  backend artwork cache, and prefer artist backdrops for music-detail wallpapers.
 - Route Android TV Back actions through Playarr so active and minimised playback sessions close
   before native WebView history navigation, while retaining login cookies across lifecycle events.
 - Pin scroll-edge shadows to the visible viewport and only show each edge when content remains in

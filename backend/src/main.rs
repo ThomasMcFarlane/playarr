@@ -1055,7 +1055,7 @@ fn spawn_poller_for(
     // and costs nothing extra for non-Radarr instances.
     .with_credit_repo(credit_repo);
     let poller = if let Some(prewarm) = artwork_prewarm {
-        poller.with_artwork_prewarm(prewarm)
+        poller.with_artwork_prewarm(prewarm.with_source_instance(instance.clone()))
     } else {
         poller
     };

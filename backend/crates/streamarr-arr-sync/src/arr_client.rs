@@ -14,6 +14,7 @@ use streamarr_arr_client::{
 use streamarr_model::{
     Availability, ExternalProvider, ImageAsset, ImageKind, SourceInstance, SourceKind, WorkKind,
 };
+use uuid::Uuid;
 
 /// Converts one *arr `images[]` entry to an [`ImageAsset`], or `None` when
 /// it should be dropped. Two things can drop an entry: no `remote_url` at
@@ -46,6 +47,25 @@ fn image_asset(cover_type: &str, remote_url: Option<&str>) -> Option<ImageAsset>
     })
 }
 
+fn lidarr_image_asset(image: &LidarrImage, source_instance_id: Uuid) -> Option<ImageAsset> {
+    image_asset(&image.cover_type, image.remote_url.as_deref()).or_else(|| {
+        let kind = match image.cover_type.as_str() {
+            "poster" | "cover" => ImageKind::Poster,
+            "fanart" => ImageKind::Backdrop,
+            "banner" => ImageKind::Banner,
+            "clearlogo" | "logo" => ImageKind::Logo,
+            _ => return None,
+        };
+        let url = streamarr_artwork::arr_artwork_locator(source_instance_id, &image.url)?;
+        Some(ImageAsset {
+            kind,
+            url,
+            width: None,
+            height: None,
+        })
+    })
+}
+
 pub(crate) fn sonarr_images(images: &[SonarrImage]) -> Vec<ImageAsset> {
     images
         .iter()
@@ -60,15 +80,18 @@ fn radarr_images(images: &[RadarrImage]) -> Vec<ImageAsset> {
         .collect()
 }
 
-fn lidarr_images(images: &[LidarrImage]) -> Vec<ImageAsset> {
+fn lidarr_images(images: &[LidarrImage], source_instance_id: Uuid) -> Vec<ImageAsset> {
     images
         .iter()
-        .filter_map(|img| image_asset(&img.cover_type, img.remote_url.as_deref()))
+        .filter_map(|image| lidarr_image_asset(image, source_instance_id))
         .collect()
 }
 
-pub(crate) fn lidarr_album_images(album: &LidarrAlbum) -> Vec<ImageAsset> {
-    lidarr_images(&album.images)
+pub(crate) fn lidarr_album_images(
+    album: &LidarrAlbum,
+    source_instance_id: Uuid,
+) -> Vec<ImageAsset> {
+    lidarr_images(&album.images, source_instance_id)
 }
 
 pub(crate) fn whisparr_images(images: &[WhisparrImage]) -> Vec<ImageAsset> {
@@ -172,7 +195,7 @@ fn map_radarr(movie: &RadarrMovie) -> RemoteWork {
     }
 }
 
-fn map_lidarr(artist: &LidarrArtist) -> RemoteWork {
+fn map_lidarr(artist: &LidarrArtist, source_instance_id: Uuid) -> RemoteWork {
     RemoteWork {
         external_id: artist.foreign_artist_id.clone(),
         source_id: artist.id,
@@ -193,15 +216,19 @@ fn map_lidarr(artist: &LidarrArtist) -> RemoteWork {
         }),
         overview: artist.overview.clone(),
         genres: artist.genres.clone(),
-        images: lidarr_images(&artist.images),
+        images: lidarr_images(&artist.images, source_instance_id),
         // An artist (unlike a single album) has no one release date of its
         // own -- see `Work::release_date`'s doc comment.
         release_date: None,
     }
 }
 
-fn map_lidarr_with_album_fallback(artist: &LidarrArtist, albums: &[LidarrAlbum]) -> RemoteWork {
-    let mut remote = map_lidarr(artist);
+fn map_lidarr_with_album_fallback(
+    artist: &LidarrArtist,
+    albums: &[LidarrAlbum],
+    source_instance_id: Uuid,
+) -> RemoteWork {
+    let mut remote = map_lidarr(artist, source_instance_id);
     if !remote
         .images
         .iter()
@@ -211,7 +238,7 @@ fn map_lidarr_with_album_fallback(artist: &LidarrArtist, albums: &[LidarrAlbum])
             albums
                 .iter()
                 .filter(|album| album.artist_id == artist.id)
-                .flat_map(lidarr_album_images)
+                .flat_map(|album| lidarr_album_images(album, source_instance_id))
                 .find(|image| image.kind == ImageKind::Poster),
         );
     }
@@ -332,7 +359,10 @@ impl ArrClient {
     /// The full remote list, normalized to [`RemoteWork`]. Empty (not an
     /// error) for source kinds `work_kind_and_provider` returns `None` for —
     /// there's nothing to list onto the `Work` aggregate for those.
-    pub async fn list_all(&self) -> Result<Vec<RemoteWork>, ArrClientError> {
+    pub async fn list_all(
+        &self,
+        source_instance_id: Uuid,
+    ) -> Result<Vec<RemoteWork>, ArrClientError> {
         match self {
             ArrClient::Sonarr(client) => {
                 Ok(client.list_series().await?.iter().map(map_sonarr).collect())
@@ -345,7 +375,9 @@ impl ArrClient {
                     tokio::try_join!(client.list_artists(), client.list_albums())?;
                 Ok(artists
                     .iter()
-                    .map(|artist| map_lidarr_with_album_fallback(artist, &albums))
+                    .map(|artist| {
+                        map_lidarr_with_album_fallback(artist, &albums, source_instance_id)
+                    })
                     .collect())
             }
             ArrClient::Readarr(client) => Ok(client
@@ -367,14 +399,22 @@ impl ArrClient {
     /// A single remote entity by the source app's own id, normalized to
     /// [`RemoteWork`]. `Ok(None)` (not an error) for source kinds with no
     /// `Work`-owning catalog surface.
-    pub async fn get_one(&self, id: i64) -> Result<Option<RemoteWork>, ArrClientError> {
+    pub async fn get_one(
+        &self,
+        id: i64,
+        source_instance_id: Uuid,
+    ) -> Result<Option<RemoteWork>, ArrClientError> {
         match self {
             ArrClient::Sonarr(client) => Ok(Some(map_sonarr(&client.get_series(id).await?))),
             ArrClient::Radarr(client) => Ok(Some(map_radarr(&client.get_movie(id).await?))),
             ArrClient::Lidarr(client) => {
                 let (artist, albums) =
                     tokio::try_join!(client.get_artist(id), client.list_albums_for_artist(id))?;
-                Ok(Some(map_lidarr_with_album_fallback(&artist, &albums)))
+                Ok(Some(map_lidarr_with_album_fallback(
+                    &artist,
+                    &albums,
+                    source_instance_id,
+                )))
             }
             ArrClient::Readarr(client) => Ok(Some(map_readarr(&client.get_author(id).await?))),
             ArrClient::Whisparr(client) => Ok(Some(map_whisparr(&client.get_series(id).await?))),
@@ -477,16 +517,18 @@ mod tests {
 
     #[test]
     fn lidarr_maps_sort_name_and_file_availability() {
-        let remote = map_lidarr(&lidarr_artist(112));
+        let source_instance_id = Uuid::new_v4();
+        let remote = map_lidarr(&lidarr_artist(112), source_instance_id);
         assert_eq!(remote.sort_title, "Sample Band");
         assert_eq!(remote.availability, Some(Availability::Available));
 
-        let remote = map_lidarr(&lidarr_artist(0));
+        let remote = map_lidarr(&lidarr_artist(0), source_instance_id);
         assert_eq!(remote.availability, Some(Availability::Pending));
     }
 
     #[test]
-    fn lidarr_uses_an_album_cover_when_artist_artwork_is_only_a_local_path() {
+    fn lidarr_keeps_authenticated_local_artist_artwork() {
+        let source_instance_id = Uuid::new_v4();
         let mut artist = lidarr_artist(112);
         artist.images = vec![LidarrImage {
             cover_type: "poster".to_string(),
@@ -510,13 +552,13 @@ mod tests {
             }],
         };
 
-        let remote = map_lidarr_with_album_fallback(&artist, &[album]);
+        let remote = map_lidarr_with_album_fallback(&artist, &[album], source_instance_id);
 
         assert_eq!(remote.images.len(), 1);
         assert_eq!(remote.images[0].kind, ImageKind::Poster);
         assert_eq!(
             remote.images[0].url,
-            "https://images.lidarr.audio/cache/cover.jpg"
+            format!("streamarr-arr://{source_instance_id}/MediaCover/7/poster.jpg")
         );
     }
 

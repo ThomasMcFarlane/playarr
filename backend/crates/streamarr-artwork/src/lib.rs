@@ -17,12 +17,97 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use dashmap::DashMap;
-use streamarr_model::ImageKind;
+use streamarr_model::{ImageKind, Sensitive, SourceKind};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
 const MAX_ARTWORK_BYTES: u64 = 12 * 1024 * 1024;
+const ARR_ARTWORK_SCHEME: &str = "streamarr-arr";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArrArtworkLocator {
+    pub source_instance_id: Uuid,
+    pub path_and_query: String,
+}
+
+/// Encodes an *arr-local `/MediaCover/...` path without exposing that
+/// instance's host or API key to catalogue clients. The API resolves this
+/// opaque locator against the registered source instance before fetching it.
+pub fn arr_artwork_locator(source_instance_id: Uuid, local_path: &str) -> Option<String> {
+    if !local_path.starts_with("/MediaCover/") {
+        return None;
+    }
+    let base =
+        reqwest::Url::parse(&format!("{ARR_ARTWORK_SCHEME}://{source_instance_id}/")).ok()?;
+    let locator = base.join(local_path).ok()?;
+    parse_arr_artwork_locator(locator.as_str())?;
+    Some(locator.to_string())
+}
+
+/// Parses the safe internal form produced by [`arr_artwork_locator`].
+/// Arbitrary *arr API paths are rejected: only media-cover reads qualify.
+pub fn parse_arr_artwork_locator(raw: &str) -> Option<ArrArtworkLocator> {
+    let locator = reqwest::Url::parse(raw).ok()?;
+    if locator.scheme() != ARR_ARTWORK_SCHEME
+        || !locator.path().starts_with("/MediaCover/")
+        || !locator.username().is_empty()
+        || locator.password().is_some()
+        || locator.port().is_some()
+    {
+        return None;
+    }
+    let source_instance_id = locator.host_str()?.parse().ok()?;
+    let mut path_and_query = locator.path().to_string();
+    if let Some(query) = locator.query() {
+        path_and_query.push('?');
+        path_and_query.push_str(query);
+    }
+    Some(ArrArtworkLocator {
+        source_instance_id,
+        path_and_query,
+    })
+}
+
+/// Resolves a validated opaque locator against its configured *arr base URL.
+pub fn resolve_arr_artwork_url(
+    base_url: &str,
+    source_kind: SourceKind,
+    locator: &ArrArtworkLocator,
+) -> Option<reqwest::Url> {
+    let base = reqwest::Url::parse(base_url).ok()?;
+    if !matches!(base.scheme(), "http" | "https") || base.host_str().is_none() {
+        return None;
+    }
+    let resolved = match source_kind {
+        SourceKind::Lidarr => {
+            let path = locator.path_and_query.split('?').next()?;
+            let segments = path
+                .strip_prefix("/MediaCover/")?
+                .split('/')
+                .collect::<Vec<_>>();
+            let endpoint = match segments.as_slice() {
+                [artist_id, filename] if artist_id.parse::<u64>().is_ok() => {
+                    format!("api/v1/mediacover/artist/{artist_id}/{filename}")
+                }
+                ["Albums", album_id, filename] if album_id.parse::<u64>().is_ok() => {
+                    format!("api/v1/mediacover/album/{album_id}/{filename}")
+                }
+                _ => return None,
+            };
+            let base_with_slash = format!("{}/", base_url.trim_end_matches('/'));
+            reqwest::Url::parse(&base_with_slash)
+                .ok()?
+                .join(&endpoint)
+                .ok()?
+        }
+        _ => base.join(&locator.path_and_query).ok()?,
+    };
+    if !matches!(resolved.scheme(), "http" | "https") || resolved.host_str().is_none() {
+        return None;
+    }
+    Some(resolved)
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ArtworkCacheError {
@@ -99,6 +184,12 @@ fn extension_content_type(extension: &str) -> Option<&'static str> {
         "gif" => Some("image/gif"),
         _ => None,
     }
+}
+
+fn same_origin(left: &reqwest::Url, right: &reqwest::Url) -> bool {
+    left.scheme() == right.scheme()
+        && left.host_str() == right.host_str()
+        && left.port_or_known_default() == right.port_or_known_default()
 }
 
 /// Resolves and (on first use) creates the local artwork cache root --
@@ -201,13 +292,55 @@ impl ArtworkCache {
         kind: ImageKind,
         url: &reqwest::Url,
         prefix: &FsPath,
+        api_key: Option<&Sensitive<String>>,
     ) -> Result<(PathBuf, &'static str), ArtworkCacheError> {
-        let response = self
-            .http
-            .get(url.clone())
-            .send()
-            .await
-            .map_err(|error| ArtworkCacheError::Unreachable(error.to_string()))?;
+        let mut request_url = url.clone();
+        let mut redirects = 0_u8;
+        let response = loop {
+            let mut request = self.http.get(request_url.clone());
+            if let Some(api_key) = api_key {
+                request = request.header("X-Api-Key", api_key.expose_secret());
+            }
+            let response = request
+                .send()
+                .await
+                .map_err(|error| ArtworkCacheError::Unreachable(error.to_string()))?;
+            if !response.status().is_redirection() {
+                break response;
+            }
+            // Public metadata URLs retain the strict no-redirect policy.
+            // A configured *arr instance may redirect its own MediaCover
+            // endpoint, but the API key must never cross an origin boundary.
+            if api_key.is_none() {
+                return Err(ArtworkCacheError::SourceError(response.status()));
+            }
+            if redirects >= 3 {
+                return Err(ArtworkCacheError::Unreachable(
+                    "source artwork exceeded the redirect limit".to_string(),
+                ));
+            }
+            let location = response
+                .headers()
+                .get(reqwest::header::LOCATION)
+                .and_then(|value| value.to_str().ok())
+                .ok_or_else(|| {
+                    ArtworkCacheError::InvalidUrl(
+                        "source artwork redirect omitted its destination".to_string(),
+                    )
+                })?;
+            let next = request_url.join(location).map_err(|_| {
+                ArtworkCacheError::InvalidUrl(
+                    "source artwork redirect destination is invalid".to_string(),
+                )
+            })?;
+            if !same_origin(url, &next) {
+                return Err(ArtworkCacheError::InvalidUrl(
+                    "source artwork redirect crossed the configured source origin".to_string(),
+                ));
+            }
+            request_url = next;
+            redirects += 1;
+        };
         if !response.status().is_success() {
             return Err(ArtworkCacheError::SourceError(response.status()));
         }
@@ -299,7 +432,35 @@ impl ArtworkCache {
         kind: ImageKind,
         url: &reqwest::Url,
     ) -> Result<CachedArtwork, ArtworkCacheError> {
-        let url_hash = stable_url_hash(url.as_str());
+        self.ensure_cached_inner(work_id, kind, url.as_str(), url, None)
+            .await
+    }
+
+    /// Authenticated counterpart to [`Self::ensure_cached`] for an artwork
+    /// path owned by a configured *arr instance. `source_key` is the opaque
+    /// locator stored in catalogue metadata, so credentials never influence
+    /// cache names or leave the backend.
+    pub async fn ensure_cached_with_api_key(
+        &self,
+        work_id: Uuid,
+        kind: ImageKind,
+        source_key: &str,
+        url: &reqwest::Url,
+        api_key: &Sensitive<String>,
+    ) -> Result<CachedArtwork, ArtworkCacheError> {
+        self.ensure_cached_inner(work_id, kind, source_key, url, Some(api_key))
+            .await
+    }
+
+    async fn ensure_cached_inner(
+        &self,
+        work_id: Uuid,
+        kind: ImageKind,
+        source_key: &str,
+        url: &reqwest::Url,
+        api_key: Option<&Sensitive<String>>,
+    ) -> Result<CachedArtwork, ArtworkCacheError> {
+        let url_hash = stable_url_hash(source_key);
         let prefix = cache_prefix(work_id, kind, url_hash);
         if let Some((path, content_type)) = cached_file(&prefix).await {
             return Ok(CachedArtwork {
@@ -327,7 +488,9 @@ impl ArtworkCache {
             });
         }
 
-        let result = self.download_and_cache(work_id, kind, url, &prefix).await;
+        let result = self
+            .download_and_cache(work_id, kind, url, &prefix, api_key)
+            .await;
         self.fill_locks.remove(&lock_key);
         let (path, content_type) = result?;
         Ok(CachedArtwork {
@@ -393,6 +556,27 @@ mod tests {
         );
     }
 
+    #[test]
+    fn arr_artwork_locators_accept_only_media_cover_paths() {
+        let source_instance_id = Uuid::new_v4();
+        let raw = arr_artwork_locator(source_instance_id, "/MediaCover/7/fanart.jpg?lastWrite=123")
+            .unwrap();
+        let parsed = parse_arr_artwork_locator(&raw).unwrap();
+        assert_eq!(parsed.source_instance_id, source_instance_id);
+        assert_eq!(
+            parsed.path_and_query,
+            "/MediaCover/7/fanart.jpg?lastWrite=123"
+        );
+        assert!(arr_artwork_locator(source_instance_id, "/api/v1/system/status").is_none());
+        assert!(parse_arr_artwork_locator("file:///etc/passwd").is_none());
+        assert_eq!(
+            resolve_arr_artwork_url("https://lidarr.example", SourceKind::Lidarr, &parsed)
+                .unwrap()
+                .as_str(),
+            "https://lidarr.example/api/v1/mediacover/artist/7/fanart.jpg"
+        );
+    }
+
     #[tokio::test]
     async fn ensure_cached_downloads_and_atomically_commits() {
         let server = wiremock::MockServer::start().await;
@@ -429,5 +613,32 @@ mod tests {
             std::env::remove_var("STREAMARR_ARTWORK_CACHE_DIR");
         }
         let _ = tokio::fs::remove_dir_all(&temp_dir).await;
+    }
+
+    #[tokio::test]
+    async fn authenticated_artwork_rejects_cross_origin_redirects() {
+        let server = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/banner.jpg"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(302)
+                    .insert_header("location", "https://untrusted.example/banner.jpg"),
+            )
+            .mount(&server)
+            .await;
+
+        let cache = ArtworkCache::new();
+        let url = reqwest::Url::parse(&format!("{}/banner.jpg", server.uri())).unwrap();
+        let result = cache
+            .ensure_cached_with_api_key(
+                Uuid::new_v4(),
+                ImageKind::Banner,
+                "streamarr-arr://source/banner.jpg",
+                &url,
+                &Sensitive::new("test-key".to_string()),
+            )
+            .await;
+
+        assert!(matches!(result, Err(ArtworkCacheError::InvalidUrl(_))));
     }
 }

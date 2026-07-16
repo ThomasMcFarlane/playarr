@@ -293,7 +293,7 @@ impl ReconciliationPoller {
 
         let remote = self
             .arr_client
-            .list_all()
+            .list_all(self.source_instance_id)
             .await
             .map_err(|err| PollError::Client(err.to_string()))?;
         // Built before `diff_works` consumes `remote`: `SyncOp`'s `Work`
@@ -364,7 +364,7 @@ impl ReconciliationPoller {
             return self.reconcile_all().await;
         };
 
-        let remote = match self.arr_client.get_one(id).await {
+        let remote = match self.arr_client.get_one(id, self.source_instance_id).await {
             Ok(Some(remote)) => remote,
             Ok(None) => return self.reconcile_all().await,
             Err(err) => {

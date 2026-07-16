@@ -31,7 +31,7 @@ import {
 } from "../components/tv/TvStage";
 import { WatchStateOverlay } from "../components/WatchStateOverlay";
 import { useApiClient } from "../lib/ApiClientProvider";
-import { CachedAlbumArtworkImage } from "../lib/artwork";
+import { CachedAlbumArtworkImage, CachedArtworkImage } from "../lib/artwork";
 import {
   navigationOriginFromState,
   useNavigationLayer,
@@ -565,32 +565,41 @@ export function MusicDetailPage() {
 
   const { work } = state.data;
   const detailRoute = `/music/${work.id}`;
+  const hasArtistBackdrop = work.images.some((image) => image.kind === "backdrop");
+
+  const albumBackdrop = selectedAlbum ? (
+    <CachedAlbumArtworkImage
+      artistWorkId={work.id}
+      album={selectedAlbum.album}
+      kinds={["poster"]}
+      alt=""
+      className="tv-music-detail-backdrop"
+      fallback={
+        selectedAlbumTracks[0]?.media_file_id ? (
+          <MediaThumbnailArtwork
+            mediaFileId={selectedAlbumTracks[0].media_file_id}
+            positionMs={0}
+            fallback={null}
+            className="tv-music-detail-backdrop"
+          />
+        ) : null
+      }
+    />
+  ) : null;
 
   return (
     <TvStageShell
       className="tv-detail tv-music-detail"
       ariaLabel={work.title}
-      artworkKey={selectedAlbum?.album.id ?? work.id}
+      artworkKey={hasArtistBackdrop ? `${work.id}:backdrop` : selectedAlbum?.album.id ?? work.id}
       artwork={
-        selectedAlbum ? (
-          <CachedAlbumArtworkImage
-            artistWorkId={work.id}
-            album={selectedAlbum.album}
-            kinds={["poster"]}
-            alt=""
-            className="tv-music-detail-backdrop"
-            fallback={
-              selectedAlbumTracks[0]?.media_file_id ? (
-                <MediaThumbnailArtwork
-                  mediaFileId={selectedAlbumTracks[0].media_file_id}
-                  positionMs={0}
-                  fallback={null}
-                  className="tv-music-detail-backdrop"
-                />
-              ) : null
-            }
-          />
-        ) : undefined
+        <CachedArtworkImage
+          work={work}
+          kinds={["backdrop"]}
+          alt=""
+          className="tv-music-detail-backdrop"
+          fallback={albumBackdrop}
+        />
       }
     >
       <header className="tv-library-heading tv-music-heading">
