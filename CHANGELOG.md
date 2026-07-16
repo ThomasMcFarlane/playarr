@@ -91,3 +91,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Verify artist catalogue details attach media identifiers and runtimes only to tracks that have
   matching media files.
+
+### Documentation
+
+- Document the Streamarr and Playarr design research snapshot and preserve a sanitised historical
+  Playarr redesign handover for future implementation and debugging context.
