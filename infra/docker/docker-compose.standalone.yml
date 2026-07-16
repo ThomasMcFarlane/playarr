@@ -36,6 +36,7 @@ services:
       # a second container for no benefit here. Persisted via the named
       # volume below, not /tmp, so it survives `docker compose restart`.
       DATABASE_URL: sqlite:///data/streamarr.db
+      STREAMARR_ARTWORK_CACHE_DIR: /data/cache/artwork
       STREAMARR_LOG: ${STREAMARR_LOG:-info,streamarr_api=debug}
       STREAMARR_HTTP_BIND_ADDR: 0.0.0.0:8080
       STREAMARR_METRICS_BIND_ADDR: 0.0.0.0:9090
@@ -44,6 +45,17 @@ services:
       # for a local test, tokens just won't survive a container restart.
       # Set explicitly if you want sessions to persist across restarts.
       STREAMARR_JWT_SECRET: ${STREAMARR_JWT_SECRET:-}
+      # Empty by default (falls back to backend/src/main.rs's RFC1918 +
+      # loopback DEFAULT_TRUSTED_NETWORK_CIDRS). Set in a local, gitignored
+      # infra/docker/.env (never committed -- this is genuinely
+      # environment-specific, not a project default) if Docker's published
+      # port sees an unexpected source IP for your own local traffic --
+      # e.g. an active host VPN/tunnel can make Docker Desktop present the
+      # tunnel's egress IP instead of a loopback/private address even for
+      # localhost-forwarded connections. Replaces the whole default list
+      # with this one CIDR, so it should describe your actual trusted
+      # network, not just add to the defaults.
+      STREAMARR_TRUSTED_NETWORK_CIDR: ${STREAMARR_TRUSTED_NETWORK_CIDR:-}
       # Deliberately NOT set: TDARR_URL/TDARR_API_KEY (no Tdarr in this
       # stack -- background dispatch simply has nothing to dispatch to,
       # which is fine; on-demand transcode doesn't depend on Tdarr at all,

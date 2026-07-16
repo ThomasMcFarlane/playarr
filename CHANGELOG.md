@@ -42,6 +42,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the obsolete in-client administration screen.
 - Rebrand the Android TV launcher as Playarr and use a hardware-accelerated fullscreen WebView so
   the television client stays aligned with the web experience.
+- Install FFmpeg in the backend runtime image, persist artwork caches across every Docker Compose
+  tier, and expose the standalone trusted-network CIDR setting.
 
 ### Fixed
 

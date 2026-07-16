@@ -127,11 +127,12 @@ FROM debian:${DEBIAN_CODENAME}-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
       curl \
+      ffmpeg \
       tini \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system --gid 10001 streamarr \
     && useradd --system --uid 10001 --gid streamarr --home-dir /app --shell /usr/sbin/nologin streamarr \
-    && mkdir -p /app /data \
+    && mkdir -p /app /data/streamarr-cache/artwork \
     && chown -R streamarr:streamarr /app /data
 
 # --------------------------------------------------------------------

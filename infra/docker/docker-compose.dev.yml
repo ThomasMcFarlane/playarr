@@ -183,6 +183,7 @@ services:
       # service's own credentials above rather than hardcoding a second
       # copy of them.
       DATABASE_URL: postgres://${POSTGRES_USER:-streamarr}:${POSTGRES_PASSWORD:-streamarr_dev_only}@postgres:5432/${POSTGRES_DB:-streamarr}
+      STREAMARR_ARTWORK_CACHE_DIR: /data/streamarr-cache/artwork
       STREAMARR_LOG: ${STREAMARR_LOG:-info,streamarr_api=debug}
       STREAMARR_HTTP_BIND_ADDR: 0.0.0.0:8080
       STREAMARR_METRICS_BIND_ADDR: 0.0.0.0:9090
@@ -230,6 +231,8 @@ services:
     ports:
       - "8080:8080"
       - "9090:9090"
+    volumes:
+      - streamarr_dev_artwork_cache:/data/streamarr-cache/artwork
     networks:
       - streamarr-net
 
@@ -249,3 +252,4 @@ volumes:
   tdarr_dev_configs:
   tdarr_dev_logs:
   media_dev:
+  streamarr_dev_artwork_cache:

@@ -60,6 +60,7 @@ x-streamarr-env: &streamarr-env
   STREAMARR_HTTP_BIND_ADDR: 0.0.0.0:8080
   STREAMARR_METRICS_BIND_ADDR: 0.0.0.0:9090
   DATABASE_URL: postgres://streamarr:${STREAMARR_DB_PASSWORD:?Set STREAMARR_DB_PASSWORD (e.g. in a .env file) before starting the prod stack}@postgres:5432/streamarr
+  STREAMARR_ARTWORK_CACHE_DIR: /data/streamarr-cache/artwork
   # Optional. Only meaningfully reachable when --profile ha has started the
   # `redis` service; left blank otherwise (REDIS_URL is treated as
   # optional throughout this repo's Streamarr contract -- see
@@ -138,6 +139,8 @@ services:
     expose:
       - "8080"
       - "9090"
+    volumes:
+      - streamarr_prod_artwork_cache:/data/streamarr-cache/artwork
     networks:
       - streamarr-net
 
@@ -172,6 +175,8 @@ services:
     expose:
       - "8080"
       - "9090"
+    volumes:
+      - streamarr_prod_artwork_cache:/data/streamarr-cache/artwork
     networks:
       - streamarr-net
 
@@ -278,3 +283,4 @@ volumes:
   redis_prod_data:
   caddy_data:
   caddy_config:
+  streamarr_prod_artwork_cache:
