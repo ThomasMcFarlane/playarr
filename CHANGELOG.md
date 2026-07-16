@@ -23,6 +23,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pages for video, episodic, music, and site content.
 - Add reusable web, Shaka, and Samsung AVPlay playback surfaces with quality, audio, subtitle,
   chapter, progress, retry, minimised-player, and remote-control support.
+- Add an Android TV shell that hosts Playarr Web with saved server configuration, D-pad and Menu
+  handling, fullscreen playback, and recoverable connection errors.
 
 ### Changed
 
@@ -38,6 +40,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   expiry as an idle timeout that advances while playback remains active.
 - Separate the consumer Playarr experience from the Streamarr administrator application and remove
   the obsolete in-client administration screen.
+- Rebrand the Android TV launcher as Playarr and use a hardware-accelerated fullscreen WebView so
+  the television client stays aligned with the web experience.
 
 ### Fixed
 
@@ -48,6 +52,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   newly exposed refresh endpoint.
 - Keep playback sessions alive beyond their initial transcode window, wait for cold HLS manifests,
   and enforce library access on both negotiation and media delivery.
+- Allow sideloaded and debug Android TV builds to continue when the Play Store update API is
+  unavailable.
 
 ### Security
 

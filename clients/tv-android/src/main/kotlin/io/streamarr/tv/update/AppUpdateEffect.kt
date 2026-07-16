@@ -51,7 +51,14 @@ class AppUpdateViewModel @Inject constructor(
                 platform = ClientPlatform.AndroidTv,
                 envelope = envelope,
             )
-            val check = appUpdateCoordinator.checkForUpdate()
+            // Sideloaded/debug builds and devices without a compatible
+            // Play Store return InstallErrorCode.ERROR_API_NOT_AVAILABLE.
+            // Update discovery is background-only, so that expected
+            // environment limitation must remain a silent no-op rather
+            // than cancelling the main coroutine and crashing the app.
+            val check = runCatching { appUpdateCoordinator.checkForUpdate() }
+                .getOrNull()
+                ?: return@launch
             when (val action = resolveUpdateAction(severity, check.snapshot)) {
                 is AppUpdateAction.Start -> _pendingStart.value = PendingUpdateStart(check, action.appUpdateType)
                 AppUpdateAction.None -> Unit

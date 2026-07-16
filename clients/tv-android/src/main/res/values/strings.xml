@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Streamarr</string>
+    <string name="app_name">Playarr</string>
 
     <string name="nav_home">Home</string>
     <string name="nav_library">Library</string>

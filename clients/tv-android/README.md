@@ -1,75 +1,64 @@
 # tv-android
 
-The Playarr Android TV / Google TV app: Jetpack Compose +
-`androidx.tv.material3` (10-foot-UI Material components with built-in
-d-pad focus states), Hilt DI, Media3 playback, targeting Android TV 9+
+The Playarr Android TV / Google TV app, targeting Android TV 9+
 (`minSdk 28`).
 
-This module is **not** a standalone Gradle project — it's included by the
-root build at `../android-shared/settings.gradle.kts`. See
-[`../android-shared/README.md`](../android-shared/README.md) for the full
-module graph, build instructions, and the (real, hit-and-fixed) build
-toolchain notes.
+Its presentation layer is the co-hosted Playarr web client running in a
+fullscreen, hardware-accelerated WebView. This is deliberate: Android TV
+renders the same React tree, CSS, routes, sign-in, profiles, libraries,
+playlists, detail pages, artwork, and player as `clients/tv-web/web`, so
+the two surfaces cannot visually or functionally drift.
 
-Quick build:
+The native Kotlin shell remains responsible for:
+
+- Android TV and Google TV launcher integration
+- Google Play in-app updates
+- the saved Streamarr server address
+- D-pad, Menu, and Back-key integration
+- HTML5 fullscreen video
+- connection failure and server-address recovery
+
+Press the remote **Menu** button to change the server address. If the
+configured server cannot serve the Playarr app, the address editor opens
+automatically.
+
+## Build
+
+This is not a standalone Gradle project. It is included by
+`../android-shared/settings.gradle.kts`.
 
 ```bash
-export JAVA_HOME=/opt/homebrew/opt/openjdk@21   # AGP needs 17/21; the environment default was too new
+export JAVA_HOME=/opt/homebrew/opt/openjdk@21
 cd ../android-shared
-./gradlew :tv-android:assembleDebug
+./gradlew :tv-android:testDebugUnitTest :tv-android:assembleDebug
 ```
 
-This was run successfully in the environment this project was built in —
-it produces a real, packaged, installable `tv-android-debug.apk`.
+Output:
 
-## Structure
-
+```text
+clients/tv-android/build/outputs/apk/debug/tv-android-debug.apk
 ```
+
+## Runtime contract
+
+The configured address must serve both:
+
+- the Playarr web app at `/`
+- the Streamarr API under `/api`
+
+This matches Streamarr's co-hosted production deployment. Plain HTTP is
+allowed because self-hosted home-LAN servers commonly do not terminate
+TLS; HTTPS remains preferred for internet-exposed instances.
+
+## Key files
+
+```text
 src/main/kotlin/io/streamarr/tv/
-├── StreamarrTvApp.kt           — @HiltAndroidApp Application
-├── MainActivity.kt             — single Activity, hosts the Compose tree
-├── navigation/
-│   ├── Routes.kt                — type-safe routes, including Pairing
-│   ├── AuthGateViewModel.kt      — decides Pairing vs. Home startDestination
-│   └── StreamarrTvNavHost.kt     — gates the real NavHost behind pairing state
-├── ui/
-│   ├── theme/TvTheme.kt          — androidx.tv.material3.MaterialTheme wrapper
-│   └── screens/                  — Pairing, Home, Library, Player, Settings
-└── di/                          — Hilt modules (mirrors mobile-android's)
+├── MainActivity.kt
+├── ui/screens/WebAppScreen.kt
+├── update/AppUpdateEffect.kt
+└── di/AuthModule.kt
 ```
 
-## The RFC 8628 pairing flow is real, end to end
-
-Per `docs/architecture/auth-modes.md`, TV is the one Playarr client that
-actually needs device-code pairing rather than username/password. This
-isn't a placeholder screen: `PairingScreen` drives `core-auth`'s real
-`DeviceAuthClient.requestDeviceCode()` → displays the user code +
-verification URL → polls `pollUntilResolved()` (which implements the RFC's
-`authorization_pending`/`slow_down`/`expired_token` backoff semantics) →
-on approval, persists the token via `TokenStore` (DataStore-backed) and
-navigates into the main app. `AuthGateViewModel` re-routes back to Pairing
-if `TokenStore` is ever cleared (Settings → Sign out).
-
-There is, of course, no real Streamarr server behind
-`BuildConfig.STREAMARR_BASE_URL` in this environment to actually approve a
-pairing against — the flow is real and compiles/type-checks against the
-documented contract, but was not exercised against a live server.
-
-## Design-system note
-
-`tv-android` does **not** use `core-designsystem`'s `StreamarrTheme` (that
-wraps `androidx.compose.material3.MaterialTheme`, tuned for phones). It
-has its own `TvTheme.kt` wrapping `androidx.tv.material3.MaterialTheme`,
-built from the same `StreamarrPalette` color tokens in `core-designsystem`
-so both apps share one source of truth for brand color despite using two
-different Material component libraries. The one exception is
-`CircularProgressIndicator`, which `androidx.tv.material3` doesn't ship —
-see `build.gradle.kts` for that dependency and the reasoning.
-
-## No blockers
-
-Gradle sync, `compileDebugKotlin`, and `assembleDebug` all succeeded
-against the real Android SDK/toolchain in this environment (SDK Platform
-37 and Build-Tools 37 were auto-downloaded; licenses were already
-accepted). There is no missing-SDK-component or license blocker to report
-here.
+The earlier native Compose screens remain in the module temporarily as
+reference code, but `MainActivity` no longer routes to them.
