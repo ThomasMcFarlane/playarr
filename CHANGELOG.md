@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Deploy Playarr Web to `playarr.app` through Cloudflare Workers after successful main-branch CI,
+  with fresh-on-reload app shells, an equivalent local command, and an operator setup guide.
 - Allow each Playarr Web login to select an absolute Streamarr server URL, connect to it
   directly from the browser, and keep saved profile sessions scoped to that server.
 - Add a VIDAA-aware hosted Playarr Web App with launcher artwork, persistent

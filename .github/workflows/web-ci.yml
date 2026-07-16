@@ -1,41 +1,41 @@
-# =============================================================================
-# Web Release
-# =============================================================================
-#
-# Release-track workflow for the standalone browser web client. Triggered
-# by pushing a tag like `web-v1.1.0`.
-#
-# NOTE: the web app is package `@streamarr-tv/web` at clients/tv-web/web/
-# -- part of the same tv-web pnpm workspace as the smart-TV app shells
-# (see clients/tv-web/pnpm-workspace.yaml and package.json's
-# `dev:web` script), not a separate top-level clients/web/. It ships on its
-# own `web-v*` tag independent of tv-web-ci.yml's `tv-web-v*` tag, and this
-# workflow is deliberately NOT part of the `changes` path-filter in ci.yml
-# (only tv-web is watched there, which covers the whole workspace including
-# web/), so it only ever runs at tag-push/release time, never on every PR.
-#
-# Build steps below are TODO placeholders (clients/tv-web/web doesn't have
-# a build script wired up yet), but the Node/pnpm toolchain setup steps ARE
-# real, since they don't depend on any repo content.
-# =============================================================================
-
-name: Web Release
+name: Deploy Playarr Web
 
 on:
-  push:
-    tags:
-      - 'web-v*'
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-playarr-web-production
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  build-and-publish:
-    name: Build & publish web release
+  deploy:
+    name: Deploy playarr.app
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
-    environment: release-web
+    timeout-minutes: 15
+    environment:
+      name: production-playarr-web
+      url: https://playarr.app
+    defaults:
+      run:
+        working-directory: clients/tv-web
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -44,19 +44,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: pnpm
+          cache-dependency-path: clients/tv-web/pnpm-lock.yaml
 
-      # TODO: once clients/tv-web/web has a build script, replace with:
-      #   pnpm install --frozen-lockfile
-      #   pnpm --filter ./web run build
-      - name: Install & build (placeholder)
-        run: |
-          echo "TODO: pnpm install --frozen-lockfile && pnpm --filter ./web run build in clients/tv-web for tag ${GITHUB_REF_NAME}"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      # TODO: publish the static build output to the CDN/hosting target
-      # (e.g. CloudFront + S3, Cloudflare Pages). scripts/cdn-bundle-publish.sh
-      # is owned by the dev-scripts scaffolding task -- wire the real
-      # invocation here once it lands, e.g.:
-      #   bash scripts/cdn-bundle-publish.sh --target web --dist clients/tv-web/web/dist
-      - name: Publish to CDN (placeholder)
-        run: |
-          echo "TODO: bash scripts/cdn-bundle-publish.sh --target web --dist clients/tv-web/web/dist (tag ${GITHUB_REF_NAME})"
+      - name: Test web client
+        run: pnpm --filter @streamarr-tv/web run test
+
+      - name: Build web client
+        run: pnpm --filter @streamarr-tv/web run build
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '4'
+          workingDirectory: clients/tv-web/web
+          command: deploy

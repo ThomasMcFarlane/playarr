@@ -83,6 +83,32 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.pathname === "/build-manifest.json") return;
 
+  // Production deploys can update the bundle without changing the package
+  // version. Fetching navigations from the network first means a reload sees
+  // the newly deployed index and its hashed assets immediately; the cached
+  // shell remains the offline fallback.
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request, { cache: "no-store" })
+        .then((response) => {
+          if (response.ok && event.request.url.startsWith(self.location.origin)) {
+            const responseClone = response.clone();
+            caches
+              .open(CACHE_PREFIX + "runtime")
+              .then((cache) => cache.put(event.request, responseClone))
+              .catch(() => {});
+          }
+          return response;
+        })
+        .catch(() =>
+          caches
+            .match(event.request)
+            .then((cached) => cached || caches.match("/index.html"))
+        )
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;

@@ -57,8 +57,12 @@ pnpm -r --if-present run test   # vitest suites (api-client, device-auth) agains
 pnpm --filter @streamarr-tv/api-client run generate   # regenerate src/generated/schema.ts
                                                         # from backend/openapi/streamarr.yaml
 pnpm --filter @streamarr-tv/web run dev     # Vite dev server for the standalone web app
+pnpm --filter @streamarr-tv/web run deploy:cloudflare   # build and deploy playarr.app
 pnpm --filter @streamarr-tv/app-webos run dev   # etc., per app
 ```
+
+Production deployment, GitHub Actions secrets, and the manual local workflow
+are documented in [Deploy Playarr Web to Cloudflare](../../docs/deployment/playarr-cloudflare.md).
 
 `pnpm -r run build` builds `packages/*` to `dist/` (declaration + source-mapped
 JS) first, then `apps/*` and `web/` typecheck against those `dist/` outputs

@@ -79,6 +79,10 @@ tv-web-dev:
 tv-web-build:
     cd {{tv_web_dir}} && pnpm install --frozen-lockfile && pnpm run build
 
+# Build and deploy the standalone Playarr Web app to playarr.app.
+playarr-deploy:
+    cd {{tv_web_dir}} && pnpm install --frozen-lockfile && pnpm --filter @streamarr-tv/web run deploy:cloudflare
+
 # ------------------------------------------------------------------------
 # Playarr native clients
 # ------------------------------------------------------------------------
