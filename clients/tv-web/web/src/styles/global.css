@@ -6113,21 +6113,29 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   flex-direction: column;
 }
 
-.tv-rail-surface.is-content::before,
-.tv-rail-surface.is-content::after {
+.tv-scroll-edge-window {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tv-scroll-edge-window::before,
+.tv-scroll-edge-window::after {
   content: "";
   position: absolute;
   z-index: 8;
   right: 0;
-  left: 10%;
+  left: 0;
   height: clamp(28px, 4vh, 54px);
   pointer-events: none;
   opacity: 0;
   transition: opacity 180ms ease;
 }
 
-.tv-rail-surface.is-content::before {
-  top: clamp(150px, 20vh, 218px);
+.tv-scroll-edge-window::before {
+  top: 0;
   border-radius: 0 0 50% 50%;
   background: radial-gradient(
     ellipse 82% 100% at 50% -25%,
@@ -6137,8 +6145,8 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   );
 }
 
-.tv-rail-surface.is-content::after {
-  bottom: clamp(45px, 6vh, 74px);
+.tv-scroll-edge-window::after {
+  bottom: 0;
   border-radius: 50% 50% 0 0;
   background: radial-gradient(
     ellipse 82% 100% at 50% 125%,
@@ -6148,8 +6156,8 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   );
 }
 
-.tv-rail-surface.is-content.can-scroll-up::before,
-.tv-rail-surface.is-content.can-scroll-down::after {
+.tv-scroll-edge-window.can-scroll-up::before,
+.tv-scroll-edge-window.can-scroll-down::after {
   opacity: 0.58;
 }
 
@@ -6466,9 +6474,13 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   font-size: clamp(0.44rem, 0.5vw, 0.62rem);
 }
 
-.tv-music-track-list-scroll {
-  min-height: 0;
+.tv-music-track-list-window {
   flex: 1 1 auto;
+}
+
+.tv-music-track-list-scroll {
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: clamp(5px, 0.65vh, 9px);
@@ -7019,6 +7031,10 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   color: var(--ink-muted);
   font-size: clamp(0.62rem, 0.72vw, 0.9rem);
   line-height: 1.55;
+}
+
+.tv-search-results-window {
+  flex: 1 1 auto;
 }
 
 .tv-search-results {

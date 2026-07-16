@@ -59,6 +59,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Pin scroll-edge shadows to the visible viewport and only show each edge when content remains in
+  that direction.
 - Migrate legacy Whisparr series records to site records without breaking catalogue references,
   and expose sites throughout administrator library filters, views, and permissions.
 - Backfill missing Lidarr media files even when the source reports an unknown availability state.

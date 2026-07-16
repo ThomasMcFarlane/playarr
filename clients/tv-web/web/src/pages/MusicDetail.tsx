@@ -38,6 +38,7 @@ import {
   type NavigationOrigin,
 } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { useScrollEdges } from "../lib/useScrollEdges";
 import type { AppShellOutletContext } from "../App";
 
 function artistChildren(children: WorkChildren): AlbumDetail[] {
@@ -211,6 +212,12 @@ function AlbumTrackList({
   onPlay: (album: AlbumDetail, track: TrackDetail) => void;
 }) {
   const tracks = playableTracks(album);
+  const trackListRef = useRef<HTMLDivElement>(null);
+  const scrollEdges = useScrollEdges(
+    trackListRef,
+    "vertical",
+    `${album.album.id}:${tracks.length}`
+  );
   const mediaContext = useMediaContextMenu({ onProgressChanged });
 
   return (
@@ -227,76 +234,83 @@ function AlbumTrackList({
         </div>
       </header>
       <div
-        className="tv-music-track-list-scroll"
-        data-tv-scroll-container
-        data-tv-scroll-axis="vertical"
-        data-navigation-scroll-key={`music:${artistId}:album:${album.album.id}`}
+        className={`tv-scroll-edge-window tv-music-track-list-window${
+          scrollEdges.start ? " can-scroll-up" : ""
+        }${scrollEdges.end ? " can-scroll-down" : ""}`}
       >
-        {tracks.map((track, index) => {
-          const mediaFileId = track.media_file_id;
-          if (!mediaFileId) return null;
-          const progress = progressByMedia.get(mediaFileId);
-          const contextProps = mediaContext.itemProps({
-            workId: artistId,
-            title: track.track.title,
-            detailRoute,
-            parentRoute: detailParentBackTo,
-            progress,
-            preferredMediaFileId: mediaFileId,
-            leaves: [
-              {
-                mediaFileId,
-                runtimeMs:
-                  track.runtime_ms ?? (track.track.duration_seconds ?? 0) * 1_000,
-                title: track.track.title,
-              },
-            ],
-            activateOrigin: true,
-            onPlay: () => onPlay(album, track),
-          });
-          return (
-            <Link
-              key={track.track.id}
-              id={`music-track-${track.track.id}`}
-              to={`/player/${mediaFileId}`}
-              state={{
-                title: track.track.title,
-                backTo: detailRoute,
-                detailParentBackTo,
-                mediaFileId,
-                playlistItems,
-                navigationOrigin,
-                detailNavigationOrigin,
-              }}
-              className={`tv-music-track-row${
-                selectedTrackId === track.track.id ? " is-selected" : ""
-              }`}
-              data-navigation-focus-key={`music:${artistId}:track:${track.track.id}`}
-              data-tv-edge-target-up={
-                index === 0 ? `#music-album-${album.album.id}` : undefined
-              }
-              onFocus={() => onSelect(album.album.id, track.track.id)}
-              onMouseEnter={() => onSelect(album.album.id, track.track.id)}
-              onClick={(event) => {
-                event.preventDefault();
-                onNavigate(event);
-                onPlay(album, track);
-              }}
-              aria-label={`Play ${track.track.title}`}
-              {...contextProps}
-              onKeyDown={(event) => contextProps.onKeyDown(event)}
-            >
-              <span className="tv-music-track-row-number" aria-hidden="true">
-                {String(track.track.track_number).padStart(2, "0")}
-              </span>
-              <strong>{track.track.title}</strong>
-              <span className="tv-music-track-row-duration">
-                {formatDuration(track.track.duration_seconds)}
-              </span>
-              <WatchStateOverlay progress={progress} showUnwatched />
-            </Link>
-          );
-        })}
+        <div
+          ref={trackListRef}
+          className="tv-music-track-list-scroll"
+          data-tv-scroll-container
+          data-tv-scroll-axis="vertical"
+          data-navigation-scroll-key={`music:${artistId}:album:${album.album.id}`}
+        >
+          {tracks.map((track, index) => {
+            const mediaFileId = track.media_file_id;
+            if (!mediaFileId) return null;
+            const progress = progressByMedia.get(mediaFileId);
+            const contextProps = mediaContext.itemProps({
+              workId: artistId,
+              title: track.track.title,
+              detailRoute,
+              parentRoute: detailParentBackTo,
+              progress,
+              preferredMediaFileId: mediaFileId,
+              leaves: [
+                {
+                  mediaFileId,
+                  runtimeMs:
+                    track.runtime_ms ?? (track.track.duration_seconds ?? 0) * 1_000,
+                  title: track.track.title,
+                },
+              ],
+              activateOrigin: true,
+              onPlay: () => onPlay(album, track),
+            });
+            return (
+              <Link
+                key={track.track.id}
+                id={`music-track-${track.track.id}`}
+                to={`/player/${mediaFileId}`}
+                state={{
+                  title: track.track.title,
+                  backTo: detailRoute,
+                  detailParentBackTo,
+                  mediaFileId,
+                  playlistItems,
+                  navigationOrigin,
+                  detailNavigationOrigin,
+                }}
+                className={`tv-music-track-row${
+                  selectedTrackId === track.track.id ? " is-selected" : ""
+                }`}
+                data-navigation-focus-key={`music:${artistId}:track:${track.track.id}`}
+                data-tv-edge-target-up={
+                  index === 0 ? `#music-album-${album.album.id}` : undefined
+                }
+                onFocus={() => onSelect(album.album.id, track.track.id)}
+                onMouseEnter={() => onSelect(album.album.id, track.track.id)}
+                onClick={(event) => {
+                  event.preventDefault();
+                  onNavigate(event);
+                  onPlay(album, track);
+                }}
+                aria-label={`Play ${track.track.title}`}
+                {...contextProps}
+                onKeyDown={(event) => contextProps.onKeyDown(event)}
+              >
+                <span className="tv-music-track-row-number" aria-hidden="true">
+                  {String(track.track.track_number).padStart(2, "0")}
+                </span>
+                <strong>{track.track.title}</strong>
+                <span className="tv-music-track-row-duration">
+                  {formatDuration(track.track.duration_seconds)}
+                </span>
+                <WatchStateOverlay progress={progress} showUnwatched />
+              </Link>
+            );
+          })}
+        </div>
       </div>
       {mediaContext.contextMenu}
     </section>

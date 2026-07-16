@@ -786,50 +786,53 @@ export function SearchPage() {
       <TvRailSurface
         mode="content"
         ariaLabel="Search results"
-        className={`tv-search-rail-surface${
-          scrollEdges.start ? " can-scroll-up" : ""
-        }${scrollEdges.end ? " can-scroll-down" : ""}`}
+        className="tv-search-rail-surface"
       >
         <div
-          ref={resultsRef}
-          className="tv-search-results tv-search-rail-scroll"
-          data-tv-scroll-container
-          data-tv-scroll-axis="vertical"
-          data-navigation-scroll-key="search:results"
-          aria-live="polite"
-          aria-busy={state.status === "loading"}
+          className={`tv-scroll-edge-window tv-search-results-window${
+            scrollEdges.start ? " can-scroll-up" : ""
+          }${scrollEdges.end ? " can-scroll-down" : ""}`}
         >
-          {state.status === "loading" ? (
-            <div className="tv-search-state" role="status">
-              <span className="tv-mini-loader" aria-hidden="true" />
-              <p>Searching…</p>
-            </div>
-          ) : state.status === "error" ? (
-            <TvEmptyState
-              announce={false}
-              graphic="search"
-              tone="error"
-              variant="rail"
-              title="Search could not be completed"
-              description={state.message}
-            />
-          ) : state.status === "idle" ? (
-            <TvEmptyState
-              announce={false}
-              graphic="search"
-              title="Start typing to search."
-              variant="rail"
-            />
-          ) : results.length === 0 ? (
-            <TvEmptyState
-              announce={false}
-              graphic="search"
-              title="No matching titles or playlists."
-              description="Try another title or adjust the filters."
-              variant="rail"
-            />
-          ) : (
-            <div className="tv-search-results-grid tv-search-rail-grid">
+          <div
+            ref={resultsRef}
+            className="tv-search-results tv-search-rail-scroll"
+            data-tv-scroll-container
+            data-tv-scroll-axis="vertical"
+            data-navigation-scroll-key="search:results"
+            aria-live="polite"
+            aria-busy={state.status === "loading"}
+          >
+            {state.status === "loading" ? (
+              <div className="tv-search-state" role="status">
+                <span className="tv-mini-loader" aria-hidden="true" />
+                <p>Searching…</p>
+              </div>
+            ) : state.status === "error" ? (
+              <TvEmptyState
+                announce={false}
+                graphic="search"
+                tone="error"
+                variant="rail"
+                title="Search could not be completed"
+                description={state.message}
+              />
+            ) : state.status === "idle" ? (
+              <TvEmptyState
+                announce={false}
+                graphic="search"
+                title="Start typing to search."
+                variant="rail"
+              />
+            ) : results.length === 0 ? (
+              <TvEmptyState
+                announce={false}
+                graphic="search"
+                title="No matching titles or playlists."
+                description="Try another title or adjust the filters."
+                variant="rail"
+              />
+            ) : (
+              <div className="tv-search-results-grid tv-search-rail-grid">
                 {results.map((result, index) => {
                   const key = resultKey(result);
                   const backTo = searchRoute(
@@ -947,8 +950,9 @@ export function SearchPage() {
                     </Link>
                   );
                 })}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </div>
       </TvRailSurface>
 
