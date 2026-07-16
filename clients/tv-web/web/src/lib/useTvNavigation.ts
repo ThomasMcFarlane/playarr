@@ -325,6 +325,7 @@ function parentRoute(pathname: string, requestedBackTo?: string): string {
     requestedBackTo === "/" ||
     requestedBackTo === "/series" ||
     requestedBackTo === "/movies" ||
+    requestedBackTo === "/sites" ||
     requestedBackTo === "/music" ||
     requestedBackTo === "/profiles" ||
     (typeof requestedBackTo === "string" &&
@@ -336,12 +337,14 @@ function parentRoute(pathname: string, requestedBackTo?: string): string {
   if (/^\/search\/[^/]+$/.test(pathname)) return "/search";
   if (/^\/series\/[^/]+$/.test(pathname)) return "/series";
   if (/^\/movies\/[^/]+$/.test(pathname)) return "/movies";
+  if (/^\/sites\/[^/]+$/.test(pathname)) return "/sites";
   if (/^\/music\/[^/]+$/.test(pathname)) return "/music";
   if (/^\/playlists\/[^/]+$/.test(pathname)) return "/playlists";
   if (
     pathname === "/search" ||
     pathname === "/series" ||
     pathname === "/movies" ||
+    pathname === "/sites" ||
     pathname === "/music" ||
     pathname === "/profiles" ||
     pathname === "/settings"

@@ -826,7 +826,7 @@ function SeasonEpisodeTrack({
   );
 }
 
-/** Immersive movie/series detail surface modelled on the supplied TV motion reference. */
+/** Immersive movie/series/site detail surface modelled on the supplied TV motion reference. */
 export function WorkDetailPage() {
   const { workId } = useParams<{ workId: string }>();
   const location = useLocation();

@@ -688,7 +688,9 @@ export function useMediaContextMenu({
   );
 
   const canAddToPlaylist =
-    activeItem?.work?.kind === "movie" || activeItem?.work?.kind === "series";
+    activeItem?.work?.kind === "movie" ||
+    activeItem?.work?.kind === "series" ||
+    activeItem?.work?.kind === "site";
   const isPlaylistItem = Boolean(activeItem?.playlistMembership);
 
   const contextMenu = activeItem ? (

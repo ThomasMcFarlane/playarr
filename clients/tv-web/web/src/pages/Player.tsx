@@ -47,7 +47,7 @@ export interface PlayerLocationState {
 function isDetailRoute(value: unknown): value is string {
   return (
     typeof value === "string" &&
-    (/^\/(?:movies|series|music)\/[^/?]+$/.test(value) ||
+    (/^\/(?:movies|series|sites|music)\/[^/?]+$/.test(value) ||
       /^\/search\/[^/?]+(?:\?.*)?$/.test(value))
   );
 }
@@ -57,6 +57,7 @@ function isDetailParentRoute(value: unknown): value is string {
     value === "/" ||
     value === "/movies" ||
     value === "/series" ||
+    value === "/sites" ||
     value === "/music" ||
     (typeof value === "string" && /^\/search(?:\?.*)?$/.test(value))
   );

@@ -36,15 +36,39 @@ import {
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 
 function detailRoute(work: Work): string {
-  return work.kind === "series" ? `/series/${work.id}` : `/movies/${work.id}`;
+  return work.kind === "site"
+    ? `/sites/${work.id}`
+    : work.kind === "series"
+      ? `/series/${work.id}`
+      : `/movies/${work.id}`;
 }
 
-function mergeRecent(series: Work[], movies: Work[]): Work[] {
-  return [...series, ...movies]
+function isEpisodic(work: Work): boolean {
+  return work.kind === "series" || work.kind === "site";
+}
+
+function workKindLabel(work: Work): string {
+  return work.kind === "site"
+    ? "Site"
+    : work.kind === "series"
+      ? "Series"
+      : "Movie";
+}
+
+function mergeRecent(...groups: Work[][]): Work[] {
+  return groups
+    .flat()
     .sort((a, b) => new Date(b.added_at).getTime() - new Date(a.added_at).getTime());
 }
 
-type HomeRailId = "primary" | "new-movies" | "new-series" | "more-movies" | "more-series";
+type HomeRailId =
+  | "primary"
+  | "new-movies"
+  | "new-series"
+  | "new-sites"
+  | "more-movies"
+  | "more-series"
+  | "more-sites";
 
 interface HomeRailDefinition {
   id: HomeRailId;
@@ -114,13 +138,21 @@ export function HomePage() {
     sort: "recent",
     limit: 36,
   });
+  const siteState = useCatalogBrowse(client, {
+    kind: "site",
+    available_only: true,
+    sort: "recent",
+    limit: 36,
+  });
   const [activeRail, setActiveRail] = useState<HomeRailId>("primary");
   const [selectedByRail, setSelectedByRail] = useState<Record<HomeRailId, string | null>>({
     primary: null,
     "new-movies": null,
     "new-series": null,
+    "new-sites": null,
     "more-movies": null,
     "more-series": null,
+    "more-sites": null,
   });
   const [onDeck, setOnDeck] = useState<OnDeckEntry[]>([]);
   const [onDeckSettled, setOnDeckSettled] = useState(false);
@@ -167,11 +199,10 @@ export function HomePage() {
           resumable.map(async (progress) => {
             try {
               const detail = await client.getWork(progress.work_id);
-              const episode =
-                detail.work.kind === "series"
-                  ? findOnDeckEpisode(detail.children, progress.media_file_id)
-                  : null;
-              if (detail.work.kind === "series" && !episode) return null;
+              const episode = isEpisodic(detail.work)
+                ? findOnDeckEpisode(detail.children, progress.media_file_id)
+                : null;
+              if (isEpisodic(detail.work) && !episode) return null;
               return { work: detail.work, progress, episode };
             } catch {
               return null;
@@ -202,9 +233,10 @@ export function HomePage() {
 
   const seriesItems = seriesState.status === "ready" ? seriesState.data.items : EMPTY_WORKS;
   const movieItems = movieState.status === "ready" ? movieState.data.items : EMPTY_WORKS;
+  const siteItems = siteState.status === "ready" ? siteState.data.items : EMPTY_WORKS;
   const items = useMemo(
-    () => mergeRecent(seriesItems, movieItems),
-    [seriesItems, movieItems]
+    () => mergeRecent(seriesItems, movieItems, siteItems),
+    [seriesItems, movieItems, siteItems]
   );
   const onDeckItems = useMemo(() => onDeck.map((entry) => entry.work), [onDeck]);
   const onDeckByWork = useMemo(
@@ -246,6 +278,11 @@ export function HomePage() {
         items: takeUnused(seriesItems, 12),
       },
       {
+        id: "new-sites",
+        title: "New sites",
+        items: takeUnused(siteItems, 12),
+      },
+      {
         id: "more-movies",
         title: "More movies",
         items: takeUnused(movieItems, 12),
@@ -255,9 +292,14 @@ export function HomePage() {
         title: "More series",
         items: takeUnused(seriesItems, 12),
       },
+      {
+        id: "more-sites",
+        title: "More sites",
+        items: takeUnused(siteItems, 12),
+      },
     ];
     return definitions.filter((rail) => rail.items.length > 0);
-  }, [items, movieItems, onDeckItems, seriesItems]);
+  }, [items, movieItems, onDeckItems, seriesItems, siteItems]);
   const progressByWork = useMemo(
     () => indexWatchProgressByWork(watchProgress ?? []),
     [watchProgress]
@@ -269,10 +311,12 @@ export function HomePage() {
       .join("|"),
     onDeckSettled &&
       seriesState.status === "ready" &&
-      movieState.status === "ready",
+      movieState.status === "ready" &&
+      siteState.status === "ready",
     onDeckSettled &&
       seriesState.status === "ready" &&
-      movieState.status === "ready"
+      movieState.status === "ready" &&
+      siteState.status === "ready"
   );
 
   useLayoutEffect(() => {
@@ -296,12 +340,16 @@ export function HomePage() {
     seriesState.status === "idle" ||
     seriesState.status === "loading" ||
     movieState.status === "idle" ||
-    movieState.status === "loading";
+    movieState.status === "loading" ||
+    siteState.status === "idle" ||
+    siteState.status === "loading";
   const error =
     seriesState.status === "error"
       ? seriesState.message
       : movieState.status === "error"
         ? movieState.message
+        : siteState.status === "error"
+          ? siteState.message
         : null;
 
   if (isLoading) {
@@ -329,7 +377,7 @@ export function HomePage() {
           graphic="home"
           variant="page"
           title="Your home screen is waiting for its first title"
-          description="Available films and series will appear here after the next sync."
+          description="Available films, series and sites will appear here after the next sync."
         />
       </div>
     );
@@ -389,7 +437,7 @@ export function HomePage() {
                 2,
                 "0"
               )} E${String(selectedEpisode.detail.episode.episode_number).padStart(2, "0")}`
-            : `${selected.kind === "series" ? "Series" : "Movie"} · ${
+            : `${workKindLabel(selected)} · ${
                 selected.genres[0] ?? "Your library"
               }`}
         </p>
@@ -526,9 +574,7 @@ function HomeRail({
                   2,
                   "0"
                 )} E${String(episode.detail.episode.episode_number).padStart(2, "0")}`
-              : work.kind === "series"
-                ? "Series"
-                : "Movie";
+              : workKindLabel(work);
             return (
               <Link
                 key={work.id}

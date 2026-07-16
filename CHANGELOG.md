@@ -25,6 +25,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   chapter, progress, retry, minimised-player, and remote-control support.
 - Add an Android TV shell that hosts Playarr Web with saved server configuration, D-pad and Menu
   handling, fullscreen playback, and recoverable connection errors.
+- Include Whisparr sites in Playarr home rails, return navigation, playlists, context actions, and
+  episodic watch-progress handling.
 
 ### Changed
 

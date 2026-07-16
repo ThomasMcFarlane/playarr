@@ -1431,7 +1431,13 @@ function PlaylistMediaTrack({
               />
             </span>
             <strong>{work.title}</strong>
-            <small>{work.kind === "series" ? "Series" : "Movie"}</small>
+            <small>
+              {work.kind === "site"
+                ? "Site"
+                : work.kind === "series"
+                  ? "Series"
+                  : "Movie"}
+            </small>
           </Link>
         );
       })}
