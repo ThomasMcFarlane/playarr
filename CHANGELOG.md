@@ -70,6 +70,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   lifecycle, avoiding premature destruction during Compose updates.
 - Retry audio thumbnail generation without seeking when FFmpeg exposes embedded cover art as a
   single attached picture.
+- Suppress Android's restricted-API lint false positive on the public Activity key-dispatch
+  override used for TV remotes.
 
 ### Security
 
