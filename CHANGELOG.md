@@ -76,6 +76,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   override used for TV remotes.
 - Reload visible Playarr library kinds for each signed-in user so profile switches cannot retain
   navigation from the previous user's permissions.
+- Make minimised-player focus unmistakable for keyboard and remote users with layered focus rings,
+  title contrast, and maximise-button feedback.
 
 ### Security
 
