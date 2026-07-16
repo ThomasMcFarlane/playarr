@@ -1,4 +1,4 @@
-//! The [`Work`] aggregate root: one row per movie, series, artist, or
+//! The [`Work`] aggregate root: one row per movie, series, site, artist, or
 //! author. Kind-specific detail (seasons/episodes, albums/tracks,
 //! books) lives in [`crate::series`], [`crate::music`], and
 //! [`crate::publishing`] and hangs off `Work::id`.
@@ -17,6 +17,7 @@ use uuid::Uuid;
 pub enum WorkKind {
     Movie,
     Series,
+    Site,
     Artist,
     Author,
 }
@@ -57,6 +58,14 @@ pub enum ExternalProvider {
     Goodreads,
     Isbn,
     Asin,
+    /// ThePornDB -- Whisparr's own metadata provider, structurally the same
+    /// role for Whisparr's studio/scene catalog that `Tvdb` plays for
+    /// Sonarr's. Given a first-class variant (rather than falling back to
+    /// `Other`) for the same reason every other Work-owning source has one:
+    /// `streamarr-arr-sync::arr_client::work_kind_and_provider` needs a
+    /// stable, matchable discriminant to key `Work::external_refs` lookups
+    /// on, and every source kind that owns `Work` rows gets one.
+    Tpdb,
     /// Escape hatch for providers we don't have a first-class variant for
     /// yet (e.g. AniDB, Discogs) without needing a migration to add one.
     Other(String),
@@ -110,6 +119,15 @@ pub struct Work {
     /// from metadata providers); used by [`crate::Policy`] tag filters.
     pub tags: Vec<String>,
     pub added_at: DateTime<Utc>,
+    /// When this title was actually released, per its source *arr app
+    /// (Radarr `digitalRelease`/`physicalRelease`, Sonarr `firstAired`) --
+    /// distinct from `added_at` (when Streamarr itself learned about the
+    /// work). Populated by `streamarr-arr-sync` for `Movie`/`Series`/`Site`
+    /// kinds only; `Artist`/`Author` works have no single release date of
+    /// their own (their children -- albums/books -- each carry one already),
+    /// so this stays `None` for those kinds. See
+    /// `backend/migrations/{sqlite,postgres}/00{11,14}_work_release_date.sql`.
+    pub release_date: Option<DateTime<Utc>>,
     /// Whether Streamarr should actively track/request missing children of
     /// this work (mirrors the *arr "monitored" concept).
     pub monitored: bool,

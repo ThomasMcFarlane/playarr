@@ -20,7 +20,7 @@ pub struct ErrorBody {
     pub message: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ApiError {
     pub status: StatusCode,
     pub body: ErrorBody,
@@ -95,6 +95,9 @@ impl From<streamarr_transcode::TranscodeError> for ApiError {
                 "no_transcode_capacity",
                 "no on-demand transcode capacity available on this node",
             ),
+            TranscodeError::Db(streamarr_db::DbError::NotFound) => {
+                Self::not_found("rendition not found")
+            }
             other => Self::internal(other.to_string()),
         }
     }
@@ -121,6 +124,30 @@ impl From<crate::source_registry::SyncTriggerError> for ApiError {
                 "no reconciliation poller is currently running for this source instance yet -- \
                  it may still be starting up (checked every 10s after registration)",
             ),
+        }
+    }
+}
+
+impl From<streamarr_auth::RefreshError> for ApiError {
+    fn from(err: streamarr_auth::RefreshError) -> Self {
+        use streamarr_auth::RefreshError;
+        match err {
+            // Every "this refresh token doesn't work anymore" reason maps
+            // to the same 401 -- same "don't leak which part was wrong"
+            // rationale as `LoginError`'s mapping just below. A caller
+            // whose refresh token is dead (expired, reused, family
+            // revoked, or simply unknown) has one correct next step either
+            // way: send the user through a real login again.
+            RefreshError::UnknownToken
+            | RefreshError::Expired
+            | RefreshError::ReuseDetected
+            | RefreshError::FamilyRevoked => Self::new(
+                StatusCode::UNAUTHORIZED,
+                "unauthorized",
+                "refresh token is invalid or expired",
+            ),
+            RefreshError::Db(inner) => inner.into(),
+            RefreshError::Jwt(err) => Self::internal(err.to_string()),
         }
     }
 }

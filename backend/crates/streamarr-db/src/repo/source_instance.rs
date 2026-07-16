@@ -52,7 +52,6 @@ impl SqlxSourceInstanceRepo {
         let priority: i32 = row.try_get("priority")?;
         let default_root_folder_id: Option<String> = row.try_get("default_root_folder_id")?;
         let default_quality_profile_id: Option<i64> = row.try_get("default_quality_profile_id")?;
-        let enabled_for_requests: i64 = row.try_get("enabled_for_requests")?;
         let best_effort: i64 = row.try_get("best_effort")?;
 
         Ok(SourceInstance {
@@ -64,7 +63,6 @@ impl SqlxSourceInstanceRepo {
             priority,
             default_root_folder_id,
             default_quality_profile_id,
-            enabled_for_requests: bool_from_i64(enabled_for_requests),
             best_effort: bool_from_i64(best_effort),
         })
     }
@@ -74,38 +72,46 @@ impl SqlxSourceInstanceRepo {
 impl SourceInstanceRepo for SqlxSourceInstanceRepo {
     async fn list_all(&self) -> Result<Vec<SourceInstance>, DbError> {
         let sql = "SELECT id, kind, name, base_url, api_key_encrypted, priority, \
-                    default_root_folder_id, default_quality_profile_id, enabled_for_requests, \
+                    default_root_folder_id, default_quality_profile_id, \
                     best_effort FROM source_instances ORDER BY priority, name";
         let rows = sqlx::query(sql).fetch_all(&self.pool).await?;
         rows.iter().map(Self::from_row).collect()
     }
 
+    // `enabled_for_requests` still exists as a DB column (see
+    // migrations/{sqlite,postgres}/000{6,9}_source_instances.sql) but is
+    // deliberately not read/written here anymore -- it backed a request-
+    // submission feature Streamarr no longer has (see
+    // streamarr_model::SourceInstance's own doc comment). Leaving the
+    // column in place (rather than a destructive DROP COLUMN migration)
+    // means it just keeps whatever value it already has for existing rows,
+    // and a fresh insert relies on the column's own DEFAULT -- both
+    // harmless, and safe to actually drop later in a real migration
+    // without any code-level urgency.
     async fn upsert(&self, instance: &SourceInstance) -> Result<(), DbError> {
         let sql = match self.backend {
             Backend::Sqlite => {
                 "INSERT INTO source_instances \
                  (id, kind, name, base_url, api_key_encrypted, priority, default_root_folder_id, \
-                 default_quality_profile_id, enabled_for_requests, best_effort) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+                 default_quality_profile_id, best_effort) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (id) DO UPDATE SET \
                  kind = excluded.kind, name = excluded.name, base_url = excluded.base_url, \
                  api_key_encrypted = excluded.api_key_encrypted, priority = excluded.priority, \
                  default_root_folder_id = excluded.default_root_folder_id, \
                  default_quality_profile_id = excluded.default_quality_profile_id, \
-                 enabled_for_requests = excluded.enabled_for_requests, \
                  best_effort = excluded.best_effort"
             }
             Backend::Postgres => {
                 "INSERT INTO source_instances \
                  (id, kind, name, base_url, api_key_encrypted, priority, default_root_folder_id, \
-                 default_quality_profile_id, enabled_for_requests, best_effort) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
+                 default_quality_profile_id, best_effort) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
                  ON CONFLICT (id) DO UPDATE SET \
                  kind = excluded.kind, name = excluded.name, base_url = excluded.base_url, \
                  api_key_encrypted = excluded.api_key_encrypted, priority = excluded.priority, \
                  default_root_folder_id = excluded.default_root_folder_id, \
                  default_quality_profile_id = excluded.default_quality_profile_id, \
-                 enabled_for_requests = excluded.enabled_for_requests, \
                  best_effort = excluded.best_effort"
             }
         };
@@ -118,7 +124,6 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
             .bind(instance.priority)
             .bind(instance.default_root_folder_id.as_deref())
             .bind(instance.default_quality_profile_id)
-            .bind(bool_to_i64(instance.enabled_for_requests))
             .bind(bool_to_i64(instance.best_effort))
             .execute(&self.pool)
             .await?;
@@ -158,7 +163,6 @@ mod tests {
             priority: 10,
             default_root_folder_id: Some("/data/media".to_string()),
             default_quality_profile_id: Some(4),
-            enabled_for_requests: true,
             best_effort: false,
         }
     }
@@ -251,6 +255,7 @@ mod tests {
             SourceKind::Bazarr,
             SourceKind::Prowlarr,
             SourceKind::Readarr,
+            SourceKind::Whisparr,
         ] {
             let instance = sample_instance(kind, "instance");
             repo.upsert(&instance).await.unwrap();

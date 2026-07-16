@@ -101,6 +101,7 @@ impl SqlxWorkRepo {
         let genres: String = row.try_get("genres")?;
         let tags: String = row.try_get("tags")?;
         let added_at: String = row.try_get("added_at")?;
+        let release_date: Option<String> = row.try_get("release_date")?;
         let monitored: i64 = row.try_get("monitored")?;
         let availability: String = row.try_get("availability")?;
 
@@ -118,6 +119,7 @@ impl SqlxWorkRepo {
             genres: serde_json::from_str(&genres)?,
             tags: serde_json::from_str(&tags)?,
             added_at: parse_datetime(&added_at)?,
+            release_date: release_date.map(|raw| parse_datetime(&raw)).transpose()?,
             monitored: bool_from_i64(monitored),
             availability: availability_from_str(&availability)?,
         })
@@ -130,11 +132,11 @@ impl WorkRepo for SqlxWorkRepo {
         let sql = match self.backend {
             Backend::Sqlite => {
                 "SELECT id, kind, title, sort_title, overview, images, genres, tags, \
-                 added_at, monitored, availability FROM works WHERE id = ?"
+                 added_at, release_date, monitored, availability FROM works WHERE id = ?"
             }
             Backend::Postgres => {
                 "SELECT id, kind, title, sort_title, overview, images, genres, tags, \
-                 added_at, monitored, availability FROM works WHERE id = $1"
+                 added_at, release_date, monitored, availability FROM works WHERE id = $1"
             }
         };
         let row = sqlx::query(sql)
@@ -154,12 +156,12 @@ impl WorkRepo for SqlxWorkRepo {
         let sql = match self.backend {
             Backend::Sqlite => {
                 "SELECT id, kind, title, sort_title, overview, images, genres, tags, \
-                 added_at, monitored, availability FROM works \
+                 added_at, release_date, monitored, availability FROM works \
                  WHERE kind = ? ORDER BY sort_title LIMIT ? OFFSET ?"
             }
             Backend::Postgres => {
                 "SELECT id, kind, title, sort_title, overview, images, genres, tags, \
-                 added_at, monitored, availability FROM works \
+                 added_at, release_date, monitored, availability FROM works \
                  WHERE kind = $1 ORDER BY sort_title LIMIT $2 OFFSET $3"
             }
         };
@@ -191,23 +193,23 @@ impl WorkRepo for SqlxWorkRepo {
         let upsert_sql = match self.backend {
             Backend::Sqlite => {
                 "INSERT INTO works \
-                 (id, kind, title, sort_title, overview, images, genres, tags, added_at, monitored, availability) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+                 (id, kind, title, sort_title, overview, images, genres, tags, added_at, release_date, monitored, availability) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (id) DO UPDATE SET \
                  kind = excluded.kind, title = excluded.title, sort_title = excluded.sort_title, \
                  overview = excluded.overview, images = excluded.images, genres = excluded.genres, \
-                 tags = excluded.tags, added_at = excluded.added_at, monitored = excluded.monitored, \
-                 availability = excluded.availability"
+                 tags = excluded.tags, added_at = excluded.added_at, release_date = excluded.release_date, \
+                 monitored = excluded.monitored, availability = excluded.availability"
             }
             Backend::Postgres => {
                 "INSERT INTO works \
-                 (id, kind, title, sort_title, overview, images, genres, tags, added_at, monitored, availability) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
+                 (id, kind, title, sort_title, overview, images, genres, tags, added_at, release_date, monitored, availability) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
                  ON CONFLICT (id) DO UPDATE SET \
                  kind = excluded.kind, title = excluded.title, sort_title = excluded.sort_title, \
                  overview = excluded.overview, images = excluded.images, genres = excluded.genres, \
-                 tags = excluded.tags, added_at = excluded.added_at, monitored = excluded.monitored, \
-                 availability = excluded.availability"
+                 tags = excluded.tags, added_at = excluded.added_at, release_date = excluded.release_date, \
+                 monitored = excluded.monitored, availability = excluded.availability"
             }
         };
         sqlx::query(upsert_sql)
@@ -220,6 +222,7 @@ impl WorkRepo for SqlxWorkRepo {
             .bind(genres)
             .bind(tags)
             .bind(format_datetime(work.added_at))
+            .bind(work.release_date.map(format_datetime))
             .bind(bool_to_i64(work.monitored))
             .bind(availability_to_str(work.availability))
             .execute(&mut *tx)
@@ -278,14 +281,14 @@ impl WorkRepo for SqlxWorkRepo {
         let sql = match self.backend {
             Backend::Sqlite => {
                 "SELECT w.id, w.kind, w.title, w.sort_title, w.overview, w.images, w.genres, \
-                 w.tags, w.added_at, w.monitored, w.availability \
+                 w.tags, w.added_at, w.release_date, w.monitored, w.availability \
                  FROM works w \
                  JOIN work_external_refs r ON r.work_id = w.id \
                  WHERE r.provider = ? AND r.external_id = ? LIMIT 1"
             }
             Backend::Postgres => {
                 "SELECT w.id, w.kind, w.title, w.sort_title, w.overview, w.images, w.genres, \
-                 w.tags, w.added_at, w.monitored, w.availability \
+                 w.tags, w.added_at, w.release_date, w.monitored, w.availability \
                  FROM works w \
                  JOIN work_external_refs r ON r.work_id = w.id \
                  WHERE r.provider = $1 AND r.external_id = $2 LIMIT 1"
@@ -343,6 +346,7 @@ mod tests {
             // asserting exact equality against a nanosecond-precision
             // `Utc::now()`.
             added_at: Utc::now().trunc_subsecs(3),
+            release_date: Some(Utc::now().trunc_subsecs(3) - chrono::Duration::days(14)),
             monitored: true,
             availability: Availability::Available,
         }

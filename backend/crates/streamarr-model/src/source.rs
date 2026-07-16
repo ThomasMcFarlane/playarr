@@ -16,6 +16,13 @@ pub enum SourceKind {
     Bazarr,
     Prowlarr,
     Readarr,
+    /// Whisparr V3 -- a direct Sonarr fork (same `/api/v3/series`,
+    /// `/api/v3/episode`, `/api/v3/episodefile` route shapes; a "series" is
+    /// a studio/site and an "episode" is an individual scene). Kept as its
+    /// own `SourceKind` rather than reusing `Sonarr` because it is a
+    /// distinct application an operator points Streamarr at separately, with
+    /// its own [`crate::ExternalProvider::Tpdb`] metadata identity.
+    Whisparr,
 }
 
 /// A single configured *arr connection. Streamarr can be pointed at
@@ -39,15 +46,6 @@ pub struct SourceInstance {
     pub priority: i32,
     pub default_root_folder_id: Option<String>,
     pub default_quality_profile_id: Option<i64>,
-    /// Reserved: originally gated whether a (since-removed) request-
-    /// management feature could submit new adds/searches to this instance,
-    /// as opposed to only reading its existing catalog. Streamarr no longer
-    /// has a request-submission feature -- see `docs/architecture/
-    /// overview.md`'s scope note -- so nothing currently reads this field.
-    /// Kept on the wire (not removed) since it's cheap to keep and an
-    /// operator-facing admin toggle for "this instance is read-only" is a
-    /// plausible future use.
-    pub enabled_for_requests: bool,
     /// When true, a sync failure against this instance is logged and
     /// skipped rather than failing the overall reconciliation pass — for
     /// instances the operator has marked as non-critical/flaky.

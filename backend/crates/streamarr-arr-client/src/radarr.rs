@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use streamarr_model::Sensitive;
 
@@ -12,7 +13,9 @@ use crate::{ArrClientError, ArrConnector};
 /// file per movie, so there's no separate list-by-parent-id endpoint to
 /// call. This previously deserialized into an implicit ignored field
 /// (unmapped JSON keys are dropped silently by serde by default) rather
-/// than a typed one; `movie_file` now captures it.
+/// than a typed one; `movie_file` now captures it. `overview`, `genres` and
+/// `images` were added on top of that for a downstream metadata-display
+/// pipeline, which needs synopsis/genre/artwork data Radarr already returns.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RadarrMovie {
     pub id: i64,
@@ -25,11 +28,54 @@ pub struct RadarrMovie {
     #[serde(rename = "hasFile")]
     pub has_file: bool,
     pub path: String,
+    /// Radarr's title runtime, in whole minutes.
+    #[serde(default)]
+    pub runtime: Option<u32>,
     /// Absent/null when `has_file` is false. `Option<T>` fields are
     /// missing-key-tolerant under serde's default derive, so this parses
     /// fine whether Radarr omits the key entirely or sends `null`.
     #[serde(rename = "movieFile")]
     pub movie_file: Option<RadarrMovieFile>,
+    /// Plot synopsis. Absent or null on movies Radarr hasn't fetched
+    /// metadata for yet.
+    #[serde(default)]
+    pub overview: Option<String>,
+    /// Genre tags, e.g. `["Action", "Crime", "Drama"]`. Empty rather than
+    /// missing when Radarr has no genre data.
+    #[serde(default)]
+    pub genres: Vec<String>,
+    /// Poster/fanart/etc artwork. See `RadarrImage` for why `remote_url`
+    /// must be checked before use.
+    #[serde(default)]
+    pub images: Vec<RadarrImage>,
+    /// When this movie became available digitally. Absent/null until
+    /// Radarr's metadata provider reports one -- see
+    /// `streamarr_arr_sync::arr_client::map_radarr`'s doc comment for how
+    /// this and `physical_release` combine into `Work::release_date`.
+    #[serde(default, rename = "digitalRelease")]
+    pub digital_release: Option<DateTime<Utc>>,
+    /// When this movie became available physically (Blu-ray/DVD). See
+    /// `digital_release`.
+    #[serde(default, rename = "physicalRelease")]
+    pub physical_release: Option<DateTime<Utc>>,
+}
+
+/// An entry in a movie's `images` array (poster, fanart, banner, ...).
+/// `remote_url` -- when present -- points at TMDb's own CDN and is safe to
+/// hand to a Streamarr client directly; `url` is a path local to this
+/// Radarr instance that requires its API key to fetch and must not be
+/// forwarded as-is.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RadarrImage {
+    #[serde(rename = "coverType")]
+    pub cover_type: String,
+    pub url: String,
+    /// Absolute, externally-hosted image URL (TMDb's CDN) -- present for
+    /// most images but not guaranteed. Absent from Radarr's own `url`
+    /// field's local path, which requires this instance's own API key to
+    /// fetch and must never be forwarded to a Streamarr client as-is.
+    #[serde(rename = "remoteUrl")]
+    pub remote_url: Option<String>,
 }
 
 /// The nested `quality.quality` object on Radarr's quality-bearing
@@ -97,6 +143,46 @@ pub struct RadarrMovieFile {
     pub media_info: Option<RadarrMediaInfo>,
 }
 
+/// One entry in a movie's `/api/v3/credit?movieId={id}` response --
+/// either a cast member (`type: "cast"`, `character` set, `department`/
+/// `job` absent) or a crew member (`type: "crew"`, `department`/`job`
+/// set, `character` absent). Radarr is the only *arr app in this stack
+/// that exposes this: verified live that Sonarr's `/api/v3/series/{id}`
+/// has no cast/crew field and no `/api/v3/credit` endpoint exists on it
+/// (404) -- Sonarr's own web UI shows no Cast/Crew section either, unlike
+/// Radarr's. Lidarr/Readarr have no equivalent concept at all. So
+/// `streamarr-arr-sync` only ever calls this for Radarr-sourced movies;
+/// series/artist/author works simply have no credits, not "not synced
+/// yet".
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RadarrCredit {
+    #[serde(rename = "personName")]
+    pub person_name: String,
+    /// TMDb's own person id -- the stable cross-movie identity key (the
+    /// same actor gets the same `person_tmdb_id` on every movie they
+    /// appear in), used to dedupe into one `streamarr_model::Person` row
+    /// rather than one per credit.
+    #[serde(rename = "personTmdbId")]
+    pub person_tmdb_id: i64,
+    #[serde(default)]
+    pub images: Vec<RadarrImage>,
+    /// `"cast"` or `"crew"`.
+    #[serde(rename = "type")]
+    pub credit_type: String,
+    /// Cast-only: the character played. Absent on a crew credit.
+    #[serde(default)]
+    pub character: Option<String>,
+    /// Crew-only: e.g. `"Directing"`. Absent on a cast credit.
+    #[serde(default)]
+    pub department: Option<String>,
+    /// Crew-only: e.g. `"Director"`. Absent on a cast credit.
+    #[serde(default)]
+    pub job: Option<String>,
+    /// Display order Radarr/TMDb assigns -- billing order for cast,
+    /// roughly department-grouped for crew.
+    pub order: i64,
+}
+
 pub struct RadarrClient {
     http: reqwest::Client,
     base_url: String,
@@ -132,6 +218,19 @@ impl RadarrClient {
             &self.base_url,
             &self.api_key,
             &format!("/api/v3/movie/{id}"),
+        )
+        .await
+    }
+
+    /// `GET /api/v3/credit?movieId={id}` — every cast/crew credit for one
+    /// movie, by Radarr's own internal movie id (not `tmdb_id`).
+    pub async fn list_credits(&self, movie_id: i64) -> Result<Vec<RadarrCredit>, ArrClientError> {
+        get_json(
+            &self.http,
+            "radarr",
+            &self.base_url,
+            &self.api_key,
+            &format!("/api/v3/credit?movieId={movie_id}"),
         )
         .await
     }
@@ -177,7 +276,8 @@ mod tests {
                     "tmdbId": 949,
                     "monitored": true,
                     "hasFile": true,
-                    "path": "/movies/Orbit (1995)"
+                    "path": "/movies/Orbit (1995)",
+                    "runtime": 170
                 }
             ])))
             .mount(&server)
@@ -193,6 +293,7 @@ mod tests {
         assert_eq!(movies[0].title, "Orbit");
         assert_eq!(movies[0].tmdb_id, 949);
         assert!(movies[0].has_file);
+        assert_eq!(movies[0].runtime, Some(170));
     }
 
     #[tokio::test]
@@ -298,6 +399,145 @@ mod tests {
         assert_eq!(media_info.audio_codec.as_deref(), Some("DTS"));
         assert_eq!(media_info.video_codec.as_deref(), Some("x264"));
         assert_eq!(media_info.video_bitrate, Some(8_000_000));
+    }
+
+    #[tokio::test]
+    async fn get_movie_parses_overview_genres_and_images() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/movie/1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": 1,
+                "title": "Orbit",
+                "sortTitle": "heat",
+                "tmdbId": 949,
+                "monitored": true,
+                "hasFile": true,
+                "path": "/movies/Orbit (1995)",
+                "overview": "Obsessive master thief Neil McCauley leads a top-notch crew.",
+                "genres": ["Action", "Crime", "Drama"],
+                "images": [
+                    {
+                        "coverType": "poster",
+                        "url": "/MediaCover/1/poster.jpg",
+                        "remoteUrl": "https://image.tmdb.org/t/p/original/poster.jpg"
+                    },
+                    {
+                        "coverType": "fanart",
+                        "url": "/MediaCover/1/fanart.jpg"
+                    }
+                ]
+            })))
+            .mount(&server)
+            .await;
+
+        let client = RadarrClient::new(server.uri(), "test-key");
+        let movie = client
+            .get_movie(1)
+            .await
+            .expect("get_movie should succeed against a healthy mock");
+
+        assert_eq!(
+            movie.overview.as_deref(),
+            Some("Obsessive master thief Neil McCauley leads a top-notch crew.")
+        );
+        assert_eq!(movie.genres, vec!["Action", "Crime", "Drama"]);
+        assert_eq!(movie.images.len(), 2);
+        assert_eq!(movie.images[0].cover_type, "poster");
+        assert_eq!(
+            movie.images[0].remote_url.as_deref(),
+            Some("https://image.tmdb.org/t/p/original/poster.jpg")
+        );
+        assert_eq!(movie.images[1].cover_type, "fanart");
+        assert!(
+            movie.images[1].remote_url.is_none(),
+            "an image with no remoteUrl key should parse to None, not error"
+        );
+    }
+
+    #[tokio::test]
+    async fn get_movie_defaults_overview_genres_and_images_when_absent() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/movie/7"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": 7,
+                "title": "Sample Seven",
+                "sortTitle": "sampleseven",
+                "tmdbId": 807,
+                "monitored": true,
+                "hasFile": false,
+                "path": "/movies/Sample Seven (1995)"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = RadarrClient::new(server.uri(), "test-key");
+        let movie = client
+            .get_movie(7)
+            .await
+            .expect("get_movie should succeed against a healthy mock");
+
+        assert_eq!(movie.overview, None);
+        assert_eq!(movie.genres, Vec::<String>::new());
+        assert!(movie.images.is_empty());
+    }
+
+    #[tokio::test]
+    async fn list_credits_parses_cast_and_crew() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/credit"))
+            .and(wiremock::matchers::query_param("movieId", "4"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {
+                    "personName": "Mary Elizabeth Winstead",
+                    "personTmdbId": 17628,
+                    "images": [
+                        {
+                            "coverType": "headshot",
+                            "url": "/MediaCoverProxy/abc/headshot.jpg",
+                            "remoteUrl": "https://image.tmdb.org/t/p/original/headshot.jpg"
+                        }
+                    ],
+                    "character": "Michelle",
+                    "order": 1,
+                    "type": "cast"
+                },
+                {
+                    "personName": "J.J. Abrams",
+                    "personTmdbId": 15344,
+                    "images": [],
+                    "department": "Production",
+                    "job": "Producer",
+                    "order": 4,
+                    "type": "crew"
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = RadarrClient::new(server.uri(), "test-key");
+        let credits = client
+            .list_credits(4)
+            .await
+            .expect("list_credits should succeed against a healthy mock");
+
+        assert_eq!(credits.len(), 2);
+        assert_eq!(credits[0].person_name, "Mary Elizabeth Winstead");
+        assert_eq!(credits[0].credit_type, "cast");
+        assert_eq!(credits[0].character.as_deref(), Some("Michelle"));
+        assert_eq!(credits[0].department, None);
+        assert_eq!(
+            credits[0].images[0].remote_url.as_deref(),
+            Some("https://image.tmdb.org/t/p/original/headshot.jpg")
+        );
+
+        assert_eq!(credits[1].person_name, "J.J. Abrams");
+        assert_eq!(credits[1].credit_type, "crew");
+        assert_eq!(credits[1].department.as_deref(), Some("Production"));
+        assert_eq!(credits[1].job.as_deref(), Some("Producer"));
+        assert_eq!(credits[1].character, None);
     }
 
     #[tokio::test]

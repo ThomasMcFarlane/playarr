@@ -23,13 +23,17 @@
 //! drift the same way.
 
 pub mod arr_client;
+pub mod artwork_prewarm;
+pub mod embedding_sync;
 pub mod media_sync;
 pub mod poller;
 pub mod webhook;
 
 pub use arr_client::{work_kind_and_provider, ArrClient, RemoteWork};
+pub use artwork_prewarm::ArtworkPrewarm;
+pub use embedding_sync::{EmbeddingSync, EmbeddingSyncError};
 pub use media_sync::{MediaSync, MediaSyncError};
-pub use poller::{PollError, ReconciliationPoller, SyncOp};
+pub use poller::{PollError, ReconciliationPoller, SyncOp, SyncRunStatus, SyncStatusReporter};
 pub use webhook::{
     parse_webhook_signal, RefetchRequest, WebhookError, WebhookReceiver, WebhookSignal,
 };

@@ -22,7 +22,7 @@
 use std::sync::Arc;
 
 use dashmap::DashMap;
-use streamarr_arr_sync::RefetchRequest;
+use streamarr_arr_sync::{RefetchRequest, SyncRunStatus, SyncStatusReporter};
 use streamarr_model::SourceInstance;
 use uuid::Uuid;
 
@@ -57,6 +57,17 @@ pub struct SourceInstanceRegistry {
     /// `ReconciliationPoller::reconcile_one` falls back to `reconcile_all`
     /// for).
     trigger_senders: DashMap<Uuid, tokio::sync::mpsc::Sender<RefetchRequest>>,
+    /// The most recent [`SyncRunStatus`] reported for each source instance
+    /// -- this registry implements [`SyncStatusReporter`] itself (see
+    /// below) so `streamarr-bin`'s `spawn_poller_for` can hand a
+    /// `ReconciliationPoller` this same `Arc<SourceInstanceRegistry>`
+    /// (already threaded through that call site) as its status sink,
+    /// without a new type or a new piece of wiring. Backs the admin
+    /// "Tasks" screen (`GET /api/v1/admin/source-instances/{id}/sync-
+    /// status`) -- purely in-memory/runtime, like `trigger_senders`: it
+    /// resets on restart, same as "is a poller currently running for this
+    /// instance" does.
+    sync_status: DashMap<Uuid, SyncRunStatus>,
 }
 
 impl SourceInstanceRegistry {
@@ -120,6 +131,32 @@ impl SourceInstanceRegistry {
             .map(|entry| entry.value().clone())
             .collect()
     }
+
+    /// The most recently reported [`SyncRunStatus`] for `id`, if any poller
+    /// has reported one yet (nothing until its first reconciliation pass
+    /// starts -- there is no synthetic "Idle" state).
+    pub fn sync_status(&self, id: Uuid) -> Option<SyncRunStatus> {
+        self.sync_status.get(&id).map(|entry| entry.clone())
+    }
+
+    /// Every instance's last-known sync status, paired with the instance
+    /// itself -- backs the admin "Tasks" screen's one-shot "show me
+    /// everything" list rather than a per-instance round trip each.
+    pub fn all_sync_statuses(&self) -> Vec<(SourceInstance, Option<SyncRunStatus>)> {
+        self.by_id
+            .iter()
+            .map(|entry| {
+                let status = self.sync_status(*entry.key());
+                (entry.value().clone(), status)
+            })
+            .collect()
+    }
+}
+
+impl SyncStatusReporter for SourceInstanceRegistry {
+    fn report(&self, source_instance_id: Uuid, status: SyncRunStatus) {
+        self.sync_status.insert(source_instance_id, status);
+    }
 }
 
 pub type SharedSourceInstanceRegistry = Arc<SourceInstanceRegistry>;
@@ -139,7 +176,6 @@ mod tests {
             priority: 0,
             default_root_folder_id: Some("/data".to_string()),
             default_quality_profile_id: Some(1),
-            enabled_for_requests: true,
             best_effort: false,
         }
     }

@@ -10,7 +10,17 @@ streamarr-model = { path = "../streamarr-model" }
 streamarr-db = { path = "../streamarr-db" }
 streamarr-coordination = { path = "../streamarr-coordination" }
 streamarr-arr-client = { path = "../streamarr-arr-client" }
+streamarr-artwork = { path = "../streamarr-artwork" }
+streamarr-embeddings = { path = "../streamarr-embeddings" }
+reqwest = { workspace = true }
 tokio = { workspace = true }
+# `StreamExt::buffer_unordered` -- lets the missing-media-file backfill
+# (see `poller::ReconciliationPoller::backfill_missing_media_files`) have
+# several *arr API requests in flight at once instead of one at a time,
+# without needing to restructure the poller to spawn real `tokio::spawn`
+# tasks (which would require `Arc<Self>` -- this achieves I/O concurrency
+# within the poller's own already-running task instead).
+futures = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true }

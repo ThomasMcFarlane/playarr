@@ -23,17 +23,27 @@
 //! to confirm the checked-in file still matches.
 
 pub mod admin;
+pub mod admin_playback;
+pub mod artwork;
 pub mod auth_extractor;
 pub mod catalog;
+pub mod credits;
 pub mod error;
 pub mod health;
 pub mod login;
+pub mod media;
 pub mod oauth;
 pub mod playback;
+pub mod playlists;
 pub mod readiness;
+pub mod refresh;
 pub mod source_registry;
+pub mod tdarr;
+pub mod user_directory;
+pub mod users;
 pub mod version;
 pub mod version_gate;
+pub mod views;
 pub mod webhooks;
 
 #[cfg(test)]
@@ -68,7 +78,11 @@ pub use version_gate::{ClientCompatibilityTable, VersionGateLayer};
         (name = "webhooks", description = "*arr webhook receiver"),
         (name = "catalog", description = "Catalog browse/search/detail"),
         (name = "playback", description = "Playback negotiation: direct-play vs. transcode decision"),
-        (name = "admin", description = "Admin-only configuration: registering *arr source instances")
+        (name = "admin", description = "Admin-only configuration: registering *arr source instances"),
+        (name = "users", description = "User account management and signed-in player preferences"),
+        (name = "views", description = "Saved catalog filter presets ('Views') -- admin-managed, surfaced to Playarr as browsable shelves"),
+        (name = "playlists", description = "User + System playlists -- named, ordered, optionally-nested lists of works"),
+        (name = "credits", description = "Cast/crew for a work, and every work a given person is credited on")
     )
 )]
 pub struct ApiDoc;
@@ -87,17 +101,94 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(oauth::device_code_handler))
         .routes(routes!(oauth::device_token_handler))
         .routes(routes!(login::login_handler))
+        .routes(routes!(refresh::refresh_handler))
         .routes(routes!(webhooks::arr_webhook_handler))
         .routes(routes!(catalog::browse_catalog_handler))
+        .routes(routes!(catalog::catalog_kinds_handler))
         .routes(routes!(catalog::get_work_handler))
         .routes(routes!(catalog::search_catalog_handler))
+        .routes(routes!(catalog::similar_works_handler))
+        .routes(routes!(artwork::work_artwork_handler))
         .routes(routes!(playback::playback_info_handler))
+        .routes(routes!(playback::record_playback_event_handler))
+        .routes(routes!(playback::list_watch_progress_handler))
+        .routes(routes!(
+            playback::get_watch_progress_handler,
+            playback::update_watch_progress_handler
+        ))
+        .routes(routes!(admin_playback::list_active_sessions_handler))
+        .routes(routes!(admin_playback::list_session_history_handler))
+        .routes(routes!(admin_playback::stop_session_handler))
+        .routes(routes!(media::stream_media_handler))
+        .routes(routes!(media::media_metadata_handler))
+        .routes(routes!(
+            media::media_playback_options_handler,
+            media::update_media_playback_options_handler
+        ))
+        .routes(routes!(media::media_chapters_handler))
+        .routes(routes!(media::media_subtitle_handler))
+        .routes(routes!(media::media_thumbnail_handler))
+        .routes(routes!(media::serve_rendition_file_handler))
+        .routes(routes!(media::serve_session_file_handler))
         .routes(routes!(
             admin::create_source_instance_handler,
             admin::list_source_instances_handler
         ))
         .routes(routes!(admin::delete_source_instance_handler))
         .routes(routes!(admin::sync_source_instance_handler))
+        .routes(routes!(admin::sync_status_handler))
+        .routes(routes!(
+            tdarr::create_tdarr_connection_handler,
+            tdarr::get_tdarr_connection_handler,
+            tdarr::delete_tdarr_connection_handler
+        ))
+        .routes(routes!(
+            users::create_user_handler,
+            users::list_users_handler
+        ))
+        .routes(routes!(
+            users::update_user_handler,
+            users::delete_user_handler
+        ))
+        .routes(routes!(
+            users::get_player_preferences_handler,
+            users::update_player_preferences_handler
+        ))
+        .routes(routes!(
+            users::get_profile_pin_setting_handler,
+            users::update_profile_pin_setting_handler
+        ))
+        .routes(routes!(users::list_available_profiles_handler))
+        .routes(routes!(users::verify_profile_pin_handler))
+        .routes(routes!(
+            views::create_view_handler,
+            views::list_admin_views_handler
+        ))
+        .routes(routes!(
+            views::update_view_handler,
+            views::delete_view_handler
+        ))
+        .routes(routes!(views::list_views_handler))
+        .routes(routes!(views::resolve_view_handler))
+        .routes(routes!(
+            playlists::list_playlists_handler,
+            playlists::create_playlist_handler
+        ))
+        .routes(routes!(playlists::list_admin_playlists_handler))
+        .routes(routes!(
+            playlists::get_playlist_handler,
+            playlists::update_playlist_handler,
+            playlists::delete_playlist_handler
+        ))
+        .routes(routes!(
+            playlists::list_playlist_items_handler,
+            playlists::add_playlist_item_handler
+        ))
+        .routes(routes!(playlists::remove_playlist_item_handler))
+        .routes(routes!(playlists::reorder_playlist_items_handler))
+        .routes(routes!(credits::work_credits_handler))
+        .routes(routes!(credits::get_person_handler))
+        .routes(routes!(credits::person_works_handler))
 }
 
 pub fn openapi_spec() -> utoipa::openapi::OpenApi {
@@ -142,16 +233,52 @@ pub struct AppState {
     /// is the actual fix for registered `*arr` connections not surviving
     /// a restart.
     pub source_instance_repo: Arc<dyn streamarr_db::SourceInstanceRepo>,
+    /// The real, durable persistence layer for `streamarr_model::LibraryView`
+    /// ("Views" -- saved catalog filter+sort presets, see that type's doc
+    /// comment) -- backs `views.rs`'s admin CRUD and public list/resolve
+    /// endpoints. Unlike `source_instances`, there is no separate in-memory
+    /// cache in front of this: views are read far less often (an admin
+    /// screen, and Playarr's Home shelf list on load) than the catalog
+    /// itself, so a direct repo read per request is fine.
+    pub library_view_repo: Arc<dyn streamarr_db::LibraryViewRepo>,
+    /// The real, durable persistence layer for `streamarr_model::Playlist`/
+    /// `PlaylistItem` -- backs `playlists.rs`'s user + System playlist CRUD
+    /// and item-membership endpoints.
+    pub playlist_repo: Arc<dyn streamarr_db::repo::PlaylistRepo>,
+    /// The real, durable persistence layer for `streamarr_model::Work` --
+    /// `credits.rs`'s `person_works_handler` uses this for a cheap
+    /// `Work`-only fetch per credited work id, rather than going through
+    /// `catalog` (which additionally hydrates each work's full
+    /// season/episode/album/track/book child tree, unneeded here).
+    pub work_repo: Arc<dyn streamarr_db::WorkRepo>,
+    /// The real, durable persistence layer for `streamarr_model::Person`/
+    /// `Credit` -- backs `credits.rs`'s cast/crew and "find all content
+    /// for this person" endpoints. See `streamarr_model::person`'s module
+    /// doc comment for why this is populated only for Radarr-sourced
+    /// movies today.
+    pub credit_repo: Arc<dyn streamarr_db::CreditRepo>,
+    /// The real, durable persistence layer for
+    /// `streamarr_model::TdarrConnection` -- backs `tdarr.rs`'s admin
+    /// registration endpoints. See that type's doc comment for why this
+    /// is a singleton, unlike `source_instance_repo`.
+    pub tdarr_connection_repo: Arc<dyn streamarr_db::TdarrConnectionRepo>,
     pub media_files: Arc<dyn MediaFileLookup>,
+    /// Per-user durable resume positions and watched state.
+    pub watch_progress: Arc<dyn streamarr_db::WatchProgressRepo>,
     /// Verifies the `Authorization: Bearer <token>` header every
     /// [`auth_extractor::AuthUser`]/[`auth_extractor::AdminUser`]
     /// extraction depends on -- the same issuer instance
     /// `POST /api/v1/auth/login` and the RFC 8628 device flow issue tokens
     /// through, so a token from either path verifies here identically.
     pub jwt: Arc<streamarr_auth::JwtIssuer>,
-    /// Interim, pending-real-persistence admin resolution -- see
-    /// `streamarr_auth::admin`'s doc comment. Backs
-    /// [`auth_extractor::AdminUser`]'s 403 check.
+    /// Superseded id-list admin check -- [`auth_extractor::AdminUser`] no
+    /// longer reads this at all (it does a real `Policy::is_admin` check via
+    /// `user_repo`/`policy_repo` below instead; see that extractor's doc
+    /// comment for the permanent replacement this field used to stand in
+    /// for). Left in `AppState` for now since nothing downstream of
+    /// `streamarr-bin`'s `boot_api` construction depends on it being gone --
+    /// a later cleanup pass can drop the field and its construction once
+    /// nothing else references it either.
     pub admin_registry: Arc<streamarr_auth::InMemoryAdminRegistry>,
     /// The operator's configured login trust tier for `POST
     /// /api/v1/auth/login` -- see `streamarr_auth::AuthMode`'s doc comment
@@ -159,10 +286,26 @@ pub struct AppState {
     /// how this pass resolves it (and the security implications of its
     /// default) from `STREAMARR_AUTH_MODE`.
     pub auth_mode: Arc<streamarr_auth::AuthMode>,
-    /// Resolves the `User`s participating in login -- see
-    /// `streamarr_auth::login::InMemoryUserDirectory`'s doc comment for why
-    /// this is in-memory pending real `UserRepo` persistence.
+    /// Resolves the `User`s participating in login. Real in production --
+    /// `streamarr-bin`'s `boot_api` wires in
+    /// [`user_directory::RepoBackedUserDirectory`], backed by `user_repo`
+    /// below, now that real `User` persistence exists (replacing
+    /// `streamarr_auth::login::InMemoryUserDirectory`'s old in-memory
+    /// stand-in).
     pub user_directory: Arc<dyn streamarr_auth::UserDirectory>,
+    /// The real, durable persistence layer for `streamarr_model::User`
+    /// accounts -- backs [`user_directory::RepoBackedUserDirectory`] above,
+    /// the real `Policy`-backed check in [`auth_extractor::AdminUser`], and
+    /// `users.rs`'s admin user-management endpoints.
+    pub user_repo: Arc<dyn streamarr_db::UserRepo>,
+    /// Optional profile-lock PIN hashes. Kept behind a distinct repository
+    /// so they cannot be confused with or overwrite account passwords.
+    pub profile_pin_repo: Arc<dyn streamarr_db::ProfilePinRepo>,
+    /// The real, durable persistence layer for `streamarr_model::Policy`
+    /// (permission/role) records -- looked up by a user's `policy_id` to
+    /// decide `Policy::is_admin` (see [`auth_extractor::AdminUser`]) and by
+    /// `users.rs`'s admin user-management endpoints.
+    pub policy_repo: Arc<dyn streamarr_db::PolicyRepo>,
     /// Issues/rotates refresh-token families for `POST /api/v1/auth/login`
     /// -- shared with the RFC 8628 device flow's own token issuance
     /// (`device_flow` above wraps a clone of the same underlying service),
@@ -178,6 +321,20 @@ pub struct AppState {
     /// multi-node deployment can be routed back to whichever node actually
     /// holds the ffmpeg process.
     pub node_id: String,
+    /// Durable playback-analytics store (session/event writes, `stats_daily`
+    /// reads) -- backs both the write path in `playback.rs` and the admin
+    /// session-history endpoint (`admin_playback.rs`). The same `Arc`
+    /// `analytics` below also holds.
+    pub analytics_store: Arc<dyn streamarr_db::analytics::AnalyticsStore>,
+    /// In-process "what's happening right now" cache -- backs
+    /// `record_playback_event_handler`'s ownership check, the admin live-
+    /// sessions endpoint, and (later) `Policy::max_concurrent_sessions`
+    /// enforcement. The same `Arc` `analytics` below also holds.
+    pub session_registry: Arc<dyn streamarr_telemetry::analytics::SessionRegistry>,
+    /// Single fan-out point for session/event writes -- see
+    /// `streamarr_telemetry::analytics::collector`'s doc comment for the
+    /// synchronous-registry / batched-durable-write split this owns.
+    pub analytics: Arc<streamarr_telemetry::analytics::AnalyticsCollector>,
 }
 
 impl FromRef<AppState> for ReadinessState {
@@ -392,8 +549,12 @@ mod tests {
         assert!(json.contains("/api/v1/catalog"));
         assert!(json.contains("/api/v1/catalog/{id}"));
         assert!(json.contains("/api/v1/catalog/search"));
+        assert!(json.contains("/api/v1/artwork/work/{work_id}/{kind}"));
         assert!(json.contains("/api/v1/playback/{media_file_id}"));
         assert!(json.contains("/api/v1/admin/source-instances"));
+        assert!(json.contains("/api/v1/admin/views"));
+        assert!(json.contains("/api/v1/views"));
+        assert!(json.contains("/api/v1/views/{id}/resolve"));
     }
 
     /// Regenerates (with `UPDATE_OPENAPI_SPEC=1`) or verifies (without it)

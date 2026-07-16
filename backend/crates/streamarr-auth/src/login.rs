@@ -227,7 +227,14 @@ pub async fn evaluate_login(
             let entry = allowlist
                 .iter()
                 .find(|network| network.network.contains(&ctx.source_ip))
-                .ok_or(LoginError::UntrustedNetwork)?;
+                .ok_or_else(|| {
+                    tracing::warn!(
+                        source_ip = %ctx.source_ip,
+                        allowlist = ?allowlist.iter().map(|n| n.network.to_string()).collect::<Vec<_>>(),
+                        "login rejected: source ip is not within any trusted network"
+                    );
+                    LoginError::UntrustedNetwork
+                })?;
             directory
                 .find_by_id(entry.auto_login_user_id)
                 .await?
@@ -299,6 +306,7 @@ mod tests {
             policy_id: Uuid::new_v4(),
             created_at: Utc::now(),
             disabled,
+            preferred_audio_language: streamarr_model::DEFAULT_PREFERRED_AUDIO_LANGUAGE.to_string(),
         }
     }
 

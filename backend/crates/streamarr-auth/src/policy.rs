@@ -180,6 +180,7 @@ mod tests {
             device_allow: vec![],
             max_concurrent_sessions: None,
             access_schedule: None,
+            can_stream: true,
             is_admin: false,
         }
     }

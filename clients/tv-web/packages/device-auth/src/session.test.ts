@@ -18,6 +18,10 @@ const BASE_URL = "http://localhost:8080";
 const IDENTITY = { deviceName: "Streamarr Web", clientPlatform: "web" as const, clientVersion: "1.0.0" };
 
 afterEach(() => {
+  // See `tokenStore.test.ts`'s matching `afterEach` comment: the in-memory
+  // fallback `TokenStore` falls back to is module-level, so it must be
+  // reset explicitly between tests in this file.
+  new TokenStore().clear();
   vi.unstubAllGlobals();
 });
 
@@ -77,19 +81,28 @@ describe("ensureAccessToken", () => {
     expect(loginCalls).toBe(0);
   });
 
-  it("logs in again once a previously-stored token has expired", async () => {
+  it("redeems the refresh token once a previously-stored access token has expired, without calling login", async () => {
+    let refreshCalls = 0;
     let loginCalls = 0;
     const client = new ApiClient({
       baseUrl: BASE_URL,
-      fetchImpl: mockFetch(() => {
+      fetchImpl: mockFetch(async (request) => {
+        const pathname = new URL(request.url).pathname;
+        if (pathname === "/api/v1/auth/refresh") {
+          refreshCalls += 1;
+          const body = (await request.json()) as Record<string, unknown>;
+          expect(body.refresh_token).toBe("rt-stale");
+          expect(typeof body.device_id).toBe("string");
+          return jsonResponse(200, {
+            access_token: "fresh-token",
+            refresh_token: "rt-fresh",
+            token_type: "Bearer",
+            expires_in: 3600,
+            user_id: "00000000-0000-0000-0000-000000000009",
+          });
+        }
         loginCalls += 1;
-        return jsonResponse(200, {
-          access_token: "fresh-token",
-          refresh_token: "rt-fresh",
-          token_type: "Bearer",
-          expires_in: 3600,
-          user_id: "00000000-0000-0000-0000-000000000009",
-        });
+        throw new Error(`unexpected request to ${pathname}`);
       }),
     });
     const store = new TokenStore();
@@ -98,6 +111,66 @@ describe("ensureAccessToken", () => {
     const token = await ensureAccessToken(client, store, IDENTITY);
 
     expect(token).toBe("fresh-token");
+    expect(refreshCalls).toBe(1);
+    expect(loginCalls).toBe(0);
+    expect(store.get()).toMatchObject({ accessToken: "fresh-token", refreshToken: "rt-fresh" });
+  });
+
+  it("uses a profile-specific device id when refreshing an independently saved browser session", async () => {
+    const profileDeviceId = "00000000-0000-4000-8000-000000000042";
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch(async (request) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        expect(body.device_id).toBe(profileDeviceId);
+        return jsonResponse(200, {
+          access_token: "profile-token",
+          refresh_token: "profile-refresh-next",
+          token_type: "Bearer",
+          expires_in: 3600,
+          user_id: "00000000-0000-0000-0000-000000000009",
+        });
+      }),
+    });
+    const store = new TokenStore();
+    store.set({
+      accessToken: "expired-profile-token",
+      refreshToken: "profile-refresh",
+      tokenType: "Bearer",
+      expiresAt: Date.now() - 1,
+    });
+
+    await ensureAccessToken(client, store, { ...IDENTITY, deviceId: profileDeviceId });
+  });
+
+  it("falls back to a transparent login when the stored refresh token itself no longer works", async () => {
+    let refreshCalls = 0;
+    let loginCalls = 0;
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch(async (request) => {
+        const pathname = new URL(request.url).pathname;
+        if (pathname === "/api/v1/auth/refresh") {
+          refreshCalls += 1;
+          return new Response(null, { status: 401, statusText: "unauthorized" });
+        }
+        loginCalls += 1;
+        return jsonResponse(200, {
+          access_token: "fresh-from-login",
+          refresh_token: "rt-from-login",
+          token_type: "Bearer",
+          expires_in: 3600,
+          user_id: "00000000-0000-0000-0000-000000000009",
+        });
+      }),
+    });
+    const store = new TokenStore();
+    store.set({ accessToken: "stale", refreshToken: "dead-refresh-token", tokenType: "Bearer", expiresAt: Date.now() - 1 });
+
+    const token = await ensureAccessToken(client, store, IDENTITY);
+
+    expect(token).toBe("fresh-from-login");
+    expect(refreshCalls).toBe(1);
     expect(loginCalls).toBe(1);
   });
 

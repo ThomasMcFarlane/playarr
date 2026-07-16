@@ -6,6 +6,8 @@
 //! cheaply and in-process, without a DB round-trip on every playback
 //! heartbeat.
 
+use std::time::{Duration, Instant};
+
 use dashmap::DashMap;
 use streamarr_model::PlaybackSession;
 use uuid::Uuid;
@@ -26,13 +28,34 @@ pub trait SessionRegistry: Send + Sync {
 
     fn list_for_user(&self, user_id: Uuid) -> Vec<PlaybackSession>;
 
+    /// Every currently-tracked session, regardless of user -- backs the
+    /// admin "who's watching now" live-sessions view.
+    fn list_all(&self) -> Vec<PlaybackSession>;
+
+    /// Ids of every tracked session whose last `insert`/`update` touch was
+    /// more than `idle_after` ago -- input to
+    /// [`crate::analytics::reaper::SessionReaper`]. Deliberately does not
+    /// remove anything itself: removal happens through the normal
+    /// `AnalyticsCollector::on_session_end` path (via `remove`) so the
+    /// durable `close_session` write and the registry removal stay
+    /// atomic-by-construction with the clean-stop path, rather than this
+    /// method silently discarding a session the caller never got to
+    /// persist a stop reason for.
+    fn stale_session_ids(&self, idle_after: Duration) -> Vec<Uuid>;
+
     /// Backs the `playback_sessions_active` gauge directly.
     fn count(&self) -> usize;
 }
 
+/// `PlaybackSession` plus the `Instant` its entry was last touched by
+/// `insert`/`update` -- the staleness clock [`SessionRegistry::stale_session_ids`]
+/// reads. Kept out of `streamarr_model::PlaybackSession` itself (which
+/// mirrors the `playback_sessions` DB schema 1:1 -- see that type's own doc
+/// comment) since this is purely in-memory bookkeeping with no durable
+/// counterpart.
 #[derive(Default)]
 pub struct InMemorySessionRegistry {
-    sessions: DashMap<Uuid, PlaybackSession>,
+    sessions: DashMap<Uuid, (PlaybackSession, Instant)>,
 }
 
 impl InMemorySessionRegistry {
@@ -43,32 +66,50 @@ impl InMemorySessionRegistry {
 
 impl SessionRegistry for InMemorySessionRegistry {
     fn insert(&self, session: PlaybackSession) {
-        self.sessions.insert(session.id, session);
+        self.sessions.insert(session.id, (session, Instant::now()));
     }
 
     fn update(&self, session_id: Uuid, f: &dyn Fn(&mut PlaybackSession)) {
         if let Some(mut entry) = self.sessions.get_mut(&session_id) {
-            f(entry.value_mut());
+            let (session, touched_at) = entry.value_mut();
+            f(session);
+            *touched_at = Instant::now();
         }
     }
 
     fn remove(&self, session_id: Uuid) -> Option<PlaybackSession> {
         self.sessions
             .remove(&session_id)
-            .map(|(_, session)| session)
+            .map(|(_, (session, _))| session)
     }
 
     fn get(&self, session_id: Uuid) -> Option<PlaybackSession> {
         self.sessions
             .get(&session_id)
-            .map(|entry| entry.value().clone())
+            .map(|entry| entry.value().0.clone())
     }
 
     fn list_for_user(&self, user_id: Uuid) -> Vec<PlaybackSession> {
         self.sessions
             .iter()
-            .filter(|entry| entry.value().user_id == user_id)
-            .map(|entry| entry.value().clone())
+            .filter(|entry| entry.value().0.user_id == user_id)
+            .map(|entry| entry.value().0.clone())
+            .collect()
+    }
+
+    fn list_all(&self) -> Vec<PlaybackSession> {
+        self.sessions
+            .iter()
+            .map(|entry| entry.value().0.clone())
+            .collect()
+    }
+
+    fn stale_session_ids(&self, idle_after: Duration) -> Vec<Uuid> {
+        let now = Instant::now();
+        self.sessions
+            .iter()
+            .filter(|entry| now.duration_since(entry.value().1) >= idle_after)
+            .map(|entry| *entry.key())
             .collect()
     }
 
@@ -140,5 +181,60 @@ mod tests {
 
         // Updating an untracked id is a silent no-op, not a panic.
         registry.update(Uuid::new_v4(), &|s| s.bytes_streamed = 9_999);
+    }
+
+    #[test]
+    fn list_all_returns_every_tracked_session_regardless_of_user() {
+        let registry = InMemorySessionRegistry::new();
+        let a = sample_session(Uuid::new_v4());
+        let b = sample_session(Uuid::new_v4());
+        registry.insert(a.clone());
+        registry.insert(b.clone());
+
+        let mut all = registry.list_all();
+        all.sort_by_key(|s| s.id);
+        let mut expected = vec![a, b];
+        expected.sort_by_key(|s| s.id);
+        assert_eq!(all, expected);
+    }
+
+    #[test]
+    fn stale_session_ids_finds_only_sessions_past_the_idle_threshold() {
+        let registry = InMemorySessionRegistry::new();
+        let stale = sample_session(Uuid::new_v4());
+        let stale_id = stale.id;
+        registry.insert(stale);
+
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        let fresh = sample_session(Uuid::new_v4());
+        let fresh_id = fresh.id;
+        registry.insert(fresh);
+
+        let idle = registry.stale_session_ids(std::time::Duration::from_millis(30));
+        assert_eq!(idle, vec![stale_id]);
+        assert!(!idle.contains(&fresh_id));
+
+        // `stale_session_ids` never removes anything itself -- see its own
+        // doc comment.
+        assert_eq!(registry.count(), 2);
+    }
+
+    #[test]
+    fn update_refreshes_staleness_clock() {
+        let registry = InMemorySessionRegistry::new();
+        let session = sample_session(Uuid::new_v4());
+        let session_id = session.id;
+        registry.insert(session);
+
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        // A real access (a heartbeat/event) must slide the staleness clock
+        // forward, same as `TranscodeSession`'s idle-deadline sliding on
+        // real lookups -- otherwise an actively-watched session would still
+        // get reaped as though it were abandoned.
+        registry.update(session_id, &|s| s.bytes_streamed += 1);
+
+        let idle = registry.stale_session_ids(std::time::Duration::from_millis(30));
+        assert!(idle.is_empty());
     }
 }

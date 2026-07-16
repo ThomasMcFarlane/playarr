@@ -25,7 +25,8 @@ export type { ClientPlatform };
 
 export { getOrCreateDeviceId } from "./deviceId";
 export { TokenStore, type StoredSession } from "./tokenStore";
-export { ensureAccessToken, type EnsureAccessTokenIdentity } from "./session";
+export { ensureAccessToken, toStoredSession, type EnsureAccessTokenIdentity } from "./session";
+export { decodeAccessTokenUserId } from "./jwt";
 
 /** RFC 8628 §3.2 device authorization response, normalized to camelCase for callers. */
 export interface DeviceCodeResponse {

@@ -37,6 +37,140 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VersionEnvelope'
+  /api/v1/admin/playback/sessions/active:
+    get:
+      tags:
+      - admin
+      summary: |-
+        Every currently-active playback session, newest first -- backs the
+        admin Activity page's "live" section. Concurrently-active sessions are a
+        small set (dozens, not thousands), so the N+1 user/media lookups
+        `enrich` does per row are acceptable here.
+      operationId: list_active_sessions_handler
+      responses:
+        '200':
+          description: Every currently-active playback session
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActiveSessionView'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+  /api/v1/admin/playback/sessions/history:
+    get:
+      tags:
+      - admin
+      summary: |-
+        Filtered, paginated raw session history -- backs the admin Activity
+        page's "history" section. `limit` is clamped to 500 server-side
+        regardless of what's requested, matching the two indexes
+        (`idx_playback_sessions_user_id`/`idx_playback_sessions_started_at`)
+        this query is built to actually use.
+      operationId: list_session_history_handler
+      parameters:
+      - name: user_id
+        in: query
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+          format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+          format: date-time
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: Filtered, paginated playback session history, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlaybackSession'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+  /api/v1/admin/playback/sessions/{session_id}/stop:
+    post:
+      tags:
+      - admin
+      summary: |-
+        Force-stops a live playback session -- the "let me stop it" half of the
+        admin Activity/Tasks in-progress-transcode view. Kills the underlying
+        ffmpeg process too, if this session has one (`TranscodeOrchestrator::
+        expire_playback_session` is a harmless no-op for direct-play/durable-
+        rendition sessions, which were never associated with a transcode
+        process in the first place -- see that method's own doc comment), then
+        finalizes the durable record with `StopReason::Other("admin_stopped")`
+        (not `UserStopped`, since the *viewer* didn't stop it -- an operator
+        did, from the admin UI, which callers reading session history should be
+        able to tell apart from a normal end-of-playback stop).
+      operationId: stop_session_handler
+      parameters:
+      - name: session_id
+        in: path
+        description: PlaybackSession id (see ActiveSessionView::session_id)
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Session stopped (or was already gone -- stopping a session that already ended is not an error)
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+  /api/v1/admin/playlists:
+    get:
+      tags:
+      - playlists
+      summary: Every playlist regardless of owner -- see the module doc comment.
+      operationId: list_admin_playlists_handler
+      responses:
+        '200':
+          description: Every playlist, System and personal
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlaylistResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
   /api/v1/admin/source-instances:
     get:
       tags:
@@ -83,6 +217,31 @@ paths:
           description: Caller is authenticated but not an admin
         '502':
           description: base_url/api_key rejected, or the instance could not be reached
+  /api/v1/admin/source-instances/sync-status:
+    get:
+      tags:
+      - admin
+      summary: |-
+        Every registered source instance's last-known sync status in one call --
+        backs the admin "Tasks" screen. Purely in-memory/runtime, like `POST
+        .../sync`'s underlying trigger channel: nothing here survives a restart,
+        and an instance with no poller running yet (or one that's never
+        completed a pass) simply has `status: null`, not a synthetic "idle" or
+        "unknown" state.
+      operationId: sync_status_handler
+      responses:
+        '200':
+          description: Every registered instance's last-known sync status
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SourceInstanceSyncStatusResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
   /api/v1/admin/source-instances/{id}:
     delete:
       tags:
@@ -136,6 +295,331 @@ paths:
           description: No source instance registered with this id
         '503':
           description: No reconciliation poller is currently running for this instance yet
+  /api/v1/admin/tdarr:
+    get:
+      tags:
+      - admin
+      summary: The currently-registered Tdarr connection, if any.
+      operationId: get_tdarr_connection_handler
+      responses:
+        '200':
+          description: The registered connection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TdarrConnectionResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '404':
+          description: No Tdarr connection has been registered yet
+    post:
+      tags:
+      - admin
+      summary: |-
+        Registers (or updates) Streamarr's Tdarr connection. Confirms Tdarr is
+        actually reachable with the given `base_url`/`api_key` before
+        accepting it.
+      operationId: create_tdarr_connection_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TdarrConnectionRequest'
+        required: true
+      responses:
+        '200':
+          description: Registered (or updated) and confirmed reachable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TdarrConnectionResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '502':
+          description: base_url/api_key rejected, or Tdarr could not be reached
+    delete:
+      tags:
+      - admin
+      summary: |-
+        De-registers the Tdarr connection. The background dispatch loop stops
+        on its next watch tick (see this module's doc comment); already-cached
+        `Rendition`s are untouched.
+      operationId: delete_tdarr_connection_handler
+      responses:
+        '204':
+          description: Removed (or was already absent)
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+  /api/v1/admin/users:
+    get:
+      tags:
+      - users
+      summary: |-
+        Every provisioned account. A user whose `Policy` has gone missing (a
+        data-integrity gap, not something a caller can cause through this API)
+        is still listed -- just with `is_admin: false` and a logged warning --
+        rather than failing the whole list over one bad row.
+      operationId: list_users_handler
+      responses:
+        '200':
+          description: All provisioned accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+    post:
+      tags:
+      - users
+      summary: |-
+        Provisions a new account: hashes the password, creates a default
+        [`Policy`] for it (see [`default_policy`]), and persists the policy
+        *before* the user -- same write-ordering rationale as `admin.rs`'s
+        create handler (the durable dependency first), except here it's an
+        actual foreign key: `User::policy_id` must resolve.
+      operationId: create_user_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+        required: true
+      responses:
+        '200':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '409':
+          description: Username is already taken
+  /api/v1/admin/users/{id}:
+    delete:
+      tags:
+      - users
+      summary: |-
+        Removes an account and, best-effort, its `Policy`. Mirrors
+        `admin.rs`'s `delete_source_instance_handler`: a `NotFound` deleting the
+        policy is not a caller-facing failure (an already-absent/shared/
+        orphaned policy is exactly as much a no-op as deleting an
+        already-absent user would be).
+      operationId: delete_user_handler
+      parameters:
+      - name: id
+        in: path
+        description: User id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed (or was already absent)
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+    patch:
+      tags:
+      - users
+      summary: |-
+        Applies a partial update to an existing account. Only fields present as
+        `Some` in the body are changed; `password`, when set, is re-hashed the
+        same way [`create_user_handler`] does; `is_admin`/`can_stream`/
+        `library_allow`, when set, update the user's `Policy` row (loaded via
+        `policy_id`) rather than `User` itself.
+      operationId: update_user_handler
+      parameters:
+      - name: id
+        in: path
+        description: User id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+        required: true
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '404':
+          description: No user with this id
+  /api/v1/admin/views:
+    get:
+      tags:
+      - views
+      summary: |-
+        Every view, full projection (including `criteria`) -- the admin list
+        screen. Ordered by [`sort_views_for_display`].
+      operationId: list_admin_views_handler
+      responses:
+        '200':
+          description: Every view, full projection, in display order
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LibraryViewResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+    post:
+      tags:
+      - views
+      summary: |-
+        Creates a new, admin-authored view. `is_default` is always `false` and
+        `default_order` is always `None` for a view created through this
+        endpoint -- both are set only by the boot-time seed step (see
+        `streamarr_db::repo::library_view::seed_default_views`).
+      operationId: create_view_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LibraryViewRequest'
+        required: true
+      responses:
+        '200':
+          description: The created view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryViewResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+  /api/v1/admin/views/{id}:
+    put:
+      tags:
+      - views
+      summary: |-
+        Updates a view's `name`/`criteria`/`sort` in place, preserving `id`/
+        `is_default`/`default_order`/`created_at`. This means an admin **can**
+        rename/retune a default view's criteria -- only deletion is blocked (see
+        [`delete_view_handler`]) since Playarr's Home shelves depend on the id
+        remaining resolvable.
+      operationId: update_view_handler
+      parameters:
+      - name: id
+        in: path
+        description: View id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LibraryViewRequest'
+        required: true
+      responses:
+        '200':
+          description: The updated view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryViewResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '404':
+          description: No view with this id
+    delete:
+      tags:
+      - views
+      summary: |-
+        Deletes a custom (non-default) view. Rejects with `409 Conflict` for a
+        seeded default view -- Playarr's Home shelves depend on those ids
+        remaining resolvable; an admin who wants to change one should rename/
+        retune it via [`update_view_handler`] instead.
+      operationId: delete_view_handler
+      parameters:
+      - name: id
+        in: path
+        description: View id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '404':
+          description: No view with this id
+        '409':
+          description: This is a seeded default view and cannot be deleted
+  /api/v1/artwork/work/{work_id}/{kind}:
+    get:
+      tags:
+      - catalog
+      operationId: work_artwork_handler
+      parameters:
+      - name: work_id
+        in: path
+        description: Work id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: kind
+        in: path
+        description: poster, backdrop, banner, logo, or thumb
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Streamarr-cached source artwork
+          content:
+            image/*: {}
+        '304':
+          description: The caller already has the current cached artwork
+        '400':
+          description: Unsupported artwork kind
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+        '404':
+          description: Unknown work or unavailable artwork kind
+        '502':
+          description: The metadata-provider artwork could not be safely cached
   /api/v1/auth/login:
     post:
       tags:
@@ -158,6 +642,28 @@ paths:
           description: credentials_required | pin_required
         '401':
           description: untrusted_network | invalid_credentials | invalid_pin | account_disabled
+        '403':
+          description: authenticated, but this account has no Playarr streaming access
+  /api/v1/auth/refresh:
+    post:
+      tags:
+      - auth
+      operationId: refresh_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+        required: true
+      responses:
+        '200':
+          description: Fresh access + rotated refresh token pair
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+        '401':
+          description: refresh token is invalid, expired, revoked, or reused
   /api/v1/catalog:
     get:
       tags:
@@ -171,6 +677,31 @@ paths:
           oneOf:
           - type: 'null'
           - $ref: '#/components/schemas/WorkKind'
+      - name: available_only
+        in: query
+        description: |-
+          Return only works that own at least one synced media file. Playarr
+          enables this; Streamarr Admin leaves it unset so records without
+          playable leaves remain visible for library reconciliation.
+        required: false
+        schema:
+          type:
+          - boolean
+          - 'null'
+      - name: source_instance_id
+        in: query
+        description: |-
+          Restricts results to works with at least one synced file from this
+          source instance -- the "library" filter (two source instances of the
+          same kind, e.g. two Radarr instances, browse as separate libraries).
+          See `streamarr_catalog::BrowseQuery::source_instance_id`'s doc
+          comment for how this is resolved.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+          format: uuid
       - name: genre
         in: query
         required: false
@@ -187,7 +718,17 @@ paths:
           - 'null'
       - name: sort
         in: query
-        description: '`"title"` (default) or `"recent"`.'
+        description: |-
+          `"title"` (default) or `"date_added"` (`"recent"` remains a
+          backwards-compatible alias for date-added descending).
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: order
+        in: query
+        description: '`"asc"` (default for title) or `"desc"` (default for date added).'
         required: false
         schema:
           type:
@@ -216,6 +757,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CatalogPageSchema'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+  /api/v1/catalog/kinds:
+    get:
+      tags:
+      - catalog
+      operationId: catalog_kinds_handler
+      responses:
+        '200':
+          description: Configured catalog kinds visible to the caller
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkKind'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
   /api/v1/catalog/search:
     get:
       tags:
@@ -244,6 +807,10 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Work'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
   /api/v1/catalog/{id}:
     get:
       tags:
@@ -264,8 +831,374 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkDetailSchema'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
         '404':
           description: No work with this id
+  /api/v1/catalog/{id}/credits:
+    get:
+      tags:
+      - credits
+      summary: |-
+        A work's cast and crew, in the source's own billing/department order
+        -- empty (not 404) for a work with no credits, which is the normal
+        case for every non-Radarr-sourced work (see this module's doc
+        comment).
+      operationId: work_credits_handler
+      parameters:
+      - name: id
+        in: path
+        description: Work id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: This work's cast and crew
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkCreditsResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+  /api/v1/catalog/{id}/similar:
+    get:
+      tags:
+      - catalog
+      summary: |-
+        "What else is like this" -- semantic similarity over a locally-cached
+        embedding (see `streamarr_model::embedding`'s module doc comment), not
+        genre/tag overlap. `404`s both for an unknown work id and for one that
+        hasn't been embedded yet (not yet synced, or this deployment hasn't
+        configured embedding generation) -- `streamarr_catalog::CatalogService::
+        similar`'s doc comment covers why those collapse to one status here
+        rather than a distinct "not available" shape.
+      operationId: similar_works_handler
+      parameters:
+      - name: id
+        in: path
+        description: Work id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int64
+      responses:
+        '200':
+          description: Works ranked by semantic similarity to this one
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Work'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+        '404':
+          description: No work with this id, or it has no cached embedding yet
+  /api/v1/media/renditions/{rendition_id}/{file_name}:
+    get:
+      tags:
+      - playback
+      operationId: serve_rendition_file_handler
+      parameters:
+      - name: rendition_id
+        in: path
+        description: Rendition id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: file_name
+        in: path
+        description: playlist.m3u8 or a segment file name within the rendition's output directory
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Full file content
+        '206':
+          description: Partial content for a `Range` request
+        '400':
+          description: file_name contains a path separator or `..`
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
+        '404':
+          description: Unknown rendition_id, or the file does not exist in its output directory
+  /api/v1/media/sessions/{session_id}/{file_name}:
+    get:
+      tags:
+      - playback
+      operationId: serve_session_file_handler
+      parameters:
+      - name: session_id
+        in: path
+        description: On-demand TranscodeSession id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: file_name
+        in: path
+        description: playlist.m3u8 or a segment file name within the session's output directory
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Full file content
+        '206':
+          description: Partial content for a `Range` request
+        '400':
+          description: file_name contains a path separator or `..`
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
+        '404':
+          description: Unknown or expired session_id, or the file hasn't been written yet
+  /api/v1/media/{media_file_id}/chapters:
+    get:
+      tags:
+      - playback
+      operationId: media_chapters_handler
+      parameters:
+      - name: media_file_id
+        in: path
+        description: MediaFile id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Real chapters embedded in the source media container
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MediaChapter'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
+        '404':
+          description: Unknown media_file_id
+        '500':
+          description: The source file could not be probed
+  /api/v1/media/{media_file_id}/metadata:
+    get:
+      tags:
+      - playback
+      operationId: media_metadata_handler
+      parameters:
+      - name: media_file_id
+        in: path
+        description: MediaFile id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Persisted fixed source-container metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaMetadata'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
+        '404':
+          description: Unknown media_file_id
+        '500':
+          description: The source file could not be probed
+  /api/v1/media/{media_file_id}/playback-options:
+    get:
+      tags:
+      - playback
+      operationId: media_playback_options_handler
+      parameters:
+      - name: media_file_id
+        in: path
+        description: MediaFile id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Playback choices and this viewer's remembered selections
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaPlaybackOptionsResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
+        '404':
+          description: Unknown media_file_id
+    patch:
+      tags:
+      - playback
+      operationId: update_media_playback_options_handler
+      parameters:
+      - name: media_file_id
+        in: path
+        description: MediaFile id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMediaPlaybackPreferencesRequest'
+        required: true
+      responses:
+        '200':
+          description: Remembered selections updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaPlaybackOptionsResponse'
+        '400':
+          description: A requested option is not available for this media file
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
+        '404':
+          description: Unknown media_file_id
+  /api/v1/media/{media_file_id}/stream:
+    get:
+      tags:
+      - playback
+      operationId: stream_media_handler
+      parameters:
+      - name: media_file_id
+        in: path
+        description: MediaFile id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Full file content (direct play)
+        '206':
+          description: Partial content for a `Range` request
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
+        '404':
+          description: Unknown media_file_id, or the file no longer exists on disk
+  /api/v1/media/{media_file_id}/subtitles/{stream_index}:
+    get:
+      tags:
+      - playback
+      operationId: media_subtitle_handler
+      parameters:
+      - name: media_file_id
+        in: path
+        description: MediaFile id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: stream_index
+        in: path
+        description: Global ffprobe stream index
+        required: true
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+      - name: source_offset_ms
+        in: query
+        description: |-
+          Absolute source timestamp represented by zero in the current media
+          timeline. On-demand HLS sessions use this to keep sidecar cues aligned.
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      responses:
+        '200':
+          description: Embedded text subtitle converted to WebVTT
+          content:
+            text/vtt: {}
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
+        '404':
+          description: Unknown media file or unsupported/nonexistent subtitle stream
+        '500':
+          description: Subtitle conversion failed
+  /api/v1/media/{media_file_id}/thumbnail:
+    get:
+      tags:
+      - playback
+      operationId: media_thumbnail_handler
+      parameters:
+      - name: media_file_id
+        in: path
+        description: MediaFile id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: position_ms
+        in: query
+        description: |-
+          Absolute source timestamp for the extracted frame. Omitted keeps the
+          established 30-second episode-thumbnail default.
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+      responses:
+        '200':
+          description: A real JPEG frame extracted from the source media file
+          content:
+            image/jpeg: {}
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
+        '404':
+          description: Unknown media_file_id
+        '500':
+          description: The source file could not be decoded
+        '503':
+          description: The source media path is not reachable on this Streamarr node
   /api/v1/oauth/device/code:
     post:
       tags:
@@ -308,6 +1241,112 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OAuthErrorBody'
+  /api/v1/people/{id}:
+    get:
+      tags:
+      - credits
+      summary: One person by id.
+      operationId: get_person_handler
+      parameters:
+      - name: id
+        in: path
+        description: Person id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The person
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+        '404':
+          description: No person with this id
+  /api/v1/people/{id}/works:
+    get:
+      tags:
+      - credits
+      summary: |-
+        Every work this person has a credit on (cast or crew, any work kind),
+        title-sorted. A work id whose `Work` row has since been removed (e.g.
+        the source deleted the movie) is silently skipped rather than failing
+        the whole request.
+      operationId: person_works_handler
+      parameters:
+      - name: id
+        in: path
+        description: Person id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Every work this person has a credit on
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Work'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+        '404':
+          description: No person with this id
+  /api/v1/playback/progress:
+    get:
+      tags:
+      - playback
+      operationId: list_watch_progress_handler
+      responses:
+        '200':
+          description: Durable progress rows for the signed-in viewer, restricted to this account's allowed libraries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WatchProgress'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
+  /api/v1/playback/sessions/{session_id}/events:
+    post:
+      tags:
+      - playback
+      operationId: record_playback_event_handler
+      parameters:
+      - name: session_id
+        in: path
+        description: PlaybackSession id, from PlaybackInfoResponse.session_id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaybackEventKind'
+        required: true
+      responses:
+        '204':
+          description: Event recorded
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: session_id does not belong to the caller
+        '404':
+          description: Unknown or already-closed session_id
   /api/v1/playback/{media_file_id}:
     get:
       tags:
@@ -361,17 +1400,577 @@ paths:
           type:
           - string
           - 'null'
+      - name: force_transcode
+        in: query
+        description: |-
+          Skip direct play and produce the requested rendition profile. Used
+          by an explicit player quality choice; omitted/false keeps Original
+          as the default uncapped negotiation behaviour.
+        required: false
+        schema:
+          type: boolean
+      - name: start_position_ms
+        in: query
+        description: |-
+          Absolute source timestamp at which a newly-created on-demand
+          transcode should begin. Direct play and complete renditions ignore
+          this and remain normally seekable by the player.
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      - name: audio_stream_index
+        in: query
+        description: |-
+          Global ffprobe stream index of the source audio track to encode into
+          an on-demand HLS session. Supplying this forces a fresh transcode so
+          a track-specific stream never reuses a default-audio rendition.
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+      - name: ignore_saved_preferences
+        in: query
+        description: |-
+          Ignore this viewer's remembered per-media choices for this request.
+          Used when the player explicitly switches back to Original/automatic.
+        required: false
+        schema:
+          type: boolean
       responses:
         '200':
-          description: Direct-play URL or HLS manifest URL
+          description: Direct-play URL or HLS manifest URL, plus the new PlaybackSession id
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PlaybackInfoResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
         '404':
           description: Unknown media_file_id
         '503':
           description: No on-demand transcode capacity available on this node
+  /api/v1/playback/{media_file_id}/progress:
+    get:
+      tags:
+      - playback
+      operationId: get_watch_progress_handler
+      parameters:
+      - name: media_file_id
+        in: path
+        description: MediaFile id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Viewer progress, including a synthetic unseen state when no row exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchProgress'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
+        '404':
+          description: Unknown media_file_id
+    put:
+      tags:
+      - playback
+      operationId: update_watch_progress_handler
+      parameters:
+      - name: media_file_id
+        in: path
+        description: MediaFile id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWatchProgressRequest'
+        required: true
+      responses:
+        '200':
+          description: Persisted viewer progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchProgress'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
+        '404':
+          description: Unknown media_file_id
+  /api/v1/playlists:
+    get:
+      tags:
+      - playlists
+      summary: |-
+        Every playlist visible to the caller: their own personal playlists plus
+        every System playlist.
+      operationId: list_playlists_handler
+      responses:
+        '200':
+          description: Every playlist visible to the caller
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlaylistResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+    post:
+      tags:
+      - playlists
+      summary: |-
+        Creates a playlist owned by the caller, or (admin-only, `is_system:
+        true`) a System playlist. If `parent_playlist_id` is set, the caller
+        must already have write access to that parent (same [`can_write`]
+        check used for every other mutation) -- this is also what keeps a
+        parent/child pair's ownership consistent, since a child can only ever
+        be created under a parent the same caller could already mutate.
+      operationId: create_playlist_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlaylistRequest'
+        required: true
+      responses:
+        '200':
+          description: The created playlist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaylistResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Non-admin caller set is_system, or lacks write access to the requested parent
+        '404':
+          description: No such parent_playlist_id
+  /api/v1/playlists/{id}:
+    get:
+      tags:
+      - playlists
+      summary: One playlist by id.
+      operationId: get_playlist_handler
+      parameters:
+      - name: id
+        in: path
+        description: Playlist id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The playlist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaylistResponse'
+        '401':
+          description: Missing or invalid access token
+        '404':
+          description: No such playlist, or not visible to the caller
+    put:
+      tags:
+      - playlists
+      summary: |-
+        Renames and/or re-nests a playlist in place. Ownership
+        (`owner_user_id`)/System-vs-personal can never change through this
+        endpoint -- only [`can_write`]-gated for the playlist's *existing*
+        owner, so a personal playlist can't be converted into a System one (or
+        vice versa) by an update.
+      operationId: update_playlist_handler
+      parameters:
+      - name: id
+        in: path
+        description: Playlist id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePlaylistRequest'
+        required: true
+      responses:
+        '200':
+          description: The updated playlist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaylistResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller lacks write access to this playlist, or to the requested new parent
+        '404':
+          description: No such playlist, or not visible to the caller
+    delete:
+      tags:
+      - playlists
+      summary: |-
+        Deletes a playlist -- cascades to nested child playlists and items, see
+        `PlaylistRepo::delete`'s doc comment.
+      operationId: delete_playlist_handler
+      parameters:
+      - name: id
+        in: path
+        description: Playlist id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller lacks write access to this playlist
+        '404':
+          description: No such playlist, or not visible to the caller
+  /api/v1/playlists/{id}/items:
+    get:
+      tags:
+      - playlists
+      summary: Every item on a playlist, in order.
+      operationId: list_playlist_items_handler
+      parameters:
+      - name: id
+        in: path
+        description: Playlist id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: This playlist's items, position-ordered
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlaylistItemResponse'
+        '401':
+          description: Missing or invalid access token
+        '404':
+          description: No such playlist, or not visible to the caller
+    post:
+      tags:
+      - playlists
+      summary: Appends a work to the end of a playlist.
+      operationId: add_playlist_item_handler
+      parameters:
+      - name: id
+        in: path
+        description: Playlist id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddPlaylistItemRequest'
+        required: true
+      responses:
+        '200':
+          description: The created item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaylistItemResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller lacks write access to this playlist
+        '404':
+          description: No such playlist, or not visible to the caller
+  /api/v1/playlists/{id}/items/order:
+    put:
+      tags:
+      - playlists
+      summary: Replaces the full item ordering of a playlist.
+      operationId: reorder_playlist_items_handler
+      parameters:
+      - name: id
+        in: path
+        description: Playlist id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderPlaylistItemsRequest'
+        required: true
+      responses:
+        '200':
+          description: The playlist's items in their new order
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlaylistItemResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller lacks write access to this playlist
+        '404':
+          description: No such playlist, or not visible to the caller
+  /api/v1/playlists/{id}/items/{item_id}:
+    delete:
+      tags:
+      - playlists
+      summary: Removes one item from a playlist.
+      operationId: remove_playlist_item_handler
+      parameters:
+      - name: id
+        in: path
+        description: Playlist id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: item_id
+        in: path
+        description: Playlist item id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller lacks write access to this playlist
+        '404':
+          description: No such playlist/item, or playlist not visible to the caller
+  /api/v1/users/me/player-preferences:
+    get:
+      tags:
+      - users
+      operationId: get_player_preferences_handler
+      responses:
+        '200':
+          description: The signed-in user's player preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerPreferencesResponse'
+        '401':
+          description: Missing or invalid access token
+        '404':
+          description: The signed-in user no longer exists
+    patch:
+      tags:
+      - users
+      operationId: update_player_preferences_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePlayerPreferencesRequest'
+        required: true
+      responses:
+        '200':
+          description: Updated player preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerPreferencesResponse'
+        '400':
+          description: Invalid preferred audio language
+        '401':
+          description: Missing or invalid access token
+        '404':
+          description: The signed-in user no longer exists
+  /api/v1/users/me/profile-pin:
+    get:
+      tags:
+      - users
+      operationId: get_profile_pin_setting_handler
+      responses:
+        '200':
+          description: The signed-in user's profile PIN setting
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfilePinSettingResponse'
+        '401':
+          description: Missing or invalid access token
+    patch:
+      tags:
+      - users
+      operationId: update_profile_pin_setting_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfilePinRequest'
+        required: true
+      responses:
+        '200':
+          description: Updated profile PIN setting
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfilePinSettingResponse'
+        '400':
+          description: PIN is not exactly four decimal digits
+        '401':
+          description: Missing or invalid access token
+        '404':
+          description: The signed-in user no longer exists
+  /api/v1/users/profiles:
+    get:
+      tags:
+      - users
+      operationId: list_available_profiles_handler
+      responses:
+        '200':
+          description: Enabled Playarr profiles available on this server
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AvailableProfileResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
+  /api/v1/users/profiles/{id}/verify-pin:
+    post:
+      tags:
+      - users
+      operationId: verify_profile_pin_handler
+      parameters:
+      - name: id
+        in: path
+        description: Profile user id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyProfilePinRequest'
+        required: true
+      responses:
+        '200':
+          description: The profile is unlocked for switching
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyProfilePinResponse'
+        '401':
+          description: The target profile is unavailable or the PIN is invalid
+        '403':
+          description: Caller does not have Playarr streaming access
+  /api/v1/views:
+    get:
+      tags:
+      - views
+      summary: |-
+        Every view, minimal projection -- the Playarr-facing shelf list. Ordered
+        by [`sort_views_for_display`], identically to the admin list, so
+        Playarr's shelf order always matches what the admin UI shows.
+      operationId: list_views_handler
+      responses:
+        '200':
+          description: Every view, minimal projection, in display order
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ViewSummary'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+  /api/v1/views/{id}/resolve:
+    get:
+      tags:
+      - views
+      summary: |-
+        Runs a saved view's criteria+sort against the live catalog (via
+        `CatalogService::resolve_view`) and returns a page of results, identical
+        in shape to `GET /api/v1/catalog`. Also passes `viewer.allowed_libraries()`
+        through, so a resolved view is silently narrowed to the caller's
+        per-user library access control ceiling exactly like `GET /api/v1/
+        catalog` itself is -- a saved view is just a stored `BrowseQuery` shape,
+        not a separate enforcement boundary (see `CatalogService::resolve_view`'s
+        doc comment).
+      operationId: resolve_view_handler
+      parameters:
+      - name: id
+        in: path
+        description: View id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int64
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int64
+      responses:
+        '200':
+          description: A page of catalog works matching this view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogPageSchema'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+        '404':
+          description: No view with this id
   /webhooks/{instance_id}:
     post:
       tags:
@@ -399,6 +1998,87 @@ paths:
           description: Unknown source_instance_id
 components:
   schemas:
+    ActiveSessionView:
+      type: object
+      description: |-
+        One live session, enriched (best-effort) with a human-readable user/
+        media label -- the raw [`PlaybackSession`] only carries ids.
+      required:
+      - session_id
+      - user_id
+      - device_id
+      - media_file_id
+      - play_method
+      - target_codec
+      - target_container
+      - client_platform
+      - client_version
+      - started_at
+      - bytes_streamed
+      - buffering_events
+      - buffering_ms_total
+      properties:
+        buffering_events:
+          type: integer
+          format: int32
+          minimum: 0
+        buffering_ms_total:
+          type: integer
+          format: int64
+          minimum: 0
+        bytes_streamed:
+          type: integer
+          format: int64
+          minimum: 0
+        client_platform:
+          $ref: '#/components/schemas/ClientPlatform'
+        client_version:
+          type: string
+        device_id:
+          type: string
+          format: uuid
+        media_file_id:
+          type: string
+          format: uuid
+        media_title:
+          type:
+          - string
+          - 'null'
+          description: |-
+            Best-effort `CatalogService` lookup via the media file's `work_id`;
+            same "never an error" tolerance as `user_display_name`.
+        play_method:
+          $ref: '#/components/schemas/PlayMethod'
+        session_id:
+          type: string
+          format: uuid
+        started_at:
+          type: string
+          format: date-time
+        target_codec:
+          type: string
+        target_container:
+          type: string
+        user_display_name:
+          type:
+          - string
+          - 'null'
+          description: |-
+            Best-effort `UserRepo` lookup; `None` on a lookup miss/failure,
+            never surfaced as an error -- a live-sessions view degrading to
+            showing a bare id for one row is far better than failing the whole
+            list over one bad lookup.
+        user_id:
+          type: string
+          format: uuid
+    AddPlaylistItemRequest:
+      type: object
+      required:
+      - work_id
+      properties:
+        work_id:
+          type: string
+          format: uuid
     Album:
       type: object
       required:
@@ -463,6 +2143,30 @@ components:
       - partially_available
       - available
       - deleted
+    AvailableProfileResponse:
+      type: object
+      description: |-
+        Minimal household-profile projection for Playarr's 'who is watching'
+        screen. Password hashes, email addresses and policy details are never
+        exposed.
+      required:
+      - id
+      - username
+      - display_name
+      - is_current
+      - pin_locked
+      properties:
+        display_name:
+          type: string
+        id:
+          type: string
+          format: uuid
+        is_current:
+          type: boolean
+        pin_locked:
+          type: boolean
+        username:
+          type: string
     Book:
       type: object
       required:
@@ -520,9 +2224,9 @@ components:
     CatalogPageSchema:
       type: object
       description: |-
-        Doc-only mirror of [`streamarr_catalog::CatalogPage`] -- the real type
-        already derives `Serialize` (and is what handlers actually return), it
-        just has no `ToSchema` (`streamarr-catalog` doesn't depend on `utoipa`).
+        Doc-only mirror of `streamarr_catalog::CatalogPage` -- see
+        `catalog::CatalogPageSchema`'s own doc comment for why this can't just
+        derive `ToSchema` on the real type.
       required:
       - items
       properties:
@@ -542,6 +2246,18 @@ components:
         (rather than a free-form string) so the compatibility table, the
         `X-Streamarr-Client-Platform` header parser, and policy's
         `device_allow` list all agree on the same finite set.
+
+        `StreamarrAdmin` is the odd one out: every other variant is a Playarr
+        client (consumer streaming), but Streamarr's own admin UI is also a
+        real first-party client surface that authenticates through the same
+        `POST /api/v1/auth/login` endpoint, and `login_handler` needs a real,
+        honest way to tell the two apart so it knows whether to require
+        `Policy::can_stream` for this login attempt -- see that handler's doc
+        comment. Declaring `client_platform: "streamarr-admin"` doesn't grant
+        anything by itself (a caller can claim whatever platform it wants); it
+        only selects which check `login_handler` applies, and every *other*
+        endpoint still separately enforces the real, persisted `Policy`
+        regardless of what a login request once claimed.
       enum:
       - android-mobile
       - android-tv
@@ -550,6 +2266,7 @@ components:
       - tv-webos
       - tv-tizen
       - tv-vidaa
+      - streamarr-admin
     CompatibilityEntry:
       type: object
       description: |-
@@ -579,6 +2296,101 @@ components:
             RFC 3339 timestamp after which `min_supported_version` will be
             ratcheted up; surfaced to clients so they can warn users ahead of
             time rather than being cut off with no notice.
+    CreatePlaylistRequest:
+      type: object
+      required:
+      - name
+      properties:
+        is_system:
+          type: boolean
+          description: |-
+            Requires [`AdminUser`] when `true` -- a non-admin caller setting
+            this is rejected with `403`, not silently downgraded to a personal
+            playlist, so a client bug never creates the wrong kind of playlist
+            unnoticed.
+        name:
+          type: string
+        parent_playlist_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: |-
+            `Some(id)` nests this playlist under an existing one the caller can
+            already write to (e.g. "Sample Movie Golf" under "MCU") -- checked in
+            [`create_playlist_handler`], not structurally enforced here.
+    CreateUserRequest:
+      type: object
+      description: |-
+        Request body for provisioning a new account. `password` is write-only
+        -- it is hashed via `streamarr_auth::login::hash_password` immediately
+        and never echoed back in [`UserResponse`].
+      required:
+      - username
+      - display_name
+      - password
+      properties:
+        can_stream:
+          type: boolean
+          description: |-
+            Grants Playarr streaming access -- see `streamarr_model::Policy::
+            can_stream`'s doc comment. Independent of `is_admin`; defaults to
+            `false` (least privilege), same as every other grant this handler
+            starts a new account with.
+        display_name:
+          type: string
+        email:
+          type:
+          - string
+          - 'null'
+        is_admin:
+          type: boolean
+        library_allow:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: |-
+            Source-instance ids ("libraries") this account may browse/stream --
+            see `streamarr_model::Policy::library_allow`'s doc comment. Defaults
+            to empty (no grants yet, deny-all -- not all-allow), same
+            least-privilege-by-default philosophy as `is_admin`/`can_stream`
+            above: an admin still has to explicitly grant library access after
+            creating the account.
+        password:
+          type: string
+        username:
+          type: string
+    CreditResponse:
+      type: object
+      description: |-
+        One credit, with its [`Person`] flattened in -- a caller displaying a
+        cast/crew list wants the name/headshot right there, not a second
+        round trip per credit.
+      required:
+      - id
+      - person
+      properties:
+        character:
+          type:
+          - string
+          - 'null'
+          description: The character played. Present only on a cast credit.
+        department:
+          type:
+          - string
+          - 'null'
+          description: Present only on a crew credit.
+        id:
+          type: string
+          format: uuid
+        job:
+          type:
+          - string
+          - 'null'
+          description: Present only on a crew credit.
+        person:
+          $ref: '#/components/schemas/PersonResponse'
     DeviceCodeRequest:
       type: object
       required:
@@ -633,6 +2445,7 @@ components:
       - id
       - season_id
       - episode_number
+      - images
       - monitored
       - availability
       properties:
@@ -649,6 +2462,11 @@ components:
         id:
           type: string
           format: uuid
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImageAsset'
+          description: Remote-hosted episode stills, normally [`crate::ImageKind::Thumb`].
         monitored:
           type: boolean
         overview:
@@ -684,6 +2502,12 @@ components:
           - string
           - 'null'
           format: uuid
+        runtime_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
     ExternalProvider:
       oneOf:
       - type: string
@@ -710,6 +2534,17 @@ components:
       - type: string
         enum:
         - asin
+      - type: string
+        description: |-
+          ThePornDB -- Whisparr's own metadata provider, structurally the same
+          role for Whisparr's studio/scene catalog that `Tvdb` plays for
+          Sonarr's. Given a first-class variant (rather than falling back to
+          `Other`) for the same reason every other Work-owning source has one:
+          `streamarr-arr-sync::arr_client::work_kind_and_provider` needs a
+          stable, matchable discriminant to key `Work::external_refs` lookups
+          on, and every source kind that owns `Work` rows gets one.
+        enum:
+        - tpdb
       - type: object
         description: |-
           Escape hatch for providers we don't have a first-class variant for
@@ -765,6 +2600,72 @@ components:
       - banner
       - logo
       - thumb
+    LibraryViewRequest:
+      type: object
+      description: |-
+        Request body for both create (`POST /api/v1/admin/views`) and update
+        (`PUT /api/v1/admin/views/{id}`). Structurally has no `is_default`/
+        `default_order` fields, so an admin can never set them through this
+        endpoint -- enforced by omission, not a runtime check (see
+        [`create_view_handler`]/[`update_view_handler`]'s doc comments).
+      required:
+      - name
+      - criteria
+      properties:
+        criteria:
+          $ref: '#/components/schemas/ViewCriteriaDto'
+        name:
+          type: string
+        sort:
+          type: array
+          items:
+            type: string
+          description: |-
+            Ordered, most-significant first -- each element one of `"title"` |
+            `"title_desc"` | `"recent"` | `"oldest"` | `"released"` |
+            `"last_played"`, same free-string convention as
+            `catalog::BrowseQueryParams::sort`, not a typed enum on the wire.
+            Empty/omitted defaults to `["title"]`. `"last_played"` orders by
+            *each resolving viewer's own* last-played time (see
+            `streamarr_model::ViewSort::LastPlayedByUser`'s doc comment) --
+            picking it here means every caller who resolves this view sees it
+            personalized to them, not a single shared order.
+    LibraryViewResponse:
+      type: object
+      required:
+      - id
+      - name
+      - criteria
+      - sort
+      - is_default
+      - created_at
+      - updated_at
+      properties:
+        created_at:
+          type: string
+          format: date-time
+        criteria:
+          $ref: '#/components/schemas/ViewCriteriaDto'
+        default_order:
+          type:
+          - integer
+          - 'null'
+          format: int32
+        id:
+          type: string
+          format: uuid
+        is_default:
+          type: boolean
+        name:
+          type: string
+        sort:
+          type: array
+          items:
+            type: string
+          description: Same ordered, most-significant-first string list `LibraryViewRequest::sort` accepts.
+        updated_at:
+          type: string
+          format: date-time
     LoginRequest:
       type: object
       required:
@@ -827,6 +2728,80 @@ components:
         user_id:
           type: string
           format: uuid
+    MediaChapter:
+      type: object
+      description: |-
+        One real chapter embedded in a media container, as reported by ffprobe.
+        Untitled chapters remain untitled rather than receiving a fabricated
+        name; Playarr can display their real start time as the label.
+      required:
+      - index
+      - start_ms
+      properties:
+        end_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        index:
+          type: integer
+          format: int32
+          minimum: 0
+        start_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        title:
+          type:
+          - string
+          - 'null'
+    MediaMetadata:
+      type: object
+      required:
+      - duration_ms
+      properties:
+        duration_ms:
+          type: integer
+          format: int64
+          minimum: 0
+    MediaPlaybackOptionsResponse:
+      type: object
+      required:
+      - quality_options
+      - audio_tracks
+      - subtitle_tracks
+      - preferences
+      properties:
+        audio_tracks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlaybackAudioTrackOption'
+        preferences:
+          $ref: '#/components/schemas/MediaPlaybackPreferenceResponse'
+        quality_options:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlaybackQualityOption'
+        subtitle_tracks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlaybackSubtitleTrackOption'
+    MediaPlaybackPreferenceResponse:
+      type: object
+      required:
+      - quality_id
+      properties:
+        audio_track_id:
+          type:
+          - string
+          - 'null'
+        quality_id:
+          type: string
+        subtitle_track_id:
+          type:
+          - string
+          - 'null'
     OAuthErrorBody:
       type: object
       required:
@@ -837,6 +2812,218 @@ components:
           description: |-
             One of RFC 8628 §3.5's four device-flow error codes, or RFC 6749
             §5.2's `unsupported_grant_type`.
+    PersonResponse:
+      type: object
+      required:
+      - id
+      - name
+      properties:
+        headshot_url:
+          type:
+          - string
+          - 'null'
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+    PlayMethod:
+      type: string
+      enum:
+      - direct_play
+      - direct_stream
+      - transcode
+    PlaybackAudioTrackOption:
+      type: object
+      required:
+      - id
+      - stream_index
+      - label
+      - is_default
+      properties:
+        channels:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+        codec:
+          type:
+          - string
+          - 'null'
+        id:
+          type: string
+        is_default:
+          type: boolean
+        label:
+          type: string
+        language:
+          type:
+          - string
+          - 'null'
+        stream_index:
+          type: integer
+          format: int32
+          minimum: 0
+    PlaybackEventKind:
+      oneOf:
+      - type: object
+        required:
+        - kind
+        properties:
+          kind:
+            type: string
+            enum:
+            - start
+      - type: object
+        required:
+        - position_ms
+        - kind
+        properties:
+          kind:
+            type: string
+            enum:
+            - pause
+          position_ms:
+            type: integer
+            format: int64
+            minimum: 0
+      - type: object
+        required:
+        - position_ms
+        - kind
+        properties:
+          kind:
+            type: string
+            enum:
+            - resume
+          position_ms:
+            type: integer
+            format: int64
+            minimum: 0
+      - type: object
+        required:
+        - from_ms
+        - to_ms
+        - kind
+        properties:
+          from_ms:
+            type: integer
+            format: int64
+            minimum: 0
+          kind:
+            type: string
+            enum:
+            - seek
+          to_ms:
+            type: integer
+            format: int64
+            minimum: 0
+      - type: object
+        required:
+        - position_ms
+        - kind
+        properties:
+          kind:
+            type: string
+            enum:
+            - buffer_start
+          position_ms:
+            type: integer
+            format: int64
+            minimum: 0
+      - type: object
+        required:
+        - duration_ms
+        - kind
+        properties:
+          duration_ms:
+            type: integer
+            format: int64
+            minimum: 0
+          kind:
+            type: string
+            enum:
+            - buffer_end
+      - type: object
+        required:
+        - to_bps
+        - kind
+        properties:
+          from_bps:
+            type:
+            - integer
+            - 'null'
+            format: int64
+            minimum: 0
+          kind:
+            type: string
+            enum:
+            - bitrate_change
+          to_bps:
+            type: integer
+            format: int64
+            minimum: 0
+      - type: object
+        required:
+        - position_ms
+        - kind
+        properties:
+          bytes_streamed_total:
+            type:
+            - integer
+            - 'null'
+            format: int64
+            description: |-
+              The client's own cumulative bytes-received counter for this
+              session (e.g. from the `<video>` element / Shaka Player's
+              network stats), if it's cheap for the client to report. `None`
+              means the client isn't reporting this yet -- `bytes_streamed`
+              on the session simply stays at whatever it last was (usually
+              `0`) rather than being fabricated. See
+              `streamarr_telemetry::analytics::collector`'s module doc
+              comment for how this is applied.
+            minimum: 0
+          kind:
+            type: string
+            enum:
+            - heartbeat
+          position_ms:
+            type: integer
+            format: int64
+            minimum: 0
+      - type: object
+        required:
+        - reason
+        - position_ms
+        - kind
+        properties:
+          kind:
+            type: string
+            enum:
+            - stop
+          position_ms:
+            type: integer
+            format: int64
+            minimum: 0
+          reason:
+            $ref: '#/components/schemas/StopReason'
+      - type: object
+        required:
+        - message
+        - kind
+        properties:
+          kind:
+            type: string
+            enum:
+            - error
+          message:
+            type: string
+      description: |-
+        A single timestamped occurrence within a [`PlaybackSession`]. Kept as a
+        tagged enum rather than a generic `{kind: String, payload: Value}` bag
+        so the analytics rollup code (`streamarr-telemetry::analytics::rollup`)
+        can exhaustively match every event type the compiler knows about.
     PlaybackInfoResponse:
       type: object
       description: |-
@@ -851,9 +3038,75 @@ components:
       required:
       - mode
       - url
+      - duration_ms
+      - source_offset_ms
+      - audio_tracks
+      - subtitle_tracks
+      - quality_options
+      - selected_quality_id
+      - session_id
       properties:
+        audio_tracks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlaybackAudioTrackOption'
+          description: |-
+            Source-container audio streams. For on-demand HLS, choosing one
+            creates a replacement session that maps this exact stream.
+        duration_ms:
+          type: integer
+          format: int64
+          description: |-
+            Fixed runtime read from the source media container with ffprobe.
+            Zero means probing failed; clients may then fall back to their
+            playback engine's duration without failing negotiation.
+          minimum: 0
         mode:
           $ref: '#/components/schemas/PlaybackMode'
+        quality_options:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlaybackQualityOption'
+          description: |-
+            The server-owned quality ladder. Original is always first and is
+            the default when the request does not explicitly force a profile.
+        selected_audio_track_id:
+          type:
+          - string
+          - 'null'
+        selected_quality_id:
+          type: string
+          description: The option represented by this URL.
+        selected_subtitle_track_id:
+          type:
+          - string
+          - 'null'
+        session_id:
+          type: string
+          format: uuid
+          description: |-
+            The freshly-created [`PlaybackSession`] id -- the client uses this
+            for every subsequent `POST .../sessions/{session_id}/events` call
+            (heartbeats, buffering, stop). Session creation piggybacks on this
+            endpoint entirely: `device_id` comes from the caller's JWT and
+            `client_platform`/`client_version` from headers the client already
+            sends on every request, so no separate "start session" call is
+            needed -- see [`record_playback_event_handler`]'s doc comment.
+        source_offset_ms:
+          type: integer
+          format: int64
+          description: |-
+            Absolute source timestamp represented by time zero in `url`.
+            Non-zero only for a freshly-created on-demand HLS session started
+            part-way through the source.
+          minimum: 0
+        subtitle_tracks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlaybackSubtitleTrackOption'
+          description: |-
+            Supported embedded text subtitles, exposed as authenticated WebVTT
+            sidecars. Bitmap subtitle codecs are deliberately omitted.
         url:
           type: string
     PlaybackMode:
@@ -861,6 +3114,317 @@ components:
       enum:
       - direct
       - hls
+    PlaybackQualityOption:
+      type: object
+      description: |-
+        One quality the server can genuinely deliver through its current
+        playback/transcode implementation.
+      required:
+      - id
+      - label
+      properties:
+        height:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Target picture height for a rendition. Original is source-defined.
+          minimum: 0
+        id:
+          type: string
+          description: |-
+            Stable selector. `"original"` means normal uncapped negotiation;
+            profile qualities use their real rendition profile name.
+        label:
+          type: string
+        profile:
+          type:
+          - string
+          - 'null'
+          description: |-
+            `None` for Original; otherwise the exact profile accepted by this
+            endpoint's `profile` query parameter.
+        video_bitrate_bps:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Target video bitrate for a rendition. Original is source-defined.
+          minimum: 0
+    PlaybackSession:
+      type: object
+      description: |-
+        One playback attempt from start to finish. Written incrementally: a row
+        is inserted at playback start and updated (`ended_at`, `stop_reason`,
+        aggregate buffering counters) as the session progresses and closes.
+      required:
+      - id
+      - user_id
+      - device_id
+      - media_file_id
+      - started_at
+      - play_method
+      - source_codec
+      - source_container
+      - target_codec
+      - target_container
+      - client_platform
+      - client_version
+      - bytes_streamed
+      - buffering_events
+      - buffering_ms_total
+      properties:
+        buffering_events:
+          type: integer
+          format: int32
+          minimum: 0
+        buffering_ms_total:
+          type: integer
+          format: int64
+          minimum: 0
+        bytes_streamed:
+          type: integer
+          format: int64
+          minimum: 0
+        client_platform:
+          $ref: '#/components/schemas/ClientPlatform'
+        client_version:
+          type: string
+        device_id:
+          type: string
+          format: uuid
+        ended_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        ip_address:
+          type:
+          - string
+          - 'null'
+        media_file_id:
+          type: string
+          format: uuid
+        play_method:
+          $ref: '#/components/schemas/PlayMethod'
+        rendition_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: |-
+            Set only when `play_method == Transcode` and an existing
+            [`crate::Rendition`] served the session (as opposed to a
+            short-lived on-demand transcode with no durable rendition record).
+        source_bitrate:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        source_codec:
+          type: string
+        source_container:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        stop_reason:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/StopReason'
+        target_bitrate:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        target_codec:
+          type: string
+          description: |-
+            The codec/container/bitrate actually delivered to the client;
+            equal to the source fields for `DirectPlay`.
+        target_container:
+          type: string
+        transcode_reason:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/TranscodeReason'
+        user_id:
+          type: string
+          format: uuid
+    PlaybackSubtitleTrackOption:
+      type: object
+      required:
+      - id
+      - stream_index
+      - label
+      - codec
+      - is_default
+      - forced
+      - url
+      properties:
+        codec:
+          type: string
+        forced:
+          type: boolean
+        id:
+          type: string
+        is_default:
+          type: boolean
+        label:
+          type: string
+        language:
+          type:
+          - string
+          - 'null'
+        stream_index:
+          type: integer
+          format: int32
+          minimum: 0
+        url:
+          type: string
+          description: Authenticated WebVTT sidecar aligned to this playback URL's timeline.
+    PlayerPreferencesResponse:
+      type: object
+      required:
+      - preferred_audio_language
+      properties:
+        preferred_audio_language:
+          type: string
+    PlaylistItemResponse:
+      type: object
+      required:
+      - id
+      - playlist_id
+      - work_id
+      - position
+      - added_at
+      properties:
+        added_at:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        playlist_id:
+          type: string
+          format: uuid
+        position:
+          type: integer
+          format: int32
+        work_id:
+          type: string
+          format: uuid
+    PlaylistResponse:
+      type: object
+      required:
+      - id
+      - name
+      - is_system
+      - created_at
+      - updated_at
+      properties:
+        created_at:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        is_system:
+          type: boolean
+          description: |-
+            `true` for a System (admin-managed, globally visible) playlist,
+            `false` for a personal one.
+        name:
+          type: string
+        owner_user_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: |-
+            `None` for a System playlist. Present (including for a personal
+            playlist that isn't the caller's own) only on the admin
+            "view everything" listing ([`list_admin_playlists_handler`]) -- the
+            ordinary [`list_playlists_handler`]/[`get_playlist_handler`]
+            responses a non-admin caller sees also carry this, but a caller
+            only ever gets back playlists they can already read (their own +
+            System, see [`can_read`]), so it's never a stranger's id in
+            practice for them.
+        parent_playlist_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        updated_at:
+          type: string
+          format: date-time
+    ProfilePinSettingResponse:
+      type: object
+      required:
+      - pin_locked
+      properties:
+        pin_locked:
+          type: boolean
+    RefreshRequest:
+      type: object
+      required:
+      - device_id
+      - refresh_token
+      properties:
+        device_id:
+          type: string
+          format: uuid
+          description: |-
+            Same `device_id` the original `POST /api/v1/auth/login` (or RFC
+            8628 device-flow) call used -- `RefreshTokenService` keys its store
+            by device, not by the opaque token value alone.
+        refresh_token:
+          type: string
+    RefreshResponse:
+      type: object
+      required:
+      - access_token
+      - refresh_token
+      - token_type
+      - expires_in
+      - user_id
+      properties:
+        access_token:
+          type: string
+        expires_in:
+          type: integer
+          format: int64
+        refresh_token:
+          type: string
+          description: |-
+            Rotated -- a new refresh token, not the one presented. The caller
+            must persist this and discard the old one; presenting the old one
+            again is treated as reuse (see `RefreshTokenService::rotate`'s doc
+            comment) and revokes the whole token family.
+        token_type:
+          type: string
+        user_id:
+          type: string
+          format: uuid
+    ReorderPlaylistItemsRequest:
+      type: object
+      required:
+      - item_ids
+      properties:
+        item_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: |-
+            Every item id currently on this playlist, in the desired new order.
+            An id that isn't actually one of this playlist's items is silently
+            ignored -- see `PlaylistRepo::reorder_items`'s own doc comment.
     Season:
       type: object
       required:
@@ -930,8 +3494,6 @@ components:
           type:
           - string
           - 'null'
-        enabled_for_requests:
-          type: boolean
         id:
           type:
           - string
@@ -961,7 +3523,6 @@ components:
       - name
       - base_url
       - priority
-      - enabled_for_requests
       - best_effort
       properties:
         base_url:
@@ -977,8 +3538,6 @@ components:
           type:
           - string
           - 'null'
-        enabled_for_requests:
-          type: boolean
         id:
           type: string
           format: uuid
@@ -989,6 +3548,54 @@ components:
         priority:
           type: integer
           format: int32
+    SourceInstanceSyncStatusResponse:
+      type: object
+      description: |-
+        One source instance's most recently reported reconciliation outcome --
+        see `streamarr_arr_sync::SyncRunStatus`. `status`/`error`/`finished_at`
+        are `None` together when no poller has reported anything for this
+        instance yet (e.g. it was registered less than ~10s ago).
+      required:
+      - source_instance_id
+      - name
+      - kind
+      properties:
+        detail:
+          type:
+          - string
+          - 'null'
+          description: |-
+            Only set when `status` is `"running"` and the poller has something
+            more specific to report than "running" alone -- see
+            `streamarr_arr_sync::SyncRunStatus::Running`'s doc comment (e.g. a
+            large missing-media-file backfill's live "N/total" progress).
+        error:
+          type:
+          - string
+          - 'null'
+          description: Only set when `status` is `"failed"`.
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        kind:
+          $ref: '#/components/schemas/SourceKind'
+        name:
+          type: string
+        source_instance_id:
+          type: string
+          format: uuid
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        status:
+          type:
+          - string
+          - 'null'
+          description: '`"running"` | `"succeeded"` | `"failed"`, or absent if unreported.'
     SourceKind:
       type: string
       enum:
@@ -998,6 +3605,108 @@ components:
       - bazarr
       - prowlarr
       - readarr
+      - whisparr
+    StopReason:
+      oneOf:
+      - type: string
+        enum:
+        - completed
+      - type: string
+        enum:
+        - user_stopped
+      - type: string
+        enum:
+        - error
+      - type: string
+        enum:
+        - device_disconnected
+      - type: string
+        enum:
+        - session_revoked
+      - type: string
+        enum:
+        - concurrent_limit_exceeded
+      - type: string
+        enum:
+        - idle_timeout
+      - type: object
+        required:
+        - other
+        properties:
+          other:
+            type: string
+    TdarrConnectionRequest:
+      type: object
+      description: |-
+        Request body for registering (or re-registering, to update in place --
+        e.g. to rotate the API key) the Tdarr connection. `api_key` is
+        write-only -- it is never echoed back in [`TdarrConnectionResponse`].
+      required:
+      - base_url
+      - api_key
+      properties:
+        active_session_threshold:
+          type: integer
+          format: int32
+        api_key:
+          type: string
+        base_url:
+          type: string
+        default_profile:
+          type: string
+        default_worker_limit:
+          type: integer
+          format: int32
+        tdarr_db_id:
+          type: string
+        throttle_check_interval_secs:
+          type: integer
+          format: int64
+        throttled_worker_limit:
+          type: integer
+          format: int32
+          description: |-
+            Worker limit applied while `active_session_threshold` or more
+            on-demand sessions are live. Defaults to `0` -- pause background
+            transcoding entirely rather than compete with live playback.
+        worker_process:
+          type: string
+    TdarrConnectionResponse:
+      type: object
+      required:
+      - base_url
+      - tdarr_db_id
+      - default_profile
+      - worker_process
+      - default_worker_limit
+      - throttled_worker_limit
+      - active_session_threshold
+      - throttle_check_interval_secs
+      - updated_at
+      properties:
+        active_session_threshold:
+          type: integer
+          format: int32
+        base_url:
+          type: string
+        default_profile:
+          type: string
+        default_worker_limit:
+          type: integer
+          format: int32
+        tdarr_db_id:
+          type: string
+        throttle_check_interval_secs:
+          type: integer
+          format: int64
+        throttled_worker_limit:
+          type: integer
+          format: int32
+        updated_at:
+          type: string
+          format: date-time
+        worker_process:
+          type: string
     TokenResponseSchema:
       type: object
       description: Doc-only mirror of [`TokenResponse`]; see [`DeviceCodeResponseSchema`].
@@ -1063,8 +3772,226 @@ components:
           - string
           - 'null'
           format: uuid
+        runtime_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
         track:
           $ref: '#/components/schemas/Track'
+    TranscodeReason:
+      oneOf:
+      - type: string
+        enum:
+        - container_not_supported
+      - type: string
+        enum:
+        - video_codec_not_supported
+      - type: string
+        enum:
+        - audio_codec_not_supported
+      - type: string
+        enum:
+        - video_bitrate_exceeds_limit
+      - type: string
+        enum:
+        - resolution_exceeds_limit
+      - type: string
+        enum:
+        - subtitle_burn_in_required
+      - type: string
+        description: |-
+          Server-side policy override (e.g. bandwidth cap) rather than a
+          client capability gap.
+        enum:
+        - server_policy
+      - type: object
+        required:
+        - other
+        properties:
+          other:
+            type: string
+      description: |-
+        Why a session couldn't direct-play/direct-stream and had to fall back to
+        a transcode. Populated only when `play_method == Transcode`.
+    UpdateMediaPlaybackPreferencesRequest:
+      type: object
+      required:
+      - quality_id
+      properties:
+        audio_track_id:
+          type:
+          - string
+          - 'null'
+        quality_id:
+          type: string
+        subtitle_track_id:
+          type:
+          - string
+          - 'null'
+    UpdatePlayerPreferencesRequest:
+      type: object
+      required:
+      - preferred_audio_language
+      properties:
+        preferred_audio_language:
+          type: string
+    UpdatePlaylistRequest:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+        parent_playlist_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+    UpdateProfilePinRequest:
+      type: object
+      required:
+      - pin
+      properties:
+        pin:
+          type:
+          - string
+          - 'null'
+          description: Exactly four ASCII decimal digits. `null` removes the profile lock.
+    UpdateUserRequest:
+      type: object
+      description: |-
+        All-optional patch body -- only fields set to `Some` are applied.
+        `password`, when set, is re-hashed the same way [`CreateUserRequest`]'s
+        is; `is_admin`, when set, updates the user's [`Policy`] rather than the
+        `User` row itself (`is_admin` lives on `Policy`, not `User`).
+      properties:
+        can_stream:
+          type:
+          - boolean
+          - 'null'
+        disabled:
+          type:
+          - boolean
+          - 'null'
+        display_name:
+          type:
+          - string
+          - 'null'
+        email:
+          type:
+          - string
+          - 'null'
+        is_admin:
+          type:
+          - boolean
+          - 'null'
+        library_allow:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+            format: uuid
+          description: |-
+            `Some(ids)` replaces the account's entire `Policy::library_allow`
+            with `ids`; `None` (the field omitted from the request body) leaves
+            it untouched -- same all-optional-patch shape as every other field
+            here. See [`update_user_handler`]'s doc comment for how this is
+            folded into the same single conditional policy re-persist
+            `is_admin`/`can_stream` already use.
+        password:
+          type:
+          - string
+          - 'null'
+    UpdateWatchProgressRequest:
+      type: object
+      required:
+      - position_ms
+      - duration_ms
+      properties:
+        completed:
+          type: boolean
+        duration_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        position_ms:
+          type: integer
+          format: int64
+          minimum: 0
+    UserResponse:
+      type: object
+      description: |-
+        The redacted, admin-facing projection of [`streamarr_model::User`] --
+        same rationale as `admin.rs`'s `SourceInstanceResponse`: `User` itself
+        is deliberately not `ToSchema` (it carries `password_hash`), so
+        handlers map to this secret-free DTO instead. `is_admin` is pulled in
+        from the user's `Policy` (see [`UserResponse::from_user`])
+        since it isn't a field on `User` at all.
+      required:
+      - id
+      - username
+      - display_name
+      - is_admin
+      - can_stream
+      - library_allow
+      - disabled
+      - created_at
+      - preferred_audio_language
+      properties:
+        can_stream:
+          type: boolean
+          description: |-
+            Whether this account is permitted to sign in to Playarr -- see
+            `streamarr_model::Policy::can_stream`'s doc comment. Independent of
+            `is_admin`.
+        created_at:
+          type: string
+          format: date-time
+        disabled:
+          type: boolean
+        display_name:
+          type: string
+        email:
+          type:
+          - string
+          - 'null'
+        id:
+          type: string
+          format: uuid
+        is_admin:
+          type: boolean
+        library_allow:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: |-
+            Source-instance ids ("libraries") this account may browse/stream --
+            see `streamarr_model::Policy::library_allow`'s doc comment. Empty
+            means no grants (deny-all), not all-allow; irrelevant (but still
+            truthfully reported) for an `is_admin` account, since `is_admin`
+            bypasses this check entirely at enforcement time.
+        preferred_audio_language:
+          type: string
+        username:
+          type: string
+    VerifyProfilePinRequest:
+      type: object
+      required:
+      - pin
+      properties:
+        pin:
+          type: string
+    VerifyProfilePinResponse:
+      type: object
+      required:
+      - verified
+      properties:
+        verified:
+          type: boolean
     VersionEnvelope:
       type: object
       description: Response body for `GET /api/system/version`.
@@ -1085,6 +4012,100 @@ components:
             $ref: '#/components/schemas/CompatibilityEntry'
         server_version:
           type: string
+    ViewCriteriaDto:
+      type: object
+      properties:
+        available_only:
+          type: boolean
+        genre:
+          type:
+          - string
+          - 'null'
+        kind:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/WorkKind'
+        release_window_days:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: |-
+            Only include works whose `release_date` falls within the last N
+            days. `None` = no window restriction.
+        source_instance_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        tag:
+          type:
+          - string
+          - 'null'
+    ViewSummary:
+      type: object
+      description: |-
+        Public/Playarr-facing list projection -- deliberately doesn't expose
+        `criteria` (Playarr never needs to interpret filter internals, only
+        call `resolve`).
+      required:
+      - id
+      - name
+      - is_default
+      properties:
+        default_order:
+          type:
+          - integer
+          - 'null'
+          format: int32
+        id:
+          type: string
+          format: uuid
+        is_default:
+          type: boolean
+        name:
+          type: string
+    WatchProgress:
+      type: object
+      description: Durable resume position for one user and one media file.
+      required:
+      - media_file_id
+      - work_id
+      - position_ms
+      - duration_ms
+      - state
+      properties:
+        duration_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        media_file_id:
+          type: string
+          format: uuid
+        position_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        state:
+          $ref: '#/components/schemas/WatchState'
+        updated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: |-
+            `None` is used only for the synthetic unseen response returned when
+            no durable progress row exists yet.
+        work_id:
+          type: string
+          format: uuid
+    WatchState:
+      type: string
+      description: The viewer-facing state derived from a durable playback position.
+      enum:
+      - unseen
+      - part_watched
+      - watched
     Work:
       type: object
       description: |-
@@ -1136,6 +4157,20 @@ components:
           type:
           - string
           - 'null'
+        release_date:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: |-
+            When this title was actually released, per its source *arr app
+            (Radarr `digitalRelease`/`physicalRelease`, Sonarr `firstAired`) --
+            distinct from `added_at` (when Streamarr itself learned about the
+            work). Populated by `streamarr-arr-sync` for `Movie`/`Series`/`Site`
+            kinds only; `Artist`/`Author` works have no single release date of
+            their own (their children -- albums/books -- each carry one already),
+            so this stays `None` for those kinds. See
+            `backend/migrations/{sqlite,postgres}/00{11,14}_work_release_date.sql`.
         sort_title:
           type: string
           description: |-
@@ -1182,6 +4217,20 @@ components:
       description: |-
         Doc-only mirror of `streamarr_catalog::WorkChildren`; see
         [`CatalogPageSchema`].
+    WorkCreditsResponse:
+      type: object
+      required:
+      - cast
+      - crew
+      properties:
+        cast:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreditResponse'
+        crew:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreditResponse'
     WorkDetailSchema:
       type: object
       required:
@@ -1199,6 +4248,15 @@ components:
             The resolved `MediaFile` id for a movie's own leaf (`LeafRef::Work`);
             always `None` for series/artist/author works, whose playable leaves
             are their children instead -- see `streamarr_catalog::WorkDetail`.
+        runtime_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: |-
+            Fixed source-container runtime for a movie. Series runtimes are
+            exposed on each `EpisodeDetailSchema`.
+          minimum: 0
         work:
           $ref: '#/components/schemas/Work'
     WorkKind:
@@ -1211,6 +4269,7 @@ components:
       enum:
       - movie
       - series
+      - site
       - artist
       - author
 tags:
@@ -1228,3 +4287,11 @@ tags:
   description: 'Playback negotiation: direct-play vs. transcode decision'
 - name: admin
   description: 'Admin-only configuration: registering *arr source instances'
+- name: users
+  description: User account management and signed-in player preferences
+- name: views
+  description: Saved catalog filter presets ('Views') -- admin-managed, surfaced to Playarr as browsable shelves
+- name: playlists
+  description: User + System playlists -- named, ordered, optionally-nested lists of works
+- name: credits
+  description: Cast/crew for a work, and every work a given person is credited on

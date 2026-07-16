@@ -10,8 +10,17 @@
  * a token back -- and persists it through the same `TokenStore` shape the
  * device-pairing flow's `DeviceTokenSuccess` result would populate, rather
  * than building a second, parallel place to keep a token.
+ *
+ * Access tokens are short-lived by design (`JwtIssuer::access_ttl`, minutes
+ * not hours), so `ensureAccessToken` also owns redeeming the stored refresh
+ * token via `POST /api/v1/auth/refresh` when the access token has expired
+ * but a session still exists -- see that path below for why this matters:
+ * without it, ANY session (however it was obtained -- a real login, RFC
+ * 8628 pairing, whatever) would silently stop working the moment its
+ * access token's TTL elapsed, even though a perfectly good refresh token
+ * was sitting right there unused.
  */
-import type { ApiClient, ClientPlatform, LoginRequest } from "@streamarr-tv/api-client";
+import type { ApiClient, ClientPlatform, LoginRequest, RefreshRequest } from "@streamarr-tv/api-client";
 import { getOrCreateDeviceId } from "./deviceId";
 import type { StoredSession, TokenStore } from "./tokenStore";
 
@@ -19,9 +28,20 @@ export interface EnsureAccessTokenIdentity {
   deviceName: string;
   clientPlatform: ClientPlatform;
   clientVersion: string;
+  /** Override for clients that persist more than one independent session per installation. */
+  deviceId?: string;
 }
 
-function toStoredSession(response: {
+/**
+ * Converts a raw `POST /api/v1/auth/login` (or refresh) response body into
+ * the shape `TokenStore` persists. Exported so every caller that stores a
+ * login response -- this module's own transparent-login path below, and
+ * the Web app's real username/password `Login` page, which calls
+ * `ApiClient.login` directly with real credentials -- shares this one
+ * mapping instead of each reimplementing the `expires_in` -> `expiresAt`
+ * epoch-ms conversion.
+ */
+export function toStoredSession(response: {
   access_token: string;
   refresh_token: string;
   token_type: string;
@@ -41,11 +61,23 @@ function toStoredSession(response: {
 const inFlightLogins = new WeakMap<TokenStore, Promise<string>>();
 
 /**
- * Returns a currently-valid access token, transparently calling
- * `POST /api/v1/auth/login` when `store` holds nothing usable yet.
- * `LoginRequest`'s `username`/`password`/`pin`/`profile_user_id` are only
- * consulted by auth tiers other than the default `TrustedNetwork`, so this
- * never needs to prompt for anything -- see `ApiClient.login`'s doc comment.
+ * Returns a currently-valid access token. Three cases, in order:
+ *
+ * 1. The stored access token hasn't expired yet -- return it as-is.
+ * 2. A stored session exists but its access token has expired -- redeem
+ *    its refresh token via `POST /api/v1/auth/refresh` (rotates it; see
+ *    `ApiClient.refresh`'s doc comment) rather than starting over. Only
+ *    falls through to (3) if the refresh token itself no longer works
+ *    (expired, revoked, already-rotated-and-reused) -- a real "you're
+ *    logged out" case, not just "some time passed."
+ * 3. Nothing usable is stored (or (2) failed) -- transparently call
+ *    `POST /api/v1/auth/login` with no credentials. `LoginRequest`'s
+ *    `username`/`password`/`pin`/`profile_user_id` are only consulted by
+ *    auth tiers other than the default `TrustedNetwork`, so this never
+ *    needs to prompt for anything -- see `ApiClient.login`'s doc comment.
+ *    Under `AuthMode::FullAccount`/`ManagedProfiles` this step has nothing
+ *    to fall back on and rejects -- callers (`ApiClientProvider`) treat
+ *    that as "redirect to a real login screen."
  */
 export async function ensureAccessToken(
   client: ApiClient,
@@ -60,10 +92,26 @@ export async function ensureAccessToken(
   const pending = inFlightLogins.get(store);
   if (pending) return pending;
 
-  const loginPromise = (async () => {
+  const acquirePromise = (async () => {
     try {
+      if (existing) {
+        try {
+          const refreshBody: RefreshRequest = {
+            device_id: identity.deviceId ?? getOrCreateDeviceId(),
+            refresh_token: existing.refreshToken,
+          };
+          const refreshed = await client.refresh(refreshBody);
+          store.set(toStoredSession(refreshed));
+          return refreshed.access_token;
+        } catch {
+          // Refresh token itself is dead -- fall through to a fresh
+          // transparent login attempt below, same as having nothing
+          // stored at all.
+        }
+      }
+
       const body: LoginRequest = {
-        device_id: getOrCreateDeviceId(),
+        device_id: identity.deviceId ?? getOrCreateDeviceId(),
         device_name: identity.deviceName,
         client_platform: identity.clientPlatform,
         client_version: identity.clientVersion,
@@ -76,6 +124,6 @@ export async function ensureAccessToken(
     }
   })();
 
-  inFlightLogins.set(store, loginPromise);
-  return loginPromise;
+  inFlightLogins.set(store, acquirePromise);
+  return acquirePromise;
 }

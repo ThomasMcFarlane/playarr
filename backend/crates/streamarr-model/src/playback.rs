@@ -9,6 +9,47 @@ use uuid::Uuid;
 
 use crate::platform::ClientPlatform;
 
+/// The viewer-facing state derived from a durable playback position.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub enum WatchState {
+    Unseen,
+    PartWatched,
+    Watched,
+}
+
+/// Durable resume position for one user and one media file.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct WatchProgress {
+    pub media_file_id: Uuid,
+    pub work_id: Uuid,
+    pub position_ms: u64,
+    pub duration_ms: u64,
+    pub state: WatchState,
+    /// `None` is used only for the synthetic unseen response returned when
+    /// no durable progress row exists yet.
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+impl WatchProgress {
+    /// Ten per cent remaining is treated as completion. This mirrors the
+    /// behaviour viewers expect from TV apps: credits do not force a title
+    /// to remain permanently part-watched.
+    pub fn state_for(position_ms: u64, duration_ms: u64, completed: bool) -> WatchState {
+        if completed
+            || (duration_ms > 0 && position_ms.saturating_mul(10) >= duration_ms.saturating_mul(9))
+        {
+            WatchState::Watched
+        } else if position_ms > 0 {
+            WatchState::PartWatched
+        } else {
+            WatchState::Unseen
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -127,6 +168,16 @@ pub enum PlaybackEventKind {
     },
     Heartbeat {
         position_ms: u64,
+        /// The client's own cumulative bytes-received counter for this
+        /// session (e.g. from the `<video>` element / Shaka Player's
+        /// network stats), if it's cheap for the client to report. `None`
+        /// means the client isn't reporting this yet -- `bytes_streamed`
+        /// on the session simply stays at whatever it last was (usually
+        /// `0`) rather than being fabricated. See
+        /// `streamarr_telemetry::analytics::collector`'s module doc
+        /// comment for how this is applied.
+        #[serde(default)]
+        bytes_streamed_total: Option<u64>,
     },
     Stop {
         reason: StopReason,

@@ -12,23 +12,32 @@ use axum::Router;
 use chrono::{Duration, Utc};
 use streamarr_auth::{
     DashMapDeviceFlowHandler, DeviceFlowConfig, DeviceFlowHandler, InMemoryAdminRegistry,
-    InMemoryDeviceAuthorizationStore, InMemoryRefreshTokenStore, InMemoryUserDirectory, JwtIssuer,
-    RefreshTokenService, RefreshTokenStore, TrustedNetwork, UserDirectory,
+    InMemoryDeviceAuthorizationStore, InMemoryRefreshTokenStore, JwtIssuer, RefreshTokenService,
+    RefreshTokenStore, TrustedNetwork, UserDirectory,
 };
 use streamarr_cache::{CacheAndPubSub, InMemory};
 use streamarr_catalog::CatalogService;
+use streamarr_db::analytics::{AnalyticsStore, SqlxAnalyticsStore};
 use streamarr_db::repo::{
-    SqlxDeviceRepo, SqlxMediaFileRepo, SqlxRenditionRepo, SqlxSourceInstanceRepo, SqlxWorkRepo,
+    seed_default_views, PlaylistRepo, SqlxCreditRepo, SqlxDeviceRepo, SqlxLibraryViewRepo,
+    SqlxMediaFileRepo, SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo, SqlxRenditionRepo,
+    SqlxSourceInstanceRepo, SqlxTdarrConnectionRepo, SqlxUserRepo, SqlxWatchProgressRepo,
+    SqlxWorkRepo,
 };
 use streamarr_db::{
-    DbPool, DeviceRepo, MediaFileRepo, RenditionRepo, SourceInstanceRepo, WorkRepo,
+    CreditRepo, DbPool, DeviceRepo, LibraryViewRepo, MediaFileRepo, PolicyRepo, ProfilePinRepo,
+    RenditionRepo, SourceInstanceRepo, TdarrConnectionRepo, UserRepo, WatchProgressRepo, WorkRepo,
 };
-use streamarr_model::{Availability, Sensitive, User, Work, WorkKind};
+use streamarr_model::{Availability, Policy, Sensitive, User, Work, WorkKind};
+use streamarr_telemetry::analytics::{
+    AnalyticsCollector, InMemorySessionRegistry, SessionRegistry,
+};
 use streamarr_transcode::{ActiveSessionCounter, TranscodeOrchestrator};
 use uuid::Uuid;
 
 use crate::playback::{InMemoryMediaFileLookup, MediaFileLookup};
 use crate::source_registry::SourceInstanceRegistry;
+use crate::user_directory::RepoBackedUserDirectory;
 use crate::version::VersionState;
 use crate::version_gate::{ClientCompatibilityTable, VersionGateLayer};
 use crate::{build_router, AppState, ReadinessState};
@@ -40,11 +49,31 @@ pub struct TestState {
     pub device_flow: Arc<dyn DeviceFlowHandler>,
     pub work_repo: Arc<dyn WorkRepo>,
     pub media_file_repo: Arc<dyn MediaFileRepo>,
+    /// Same `EmbeddingRepo` `app.catalog` is built against (via
+    /// `CatalogService::with_embedding_repo`) -- exposed here so tests can
+    /// seed a `WorkEmbedding` directly to exercise `GET /api/v1/catalog/
+    /// {id}/similar`, since `CatalogService` has no public accessor for
+    /// its own repo, by design.
+    pub embedding_repo: Arc<dyn streamarr_db::EmbeddingRepo>,
+    /// Same `RenditionRepo` `app.transcode` is backed by -- exposed here so
+    /// tests can seed a `Ready` rendition directly (`TranscodeOrchestrator`
+    /// has no public accessor for its own repo, by design).
+    pub rendition_repo: Arc<dyn RenditionRepo>,
     /// Same `InMemoryAdminRegistry` `app.admin_registry` wraps, exposed here
-    /// as its concrete type (rather than only reachable through `app`) so
-    /// tests can call [`InMemoryAdminRegistry::add`] to mint an admin
-    /// caller for approve/reject-as-admin test cases.
+    /// as its concrete type. Superseded for minting an admin test caller --
+    /// `crate::auth_extractor::AdminUser` no longer reads `admin_registry`
+    /// at all (it checks a real, persisted `Policy::is_admin` via
+    /// `user_repo`/`policy_repo` instead); use [`seed_admin_user`] to
+    /// persist a real admin `User`+`Policy` for a test caller instead of
+    /// calling [`InMemoryAdminRegistry::add`] here.
     pub admin_registry: Arc<InMemoryAdminRegistry>,
+    /// Real, `SqlxUserRepo`-backed persistence for the same in-memory
+    /// SQLite pool `app` is built against -- exposed here so tests can seed
+    /// additional users directly (see [`seed_admin_user`]).
+    pub user_repo: Arc<dyn UserRepo>,
+    /// Real, `SqlxPolicyRepo`-backed persistence for the same in-memory
+    /// SQLite pool `app` is built against.
+    pub policy_repo: Arc<dyn PolicyRepo>,
     /// The id of the one `User` seeded into `app.user_directory` and bound
     /// to `app.auth_mode`'s trusted-network auto-login -- what
     /// `POST /api/v1/auth/login` resolves to for any source IP in tests
@@ -73,6 +102,164 @@ pub fn mint_access_token(state: &TestState, user_id: Uuid) -> String {
 /// `Authorization` header value for [`mint_access_token`]'s output.
 pub fn bearer_header(token: &str) -> String {
     format!("Bearer {token}")
+}
+
+/// Persists a real `User` (with an admin `Policy`) for `user_id` via
+/// `state.user_repo`/`policy_repo` -- the real, `Policy`-backed replacement
+/// for the old `state.admin_registry.add(user_id)` pattern. Call this
+/// before [`mint_access_token`] for any test that needs an admin caller:
+/// `crate::auth_extractor::AdminUser` now checks a real, persisted
+/// `Policy::is_admin` (see that extractor's doc comment for why), so a
+/// caller that only exists in `admin_registry` and not in the database no
+/// longer passes the check.
+pub async fn seed_admin_user(state: &TestState, user_id: Uuid) {
+    let policy = Policy {
+        id: Uuid::new_v4(),
+        name: format!("test-admin-policy-{user_id}"),
+        library_allow: Vec::new(),
+        blocked_folders: Vec::new(),
+        max_rating: None,
+        blocked_tags: Vec::new(),
+        allowed_tags: Vec::new(),
+        can_transcode: true,
+        can_download: true,
+        can_delete: true,
+        can_share_public: true,
+        device_allow: Vec::new(),
+        max_concurrent_sessions: None,
+        access_schedule: None,
+        // Mirrors the real bootstrap admin (see `main.rs`'s
+        // `bootstrap_admin_if_needed`): admin access does not imply
+        // Playarr streaming access, so a test-seeded admin shouldn't
+        // either. Tests that need an admin caller who can *also* stream
+        // should set this explicitly rather than relying on this helper.
+        can_stream: false,
+        is_admin: true,
+    };
+    state
+        .policy_repo
+        .upsert(&policy)
+        .await
+        .expect("seed admin test policy");
+
+    let user = User {
+        id: user_id,
+        username: format!("test-admin-{user_id}"),
+        display_name: "Test Admin User".to_string(),
+        email: None,
+        password_hash: Sensitive::new(streamarr_auth::login::hash_password("test-only-password")),
+        policy_id: policy.id,
+        created_at: Utc::now(),
+        disabled: false,
+        preferred_audio_language: streamarr_model::DEFAULT_PREFERRED_AUDIO_LANGUAGE.to_string(),
+    };
+    state
+        .user_repo
+        .upsert(&user)
+        .await
+        .expect("seed admin test user");
+}
+
+/// Persists a real `User` (with a `can_stream: true` `Policy`) for
+/// `user_id` -- the fixture `crate::auth_extractor::StreamingUser` tests
+/// need for a caller who's logged in *and* permitted to use Playarr.
+/// Mirrors [`seed_admin_user`]; use this instead when a test needs a
+/// non-admin streaming caller specifically (or call `seed_admin_user` and
+/// separately flip `can_stream` if a test genuinely needs both grants).
+pub async fn seed_streaming_user(state: &TestState, user_id: Uuid) {
+    let policy = Policy {
+        id: Uuid::new_v4(),
+        name: format!("test-streaming-policy-{user_id}"),
+        library_allow: Vec::new(),
+        blocked_folders: Vec::new(),
+        max_rating: None,
+        blocked_tags: Vec::new(),
+        allowed_tags: Vec::new(),
+        can_transcode: true,
+        can_download: true,
+        can_delete: false,
+        can_share_public: false,
+        device_allow: Vec::new(),
+        max_concurrent_sessions: None,
+        access_schedule: None,
+        can_stream: true,
+        is_admin: false,
+    };
+    state
+        .policy_repo
+        .upsert(&policy)
+        .await
+        .expect("seed streaming test policy");
+
+    let user = User {
+        id: user_id,
+        username: format!("test-streaming-{user_id}"),
+        display_name: "Test Streaming User".to_string(),
+        email: None,
+        password_hash: Sensitive::new(streamarr_auth::login::hash_password("test-only-password")),
+        policy_id: policy.id,
+        created_at: Utc::now(),
+        disabled: false,
+        preferred_audio_language: streamarr_model::DEFAULT_PREFERRED_AUDIO_LANGUAGE.to_string(),
+    };
+    state
+        .user_repo
+        .upsert(&user)
+        .await
+        .expect("seed streaming test user");
+}
+
+/// Like [`seed_streaming_user`] but with a caller-chosen `Policy::
+/// library_allow` -- exists for tests that need to prove per-user library
+/// access control (`CatalogViewer`/`StreamingUser::allowed_libraries`)
+/// actually restricts a caller to a specific set of source-instance ids,
+/// rather than the wide-open (`is_admin`-bypassed or empty-but-unchecked)
+/// policies [`seed_admin_user`]/[`seed_streaming_user`] seed.
+pub async fn seed_streaming_user_with_library_allow(
+    state: &TestState,
+    user_id: Uuid,
+    library_allow: Vec<Uuid>,
+) {
+    let policy = Policy {
+        id: Uuid::new_v4(),
+        name: format!("test-restricted-streaming-policy-{user_id}"),
+        library_allow,
+        blocked_folders: Vec::new(),
+        max_rating: None,
+        blocked_tags: Vec::new(),
+        allowed_tags: Vec::new(),
+        can_transcode: true,
+        can_download: true,
+        can_delete: false,
+        can_share_public: false,
+        device_allow: Vec::new(),
+        max_concurrent_sessions: None,
+        access_schedule: None,
+        can_stream: true,
+        is_admin: false,
+    };
+    state
+        .policy_repo
+        .upsert(&policy)
+        .await
+        .expect("seed restricted streaming test policy");
+
+    let user = User {
+        id: user_id,
+        username: format!("test-restricted-streaming-{user_id}"),
+        display_name: "Test Restricted Streaming User".to_string(),
+        email: None,
+        password_hash: Sensitive::new(streamarr_auth::login::hash_password("test-only-password")),
+        policy_id: policy.id,
+        created_at: Utc::now(),
+        disabled: false,
+        preferred_audio_language: streamarr_model::DEFAULT_PREFERRED_AUDIO_LANGUAGE.to_string(),
+    };
+    state
+        .user_repo
+        .upsert(&user)
+        .await
+        .expect("seed restricted streaming test user");
 }
 
 fn test_version_gate() -> VersionGateLayer {
@@ -121,19 +308,51 @@ pub async fn test_state() -> (Router, TestState) {
     let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(SqlxMediaFileRepo::new(pool.clone()));
     let source_instance_repo: Arc<dyn SourceInstanceRepo> =
         Arc::new(SqlxSourceInstanceRepo::new(pool.clone()));
+    let user_repo: Arc<dyn UserRepo> = Arc::new(SqlxUserRepo::new(pool.clone()));
+    let profile_pin_repo: Arc<dyn ProfilePinRepo> = Arc::new(SqlxProfilePinRepo::new(pool.clone()));
+    let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
+    let watch_progress: Arc<dyn WatchProgressRepo> =
+        Arc::new(SqlxWatchProgressRepo::new(pool.clone()));
+    let library_view_repo: Arc<dyn LibraryViewRepo> =
+        Arc::new(SqlxLibraryViewRepo::new(pool.clone()));
+    let playlist_repo: Arc<dyn PlaylistRepo> = Arc::new(SqlxPlaylistRepo::new(pool.clone()));
+    let credit_repo: Arc<dyn CreditRepo> = Arc::new(SqlxCreditRepo::new(pool.clone()));
+    let tdarr_connection_repo: Arc<dyn TdarrConnectionRepo> =
+        Arc::new(SqlxTdarrConnectionRepo::new(pool.clone()));
+    // Real boot parity -- production's `boot_api` seeds the two default
+    // views right after migrations run, and test callers that assert on
+    // `GET /api/v1/views` (e.g. confirming "Newly Added"/"Newly Released"
+    // show up out of the box) need that same seeding to have happened here.
+    seed_default_views(library_view_repo.as_ref())
+        .await
+        .expect("seed default views");
+    let analytics_store: Arc<dyn AnalyticsStore> = Arc::new(SqlxAnalyticsStore::new(pool.clone()));
+    let session_registry: Arc<dyn SessionRegistry> = Arc::new(InMemorySessionRegistry::new());
+    let (analytics_event_tx, _analytics_event_rx) = tokio::sync::mpsc::channel(64);
+    let analytics = Arc::new(AnalyticsCollector::new(
+        session_registry.clone(),
+        analytics_store.clone(),
+        analytics_event_tx,
+    ));
     let cache: Arc<dyn CacheAndPubSub> = Arc::new(InMemory::new());
 
-    let catalog = Arc::new(CatalogService::new(
-        work_repo.clone(),
-        media_file_repo.clone(),
-        cache.clone(),
-        pool,
-    ));
+    let embedding_repo: Arc<dyn streamarr_db::EmbeddingRepo> =
+        Arc::new(streamarr_db::repo::SqlxEmbeddingRepo::new(pool.clone()));
+    let catalog = Arc::new(
+        CatalogService::new(
+            work_repo.clone(),
+            media_file_repo.clone(),
+            cache.clone(),
+            pool,
+            watch_progress.clone(),
+        )
+        .with_embedding_repo(embedding_repo.clone()),
+    );
 
     let source_instances = Arc::new(SourceInstanceRegistry::new());
 
     let transcode = Arc::new(
-        TranscodeOrchestrator::new(rendition_repo, cache, ActiveSessionCounter::new())
+        TranscodeOrchestrator::new(rendition_repo.clone(), cache, ActiveSessionCounter::new())
             .with_ffmpeg_binary("/usr/bin/true")
             .with_output_root(
                 std::env::temp_dir().join(format!("streamarr-api-test-{}", Uuid::new_v4())),
@@ -164,13 +383,42 @@ pub async fn test_state() -> (Router, TestState) {
         },
     ));
 
-    // Interim admin/policy + login wiring -- see `streamarr_auth::admin`
-    // and `streamarr_auth::login::InMemoryUserDirectory`'s doc comments.
-    // The seeded `AuthMode::TrustedNetwork` allowlist is deliberately
-    // `0.0.0.0/0` (every source IP) so `POST /api/v1/auth/login` tests
-    // don't need to fake a specific source address to succeed; tests that
-    // specifically exercise the CIDR restriction construct their own
-    // `AuthMode` inline instead of using this default.
+    // Real, `UserRepo`/`PolicyRepo`-backed user/policy wiring -- see
+    // `crate::user_directory::RepoBackedUserDirectory` and
+    // `crate::auth_extractor::AdminUser`'s doc comments. The seeded
+    // `AuthMode::TrustedNetwork` allowlist is deliberately `0.0.0.0/0`
+    // (every source IP) so `POST /api/v1/auth/login` tests don't need to
+    // fake a specific source address to succeed; tests that specifically
+    // exercise the CIDR restriction construct their own `AuthMode` inline
+    // instead of using this default.
+    let default_policy_id = Uuid::new_v4();
+    let default_policy = Policy {
+        id: default_policy_id,
+        name: "test-default-policy".to_string(),
+        library_allow: Vec::new(),
+        blocked_folders: Vec::new(),
+        max_rating: None,
+        blocked_tags: Vec::new(),
+        allowed_tags: Vec::new(),
+        can_transcode: true,
+        can_download: true,
+        can_delete: false,
+        can_share_public: false,
+        device_allow: Vec::new(),
+        max_concurrent_sessions: None,
+        access_schedule: None,
+        // The default trusted-network auto-login test user stands in for
+        // an ordinary Playarr viewer in most tests, so it carries
+        // streaming access by default -- see `seed_admin_user` above for
+        // the (deliberately non-streaming) admin counterpart.
+        can_stream: true,
+        is_admin: false,
+    };
+    policy_repo
+        .upsert(&default_policy)
+        .await
+        .expect("seed default test policy");
+
     let default_user_id = Uuid::new_v4();
     let default_user = User {
         id: default_user_id,
@@ -178,12 +426,18 @@ pub async fn test_state() -> (Router, TestState) {
         display_name: "Test Default User".to_string(),
         email: None,
         password_hash: Sensitive::new(streamarr_auth::login::hash_password("test-only-password")),
-        policy_id: Uuid::new_v4(),
+        policy_id: default_policy_id,
         created_at: Utc::now(),
         disabled: false,
+        preferred_audio_language: streamarr_model::DEFAULT_PREFERRED_AUDIO_LANGUAGE.to_string(),
     };
+    user_repo
+        .upsert(&default_user)
+        .await
+        .expect("seed default test user");
+
     let user_directory: Arc<dyn UserDirectory> =
-        Arc::new(InMemoryUserDirectory::from_users([default_user]));
+        Arc::new(RepoBackedUserDirectory::new(user_repo.clone()));
     let admin_registry = Arc::new(InMemoryAdminRegistry::new());
     let auth_mode = Arc::new(streamarr_auth::AuthMode::TrustedNetwork {
         allowlist: vec![TrustedNetwork {
@@ -213,14 +467,26 @@ pub async fn test_state() -> (Router, TestState) {
         webhook,
         source_instances: source_instances.clone(),
         source_instance_repo,
+        library_view_repo,
+        playlist_repo,
+        work_repo: work_repo.clone(),
+        credit_repo,
+        tdarr_connection_repo,
         media_files: media_files.clone() as Arc<dyn MediaFileLookup>,
+        watch_progress,
         jwt,
         admin_registry: admin_registry.clone(),
         auth_mode,
         user_directory,
+        user_repo: user_repo.clone(),
+        profile_pin_repo,
+        policy_repo: policy_repo.clone(),
         sessions: refresh,
         refresh_ttl: Duration::days(30),
         node_id: "test-node".to_string(),
+        analytics_store,
+        session_registry,
+        analytics,
     };
 
     let (router, _api) = build_router(app.clone(), test_version_gate(), None);
@@ -232,10 +498,14 @@ pub async fn test_state() -> (Router, TestState) {
             source_instances,
             media_files,
             admin_registry,
+            user_repo,
+            policy_repo,
             default_user_id,
             device_flow,
             work_repo,
             media_file_repo,
+            embedding_repo,
+            rendition_repo,
             _trigger_rx: trigger_rx,
         },
     )
@@ -253,10 +523,41 @@ pub async fn seed_movie(state: &TestState, title: &str) -> Uuid {
         genres: vec![],
         tags: vec![],
         added_at: Utc::now(),
+        release_date: None,
         monitored: true,
         availability: Availability::Available,
     };
     let id = work.id;
     state.work_repo.upsert(&work).await.unwrap();
+    id
+}
+
+/// Inserts a `MediaFile` row via the real `MediaFileRepo`, letting a test
+/// control which source instance a work's file "belongs" to --
+/// `CatalogService::browse`'s `source_instance_id` filter matches on this
+/// (`MediaFile::source_instance_id`), not on anything carried by `Work`
+/// itself; see `streamarr_catalog::BrowseQuery::source_instance_id`'s doc
+/// comment for why.
+pub async fn seed_media_file(
+    state: &TestState,
+    work_id: Uuid,
+    leaf_ref: streamarr_model::media::LeafRef,
+    source_instance_id: Uuid,
+) -> Uuid {
+    let file = streamarr_model::MediaFile {
+        id: Uuid::new_v4(),
+        work_id,
+        leaf_ref,
+        path: std::path::PathBuf::from("/media/file.mkv"),
+        container: "mkv".to_string(),
+        codec: "h264".to_string(),
+        bitrate: Some(4_000_000),
+        duration_ms: Some(3_600_000),
+        size_bytes: 123_456,
+        source_instance_id,
+        source_file_id: Some("1".to_string()),
+    };
+    let id = file.id;
+    state.media_file_repo.create(&file).await.unwrap();
     id
 }

@@ -8,7 +8,8 @@ description = "Logging, correlation, metrics, optional OpenTelemetry export, pla
 [dependencies]
 streamarr-model = { path = "../streamarr-model" }
 streamarr-config = { path = "../streamarr-config" }
-streamarr-db = { path = "../streamarr-db" }
+streamarr-db = { path = "../streamarr-db", features = ["sqlite"] }
+sqlx = { workspace = true, features = ["any"] }
 tokio = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }

@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use streamarr_model::Sensitive;
 
 use crate::http::{build_http_client, get_json, get_status};
@@ -8,30 +8,108 @@ use crate::{ArrClientError, ArrConnector};
 /// An artist as Lidarr's `/api/v1/artist` endpoint returns it. Note Lidarr
 /// is on API v1 (Sonarr/Radarr are on v3) — each *arr app version-bumps its
 /// API independently, which is exactly why this crate has one client per
-/// app rather than a shared "arr API v3 client" generalization.
+/// app rather than a shared "arr API v3 client" generalization. Also carries
+/// overview/genres/images so a downstream metadata pipeline can use them
+/// without a second round trip.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LidarrArtist {
     pub id: i64,
     #[serde(rename = "artistName")]
     pub artist_name: String,
+    #[serde(default, rename = "sortName")]
+    pub sort_name: Option<String>,
     /// MusicBrainz artist id.
     #[serde(rename = "foreignArtistId")]
     pub foreign_artist_id: String,
     pub monitored: bool,
     pub path: String,
+    /// May be null or absent on artists Lidarr hasn't fetched metadata for.
+    #[serde(default)]
+    pub overview: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_null_default")]
+    pub genres: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_null_default")]
+    pub images: Vec<LidarrImage>,
+    #[serde(default)]
+    pub statistics: Option<LidarrArtistStatistics>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LidarrArtistStatistics {
+    #[serde(default, rename = "albumCount")]
+    pub album_count: i64,
+    #[serde(default, rename = "trackFileCount")]
+    pub track_file_count: i64,
+    #[serde(default, rename = "trackCount")]
+    pub track_count: i64,
+    #[serde(default, rename = "totalTrackCount")]
+    pub total_track_count: i64,
+}
+
+/// One entry in an artist's `images` array. Used to surface artwork to a
+/// downstream metadata pipeline -- see `LidarrImage::remote_url` for the
+/// caveat that matters most when forwarding these onward.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LidarrImage {
+    #[serde(rename = "coverType")]
+    pub cover_type: String,
+    pub url: String,
+    /// Absolute, externally-hosted image URL -- present for most images but
+    /// not guaranteed. Absent from Lidarr's own `url` field's local path,
+    /// which requires this instance's own API key to fetch and must never
+    /// be forwarded to a Streamarr client as-is.
+    #[serde(rename = "remoteUrl")]
+    pub remote_url: Option<String>,
 }
 
 /// An album as Lidarr's `/api/v1/album` endpoint returns it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LidarrAlbum {
     pub id: i64,
-    pub title: String,
+    pub title: Option<String>,
     /// MusicBrainz release-group id.
     #[serde(rename = "foreignAlbumId")]
-    pub foreign_album_id: String,
+    pub foreign_album_id: Option<String>,
     #[serde(rename = "artistId")]
     pub artist_id: i64,
     pub monitored: bool,
+    #[serde(default, rename = "albumType")]
+    pub album_type: Option<String>,
+    #[serde(
+        default,
+        rename = "secondaryTypes",
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub secondary_types: Vec<String>,
+    #[serde(default, rename = "releaseDate")]
+    pub release_date: Option<String>,
+    #[serde(default)]
+    pub duration: Option<i64>,
+}
+
+/// A track as Lidarr's `/api/v1/track` endpoint returns it. This resource is
+/// the authoritative join between an album, its real track ordering/metadata,
+/// and the imported `trackFileId` that can actually be played.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LidarrTrack {
+    pub id: i64,
+    #[serde(rename = "artistId")]
+    pub artist_id: i64,
+    #[serde(rename = "albumId")]
+    pub album_id: i64,
+    #[serde(default, rename = "trackFileId")]
+    pub track_file_id: i64,
+    #[serde(default, rename = "absoluteTrackNumber")]
+    pub absolute_track_number: i64,
+    #[serde(default, rename = "trackNumber")]
+    pub track_number: Option<String>,
+    pub title: Option<String>,
+    #[serde(default)]
+    pub duration: i64,
+    #[serde(default, rename = "mediumNumber")]
+    pub medium_number: i64,
+    #[serde(default, rename = "hasFile")]
+    pub has_file: bool,
 }
 
 /// The nested `quality.quality` object on Lidarr's quality-bearing
@@ -68,14 +146,80 @@ pub struct LidarrQuality {
 pub struct LidarrMediaInfo {
     #[serde(rename = "audioCodec")]
     pub audio_codec: Option<String>,
-    #[serde(rename = "audioBitrate")]
+    #[serde(
+        default,
+        rename = "audioBitRate",
+        alias = "audioBitrate",
+        deserialize_with = "deserialize_optional_i64"
+    )]
     pub audio_bitrate: Option<i64>,
-    #[serde(rename = "audioChannels")]
+    #[serde(
+        default,
+        rename = "audioChannels",
+        deserialize_with = "deserialize_optional_f64"
+    )]
     pub audio_channels: Option<f64>,
-    #[serde(rename = "audioBits")]
+    #[serde(
+        default,
+        rename = "audioBits",
+        deserialize_with = "deserialize_optional_i64"
+    )]
     pub audio_bits: Option<i64>,
     #[serde(rename = "audioSampleRate")]
     pub audio_sample_rate: Option<String>,
+}
+
+fn numeric_prefix(raw: &str) -> Option<&str> {
+    let raw = raw.trim();
+    let start = raw.find(|character: char| character.is_ascii_digit() || character == '-')?;
+    let numeric = &raw[start..];
+    let end = numeric
+        .find(|character: char| {
+            !(character.is_ascii_digit() || character == '.' || character == '-')
+        })
+        .unwrap_or(numeric.len());
+    let numeric = &numeric[..end];
+    (!numeric.is_empty() && numeric != "-").then_some(numeric)
+}
+
+fn deserialize_null_default<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+where
+    T: Deserialize<'de> + Default,
+    D: Deserializer<'de>,
+{
+    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
+}
+
+fn deserialize_optional_i64<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(match value {
+        None | Some(serde_json::Value::Null) => None,
+        Some(serde_json::Value::Number(number)) => number
+            .as_i64()
+            .or_else(|| number.as_f64().map(|value| value.round() as i64)),
+        Some(serde_json::Value::String(raw)) => numeric_prefix(&raw)
+            .and_then(|numeric| numeric.parse::<f64>().ok())
+            .map(|value| value.round() as i64),
+        _ => None,
+    })
+}
+
+fn deserialize_optional_f64<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(match value {
+        None | Some(serde_json::Value::Null) => None,
+        Some(serde_json::Value::Number(number)) => number.as_f64(),
+        Some(serde_json::Value::String(raw)) => {
+            numeric_prefix(&raw).and_then(|numeric| numeric.parse::<f64>().ok())
+        }
+        _ => None,
+    })
 }
 
 /// A track file as Lidarr's `/api/v1/trackfile` endpoint returns it — a
@@ -89,7 +233,7 @@ pub struct LidarrTrackFile {
     pub artist_id: i64,
     #[serde(rename = "albumId")]
     pub album_id: i64,
-    pub path: String,
+    pub path: Option<String>,
     pub size: i64,
     pub quality: LidarrQuality,
     /// Absent on files Lidarr hasn't run media analysis on yet.
@@ -162,6 +306,22 @@ impl LidarrClient {
             &self.base_url,
             &self.api_key,
             &format!("/api/v1/album?artistId={artist_id}"),
+        )
+        .await
+    }
+
+    /// `GET /api/v1/track?artistId={id}` — the authoritative tracks and
+    /// their imported `trackFileId` values for one artist.
+    pub async fn list_tracks_for_artist(
+        &self,
+        artist_id: i64,
+    ) -> Result<Vec<LidarrTrack>, ArrClientError> {
+        get_json(
+            &self.http,
+            "lidarr",
+            &self.base_url,
+            &self.api_key,
+            &format!("/api/v1/track?artistId={artist_id}"),
         )
         .await
     }
@@ -239,6 +399,101 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn list_artists_parses_overview_genres_and_images() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/artist"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {
+                    "id": 1,
+                    "artistName": "Sample Band",
+                    "foreignArtistId": "a74b1b7f-71a5-4011-9441-d0b5e4122711",
+                    "monitored": true,
+                    "path": "/music/Sample Band",
+                    "overview": "English rock band formed in Abingdon, Oxfordshire.",
+                    "sortName": "Sample Band",
+                    "genres": ["Alternative Rock", "Art Rock"],
+                    "images": [
+                        {
+                            "coverType": "poster",
+                            "url": "/MediaCover/Artist/1/poster.jpg",
+                            "remoteUrl": "https://fanart.tv/poster.jpg"
+                        },
+                        {
+                            "coverType": "fanart",
+                            "url": "/MediaCover/Artist/1/fanart.jpg"
+                        }
+                    ],
+                    "statistics": {
+                        "albumCount": 9,
+                        "trackFileCount": 112,
+                        "trackCount": 112,
+                        "totalTrackCount": 112
+                    }
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = LidarrClient::new(server.uri(), "test-key");
+        let artists = client
+            .list_artists()
+            .await
+            .expect("list_artists should succeed against a healthy mock");
+
+        assert_eq!(artists.len(), 1);
+        let artist = &artists[0];
+        assert_eq!(
+            artist.overview.as_deref(),
+            Some("English rock band formed in Abingdon, Oxfordshire.")
+        );
+        assert_eq!(artist.genres, vec!["Alternative Rock", "Art Rock"]);
+        assert_eq!(artist.sort_name.as_deref(), Some("Sample Band"));
+        assert_eq!(
+            artist.statistics.as_ref().map(|stats| stats.track_file_count),
+            Some(112)
+        );
+        assert_eq!(artist.images.len(), 2);
+        assert_eq!(
+            artist.images[0].remote_url.as_deref(),
+            Some("https://fanart.tv/poster.jpg")
+        );
+        assert_eq!(artist.images[1].remote_url, None);
+    }
+
+    #[tokio::test]
+    async fn list_artists_defaults_overview_genres_and_images_when_absent() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/artist"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {
+                    "id": 1,
+                    "artistName": "Sample Band",
+                    "foreignArtistId": "a74b1b7f-71a5-4011-9441-d0b5e4122711",
+                    "monitored": true,
+                    "path": "/music/Sample Band",
+                    "genres": null,
+                    "images": null
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = LidarrClient::new(server.uri(), "test-key");
+        let artists = client
+            .list_artists()
+            .await
+            .expect("list_artists should succeed against a healthy mock");
+
+        assert_eq!(artists.len(), 1);
+        let artist = &artists[0];
+        assert_eq!(artist.overview, None);
+        assert!(artist.genres.is_empty());
+        assert!(artist.images.is_empty());
+    }
+
+    #[tokio::test]
     async fn get_artist_parses_single_response() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
@@ -287,7 +542,7 @@ mod tests {
             .expect("list_albums should succeed against a healthy mock");
 
         assert_eq!(albums.len(), 1);
-        assert_eq!(albums[0].title, "Sample Album");
+        assert_eq!(albums[0].title.as_deref(), Some("Sample Album"));
         assert_eq!(albums[0].artist_id, 1);
     }
 
@@ -320,6 +575,44 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn list_tracks_for_artist_parses_playable_track_metadata() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/track"))
+            .and(query_param("artistId", "1"))
+            .and(header("X-Api-Key", "test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {
+                    "id": 300,
+                    "artistId": 1,
+                    "albumId": 100,
+                    "trackFileId": 500,
+                    "absoluteTrackNumber": 1,
+                    "trackNumber": "1",
+                    "title": "Sample Track One",
+                    "duration": 284_000,
+                    "mediumNumber": 1,
+                    "hasFile": true
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = LidarrClient::new(server.uri(), "test-key");
+        let tracks = client
+            .list_tracks_for_artist(1)
+            .await
+            .expect("list_tracks_for_artist should parse Lidarr's track resource");
+
+        assert_eq!(tracks.len(), 1);
+        assert_eq!(tracks[0].id, 300);
+        assert_eq!(tracks[0].track_file_id, 500);
+        assert_eq!(tracks[0].track_number.as_deref(), Some("1"));
+        assert_eq!(tracks[0].duration, 284_000);
+        assert!(tracks[0].has_file);
+    }
+
+    #[tokio::test]
     async fn list_track_files_filters_by_artist_id_and_parses_media_info() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
@@ -346,10 +639,10 @@ mod tests {
                     },
                     "mediaInfo": {
                         "audioCodec": "FLAC",
-                        "audioBitrate": 1000,
-                        "audioChannels": 2.0,
-                        "audioBits": 16,
-                        "audioSampleRate": "44100"
+                        "audioBitRate": "1000 kbps",
+                        "audioChannels": "2.0",
+                        "audioBits": "16bit",
+                        "audioSampleRate": ""
                     }
                 }
             ])))
@@ -373,7 +666,50 @@ mod tests {
             .as_ref()
             .expect("mediaInfo should be present");
         assert_eq!(media_info.audio_codec.as_deref(), Some("FLAC"));
+        assert_eq!(media_info.audio_bitrate, Some(1000));
+        assert_eq!(media_info.audio_channels, Some(2.0));
         assert_eq!(media_info.audio_bits, Some(16));
+    }
+
+    #[tokio::test]
+    async fn list_track_files_tolerates_empty_media_info_values() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/trackfile"))
+            .and(query_param("artistId", "1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {
+                    "id": 501,
+                    "artistId": 1,
+                    "albumId": 100,
+                    "path": "/music/Sample Band/Sample Album/02 - Sample Track Two.flac",
+                    "size": 45_678_901,
+                    "quality": {
+                        "quality": { "id": 6, "name": "FLAC" },
+                        "revision": { "version": 1, "real": 0, "isRepack": false }
+                    },
+                    "mediaInfo": {
+                        "audioCodec": "",
+                        "audioBitRate": "",
+                        "audioChannels": "",
+                        "audioBits": "",
+                        "audioSampleRate": ""
+                    }
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = LidarrClient::new(server.uri(), "test-key");
+        let files = client
+            .list_track_files(1)
+            .await
+            .expect("empty optional media-info strings must not reject the entire response");
+
+        let media_info = files[0].media_info.as_ref().expect("mediaInfo");
+        assert_eq!(media_info.audio_bitrate, None);
+        assert_eq!(media_info.audio_channels, None);
+        assert_eq!(media_info.audio_bits, None);
     }
 
     #[tokio::test]

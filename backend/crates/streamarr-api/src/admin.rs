@@ -34,6 +34,7 @@ async fn health_check(client: &ArrClient) -> Result<(), streamarr_arr_client::Ar
         ArrClient::Readarr(c) => c.health_check().await,
         ArrClient::Bazarr(c) => c.health_check().await,
         ArrClient::Prowlarr(c) => c.health_check().await,
+        ArrClient::Whisparr(c) => c.health_check().await,
     }
 }
 
@@ -56,14 +57,8 @@ pub struct SourceInstanceRequest {
     pub default_root_folder_id: Option<String>,
     #[serde(default)]
     pub default_quality_profile_id: Option<i64>,
-    #[serde(default = "default_true")]
-    pub enabled_for_requests: bool,
     #[serde(default)]
     pub best_effort: bool,
-}
-
-fn default_true() -> bool {
-    true
 }
 
 /// The redacted, admin-facing projection of [`SourceInstance`] -- see that
@@ -79,7 +74,6 @@ pub struct SourceInstanceResponse {
     pub priority: i32,
     pub default_root_folder_id: Option<String>,
     pub default_quality_profile_id: Option<i64>,
-    pub enabled_for_requests: bool,
     pub best_effort: bool,
 }
 
@@ -93,7 +87,6 @@ impl From<SourceInstance> for SourceInstanceResponse {
             priority: instance.priority,
             default_root_folder_id: instance.default_root_folder_id,
             default_quality_profile_id: instance.default_quality_profile_id,
-            enabled_for_requests: instance.enabled_for_requests,
             best_effort: instance.best_effort,
         }
     }
@@ -128,7 +121,6 @@ pub async fn create_source_instance_handler(
         priority: body.priority,
         default_root_folder_id: body.default_root_folder_id,
         default_quality_profile_id: body.default_quality_profile_id,
-        enabled_for_requests: body.enabled_for_requests,
         best_effort: body.best_effort,
     };
 
@@ -256,6 +248,83 @@ pub async fn sync_source_instance_handler(
     Ok(axum::http::StatusCode::ACCEPTED)
 }
 
+/// One source instance's most recently reported reconciliation outcome --
+/// see `streamarr_arr_sync::SyncRunStatus`. `status`/`error`/`finished_at`
+/// are `None` together when no poller has reported anything for this
+/// instance yet (e.g. it was registered less than ~10s ago).
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SourceInstanceSyncStatusResponse {
+    pub source_instance_id: Uuid,
+    pub name: String,
+    pub kind: SourceKind,
+    /// `"running"` | `"succeeded"` | `"failed"`, or absent if unreported.
+    pub status: Option<&'static str>,
+    /// Only set when `status` is `"failed"`.
+    pub error: Option<String>,
+    /// Only set when `status` is `"running"` and the poller has something
+    /// more specific to report than "running" alone -- see
+    /// `streamarr_arr_sync::SyncRunStatus::Running`'s doc comment (e.g. a
+    /// large missing-media-file backfill's live "N/total" progress).
+    pub detail: Option<String>,
+    pub started_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub finished_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// Every registered source instance's last-known sync status in one call --
+/// backs the admin "Tasks" screen. Purely in-memory/runtime, like `POST
+/// .../sync`'s underlying trigger channel: nothing here survives a restart,
+/// and an instance with no poller running yet (or one that's never
+/// completed a pass) simply has `status: null`, not a synthetic "idle" or
+/// "unknown" state.
+#[utoipa::path(
+    get,
+    path = "/api/v1/admin/source-instances/sync-status",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Every registered instance's last-known sync status", body = Vec<SourceInstanceSyncStatusResponse>),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Caller is authenticated but not an admin")
+    )
+)]
+pub async fn sync_status_handler(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+) -> Result<Json<Vec<SourceInstanceSyncStatusResponse>>, ApiError> {
+    use streamarr_arr_sync::SyncRunStatus;
+
+    let responses = state
+        .source_instances
+        .all_sync_statuses()
+        .into_iter()
+        .map(|(instance, status)| {
+            let (status_label, error, detail, started_at, finished_at) = match status {
+                None => (None, None, None, None, None),
+                Some(SyncRunStatus::Running { started_at, detail }) => {
+                    (Some("running"), None, detail, Some(started_at), None)
+                }
+                Some(SyncRunStatus::Succeeded { finished_at }) => {
+                    (Some("succeeded"), None, None, None, Some(finished_at))
+                }
+                Some(SyncRunStatus::Failed { error, finished_at }) => {
+                    (Some("failed"), Some(error), None, None, Some(finished_at))
+                }
+            };
+            SourceInstanceSyncStatusResponse {
+                source_instance_id: instance.id,
+                name: instance.name,
+                kind: instance.kind,
+                status: status_label,
+                error,
+                detail,
+                started_at,
+                finished_at,
+            }
+        })
+        .collect();
+
+    Ok(Json(responses))
+}
+
 #[cfg(test)]
 mod tests {
     use axum::body::Body;
@@ -265,7 +334,7 @@ mod tests {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    use crate::test_support::{bearer_header, mint_access_token, test_state};
+    use crate::test_support::{bearer_header, mint_access_token, seed_admin_user, test_state};
 
     #[tokio::test]
     async fn register_confirms_reachability_before_accepting() {
@@ -280,7 +349,7 @@ mod tests {
 
         let (router, state) = test_state().await;
         let admin_id = Uuid::new_v4();
-        state.admin_registry.add(admin_id);
+        seed_admin_user(&state, admin_id).await;
         let token = mint_access_token(&state, admin_id);
 
         let body = serde_json::json!({
@@ -319,7 +388,7 @@ mod tests {
     async fn register_rejects_unreachable_instance() {
         let (router, state) = test_state().await;
         let admin_id = Uuid::new_v4();
-        state.admin_registry.add(admin_id);
+        seed_admin_user(&state, admin_id).await;
         let token = mint_access_token(&state, admin_id);
 
         let body = serde_json::json!({
@@ -349,7 +418,7 @@ mod tests {
     async fn list_and_delete_round_trip() {
         let (router, state) = test_state().await;
         let admin_id = Uuid::new_v4();
-        state.admin_registry.add(admin_id);
+        seed_admin_user(&state, admin_id).await;
         let token = mint_access_token(&state, admin_id);
 
         let instance = streamarr_model::SourceInstance {
@@ -361,7 +430,6 @@ mod tests {
             priority: 0,
             default_root_folder_id: None,
             default_quality_profile_id: None,
-            enabled_for_requests: false,
             best_effort: false,
         };
         state.app.source_instances.upsert(instance.clone());
@@ -403,7 +471,7 @@ mod tests {
     async fn sync_reports_not_found_for_unknown_instance() {
         let (router, state) = test_state().await;
         let admin_id = Uuid::new_v4();
-        state.admin_registry.add(admin_id);
+        seed_admin_user(&state, admin_id).await;
         let token = mint_access_token(&state, admin_id);
 
         let response = router
@@ -427,7 +495,7 @@ mod tests {
     async fn sync_reports_poller_not_running_when_none_is_registered() {
         let (router, state) = test_state().await;
         let admin_id = Uuid::new_v4();
-        state.admin_registry.add(admin_id);
+        seed_admin_user(&state, admin_id).await;
         let token = mint_access_token(&state, admin_id);
 
         let instance = streamarr_model::SourceInstance {
@@ -439,7 +507,6 @@ mod tests {
             priority: 0,
             default_root_folder_id: None,
             default_quality_profile_id: None,
-            enabled_for_requests: false,
             best_effort: false,
         };
         state.app.source_instances.upsert(instance.clone());

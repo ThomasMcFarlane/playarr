@@ -27,6 +27,12 @@ const session: StoredSession = {
 };
 
 afterEach(() => {
+  // The in-memory fallback (used whenever `localStorage` isn't stubbed for
+  // a given test) is module-level, not per-instance -- see `tokenStore.ts`'s
+  // doc comment on `memoryFallback` for why that's required for the app to
+  // work correctly. That means it persists across `it()` blocks in this
+  // file unless explicitly reset here.
+  new TokenStore().clear();
   vi.unstubAllGlobals();
 });
 

@@ -12,10 +12,12 @@ streamarr-telemetry = { path = "../streamarr-telemetry" }
 streamarr-db = { path = "../streamarr-db", features = ["sqlite", "postgres"] }
 streamarr-cache = { path = "../streamarr-cache" }
 streamarr-catalog = { path = "../streamarr-catalog" }
+streamarr-artwork = { path = "../streamarr-artwork" }
 streamarr-transcode = { path = "../streamarr-transcode" }
 streamarr-auth = { path = "../streamarr-auth" }
 streamarr-arr-sync = { path = "../streamarr-arr-sync" }
 streamarr-arr-client = { path = "../streamarr-arr-client" }
+streamarr-tdarr-client = { path = "../streamarr-tdarr-client" }
 axum = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
@@ -31,6 +33,7 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 async-trait = { workspace = true }
 dashmap = { workspace = true }
+reqwest = { workspace = true }
 
 [dev-dependencies]
 tower = { workspace = true, features = ["util"] }

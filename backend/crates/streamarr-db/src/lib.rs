@@ -14,4 +14,10 @@ pub mod repo;
 
 pub use error::DbError;
 pub use pool::{connect, run_migrations, DbPool, POSTGRES_MIGRATIONS, SQLITE_MIGRATIONS};
-pub use repo::{DeviceRepo, MediaFileRepo, RenditionRepo, SourceInstanceRepo, WorkRepo};
+pub use repo::{
+    CreditRepo, DeviceRepo, EmbeddingRepo, InMemoryRefreshTokenStore, LibraryViewRepo,
+    MediaFileRepo, PlaylistRepo, PolicyRepo, ProfilePinRepo, RefreshTokenRepo, RenditionRepo,
+    SourceInstanceRepo, SqlxCreditRepo, SqlxEmbeddingRepo, SqlxLibraryViewRepo, SqlxPlaylistRepo,
+    SqlxProfilePinRepo, SqlxRefreshTokenRepo, SqlxTdarrConnectionRepo, SqlxWatchProgressRepo,
+    TdarrConnectionRepo, UserRepo, WatchProgressRepo, WorkRepo,
+};

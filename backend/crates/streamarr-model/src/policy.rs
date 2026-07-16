@@ -75,7 +75,17 @@ pub struct Policy {
     /// with an empty vec means "never allowed" — an explicit lockout.
     pub access_schedule: Option<Vec<AccessWindow>>,
 
-    /// Bypasses every other field on this struct. Kept as the last field so
-    /// review diffs always show it as an explicit, deliberate grant.
+    /// Whether this account may sign in to Playarr (the consumer streaming
+    /// client family) at all. Deliberately **not** bypassed by `is_admin`
+    /// below — an operator/admin account exists to run Streamarr's own
+    /// admin surface, not to imply a household viewer account, so the two
+    /// are independent grants. Defaults to `false` (least privilege): an
+    /// admin has to explicitly opt an account into Playarr access, same
+    /// philosophy as `library_allow` defaulting to no grants.
+    pub can_stream: bool,
+
+    /// Bypasses every other field on this struct *except* `can_stream`
+    /// above. Kept as the last field so review diffs always show it as an
+    /// explicit, deliberate grant.
     pub is_admin: bool,
 }

@@ -63,6 +63,7 @@ pub(crate) fn work_kind_to_str(kind: WorkKind) -> &'static str {
     match kind {
         WorkKind::Movie => "movie",
         WorkKind::Series => "series",
+        WorkKind::Site => "site",
         WorkKind::Artist => "artist",
         WorkKind::Author => "author",
     }
@@ -74,6 +75,7 @@ pub(crate) fn work_kind_from_str(raw: &str) -> Result<WorkKind, CatalogError> {
     match raw {
         "movie" => Ok(WorkKind::Movie),
         "series" => Ok(WorkKind::Series),
+        "site" => Ok(WorkKind::Site),
         "artist" => Ok(WorkKind::Artist),
         "author" => Ok(WorkKind::Author),
         other => Err(decode_err(format!("unknown work kind {other:?}"))),
@@ -120,6 +122,7 @@ pub(crate) fn provider_to_str(provider: &ExternalProvider) -> String {
         ExternalProvider::Goodreads => "goodreads".to_string(),
         ExternalProvider::Isbn => "isbn".to_string(),
         ExternalProvider::Asin => "asin".to_string(),
+        ExternalProvider::Tpdb => "tpdb".to_string(),
         ExternalProvider::Other(label) => format!("other:{label}"),
     }
 }
@@ -135,6 +138,7 @@ pub(crate) fn provider_from_str(raw: &str) -> ExternalProvider {
         "goodreads" => ExternalProvider::Goodreads,
         "isbn" => ExternalProvider::Isbn,
         "asin" => ExternalProvider::Asin,
+        "tpdb" => ExternalProvider::Tpdb,
         other => ExternalProvider::Other(other.strip_prefix("other:").unwrap_or(other).to_string()),
     }
 }

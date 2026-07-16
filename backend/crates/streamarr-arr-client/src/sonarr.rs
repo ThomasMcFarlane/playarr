@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use streamarr_model::Sensitive;
 
@@ -8,8 +9,9 @@ use crate::{ArrClientError, ArrConnector};
 /// A series as Sonarr's `/api/v3/series` endpoint returns it. Deliberately
 /// a small, hand-picked subset of Sonarr's actual (much larger) response —
 /// just enough for `streamarr-arr-sync` to reconcile identity and
-/// monitoring state. Add fields as sync actually needs them rather than
-/// mirroring Sonarr's full schema speculatively.
+/// monitoring state, plus `overview`/`genres`/`images` for a downstream
+/// metadata-display pipeline. Add fields as sync actually needs them rather
+/// than mirroring Sonarr's full schema speculatively.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SonarrSeries {
     pub id: i64,
@@ -21,6 +23,37 @@ pub struct SonarrSeries {
     pub monitored: bool,
     pub status: String,
     pub path: String,
+    /// Absent or null on some entries, so this stays optional rather than
+    /// defaulting to an empty string.
+    #[serde(default)]
+    pub overview: Option<String>,
+    #[serde(default)]
+    pub genres: Vec<String>,
+    #[serde(default)]
+    pub images: Vec<SonarrImage>,
+    /// When the series first aired. Absent/null for a series TheTVDB has no
+    /// air date for yet. Maps onto `Work::release_date` -- see
+    /// `streamarr_arr_sync::arr_client::map_sonarr`.
+    #[serde(default, rename = "firstAired")]
+    pub first_aired: Option<DateTime<Utc>>,
+}
+
+/// A single entry from a Sonarr resource's `images` array (poster, fanart,
+/// episode screenshot, etc). Used to resolve artwork for the metadata-
+/// display pipeline without leaking Sonarr's own API-key-gated local paths
+/// to Streamarr clients.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SonarrImage {
+    #[serde(rename = "coverType")]
+    pub cover_type: String,
+    pub url: String,
+    /// Absolute, externally-hosted image URL (TheTVDB's CDN) -- present for
+    /// most images but not guaranteed (e.g. images added purely from a
+    /// local file). Absent from Sonarr's own `url` field's local path,
+    /// which requires this instance's own API key to fetch and must never
+    /// be forwarded to a Streamarr client as-is.
+    #[serde(rename = "remoteUrl")]
+    pub remote_url: Option<String>,
 }
 
 /// An episode as Sonarr's `/api/v3/episode` endpoint returns it. Carries
@@ -37,6 +70,19 @@ pub struct SonarrEpisode {
     #[serde(rename = "episodeNumber")]
     pub episode_number: i64,
     pub title: String,
+    #[serde(default)]
+    pub overview: Option<String>,
+    /// Calendar air date supplied by Sonarr.
+    #[serde(default, rename = "airDate")]
+    pub air_date: Option<NaiveDate>,
+    /// Episode runtime in whole minutes.
+    #[serde(default)]
+    pub runtime: Option<u32>,
+    /// Episode stills supplied by Sonarr's metadata provider. As with
+    /// series artwork, downstream clients must only expose `remote_url`;
+    /// `url` is Sonarr's local API-key-gated path.
+    #[serde(default)]
+    pub images: Vec<SonarrImage>,
     #[serde(rename = "hasFile")]
     pub has_file: bool,
     pub monitored: bool,
@@ -222,6 +268,53 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn episode_payload_parses_remote_screenshot_and_defaults_missing_images() {
+        let with_image: SonarrEpisode = serde_json::from_value(json!({
+            "id": 10,
+            "seriesId": 1,
+            "seasonNumber": 1,
+            "episodeNumber": 1,
+            "title": "Pilot",
+            "overview": "The story begins.",
+            "airDate": "2008-01-20",
+            "runtime": 58,
+            "images": [{
+                "coverType": "screenshot",
+                "url": "/MediaCover/episodes/10/screenshot.jpg",
+                "remoteUrl": "https://artworks.thetvdb.com/episodes/10.jpg"
+            }],
+            "hasFile": true,
+            "monitored": true,
+            "episodeFileId": 55
+        }))
+        .unwrap();
+        assert_eq!(with_image.images[0].cover_type, "screenshot");
+        assert_eq!(with_image.overview.as_deref(), Some("The story begins."));
+        assert_eq!(
+            with_image.air_date,
+            chrono::NaiveDate::from_ymd_opt(2008, 1, 20)
+        );
+        assert_eq!(with_image.runtime, Some(58));
+        assert_eq!(
+            with_image.images[0].remote_url.as_deref(),
+            Some("https://artworks.thetvdb.com/episodes/10.jpg")
+        );
+
+        let without_images: SonarrEpisode = serde_json::from_value(json!({
+            "id": 11,
+            "seriesId": 1,
+            "seasonNumber": 1,
+            "episodeNumber": 2,
+            "title": "Episode Two",
+            "hasFile": false,
+            "monitored": true,
+            "episodeFileId": 0
+        }))
+        .unwrap();
+        assert!(without_images.images.is_empty());
+    }
+
     #[tokio::test]
     async fn list_series_parses_response_and_sends_api_key() {
         let server = MockServer::start().await;
@@ -283,6 +376,88 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn get_series_parses_overview_genres_and_images() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/series/1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": 1,
+                "title": "Test Series Q",
+                "sortTitle": "test series q",
+                "tvdbId": 81189,
+                "monitored": true,
+                "status": "ended",
+                "path": "/tv/Test Series Q",
+                "overview": "A high school chemistry teacher turns to a life of crime.",
+                "genres": ["Drama", "Crime", "Thriller"],
+                "images": [
+                    {
+                        "coverType": "poster",
+                        "url": "/MediaCover/1/poster.jpg",
+                        "remoteUrl": "https://artworks.thetvdb.com/banners/posters/81189-1.jpg"
+                    },
+                    {
+                        "coverType": "fanart",
+                        "url": "/MediaCover/1/fanart.jpg"
+                    }
+                ]
+            })))
+            .mount(&server)
+            .await;
+
+        let client = SonarrClient::new(server.uri(), "test-key");
+        let series = client
+            .get_series(1)
+            .await
+            .expect("get_series should succeed against a healthy mock");
+
+        assert_eq!(
+            series.overview.as_deref(),
+            Some("A high school chemistry teacher turns to a life of crime.")
+        );
+        assert_eq!(series.genres, vec!["Drama", "Crime", "Thriller"]);
+        assert_eq!(series.images.len(), 2);
+        assert_eq!(series.images[0].cover_type, "poster");
+        assert_eq!(
+            series.images[0].remote_url.as_deref(),
+            Some("https://artworks.thetvdb.com/banners/posters/81189-1.jpg")
+        );
+        assert_eq!(series.images[1].cover_type, "fanart");
+        assert_eq!(series.images[1].remote_url, None);
+    }
+
+    #[tokio::test]
+    async fn list_series_defaults_overview_genres_and_images_when_absent() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/series"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {
+                    "id": 2,
+                    "title": "Older Show",
+                    "sortTitle": "older show",
+                    "tvdbId": 12345,
+                    "monitored": true,
+                    "status": "continuing",
+                    "path": "/tv/Older Show"
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = SonarrClient::new(server.uri(), "test-key");
+        let series = client
+            .list_series()
+            .await
+            .expect("list_series should succeed even when new fields are absent");
+
+        assert_eq!(series.len(), 1);
+        assert_eq!(series[0].overview, None);
+        assert!(series[0].genres.is_empty());
+        assert!(series[0].images.is_empty());
+    }
+
+    #[tokio::test]
     async fn list_episodes_filters_by_series_id_and_sends_api_key() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
@@ -296,6 +471,13 @@ mod tests {
                     "seasonNumber": 1,
                     "episodeNumber": 1,
                     "title": "Pilot",
+                    "images": [
+                        {
+                            "coverType": "screenshot",
+                            "url": "/MediaCover/episodes/10/screenshot.jpg",
+                            "remoteUrl": "https://artworks.thetvdb.com/episodes/10.jpg"
+                        }
+                    ],
                     "hasFile": true,
                     "monitored": true,
                     "episodeFileId": 55
@@ -322,7 +504,13 @@ mod tests {
 
         assert_eq!(episodes.len(), 2);
         assert_eq!(episodes[0].title, "Pilot");
+        assert_eq!(episodes[0].images[0].cover_type, "screenshot");
+        assert_eq!(
+            episodes[0].images[0].remote_url.as_deref(),
+            Some("https://artworks.thetvdb.com/episodes/10.jpg")
+        );
         assert_eq!(episodes[0].episode_file_id, 55);
+        assert!(episodes[1].images.is_empty());
         assert_eq!(episodes[1].episode_file_id, 0);
         assert!(!episodes[1].has_file);
     }

@@ -26,6 +26,24 @@
 //! primitive (see that crate's docs), and a hot per-session-lifecycle
 //! counter belongs in-process rather than round-tripping a KV store on
 //! every increment/decrement.
+//!
+//! The other bridge, optional and one-directional: `TranscodeOrchestrator`
+//! can hold an [`mpsc::Sender<MediaFileImportEvent>`] (see
+//! [`TranscodeOrchestrator::with_tdarr_notify`]) and fires one every time
+//! [`TranscodeOrchestrator::spawn_on_demand_transcode`] starts a live
+//! session — the same channel `TdarrDispatcher` already consumes for real
+//! *arr import events. This is what turns "someone is watching this file
+//! right now via a temporary, TTL'd ffmpeg session" into "Tdarr goes and
+//! produces a durable, cached `Rendition` for it in the background" per
+//! this crate's own three-step lookup order above: once that `Rendition`
+//! is `Ready`, every subsequent playback request for the same file+profile
+//! hits step 2 instead of re-paying for step 3. Fire-and-forget
+//! (`try_send`, never awaited) so a full or absent channel (Tdarr not
+//! configured, or a worker-role process not running in this deployment)
+//! never affects playback itself — `TdarrDispatcher::dispatch_one` already
+//! re-checks for an existing `Ready` rendition before doing any real work,
+//! so redundant events from multiple concurrent on-demand sessions for the
+//! same file are naturally deduplicated on the receiving end.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -114,6 +132,8 @@ pub struct TranscodeSession {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TranscodeTargetProfile {
     pub name: String,
+    /// Display/selection height exposed to playback clients.
+    pub height: u16,
     /// ffmpeg `-c:v` value, e.g. `"libx264"`.
     pub video_codec: String,
     /// ffmpeg `-c:a` value, e.g. `"aac"`.
@@ -123,6 +143,18 @@ pub struct TranscodeTargetProfile {
 }
 
 impl TranscodeTargetProfile {
+    /// The real rendition ladder this server can currently produce.
+    ///
+    /// Playback clients use this rather than maintaining a second,
+    /// potentially fictional quality list. Keep the order highest-first
+    /// for direct rendering in a quality picker.
+    pub fn supported() -> Vec<Self> {
+        ["h264-1080p-8mbps", "h264-720p-4mbps", "h264-480p-2mbps"]
+            .into_iter()
+            .map(Self::resolve)
+            .collect()
+    }
+
     /// Resolves a named profile to concrete ffmpeg settings, falling back
     /// to a conservative default (H.264/AAC, 4Mbps video) for any name
     /// this crate doesn't recognize, rather than failing outright — an
@@ -133,6 +165,7 @@ impl TranscodeTargetProfile {
         match profile {
             "h264-1080p-8mbps" => Self {
                 name: profile.to_string(),
+                height: 1080,
                 video_codec: "libx264".to_string(),
                 audio_codec: "aac".to_string(),
                 video_bitrate_kbps: Some(8000),
@@ -140,6 +173,7 @@ impl TranscodeTargetProfile {
             },
             "h264-720p-4mbps" => Self {
                 name: profile.to_string(),
+                height: 720,
                 video_codec: "libx264".to_string(),
                 audio_codec: "aac".to_string(),
                 video_bitrate_kbps: Some(4000),
@@ -147,6 +181,7 @@ impl TranscodeTargetProfile {
             },
             "h264-480p-2mbps" => Self {
                 name: profile.to_string(),
+                height: 480,
                 video_codec: "libx264".to_string(),
                 audio_codec: "aac".to_string(),
                 video_bitrate_kbps: Some(2000),
@@ -154,6 +189,7 @@ impl TranscodeTargetProfile {
             },
             other => Self {
                 name: other.to_string(),
+                height: 720,
                 video_codec: "libx264".to_string(),
                 audio_codec: "aac".to_string(),
                 video_bitrate_kbps: Some(4000),
@@ -183,16 +219,69 @@ pub fn build_ffmpeg_hls_args(
     profile: &TranscodeTargetProfile,
     output_dir: &Path,
 ) -> Vec<String> {
+    build_ffmpeg_hls_args_at(input_path, profile, output_dir, 0)
+}
+
+/// Builds the same live HLS command as [`build_ffmpeg_hls_args`], starting
+/// from an absolute position in the source file. The replacement playlist's
+/// own media timeline still begins at zero; callers must carry
+/// `start_position_ms` separately when presenting source-relative time.
+pub fn build_ffmpeg_hls_args_at(
+    input_path: &Path,
+    profile: &TranscodeTargetProfile,
+    output_dir: &Path,
+    start_position_ms: u64,
+) -> Vec<String> {
+    build_ffmpeg_hls_args_at_with_audio(input_path, profile, output_dir, start_position_ms, None)
+}
+
+/// Builds a live HLS command with one explicitly selected source audio
+/// stream. `audio_stream_index` is ffprobe's global stream index, so the
+/// mapping remains correct even when subtitle/data streams appear between
+/// video and audio streams in the container.
+pub fn build_ffmpeg_hls_args_at_with_audio(
+    input_path: &Path,
+    profile: &TranscodeTargetProfile,
+    output_dir: &Path,
+    start_position_ms: u64,
+    audio_stream_index: Option<u32>,
+) -> Vec<String> {
     let mut args = vec![
         // Overwrite without prompting — the per-session output directory
         // is freshly created, but ffmpeg still probes for an existing
         // playlist file otherwise and this keeps it non-interactive.
         "-y".to_string(),
+    ];
+
+    if start_position_ms > 0 {
+        args.push("-ss".to_string());
+        args.push(format!("{:.3}", start_position_ms as f64 / 1000.0));
+    }
+
+    args.extend([
         "-i".to_string(),
         input_path.to_string_lossy().into_owned(),
         "-c:v".to_string(),
         profile.video_codec.clone(),
-    ];
+        // Browser MSE implementations generally accept 8-bit H.264 but
+        // reject High 10 output. Without an explicit pixel format, libx264
+        // preserves a 10-bit source as yuv420p10le, which produces valid TS
+        // segments that Chrome/Safari still fail to append (Shaka 3014/3015).
+        "-pix_fmt".to_string(),
+        "yuv420p".to_string(),
+        "-map".to_string(),
+        "0:v:0".to_string(),
+        "-map".to_string(),
+        audio_stream_index
+            .map(|stream_index| format!("0:{stream_index}"))
+            .unwrap_or_else(|| "0:a:0?".to_string()),
+        "-sn".to_string(),
+    ]);
+
+    if profile.height > 0 {
+        args.push("-vf".to_string());
+        args.push(format!("scale=-2:min({}\\,ih)", profile.height));
+    }
 
     if let Some(kbps) = profile.video_bitrate_kbps {
         args.push("-b:v".to_string());
@@ -307,6 +396,23 @@ pub struct TranscodeOrchestrator {
     /// actually exercised — deferred, since today every node only ever
     /// expires sessions it owns.
     active_children: Mutex<HashMap<Uuid, Child>>,
+    /// Links the durable/user-facing playback session id returned by the
+    /// API to the ephemeral on-demand transcode process serving it. The
+    /// ids are deliberately different domains: `PlaybackSession` is an
+    /// analytics record, while `TranscodeSession` identifies an ffmpeg
+    /// process and its HLS output directory.
+    ///
+    /// Keeping the association here lets a normal playback Stop/Error
+    /// event terminate the exact process immediately. Re-associating the
+    /// same playback session (for example after a quality change or a
+    /// duplicate negotiation) expires the superseded process instead of
+    /// leaving it running until its idle TTL.
+    playback_transcodes: Mutex<HashMap<Uuid, Uuid>>,
+    /// See the module docs' "other bridge" section and
+    /// [`Self::with_tdarr_notify`]. `None` (the default) means "don't
+    /// notify Tdarr" — correct both when Tdarr isn't configured for this
+    /// deployment and when this node doesn't also run the worker role.
+    tdarr_notify: Option<mpsc::Sender<MediaFileImportEvent>>,
 }
 
 impl TranscodeOrchestrator {
@@ -324,11 +430,23 @@ impl TranscodeOrchestrator {
             session_ttl: Duration::from_secs(60),
             max_concurrent_sessions: None,
             active_children: Mutex::new(HashMap::new()),
+            playback_transcodes: Mutex::new(HashMap::new()),
+            tdarr_notify: None,
         }
     }
 
     pub fn with_ffmpeg_binary(mut self, ffmpeg_binary: impl Into<String>) -> Self {
         self.ffmpeg_binary = ffmpeg_binary.into();
+        self
+    }
+
+    /// Wires this orchestrator to notify [`TdarrDispatcher`] (via the same
+    /// channel `TdarrDispatcher::new` takes a receiver for) every time it
+    /// starts a live on-demand session — see the module docs' "other
+    /// bridge" section for why. Skipped entirely (stays `None`) when Tdarr
+    /// isn't configured for this deployment.
+    pub fn with_tdarr_notify(mut self, tdarr_notify: mpsc::Sender<MediaFileImportEvent>) -> Self {
+        self.tdarr_notify = Some(tdarr_notify);
         self
     }
 
@@ -420,6 +538,39 @@ impl TranscodeOrchestrator {
         profile: &str,
         owning_node_id: &str,
     ) -> Result<TranscodeSession, TranscodeError> {
+        self.spawn_on_demand_transcode_at(media_file, profile, owning_node_id, 0)
+            .await
+    }
+
+    /// Starts a short-lived HLS transcode at an absolute source timestamp.
+    /// Used when a player seeks beyond the currently-produced live
+    /// playlist: the old process is stopped by its playback session, and a
+    /// replacement process begins encoding from this source position.
+    pub async fn spawn_on_demand_transcode_at(
+        &self,
+        media_file: &MediaFile,
+        profile: &str,
+        owning_node_id: &str,
+        start_position_ms: u64,
+    ) -> Result<TranscodeSession, TranscodeError> {
+        self.spawn_on_demand_transcode_at_with_audio(
+            media_file,
+            profile,
+            owning_node_id,
+            start_position_ms,
+            None,
+        )
+        .await
+    }
+
+    pub async fn spawn_on_demand_transcode_at_with_audio(
+        &self,
+        media_file: &MediaFile,
+        profile: &str,
+        owning_node_id: &str,
+        start_position_ms: u64,
+        audio_stream_index: Option<u32>,
+    ) -> Result<TranscodeSession, TranscodeError> {
         if let Some(max) = self.max_concurrent_sessions {
             let active = self.active_children.lock().await.len();
             if active >= max {
@@ -432,7 +583,14 @@ impl TranscodeOrchestrator {
         let output_dir = self.output_root.join(session_id.to_string());
         tokio::fs::create_dir_all(&output_dir).await?;
 
-        let args = build_ffmpeg_hls_args(&media_file.path, &target_profile, &output_dir);
+        let source_path = streamarr_model::resolve_media_path(&media_file.path);
+        let args = build_ffmpeg_hls_args_at_with_audio(
+            &source_path,
+            &target_profile,
+            &output_dir,
+            start_position_ms,
+            audio_stream_index,
+        );
 
         let mut command = Command::new(&self.ffmpeg_binary);
         command
@@ -468,20 +626,79 @@ impl TranscodeOrchestrator {
         self.active_children.lock().await.insert(session.id, child);
         self.active_sessions.increment();
 
+        // Someone is watching this file right now via this temporary,
+        // TTL'd session -- tell Tdarr to go produce a durable `Rendition`
+        // for it in the background too, so a *future* request for the same
+        // file+profile hits the `find_existing_rendition` cache hit instead
+        // of paying for another on-demand transcode. `try_send`, never
+        // awaited: a full/closed channel (Tdarr not configured, or this
+        // node doesn't also run the worker role) must never affect
+        // playback itself -- see the module docs' "other bridge" section.
+        if let Some(tdarr_notify) = &self.tdarr_notify {
+            let _ = tdarr_notify.try_send(MediaFileImportEvent {
+                media_file: media_file.clone(),
+            });
+        }
+
         Ok(session)
     }
 
     /// Looks up a [`TranscodeSession`] by id, regardless of which node
     /// owns it — the cache entry is visible cluster-wide even though only
     /// the owning node has the actual ffmpeg process.
+    /// The on-disk directory a live on-demand session's ffmpeg process
+    /// writes its HLS playlist/segments into -- `streamarr-api`'s media-
+    /// serving routes use this to find the actual files a client's
+    /// `playlist.m3u8`/segment requests resolve to. Same derivation
+    /// `spawn_on_demand_transcode` already uses internally, exposed here
+    /// rather than duplicated at the call site.
+    pub fn session_output_dir(&self, session_id: Uuid) -> PathBuf {
+        self.output_root.join(session_id.to_string())
+    }
+
+    /// Looks up a persisted [`Rendition`] by id -- `streamarr-api`'s media-
+    /// serving routes use this to resolve a `renditions/{id}/...` request
+    /// to the on-disk directory `Rendition::output_path` points at.
+    /// Delegates to the same `RenditionRepo` `find_existing_rendition`
+    /// already wraps, rather than exposing that repo directly on
+    /// `AppState` as a second, parallel path to the same data.
+    pub async fn get_rendition(&self, id: Uuid) -> Result<Rendition, TranscodeError> {
+        Ok(self.rendition_repo.get(id).await?)
+    }
+
+    /// Looks up a live [`TranscodeSession`] by id -- and, if found, slides
+    /// its expiry forward by another full `session_ttl` from now.
+    ///
+    /// `session_ttl` is deliberately an *idle* deadline (see
+    /// [`TranscodeSession::expires_at`]'s doc comment), not a hard cap on
+    /// total session lifetime -- but until this method existed, nothing
+    /// ever re-touched a session's cache entry after `spawn_on_demand_transcode`
+    /// created it once, so every session (even one being actively watched
+    /// straight through) silently expired exactly `session_ttl` after
+    /// creation. Confirmed live: a real on-demand transcode played its
+    /// first few segments successfully, then started 404ing mid-playback
+    /// once the fixed 60s window elapsed -- indistinguishable from "can't
+    /// play anything" for any title longer than a minute. `streamarr-api`'s
+    /// `serve_session_file_handler` (manifest + every segment request) is
+    /// the only caller, and gets called continuously by a real player for
+    /// the entire time it's actively watching -- exactly the activity this
+    /// needs to key off of, so no separate heartbeat/keepalive endpoint is
+    /// needed. An abandoned session (client stopped requesting: tab closed,
+    /// navigated away, network dropped) still naturally expires and frees
+    /// its capacity slot roughly `session_ttl` after the last real request.
     pub async fn lookup_session(
         &self,
         session_id: Uuid,
     ) -> Result<Option<TranscodeSession>, TranscodeError> {
-        match self.cache.get(&Self::session_cache_key(session_id)).await? {
-            Some(bytes) => Ok(Some(serde_json::from_slice(&bytes)?)),
-            None => Ok(None),
-        }
+        let key = Self::session_cache_key(session_id);
+        let Some(bytes) = self.cache.get(&key).await? else {
+            return Ok(None);
+        };
+        let mut session: TranscodeSession = serde_json::from_slice(&bytes)?;
+        session.expires_at = Utc::now()
+            + chrono::Duration::from_std(self.session_ttl).unwrap_or(chrono::Duration::zero());
+        self.store_session(&session).await?;
+        Ok(Some(session))
     }
 
     /// Ends a [`TranscodeSession`]: removes it from the cache (so no
@@ -498,6 +715,62 @@ impl TranscodeOrchestrator {
             // expected, not a failure of expiry itself.
             let _ = child.kill().await;
             self.active_sessions.decrement();
+        }
+
+        self.playback_transcodes
+            .lock()
+            .await
+            .retain(|_, transcode_session_id| *transcode_session_id != session_id);
+
+        // HLS output is session-scoped and has no value once the process is
+        // stopped. Ignore a missing directory (the process may have failed
+        // before writing anything) but surface real filesystem errors.
+        match tokio::fs::remove_dir_all(self.session_output_dir(session_id)).await {
+            Ok(()) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => return Err(TranscodeError::Io(err)),
+        }
+
+        Ok(())
+    }
+
+    /// Associates a user-facing playback session with its live ffmpeg
+    /// session. If the playback session already pointed at another
+    /// transcode (quality replacement or duplicate negotiation), the old
+    /// process is stopped before this call returns.
+    pub async fn associate_playback_session(
+        &self,
+        playback_session_id: Uuid,
+        transcode_session_id: Uuid,
+    ) -> Result<(), TranscodeError> {
+        let superseded = self
+            .playback_transcodes
+            .lock()
+            .await
+            .insert(playback_session_id, transcode_session_id);
+
+        if let Some(superseded) = superseded.filter(|id| *id != transcode_session_id) {
+            self.expire_session(superseded).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Stops the on-demand transcode, if any, that belongs to a
+    /// user-facing playback session. Direct-play and durable-rendition
+    /// sessions have no association and are therefore harmless no-ops.
+    pub async fn expire_playback_session(
+        &self,
+        playback_session_id: Uuid,
+    ) -> Result<(), TranscodeError> {
+        let transcode_session_id = self
+            .playback_transcodes
+            .lock()
+            .await
+            .remove(&playback_session_id);
+
+        if let Some(transcode_session_id) = transcode_session_id {
+            self.expire_session(transcode_session_id).await?;
         }
 
         Ok(())
@@ -804,6 +1077,7 @@ mod tests {
             container: "mkv".to_string(),
             codec: "hevc".to_string(),
             bitrate: Some(15_000_000),
+            duration_ms: None,
             size_bytes: 4_000_000_000,
             source_instance_id: Uuid::new_v4(),
             source_file_id: Some("123".to_string()),
@@ -928,6 +1202,7 @@ mod tests {
         fn builds_expected_argv_with_bitrates() {
             let profile = TranscodeTargetProfile {
                 name: "h264-720p-4mbps".to_string(),
+                height: 720,
                 video_codec: "libx264".to_string(),
                 audio_codec: "aac".to_string(),
                 video_bitrate_kbps: Some(4000),
@@ -946,6 +1221,15 @@ mod tests {
                 "/media/in.mkv",
                 "-c:v",
                 "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-map",
+                "0:v:0",
+                "-map",
+                "0:a:0?",
+                "-sn",
+                "-vf",
+                "scale=-2:min(720\\,ih)",
                 "-b:v",
                 "4000k",
                 "-c:a",
@@ -975,6 +1259,7 @@ mod tests {
         fn omits_bitrate_flags_when_profile_has_none() {
             let profile = TranscodeTargetProfile {
                 name: "custom".to_string(),
+                height: 0,
                 video_codec: "libx264".to_string(),
                 audio_codec: "aac".to_string(),
                 video_bitrate_kbps: None,
@@ -991,6 +1276,10 @@ mod tests {
             assert!(!args.iter().any(|a| a == "-b:a"));
             assert!(args.iter().any(|a| a == "-c:v"));
             assert!(args.iter().any(|a| a == "-c:a"));
+            assert_eq!(
+                args[args.iter().position(|a| a == "-pix_fmt").unwrap() + 1],
+                "yuv420p"
+            );
         }
 
         #[test]
@@ -1011,8 +1300,58 @@ mod tests {
         }
 
         #[test]
+        fn source_seek_is_applied_before_input_with_millisecond_precision() {
+            let profile = TranscodeTargetProfile::resolve("h264-720p-4mbps");
+            let args = build_ffmpeg_hls_args_at(
+                Path::new("/library/episode.mkv"),
+                &profile,
+                Path::new("/tmp/session-seek"),
+                1_234_567,
+            );
+
+            let seek_index = args.iter().position(|arg| arg == "-ss").unwrap();
+            let input_index = args.iter().position(|arg| arg == "-i").unwrap();
+            assert_eq!(args[seek_index + 1], "1234.567");
+            assert!(seek_index < input_index);
+        }
+
+        #[test]
+        fn maps_the_selected_global_source_audio_stream() {
+            let profile = TranscodeTargetProfile::resolve("h264-720p-4mbps");
+            let args = build_ffmpeg_hls_args_at_with_audio(
+                Path::new("/library/episode.mkv"),
+                &profile,
+                Path::new("/tmp/session-audio"),
+                45_000,
+                Some(4),
+            );
+
+            let maps = args
+                .windows(2)
+                .filter(|pair| pair[0] == "-map")
+                .map(|pair| pair[1].as_str())
+                .collect::<Vec<_>>();
+            assert_eq!(maps, vec!["0:v:0", "0:4"]);
+            assert!(args.iter().any(|arg| arg == "-sn"));
+        }
+
+        #[test]
+        fn selected_quality_caps_the_real_output_height_without_upscaling() {
+            let profile = TranscodeTargetProfile::resolve("h264-480p-2mbps");
+            let args = build_ffmpeg_hls_args(
+                Path::new("/library/episode.mkv"),
+                &profile,
+                Path::new("/tmp/session-quality"),
+            );
+
+            let filter_index = args.iter().position(|arg| arg == "-vf").unwrap();
+            assert_eq!(args[filter_index + 1], "scale=-2:min(480\\,ih)");
+        }
+
+        #[test]
         fn resolve_known_profile_maps_expected_codecs_and_bitrate() {
             let profile = TranscodeTargetProfile::resolve("h264-1080p-8mbps");
+            assert_eq!(profile.height, 1080);
             assert_eq!(profile.video_codec, "libx264");
             assert_eq!(profile.audio_codec, "aac");
             assert_eq!(profile.video_bitrate_kbps, Some(8000));
@@ -1022,9 +1361,24 @@ mod tests {
         #[test]
         fn resolve_unknown_profile_falls_back_to_a_sane_default() {
             let profile = TranscodeTargetProfile::resolve("totally-unrecognized-profile");
+            assert_eq!(profile.height, 720);
             assert_eq!(profile.video_codec, "libx264");
             assert_eq!(profile.audio_codec, "aac");
             assert!(profile.video_bitrate_kbps.is_some());
+        }
+
+        #[test]
+        fn supported_profiles_are_the_real_ladder_in_display_order() {
+            let profiles = TranscodeTargetProfile::supported();
+            assert_eq!(
+                profiles
+                    .iter()
+                    .map(|profile| profile.height)
+                    .collect::<Vec<_>>(),
+                vec![1080, 720, 480]
+            );
+            assert_eq!(profiles[0].name, "h264-1080p-8mbps");
+            assert_eq!(profiles[2].video_bitrate_kbps, Some(2000));
         }
     }
 
@@ -1054,11 +1408,22 @@ mod tests {
             assert_eq!(session.current_segment, 0);
             assert_eq!(counter.get(), 1);
 
+            // `lookup_session` slides `expires_at` forward on every real
+            // access (see its doc comment) -- compare everything else
+            // exactly, and only assert `expires_at` moved forward rather
+            // than expecting a byte-for-byte match against the
+            // just-created `session`.
             let found = orchestrator
                 .lookup_session(session.id)
                 .await
-                .expect("lookup should not error");
-            assert_eq!(found, Some(session.clone()));
+                .expect("lookup should not error")
+                .expect("session should be found");
+            assert_eq!(found.id, session.id);
+            assert_eq!(found.media_file_id, session.media_file_id);
+            assert_eq!(found.profile, session.profile);
+            assert_eq!(found.owning_node_id, session.owning_node_id);
+            assert_eq!(found.current_segment, session.current_segment);
+            assert!(found.expires_at >= session.expires_at);
 
             orchestrator
                 .expire_session(session.id)
@@ -1089,6 +1454,71 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn expiring_a_playback_session_stops_its_associated_transcode() {
+            let repo = Arc::new(FakeRenditionRepo::default());
+            let counter = ActiveSessionCounter::new();
+            let orchestrator =
+                TranscodeOrchestrator::new(repo, Arc::new(InMemory::new()), counter.clone())
+                    .with_ffmpeg_binary("/usr/bin/true")
+                    .with_output_root(unique_tmp_dir());
+            let session = orchestrator
+                .spawn_on_demand_transcode(&sample_media_file(), "h264-720p-4mbps", "node-a")
+                .await
+                .unwrap();
+            let playback_session_id = Uuid::new_v4();
+
+            orchestrator
+                .associate_playback_session(playback_session_id, session.id)
+                .await
+                .unwrap();
+            orchestrator
+                .expire_playback_session(playback_session_id)
+                .await
+                .unwrap();
+
+            assert_eq!(counter.get(), 0);
+            assert_eq!(orchestrator.lookup_session(session.id).await.unwrap(), None);
+            assert!(!orchestrator.session_output_dir(session.id).exists());
+        }
+
+        #[tokio::test]
+        async fn replacing_a_playback_sessions_transcode_expires_the_old_one() {
+            let repo = Arc::new(FakeRenditionRepo::default());
+            let counter = ActiveSessionCounter::new();
+            let orchestrator =
+                TranscodeOrchestrator::new(repo, Arc::new(InMemory::new()), counter.clone())
+                    .with_ffmpeg_binary("/usr/bin/true")
+                    .with_output_root(unique_tmp_dir());
+            let media_file = sample_media_file();
+            let first = orchestrator
+                .spawn_on_demand_transcode(&media_file, "profile-a", "node-a")
+                .await
+                .unwrap();
+            let second = orchestrator
+                .spawn_on_demand_transcode(&media_file, "profile-b", "node-a")
+                .await
+                .unwrap();
+            let playback_session_id = Uuid::new_v4();
+
+            orchestrator
+                .associate_playback_session(playback_session_id, first.id)
+                .await
+                .unwrap();
+            orchestrator
+                .associate_playback_session(playback_session_id, second.id)
+                .await
+                .unwrap();
+
+            assert_eq!(orchestrator.lookup_session(first.id).await.unwrap(), None);
+            assert!(orchestrator
+                .lookup_session(second.id)
+                .await
+                .unwrap()
+                .is_some());
+            assert_eq!(counter.get(), 1);
+        }
+
+        #[tokio::test]
         async fn session_passively_expires_once_its_ttl_elapses() {
             let repo = Arc::new(FakeRenditionRepo::default());
             let orchestrator = TranscodeOrchestrator::new(
@@ -1108,6 +1538,54 @@ mod tests {
 
             tokio::time::sleep(Duration::from_millis(150)).await;
 
+            let found = orchestrator.lookup_session(session.id).await.unwrap();
+            assert_eq!(found, None);
+        }
+
+        /// The bug this guards against: a real on-demand session (a movie
+        /// actually being watched) outlives a single `session_ttl` window
+        /// because every real request re-touches it -- `session_ttl` is an
+        /// *idle* deadline, not a hard cap on total session lifetime (see
+        /// `TranscodeSession::expires_at`'s doc comment). Confirmed live
+        /// before this fix: a real playback session played its first few
+        /// segments fine, then 404'd mid-playback the moment the fixed 60s
+        /// window from creation elapsed, regardless of how continuously it
+        /// was being watched.
+        #[tokio::test]
+        async fn repeated_lookups_keep_an_actively_watched_session_alive_past_its_ttl() {
+            let repo = Arc::new(FakeRenditionRepo::default());
+            let orchestrator = TranscodeOrchestrator::new(
+                repo,
+                Arc::new(InMemory::new()),
+                ActiveSessionCounter::new(),
+            )
+            .with_ffmpeg_binary("/usr/bin/true")
+            .with_output_root(unique_tmp_dir())
+            .with_session_ttl(Duration::from_millis(80));
+
+            let media_file = sample_media_file();
+            let session = orchestrator
+                .spawn_on_demand_transcode(&media_file, "h264-720p-4mbps", "node-a")
+                .await
+                .unwrap();
+
+            // Simulate a player polling the manifest/segments well past what
+            // a single `session_ttl` window would allow if nothing refreshed
+            // it -- 6 rounds x 40ms = 240ms, versus an 80ms TTL.
+            for _ in 0..6 {
+                tokio::time::sleep(Duration::from_millis(40)).await;
+                let found = orchestrator
+                    .lookup_session(session.id)
+                    .await
+                    .unwrap()
+                    .expect("an actively-polled session must not expire between accesses");
+                assert_eq!(found.id, session.id);
+            }
+
+            // Once real access actually stops, the session still expires
+            // (this is deliberately idle cleanup, not immortality) --
+            // roughly `session_ttl` after the last real lookup above.
+            tokio::time::sleep(Duration::from_millis(150)).await;
             let found = orchestrator.lookup_session(session.id).await.unwrap();
             assert_eq!(found, None);
         }

@@ -5,11 +5,70 @@
 //! can diff against `streamarr_model::Work` without knowing which *arr app
 //! it came from.
 
+use chrono::{DateTime, Utc};
 use streamarr_arr_client::{
-    ArrClientError, BazarrClient, LidarrArtist, LidarrClient, ProwlarrClient, RadarrClient,
-    RadarrMovie, ReadarrAuthor, ReadarrClient, SonarrClient, SonarrSeries,
+    ArrClientError, BazarrClient, LidarrArtist, LidarrClient, LidarrImage, ProwlarrClient,
+    RadarrClient, RadarrImage, RadarrMovie, ReadarrAuthor, ReadarrClient, SonarrClient,
+    SonarrImage, SonarrSeries, WhisparrClient, WhisparrImage, WhisparrSeries,
 };
-use streamarr_model::{Availability, ExternalProvider, SourceInstance, SourceKind, WorkKind};
+use streamarr_model::{
+    Availability, ExternalProvider, ImageAsset, ImageKind, SourceInstance, SourceKind, WorkKind,
+};
+
+/// Converts one *arr `images[]` entry to an [`ImageAsset`], or `None` when
+/// it should be dropped. Two things can drop an entry: no `remote_url` at
+/// all (the only URL available is the source app's own local, API-key-
+/// gated path -- forwarding that to a Streamarr client would leak this
+/// *arr instance's credential, see e.g. `SonarrImage::remote_url`'s doc
+/// comment), or a `cover_type` this app doesn't have a matching
+/// `ImageKind` for (unrecognized/future *arr cover types fail closed by
+/// being skipped, not by guessing).
+fn image_asset(cover_type: &str, remote_url: Option<&str>) -> Option<ImageAsset> {
+    let url = remote_url?;
+    let kind = match cover_type {
+        "poster" => ImageKind::Poster,
+        "fanart" => ImageKind::Backdrop,
+        "banner" => ImageKind::Banner,
+        "clearlogo" | "logo" => ImageKind::Logo,
+        "screenshot" => ImageKind::Thumb,
+        _ => return None,
+    };
+    Some(ImageAsset {
+        kind,
+        url: url.to_string(),
+        // *arr's `images[]` entries carry no width/height metadata.
+        width: None,
+        height: None,
+    })
+}
+
+pub(crate) fn sonarr_images(images: &[SonarrImage]) -> Vec<ImageAsset> {
+    images
+        .iter()
+        .filter_map(|img| image_asset(&img.cover_type, img.remote_url.as_deref()))
+        .collect()
+}
+
+fn radarr_images(images: &[RadarrImage]) -> Vec<ImageAsset> {
+    images
+        .iter()
+        .filter_map(|img| image_asset(&img.cover_type, img.remote_url.as_deref()))
+        .collect()
+}
+
+fn lidarr_images(images: &[LidarrImage]) -> Vec<ImageAsset> {
+    images
+        .iter()
+        .filter_map(|img| image_asset(&img.cover_type, img.remote_url.as_deref()))
+        .collect()
+}
+
+pub(crate) fn whisparr_images(images: &[WhisparrImage]) -> Vec<ImageAsset> {
+    images
+        .iter()
+        .filter_map(|img| image_asset(&img.cover_type, img.remote_url.as_deref()))
+        .collect()
+}
 
 /// A source-kind-normalized view of one remote entity, carrying only the
 /// fields arr-sync actually derives from an *arr app's trimmed DTO. Deriving
@@ -44,6 +103,19 @@ pub struct RemoteWork {
     /// `Work::availability` untouched rather than downgrading it to
     /// `Unknown` on every sync pass.
     pub availability: Option<Availability>,
+    /// Metadata *arr apps themselves carry (they're TMDb/TVDB/MusicBrainz-
+    /// backed) — arr-sync owns these `Work` fields outright now (see
+    /// `poller::new_work`/`merge_work`), unlike `tags`, which stays
+    /// user/automation-owned and is never touched here.
+    pub overview: Option<String>,
+    pub genres: Vec<String>,
+    pub images: Vec<ImageAsset>,
+    /// The source *arr app's own release-date signal, mapped onto
+    /// `Work::release_date` by `poller::new_work`/`merge_work`. `None` for
+    /// source kinds whose trimmed DTO carries no such signal (Lidarr/
+    /// Readarr -- see `map_lidarr`/`map_readarr`) or a Movie/Series entry
+    /// the source app itself hasn't backfilled one for yet.
+    pub release_date: Option<DateTime<Utc>>,
 }
 
 fn map_sonarr(series: &SonarrSeries) -> RemoteWork {
@@ -58,6 +130,10 @@ fn map_sonarr(series: &SonarrSeries) -> RemoteWork {
         // scope for this pass (episodes are a separate child aggregate —
         // see `streamarr_model::series`), so we deliberately don't guess.
         availability: None,
+        overview: series.overview.clone(),
+        genres: series.genres.clone(),
+        images: sonarr_images(&series.images),
+        release_date: series.first_aired,
     }
 }
 
@@ -75,6 +151,16 @@ fn map_radarr(movie: &RadarrMovie) -> RemoteWork {
         } else {
             Availability::Unknown
         }),
+        overview: movie.overview.clone(),
+        genres: movie.genres.clone(),
+        images: radarr_images(&movie.images),
+        // A movie can go digital before it's out physically (or vice versa
+        // for a straight-to-disc release), so prefer `digital_release`
+        // (the more commonly-populated, earlier signal) and fall back to
+        // `physical_release` -- either one is a real "it's out" signal, and
+        // Radarr itself has no single unambiguous "release date" field of
+        // its own to defer to instead.
+        release_date: movie.digital_release.or(movie.physical_release),
     }
 }
 
@@ -83,10 +169,26 @@ fn map_lidarr(artist: &LidarrArtist) -> RemoteWork {
         external_id: artist.foreign_artist_id.clone(),
         source_id: artist.id,
         title: artist.artist_name.clone(),
-        // Lidarr's artist DTO has no distinct sort-title field.
-        sort_title: artist.artist_name.clone(),
+        sort_title: artist
+            .sort_name
+            .clone()
+            .unwrap_or_else(|| artist.artist_name.clone()),
         monitored: artist.monitored,
-        availability: None,
+        availability: artist.statistics.as_ref().map(|statistics| {
+            if statistics.track_file_count > 0 {
+                Availability::Available
+            } else if artist.monitored {
+                Availability::Pending
+            } else {
+                Availability::Unknown
+            }
+        }),
+        overview: artist.overview.clone(),
+        genres: artist.genres.clone(),
+        images: lidarr_images(&artist.images),
+        // An artist (unlike a single album) has no one release date of its
+        // own -- see `Work::release_date`'s doc comment.
+        release_date: None,
     }
 }
 
@@ -98,6 +200,34 @@ fn map_readarr(author: &ReadarrAuthor) -> RemoteWork {
         sort_title: author.author_name.clone(),
         monitored: author.monitored,
         availability: None,
+        // Readarr's trimmed DTO (`ReadarrAuthor`) hasn't grown overview/
+        // genres/images fields -- Readarr is archived upstream (see the
+        // crate-level docs) and best-effort here, so extending it wasn't
+        // part of this pass's scope (Sonarr/Radarr/Lidarr only).
+        overview: None,
+        genres: Vec::new(),
+        images: Vec::new(),
+        // An author, like an artist, has no one release date of its own.
+        release_date: None,
+    }
+}
+
+fn map_whisparr(series: &WhisparrSeries) -> RemoteWork {
+    RemoteWork {
+        external_id: series.tpdb_id.to_string(),
+        source_id: series.id,
+        title: series.title.clone(),
+        sort_title: series.sort_title.clone(),
+        monitored: series.monitored,
+        // Series-level Whisparr payloads don't carry an episode-file-count
+        // summary in our trimmed DTO, same as Sonarr's -- per-scene
+        // availability is a separate child aggregate concern, so this
+        // deliberately doesn't guess (see `map_sonarr`'s matching comment).
+        availability: None,
+        overview: series.overview.clone(),
+        genres: series.genres.clone(),
+        images: whisparr_images(&series.images),
+        release_date: series.first_aired,
     }
 }
 
@@ -112,6 +242,21 @@ fn map_readarr(author: &ReadarrAuthor) -> RemoteWork {
 /// - Prowlarr manages search indexers, not media — its webhook/poll surface
 ///   (`ProwlarrIndexer`) has nothing to do with the `Work` aggregate.
 ///
+/// Whisparr deliberately returns `(WorkKind::Site, ExternalProvider::Tpdb)`
+/// rather than reusing Sonarr's `(WorkKind::Series, ExternalProvider::Tvdb)`
+/// pair: the reconciliation
+/// poller's per-`(WorkKind, ExternalProvider)` diffing (see
+/// `crate::poller::diff_works`) treats every source instance sharing one
+/// bucket as jointly authoritative over it, so a source instance's
+/// reconciliation pass will delete any `Work` in its bucket that its own
+/// listing didn't return. If Whisparr shared Sonarr's `Tvdb` bucket, a
+/// Whisparr instance's pass would see every Sonarr-sourced series as
+/// "missing" (Whisparr's own listing never returns them) and delete them,
+/// and vice versa. This is the same documented gap that already exists for
+/// two same-kind instances (e.g. two independent Sonarr instances) -- giving
+/// Whisparr its own provider avoids adding a *second*, needless instance of
+/// it, not fixing the underlying gap itself.
+///
 /// TODO: once `WorkRepo` (or a sibling repo) grows a write path for
 /// subtitle-completeness state, Bazarr reconciliation should target that
 /// instead of `Work` directly — it's deliberately not shoehorned in here.
@@ -121,6 +266,7 @@ pub fn work_kind_and_provider(source_kind: SourceKind) -> Option<(WorkKind, Exte
         SourceKind::Radarr => Some((WorkKind::Movie, ExternalProvider::Tmdb)),
         SourceKind::Lidarr => Some((WorkKind::Artist, ExternalProvider::MusicBrainzArtist)),
         SourceKind::Readarr => Some((WorkKind::Author, ExternalProvider::Goodreads)),
+        SourceKind::Whisparr => Some((WorkKind::Site, ExternalProvider::Tpdb)),
         SourceKind::Bazarr | SourceKind::Prowlarr => None,
     }
 }
@@ -134,6 +280,7 @@ pub enum ArrClient {
     Readarr(ReadarrClient),
     Bazarr(BazarrClient),
     Prowlarr(ProwlarrClient),
+    Whisparr(WhisparrClient),
 }
 
 impl ArrClient {
@@ -152,6 +299,7 @@ impl ArrClient {
             SourceKind::Readarr => ArrClient::Readarr(ReadarrClient::new(base_url, api_key)),
             SourceKind::Bazarr => ArrClient::Bazarr(BazarrClient::new(base_url, api_key)),
             SourceKind::Prowlarr => ArrClient::Prowlarr(ProwlarrClient::new(base_url, api_key)),
+            SourceKind::Whisparr => ArrClient::Whisparr(WhisparrClient::new(base_url, api_key)),
         }
     }
 
@@ -178,6 +326,12 @@ impl ArrClient {
                 .iter()
                 .map(map_readarr)
                 .collect()),
+            ArrClient::Whisparr(client) => Ok(client
+                .list_series()
+                .await?
+                .iter()
+                .map(map_whisparr)
+                .collect()),
             ArrClient::Bazarr(_) | ArrClient::Prowlarr(_) => Ok(Vec::new()),
         }
     }
@@ -191,6 +345,7 @@ impl ArrClient {
             ArrClient::Radarr(client) => Ok(Some(map_radarr(&client.get_movie(id).await?))),
             ArrClient::Lidarr(client) => Ok(Some(map_lidarr(&client.get_artist(id).await?))),
             ArrClient::Readarr(client) => Ok(Some(map_readarr(&client.get_author(id).await?))),
+            ArrClient::Whisparr(client) => Ok(Some(map_whisparr(&client.get_series(id).await?))),
             ArrClient::Bazarr(_) | ArrClient::Prowlarr(_) => Ok(None),
         }
     }
@@ -200,17 +355,66 @@ impl ArrClient {
 mod tests {
     use super::*;
 
+    fn sonarr_series(id: i64, title: &str, tvdb_id: i64, monitored: bool) -> SonarrSeries {
+        SonarrSeries {
+            id,
+            title: title.to_string(),
+            sort_title: title.to_lowercase(),
+            tvdb_id,
+            monitored,
+            status: "continuing".to_string(),
+            path: format!("/tv/{title}"),
+            overview: None,
+            genres: Vec::new(),
+            images: Vec::new(),
+            first_aired: None,
+        }
+    }
+
+    fn whisparr_series(id: i64, title: &str, tpdb_id: i64, monitored: bool) -> WhisparrSeries {
+        WhisparrSeries {
+            id,
+            title: title.to_string(),
+            sort_title: title.to_lowercase(),
+            tpdb_id,
+            monitored,
+            status: "continuing".to_string(),
+            path: format!("/scenes/{title}"),
+            overview: None,
+            genres: Vec::new(),
+            images: Vec::new(),
+            first_aired: None,
+        }
+    }
+
+    fn radarr_movie(
+        id: i64,
+        title: &str,
+        tmdb_id: i64,
+        monitored: bool,
+        has_file: bool,
+    ) -> RadarrMovie {
+        RadarrMovie {
+            id,
+            title: title.to_string(),
+            sort_title: title.to_lowercase(),
+            tmdb_id,
+            monitored,
+            has_file,
+            path: format!("/movies/{title}"),
+            runtime: None,
+            movie_file: None,
+            overview: None,
+            genres: Vec::new(),
+            images: Vec::new(),
+            digital_release: None,
+            physical_release: None,
+        }
+    }
+
     #[test]
     fn sonarr_maps_tvdb_id_as_external_id_and_leaves_availability_unknown() {
-        let series = SonarrSeries {
-            id: 42,
-            title: "Example Show".to_string(),
-            sort_title: "example show".to_string(),
-            tvdb_id: 12345,
-            monitored: true,
-            status: "continuing".to_string(),
-            path: "/tv/example-show".to_string(),
-        };
+        let series = sonarr_series(42, "Example Show", 12345, true);
         let remote = map_sonarr(&series);
         assert_eq!(remote.external_id, "12345");
         assert_eq!(remote.title, "Example Show");
@@ -219,17 +423,140 @@ mod tests {
     }
 
     #[test]
+    fn sonarr_maps_overview_genres_and_remote_hosted_images() {
+        let mut series = sonarr_series(42, "Example Show", 12345, true);
+        series.overview = Some("A show about examples.".to_string());
+        series.genres = vec!["Drama".to_string(), "Crime".to_string()];
+        series.images = vec![
+            SonarrImage {
+                cover_type: "poster".to_string(),
+                url: "/MediaCover/42/poster.jpg".to_string(),
+                remote_url: Some("https://artworks.thetvdb.com/poster.jpg".to_string()),
+            },
+            // No remote_url -- Sonarr's own local, API-key-gated path must
+            // never be forwarded to a Streamarr client, so this entry is
+            // dropped rather than falling back to `url`.
+            SonarrImage {
+                cover_type: "fanart".to_string(),
+                url: "/MediaCover/42/fanart.jpg".to_string(),
+                remote_url: None,
+            },
+        ];
+
+        let remote = map_sonarr(&series);
+        assert_eq!(remote.overview.as_deref(), Some("A show about examples."));
+        assert_eq!(
+            remote.genres,
+            vec!["Drama".to_string(), "Crime".to_string()]
+        );
+        assert_eq!(remote.images.len(), 1);
+        assert_eq!(remote.images[0].kind, streamarr_model::ImageKind::Poster);
+        assert_eq!(
+            remote.images[0].url,
+            "https://artworks.thetvdb.com/poster.jpg"
+        );
+    }
+
+    #[test]
+    fn sonarr_maps_first_aired_to_release_date() {
+        let mut series = sonarr_series(42, "Example Show", 12345, true);
+        let aired = "2019-01-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+        series.first_aired = Some(aired);
+        let remote = map_sonarr(&series);
+        assert_eq!(remote.release_date, Some(aired));
+    }
+
+    #[test]
+    fn sonarr_release_date_is_none_when_first_aired_absent() {
+        let series = sonarr_series(42, "Example Show", 12345, true);
+        let remote = map_sonarr(&series);
+        assert_eq!(remote.release_date, None);
+    }
+
+    #[test]
+    fn whisparr_maps_tpdb_id_as_external_id_and_leaves_availability_unknown() {
+        let series = whisparr_series(42, "Example Studio", 12345, true);
+        let remote = map_whisparr(&series);
+        assert_eq!(remote.external_id, "12345");
+        assert_eq!(remote.title, "Example Studio");
+        assert!(remote.monitored);
+        assert_eq!(remote.availability, None);
+    }
+
+    #[test]
+    fn whisparr_maps_overview_genres_and_remote_hosted_images() {
+        let mut series = whisparr_series(42, "Example Studio", 12345, true);
+        series.overview = Some("A studio producing example content.".to_string());
+        series.genres = vec!["Genre A".to_string(), "Genre B".to_string()];
+        series.images = vec![
+            WhisparrImage {
+                cover_type: "poster".to_string(),
+                url: "/MediaCover/42/poster.jpg".to_string(),
+                remote_url: Some("https://cdn.theporndb.net/poster.jpg".to_string()),
+            },
+            // No remote_url -- Whisparr's own local, API-key-gated path
+            // must never be forwarded to a Streamarr client, so this entry
+            // is dropped rather than falling back to `url`.
+            WhisparrImage {
+                cover_type: "fanart".to_string(),
+                url: "/MediaCover/42/fanart.jpg".to_string(),
+                remote_url: None,
+            },
+        ];
+
+        let remote = map_whisparr(&series);
+        assert_eq!(
+            remote.overview.as_deref(),
+            Some("A studio producing example content.")
+        );
+        assert_eq!(
+            remote.genres,
+            vec!["Genre A".to_string(), "Genre B".to_string()]
+        );
+        assert_eq!(remote.images.len(), 1);
+        assert_eq!(remote.images[0].kind, streamarr_model::ImageKind::Poster);
+        assert_eq!(remote.images[0].url, "https://cdn.theporndb.net/poster.jpg");
+    }
+
+    #[test]
+    fn whisparr_maps_first_aired_to_release_date() {
+        let mut series = whisparr_series(42, "Example Studio", 12345, true);
+        let aired = "2019-01-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+        series.first_aired = Some(aired);
+        let remote = map_whisparr(&series);
+        assert_eq!(remote.release_date, Some(aired));
+    }
+
+    #[test]
+    fn whisparr_release_date_is_none_when_first_aired_absent() {
+        let series = whisparr_series(42, "Example Studio", 12345, true);
+        let remote = map_whisparr(&series);
+        assert_eq!(remote.release_date, None);
+    }
+
+    #[test]
+    fn radarr_prefers_digital_release_over_physical_release() {
+        let mut movie = radarr_movie(1, "Example Movie", 999, true, true);
+        let digital = "2020-06-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+        let physical = "2020-07-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+        movie.digital_release = Some(digital);
+        movie.physical_release = Some(physical);
+        let remote = map_radarr(&movie);
+        assert_eq!(remote.release_date, Some(digital));
+    }
+
+    #[test]
+    fn radarr_falls_back_to_physical_release_when_digital_absent() {
+        let mut movie = radarr_movie(1, "Example Movie", 999, true, true);
+        let physical = "2020-07-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+        movie.physical_release = Some(physical);
+        let remote = map_radarr(&movie);
+        assert_eq!(remote.release_date, Some(physical));
+    }
+
+    #[test]
     fn radarr_derives_available_from_has_file() {
-        let movie = RadarrMovie {
-            id: 1,
-            title: "Example Movie".to_string(),
-            sort_title: "example movie".to_string(),
-            tmdb_id: 999,
-            monitored: true,
-            has_file: true,
-            path: "/movies/example-movie".to_string(),
-            movie_file: None,
-        };
+        let movie = radarr_movie(1, "Example Movie", 999, true, true);
         let remote = map_radarr(&movie);
         assert_eq!(remote.external_id, "999");
         assert_eq!(remote.availability, Some(Availability::Available));
@@ -237,32 +564,14 @@ mod tests {
 
     #[test]
     fn radarr_monitored_without_file_is_pending() {
-        let movie = RadarrMovie {
-            id: 2,
-            title: "Unreleased".to_string(),
-            sort_title: "unreleased".to_string(),
-            tmdb_id: 1000,
-            monitored: true,
-            has_file: false,
-            path: "/movies/unreleased".to_string(),
-            movie_file: None,
-        };
+        let movie = radarr_movie(2, "Unreleased", 1000, true, false);
         let remote = map_radarr(&movie);
         assert_eq!(remote.availability, Some(Availability::Pending));
     }
 
     #[test]
     fn radarr_unmonitored_without_file_is_unknown() {
-        let movie = RadarrMovie {
-            id: 3,
-            title: "Ignored".to_string(),
-            sort_title: "ignored".to_string(),
-            tmdb_id: 1001,
-            monitored: false,
-            has_file: false,
-            path: "/movies/ignored".to_string(),
-            movie_file: None,
-        };
+        let movie = radarr_movie(3, "Ignored", 1001, false, false);
         let remote = map_radarr(&movie);
         assert_eq!(remote.availability, Some(Availability::Unknown));
     }
@@ -284,6 +593,10 @@ mod tests {
         assert_eq!(
             work_kind_and_provider(SourceKind::Readarr),
             Some((WorkKind::Author, ExternalProvider::Goodreads))
+        );
+        assert_eq!(
+            work_kind_and_provider(SourceKind::Whisparr),
+            Some((WorkKind::Site, ExternalProvider::Tpdb))
         );
     }
 

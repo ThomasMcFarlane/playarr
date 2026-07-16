@@ -37,6 +37,10 @@ pub struct MediaFile {
     pub codec: String,
     /// Bits per second; `None` when the source instance didn't report it.
     pub bitrate: Option<u64>,
+    /// Fixed source-container runtime in milliseconds. Filled from the
+    /// source *arr app's media analysis where available, or lazily probed
+    /// once from the real file for older catalogue rows.
+    pub duration_ms: Option<u64>,
     pub size_bytes: u64,
     /// The *arr instance this file was imported by/discovered through.
     pub source_instance_id: Uuid,

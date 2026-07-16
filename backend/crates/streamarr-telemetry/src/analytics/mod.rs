@@ -9,11 +9,15 @@
 //! in front of it.
 
 pub mod collector;
+pub mod flusher;
+pub mod reaper;
 pub mod registry;
 pub mod retention;
 pub mod rollup;
 
 pub use collector::AnalyticsCollector;
+pub use flusher::AnalyticsFlusher;
+pub use reaper::SessionReaper;
 pub use registry::{InMemorySessionRegistry, SessionRegistry};
 pub use retention::{RetentionPolicy, RetentionSweeper};
 pub use rollup::RollupScheduler;

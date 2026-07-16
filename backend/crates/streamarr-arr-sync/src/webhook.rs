@@ -71,6 +71,19 @@ fn extract_entity_id(source_kind: SourceKind, body: &Value) -> Option<i64> {
         SourceKind::Radarr => "/movie/id",
         SourceKind::Lidarr => "/artist/id",
         SourceKind::Readarr => "/author/id",
+        // Whisparr V3 is a direct Sonarr fork, so its webhook payload is
+        // expected to nest the primary entity the same way Sonarr's does
+        // (`/series/id` for series-level events) -- but scene-add/import
+        // events specifically are expected to nest under `/episode/id`
+        // instead, mirroring Sonarr's own episode-centric payload shape for
+        // download/import events. **Best-effort, unverified**: same
+        // uncertainty-note style as `ReadarrBookFile`'s doc comment in
+        // `streamarr-arr-client` -- there is no real Whisparr instance to
+        // confirm this against at implementation time, so treat this as a
+        // reasonable guess by analogy, not a verified schema, and correct
+        // it against a live instance before depending on it for anything
+        // beyond "a targeted refetch is worth attempting."
+        SourceKind::Whisparr => "/episode/id",
         // Bazarr's webhook support and payload shape is inconsistent
         // across its own versions; targeted refetch isn't reliable enough
         // to depend on an id pointer here, so it always falls back to a
@@ -158,6 +171,14 @@ mod tests {
         let signal = parse_webhook_signal(SourceKind::Sonarr, &body).unwrap();
         assert_eq!(signal.event_type, "SeriesAdd");
         assert_eq!(signal.entity_id, Some(42));
+    }
+
+    #[test]
+    fn extracts_whisparr_episode_id() {
+        let body = json!({ "eventType": "Download", "episode": { "id": 77 } });
+        let signal = parse_webhook_signal(SourceKind::Whisparr, &body).unwrap();
+        assert_eq!(signal.event_type, "Download");
+        assert_eq!(signal.entity_id, Some(77));
     }
 
     #[test]

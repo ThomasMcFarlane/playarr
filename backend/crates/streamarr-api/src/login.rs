@@ -14,6 +14,21 @@
 //! endpoint reads the caller's source IP straight off the TCP connection
 //! via Axum's [`ConnectInfo`] extractor, which is what
 //! `AuthMode::TrustedNetwork` needs to auto-login without credentials.
+//!
+//! **Streaming-access gate**: once `evaluate_login` resolves a real user,
+//! and unless the request declares `client_platform: "streamarr-admin"`
+//! (see [`ClientPlatform::StreamarrAdmin`]'s doc comment), this handler
+//! additionally requires that user's `Policy::can_stream` before issuing a
+//! token -- the same grant [`crate::auth_extractor::StreamingUser`]
+//! enforces on every catalog/playback request. This used to be enforced
+//! only downstream (login would succeed for any valid account, then the
+//! first catalog/playback call would 403), which is a confusing dead end
+//! for an operator-provisioned account with no streaming access: login
+//! itself now fails fast with a real, specific 403 instead of a token that
+//! can't actually do anything in Playarr. Deliberately skipped for
+//! `client_platform: "streamarr-admin"` logins -- an admin-only account
+//! (e.g. the bootstrap admin, which never has `can_stream`) must still be
+//! able to sign in to Streamarr's own admin UI.
 
 use std::net::SocketAddr;
 
@@ -28,6 +43,7 @@ use streamarr_model::{ClientPlatform, Device};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use crate::auth_extractor::{forbidden, resolve_policy};
 use crate::error::ApiError;
 use crate::AppState;
 
@@ -66,7 +82,8 @@ pub struct LoginResponse {
     responses(
         (status = 200, description = "Access + refresh token pair", body = LoginResponse),
         (status = 400, description = "credentials_required | pin_required"),
-        (status = 401, description = "untrusted_network | invalid_credentials | invalid_pin | account_disabled")
+        (status = 401, description = "untrusted_network | invalid_credentials | invalid_pin | account_disabled"),
+        (status = 403, description = "authenticated, but this account has no Playarr streaming access")
     )
 )]
 pub async fn login_handler(
@@ -74,6 +91,7 @@ pub async fn login_handler(
     ConnectInfo(remote_addr): ConnectInfo<SocketAddr>,
     Json(body): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, ApiError> {
+    let client_platform = body.client_platform;
     let device = Device {
         id: body.device_id,
         user_id: Uuid::nil(),
@@ -115,6 +133,28 @@ pub async fn login_handler(
     )
     .await?;
 
+    // See the module doc comment's "Streaming-access gate" section. Runs
+    // after `evaluate_login` (which already minted a real session/refresh
+    // token) rather than before it, since resolving a user is itself
+    // auth-mode-specific logic `evaluate_login` owns -- duplicating it here
+    // just to check first isn't worth it. A rejected attempt leaves one
+    // unused session row behind; it expires with the rest via
+    // `refresh_ttl`, same as any other refresh token nobody ever redeems.
+    if client_platform != ClientPlatform::StreamarrAdmin {
+        let policy = resolve_policy(
+            &state,
+            outcome.user.id,
+            "streaming",
+            forbidden("this account does not have Playarr streaming access"),
+        )
+        .await?;
+        if !policy.can_stream {
+            return Err(forbidden(
+                "this account does not have Playarr streaming access",
+            ));
+        }
+    }
+
     Ok(Json(LoginResponse {
         access_token: outcome.access_token,
         refresh_token: outcome.session.refresh_token.expose_secret().clone(),
@@ -127,10 +167,28 @@ pub async fn login_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::test_state;
+    use crate::test_support::{seed_admin_user, seed_streaming_user, test_state};
+    use crate::version_gate::{ClientCompatibilityTable, VersionGateLayer};
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use tower::ServiceExt;
+
+    /// Same minimal table `test_support::test_state`'s router is built
+    /// with -- duplicated here (rather than made `pub(crate)` there) since
+    /// this is the only test module that needs a *second*, differently-
+    /// configured router built from a mutated clone of `TestState::app`.
+    fn test_version_gate() -> VersionGateLayer {
+        VersionGateLayer::new(
+            ClientCompatibilityTable::from_toml_str(
+                r#"
+[server]
+version = "0.1.0"
+apiVersion = "1"
+"#,
+            )
+            .unwrap(),
+        )
+    }
 
     fn request_from(addr: SocketAddr, body: serde_json::Value) -> Request<Body> {
         let mut request = Request::builder()
@@ -200,5 +258,92 @@ mod tests {
             .unwrap();
         let response = router.oneshot(request).await.unwrap();
         assert!(!response.status().is_success());
+    }
+
+    /// The exact scenario this gate exists for: an admin account (which
+    /// deliberately never carries `can_stream`, see `Policy::can_stream`'s
+    /// doc comment and `main.rs`'s bootstrap policy) trying to log in to
+    /// Playarr is rejected at login, not silently issued a token that
+    /// would just 403 on the first catalog request -- but the exact same
+    /// account logging in as `client_platform: "streamarr-admin"` still
+    /// succeeds, since Streamarr's own admin UI doesn't need `can_stream`.
+    #[tokio::test]
+    async fn login_without_streaming_access_is_rejected_unless_admin_platform() {
+        let (_router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+
+        let mut app = state.app.clone();
+        app.auth_mode = std::sync::Arc::new(streamarr_auth::AuthMode::TrustedNetwork {
+            allowlist: vec![streamarr_auth::TrustedNetwork {
+                network: "0.0.0.0/0".parse().unwrap(),
+                auto_login_user_id: admin_id,
+            }],
+        });
+        let (custom_router, _api) = crate::build_router(app, test_version_gate(), None);
+
+        let playarr_body = serde_json::json!({
+            "device_id": Uuid::new_v4(),
+            "device_name": "test browser",
+            "client_platform": "web",
+            "client_version": "1.0.0",
+        });
+        let response = custom_router
+            .clone()
+            .oneshot(request_from(
+                SocketAddr::from(([127, 0, 0, 1], 51234)),
+                playarr_body,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+        let admin_body = serde_json::json!({
+            "device_id": Uuid::new_v4(),
+            "device_name": "test browser",
+            "client_platform": "streamarr-admin",
+            "client_version": "1.0.0",
+        });
+        let response = custom_router
+            .oneshot(request_from(
+                SocketAddr::from(([127, 0, 0, 1], 51234)),
+                admin_body,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    /// The mirror-image case: a real streaming user (not an admin) logging
+    /// in with `client_platform: "web"` succeeds normally.
+    #[tokio::test]
+    async fn login_with_streaming_access_succeeds_for_playarr_platform() {
+        let (_router, state) = test_state().await;
+        let user_id = Uuid::new_v4();
+        seed_streaming_user(&state, user_id).await;
+
+        let mut app = state.app.clone();
+        app.auth_mode = std::sync::Arc::new(streamarr_auth::AuthMode::TrustedNetwork {
+            allowlist: vec![streamarr_auth::TrustedNetwork {
+                network: "0.0.0.0/0".parse().unwrap(),
+                auto_login_user_id: user_id,
+            }],
+        });
+        let (custom_router, _api) = crate::build_router(app, test_version_gate(), None);
+
+        let body = serde_json::json!({
+            "device_id": Uuid::new_v4(),
+            "device_name": "test browser",
+            "client_platform": "web",
+            "client_version": "1.0.0",
+        });
+        let response = custom_router
+            .oneshot(request_from(
+                SocketAddr::from(([127, 0, 0, 1], 51234)),
+                body,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }

@@ -79,6 +79,7 @@ pub(crate) fn work_kind_to_str(kind: WorkKind) -> &'static str {
     match kind {
         WorkKind::Movie => "movie",
         WorkKind::Series => "series",
+        WorkKind::Site => "site",
         WorkKind::Artist => "artist",
         WorkKind::Author => "author",
     }
@@ -88,6 +89,7 @@ pub(crate) fn work_kind_from_str(raw: &str) -> Result<WorkKind, DbError> {
     match raw {
         "movie" => Ok(WorkKind::Movie),
         "series" => Ok(WorkKind::Series),
+        "site" => Ok(WorkKind::Site),
         "artist" => Ok(WorkKind::Artist),
         "author" => Ok(WorkKind::Author),
         other => Err(decode_err(format!("unknown work kind {other:?}"))),
@@ -105,6 +107,7 @@ pub(crate) fn source_kind_to_str(kind: SourceKind) -> &'static str {
         SourceKind::Bazarr => "bazarr",
         SourceKind::Prowlarr => "prowlarr",
         SourceKind::Readarr => "readarr",
+        SourceKind::Whisparr => "whisparr",
     }
 }
 
@@ -116,6 +119,7 @@ pub(crate) fn source_kind_from_str(raw: &str) -> Result<SourceKind, DbError> {
         "bazarr" => Ok(SourceKind::Bazarr),
         "prowlarr" => Ok(SourceKind::Prowlarr),
         "readarr" => Ok(SourceKind::Readarr),
+        "whisparr" => Ok(SourceKind::Whisparr),
         other => Err(decode_err(format!("unknown source kind {other:?}"))),
     }
 }
@@ -156,6 +160,7 @@ pub(crate) fn provider_to_str(provider: &ExternalProvider) -> String {
         ExternalProvider::Goodreads => "goodreads".to_string(),
         ExternalProvider::Isbn => "isbn".to_string(),
         ExternalProvider::Asin => "asin".to_string(),
+        ExternalProvider::Tpdb => "tpdb".to_string(),
         ExternalProvider::Other(label) => format!("other:{label}"),
     }
 }
@@ -170,6 +175,7 @@ pub(crate) fn provider_from_str(raw: &str) -> ExternalProvider {
         "goodreads" => ExternalProvider::Goodreads,
         "isbn" => ExternalProvider::Isbn,
         "asin" => ExternalProvider::Asin,
+        "tpdb" => ExternalProvider::Tpdb,
         other => ExternalProvider::Other(other.strip_prefix("other:").unwrap_or(other).to_string()),
     }
 }
@@ -240,15 +246,22 @@ pub(crate) fn transcode_reason_to_str(reason: &TranscodeReason) -> String {
     }
 }
 
-// `TranscodeReason`/`StopReason` currently only ever flow *into* the
-// database — `AnalyticsStore`'s trait surface (`record_session_start`,
-// `close_session`, `rollup_day`, `get_daily_stats`) never reads a full
-// `PlaybackSession` row back out, so there's no decode (`_from_str`)
-// counterpart to `transcode_reason_to_str`/`stop_reason_to_str` here yet.
-// Add one, following the `Result<T, DbError>`-returning pattern used by
-// `work_kind_from_str`/`availability_from_str` above, alongside whichever
-// future `AnalyticsStore` method first needs to reconstruct a
-// `PlaybackSession`.
+/// Decode counterpart to [`transcode_reason_to_str`] — needed now that
+/// `AnalyticsStore::list_sessions` reads full `PlaybackSession` rows back
+/// out (the admin session-history endpoint). `Other(label)` round-trips via
+/// the same `"other:<label>"` prefix convention `provider_from_str` uses.
+pub(crate) fn transcode_reason_from_str(raw: &str) -> TranscodeReason {
+    match raw {
+        "container_not_supported" => TranscodeReason::ContainerNotSupported,
+        "video_codec_not_supported" => TranscodeReason::VideoCodecNotSupported,
+        "audio_codec_not_supported" => TranscodeReason::AudioCodecNotSupported,
+        "video_bitrate_exceeds_limit" => TranscodeReason::VideoBitrateExceedsLimit,
+        "resolution_exceeds_limit" => TranscodeReason::ResolutionExceedsLimit,
+        "subtitle_burn_in_required" => TranscodeReason::SubtitleBurnInRequired,
+        "server_policy" => TranscodeReason::ServerPolicy,
+        other => TranscodeReason::Other(other.strip_prefix("other:").unwrap_or(other).to_string()),
+    }
+}
 
 pub(crate) fn stop_reason_to_str(reason: &StopReason) -> String {
     match reason {
@@ -260,6 +273,21 @@ pub(crate) fn stop_reason_to_str(reason: &StopReason) -> String {
         StopReason::ConcurrentLimitExceeded => "concurrent_limit_exceeded".to_string(),
         StopReason::IdleTimeout => "idle_timeout".to_string(),
         StopReason::Other(label) => format!("other:{label}"),
+    }
+}
+
+/// Decode counterpart to [`stop_reason_to_str`] — same rationale/round-trip
+/// convention as [`transcode_reason_from_str`] above.
+pub(crate) fn stop_reason_from_str(raw: &str) -> StopReason {
+    match raw {
+        "completed" => StopReason::Completed,
+        "user_stopped" => StopReason::UserStopped,
+        "error" => StopReason::Error,
+        "device_disconnected" => StopReason::DeviceDisconnected,
+        "session_revoked" => StopReason::SessionRevoked,
+        "concurrent_limit_exceeded" => StopReason::ConcurrentLimitExceeded,
+        "idle_timeout" => StopReason::IdleTimeout,
+        other => StopReason::Other(other.strip_prefix("other:").unwrap_or(other).to_string()),
     }
 }
 

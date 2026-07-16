@@ -65,7 +65,6 @@ mod tests {
             priority: 0,
             default_root_folder_id: None,
             default_quality_profile_id: None,
-            enabled_for_requests: false,
             best_effort: false,
         }
     }

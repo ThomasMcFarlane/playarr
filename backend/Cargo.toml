@@ -9,6 +9,8 @@ members = [
     "crates/streamarr-arr-client",
     "crates/streamarr-arr-sync",
     "crates/streamarr-catalog",
+    "crates/streamarr-embeddings",
+    "crates/streamarr-artwork",
     "crates/streamarr-tdarr-client",
     "crates/streamarr-transcode",
     "crates/streamarr-auth",
@@ -44,6 +46,8 @@ streamarr-catalog = { path = "crates/streamarr-catalog" }
 streamarr-transcode = { path = "crates/streamarr-transcode" }
 streamarr-auth = { path = "crates/streamarr-auth" }
 streamarr-arr-sync = { path = "crates/streamarr-arr-sync" }
+streamarr-embeddings = { path = "crates/streamarr-embeddings" }
+streamarr-artwork = { path = "crates/streamarr-artwork" }
 streamarr-tdarr-client = { path = "crates/streamarr-tdarr-client" }
 axum = { workspace = true }
 tokio = { workspace = true }

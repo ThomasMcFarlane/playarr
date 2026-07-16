@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use chrono::Utc;
 use streamarr_coordination::ClusterCoordinator;
-use streamarr_db::{DbPool, MediaFileRepo, WorkRepo};
+use streamarr_db::{CreditRepo, DbPool, MediaFileRepo, WorkRepo};
 use streamarr_model::{Availability, ExternalProvider, ExternalRef, SourceKind, Work, WorkKind};
 use uuid::Uuid;
 
@@ -47,6 +47,46 @@ enum ReconcileTrigger {
     Refetch(Option<i64>),
 }
 
+/// A reconciliation pass's outcome, for whoever wants to observe this
+/// poller's health/activity from outside (e.g. an admin-facing "sync
+/// status" screen) without reading log lines. Deliberately coarse (no
+/// insert/update/delete counts -- those stay in the `tracing::info!` this
+/// module already emits) since the only real consumer today is "is this
+/// source instance's sync currently working," not a detailed audit log.
+#[derive(Debug, Clone)]
+pub enum SyncRunStatus {
+    Running {
+        started_at: chrono::DateTime<Utc>,
+        /// Free-form human-readable progress, e.g. `"backfilling media
+        /// files: 42/731"` -- set by `backfill_missing_media_files` while
+        /// it's working through a large catch-up batch (see that method's
+        /// doc comment for why that batch can be large and slow: one real
+        /// *arr API request per work, run with bounded concurrency but
+        /// still genuinely rate-limited by the source instance's own
+        /// response time). `None` outside of that, including for the
+        /// initial `Running` report at the very start of a pass.
+        detail: Option<String>,
+    },
+    Succeeded {
+        finished_at: chrono::DateTime<Utc>,
+    },
+    Failed {
+        error: String,
+        finished_at: chrono::DateTime<Utc>,
+    },
+}
+
+/// Implemented by whatever wants to observe every reconciliation pass this
+/// poller runs. Optional (see [`ReconciliationPoller::with_status_reporter`])
+/// so tests and any future caller with no observer can skip it entirely --
+/// this trait exists purely to let `streamarr-arr-sync` report status
+/// without depending on whatever storage/API type actually holds it
+/// (that's `streamarr-api::SourceInstanceRegistry` in production, which
+/// implements this trait rather than this crate depending the other way).
+pub trait SyncStatusReporter: Send + Sync {
+    fn report(&self, source_instance_id: Uuid, status: SyncRunStatus);
+}
+
 /// One reconciliation loop, bound to a single [`streamarr_model::SourceInstance`].
 /// `streamarr-bin`'s worker-role startup constructs one `ReconciliationPoller`
 /// per enabled source instance and spawns each with `run` (see
@@ -69,6 +109,15 @@ pub struct ReconciliationPoller {
     media_sync: MediaSync,
     coordinator: Arc<dyn ClusterCoordinator>,
     trigger_rx: tokio::sync::mpsc::Receiver<RefetchRequest>,
+    /// `None` by default (every existing test/caller that doesn't opt in
+    /// via [`Self::with_status_reporter`] just skips reporting) -- see
+    /// [`SyncStatusReporter`]'s doc comment for why this is a trait object
+    /// rather than a concrete dependency on `streamarr-api`.
+    status_reporter: Option<Arc<dyn SyncStatusReporter>>,
+    /// `None` by default -- see [`Self::with_artwork_prewarm`].
+    artwork_prewarm: Option<crate::ArtworkPrewarm>,
+    /// `None` by default -- see [`Self::with_embedding_sync`].
+    embedding_sync: Option<crate::EmbeddingSync>,
 }
 
 impl ReconciliationPoller {
@@ -93,7 +142,44 @@ impl ReconciliationPoller {
             media_sync: MediaSync::new(pool, media_file_repo),
             coordinator,
             trigger_rx,
+            status_reporter: None,
+            artwork_prewarm: None,
+            embedding_sync: None,
         }
+    }
+
+    /// Opts this poller into reporting every reconciliation pass's outcome
+    /// to `reporter` -- see [`SyncStatusReporter`]. Builder-style so
+    /// existing callers/tests that don't care about status observation
+    /// don't need to thread an extra argument through `new`.
+    pub fn with_status_reporter(mut self, reporter: Arc<dyn SyncStatusReporter>) -> Self {
+        self.status_reporter = Some(reporter);
+        self
+    }
+
+    /// Opts this poller into proactively warming Streamarr's local
+    /// artwork cache for every reconciled work's images -- see
+    /// [`crate::artwork_prewarm`]'s doc comment.
+    pub fn with_artwork_prewarm(mut self, prewarm: crate::ArtworkPrewarm) -> Self {
+        self.artwork_prewarm = Some(prewarm);
+        self
+    }
+
+    /// Opts this poller into generating/caching a semantic-similarity
+    /// embedding for every reconciled work -- see [`crate::embedding_sync`]'s
+    /// doc comment.
+    pub fn with_embedding_sync(mut self, embedding_sync: crate::EmbeddingSync) -> Self {
+        self.embedding_sync = Some(embedding_sync);
+        self
+    }
+
+    /// Opts this poller's [`MediaSync`] into also syncing cast/crew
+    /// credits (Radarr-sourced movies only, see
+    /// [`crate::media_sync::MediaSync::with_credit_repo`]'s doc comment).
+    /// Same builder-opt-in shape as [`Self::with_status_reporter`].
+    pub fn with_credit_repo(mut self, credit_repo: Arc<dyn CreditRepo>) -> Self {
+        self.media_sync = self.media_sync.with_credit_repo(credit_repo);
+        self
     }
 
     /// Runs until the trigger channel closes (i.e. every clone of the
@@ -145,10 +231,35 @@ impl ReconciliationPoller {
             return Ok(());
         };
 
-        match trigger {
+        if let Some(reporter) = &self.status_reporter {
+            reporter.report(
+                self.source_instance_id,
+                SyncRunStatus::Running {
+                    started_at: Utc::now(),
+                    detail: None,
+                },
+            );
+        }
+
+        let outcome = match trigger {
             ReconcileTrigger::Scheduled => self.reconcile_all().await,
             ReconcileTrigger::Refetch(entity_id) => self.reconcile_one(entity_id).await,
+        };
+
+        if let Some(reporter) = &self.status_reporter {
+            let status = match &outcome {
+                Ok(()) => SyncRunStatus::Succeeded {
+                    finished_at: Utc::now(),
+                },
+                Err(err) => SyncRunStatus::Failed {
+                    error: err.to_string(),
+                    finished_at: Utc::now(),
+                },
+            };
+            reporter.report(self.source_instance_id, status);
         }
+
+        outcome
     }
 
     /// A full pass: list everything from the source instance, diff by
@@ -196,6 +307,12 @@ impl ReconciliationPoller {
             .collect();
 
         let local = self.list_all_local(work_kind).await?;
+        // Snapshot before `diff_works` moves `local` -- needed below to
+        // find works the diff *didn't* touch (no catalog-level change) but
+        // whose file-level sync may still be outstanding. See
+        // `backfill_missing_media_files`'s doc comment for why this is
+        // necessary at all.
+        let local_snapshot = local.clone();
 
         let ops = diff_works(work_kind, &provider, remote, local);
         tracing::info!(
@@ -208,6 +325,10 @@ impl ReconciliationPoller {
 
         self.apply_ops(&ops).await?;
         self.sync_media_files(&ops, &provider, &source_ids).await;
+        self.prewarm_artwork(&ops).await;
+        self.sync_embeddings(&ops).await;
+        self.backfill_missing_media_files(&local_snapshot, &ops, &provider, &source_ids)
+            .await;
         Ok(())
     }
 
@@ -259,6 +380,14 @@ impl ReconciliationPoller {
             Some(existing) => {
                 let merged = merge_work(&existing, &remote);
                 if merged == existing {
+                    if self
+                        .media_sync
+                        .has_missing_duration(existing.id)
+                        .await
+                        .unwrap_or(false)
+                    {
+                        self.sync_media_file(existing.id, id).await;
+                    }
                     return Ok(());
                 }
                 SyncOp::Update(merged)
@@ -274,6 +403,8 @@ impl ReconciliationPoller {
         if let Some(SyncOp::Insert(work) | SyncOp::Update(work)) = ops.first() {
             self.sync_media_file(work.id, id).await;
         }
+        self.prewarm_artwork(&ops).await;
+        self.sync_embeddings(&ops).await;
         Ok(())
     }
 
@@ -364,12 +495,218 @@ impl ReconciliationPoller {
             );
         }
     }
+
+    /// No-op unless [`Self::with_artwork_prewarm`] was called. Best-effort
+    /// per work -- see [`crate::artwork_prewarm::ArtworkPrewarm::
+    /// prewarm_work`]'s own doc comment for why a single image failure
+    /// never propagates.
+    async fn prewarm_artwork(&self, ops: &[SyncOp]) {
+        let Some(prewarm) = &self.artwork_prewarm else {
+            return;
+        };
+        for op in ops {
+            let work = match op {
+                SyncOp::Insert(work) | SyncOp::Update(work) => work,
+                SyncOp::Delete(_) => continue,
+            };
+            prewarm.prewarm_work(work).await;
+        }
+    }
+
+    /// No-op unless [`Self::with_embedding_sync`] was called. Best-effort
+    /// per work, same "one failure never blocks the rest" shape as
+    /// [`Self::sync_media_files`].
+    async fn sync_embeddings(&self, ops: &[SyncOp]) {
+        let Some(embedding_sync) = &self.embedding_sync else {
+            return;
+        };
+        for op in ops {
+            let work = match op {
+                SyncOp::Insert(work) | SyncOp::Update(work) => work,
+                SyncOp::Delete(_) => continue,
+            };
+            if let Err(err) = embedding_sync.sync_work(work).await {
+                tracing::warn!(
+                    source_instance_id = %self.source_instance_id,
+                    work_id = %work.id,
+                    error = %err,
+                    "embedding sync failed for this work; 'similar to this' will be \
+                     unavailable for it until a later pass succeeds"
+                );
+            }
+        }
+    }
+
+    /// Retries file-level sync for `Available` local works that [`Self::
+    /// sync_media_files`] didn't touch this pass -- because their catalog
+    /// identity hadn't changed, so `diff_works` produced no `SyncOp` for
+    /// them -- but that still have zero synced `MediaFile` rows.
+    ///
+    /// This closes a real gap [`Self::sync_media_file`]'s own doc comment
+    /// used to claim was already handled ("will retry on the next
+    /// reconciliation pass") but wasn't: `sync_media_files` only ever runs
+    /// for works appearing in *this pass's* diff (a fresh insert or a
+    /// catalog-level update), so a work whose very first file-sync attempt
+    /// failed or was interrupted (a transient *arr API error, a process
+    /// restart mid-sync) would never be retried on any *later* pass, since
+    /// once its catalog identity stopped changing it would stop appearing
+    /// in `ops` at all -- permanently missing a `MediaFile` despite
+    /// `Work::availability` correctly reporting `Available`. Confirmed as a
+    /// real, non-hypothetical gap: a large fraction of an already-"Available"
+    /// library can end up with no playable file this way after nothing
+    /// more unusual than an interrupted initial sync.
+    ///
+    /// Cheap on the common case (no gap): `MediaSync::has_any_media_file`
+    /// is a local DB read, not a network call, so this only spends a real
+    /// *arr API request on works that actually need one.
+    ///
+    /// Runs candidates with up to [`BACKFILL_CONCURRENCY`] *arr API
+    /// requests in flight at once (via `buffer_unordered`, not separate
+    /// spawned tasks -- see this crate's `Cargo.toml` for why that's
+    /// enough here) rather than one at a time, and reports live progress
+    /// through `self.status_reporter` as `SyncRunStatus::Running`'s
+    /// `detail` -- a library backfill can genuinely be hundreds of works
+    /// deep (confirmed in practice, not hypothetical: a real library with
+    /// most of its initial sync interrupted needed 700+ retries), and a
+    /// purely-sequential loop with no visible progress reads as "stuck"
+    /// even when it's working correctly.
+    async fn backfill_missing_media_files(
+        &self,
+        local_snapshot: &[Work],
+        ops: &[SyncOp],
+        provider: &ExternalProvider,
+        source_ids: &HashMap<String, i64>,
+    ) {
+        use futures::stream::{self, StreamExt};
+
+        let already_handled: std::collections::HashSet<Uuid> = ops
+            .iter()
+            .filter_map(|op| match op {
+                SyncOp::Insert(work) | SyncOp::Update(work) => Some(work.id),
+                SyncOp::Delete(_) => None,
+            })
+            .collect();
+
+        let candidates: Vec<(Uuid, i64, Availability)> = local_snapshot
+            .iter()
+            .filter(|work| !already_handled.contains(&work.id))
+            .filter_map(|work| {
+                let external_id = work
+                    .external_refs
+                    .iter()
+                    .find(|r| &r.provider == provider)
+                    .map(|r| r.external_id.as_str())?;
+                let arr_source_id = *source_ids.get(external_id)?;
+                Some((work.id, arr_source_id, work.availability))
+            })
+            .collect();
+
+        if candidates.is_empty() {
+            return;
+        }
+        let total = candidates.len();
+        tracing::info!(
+            source_instance_id = %self.source_instance_id,
+            total,
+            "starting missing-media-file backfill pass"
+        );
+
+        let mut in_flight = stream::iter(candidates.into_iter().map(
+            |(work_id, arr_source_id, availability)| {
+                self.backfill_one(work_id, arr_source_id, availability)
+            },
+        ))
+        .buffer_unordered(BACKFILL_CONCURRENCY);
+
+        let mut completed = 0usize;
+        while in_flight.next().await.is_some() {
+            completed += 1;
+            if let Some(reporter) = &self.status_reporter {
+                reporter.report(
+                    self.source_instance_id,
+                    SyncRunStatus::Running {
+                        started_at: Utc::now(),
+                        detail: Some(format!("backfilling media files: {completed}/{total}")),
+                    },
+                );
+            }
+        }
+
+        tracing::info!(
+            source_instance_id = %self.source_instance_id,
+            total,
+            "missing-media-file backfill pass complete"
+        );
+    }
+
+    /// One backfill candidate: checks (a local DB read) whether `work_id`
+    /// still has no `MediaFile`, and if so retries its file-level sync (a
+    /// real *arr API request). Split out from [`Self::
+    /// backfill_missing_media_files`] so that method can drive many of
+    /// these concurrently via `buffer_unordered`.
+    async fn backfill_one(&self, work_id: Uuid, arr_source_id: i64, availability: Availability) {
+        let has_files = match self.media_sync.has_any_media_file(work_id).await {
+            Ok(has_files) => has_files,
+            Err(err) => {
+                tracing::warn!(
+                    source_instance_id = %self.source_instance_id,
+                    work_id = %work_id,
+                    error = %err,
+                    "failed to inspect media files; skipping backfill for this work this pass"
+                );
+                return;
+            }
+        };
+        let needs_duration = if has_files {
+            match self.media_sync.has_missing_duration(work_id).await {
+                Ok(needs_duration) => needs_duration,
+                Err(err) => {
+                    tracing::warn!(
+                        source_instance_id = %self.source_instance_id,
+                        work_id = %work_id,
+                        error = %err,
+                        "failed to inspect media runtime metadata; skipping backfill for this work this pass"
+                    );
+                    return;
+                }
+            }
+        } else {
+            false
+        };
+
+        if needs_duration || (!has_files && availability == Availability::Available) {
+            if needs_duration {
+                tracing::info!(
+                    source_instance_id = %self.source_instance_id,
+                    work_id = %work_id,
+                    "backfilling missing media runtime metadata"
+                );
+            } else {
+                tracing::info!(
+                    source_instance_id = %self.source_instance_id,
+                    work_id = %work_id,
+                    "backfilling missing media file for an already-Available work"
+                );
+            }
+            self.sync_media_file(work_id, arr_source_id).await;
+        }
+    }
 }
 
+/// How many `backfill_missing_media_files` candidates get a real *arr API
+/// request in flight at once. Bounded, not unlimited: this is still one
+/// operator's own `*arr` instance answering every request, and a burst of
+/// hundreds of simultaneous requests against it (e.g. a self-hosted
+/// instance on modest hardware) risks looking like abuse or just
+/// overwhelming it -- 8 is a reasonable middle ground between "meaningfully
+/// faster than serial" and "still polite."
+const BACKFILL_CONCURRENCY: usize = 8;
+
 /// Builds a brand-new `Work` for a remote entity with no existing local
-/// match. Only identity/monitoring/(when derivable) availability fields are
-/// populated from `remote` — `overview`/`images`/`genres` are left empty for
-/// a separate metadata-provider pipeline to fill in later, and `tags`
+/// match. Identity/monitoring/(when derivable) availability, plus
+/// `overview`/`images`/`genres` (arr-sync owns these now -- the source
+/// *arr apps are themselves TMDb/TVDB/MusicBrainz-backed, see
+/// `RemoteWork`'s doc comment), are populated from `remote`; `tags`
 /// defaults empty since arr-sync doesn't originate user/automation tags.
 fn new_work(kind: WorkKind, provider: ExternalProvider, remote: &RemoteWork) -> Work {
     Work {
@@ -381,19 +718,22 @@ fn new_work(kind: WorkKind, provider: ExternalProvider, remote: &RemoteWork) -> 
         }],
         title: remote.title.clone(),
         sort_title: remote.sort_title.clone(),
-        overview: None,
-        images: Vec::new(),
-        genres: Vec::new(),
+        overview: remote.overview.clone(),
+        images: remote.images.clone(),
+        genres: remote.genres.clone(),
         tags: Vec::new(),
         added_at: Utc::now(),
+        // Arr-owned, like `overview`/`images`/`genres` above -- see
+        // `RemoteWork::release_date`'s doc comment.
+        release_date: remote.release_date,
         monitored: remote.monitored,
         availability: remote.availability.unwrap_or(Availability::Unknown),
     }
 }
 
 /// Applies a remote entity's arr-owned fields onto an existing `Work`,
-/// leaving everything arr-sync doesn't own (metadata, tags, `added_at`,
-/// other providers' `external_refs`) untouched. This is why `reconcile_all`
+/// leaving everything arr-sync doesn't own (`tags`, `added_at`, other
+/// providers' `external_refs`) untouched. This is why `reconcile_all`
 /// diffs by comparing the *merged* result against `existing` rather than
 /// just always emitting an `Update` — a remote entity that hasn't
 /// meaningfully changed since the last pass shouldn't generate a write.
@@ -405,6 +745,10 @@ fn merge_work(existing: &Work, remote: &RemoteWork) -> Work {
     if let Some(availability) = remote.availability {
         merged.availability = availability;
     }
+    merged.overview = remote.overview.clone();
+    merged.images = remote.images.clone();
+    merged.genres = remote.genres.clone();
+    merged.release_date = remote.release_date;
     merged
 }
 
@@ -490,6 +834,7 @@ mod tests {
             genres: vec!["Drama".to_string()],
             tags: vec!["kids".to_string()],
             added_at: Utc::now(),
+            release_date: None,
             monitored,
             availability,
         }
@@ -506,6 +851,10 @@ mod tests {
             sort_title: title.to_lowercase(),
             monitored,
             availability: None,
+            overview: None,
+            genres: Vec::new(),
+            images: Vec::new(),
+            release_date: None,
         }
     }
 
@@ -578,9 +927,14 @@ mod tests {
         match &ops[0] {
             SyncOp::Update(work) => {
                 assert_eq!(work.title, "New Title");
-                // Fields arr-sync doesn't own are preserved.
-                assert_eq!(work.overview, Some("existing overview".to_string()));
-                assert_eq!(work.genres, vec!["Drama".to_string()]);
+                // `overview`/`genres` are arr-owned (see `merge_work`'s doc
+                // comment) -- the `remote()` fixture carries neither, so
+                // they're overwritten to empty rather than preserved from
+                // `existing`. `tags` (genuinely not arr-owned) isn't
+                // exercised by this fixture; see
+                // `merge_work_preserves_tags_but_not_arr_owned_metadata`.
+                assert_eq!(work.overview, None);
+                assert!(work.genres.is_empty());
                 assert_eq!(work.availability, Availability::Available);
             }
             other => panic!("expected Update, got {other:?}"),
@@ -597,7 +951,15 @@ mod tests {
             true,
             Availability::Available,
         )];
-        let remote_list = vec![remote("400", "Stable Show", true)];
+        // `overview`/`genres` are arr-owned now, so a genuine "nothing
+        // changed" remote must report the same values `work_with_ref`
+        // already seeded onto `local` -- otherwise this wouldn't actually
+        // be testing a no-op, it'd be testing a real (if metadata-only)
+        // change that happens to look like one.
+        let mut remote_entity = remote("400", "Stable Show", true);
+        remote_entity.overview = Some("existing overview".to_string());
+        remote_entity.genres = vec!["Drama".to_string()];
+        let remote_list = vec![remote_entity];
 
         let ops = diff_works(
             WorkKind::Series,
@@ -638,8 +1000,15 @@ mod tests {
         let to_delete_id = to_delete.id;
         let local = vec![unchanged.clone(), to_update, to_delete];
 
+        // The "unchanged" remote entry must report the same arr-owned
+        // overview/genres `work_with_ref` already seeded onto `unchanged`
+        // -- otherwise it isn't actually a no-op under the new "arr-sync
+        // owns overview/genres" merge semantics (see `merge_work`).
+        let mut unchanged_remote = remote("1", "Unchanged Movie", true);
+        unchanged_remote.overview = unchanged.overview.clone();
+        unchanged_remote.genres = unchanged.genres.clone();
         let remote_list = vec![
-            remote("1", "Unchanged Movie", true),
+            unchanged_remote,
             remote("2", "New Name", true),
             remote("4", "Brand New Movie", true),
         ];
@@ -870,7 +1239,7 @@ mod tests {
     }
 
     #[test]
-    fn merge_work_preserves_fields_arr_sync_does_not_own() {
+    fn merge_work_preserves_tags_but_not_arr_owned_metadata() {
         let existing = work_with_ref(
             WorkKind::Series,
             ExternalProvider::Tvdb,
@@ -888,10 +1257,80 @@ mod tests {
         // Sonarr-shaped remote (from `remote()` helper) carries no
         // availability signal, so the existing value survives untouched.
         assert_eq!(merged.availability, Availability::PartiallyAvailable);
-        assert_eq!(merged.overview, existing.overview);
-        assert_eq!(merged.genres, existing.genres);
+        // `tags` is user/automation-owned -- arr-sync never touches it.
         assert_eq!(merged.tags, existing.tags);
         assert_eq!(merged.id, existing.id);
+        // `overview`/`genres`/`images` ARE arr-owned now (see `RemoteWork`'s
+        // doc comment) -- the `remote()` helper carries none of them, so
+        // they're overwritten to empty here rather than surviving from
+        // `existing`. See `merge_work_applies_overview_genres_and_images_
+        // from_remote` below for the case where remote actually has them.
+        assert_eq!(merged.overview, None);
+        assert!(merged.genres.is_empty());
+        assert!(merged.images.is_empty());
+    }
+
+    #[test]
+    fn merge_work_applies_overview_genres_and_images_from_remote() {
+        let existing = work_with_ref(
+            WorkKind::Series,
+            ExternalProvider::Tvdb,
+            "1",
+            "Old",
+            false,
+            Availability::PartiallyAvailable,
+        );
+        let mut remote_entity = remote("1", "New", true);
+        remote_entity.overview = Some("A new synopsis.".to_string());
+        remote_entity.genres = vec!["Thriller".to_string()];
+        remote_entity.images = vec![streamarr_model::ImageAsset {
+            kind: streamarr_model::ImageKind::Poster,
+            url: "https://example.test/poster.jpg".to_string(),
+            width: None,
+            height: None,
+        }];
+
+        let merged = merge_work(&existing, &remote_entity);
+
+        assert_eq!(merged.overview.as_deref(), Some("A new synopsis."));
+        assert_eq!(merged.genres, vec!["Thriller".to_string()]);
+        assert_eq!(merged.images.len(), 1);
+        assert_eq!(merged.images[0].url, "https://example.test/poster.jpg");
+    }
+
+    #[test]
+    fn new_work_applies_release_date_from_remote() {
+        let release_date = "2020-06-01T00:00:00Z"
+            .parse::<chrono::DateTime<Utc>>()
+            .unwrap();
+        let mut remote_entity = remote("1", "New Movie", true);
+        remote_entity.release_date = Some(release_date);
+
+        let work = new_work(WorkKind::Movie, ExternalProvider::Tmdb, &remote_entity);
+
+        assert_eq!(work.release_date, Some(release_date));
+    }
+
+    #[test]
+    fn merge_work_applies_release_date_from_remote() {
+        let existing = work_with_ref(
+            WorkKind::Movie,
+            ExternalProvider::Tmdb,
+            "1",
+            "Old",
+            true,
+            Availability::Available,
+        );
+        assert_eq!(existing.release_date, None);
+        let release_date = "2020-06-01T00:00:00Z"
+            .parse::<chrono::DateTime<Utc>>()
+            .unwrap();
+        let mut remote_entity = remote("1", "Old", true);
+        remote_entity.release_date = Some(release_date);
+
+        let merged = merge_work(&existing, &remote_entity);
+
+        assert_eq!(merged.release_date, Some(release_date));
     }
 
     #[test]
@@ -914,7 +1353,7 @@ mod tests {
 
     // ---- end-to-end reconcile_all against a mocked Sonarr HTTP API ----
 
-    use streamarr_arr_client::SonarrClient;
+    use streamarr_arr_client::{RadarrClient, SonarrClient};
     use streamarr_coordination::SingleNodeCoordinator;
     use streamarr_db::repo::SqlxMediaFileRepo;
     use wiremock::matchers::{method, path};
@@ -1032,6 +1471,122 @@ mod tests {
             .any(|w| w.title == "Renamed Show" && w.id == existing.id));
         assert!(snapshot.iter().any(|w| w.title == "Brand New Show"));
         assert!(!snapshot.iter().any(|w| w.id == to_be_deleted_id));
+    }
+
+    /// Reproduces the real bug `backfill_missing_media_files` exists to
+    /// fix: a work that's already `Available` (per a *prior* sync pass)
+    /// but somehow never got a `MediaFile` row -- e.g. its very first
+    /// file-sync attempt failed or was interrupted -- must still get one
+    /// on a *later* pass, even though its catalog identity (title/
+    /// monitored/availability) hasn't changed and so produces no `SyncOp`
+    /// for `sync_media_files` to act on.
+    #[tokio::test]
+    async fn reconcile_all_backfills_a_missing_media_file_for_an_unchanged_available_work() {
+        let mock_server = MockServer::start().await;
+
+        // The remote list call: same title/monitored Radarr already
+        // reports as before, so `diff_works` sees no change for this
+        // movie and it never appears in `ops`.
+        Mock::given(method("GET"))
+            .and(path("/api/v3/movie"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {
+                    "id": 1,
+                    "title": "Orbit",
+                    "sortTitle": "heat",
+                    "tmdbId": 949,
+                    "monitored": true,
+                    "hasFile": true,
+                    "path": "/movies/Orbit (1995)"
+                }
+            ])))
+            .mount(&mock_server)
+            .await;
+
+        // The targeted per-movie call `sync_radarr` makes -- this is what
+        // actually has the file Radarr already reported via `hasFile`.
+        Mock::given(method("GET"))
+            .and(path("/api/v3/movie/1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": 1,
+                "title": "Orbit",
+                "sortTitle": "heat",
+                "tmdbId": 949,
+                "monitored": true,
+                "hasFile": true,
+                "path": "/movies/Orbit (1995)",
+                "movieFile": {
+                    "id": 30,
+                    "movieId": 1,
+                    "relativePath": "Orbit (1995) Bluray-1080p.mkv",
+                    "path": "/movies/Orbit (1995)/Orbit (1995) Bluray-1080p.mkv",
+                    "size": 12_345_678_900i64,
+                    "quality": {
+                        "quality": { "id": 7, "name": "Bluray-1080p", "source": "bluray", "resolution": 1080 },
+                        "revision": { "version": 1, "real": 0, "isRepack": false }
+                    },
+                    "mediaInfo": null
+                }
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let existing = work_with_ref(
+            WorkKind::Movie,
+            ExternalProvider::Tmdb,
+            "949",
+            "Orbit",
+            true,
+            Availability::Available,
+        );
+        let work_id = existing.id;
+
+        let repo = Arc::new(InMemoryWorkRepo::seeded(vec![existing]));
+        let arr_client = ArrClient::Radarr(RadarrClient::new(mock_server.uri(), "test-api-key"));
+        let pool = test_pool().await;
+        // `media_files.work_id` has a real FK to `works(id)` -- seed the
+        // matching row directly, same as `playback.rs`'s own
+        // `repo_backed_lookup_resolves_a_persisted_media_file` test does,
+        // since `WorkRepo` here is the in-memory fake, not this real pool.
+        sqlx::query(
+            "INSERT INTO works (id, kind, title, sort_title, added_at, availability) \
+             VALUES (?, 'movie', 'Orbit', 'heat', '2026-01-01T00:00:00Z', 'available')",
+        )
+        .bind(work_id.to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+        let media_file_repo = media_file_repo(pool.clone()).await;
+        let coordinator: Arc<dyn ClusterCoordinator> = Arc::new(SingleNodeCoordinator::new());
+        let (_tx, rx) = tokio::sync::mpsc::channel(1);
+
+        let poller = ReconciliationPoller::new(
+            Uuid::new_v4(),
+            SourceKind::Radarr,
+            arr_client,
+            Duration::from_secs(3600),
+            repo as Arc<dyn WorkRepo>,
+            media_file_repo.clone(),
+            pool,
+            coordinator,
+            rx,
+        );
+
+        // Sanity check: genuinely nothing synced yet.
+        assert!(media_file_repo
+            .list_by_work_id(work_id)
+            .await
+            .unwrap()
+            .is_empty());
+
+        poller.reconcile_all().await.unwrap();
+
+        let files = media_file_repo.list_by_work_id(work_id).await.unwrap();
+        assert_eq!(
+            files.len(),
+            1,
+            "expected the backfill to sync the missing media file, found: {files:?}"
+        );
     }
 
     #[tokio::test]

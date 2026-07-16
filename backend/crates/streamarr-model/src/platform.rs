@@ -8,6 +8,18 @@ use serde::{Deserialize, Serialize};
 /// (rather than a free-form string) so the compatibility table, the
 /// `X-Streamarr-Client-Platform` header parser, and policy's
 /// `device_allow` list all agree on the same finite set.
+///
+/// `StreamarrAdmin` is the odd one out: every other variant is a Playarr
+/// client (consumer streaming), but Streamarr's own admin UI is also a
+/// real first-party client surface that authenticates through the same
+/// `POST /api/v1/auth/login` endpoint, and `login_handler` needs a real,
+/// honest way to tell the two apart so it knows whether to require
+/// `Policy::can_stream` for this login attempt -- see that handler's doc
+/// comment. Declaring `client_platform: "streamarr-admin"` doesn't grant
+/// anything by itself (a caller can claim whatever platform it wants); it
+/// only selects which check `login_handler` applies, and every *other*
+/// endpoint still separately enforces the real, persisted `Policy`
+/// regardless of what a login request once claimed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -19,6 +31,7 @@ pub enum ClientPlatform {
     TvWebos,
     TvTizen,
     TvVidaa,
+    StreamarrAdmin,
 }
 
 impl ClientPlatform {
@@ -35,6 +48,7 @@ impl ClientPlatform {
             ClientPlatform::TvWebos => "tv-webos",
             ClientPlatform::TvTizen => "tv-tizen",
             ClientPlatform::TvVidaa => "tv-vidaa",
+            ClientPlatform::StreamarrAdmin => "streamarr-admin",
         }
     }
 
@@ -47,6 +61,7 @@ impl ClientPlatform {
             "tv-webos" => ClientPlatform::TvWebos,
             "tv-tizen" => ClientPlatform::TvTizen,
             "tv-vidaa" => ClientPlatform::TvVidaa,
+            "streamarr-admin" => ClientPlatform::StreamarrAdmin,
             _ => return None,
         })
     }

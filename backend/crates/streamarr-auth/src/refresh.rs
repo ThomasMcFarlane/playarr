@@ -9,99 +9,42 @@
 //! login rather than silently trusting whichever of the two holders
 //! (legitimate device or thief) happens to poll next.
 //!
-//! State lives behind [`RefreshTokenStore`], backed by an in-memory
-//! `DashMap` by default (see [`InMemoryRefreshTokenStore`]), with a trait
-//! boundary so a real deployment can swap in a shared/persistent store
-//! later without touching the rotation logic below.
+//! State lives behind [`RefreshTokenStore`] -- re-exported from
+//! `streamarr_db::RefreshTokenRepo` under this crate's original name so
+//! every existing caller (`streamarr-bin`, `streamarr-api`'s tests, this
+//! crate's own tests) keeps working unchanged. The record type
+//! (`RefreshTokenRecord`) and both implementations
+//! (`InMemoryRefreshTokenStore`, `SqlxRefreshTokenRepo`) live in
+//! `streamarr-db` now, not here -- they moved so a real, durable
+//! implementation could exist at all: `streamarr-db` is the only crate
+//! allowed to touch `sqlx`/`DbPool` directly (see that crate's own doc
+//! comment), and a persisted domain type has to live in `streamarr-model`
+//! for `streamarr-db` to build a repository over it without depending on
+//! `streamarr-auth` (which itself depends on `streamarr-db`) -- the same
+//! placement every other persisted type in this codebase already follows.
+//! This module still owns all the actual rotation/reuse-detection *logic*
+//! below; only the storage boundary moved.
 //!
-//! TODO(schema): `streamarr_model::Device` has no `refresh_token_hash`/
-//! family columns yet, so the secret material tracked here can't ride
-//! along on the `devices` table the way a fully wired-up version of this
-//! would. This module owns that state itself instead, while still routing
-//! every device lifecycle read/write through the real
-//! [`streamarr_db::DeviceRepo`] trait (existence checks, `touch_last_seen`,
-//! marking a device `trusted`). A follow-up pass that adds those columns
-//! to `Device` and `DeviceRepo` should be able to replace
-//! `InMemoryRefreshTokenStore` with a `DeviceRepo`-backed implementation
-//! without changing anything that calls into `RefreshTokenService`.
+//! Device lifecycle reads/writes (existence checks, `touch_last_seen`,
+//! marking a device `trusted`) still go through the real
+//! [`streamarr_db::DeviceRepo`] trait, unchanged.
 
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
-use dashmap::DashMap;
+use chrono::{Duration, Utc};
 use streamarr_db::{DbError, DeviceRepo};
 use streamarr_model::{Device, Session};
 use uuid::Uuid;
 
+pub use streamarr_db::{
+    InMemoryRefreshTokenStore, RefreshTokenRepo as RefreshTokenStore, SqlxRefreshTokenRepo,
+};
+pub use streamarr_model::RefreshTokenRecord;
+
 use crate::device_flow::TokenResponse;
 use crate::jwt::{JwtError, JwtIssuer};
 use crate::secret::{hash_token, opaque_token};
-
-/// Server-side bookkeeping for one device's current refresh-token family.
-#[derive(Debug, Clone)]
-pub struct RefreshTokenRecord {
-    pub device_id: Uuid,
-    pub user_id: Uuid,
-    /// Stable across rotations -- the same login "session" as far as
-    /// `AccessTokenClaims::session_id` / `Policy::max_concurrent_sessions`
-    /// are concerned, even though the underlying secret changes.
-    pub session_id: Uuid,
-    /// Identifies the family a token belongs to; a brand-new family is
-    /// started on every fresh [`RefreshTokenService::issue`] call.
-    pub family_id: Uuid,
-    /// Incremented on every successful rotation; 0 at issuance.
-    pub generation: u64,
-    pub current_hash: String,
-    /// Every hash this family has ever had as its `current_hash`,
-    /// including the current one -- checked on reuse so a token from *any*
-    /// earlier generation (not just the immediately-prior one) is caught.
-    pub used_hashes: HashSet<String>,
-    pub issued_at: DateTime<Utc>,
-    /// Fixed at issuance (not extended by rotation) -- a deliberately
-    /// simple, secure-by-default choice: the device must complete a full
-    /// login again after this point no matter how often it refreshes.
-    /// TODO: a sliding-expiration policy could be layered on top later if
-    /// operators want "stay logged in as long as you're active" instead.
-    pub expires_at: DateTime<Utc>,
-    pub rotated_at: Option<DateTime<Utc>>,
-    pub revoked: bool,
-}
-
-/// Storage boundary for [`RefreshTokenRecord`]s, keyed by `device_id` (a
-/// device has at most one live token family at a time -- a fresh
-/// [`RefreshTokenService::issue`] call replaces whatever family it had).
-#[async_trait]
-pub trait RefreshTokenStore: Send + Sync {
-    async fn get(&self, device_id: Uuid) -> Option<RefreshTokenRecord>;
-    async fn put(&self, record: RefreshTokenRecord);
-}
-
-/// The default [`RefreshTokenStore`]: an in-process `DashMap`. Fine for a
-/// single-node deployment; a multi-node one should implement the trait
-/// against a shared store (Redis, Postgres, ...) instead.
-#[derive(Default)]
-pub struct InMemoryRefreshTokenStore {
-    records: DashMap<Uuid, RefreshTokenRecord>,
-}
-
-impl InMemoryRefreshTokenStore {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-#[async_trait]
-impl RefreshTokenStore for InMemoryRefreshTokenStore {
-    async fn get(&self, device_id: Uuid) -> Option<RefreshTokenRecord> {
-        self.records.get(&device_id).map(|entry| entry.clone())
-    }
-
-    async fn put(&self, record: RefreshTokenRecord) {
-        self.records.insert(record.device_id, record);
-    }
-}
 
 #[derive(Debug, thiserror::Error)]
 pub enum RefreshError {
@@ -174,7 +117,7 @@ impl RefreshTokenService {
             rotated_at: None,
             revoked: false,
         };
-        self.store.put(record.clone()).await;
+        self.store.put(record.clone()).await?;
 
         let access_token = self
             .jwt
@@ -218,7 +161,7 @@ impl RefreshTokenService {
         let mut record = self
             .store
             .get(device_id)
-            .await
+            .await?
             .ok_or(RefreshError::UnknownToken)?;
 
         if record.revoked {
@@ -235,7 +178,7 @@ impl RefreshTokenService {
         if presented_hash != record.current_hash {
             if record.used_hashes.contains(&presented_hash) {
                 record.revoked = true;
-                self.store.put(record).await;
+                self.store.put(record).await?;
                 return Err(RefreshError::ReuseDetected);
             }
             return Err(RefreshError::UnknownToken);
@@ -247,7 +190,7 @@ impl RefreshTokenService {
         record.current_hash = new_hash.clone();
         record.used_hashes.insert(new_hash);
         record.rotated_at = Some(now);
-        self.store.put(record.clone()).await;
+        self.store.put(record.clone()).await?;
 
         self.devices.touch_last_seen(device_id, now).await?;
 

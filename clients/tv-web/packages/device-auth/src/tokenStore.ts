@@ -60,29 +60,43 @@ function writePersisted(session: StoredSession | undefined): void {
   }
 }
 
+// Module-level, not a `TokenStore` instance field: the in-memory fallback
+// (used only when `localStorage` is unavailable) must be shared by every
+// `TokenStore()` constructed anywhere in the app, not private to whichever
+// instance happened to call `set()`. Multiple independent `new TokenStore()`
+// call sites are normal and expected (e.g. a login page constructs its own
+// short-lived instance rather than reaching into `ApiClientProvider`'s) --
+// when `localStorage` is available this doesn't matter, `get()` always
+// re-reads it fresh below, but a per-instance cache field previously meant
+// that on runtimes *without* `localStorage` (and, more subtly, even a
+// stale in-memory cache read ordering bug was possible before this became
+// a pure passthrough) one instance's `set()` was invisible to another
+// instance's `get()` until the page reloaded. Concretely: Admin's Login
+// page constructs its own `TokenStore` to persist a freshly-obtained
+// session, while `ApiClientProvider` already holds a *different* long-lived
+// instance whose `getAccessToken` callback reads from it on every
+// protected request -- that second instance needs to see the first one's
+// write immediately, not after a reload.
+let memoryFallback: StoredSession | undefined;
+
 export class TokenStore {
-  private current: StoredSession | undefined;
-
-  constructor() {
-    this.current = readPersisted();
-  }
-
   get(): StoredSession | undefined {
-    return this.current;
+    return hasLocalStorage() ? readPersisted() : memoryFallback;
   }
 
   set(session: StoredSession): void {
-    this.current = session;
+    memoryFallback = session;
     writePersisted(session);
   }
 
   clear(): void {
-    this.current = undefined;
+    memoryFallback = undefined;
     writePersisted(undefined);
   }
 
   /** True when a session is stored and its access token has not (yet) passed its expiry. */
   hasValidAccessToken(nowMs: number = Date.now()): boolean {
-    return this.current !== undefined && this.current.expiresAt > nowMs;
+    const current = this.get();
+    return current !== undefined && current.expiresAt > nowMs;
   }
 }

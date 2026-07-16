@@ -5,7 +5,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::work::Availability;
+use crate::work::{Availability, ImageAsset};
 
 /// Series-specific detail. One row per `Work` of kind `Series`; `work_id`
 /// is both the foreign key and the primary key (a strict 1:1 extension of
@@ -49,6 +49,8 @@ pub struct Episode {
     pub episode_number: i32,
     pub title: Option<String>,
     pub overview: Option<String>,
+    /// Remote-hosted episode stills, normally [`crate::ImageKind::Thumb`].
+    pub images: Vec<ImageAsset>,
     pub air_date: Option<NaiveDate>,
     pub runtime_minutes: Option<u32>,
     pub monitored: bool,

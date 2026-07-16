@@ -119,6 +119,48 @@ async fn serve() -> anyhow::Result<()> {
     // repo behind it.
     let source_instances = Arc::new(streamarr_api::SourceInstanceRegistry::new());
 
+    // Connects `boot_api`'s `TranscodeOrchestrator` (an on-demand session
+    // starting is the send side) to `boot_worker`'s `TdarrDispatcher` (the
+    // receive side) -- see `streamarr_transcode`'s module docs, "other
+    // bridge" section, for why: it's what promotes a live, temporary
+    // on-demand transcode into a durable, Tdarr-produced `Rendition` for
+    // future requests. Constructed once here (not inside either `boot_*`
+    // function) since both live in the same process for `STREAMARR_ROLE=all`
+    // -- the only topology this local `mpsc` channel can bridge; a split
+    // api/worker deployment needs a cross-node signal instead (same
+    // limitation already noted on `TranscodeOrchestrator::active_children`),
+    // not addressed here. If this process doesn't run the worker role, or
+    // `TDARR_URL` isn't set, `tdarr_notify_rx` is simply dropped and every
+    // `try_send` on the other end harmlessly fails closed.
+    let (tdarr_notify_tx, tdarr_notify_rx) =
+        tokio::sync::mpsc::channel::<streamarr_transcode::MediaFileImportEvent>(64);
+
+    // Playback-activity analytics plumbing, shared across roles the same
+    // way `active_sessions`/`source_instances` above are: `analytics`
+    // (backing every playback-session/event write) is used by `boot_api`'s
+    // `AppState`, while the cluster-wide-singleton background jobs that
+    // operate on the same store/registry (`RollupScheduler`,
+    // `SessionReaper`, `RetentionSweeper`) run leader-gated inside
+    // `boot_worker`. See `streamarr_telemetry::analytics::collector`'s
+    // module doc comment for the overall architecture.
+    let analytics_store: Arc<dyn streamarr_db::analytics::AnalyticsStore> = Arc::new(
+        streamarr_db::analytics::SqlxAnalyticsStore::new(pool.clone()),
+    );
+    let session_registry: Arc<dyn streamarr_telemetry::analytics::SessionRegistry> =
+        Arc::new(streamarr_telemetry::analytics::InMemorySessionRegistry::new());
+    // Drained by `AnalyticsFlusher`, spawned inside `boot_api` -- see that
+    // function for why the flusher lives there rather than here: only an
+    // API-role process ever calls `AnalyticsCollector::on_event`/
+    // `on_session_start` (there's no HTTP handler in the worker role), so
+    // it's the only role that ever produces events into this channel.
+    let (analytics_event_tx, analytics_event_rx) =
+        tokio::sync::mpsc::channel::<streamarr_model::PlaybackEvent>(4096);
+    let analytics = Arc::new(streamarr_telemetry::analytics::AnalyticsCollector::new(
+        session_registry.clone(),
+        analytics_store.clone(),
+        analytics_event_tx,
+    ));
+
     // `streamarr-telemetry`'s own docs are explicit that `init` above only
     // covers logging -- the /metrics HTTP listener is real, tested code
     // that this composition root is documented as responsible for
@@ -143,6 +185,10 @@ async fn serve() -> anyhow::Result<()> {
             coordinator,
             source_instances.clone(),
             active_sessions.clone(),
+            tdarr_notify_rx,
+            analytics_store.clone(),
+            session_registry.clone(),
+            analytics.clone(),
         )
         .await?
     } else {
@@ -150,7 +196,18 @@ async fn serve() -> anyhow::Result<()> {
     };
 
     if config.role.runs_api() {
-        boot_api(&config, pool, source_instances, active_sessions).await?;
+        boot_api(
+            &config,
+            pool,
+            source_instances,
+            active_sessions,
+            tdarr_notify_tx,
+            analytics_store,
+            session_registry,
+            analytics,
+            analytics_event_rx,
+        )
+        .await?;
     } else {
         tracing::info!(
             "role does not run the public API router; serving only a minimal /healthz listener"
@@ -246,6 +303,34 @@ fn jwt_secret_from_env() -> String {
     }
 }
 
+/// How long an on-demand [`streamarr_transcode::TranscodeSession`] survives
+/// without being accessed before it's eligible for cleanup -- an *idle*
+/// deadline (every real manifest/segment request slides it forward, see
+/// `TranscodeOrchestrator::lookup_session`'s doc comment), not a cap on how
+/// long a single playback can run. `STREAMARR_TRANSCODE_SESSION_IDLE_TTL_SECS`,
+/// defaulting to 60s -- long enough that normal HLS segment-fetch cadence
+/// (a few seconds apart) never lapses it, short enough that a viewer who
+/// closes the tab or loses their connection frees the ffmpeg process and
+/// its capacity slot promptly rather than lingering for the lifetime of a
+/// much longer default.
+fn transcode_session_idle_ttl_from_env() -> std::time::Duration {
+    const DEFAULT_SECS: u64 = 60;
+    match std::env::var("STREAMARR_TRANSCODE_SESSION_IDLE_TTL_SECS") {
+        Ok(raw) => match raw.parse::<u64>() {
+            Ok(secs) if secs > 0 => std::time::Duration::from_secs(secs),
+            _ => {
+                tracing::warn!(
+                    value = %raw,
+                    "STREAMARR_TRANSCODE_SESSION_IDLE_TTL_SECS is not a positive integer; \
+                     falling back to the default of {DEFAULT_SECS}s"
+                );
+                std::time::Duration::from_secs(DEFAULT_SECS)
+            }
+        },
+        Err(_) => std::time::Duration::from_secs(DEFAULT_SECS),
+    }
+}
+
 fn generated_dev_jwt_secret() -> String {
     format!(
         "{}{}",
@@ -254,15 +339,21 @@ fn generated_dev_jwt_secret() -> String {
     )
 }
 
-/// Resolves the id of the single default/admin user a fresh single-node
-/// deployment gets, from `STREAMARR_DEFAULT_ADMIN_USER_ID`. Falls back to a
-/// boot-lifetime-only generated id, mirroring [`generated_dev_jwt_secret`]'s
-/// fallback above -- fine for local/dev use, but every session issued
-/// before a restart is orphaned anyway (the in-memory `RefreshTokenStore`/
-/// `DeviceAuthorizationStore` don't survive a restart either), so a real
-/// deployment that wants a stable admin identity across restarts should set
-/// this explicitly.
-fn default_admin_user_id_from_env() -> uuid::Uuid {
+/// Resolves the id of the account `AuthMode::TrustedNetwork`'s
+/// zero-credential auto-login binds to, from
+/// `STREAMARR_DEFAULT_ADMIN_USER_ID`. `fallback` is the id
+/// [`bootstrap_admin_if_needed`] resolved (either a freshly bootstrapped
+/// admin, or the id of an existing admin/user already in the database) --
+/// used whenever the env var is unset or doesn't parse.
+///
+/// Unlike the old boot-lifetime-random-UUID fallback this function used to
+/// generate, `fallback` is guaranteed to actually resolve against
+/// `AppState::user_directory` (`streamarr_api::user_directory::
+/// RepoBackedUserDirectory`, backed by the real `UserRepo` -- unlike the
+/// in-memory stand-in it replaced, this one only ever resolves ids that are
+/// genuinely persisted). A random, nothing-resolves-to-it id would make
+/// trusted-network mode's auto-login fail every login attempt.
+fn default_admin_user_id_from_env(fallback: uuid::Uuid) -> uuid::Uuid {
     match std::env::var("STREAMARR_DEFAULT_ADMIN_USER_ID") {
         Ok(raw) => match uuid::Uuid::parse_str(&raw) {
             Ok(id) => id,
@@ -270,20 +361,13 @@ fn default_admin_user_id_from_env() -> uuid::Uuid {
                 tracing::warn!(
                     value = %raw,
                     %err,
-                    "STREAMARR_DEFAULT_ADMIN_USER_ID is not a valid UUID; generating a \
-                     boot-lifetime id instead"
+                    "STREAMARR_DEFAULT_ADMIN_USER_ID is not a valid UUID; falling back to the \
+                     resolved bootstrap admin id instead"
                 );
-                uuid::Uuid::new_v4()
+                fallback
             }
         },
-        Err(_) => {
-            tracing::warn!(
-                "STREAMARR_DEFAULT_ADMIN_USER_ID not set; generating a boot-lifetime default \
-                 admin user id. Set it explicitly for any deployment where the admin identity \
-                 must be stable across restarts."
-            );
-            uuid::Uuid::new_v4()
-        }
+        Err(_) => fallback,
     }
 }
 
@@ -323,43 +407,56 @@ fn web_assets_dir_from_env() -> Option<std::path::PathBuf> {
 }
 
 /// Resolves the operator's configured login trust tier
-/// (`STREAMARR_AUTH_MODE` -- `trusted-network` (the default) or
-/// `full-account`) for `POST /api/v1/auth/login`. See
-/// [`trusted_network_auth_mode`]'s doc comment for the real security
-/// tradeoff the default makes for a fresh deployment.
+/// (`STREAMARR_AUTH_MODE` -- `full-account` (the default as of this pass)
+/// or `trusted-network`, opt-in only) for `POST /api/v1/auth/login`.
 ///
-/// `full-account` mode is wired at the type level -- `evaluate_login`
-/// fully implements it -- but this pass provisions no user with a known,
-/// usable password (there is no user-provisioning tool; the only seeded
-/// `User`, `admin_user_id`, gets a random, never-recorded password hash),
-/// so flipping to `full-account` today leaves a fresh deployment with no
-/// way to log in at all until real `User` persistence and a provisioning
-/// path exist. Documented here as a known follow-up gap, not silently
-/// papered over.
+/// **Why the default flipped from `trusted-network` to `full-account`:**
+/// real username/password accounts now have a real, always-available,
+/// durable persistence layer (`streamarr_db::UserRepo`/`PolicyRepo`) and
+/// `boot_api` guarantees at least one real admin account exists before
+/// this deployment ever serves traffic (see [`bootstrap_admin_if_needed`]).
+/// With a genuine credential-based login path always available, defaulting
+/// a fresh deployment to IP-based, zero-credential auto-admin
+/// (`trusted-network`) is no longer the right default -- it was only ever
+/// the sensible *zero-setup* choice because, before this pass, it was the
+/// *only* login path that could possibly work (no `UserRepo`, no
+/// provisioning tool, nobody could ever have a real password). That gap is
+/// closed. `trusted-network` is still fully supported and still the right
+/// choice for some deployments (e.g. a household box where nobody wants to
+/// remember a password) -- see [`trusted_network_auth_mode`]'s doc comment
+/// for its real security tradeoff -- but it now requires the operator to
+/// explicitly opt in with `STREAMARR_AUTH_MODE=trusted-network` rather than
+/// being handed out to anyone who reaches the socket by default.
 fn auth_mode_from_env(admin_user_id: uuid::Uuid) -> streamarr_auth::AuthMode {
     use streamarr_auth::AuthMode;
 
     match std::env::var("STREAMARR_AUTH_MODE") {
+        Ok(value) if value == "trusted-network" => trusted_network_auth_mode(admin_user_id),
         Ok(value) if value == "full-account" => {
-            tracing::warn!(
-                "STREAMARR_AUTH_MODE=full-account: POST /api/v1/auth/login now requires a \
-                 username/password for every login, but no user with a known password is \
-                 provisioned in this pass (no UserRepo/admin-provisioning tool exists yet) -- \
-                 nobody can log in until one is. Use trusted-network (the default) until real \
-                 user provisioning lands."
+            tracing::info!(
+                "STREAMARR_AUTH_MODE=full-account: POST /api/v1/auth/login requires a real \
+                 username/password for every login -- see bootstrap_admin_if_needed's doc \
+                 comment for how this deployment's first admin account gets provisioned."
             );
             AuthMode::FullAccount
         }
-        Ok(value) if value == "trusted-network" => trusted_network_auth_mode(admin_user_id),
         Ok(other) => {
             tracing::warn!(
                 value = %other,
-                "unrecognized STREAMARR_AUTH_MODE (expected trusted-network or full-account); \
-                 falling back to trusted-network"
+                "unrecognized STREAMARR_AUTH_MODE (expected full-account or trusted-network); \
+                 falling back to full-account, the default"
             );
-            trusted_network_auth_mode(admin_user_id)
+            AuthMode::FullAccount
         }
-        Err(_) => trusted_network_auth_mode(admin_user_id),
+        Err(_) => {
+            tracing::info!(
+                "STREAMARR_AUTH_MODE not set; defaulting to full-account -- set \
+                 STREAMARR_AUTH_MODE=trusted-network to opt into IP-based zero-credential \
+                 auto-admin instead (see trusted_network_auth_mode's doc comment for the \
+                 tradeoff before doing so)."
+            );
+            AuthMode::FullAccount
+        }
     }
 }
 
@@ -378,8 +475,10 @@ const DEFAULT_TRUSTED_NETWORK_CIDRS: &[&str] = &[
     "::1/128",
 ];
 
-/// Builds the `AuthMode::TrustedNetwork` mode this pass defaults every
-/// fresh deployment to: `STREAMARR_TRUSTED_NETWORK_CIDR`, if set, replaces
+/// Builds the `AuthMode::TrustedNetwork` mode, only reached when the
+/// operator explicitly opts in with `STREAMARR_AUTH_MODE=trusted-network`
+/// (see [`auth_mode_from_env`]'s doc comment for why this is no longer the
+/// implicit default): `STREAMARR_TRUSTED_NETWORK_CIDR`, if set, replaces
 /// [`DEFAULT_TRUSTED_NETWORK_CIDRS`] with that single custom range; either
 /// way, every request whose source IP falls inside the resulting allowlist
 /// auto-logs in as `admin_user_id`, with zero credentials.
@@ -450,13 +549,169 @@ fn trusted_network_auth_mode(admin_user_id: uuid::Uuid) -> streamarr_auth::AuthM
     tracing::warn!(
         cidrs = ?cidrs,
         admin_user_id = %admin_user_id,
-        "STREAMARR_AUTH_MODE=trusted-network (the default): every request whose source IP \
-         falls inside this allowlist auto-logs in as the default admin user with zero \
-         credentials -- see trusted_network_auth_mode's doc comment for the real security \
+        "STREAMARR_AUTH_MODE=trusted-network (explicitly opted into): every request whose \
+         source IP falls inside this allowlist auto-logs in as the default admin user with \
+         zero credentials -- see trusted_network_auth_mode's doc comment for the real security \
          implications before exposing this server beyond a genuinely trusted network"
     );
 
     AuthMode::TrustedNetwork { allowlist }
+}
+
+/// The bootstrap admin username used when `STREAMARR_BOOTSTRAP_ADMIN_USERNAME`
+/// is unset.
+const DEFAULT_BOOTSTRAP_ADMIN_USERNAME: &str = "admin";
+
+/// Ensures at least one real, persisted `User` exists before this
+/// deployment ever serves traffic -- with zero users in a fresh database,
+/// nobody could log in, in *either* auth mode (`full-account` has no
+/// account to authenticate as; `trusted-network`'s auto-login target
+/// wouldn't resolve against the real, `UserRepo`-backed `UserDirectory`
+/// either). Called once, from [`boot_api`], before `AppState` is
+/// constructed.
+///
+/// If [`streamarr_db::UserRepo::list_all`] already returns at least one
+/// row, this is a no-op: returns the id of an existing admin (found by
+/// checking each user's `Policy::is_admin`), or, if none of them is an
+/// admin, the first user found at all -- either way, [`default_admin_user_id_from_env`]
+/// still has a real, resolvable fallback id for `AuthMode::TrustedNetwork`
+/// to bind to if that mode is explicitly opted into.
+///
+/// Otherwise, provisions exactly one admin account: reads
+/// `STREAMARR_BOOTSTRAP_ADMIN_USERNAME` (default `"admin"`) and
+/// `STREAMARR_BOOTSTRAP_ADMIN_PASSWORD`. When the password env var is
+/// unset (or empty), a real random password is generated -- never a fixed,
+/// shipped-in-code default, which would be a real, exploitable
+/// vulnerability the moment two deployments share it -- and logged exactly
+/// once at `WARN` (the only time it is ever available in cleartext: the
+/// database only ever stores its Argon2id hash) so the operator can
+/// actually retrieve and change it.
+///
+/// This function itself only resolves the two env vars; [`bootstrap_admin_with`]
+/// is the actual env-independent logic (split out so tests can pass
+/// explicit values instead of racily mutating process-global env vars
+/// under parallel test execution).
+async fn bootstrap_admin_if_needed(
+    user_repo: &Arc<dyn streamarr_db::UserRepo>,
+    policy_repo: &Arc<dyn streamarr_db::PolicyRepo>,
+) -> anyhow::Result<uuid::Uuid> {
+    let username = std::env::var("STREAMARR_BOOTSTRAP_ADMIN_USERNAME")
+        .unwrap_or_else(|_| DEFAULT_BOOTSTRAP_ADMIN_USERNAME.to_string());
+    let explicit_password = std::env::var("STREAMARR_BOOTSTRAP_ADMIN_PASSWORD").ok();
+    bootstrap_admin_with(
+        user_repo,
+        policy_repo,
+        &username,
+        explicit_password.as_deref(),
+    )
+    .await
+}
+
+/// The env-independent core of [`bootstrap_admin_if_needed`], split out so
+/// tests can exercise it with explicit, in-process values instead of
+/// mutating process-global environment variables (which is inherently
+/// racy against Rust's default parallel test execution -- two tests
+/// setting/clearing the same env var concurrently is a real flakiness
+/// source, not a hypothetical one).
+async fn bootstrap_admin_with(
+    user_repo: &Arc<dyn streamarr_db::UserRepo>,
+    policy_repo: &Arc<dyn streamarr_db::PolicyRepo>,
+    username: &str,
+    explicit_password: Option<&str>,
+) -> anyhow::Result<uuid::Uuid> {
+    let existing_users = user_repo.list_all().await?;
+    if !existing_users.is_empty() {
+        for user in &existing_users {
+            if let Ok(Some(policy)) = policy_repo.find_by_id(user.policy_id).await {
+                if policy.is_admin {
+                    return Ok(user.id);
+                }
+            }
+        }
+        tracing::info!(
+            existing_user_count = existing_users.len(),
+            "users already exist in the database; skipping bootstrap admin creation (no \
+             existing user's policy has is_admin set -- trusted-network mode, if opted into, \
+             will bind to the first user found instead)"
+        );
+        return Ok(existing_users[0].id);
+    }
+
+    let (password, generated) = match explicit_password {
+        Some(password) if !password.is_empty() => (password.to_string(), false),
+        _ => (generate_bootstrap_password(), true),
+    };
+
+    let policy = streamarr_model::Policy {
+        id: uuid::Uuid::new_v4(),
+        name: "Bootstrap Admin".to_string(),
+        library_allow: Vec::new(),
+        blocked_folders: Vec::new(),
+        max_rating: None,
+        blocked_tags: Vec::new(),
+        allowed_tags: Vec::new(),
+        can_transcode: true,
+        can_download: true,
+        can_delete: true,
+        can_share_public: true,
+        device_allow: Vec::new(),
+        max_concurrent_sessions: None,
+        access_schedule: None,
+        // Deliberately no Playarr access -- this account exists to run
+        // Streamarr's own admin surface, not as a household viewer
+        // account. See `Policy::can_stream`'s doc comment: `is_admin`
+        // does not imply it. An operator who also wants to use Playarr
+        // day to day should provision (or grant `can_stream` on) a
+        // separate account via the Users admin screen.
+        can_stream: false,
+        is_admin: true,
+    };
+    policy_repo.upsert(&policy).await?;
+
+    let user = streamarr_model::User {
+        id: uuid::Uuid::new_v4(),
+        username: username.to_string(),
+        display_name: username.to_string(),
+        email: None,
+        password_hash: streamarr_model::Sensitive::new(streamarr_auth::login::hash_password(
+            &password,
+        )),
+        policy_id: policy.id,
+        created_at: chrono::Utc::now(),
+        disabled: false,
+        preferred_audio_language: streamarr_model::DEFAULT_PREFERRED_AUDIO_LANGUAGE.to_string(),
+    };
+    let user_id = user.id;
+    user_repo.upsert(&user).await?;
+
+    if generated {
+        tracing::warn!(
+            "bootstrap admin created -- username: {username} password: {password} -- save this \
+             now, it will not be shown again"
+        );
+    } else {
+        tracing::warn!(
+            username = %username,
+            "bootstrap admin created using STREAMARR_BOOTSTRAP_ADMIN_PASSWORD from the \
+             environment -- save it now if you haven't already, it will not be logged again"
+        );
+    }
+
+    Ok(user_id)
+}
+
+/// A real, randomly generated bootstrap admin password: two concatenated
+/// v4 UUIDs' hex digits (64 characters, the same generation idiom
+/// [`generated_dev_jwt_secret`] above already uses for the same
+/// "boot-lifetime, never hardcoded" reasoning) -- comfortably above any
+/// reasonable minimum length, and never the same value twice, unlike a
+/// fixed in-code default would be.
+fn generate_bootstrap_password() -> String {
+    format!(
+        "{}{}",
+        uuid::Uuid::new_v4().simple(),
+        uuid::Uuid::new_v4().simple()
+    )
 }
 
 async fn boot_api(
@@ -464,20 +719,33 @@ async fn boot_api(
     pool: DbPool,
     source_instances: Arc<streamarr_api::SourceInstanceRegistry>,
     active_sessions: streamarr_transcode::ActiveSessionCounter,
+    tdarr_notify_tx: tokio::sync::mpsc::Sender<streamarr_transcode::MediaFileImportEvent>,
+    analytics_store: Arc<dyn streamarr_db::analytics::AnalyticsStore>,
+    session_registry: Arc<dyn streamarr_telemetry::analytics::SessionRegistry>,
+    analytics: Arc<streamarr_telemetry::analytics::AnalyticsCollector>,
+    analytics_event_rx: tokio::sync::mpsc::Receiver<streamarr_model::PlaybackEvent>,
 ) -> anyhow::Result<()> {
+    use streamarr_api::user_directory::RepoBackedUserDirectory;
     use streamarr_api::{
         build_router, AppState, ClientCompatibilityTable, ReadinessState,
         RepoBackedMediaFileLookup, VersionGateLayer, VersionState,
     };
     use streamarr_auth::{
         DashMapDeviceFlowHandler, DeviceFlowConfig, DeviceFlowHandler, InMemoryAdminRegistry,
-        InMemoryDeviceAuthorizationStore, InMemoryRefreshTokenStore, InMemoryUserDirectory,
-        JwtIssuer, RefreshTokenService, RefreshTokenStore, UserDirectory,
+        InMemoryDeviceAuthorizationStore, JwtIssuer, RefreshTokenService, RefreshTokenStore,
+        UserDirectory,
     };
     use streamarr_db::repo::{
-        SqlxDeviceRepo, SqlxMediaFileRepo, SqlxRenditionRepo, SqlxSourceInstanceRepo, SqlxWorkRepo,
+        seed_default_views, SqlxCreditRepo, SqlxDeviceRepo, SqlxLibraryViewRepo, SqlxMediaFileRepo,
+        SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo, SqlxRefreshTokenRepo,
+        SqlxRenditionRepo, SqlxSourceInstanceRepo, SqlxTdarrConnectionRepo, SqlxUserRepo,
+        SqlxWatchProgressRepo, SqlxWorkRepo,
     };
-    use streamarr_db::{DeviceRepo, MediaFileRepo, RenditionRepo, SourceInstanceRepo, WorkRepo};
+    use streamarr_db::{
+        CreditRepo, DeviceRepo, LibraryViewRepo, MediaFileRepo, PlaylistRepo, PolicyRepo,
+        ProfilePinRepo, RenditionRepo, SourceInstanceRepo, TdarrConnectionRepo, UserRepo,
+        WatchProgressRepo, WorkRepo,
+    };
     use streamarr_model::VersionEnvelope;
 
     let compatibility_table = ClientCompatibilityTable::from_toml_str(CLIENT_COMPATIBILITY_TOML)?;
@@ -504,6 +772,36 @@ async fn boot_api(
     let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(SqlxMediaFileRepo::new(pool.clone()));
     let source_instance_repo: Arc<dyn SourceInstanceRepo> =
         Arc::new(SqlxSourceInstanceRepo::new(pool.clone()));
+    let user_repo: Arc<dyn UserRepo> = Arc::new(SqlxUserRepo::new(pool.clone()));
+    let profile_pin_repo: Arc<dyn ProfilePinRepo> = Arc::new(SqlxProfilePinRepo::new(pool.clone()));
+    let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
+    let watch_progress: Arc<dyn WatchProgressRepo> =
+        Arc::new(SqlxWatchProgressRepo::new(pool.clone()));
+    let library_view_repo: Arc<dyn LibraryViewRepo> =
+        Arc::new(SqlxLibraryViewRepo::new(pool.clone()));
+    // Idempotent -- inserts "Newly Added"/"Newly Released" only if their
+    // fixed ids don't already exist, never overwriting an admin's edits.
+    // Same "seed once, every boot" treatment as `bootstrap_admin_if_needed`
+    // below, just for Views instead of the admin account.
+    if let Err(err) = seed_default_views(library_view_repo.as_ref()).await {
+        tracing::error!(
+            %err,
+            "failed to seed default library views; Playarr's Home screen may be missing \
+             its default 'Newly Added'/'Newly Released' shelves until this is investigated"
+        );
+    }
+    let playlist_repo: Arc<dyn PlaylistRepo> = Arc::new(SqlxPlaylistRepo::new(pool.clone()));
+    let credit_repo: Arc<dyn CreditRepo> = Arc::new(SqlxCreditRepo::new(pool.clone()));
+    let tdarr_connection_repo: Arc<dyn TdarrConnectionRepo> =
+        Arc::new(SqlxTdarrConnectionRepo::new(pool.clone()));
+    // Durable, not `InMemoryRefreshTokenStore` -- see
+    // `streamarr_db::repo::refresh_token`'s doc comment: without this, a
+    // process restart silently invalidated every refresh token, forcing a
+    // fresh login the moment each client's short-lived access token next
+    // expired even though its refresh token was still well within its own
+    // (much longer) TTL.
+    let refresh_store: Arc<dyn RefreshTokenStore> =
+        Arc::new(SqlxRefreshTokenRepo::new(pool.clone()));
 
     // Hydrate the in-memory `SourceInstanceRegistry` from whatever's
     // actually durable *before* it's handed to the router (and, via
@@ -545,16 +843,32 @@ async fn boot_api(
     let media_files: Arc<dyn streamarr_api::MediaFileLookup> =
         Arc::new(RepoBackedMediaFileLookup::new(media_file_repo.clone()));
 
-    let catalog = Arc::new(streamarr_catalog::CatalogService::new(
-        work_repo,
-        media_file_repo,
-        cache.clone(),
-        pool,
-    ));
+    // The API role only ever *reads* cached embeddings (`GET /api/v1/
+    // catalog/{id}/similar` brute-force cosine-scans `embedding_repo`); it
+    // never loads the actual `streamarr_embeddings::Embedder` model itself
+    // -- that's the worker role's job (see `spawn_poller_for`'s
+    // `embedding_sync` wiring below). A work with no cached embedding yet
+    // (not synced, or the worker hasn't loaded its model) just 404s from
+    // `similar` (see that method's doc comment) -- there's nothing to
+    // gate at boot here.
+    let embedding_repo: Arc<dyn streamarr_db::EmbeddingRepo> =
+        Arc::new(streamarr_db::repo::SqlxEmbeddingRepo::new(pool.clone()));
+    let catalog = Arc::new(
+        streamarr_catalog::CatalogService::new(
+            work_repo.clone(),
+            media_file_repo,
+            cache.clone(),
+            pool,
+            watch_progress.clone(),
+        )
+        .with_embedding_repo(embedding_repo),
+    );
 
     let transcode = Arc::new(
         streamarr_transcode::TranscodeOrchestrator::new(rendition_repo, cache, active_sessions)
-            .with_output_root(std::env::temp_dir().join("streamarr-transcode")),
+            .with_output_root(std::env::temp_dir().join("streamarr-transcode"))
+            .with_session_ttl(transcode_session_idle_ttl_from_env())
+            .with_tdarr_notify(tdarr_notify_tx),
     );
 
     let jwt_secret = jwt_secret_from_env();
@@ -563,7 +877,6 @@ async fn boot_api(
         "streamarr",
         chrono::Duration::minutes(15),
     ));
-    let refresh_store: Arc<dyn RefreshTokenStore> = Arc::new(InMemoryRefreshTokenStore::new());
     let refresh = Arc::new(RefreshTokenService::new(
         refresh_store,
         device_repo,
@@ -581,32 +894,21 @@ async fn boot_api(
         },
     ));
 
-    // -- Interim admin/policy + login wiring -- see
-    // `streamarr_auth::admin` and
-    // `streamarr_auth::login::InMemoryUserDirectory`'s doc comments for
-    // why these are deliberately small, in-memory stand-ins rather than
-    // real `User`/`Policy` persistence, and `auth_mode_from_env`'s doc
-    // comment for the real security tradeoff this deployment's default
-    // makes.
-    let admin_user_id = default_admin_user_id_from_env();
-    let admin_user = streamarr_model::User {
-        id: admin_user_id,
-        username: "admin".to_string(),
-        display_name: "Default Admin".to_string(),
-        email: None,
-        // No real password-based login story exists for this seeded user
-        // in this pass -- see `auth_mode_from_env`'s doc comment. The hash
-        // is a random, never-recorded value purely so `User::password_hash`
-        // holds *something* well-formed, not a real, usable credential.
-        password_hash: streamarr_model::Sensitive::new(streamarr_auth::login::hash_password(
-            &uuid::Uuid::new_v4().to_string(),
-        )),
-        policy_id: uuid::Uuid::new_v4(),
-        created_at: chrono::Utc::now(),
-        disabled: false,
-    };
+    // -- Real, durable user/policy persistence + login wiring --
+    // `user_repo`/`policy_repo` (constructed above) replace the old
+    // `streamarr_auth::login::InMemoryUserDirectory`/`admin_registry`
+    // in-memory stand-ins that doc comment used to describe as interim.
+    // `bootstrap_admin_if_needed` guarantees at least one real admin
+    // account exists in the database before `state` (and therefore the
+    // router) is ever constructed below -- with zero users in a fresh
+    // database, nobody could ever log in through either auth mode.
+    let bootstrap_admin_user_id = bootstrap_admin_if_needed(&user_repo, &policy_repo).await?;
+    let admin_user_id = default_admin_user_id_from_env(bootstrap_admin_user_id);
     let user_directory: Arc<dyn UserDirectory> =
-        Arc::new(InMemoryUserDirectory::from_users([admin_user]));
+        Arc::new(RepoBackedUserDirectory::new(user_repo.clone()));
+    // Still constructed (and still a required `AppState` field) even though
+    // `auth_extractor::AdminUser` no longer reads it -- see that field's own
+    // doc comment on `AppState` for why it's left in place for now.
     let admin_registry = Arc::new(InMemoryAdminRegistry::from_ids([admin_user_id]));
     let auth_mode = Arc::new(auth_mode_from_env(admin_user_id));
 
@@ -632,16 +934,43 @@ async fn boot_api(
         webhook,
         source_instances,
         source_instance_repo,
+        library_view_repo,
+        playlist_repo,
+        work_repo,
+        credit_repo,
+        tdarr_connection_repo,
         media_files,
+        watch_progress,
         jwt,
         admin_registry,
         auth_mode,
         user_directory,
+        user_repo,
+        profile_pin_repo,
+        policy_repo,
         sessions: refresh,
         refresh_ttl: chrono::Duration::days(30),
         node_id: uuid::Uuid::new_v4().to_string(),
+        analytics_store: analytics_store.clone(),
+        session_registry,
+        analytics,
     };
     let version_gate = VersionGateLayer::new(compatibility_table);
+
+    // Must run on every node that runs this (the API) role -- not
+    // leader-gated. The event channel is a local, in-process `mpsc` fed
+    // only by this same node's own `AnalyticsCollector` (via the playback
+    // handlers this router just got wired with above), so each node has
+    // its own buffered events that only it can flush; gating this behind
+    // leadership would silently drop every non-leader node's events. See
+    // `streamarr_telemetry::analytics::flusher`'s module doc comment.
+    let analytics_flusher = streamarr_telemetry::analytics::AnalyticsFlusher::new(
+        analytics_store,
+        analytics_event_rx,
+        std::time::Duration::from_secs(3),
+        500,
+    );
+    tokio::spawn(analytics_flusher.run());
 
     let (router, _openapi) = build_router(state, version_gate, web_assets_dir_from_env());
 
@@ -676,11 +1005,16 @@ async fn boot_api(
 /// [`boot_worker`] so both its initial snapshot loop and the supervisor
 /// loop below (which spawns pollers for instances registered *after*
 /// startup) share exactly one construction path.
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 fn spawn_poller_for(
     instance: &streamarr_model::SourceInstance,
     source_instances: &Arc<streamarr_api::SourceInstanceRegistry>,
     work_repo: Arc<dyn streamarr_db::WorkRepo>,
     media_file_repo: Arc<dyn streamarr_db::MediaFileRepo>,
+    credit_repo: Arc<dyn streamarr_db::CreditRepo>,
+    artwork_prewarm: Option<streamarr_arr_sync::ArtworkPrewarm>,
+    embedding_sync: Option<streamarr_arr_sync::EmbeddingSync>,
     pool: DbPool,
     coordinator: Arc<dyn streamarr_coordination::ClusterCoordinator>,
 ) -> tokio::task::JoinHandle<()> {
@@ -707,7 +1041,29 @@ fn spawn_poller_for(
         pool,
         coordinator,
         refetch_rx,
-    );
+    )
+    // `SourceInstanceRegistry` implements `SyncStatusReporter` itself (see
+    // that type's doc comment) -- reusing the same `Arc` already threaded
+    // through this function rather than introducing a separate status
+    // store. Backs `GET /api/v1/admin/source-instances/sync-status`
+    // (Streamarr Admin's "Tasks" screen).
+    .with_status_reporter(source_instances.clone())
+    // A no-op for every source kind except Radarr (see
+    // `MediaSync::with_credit_repo`'s doc comment) -- passed unconditionally
+    // rather than only for `SourceKind::Radarr` instances, since threading
+    // it through unconditionally here is simpler than a kind-gated branch
+    // and costs nothing extra for non-Radarr instances.
+    .with_credit_repo(credit_repo);
+    let poller = if let Some(prewarm) = artwork_prewarm {
+        poller.with_artwork_prewarm(prewarm)
+    } else {
+        poller
+    };
+    let poller = if let Some(embedding_sync) = embedding_sync {
+        poller.with_embedding_sync(embedding_sync)
+    } else {
+        poller
+    };
     let span = tracing::info_span!(
         "arr_sync_poller",
         source_instance_id = %instance.id,
@@ -725,16 +1081,58 @@ async fn boot_worker(
     coordinator: Arc<dyn streamarr_coordination::ClusterCoordinator>,
     source_instances: Arc<streamarr_api::SourceInstanceRegistry>,
     active_sessions: streamarr_transcode::ActiveSessionCounter,
+    tdarr_notify_rx: tokio::sync::mpsc::Receiver<streamarr_transcode::MediaFileImportEvent>,
+    analytics_store: Arc<dyn streamarr_db::analytics::AnalyticsStore>,
+    session_registry: Arc<dyn streamarr_telemetry::analytics::SessionRegistry>,
+    analytics: Arc<streamarr_telemetry::analytics::AnalyticsCollector>,
 ) -> anyhow::Result<Vec<tokio::task::JoinHandle<()>>> {
     use std::collections::HashSet;
 
-    use streamarr_db::repo::{SqlxMediaFileRepo, SqlxRenditionRepo, SqlxWorkRepo};
-    use streamarr_db::{MediaFileRepo, RenditionRepo, WorkRepo};
+    use streamarr_db::repo::{SqlxCreditRepo, SqlxEmbeddingRepo, SqlxMediaFileRepo, SqlxWorkRepo};
+    use streamarr_db::{CreditRepo, EmbeddingRepo, MediaFileRepo, WorkRepo};
 
     let mut handles = Vec::new();
 
     let work_repo: Arc<dyn WorkRepo> = Arc::new(SqlxWorkRepo::new(pool.clone()));
     let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(SqlxMediaFileRepo::new(pool.clone()));
+    let credit_repo: Arc<dyn CreditRepo> = Arc::new(SqlxCreditRepo::new(pool.clone()));
+
+    // Proactive artwork cache warming (see `streamarr_arr_sync::
+    // artwork_prewarm`'s doc comment) -- unconditional, no fallible setup,
+    // so this is always `Some`.
+    let artwork_prewarm = Some(streamarr_arr_sync::ArtworkPrewarm::new(
+        streamarr_artwork::shared(),
+    ));
+
+    // Best-effort, same tradeoff `boot_api`'s own embedding-repo wiring
+    // documents: `FastEmbedEmbedder::new()` downloads its model on first
+    // use, so this must never fail worker startup. `None` here just means
+    // `similar` stays empty-of-fresh-data (already-cached embeddings from
+    // before this failure still serve fine) until a later restart
+    // succeeds.
+    let embedding_repo: Arc<dyn EmbeddingRepo> = Arc::new(SqlxEmbeddingRepo::new(pool.clone()));
+    let embedding_sync = match tokio::task::spawn_blocking(
+        streamarr_embeddings::FastEmbedEmbedder::new,
+    )
+    .await
+    {
+        Ok(Ok(embedder)) => Some(streamarr_arr_sync::EmbeddingSync::new(
+            Arc::new(embedder),
+            embedding_repo,
+        )),
+        Ok(Err(err)) => {
+            tracing::warn!(
+                %err,
+                "local embedding model failed to load; new/changed works will not get a \
+                 'similar to this' embedding until a later restart succeeds"
+            );
+            None
+        }
+        Err(err) => {
+            tracing::warn!(%err, "embedding model init task panicked; embedding sync disabled this run");
+            None
+        }
+    };
 
     let mut spawned_instance_ids: HashSet<uuid::Uuid> = HashSet::new();
     let configured_instances = source_instances.all();
@@ -751,6 +1149,9 @@ async fn boot_worker(
             &source_instances,
             work_repo.clone(),
             media_file_repo.clone(),
+            credit_repo.clone(),
+            artwork_prewarm.clone(),
+            embedding_sync.clone(),
             pool.clone(),
             coordinator.clone(),
         ));
@@ -783,6 +1184,9 @@ async fn boot_worker(
         let source_instances = source_instances.clone();
         let work_repo = work_repo.clone();
         let media_file_repo = media_file_repo.clone();
+        let credit_repo = credit_repo.clone();
+        let artwork_prewarm = artwork_prewarm.clone();
+        let embedding_sync = embedding_sync.clone();
         let pool = pool.clone();
         let coordinator = coordinator.clone();
         handles.push(tokio::spawn(async move {
@@ -802,6 +1206,9 @@ async fn boot_worker(
                             &source_instances,
                             work_repo.clone(),
                             media_file_repo.clone(),
+                            credit_repo.clone(),
+                            artwork_prewarm.clone(),
+                            embedding_sync.clone(),
                             pool.clone(),
                             coordinator.clone(),
                         );
@@ -811,48 +1218,200 @@ async fn boot_worker(
         }));
     }
 
-    if let Ok(tdarr_url) = std::env::var("TDARR_URL") {
-        let tdarr_api_key = std::env::var("TDARR_API_KEY").unwrap_or_default();
-        let rendition_repo: Arc<dyn RenditionRepo> = Arc::new(SqlxRenditionRepo::new(pool.clone()));
-        let tdarr = streamarr_tdarr_client::TdarrClient::new(tdarr_url, tdarr_api_key);
-        // TODO: nothing produces `MediaFileImportEvent`s yet (no
-        // `MediaFileRepo`/import pipeline — see `streamarr-transcode`'s own
-        // docs on `MediaFileImportEvent`); dropping `_events_tx` means this
-        // dispatcher only ever runs its real throttle-check loop against
-        // Tdarr's live API, never the per-import dispatch path, until that
-        // pipeline exists.
-        let (_events_tx, events_rx) = tokio::sync::mpsc::channel(64);
-        let dispatcher = streamarr_transcode::TdarrDispatcher::new(
-            tdarr,
-            rendition_repo,
-            active_sessions,
-            events_rx,
-            streamarr_transcode::TdarrDispatcherConfig {
-                tdarr_db_id: std::env::var("TDARR_DB_ID")
-                    .unwrap_or_else(|_| "streamarr".to_string()),
-                default_profile: "h264-720p-4mbps".to_string(),
-                worker_process: "transcodecpu".to_string(),
-                default_worker_limit: 2,
-                throttled_worker_limit: 0,
-                active_session_threshold: 2,
-                throttle_check_interval: Duration::from_secs(30),
-            },
+    // Three cluster-wide-singleton playback-analytics background jobs --
+    // all leader-gated, same `run_while_leader` pattern the Tdarr
+    // dispatcher below already uses, since each would be redundant work
+    // (though not unsafe -- every one of them is idempotent) if every node
+    // ran it concurrently.
+    {
+        let rollup = streamarr_telemetry::analytics::RollupScheduler::new(
+            analytics_store.clone(),
+            Duration::from_secs(300),
         );
         handles.push(tokio::spawn(run_while_leader(
-            coordinator,
-            "transcode-dispatcher",
+            coordinator.clone(),
+            "analytics-rollup",
             Duration::from_secs(30),
             async move {
-                if let Err(err) = dispatcher.run().await {
-                    tracing::error!(%err, "tdarr dispatcher exited with an error");
+                if let Err(err) = rollup.run().await {
+                    tracing::error!(%err, "stats_daily rollup scheduler exited with an error");
                 }
             },
         )));
-    } else {
-        tracing::info!("TDARR_URL not set; skipping the background Tdarr dispatch loop");
+    }
+    {
+        // 60s idle threshold: four missed heartbeats at the recommended
+        // 15s client heartbeat cadence -- see `SessionReaper`'s own doc
+        // comment for the tradeoff this balances.
+        let reaper = streamarr_telemetry::analytics::SessionReaper::new(
+            session_registry.clone(),
+            analytics.clone(),
+            Duration::from_secs(60),
+            Duration::from_secs(30),
+        );
+        handles.push(tokio::spawn(run_while_leader(
+            coordinator.clone(),
+            "analytics-reaper",
+            Duration::from_secs(30),
+            async move {
+                reaper.run().await;
+            },
+        )));
+    }
+    {
+        let retention = streamarr_telemetry::analytics::RetentionSweeper::new(
+            pool.clone(),
+            streamarr_telemetry::analytics::RetentionPolicy::default(),
+            Duration::from_secs(3600),
+        );
+        handles.push(tokio::spawn(run_while_leader(
+            coordinator.clone(),
+            "analytics-retention",
+            Duration::from_secs(30),
+            async move {
+                if let Err(err) = retention.run().await {
+                    tracing::error!(%err, "playback analytics retention sweeper exited with an error");
+                }
+            },
+        )));
+    }
+
+    // Sourced from the admin-registered `TdarrConnection` (see
+    // `streamarr_api::tdarr`'s module doc comment) -- replaces the old
+    // `TDARR_URL`/`TDARR_API_KEY`/`TDARR_DB_ID` env-var-only config, same
+    // "durable, admin-registerable, not a restart-required env var"
+    // upgrade `SourceInstance` already went through for `*arr` apps.
+    let tdarr_connection_repo: Arc<dyn streamarr_db::TdarrConnectionRepo> = Arc::new(
+        streamarr_db::repo::SqlxTdarrConnectionRepo::new(pool.clone()),
+    );
+    match tdarr_connection_repo.get().await {
+        Ok(Some(connection)) => {
+            handles.push(spawn_tdarr_dispatcher(
+                connection,
+                pool.clone(),
+                active_sessions,
+                tdarr_notify_rx,
+                coordinator.clone(),
+            ));
+        }
+        Ok(None) => {
+            tracing::info!(
+                "no Tdarr connection registered yet; background Tdarr dispatch loop starts \
+                 once one is registered via POST /api/v1/admin/tdarr (checked every 10s below)"
+            );
+            // Same "registered after this snapshot" gap `SourceInstance`
+            // hydration has its own 10s watch loop for (see the comment
+            // above this function's `configured_instances` loop) --
+            // mirrored here for Tdarr's single connection. Runs until the
+            // connection first appears, then spawns the dispatcher (moving
+            // `tdarr_notify_rx` in, which is why this loop can only ever
+            // do this once) and stops watching -- registering a *second*
+            // time (e.g. to rotate the API key) updates the row in place
+            // but does not hot-swap the already-running dispatcher; that
+            // still needs a restart, same as changing `STREAMARR_AUTH_MODE`
+            // does.
+            let coordinator = coordinator.clone();
+            handles.push(tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(10));
+                interval.tick().await; // first tick fires immediately; the check above already covered "now"
+                let mut tdarr_notify_rx = Some(tdarr_notify_rx);
+                loop {
+                    interval.tick().await;
+                    match tdarr_connection_repo.get().await {
+                        Ok(Some(connection)) => {
+                            let Some(tdarr_notify_rx) = tdarr_notify_rx.take() else {
+                                return;
+                            };
+                            tracing::info!(
+                                "Tdarr connection registered; starting the background dispatch loop now"
+                            );
+                            spawn_tdarr_dispatcher(
+                                connection,
+                                pool.clone(),
+                                active_sessions,
+                                tdarr_notify_rx,
+                                coordinator.clone(),
+                            );
+                            return;
+                        }
+                        Ok(None) => {}
+                        Err(err) => {
+                            tracing::error!(%err, "failed to check for a registered Tdarr connection");
+                        }
+                    }
+                }
+            }));
+        }
+        Err(err) => {
+            tracing::error!(
+                %err,
+                "failed to load the Tdarr connection from the database; background Tdarr \
+                 dispatch is unavailable until this is investigated"
+            );
+        }
     }
 
     Ok(handles)
+}
+
+/// Builds and spawns the leader-gated `TdarrDispatcher` loop from a
+/// persisted [`streamarr_model::TdarrConnection`] -- the single spawn
+/// point both `boot_worker`'s boot-time hydration and its registration
+/// watch loop (see that function's body) call into, so the two paths
+/// can't drift.
+fn spawn_tdarr_dispatcher(
+    connection: streamarr_model::TdarrConnection,
+    pool: DbPool,
+    active_sessions: streamarr_transcode::ActiveSessionCounter,
+    tdarr_notify_rx: tokio::sync::mpsc::Receiver<streamarr_transcode::MediaFileImportEvent>,
+    coordinator: Arc<dyn streamarr_coordination::ClusterCoordinator>,
+) -> tokio::task::JoinHandle<()> {
+    use streamarr_db::repo::SqlxRenditionRepo;
+    use streamarr_db::RenditionRepo;
+
+    let rendition_repo: Arc<dyn RenditionRepo> = Arc::new(SqlxRenditionRepo::new(pool));
+    let tdarr = streamarr_tdarr_client::TdarrClient::new(
+        connection.base_url,
+        connection.api_key_encrypted.expose_secret().clone(),
+    );
+    // `tdarr_notify_rx` is the receive side of the channel `boot_api`'s
+    // `TranscodeOrchestrator` sends on every time it starts a live
+    // on-demand session (see `streamarr_transcode`'s module docs, "other
+    // bridge" section) -- this is what turns "someone is watching this
+    // file right now via a temporary session" into a durable,
+    // Tdarr-produced `Rendition` for future requests. Real *arr
+    // import/upgrade events aren't wired onto this same channel yet
+    // (there's no `MediaFileRepo`-backed import pipeline outside
+    // arr-sync's own reconciliation flow to source them from) -- a
+    // separate, not-yet-addressed gap; the on-demand path above is real
+    // and live today regardless.
+    let dispatcher = streamarr_transcode::TdarrDispatcher::new(
+        tdarr,
+        rendition_repo,
+        active_sessions,
+        tdarr_notify_rx,
+        streamarr_transcode::TdarrDispatcherConfig {
+            tdarr_db_id: connection.tdarr_db_id,
+            default_profile: connection.default_profile,
+            worker_process: connection.worker_process,
+            default_worker_limit: connection.default_worker_limit,
+            throttled_worker_limit: connection.throttled_worker_limit,
+            active_session_threshold: connection.active_session_threshold.max(0) as usize,
+            throttle_check_interval: Duration::from_secs(
+                connection.throttle_check_interval_secs.max(0) as u64,
+            ),
+        },
+    );
+    tokio::spawn(run_while_leader(
+        coordinator,
+        "transcode-dispatcher",
+        Duration::from_secs(30),
+        async move {
+            if let Err(err) = dispatcher.run().await {
+                tracing::error!(%err, "tdarr dispatcher exited with an error");
+            }
+        },
+    ))
 }
 
 /// Runs `task` only once this node has won leadership of `role` via
@@ -1036,4 +1595,135 @@ async fn apply_update(target_version: &str) -> anyhow::Result<()> {
     anyhow::bail!(
         "streamarr update --yes is not implemented yet (would update to {target_version})"
     );
+}
+
+#[cfg(test)]
+mod bootstrap_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use streamarr_auth::PasswordVerifier as _;
+    use streamarr_db::repo::{SqlxPolicyRepo, SqlxUserRepo};
+    use streamarr_db::{DbPool, PolicyRepo, UserRepo};
+
+    /// Same private, migrated, in-memory SQLite pool idiom
+    /// `streamarr-api`'s `test_support::test_pool` and `streamarr-catalog`'s
+    /// own tests use -- a fresh, uniquely named `:memory:`-equivalent
+    /// database per call.
+    async fn test_pool() -> DbPool {
+        static SEQ: AtomicU64 = AtomicU64::new(0);
+        let n = SEQ.fetch_add(1, Ordering::Relaxed);
+        let url = format!("sqlite://streamarr_bin_bootstrap_test_{n}?mode=memory&cache=shared");
+
+        sqlx::any::install_default_drivers();
+        let pool: DbPool = sqlx::any::AnyPoolOptions::new()
+            .max_connections(1)
+            .connect(&url)
+            .await
+            .expect("open in-memory sqlite pool");
+        streamarr_db::run_migrations(&pool, false)
+            .await
+            .expect("run real embedded sqlite migrations");
+        pool
+    }
+
+    /// End-to-end proof (real SQLite, real Argon2 hashing, no mocks) that a
+    /// fresh, empty database gets exactly one real, persisted, `is_admin`
+    /// account whose generated password actually verifies against the
+    /// stored hash -- the actual "nobody could ever log in" gap this
+    /// function exists to close.
+    #[tokio::test]
+    async fn bootstrap_creates_a_real_verifiable_admin_on_an_empty_database() {
+        let pool = test_pool().await;
+        let user_repo: Arc<dyn UserRepo> = Arc::new(SqlxUserRepo::new(pool.clone()));
+        let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool));
+
+        let admin_id = bootstrap_admin_with(
+            &user_repo,
+            &policy_repo,
+            DEFAULT_BOOTSTRAP_ADMIN_USERNAME,
+            None,
+        )
+        .await
+        .expect("bootstrap succeeds on an empty database");
+
+        let users = user_repo.list_all().await.unwrap();
+        assert_eq!(users.len(), 1, "exactly one account is provisioned");
+        let user = &users[0];
+        assert_eq!(user.id, admin_id);
+        assert_eq!(user.username, DEFAULT_BOOTSTRAP_ADMIN_USERNAME);
+        assert!(!user.disabled);
+
+        let policy = policy_repo
+            .find_by_id(user.policy_id)
+            .await
+            .unwrap()
+            .expect("bootstrap admin's policy is persisted");
+        assert!(policy.is_admin, "bootstrap account must be a real admin");
+        assert!(
+            !policy.can_stream,
+            "bootstrap admin must not have Playarr streaming access by default"
+        );
+
+        // The generated password itself is never stored/returned -- only
+        // its Argon2id hash is persisted -- so this can only prove *some*
+        // real, well-formed password was generated and hashed correctly
+        // (a wrong guess must not verify against it), not recover what the
+        // generated password actually was.
+        assert!(
+            !streamarr_auth::login::Argon2PasswordVerifier.verify(
+                "definitely-not-the-generated-password",
+                user.password_hash.expose_secret()
+            ),
+            "an arbitrary wrong password must never verify against the real hash"
+        );
+    }
+
+    #[tokio::test]
+    async fn bootstrap_is_idempotent_and_honors_explicit_credentials() {
+        let pool = test_pool().await;
+        let user_repo: Arc<dyn UserRepo> = Arc::new(SqlxUserRepo::new(pool.clone()));
+        let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool));
+
+        let first_id = bootstrap_admin_with(
+            &user_repo,
+            &policy_repo,
+            "root-test-user",
+            Some("a-real-known-test-password-123"),
+        )
+        .await
+        .unwrap();
+        let users_after_first = user_repo.list_all().await.unwrap();
+        assert_eq!(users_after_first.len(), 1);
+        assert_eq!(users_after_first[0].username, "root-test-user");
+
+        // The explicit password must actually be the one that verifies --
+        // not a generated one -- since an explicit password was passed.
+        assert!(streamarr_auth::login::Argon2PasswordVerifier.verify(
+            "a-real-known-test-password-123",
+            users_after_first[0].password_hash.expose_secret()
+        ));
+
+        // A second call against a now-non-empty database must not create a
+        // second account -- it must resolve back to the same (or an
+        // equally real, already-persisted) admin instead, regardless of
+        // what's passed in this time.
+        let second_id = bootstrap_admin_with(&user_repo, &policy_repo, "some-other-name", None)
+            .await
+            .unwrap();
+        let users_after_second = user_repo.list_all().await.unwrap();
+        assert_eq!(
+            users_after_second.len(),
+            1,
+            "bootstrap must not create a second account when one already exists"
+        );
+        assert_eq!(second_id, first_id);
+    }
+
+    #[test]
+    fn generated_bootstrap_passwords_are_long_and_not_a_fixed_default() {
+        let a = generate_bootstrap_password();
+        let b = generate_bootstrap_password();
+        assert_ne!(a, b, "must never generate the same password twice");
+        assert!(a.len() >= 20, "must be comfortably longer than 20 chars");
+    }
 }

@@ -21,6 +21,9 @@ describe("ApiClient", () => {
       const url = new URL(request.url);
       expect(url.pathname).toBe("/api/v1/catalog");
       expect(url.searchParams.get("kind")).toBe("movie");
+      expect(url.searchParams.get("available_only")).toBe("true");
+      expect(url.searchParams.get("sort")).toBe("date_added");
+      expect(url.searchParams.get("order")).toBe("desc");
       expect(url.searchParams.get("limit")).toBe("10");
       return jsonResponse(200, {
         items: [
@@ -43,11 +46,45 @@ describe("ApiClient", () => {
     });
 
     const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl });
-    const page = await client.browseCatalog({ kind: "movie", limit: 10 });
+    const page = await client.browseCatalog({
+      kind: "movie",
+      available_only: true,
+      sort: "date_added",
+      order: "desc",
+      limit: 10,
+    });
 
     expect(page.items).toHaveLength(1);
     expect(page.items[0]?.title).toBe("Voyage");
     expect(page.total).toBe(1);
+  });
+
+  it("threads source_instance_id through to the query string", async () => {
+    const instanceId = "9c1d2e3f-3333-4c33-9c33-000000000003";
+    const fetchImpl = mockFetch((request) => {
+      const url = new URL(request.url);
+      expect(url.pathname).toBe("/api/v1/catalog");
+      expect(url.searchParams.get("source_instance_id")).toBe(instanceId);
+      return jsonResponse(200, { items: [], total: 0 });
+    });
+
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl });
+    await client.browseCatalog({ source_instance_id: instanceId });
+  });
+
+  it("lists authenticated catalog kinds visible to the caller", async () => {
+    const fetchImpl = mockFetch((request) => {
+      expect(new URL(request.url).pathname).toBe("/api/v1/catalog/kinds");
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+      return jsonResponse(200, ["movie", "site"]);
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "viewer-token",
+    });
+
+    await expect(client.listCatalogKinds()).resolves.toEqual(["movie", "site"]);
   });
 
   it("throws ApiError with the parsed body on a non-2xx response", async () => {
@@ -89,6 +126,98 @@ describe("ApiClient", () => {
 
     expect(detail.media_file_id).toBe(mediaFileId);
     expect(detail.children).toBe("Movie");
+  });
+
+  it("fetches a movie's authenticated cast and crew credits", async () => {
+    const workId = "3f8b3e2a-1111-4a11-9a11-000000000001";
+    const personId = "4f8b3e2a-1111-4a11-9a11-000000000001";
+    const fetchImpl = mockFetch((request) => {
+      expect(new URL(request.url).pathname).toBe(`/api/v1/catalog/${workId}/credits`);
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+      return jsonResponse(200, {
+        cast: [
+          {
+            id: "5f8b3e2a-1111-4a11-9a11-000000000001",
+            person: {
+              id: personId,
+              name: "Sample Actress",
+              headshot_url: "https://example.test/sample-actress.jpg",
+            },
+            character: "Sample Character Two",
+          },
+        ],
+        crew: [],
+      });
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "viewer-token",
+    });
+
+    const credits = await client.getWorkCredits(workId);
+
+    expect(credits.cast[0]?.person.name).toBe("Sample Actress");
+    expect(credits.cast[0]?.character).toBe("Sample Character Two");
+    expect(credits.crew).toEqual([]);
+  });
+
+  it("fetches authenticated similar titles with the requested limit", async () => {
+    const workId = "3f8b3e2a-1111-4a11-9a11-000000000001";
+    const similarId = "3f8b3e2a-1111-4a11-9a11-000000000002";
+    const fetchImpl = mockFetch((request) => {
+      const url = new URL(request.url);
+      expect(url.pathname).toBe(`/api/v1/catalog/${workId}/similar`);
+      expect(url.searchParams.get("limit")).toBe("12");
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+      return jsonResponse(200, [
+        {
+          id: similarId,
+          kind: "movie",
+          external_refs: [],
+          title: "Sample Movie 2049",
+          sort_title: "Sample Movie 2049",
+          images: [],
+          genres: ["science fiction"],
+          tags: [],
+          added_at: "2024-01-01T00:00:00Z",
+          monitored: true,
+          availability: "available",
+        },
+      ]);
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "viewer-token",
+    });
+
+    const similar = await client.getSimilarWorks(workId, 12);
+
+    expect(similar).toHaveLength(1);
+    expect(similar[0]?.id).toBe(similarId);
+  });
+
+  it("fetches authenticated Streamarr-cached work artwork as a blob", async () => {
+    const workId = "3f8b3e2a-1111-4a11-9a11-000000000001";
+    const getAccessToken = vi.fn(async () => "access-token");
+    const fetchImpl = mockFetch((request) => {
+      expect(new URL(request.url).pathname).toBe(
+        `/api/v1/artwork/work/${workId}/backdrop`
+      );
+      expect(request.headers.get("Authorization")).toBe("Bearer access-token");
+      return new Response(new Uint8Array([0xff, 0xd8, 0xff]), {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      });
+    });
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken });
+
+    const artwork = await client.getWorkArtwork(workId, "backdrop");
+
+    expect(artwork).toBeInstanceOf(Blob);
+    expect(artwork.type).toBe("image/jpeg");
+    expect(getAccessToken).toHaveBeenCalledOnce();
   });
 
   it("resolves media_file_id to null for a series whose leaves live on its episodes instead", async () => {
@@ -250,7 +379,17 @@ describe("ApiClient", () => {
       expect(url.searchParams.get("containers")).toBe("mp4");
       expect(url.searchParams.get("video_codecs")).toBe("h264");
       expect(url.searchParams.get("max_bitrate_bps")).toBe("4000000");
-      return jsonResponse(200, { mode: "direct", url: "/api/v1/media/media-file-1/stream" });
+      expect(url.searchParams.get("profile")).toBe("h264-720p-4mbps");
+      expect(url.searchParams.get("force_transcode")).toBe("true");
+      expect(url.searchParams.get("start_position_ms")).toBe("1234567");
+      expect(url.searchParams.get("audio_stream_index")).toBe("4");
+      return jsonResponse(200, {
+        mode: "hls",
+        url: "/api/v1/media/sessions/session-1/playlist.m3u8",
+        session_id: "00000000-0000-0000-0000-000000000001",
+        selected_quality_id: "h264-720p-4mbps",
+        quality_options: [],
+      });
     });
 
     const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl });
@@ -258,10 +397,306 @@ describe("ApiClient", () => {
       containers: "mp4",
       videoCodecs: "h264",
       maxBitrateBps: 4_000_000,
+      profile: "h264-720p-4mbps",
+      forceTranscode: true,
+      startPositionMs: 1_234_567,
+      audioStreamIndex: 4,
     });
 
-    expect(info.mode).toBe("direct");
-    expect(client.resolveUrl(info.url)).toBe("http://localhost:8080/api/v1/media/media-file-1/stream");
+    expect(info.mode).toBe("hls");
+    expect(client.resolveUrl(info.url)).toBe(
+      "http://localhost:8080/api/v1/media/sessions/session-1/playlist.m3u8"
+    );
+  });
+
+  it("records an authenticated playback stop event", async () => {
+    const fetchImpl = mockFetch(async (request) => {
+      expect(new URL(request.url).pathname).toBe(
+        "/api/v1/playback/sessions/session-1/events"
+      );
+      expect(request.method).toBe("POST");
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+      expect(await request.json()).toEqual({
+        kind: "stop",
+        reason: "user_stopped",
+        position_ms: 12_000,
+      });
+      return new Response(null, { status: 204 });
+    });
+
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: async () => "viewer-token",
+    });
+    await client.recordPlaybackEvent("session-1", {
+      kind: "stop",
+      reason: "user_stopped",
+      position_ms: 12_000,
+    });
+  });
+
+  it("fetches real embedded media chapters with streaming authentication", async () => {
+    const fetchImpl = mockFetch((request) => {
+      expect(new URL(request.url).pathname).toBe("/api/v1/media/media-file-1/chapters");
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+      return jsonResponse(200, [
+        { index: 0, title: "Opening", start_ms: 0, end_ms: 65_432 },
+        { index: 1, start_ms: 65_432, end_ms: 120_000 },
+      ]);
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "viewer-token",
+    });
+
+    const chapters = await client.getMediaChapters("media-file-1");
+
+    expect(chapters).toHaveLength(2);
+    expect(chapters[1]?.title).toBeUndefined();
+    expect(chapters[1]?.start_ms).toBe(65_432);
+  });
+
+  it("fetches persisted media runtime metadata with streaming authentication", async () => {
+    const fetchImpl = mockFetch((request) => {
+      expect(new URL(request.url).pathname).toBe("/api/v1/media/media-file-1/metadata");
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+      return jsonResponse(200, { duration_ms: 3_643_424 });
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "viewer-token",
+    });
+
+    const metadata = await client.getMediaMetadata("media-file-1");
+
+    expect(metadata.duration_ms).toBe(3_643_424);
+  });
+
+  it("fetches an authenticated WebVTT subtitle with its source offset", async () => {
+    const fetchImpl = mockFetch((request) => {
+      const url = new URL(request.url);
+      expect(url.pathname).toBe("/api/v1/media/media-file-1/subtitles/3");
+      expect(url.searchParams.get("source_offset_ms")).toBe("65432");
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+      return new Response("WEBVTT\n\n00:00.000 --> 00:01.000\nHello\n", {
+        status: 200,
+        headers: { "content-type": "text/vtt" },
+      });
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "viewer-token",
+    });
+
+    const subtitle = await client.getMediaSubtitle("media-file-1", 3, 65_432);
+
+    expect(subtitle).toBeInstanceOf(Blob);
+    expect(subtitle.type).toBe("text/vtt");
+    expect(await subtitle.text()).toContain("WEBVTT");
+  });
+
+  it("fetches an authenticated episode thumbnail as a JPEG blob", async () => {
+    const jpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+    const fetchImpl = mockFetch((request) => {
+      const url = new URL(request.url);
+      expect(url.pathname).toBe(
+        "/api/v1/media/media-file-1/thumbnail"
+      );
+      expect(url.searchParams.get("position_ms")).toBe("65432");
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+      return new Response(jpegBytes, {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      });
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "viewer-token",
+    });
+
+    const thumbnail = await client.getMediaThumbnail("media-file-1", 65_432);
+
+    expect(thumbnail).toBeInstanceOf(Blob);
+    expect(thumbnail.type).toBe("image/jpeg");
+    expect(Array.from(new Uint8Array(await thumbnail.arrayBuffer()))).toEqual(
+      Array.from(jpegBytes)
+    );
+  });
+
+  it("gets and persists authenticated per-media playback choices", async () => {
+    const requests: Request[] = [];
+    const response = {
+      quality_options: [
+        {
+          id: "original",
+          label: "Original",
+          profile: null,
+          height: null,
+          video_bitrate_bps: null,
+        },
+      ],
+      audio_tracks: [],
+      subtitle_tracks: [],
+      preferences: {
+        quality_id: "original",
+        audio_track_id: null,
+        subtitle_track_id: null,
+      },
+    };
+    const fetchImpl = mockFetch(async (request) => {
+      requests.push(request);
+      expect(new URL(request.url).pathname).toBe(
+        "/api/v1/media/media-file-1/playback-options"
+      );
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+      if (request.method === "PATCH") {
+        expect(await request.json()).toEqual(response.preferences);
+      }
+      return jsonResponse(200, response);
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "viewer-token",
+    });
+
+    expect((await client.getMediaPlaybackOptions("media-file-1")).preferences).toEqual(
+      response.preferences
+    );
+    expect(
+      (
+        await client.updateMediaPlaybackOptions(
+          "media-file-1",
+          response.preferences
+        )
+      ).preferences
+    ).toEqual(response.preferences);
+    expect(requests.map((request) => request.method)).toEqual(["GET", "PATCH"]);
+  });
+
+  it("lists and updates authenticated watch progress with ergonomic field names", async () => {
+    const requests: Request[] = [];
+    const fetchImpl = mockFetch(async (request) => {
+      requests.push(request);
+      const url = new URL(request.url);
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+
+      if (url.pathname === "/api/v1/playback/progress") {
+        return jsonResponse(200, []);
+      }
+
+      expect(url.pathname).toBe("/api/v1/playback/media-file-1/progress");
+      expect(request.method).toBe("PUT");
+      expect(await request.json()).toEqual({
+        position_ms: 45_000,
+        duration_ms: 100_000,
+        completed: false,
+      });
+      return jsonResponse(200, {
+        media_file_id: "media-file-1",
+        work_id: "work-1",
+        position_ms: 45_000,
+        duration_ms: 100_000,
+        state: "part_watched",
+        updated_at: "2026-07-16T00:00:00Z",
+      });
+    });
+
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "viewer-token",
+    });
+
+    expect(await client.listWatchProgress()).toEqual([]);
+    const progress = await client.updateWatchProgress("media-file-1", {
+      positionMs: 45_000,
+      durationMs: 100_000,
+      completed: false,
+    });
+
+    expect(progress.state).toBe("part_watched");
+    expect(requests).toHaveLength(2);
+  });
+
+  it("gets and updates the signed-in user's player audio language", async () => {
+    const requests: Request[] = [];
+    const fetchImpl = mockFetch(async (request) => {
+      requests.push(request);
+      expect(new URL(request.url).pathname).toBe(
+        "/api/v1/users/me/player-preferences"
+      );
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+      if (request.method === "GET") {
+        return jsonResponse(200, { preferred_audio_language: "en" });
+      }
+      expect(await request.json()).toEqual({ preferred_audio_language: "fr" });
+      return jsonResponse(200, { preferred_audio_language: "fr" });
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "viewer-token",
+    });
+
+    expect(await client.getPlayerPreferences()).toEqual({
+      preferred_audio_language: "en",
+    });
+    expect(
+      await client.updatePlayerPreferences({ preferred_audio_language: "fr" })
+    ).toEqual({ preferred_audio_language: "fr" });
+    expect(requests).toHaveLength(2);
+  });
+
+  it("lists profiles and manages profile PIN locks with viewer authentication", async () => {
+    const requests: Request[] = [];
+    const fetchImpl = mockFetch(async (request) => {
+      requests.push(request);
+      const path = new URL(request.url).pathname;
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+
+      if (path === "/api/v1/users/profiles") {
+        return jsonResponse(200, [
+          {
+            id: "profile-1",
+            username: "alex",
+            display_name: "Alex",
+            is_current: true,
+            pin_locked: false,
+          },
+        ]);
+      }
+      if (path === "/api/v1/users/me/profile-pin" && request.method === "GET") {
+        return jsonResponse(200, { pin_locked: false });
+      }
+      if (path === "/api/v1/users/me/profile-pin" && request.method === "PATCH") {
+        expect(await request.json()).toEqual({ pin: "1234" });
+        return jsonResponse(200, { pin_locked: true });
+      }
+      expect(path).toBe("/api/v1/users/profiles/profile-1/verify-pin");
+      expect(await request.json()).toEqual({ pin: "1234" });
+      return jsonResponse(200, { verified: true });
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "viewer-token",
+    });
+
+    expect(await client.listAvailableProfiles()).toHaveLength(1);
+    expect(await client.getProfilePinSetting()).toEqual({ pin_locked: false });
+    expect(await client.updateProfilePinSetting({ pin: "1234" })).toEqual({
+      pin_locked: true,
+    });
+    expect(await client.verifyProfilePin("profile-1", { pin: "1234" })).toEqual({
+      verified: true,
+    });
+    expect(requests).toHaveLength(4);
   });
 });
 

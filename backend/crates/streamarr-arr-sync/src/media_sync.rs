@@ -1,8 +1,9 @@
 //! File-level sync: once a [`streamarr_model::Work`]'s catalog identity is
 //! reconciled (see [`crate::poller`]), [`MediaSync::sync_work`] fetches that
 //! work's *file* data from the same source instance (Sonarr episode files,
-//! Radarr's embedded movie file, Lidarr track files, Readarr book files) and
-//! upserts real [`streamarr_model::MediaFile`] rows via
+//! Radarr's embedded movie file, Lidarr track files, Readarr book files,
+//! Whisparr scene/episode files) and upserts real
+//! [`streamarr_model::MediaFile`] rows via
 //! [`streamarr_db::MediaFileRepo::upsert_by_source`].
 //!
 //! ## Resolving a leaf id
@@ -28,17 +29,11 @@
 //! - Season: `(series_work_id, season_number)` — a real `UNIQUE` index.
 //! - Episode: `(season_id, episode_number)` — a real `UNIQUE` index; Sonarr's
 //!   trimmed episode DTO conveniently carries both numbers directly.
-//! - Album: `(artist_work_id, title)` — no `UNIQUE` index exists (Lidarr's
-//!   trimmed DTO has no field this crate could add one on), so this is a
-//!   best-effort natural key, not a guaranteed-unique one.
-//! - Track: **no natural key is available at all.** Lidarr's trimmed
-//!   `LidarrTrackFile` (see `streamarr-arr-client`) carries `album_id` but no
-//!   track/disc number, title, or per-track id, and `LidarrClient` has no
-//!   `list_tracks` method to fetch that detail separately. This module falls
-//!   back to `(album_id, disc_number = 1, track_number = <Lidarr's own
-//!   trackfile id>)` — deterministic and stable across re-syncs (so re-
-//!   running sync doesn't duplicate rows), but not a faithful per-song
-//!   track number. Documented here rather than silently guessed at.
+//! - Album: `(artist_work_id, title)` — no `UNIQUE` index exists, so this is
+//!   a best-effort natural key, not a guaranteed-unique one.
+//! - Track: `(album_id, disc_number, track_number)` — Lidarr's `/track`
+//!   resource supplies the real ordering, title, duration, and `trackFileId`;
+//!   the last field joins each catalogue track to its imported file.
 //! - Book: `(author_work_id, title)` — same best-effort shape as Album;
 //!   Readarr's `bookId` on the file *does* let us resolve the correct
 //!   `ReadarrBook` (so `title` itself is trustworthy), just not via a real
@@ -56,15 +51,16 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use streamarr_arr_client::{
-    ArrClientError, LidarrAlbum, LidarrClient, RadarrClient, ReadarrBook, ReadarrClient,
-    SonarrClient, SonarrEpisodeFile,
+    ArrClientError, LidarrAlbum, LidarrClient, LidarrTrack, RadarrClient, RadarrCredit,
+    ReadarrBook, ReadarrClient, SonarrClient, SonarrEpisodeFile, WhisparrClient,
+    WhisparrEpisodeFile,
 };
-use streamarr_db::{DbPool, MediaFileRepo};
+use streamarr_db::{CreditRepo, DbPool, MediaFileRepo};
 use streamarr_model::media::LeafRef;
-use streamarr_model::MediaFile;
+use streamarr_model::{Credit, CreditRole, ImageAsset, MediaFile, Person};
 use uuid::Uuid;
 
-use crate::arr_client::ArrClient;
+use crate::arr_client::{sonarr_images, whisparr_images, ArrClient};
 
 #[derive(Debug, thiserror::Error)]
 pub enum MediaSyncError {
@@ -114,21 +110,99 @@ fn container_from_path(path: &str) -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
-/// Best-effort file-stem-derived title, used only where the source *arr
-/// app's trimmed DTO carries no title of its own (Lidarr's per-file/per-
-/// track detail — see this module's doc comment).
-fn title_from_path(path: &str) -> String {
-    Path::new(path)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .map(str::to_string)
-        .unwrap_or_else(|| path.to_string())
+fn lidarr_track_number(track: &LidarrTrack) -> i64 {
+    (track.absolute_track_number > 0)
+        .then_some(track.absolute_track_number)
+        .or_else(|| {
+            track
+        .track_number
+                .as_deref()
+                .unwrap_or_default()
+        .split(|character: char| !character.is_ascii_digit())
+        .find(|part| !part.is_empty())
+        .and_then(|part| part.parse::<i64>().ok())
+        })
+        .unwrap_or(track.id)
+}
+
+fn lidarr_album_type(album: &LidarrAlbum) -> &'static str {
+    let labels = album
+        .secondary_types
+        .iter()
+        .map(String::as_str)
+        .chain(album.album_type.as_deref())
+        .map(|label| label.trim().to_ascii_lowercase())
+        .collect::<Vec<_>>();
+    if labels.iter().any(|label| label.contains("live")) {
+        "live"
+    } else if labels.iter().any(|label| label.contains("compilation")) {
+        "compilation"
+    } else if labels
+        .iter()
+        .any(|label| label == "ep" || label.contains("extended play"))
+    {
+        "ep"
+    } else if labels.iter().any(|label| label.contains("single")) {
+        "single"
+    } else if labels.iter().any(|label| label.contains("soundtrack")) {
+        "soundtrack"
+    } else {
+        "studio"
+    }
+}
+
+fn lidarr_release_date(raw: Option<&str>) -> Option<String> {
+    let raw = raw?.trim();
+    if raw.len() < 10 {
+        return None;
+    }
+    chrono::NaiveDate::parse_from_str(&raw[..10], "%Y-%m-%d")
+        .ok()
+        .map(|date| date.format("%Y-%m-%d").to_string())
+}
+
+/// Parses the `HH:MM:SS[.fraction]` value Sonarr/Radarr expose from their
+/// own media analysis. Invalid or non-positive values stay unknown so a
+/// later one-file ffprobe can fill them without poisoning the cache.
+fn runtime_string_to_ms(raw: &str) -> Option<u64> {
+    let parts: Vec<&str> = raw.trim().split(':').collect();
+    let (hours, minutes, seconds) = match parts.as_slice() {
+        [minutes, seconds] => (
+            0,
+            minutes.parse::<u64>().ok()?,
+            seconds.parse::<f64>().ok()?,
+        ),
+        [hours, minutes, seconds] => (
+            hours.parse::<u64>().ok()?,
+            minutes.parse::<u64>().ok()?,
+            seconds.parse::<f64>().ok()?,
+        ),
+        _ => return None,
+    };
+    if minutes >= 60 || !seconds.is_finite() || !(0.0..60.0).contains(&seconds) {
+        return None;
+    }
+    let total_ms =
+        ((hours * 3_600 + minutes * 60) as f64 * 1_000.0 + seconds * 1_000.0).round() as u64;
+    (total_ms > 0).then_some(total_ms)
+}
+
+fn minutes_to_ms(minutes: Option<u32>) -> Option<u64> {
+    minutes
+        .filter(|minutes| *minutes > 0)
+        .map(|minutes| u64::from(minutes) * 60_000)
 }
 
 pub struct MediaSync {
     pool: DbPool,
     backend: Backend,
     media_file_repo: std::sync::Arc<dyn MediaFileRepo>,
+    /// `None` by default (same builder-opt-in shape as `ReconciliationPoller`'s
+    /// `status_reporter` -- existing callers/tests that don't care about
+    /// credits don't need to thread an extra constructor argument through).
+    /// Only ever consulted from `sync_radarr` -- see that method's doc
+    /// comment for why credits are Radarr-only.
+    credit_repo: Option<std::sync::Arc<dyn CreditRepo>>,
 }
 
 impl MediaSync {
@@ -138,7 +212,36 @@ impl MediaSync {
             pool,
             backend,
             media_file_repo,
+            credit_repo: None,
         }
+    }
+
+    /// Opts this `MediaSync` into also syncing cast/crew credits for
+    /// Radarr-sourced movies -- see `sync_radarr`'s doc comment.
+    pub fn with_credit_repo(mut self, credit_repo: std::sync::Arc<dyn CreditRepo>) -> Self {
+        self.credit_repo = Some(credit_repo);
+        self
+    }
+
+    /// Whether `work_id` already has at least one synced `MediaFile` row --
+    /// lets a caller distinguish "genuinely nothing to sync yet" from "a
+    /// file sync was attempted and never completed" without needing its
+    /// own tracking. Backs `ReconciliationPoller`'s missing-file backfill:
+    /// see that type's doc comment on why a work's *catalog* identity being
+    /// unchanged across passes doesn't guarantee its file-level sync ever
+    /// actually succeeded.
+    pub async fn has_any_media_file(&self, work_id: Uuid) -> Result<bool, MediaSyncError> {
+        let files = self.media_file_repo.list_by_work_id(work_id).await?;
+        Ok(!files.is_empty())
+    }
+
+    /// Returns whether a work needs a file-level refresh because at least
+    /// one existing file predates persisted runtimes. This makes the
+    /// scheduled reconciliation pass a bounded backfill for established
+    /// libraries instead of requiring tens of thousands of eager probes.
+    pub async fn has_missing_duration(&self, work_id: Uuid) -> Result<bool, MediaSyncError> {
+        let files = self.media_file_repo.list_by_work_id(work_id).await?;
+        Ok(files.iter().any(|file| file.duration_ms.is_none()))
     }
 
     /// Entry point [`crate::poller::ReconciliationPoller`] calls after
@@ -155,7 +258,7 @@ impl MediaSync {
         arr_source_id: i64,
         source_instance_id: Uuid,
     ) -> Result<(), MediaSyncError> {
-        match arr_client {
+        let result = match arr_client {
             ArrClient::Sonarr(client) => {
                 self.sync_sonarr(client, work_id, arr_source_id, source_instance_id)
                     .await
@@ -172,8 +275,18 @@ impl MediaSync {
                 self.sync_readarr(client, work_id, arr_source_id, source_instance_id)
                     .await
             }
+            ArrClient::Whisparr(client) => {
+                self.sync_whisparr(client, work_id, arr_source_id, source_instance_id)
+                    .await
+            }
             ArrClient::Bazarr(_) | ArrClient::Prowlarr(_) => Ok(()),
+        };
+        if result.is_ok() {
+            self.media_file_repo
+                .mark_missing_durations_scanned(work_id)
+                .await?;
         }
+        result
     }
 
     // ---- Radarr: movie file embedded directly on the movie resource ----
@@ -193,6 +306,10 @@ impl MediaSync {
         };
 
         let media_info = file.media_info.as_ref();
+        let duration_ms = media_info
+            .and_then(|info| info.run_time.as_deref())
+            .and_then(runtime_string_to_ms)
+            .or_else(|| minutes_to_ms(movie.runtime));
         let media_file = MediaFile {
             id: Uuid::new_v4(),
             work_id,
@@ -203,12 +320,97 @@ impl MediaSync {
                 .and_then(|m| m.video_codec.clone())
                 .unwrap_or_else(|| file.quality.quality.name.clone()),
             bitrate: media_info.and_then(|m| m.video_bitrate).map(|b| b as u64),
+            // `0` is a persisted "source metadata checked but did not
+            // report a runtime" sentinel. Playarr still lazily ffprobes
+            // that one file when opened, but scheduled reconciliation does
+            // not repeatedly re-fetch the same unresolved title forever.
+            duration_ms: Some(duration_ms.unwrap_or(0)),
             size_bytes: file.size as u64,
             source_instance_id,
             source_file_id: Some(file.id.to_string()),
         };
         self.media_file_repo.upsert_by_source(&media_file).await?;
+
+        if let Some(credit_repo) = &self.credit_repo {
+            self.sync_radarr_credits(credit_repo.as_ref(), client, work_id, movie_id)
+                .await?;
+        }
         Ok(())
+    }
+
+    /// `GET /api/v3/credit?movieId={id}` -- verified live against a real
+    /// Radarr instance to be the only *arr credit source in this stack
+    /// (see `RadarrCredit`'s doc comment). Dedupes each credited person by
+    /// `person_tmdb_id` (one `Person` row per real individual, shared
+    /// across every movie they appear in) via
+    /// `CreditRepo::find_person_by_tmdb_id`, then fully replaces
+    /// `work_id`'s credit list -- a full reconciliation each pass, same as
+    /// every other Radarr-sourced field here, not an incremental diff.
+    async fn sync_radarr_credits(
+        &self,
+        credit_repo: &dyn CreditRepo,
+        client: &RadarrClient,
+        work_id: Uuid,
+        movie_id: i64,
+    ) -> Result<(), MediaSyncError> {
+        let remote_credits = client.list_credits(movie_id).await?;
+        let mut credits = Vec::with_capacity(remote_credits.len());
+
+        for remote in remote_credits {
+            let person_id = self.find_or_upsert_person(credit_repo, &remote).await?;
+            let role = match remote.credit_type.as_str() {
+                "crew" => CreditRole::Crew {
+                    department: remote.department.unwrap_or_default(),
+                    job: remote.job.unwrap_or_default(),
+                },
+                // "cast", and anything unrecognized -- see
+                // `SqlxCreditRepo::credit_from_row`'s matching fallback for
+                // the same "never fail a sync pass over one unexpected
+                // discriminant" rationale.
+                _ => CreditRole::Cast {
+                    character: remote.character.unwrap_or_default(),
+                },
+            };
+            credits.push(Credit {
+                id: Uuid::new_v4(),
+                work_id,
+                person_id,
+                role,
+                order: remote.order as i32,
+            });
+        }
+
+        credit_repo
+            .replace_credits_for_work(work_id, &credits)
+            .await?;
+        Ok(())
+    }
+
+    async fn find_or_upsert_person(
+        &self,
+        credit_repo: &dyn CreditRepo,
+        remote: &RadarrCredit,
+    ) -> Result<Uuid, MediaSyncError> {
+        if let Some(existing) = credit_repo
+            .find_person_by_tmdb_id(remote.person_tmdb_id)
+            .await?
+        {
+            return Ok(existing.id);
+        }
+
+        let headshot_url = remote
+            .images
+            .iter()
+            .find(|image| image.cover_type == "headshot")
+            .and_then(|image| image.remote_url.clone());
+        let person = Person {
+            id: Uuid::new_v4(),
+            name: remote.person_name.clone(),
+            tmdb_id: Some(remote.person_tmdb_id),
+            headshot_url,
+        };
+        credit_repo.upsert_person(&person).await?;
+        Ok(person.id)
     }
 
     // ---- Sonarr: episodes + episode files, joined by episode_file_id ----
@@ -241,16 +443,25 @@ impl MediaSync {
             let season_id = self
                 .find_or_create_season(series_work_id, episode.season_number as i32)
                 .await?;
+            let images = sonarr_images(&episode.images);
             let episode_id = self
                 .find_or_upsert_episode(
                     season_id,
                     episode.episode_number as i32,
                     &episode.title,
+                    episode.overview.as_deref(),
+                    &images,
+                    episode.air_date,
+                    episode.runtime,
                     episode.monitored,
                 )
                 .await?;
 
             let media_info = file.media_info.as_ref();
+            let duration_ms = media_info
+                .and_then(|info| info.run_time.as_deref())
+                .and_then(runtime_string_to_ms)
+                .or_else(|| minutes_to_ms(episode.runtime));
             let media_file = MediaFile {
                 id: Uuid::new_v4(),
                 work_id: series_work_id,
@@ -261,6 +472,7 @@ impl MediaSync {
                     .and_then(|m| m.video_codec.clone())
                     .unwrap_or_else(|| file.quality.quality.name.clone()),
                 bitrate: media_info.and_then(|m| m.video_bitrate).map(|b| b as u64),
+                duration_ms: Some(duration_ms.unwrap_or(0)),
                 size_bytes: file.size as u64,
                 source_instance_id,
                 source_file_id: Some(file.id.to_string()),
@@ -270,7 +482,89 @@ impl MediaSync {
         Ok(())
     }
 
-    // ---- Lidarr: albums + track files, joined by album_id ----
+    // ---- Whisparr: episodes (scenes) + episode files, joined by
+    // episode_file_id -- structurally identical to `sync_sonarr` above
+    // since Whisparr V3 is a direct Sonarr fork with the same per-episode
+    // file-ownership shape (each scene can have its own file), unlike
+    // Radarr's single-file-embedded-on-the-parent shape. ----
+
+    async fn sync_whisparr(
+        &self,
+        client: &WhisparrClient,
+        series_work_id: Uuid,
+        series_id: i64,
+        source_instance_id: Uuid,
+    ) -> Result<(), MediaSyncError> {
+        let episodes = client.list_episodes(series_id).await?;
+        let files = client.list_episode_files(series_id).await?;
+        let files_by_id: HashMap<i64, WhisparrEpisodeFile> =
+            files.into_iter().map(|f| (f.id, f)).collect();
+
+        for episode in episodes {
+            // Whisparr uses the same `0` sentinel Sonarr does for "no file
+            // imported yet" (see `WhisparrEpisode::episode_file_id`'s doc
+            // comment).
+            if episode.episode_file_id == 0 {
+                continue;
+            }
+            let Some(file) = files_by_id.get(&episode.episode_file_id) else {
+                // Episode claims a file id `list_episode_files` didn't
+                // return -- a transient inconsistency between the two
+                // Whisparr calls; the next scheduled pass will pick it up.
+                continue;
+            };
+
+            let season_id = self
+                .find_or_create_season(series_work_id, episode.season_number as i32)
+                .await?;
+            let images = whisparr_images(&episode.images);
+            // Real Whisparr V3 instances omit `episodeNumber` entirely (see
+            // `WhisparrEpisode::episode_number`'s doc comment) -- fall back
+            // to Whisparr's own stable per-scene `id` so
+            // `find_or_upsert_episode`'s `(season_id, episode_number)`
+            // lookup key still resolves to the same row on every resync
+            // (the same scene always carries the same Whisparr `id`),
+            // rather than duplicating a row per pass.
+            let episode_number = episode.episode_number.unwrap_or(episode.id) as i32;
+            let episode_id = self
+                .find_or_upsert_episode(
+                    season_id,
+                    episode_number,
+                    &episode.title,
+                    episode.overview.as_deref(),
+                    &images,
+                    episode.air_date,
+                    episode.runtime,
+                    episode.monitored,
+                )
+                .await?;
+
+            let media_info = file.media_info.as_ref();
+            let duration_ms = media_info
+                .and_then(|info| info.run_time.as_deref())
+                .and_then(runtime_string_to_ms)
+                .or_else(|| minutes_to_ms(episode.runtime));
+            let media_file = MediaFile {
+                id: Uuid::new_v4(),
+                work_id: series_work_id,
+                leaf_ref: LeafRef::Episode(episode_id),
+                path: PathBuf::from(&file.path),
+                container: container_from_path(&file.path),
+                codec: media_info
+                    .and_then(|m| m.video_codec.clone())
+                    .unwrap_or_else(|| file.quality.quality.name.clone()),
+                bitrate: media_info.and_then(|m| m.video_bitrate).map(|b| b as u64),
+                duration_ms: Some(duration_ms.unwrap_or(0)),
+                size_bytes: file.size as u64,
+                source_instance_id,
+                source_file_id: Some(file.id.to_string()),
+            };
+            self.media_file_repo.upsert_by_source(&media_file).await?;
+        }
+        Ok(())
+    }
+
+    // ---- Lidarr: albums + tracks + track files ----
 
     async fn sync_lidarr(
         &self,
@@ -280,22 +574,50 @@ impl MediaSync {
         source_instance_id: Uuid,
     ) -> Result<(), MediaSyncError> {
         let albums = client.list_albums_for_artist(artist_id).await?;
+        let tracks = client.list_tracks_for_artist(artist_id).await?;
         let files = client.list_track_files(artist_id).await?;
         let albums_by_id: HashMap<i64, LidarrAlbum> =
             albums.into_iter().map(|a| (a.id, a)).collect();
+        let files_by_id = files
+            .into_iter()
+            .map(|file| (file.id, file))
+            .collect::<HashMap<_, _>>();
 
-        for file in files {
-            let Some(album) = albums_by_id.get(&file.album_id) else {
+        for track in tracks {
+            if !track.has_file || track.track_file_id <= 0 {
+                continue;
+            }
+            let Some(file) = files_by_id.get(&track.track_file_id) else {
+                continue;
+            };
+            let Some(album) = albums_by_id.get(&track.album_id) else {
+                continue;
+            };
+            let Some(album_title) = album.title.as_deref().filter(|title| !title.trim().is_empty())
+            else {
+                continue;
+            };
+            let Some(track_title) = track.title.as_deref().filter(|title| !title.trim().is_empty())
+            else {
+                continue;
+            };
+            let Some(path) = file.path.as_deref().filter(|path| !path.trim().is_empty()) else {
                 continue;
             };
             let album_id = self
-                .find_or_create_album(artist_work_id, &album.title)
+                .find_or_create_album(artist_work_id, album, album_title)
                 .await?;
-            // See this module's doc comment: no real per-track identity is
-            // available from this trimmed client, so the file's own Lidarr
-            // id stands in as a deterministic "track number".
+            let disc_number = track.medium_number.max(1);
+            let track_number = lidarr_track_number(&track).max(1);
+            let duration_seconds = (track.duration > 0).then_some((track.duration + 999) / 1_000);
             let track_id = self
-                .find_or_create_track(album_id, 1, file.id, &title_from_path(&file.path))
+                .find_or_create_track(
+                    album_id,
+                    disc_number,
+                    track_number,
+                    track_title,
+                    duration_seconds,
+                )
                 .await?;
 
             let media_info = file.media_info.as_ref();
@@ -303,12 +625,18 @@ impl MediaSync {
                 id: Uuid::new_v4(),
                 work_id: artist_work_id,
                 leaf_ref: LeafRef::Track(track_id),
-                path: PathBuf::from(&file.path),
-                container: container_from_path(&file.path),
+                path: PathBuf::from(path),
+                container: container_from_path(path),
                 codec: media_info
-                    .and_then(|m| m.audio_codec.clone())
+                    .and_then(|m| m.audio_codec.as_deref())
+                    .filter(|codec| !codec.trim().is_empty())
+                    .map(str::to_string)
                     .unwrap_or_else(|| file.quality.quality.name.clone()),
-                bitrate: media_info.and_then(|m| m.audio_bitrate).map(|b| b as u64),
+                bitrate: media_info
+                    .and_then(|m| m.audio_bitrate)
+                    .and_then(|kbps| u64::try_from(kbps).ok())
+                    .and_then(|kbps| kbps.checked_mul(1_000)),
+                duration_ms: (track.duration > 0).then_some(track.duration as u64),
                 size_bytes: file.size as u64,
                 source_instance_id,
                 source_file_id: Some(file.id.to_string()),
@@ -351,6 +679,7 @@ impl MediaSync {
                 // a format/codec label.
                 codec: file.quality.quality.name.clone(),
                 bitrate: None,
+                duration_ms: Some(0),
                 size_bytes: file.size as u64,
                 source_instance_id,
                 source_file_id: Some(file.id.to_string()),
@@ -412,8 +741,13 @@ impl MediaSync {
         season_id: Uuid,
         episode_number: i32,
         title: &str,
+        overview: Option<&str>,
+        images: &[ImageAsset],
+        air_date: Option<chrono::NaiveDate>,
+        runtime_minutes: Option<u32>,
         monitored: bool,
     ) -> Result<Uuid, MediaSyncError> {
+        let images_json = serde_json::to_string(images).map_err(streamarr_db::DbError::from)?;
         let select_sql = match self.backend {
             Backend::Sqlite => "SELECT id FROM episodes WHERE season_id = ? AND episode_number = ?",
             Backend::Postgres => {
@@ -426,14 +760,18 @@ impl MediaSync {
         {
             let update_sql = match self.backend {
                 Backend::Sqlite => {
-                    "UPDATE episodes SET title = ?, monitored = ?, availability = 'available' WHERE id = ?"
+                    "UPDATE episodes SET title = ?, overview = ?, images = ?, air_date = ?, runtime_minutes = ?, monitored = ?, availability = 'available' WHERE id = ?"
                 }
                 Backend::Postgres => {
-                    "UPDATE episodes SET title = $1, monitored = $2, availability = 'available' WHERE id = $3"
+                    "UPDATE episodes SET title = $1, overview = $2, images = $3, air_date = $4, runtime_minutes = $5, monitored = $6, availability = 'available' WHERE id = $7"
                 }
             };
             sqlx::query(update_sql)
                 .bind(title)
+                .bind(overview)
+                .bind(&images_json)
+                .bind(air_date.map(|date| date.format("%Y-%m-%d").to_string()))
+                .bind(runtime_minutes.map(i64::from))
                 .bind(monitored as i64)
                 .bind(id.to_string())
                 .execute(&self.pool)
@@ -444,12 +782,12 @@ impl MediaSync {
         let id = Uuid::new_v4();
         let insert_sql = match self.backend {
             Backend::Sqlite => {
-                "INSERT INTO episodes (id, season_id, episode_number, title, overview, air_date, runtime_minutes, monitored, availability) \
-                 VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, 'available')"
+                "INSERT INTO episodes (id, season_id, episode_number, title, overview, images, air_date, runtime_minutes, monitored, availability) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'available')"
             }
             Backend::Postgres => {
-                "INSERT INTO episodes (id, season_id, episode_number, title, overview, air_date, runtime_minutes, monitored, availability) \
-                 VALUES ($1, $2, $3, $4, NULL, NULL, NULL, $5, 'available')"
+                "INSERT INTO episodes (id, season_id, episode_number, title, overview, images, air_date, runtime_minutes, monitored, availability) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'available')"
             }
         };
         sqlx::query(insert_sql)
@@ -457,6 +795,10 @@ impl MediaSync {
             .bind(season_id.to_string())
             .bind(episode_number as i64)
             .bind(title)
+            .bind(overview)
+            .bind(images_json)
+            .bind(air_date.map(|date| date.format("%Y-%m-%d").to_string()))
+            .bind(runtime_minutes.map(i64::from))
             .bind(monitored as i64)
             .execute(&self.pool)
             .await?;
@@ -466,6 +808,7 @@ impl MediaSync {
     async fn find_or_create_album(
         &self,
         artist_work_id: Uuid,
+        album: &LidarrAlbum,
         title: &str,
     ) -> Result<Uuid, MediaSyncError> {
         let select_sql = match self.backend {
@@ -476,27 +819,58 @@ impl MediaSync {
             .select_uuid_str(select_sql, artist_work_id.to_string(), title)
             .await?
         {
+            self.update_album(id, album).await?;
             return Ok(id);
         }
 
         let id = Uuid::new_v4();
+        let album_type = lidarr_album_type(album);
+        let release_date = lidarr_release_date(album.release_date.as_deref());
         let insert_sql = match self.backend {
             Backend::Sqlite => {
                 "INSERT INTO albums (id, artist_work_id, title, album_type, release_date, monitored, availability) \
-                 VALUES (?, ?, ?, 'studio', NULL, 1, 'available')"
+                 VALUES (?, ?, ?, ?, ?, ?, 'available')"
             }
             Backend::Postgres => {
                 "INSERT INTO albums (id, artist_work_id, title, album_type, release_date, monitored, availability) \
-                 VALUES ($1, $2, $3, 'studio', NULL, 1, 'available')"
+                 VALUES ($1, $2, $3, $4, $5, $6, 'available')"
             }
         };
         sqlx::query(insert_sql)
             .bind(id.to_string())
             .bind(artist_work_id.to_string())
             .bind(title)
+            .bind(album_type)
+            .bind(release_date)
+            .bind(album.monitored as i64)
             .execute(&self.pool)
             .await?;
         Ok(id)
+    }
+
+    async fn update_album(
+        &self,
+        album_id: Uuid,
+        album: &LidarrAlbum,
+    ) -> Result<(), MediaSyncError> {
+        let update_sql = match self.backend {
+            Backend::Sqlite => {
+                "UPDATE albums SET album_type = ?, release_date = ?, monitored = ?, availability = 'available' \
+                 WHERE id = ?"
+            }
+            Backend::Postgres => {
+                "UPDATE albums SET album_type = $1, release_date = $2, monitored = $3, availability = 'available' \
+                 WHERE id = $4"
+            }
+        };
+        sqlx::query(update_sql)
+            .bind(lidarr_album_type(album))
+            .bind(lidarr_release_date(album.release_date.as_deref()))
+            .bind(album.monitored as i64)
+            .bind(album_id.to_string())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 
     async fn find_or_create_track(
@@ -505,6 +879,7 @@ impl MediaSync {
         disc_number: i64,
         track_number: i64,
         title: &str,
+        duration_seconds: Option<i64>,
     ) -> Result<Uuid, MediaSyncError> {
         let select_sql = match self.backend {
             Backend::Sqlite => {
@@ -521,18 +896,33 @@ impl MediaSync {
             .fetch_optional(&self.pool)
             .await?;
         if let Some(row) = row {
-            return uuid_from_row(&row);
+            let id = uuid_from_row(&row)?;
+            let update_sql = match self.backend {
+                Backend::Sqlite => {
+                    "UPDATE tracks SET title = ?, duration_seconds = ?, availability = 'available' WHERE id = ?"
+                }
+                Backend::Postgres => {
+                    "UPDATE tracks SET title = $1, duration_seconds = $2, availability = 'available' WHERE id = $3"
+                }
+            };
+            sqlx::query(update_sql)
+                .bind(title)
+                .bind(duration_seconds)
+                .bind(id.to_string())
+                .execute(&self.pool)
+                .await?;
+            return Ok(id);
         }
 
         let id = Uuid::new_v4();
         let insert_sql = match self.backend {
             Backend::Sqlite => {
                 "INSERT INTO tracks (id, album_id, disc_number, track_number, title, duration_seconds, availability) \
-                 VALUES (?, ?, ?, ?, ?, NULL, 'available')"
+                 VALUES (?, ?, ?, ?, ?, ?, 'available')"
             }
             Backend::Postgres => {
                 "INSERT INTO tracks (id, album_id, disc_number, track_number, title, duration_seconds, availability) \
-                 VALUES ($1, $2, $3, $4, $5, NULL, 'available')"
+                 VALUES ($1, $2, $3, $4, $5, $6, 'available')"
             }
         };
         sqlx::query(insert_sql)
@@ -541,6 +931,7 @@ impl MediaSync {
             .bind(disc_number)
             .bind(track_number)
             .bind(title)
+            .bind(duration_seconds)
             .execute(&self.pool)
             .await?;
         Ok(id)
@@ -669,6 +1060,15 @@ mod tests {
         MediaSync::new(pool, repo)
     }
 
+    #[test]
+    fn parses_arr_runtime_strings() {
+        assert_eq!(runtime_string_to_ms("2:50:00"), Some(10_200_000));
+        assert_eq!(runtime_string_to_ms("42:00"), Some(2_520_000));
+        assert_eq!(runtime_string_to_ms("00:42:00.500"), Some(2_520_500));
+        assert_eq!(runtime_string_to_ms("N/A"), None);
+        assert_eq!(runtime_string_to_ms("00:99:00"), None);
+    }
+
     // ---- Radarr ----
 
     #[tokio::test]
@@ -726,6 +1126,7 @@ mod tests {
         assert_eq!(files[0].container, "mkv");
         assert_eq!(files[0].source_file_id.as_deref(), Some("30"));
         assert_eq!(files[0].source_instance_id, instance_id);
+        assert_eq!(files[0].duration_ms, Some(10_200_000));
     }
 
     #[tokio::test]
@@ -764,6 +1165,72 @@ mod tests {
 
     // ---- Sonarr ----
 
+    #[tokio::test]
+    async fn find_or_upsert_episode_persists_remote_thumbnail() {
+        let work_id = Uuid::new_v4();
+        let pool = test_pool_with_work(work_id, "series").await;
+        let sync = media_sync(pool.clone());
+        let season_id = sync.find_or_create_season(work_id, 1).await.unwrap();
+        let images = vec![ImageAsset {
+            kind: streamarr_model::ImageKind::Thumb,
+            url: "https://artworks.thetvdb.com/episodes/10.jpg".to_string(),
+            width: None,
+            height: None,
+        }];
+
+        let episode_id = sync
+            .find_or_upsert_episode(
+                season_id,
+                1,
+                "Pilot",
+                Some("First episode"),
+                &images,
+                chrono::NaiveDate::from_ymd_opt(2024, 1, 2),
+                Some(43),
+                true,
+            )
+            .await
+            .unwrap();
+        let replacement = vec![ImageAsset {
+            kind: streamarr_model::ImageKind::Thumb,
+            url: "https://artworks.thetvdb.com/episodes/10-v2.jpg".to_string(),
+            width: None,
+            height: None,
+        }];
+        let updated_id = sync
+            .find_or_upsert_episode(
+                season_id,
+                1,
+                "Pilot",
+                Some("Updated synopsis"),
+                &replacement,
+                chrono::NaiveDate::from_ymd_opt(2024, 1, 3),
+                Some(44),
+                true,
+            )
+            .await
+            .unwrap();
+        assert_eq!(updated_id, episode_id);
+
+        let images_json: (String,) = sqlx::query_as("SELECT images FROM episodes WHERE id = ?")
+            .bind(episode_id.to_string())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let persisted: Vec<ImageAsset> = serde_json::from_str(&images_json.0).unwrap();
+        assert_eq!(persisted, replacement);
+
+        let metadata: (Option<String>, Option<String>, Option<i64>) =
+            sqlx::query_as("SELECT overview, air_date, runtime_minutes FROM episodes WHERE id = ?")
+                .bind(episode_id.to_string())
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(metadata.0.as_deref(), Some("Updated synopsis"));
+        assert_eq!(metadata.1.as_deref(), Some("2024-01-03"));
+        assert_eq!(metadata.2, Some(44));
+    }
+
     fn sonarr_episode_json(
         id: i64,
         season: i64,
@@ -777,6 +1244,20 @@ mod tests {
             "seasonNumber": season,
             "episodeNumber": number,
             "title": title,
+            "overview": format!("{title} synopsis"),
+            "airDate": "2024-01-02",
+            "runtime": 43,
+            "images": [
+                {
+                    "coverType": "screenshot",
+                    "url": format!("/MediaCover/episodes/{id}/screenshot.jpg"),
+                    "remoteUrl": format!("https://artworks.thetvdb.com/episodes/{id}.jpg")
+                },
+                {
+                    "coverType": "screenshot",
+                    "url": format!("/MediaCover/episodes/{id}/local-only.jpg")
+                }
+            ],
             "hasFile": episode_file_id != 0,
             "monitored": true,
             "episodeFileId": episode_file_id
@@ -802,7 +1283,7 @@ mod tests {
                 "videoCodec": "x264",
                 "videoBitrate": 4_000_000,
                 "resolution": "1920x1080",
-                "runTime": "42:00"
+                "runTime": "00:42:00.500"
             }
         })
     }
@@ -854,6 +1335,7 @@ mod tests {
         assert_eq!(files[0].container, "mkv");
         assert_eq!(files[0].codec, "x264");
         assert_eq!(files[0].source_file_id.as_deref(), Some("55"));
+        assert_eq!(files[0].duration_ms, Some(2_520_500));
 
         let seasons: Vec<(String, i64)> = sqlx::query_as("SELECT id, season_number FROM seasons")
             .fetch_all(&pool)
@@ -862,14 +1344,34 @@ mod tests {
         assert_eq!(seasons.len(), 1);
         assert_eq!(seasons[0].1, 1);
 
-        let episode_row: (String, i64, String) =
-            sqlx::query_as("SELECT id, episode_number, title FROM episodes WHERE id = ?")
-                .bind(episode_id.to_string())
-                .fetch_one(&pool)
-                .await
-                .unwrap();
+        let episode_row: (
+            String,
+            i64,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<i64>,
+        ) = sqlx::query_as(
+            "SELECT id, episode_number, title, images, overview, air_date, runtime_minutes \
+                 FROM episodes WHERE id = ?",
+        )
+        .bind(episode_id.to_string())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
         assert_eq!(episode_row.1, 1);
         assert_eq!(episode_row.2, "Pilot");
+        let images: Vec<ImageAsset> = serde_json::from_str(&episode_row.3).unwrap();
+        assert_eq!(images.len(), 1, "local-only Sonarr artwork is dropped");
+        assert_eq!(episode_row.4.as_deref(), Some("Pilot synopsis"));
+        assert_eq!(episode_row.5.as_deref(), Some("2024-01-02"));
+        assert_eq!(episode_row.6, Some(43));
+        assert_eq!(images[0].kind, streamarr_model::ImageKind::Thumb);
+        assert_eq!(
+            images[0].url,
+            "https://artworks.thetvdb.com/episodes/10.jpg"
+        );
     }
 
     #[tokio::test]
@@ -924,6 +1426,273 @@ mod tests {
         assert_eq!(episode_count.0, 1);
     }
 
+    // ---- Whisparr ----
+
+    fn whisparr_episode_json(
+        id: i64,
+        season: i64,
+        number: i64,
+        title: &str,
+        episode_file_id: i64,
+    ) -> serde_json::Value {
+        serde_json::json!({
+            "id": id,
+            "seriesId": 1,
+            "seasonNumber": season,
+            "episodeNumber": number,
+            "title": title,
+            "overview": format!("{title} synopsis"),
+            "releaseDate": "2024-01-02",
+            "runtime": 32,
+            "images": [
+                {
+                    "coverType": "screenshot",
+                    "url": format!("/MediaCover/episodes/{id}/screenshot.jpg"),
+                    "remoteUrl": format!("https://cdn.theporndb.net/episodes/{id}.jpg")
+                },
+                {
+                    "coverType": "screenshot",
+                    "url": format!("/MediaCover/episodes/{id}/local-only.jpg")
+                }
+            ],
+            "hasFile": episode_file_id != 0,
+            "monitored": true,
+            "episodeFileId": episode_file_id
+        })
+    }
+
+    fn whisparr_episode_file_json(id: i64, season: i64, path: &str) -> serde_json::Value {
+        serde_json::json!({
+            "id": id,
+            "seriesId": 1,
+            "seasonNumber": season,
+            "relativePath": path,
+            "path": format!("/scenes/Studio/{path}"),
+            "size": 1_234_567i64,
+            "quality": {
+                "quality": { "id": 7, "name": "Bluray-1080p", "source": "bluray", "resolution": 1080 },
+                "revision": { "version": 1, "real": 0, "isRepack": false }
+            },
+            "mediaInfo": {
+                "audioCodec": "AC3",
+                "audioBitrate": 384000,
+                "audioChannels": 6.0,
+                "videoCodec": "x264",
+                "videoBitrate": 4_000_000,
+                "resolution": "1920x1080",
+                "runTime": "00:32:00.500"
+            }
+        })
+    }
+
+    async fn mount_whisparr(server: &MockServer, series_id: i64) {
+        Mock::given(method("GET"))
+            .and(path("/api/v3/episode"))
+            .and(query_param("seriesId", series_id.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                whisparr_episode_json(10, 1, 1, "Scene One", 55),
+                whisparr_episode_json(11, 1, 2, "Scene Two", 0),
+            ])))
+            .mount(server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/episodefile"))
+            .and(query_param("seriesId", series_id.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                whisparr_episode_file_json(55, 1, "S01E01.mkv"),
+            ])))
+            .mount(server)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn sync_whisparr_creates_season_episode_and_media_file_for_episode_with_file() {
+        let work_id = Uuid::new_v4();
+        let pool = test_pool_with_work(work_id, "series").await;
+        let sync = media_sync(pool.clone());
+
+        let server = MockServer::start().await;
+        mount_whisparr(&server, 1).await;
+
+        let client = ArrClient::Whisparr(WhisparrClient::new(server.uri(), "test-key"));
+        sync.sync_work(&client, work_id, 1, Uuid::new_v4())
+            .await
+            .expect("sync_work should succeed");
+
+        let media_file_repo: Arc<dyn MediaFileRepo> =
+            Arc::new(SqlxMediaFileRepo::new(pool.clone()));
+        let files = media_file_repo.list_by_work_id(work_id).await.unwrap();
+        // Only the episode with a real `episode_file_id` (Scene One) gets a
+        // `MediaFile` -- the second episode (`episodeFileId: 0`) is skipped.
+        assert_eq!(files.len(), 1);
+        let episode_id = match files[0].leaf_ref {
+            LeafRef::Episode(id) => id,
+            other => panic!("expected LeafRef::Episode, got {other:?}"),
+        };
+        assert_eq!(files[0].container, "mkv");
+        assert_eq!(files[0].codec, "x264");
+        assert_eq!(files[0].source_file_id.as_deref(), Some("55"));
+        assert_eq!(files[0].duration_ms, Some(1_920_500));
+
+        let seasons: Vec<(String, i64)> = sqlx::query_as("SELECT id, season_number FROM seasons")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+        assert_eq!(seasons.len(), 1);
+        assert_eq!(seasons[0].1, 1);
+
+        let episode_row: (
+            String,
+            i64,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<i64>,
+        ) = sqlx::query_as(
+            "SELECT id, episode_number, title, images, overview, air_date, runtime_minutes \
+                 FROM episodes WHERE id = ?",
+        )
+        .bind(episode_id.to_string())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(episode_row.1, 1);
+        assert_eq!(episode_row.2, "Scene One");
+        let images: Vec<ImageAsset> = serde_json::from_str(&episode_row.3).unwrap();
+        assert_eq!(images.len(), 1, "local-only Whisparr artwork is dropped");
+        assert_eq!(episode_row.4.as_deref(), Some("Scene One synopsis"));
+        assert_eq!(episode_row.5.as_deref(), Some("2024-01-02"));
+        assert_eq!(episode_row.6, Some(32));
+        assert_eq!(images[0].kind, streamarr_model::ImageKind::Thumb);
+        assert_eq!(images[0].url, "https://cdn.theporndb.net/episodes/10.jpg");
+    }
+
+    #[tokio::test]
+    async fn sync_whisparr_is_idempotent_across_resyncs() {
+        let work_id = Uuid::new_v4();
+        let pool = test_pool_with_work(work_id, "series").await;
+        let sync = media_sync(pool.clone());
+
+        let server = MockServer::start().await;
+        mount_whisparr(&server, 1).await;
+        let client = ArrClient::Whisparr(WhisparrClient::new(server.uri(), "test-key"));
+        let instance_id = Uuid::new_v4();
+
+        sync.sync_work(&client, work_id, 1, instance_id)
+            .await
+            .unwrap();
+        let media_file_repo: Arc<dyn MediaFileRepo> =
+            Arc::new(SqlxMediaFileRepo::new(pool.clone()));
+        let first_pass = media_file_repo.list_by_work_id(work_id).await.unwrap();
+        assert_eq!(first_pass.len(), 1);
+        let episode_id_first = match first_pass[0].leaf_ref {
+            LeafRef::Episode(id) => id,
+            other => panic!("expected LeafRef::Episode, got {other:?}"),
+        };
+
+        // Re-sync -- same season/episode natural keys and the same
+        // (source_instance_id, source_file_id) file key must resolve back
+        // to the same rows, not duplicate them.
+        sync.sync_work(&client, work_id, 1, instance_id)
+            .await
+            .unwrap();
+        let second_pass = media_file_repo.list_by_work_id(work_id).await.unwrap();
+        assert_eq!(
+            second_pass.len(),
+            1,
+            "resync must not duplicate the MediaFile row"
+        );
+        assert_eq!(second_pass[0].id, first_pass[0].id);
+        let episode_id_second = match second_pass[0].leaf_ref {
+            LeafRef::Episode(id) => id,
+            other => panic!("expected LeafRef::Episode, got {other:?}"),
+        };
+        assert_eq!(
+            episode_id_second, episode_id_first,
+            "resync must resolve back to the same episode row, not create a second one"
+        );
+
+        let episode_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM episodes")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(episode_count.0, 1);
+    }
+
+    /// Real Whisparr V3 instances omit `episodeNumber` from `/api/v3/episode`
+    /// entirely (see `WhisparrEpisode::episode_number`'s doc comment) --
+    /// this mounts a scene payload with no `episodeNumber` key at all
+    /// (rather than going through `whisparr_episode_json`, which always
+    /// supplies one) and proves `sync_whisparr` still succeeds using the
+    /// `WhisparrEpisode::id`-based fallback, and that the fallback stays
+    /// stable (so a resync updates the same episode row rather than
+    /// duplicating it) since the same scene always carries the same id.
+    #[tokio::test]
+    async fn sync_whisparr_falls_back_to_episode_id_when_episode_number_is_absent() {
+        let work_id = Uuid::new_v4();
+        let pool = test_pool_with_work(work_id, "series").await;
+        let sync = media_sync(pool.clone());
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/episode"))
+            .and(query_param("seriesId", "1"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!([{
+                    "id": 8117,
+                    "seriesId": 1,
+                    "seasonNumber": 2006,
+                    "title": "Sample Track Three",
+                    "overview": "Scene synopsis",
+                    "releaseDate": "2006-06-08",
+                    "runtime": 41,
+                    "hasFile": true,
+                    "monitored": false,
+                    "episodeFileId": 55
+                }])),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/episodefile"))
+            .and(query_param("seriesId", "1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                whisparr_episode_file_json(55, 2006, "Sample Track Three.mkv"),
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = ArrClient::Whisparr(WhisparrClient::new(server.uri(), "test-key"));
+        let instance_id = Uuid::new_v4();
+        sync.sync_work(&client, work_id, 1, instance_id)
+            .await
+            .expect("sync_work should tolerate a missing episodeNumber");
+
+        let episode_row: (i64,) =
+            sqlx::query_as("SELECT episode_number FROM episodes WHERE season_id = (SELECT id FROM seasons WHERE season_number = 2006)")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            episode_row.0, 8117,
+            "falls back to the scene's own stable Whisparr id"
+        );
+
+        // Resync: the same fallback id must resolve back to the same row.
+        sync.sync_work(&client, work_id, 1, instance_id)
+            .await
+            .unwrap();
+        let episode_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM episodes")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            episode_count.0, 1,
+            "resync must not duplicate the episode row"
+        );
+    }
+
     // ---- Lidarr ----
 
     #[tokio::test]
@@ -942,7 +1711,30 @@ mod tests {
                     "title": "Sample Album",
                     "foreignAlbumId": "d6591261-daa1-32e1-8d0e-a60e6f97a698",
                     "artistId": 1,
-                    "monitored": true
+                    "monitored": true,
+                    "albumType": "Album",
+                    "secondaryTypes": ["Live"],
+                    "releaseDate": "1997-05-21T00:00:00Z",
+                    "duration": 3_200_000
+                }
+            ])))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/track"))
+            .and(query_param("artistId", "1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {
+                    "id": 300,
+                    "artistId": 1,
+                    "albumId": 100,
+                    "trackFileId": 500,
+                    "absoluteTrackNumber": 2,
+                    "trackNumber": "1-2",
+                    "title": "Sample Track One",
+                    "duration": 284_000,
+                    "mediumNumber": 1,
+                    "hasFile": true
                 }
             ])))
             .mount(&server)
@@ -962,8 +1754,8 @@ mod tests {
                         "revision": { "version": 1, "real": 0, "isRepack": false }
                     },
                     "mediaInfo": {
-                        "audioCodec": "FLAC",
-                        "audioBitrate": 1000,
+                        "audioCodec": "",
+                        "audioBitRate": "1000 kbps",
                         "audioChannels": 2.0,
                         "audioBits": 16,
                         "audioSampleRate": "44100"
@@ -985,14 +1777,26 @@ mod tests {
         assert!(matches!(files[0].leaf_ref, LeafRef::Track(_)));
         assert_eq!(files[0].codec, "FLAC");
         assert_eq!(files[0].container, "flac");
+        assert_eq!(files[0].bitrate, Some(1_000_000));
+        assert_eq!(files[0].duration_ms, Some(284_000));
 
-        let album_row: (String,) =
-            sqlx::query_as("SELECT title FROM albums WHERE artist_work_id = ?")
-                .bind(work_id.to_string())
+        let album_row: (String, String, Option<String>) = sqlx::query_as(
+            "SELECT title, album_type, release_date FROM albums WHERE artist_work_id = ?",
+        )
+        .bind(work_id.to_string())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(album_row.0, "Sample Album");
+        assert_eq!(album_row.1, "live");
+        assert_eq!(album_row.2.as_deref(), Some("1997-05-21"));
+
+        let track_row: (i64, i64, String, Option<i64>) =
+            sqlx::query_as("SELECT disc_number, track_number, title, duration_seconds FROM tracks")
                 .fetch_one(&pool)
                 .await
                 .unwrap();
-        assert_eq!(album_row.0, "Sample Album");
+        assert_eq!(track_row, (1, 2, "Sample Track One".to_string(), Some(284)));
     }
 
     // ---- Readarr ----

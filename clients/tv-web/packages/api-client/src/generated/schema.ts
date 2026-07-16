@@ -52,6 +52,96 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/playback/sessions/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every currently-active playback session, newest first -- backs the
+         *     admin Activity page's "live" section. Concurrently-active sessions are a
+         *     small set (dozens, not thousands), so the N+1 user/media lookups
+         *     `enrich` does per row are acceptable here.
+         */
+        get: operations["list_active_sessions_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/playback/sessions/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Filtered, paginated raw session history -- backs the admin Activity
+         *     page's "history" section. `limit` is clamped to 500 server-side
+         *     regardless of what's requested, matching the two indexes
+         *     (`idx_playback_sessions_user_id`/`idx_playback_sessions_started_at`)
+         *     this query is built to actually use.
+         */
+        get: operations["list_session_history_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/playback/sessions/{session_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Force-stops a live playback session -- the "let me stop it" half of the
+         *     admin Activity/Tasks in-progress-transcode view. Kills the underlying
+         *     ffmpeg process too, if this session has one (`TranscodeOrchestrator::
+         *     expire_playback_session` is a harmless no-op for direct-play/durable-
+         *     rendition sessions, which were never associated with a transcode
+         *     process in the first place -- see that method's own doc comment), then
+         *     finalizes the durable record with `StopReason::Other("admin_stopped")`
+         *     (not `UserStopped`, since the *viewer* didn't stop it -- an operator
+         *     did, from the admin UI, which callers reading session history should be
+         *     able to tell apart from a normal end-of-playback stop).
+         */
+        post: operations["stop_session_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/playlists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every playlist regardless of owner -- see the module doc comment. */
+        get: operations["list_admin_playlists_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/source-instances": {
         parameters: {
             query?: never;
@@ -68,6 +158,30 @@ export interface paths {
          *     given `base_url`/`api_key` before accepting it.
          */
         post: operations["create_source_instance_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/source-instances/sync-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every registered source instance's last-known sync status in one call --
+         *     backs the admin "Tasks" screen. Purely in-memory/runtime, like `POST
+         *     .../sync`'s underlying trigger channel: nothing here survives a restart,
+         *     and an instance with no poller running yet (or one that's never
+         *     completed a pass) simply has `status: null`, not a synthetic "idle" or
+         *     "unknown" state.
+         */
+        get: operations["sync_status_handler"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -117,6 +231,163 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/tdarr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The currently-registered Tdarr connection, if any. */
+        get: operations["get_tdarr_connection_handler"];
+        put?: never;
+        /**
+         * Registers (or updates) Streamarr's Tdarr connection. Confirms Tdarr is
+         *     actually reachable with the given `base_url`/`api_key` before
+         *     accepting it.
+         */
+        post: operations["create_tdarr_connection_handler"];
+        /**
+         * De-registers the Tdarr connection. The background dispatch loop stops
+         *     on its next watch tick (see this module's doc comment); already-cached
+         *     `Rendition`s are untouched.
+         */
+        delete: operations["delete_tdarr_connection_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every provisioned account. A user whose `Policy` has gone missing (a
+         *     data-integrity gap, not something a caller can cause through this API)
+         *     is still listed -- just with `is_admin: false` and a logged warning --
+         *     rather than failing the whole list over one bad row.
+         */
+        get: operations["list_users_handler"];
+        put?: never;
+        /**
+         * Provisions a new account: hashes the password, creates a default
+         *     [`Policy`] for it (see [`default_policy`]), and persists the policy
+         *     *before* the user -- same write-ordering rationale as `admin.rs`'s
+         *     create handler (the durable dependency first), except here it's an
+         *     actual foreign key: `User::policy_id` must resolve.
+         */
+        post: operations["create_user_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Removes an account and, best-effort, its `Policy`. Mirrors
+         *     `admin.rs`'s `delete_source_instance_handler`: a `NotFound` deleting the
+         *     policy is not a caller-facing failure (an already-absent/shared/
+         *     orphaned policy is exactly as much a no-op as deleting an
+         *     already-absent user would be).
+         */
+        delete: operations["delete_user_handler"];
+        options?: never;
+        head?: never;
+        /**
+         * Applies a partial update to an existing account. Only fields present as
+         *     `Some` in the body are changed; `password`, when set, is re-hashed the
+         *     same way [`create_user_handler`] does; `is_admin`/`can_stream`/
+         *     `library_allow`, when set, update the user's `Policy` row (loaded via
+         *     `policy_id`) rather than `User` itself.
+         */
+        patch: operations["update_user_handler"];
+        trace?: never;
+    };
+    "/api/v1/admin/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every view, full projection (including `criteria`) -- the admin list
+         *     screen. Ordered by [`sort_views_for_display`].
+         */
+        get: operations["list_admin_views_handler"];
+        put?: never;
+        /**
+         * Creates a new, admin-authored view. `is_default` is always `false` and
+         *     `default_order` is always `None` for a view created through this
+         *     endpoint -- both are set only by the boot-time seed step (see
+         *     `streamarr_db::repo::library_view::seed_default_views`).
+         */
+        post: operations["create_view_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/views/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Updates a view's `name`/`criteria`/`sort` in place, preserving `id`/
+         *     `is_default`/`default_order`/`created_at`. This means an admin **can**
+         *     rename/retune a default view's criteria -- only deletion is blocked (see
+         *     [`delete_view_handler`]) since Playarr's Home shelves depend on the id
+         *     remaining resolvable.
+         */
+        put: operations["update_view_handler"];
+        post?: never;
+        /**
+         * Deletes a custom (non-default) view. Rejects with `409 Conflict` for a
+         *     seeded default view -- Playarr's Home shelves depend on those ids
+         *     remaining resolvable; an admin who wants to change one should rename/
+         *     retune it via [`update_view_handler`] instead.
+         */
+        delete: operations["delete_view_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/artwork/work/{work_id}/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["work_artwork_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -133,6 +404,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["refresh_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog": {
         parameters: {
             query?: never;
@@ -141,6 +428,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["browse_catalog_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/kinds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["catalog_kinds_handler"];
         put?: never;
         post?: never;
         delete?: never;
@@ -181,6 +484,181 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog/{id}/credits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A work's cast and crew, in the source's own billing/department order
+         *     -- empty (not 404) for a work with no credits, which is the normal
+         *     case for every non-Radarr-sourced work (see this module's doc
+         *     comment).
+         */
+        get: operations["work_credits_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/{id}/similar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * "What else is like this" -- semantic similarity over a locally-cached
+         *     embedding (see `streamarr_model::embedding`'s module doc comment), not
+         *     genre/tag overlap. `404`s both for an unknown work id and for one that
+         *     hasn't been embedded yet (not yet synced, or this deployment hasn't
+         *     configured embedding generation) -- `streamarr_catalog::CatalogService::
+         *     similar`'s doc comment covers why those collapse to one status here
+         *     rather than a distinct "not available" shape.
+         */
+        get: operations["similar_works_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/media/renditions/{rendition_id}/{file_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["serve_rendition_file_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/media/sessions/{session_id}/{file_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["serve_session_file_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/media/{media_file_id}/chapters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["media_chapters_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/media/{media_file_id}/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["media_metadata_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/media/{media_file_id}/playback-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["media_playback_options_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["update_media_playback_options_handler"];
+        trace?: never;
+    };
+    "/api/v1/media/{media_file_id}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["stream_media_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/media/{media_file_id}/subtitles/{stream_index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["media_subtitle_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/media/{media_file_id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["media_thumbnail_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/oauth/device/code": {
         parameters: {
             query?: never;
@@ -213,6 +691,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/people/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One person by id. */
+        get: operations["get_person_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/people/{id}/works": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every work this person has a credit on (cast or crew, any work kind),
+         *     title-sorted. A work id whose `Work` row has since been removed (e.g.
+         *     the source deleted the movie) is silently skipped rather than failing
+         *     the whole request.
+         */
+        get: operations["person_works_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playback/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_watch_progress_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playback/sessions/{session_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["record_playback_event_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/playback/{media_file_id}": {
         parameters: {
             query?: never;
@@ -221,6 +770,241 @@ export interface paths {
             cookie?: never;
         };
         get: operations["playback_info_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playback/{media_file_id}/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_watch_progress_handler"];
+        put: operations["update_watch_progress_handler"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playlists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every playlist visible to the caller: their own personal playlists plus
+         *     every System playlist.
+         */
+        get: operations["list_playlists_handler"];
+        put?: never;
+        /**
+         * Creates a playlist owned by the caller, or (admin-only, `is_system:
+         *     true`) a System playlist. If `parent_playlist_id` is set, the caller
+         *     must already have write access to that parent (same [`can_write`]
+         *     check used for every other mutation) -- this is also what keeps a
+         *     parent/child pair's ownership consistent, since a child can only ever
+         *     be created under a parent the same caller could already mutate.
+         */
+        post: operations["create_playlist_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playlists/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One playlist by id. */
+        get: operations["get_playlist_handler"];
+        /**
+         * Renames and/or re-nests a playlist in place. Ownership
+         *     (`owner_user_id`)/System-vs-personal can never change through this
+         *     endpoint -- only [`can_write`]-gated for the playlist's *existing*
+         *     owner, so a personal playlist can't be converted into a System one (or
+         *     vice versa) by an update.
+         */
+        put: operations["update_playlist_handler"];
+        post?: never;
+        /**
+         * Deletes a playlist -- cascades to nested child playlists and items, see
+         *     `PlaylistRepo::delete`'s doc comment.
+         */
+        delete: operations["delete_playlist_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playlists/{id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every item on a playlist, in order. */
+        get: operations["list_playlist_items_handler"];
+        put?: never;
+        /** Appends a work to the end of a playlist. */
+        post: operations["add_playlist_item_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playlists/{id}/items/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replaces the full item ordering of a playlist. */
+        put: operations["reorder_playlist_items_handler"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playlists/{id}/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removes one item from a playlist. */
+        delete: operations["remove_playlist_item_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/player-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_player_preferences_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["update_player_preferences_handler"];
+        trace?: never;
+    };
+    "/api/v1/users/me/profile-pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_profile_pin_setting_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["update_profile_pin_setting_handler"];
+        trace?: never;
+    };
+    "/api/v1/users/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_available_profiles_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/profiles/{id}/verify-pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["verify_profile_pin_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every view, minimal projection -- the Playarr-facing shelf list. Ordered
+         *     by [`sort_views_for_display`], identically to the admin list, so
+         *     Playarr's shelf order always matches what the admin UI shows.
+         */
+        get: operations["list_views_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/views/{id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Runs a saved view's criteria+sort against the live catalog (via
+         *     `CatalogService::resolve_view`) and returns a page of results, identical
+         *     in shape to `GET /api/v1/catalog`. Also passes `viewer.allowed_libraries()`
+         *     through, so a resolved view is silently narrowed to the caller's
+         *     per-user library access control ceiling exactly like `GET /api/v1/
+         *     catalog` itself is -- a saved view is just a stored `BrowseQuery` shape,
+         *     not a separate enforcement boundary (see `CatalogService::resolve_view`'s
+         *     doc comment).
+         */
+        get: operations["resolve_view_handler"];
         put?: never;
         post?: never;
         delete?: never;
@@ -249,6 +1033,49 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description One live session, enriched (best-effort) with a human-readable user/
+         *     media label -- the raw [`PlaybackSession`] only carries ids.
+         */
+        ActiveSessionView: {
+            /** Format: int32 */
+            buffering_events: number;
+            /** Format: int64 */
+            buffering_ms_total: number;
+            /** Format: int64 */
+            bytes_streamed: number;
+            client_platform: components["schemas"]["ClientPlatform"];
+            client_version: string;
+            /** Format: uuid */
+            device_id: string;
+            /** Format: uuid */
+            media_file_id: string;
+            /**
+             * @description Best-effort `CatalogService` lookup via the media file's `work_id`;
+             *     same "never an error" tolerance as `user_display_name`.
+             */
+            media_title?: string | null;
+            play_method: components["schemas"]["PlayMethod"];
+            /** Format: uuid */
+            session_id: string;
+            /** Format: date-time */
+            started_at: string;
+            target_codec: string;
+            target_container: string;
+            /**
+             * @description Best-effort `UserRepo` lookup; `None` on a lookup miss/failure,
+             *     never surfaced as an error -- a live-sessions view degrading to
+             *     showing a bare id for one row is far better than failing the whole
+             *     list over one bad lookup.
+             */
+            user_display_name?: string | null;
+            /** Format: uuid */
+            user_id: string;
+        };
+        AddPlaylistItemRequest: {
+            /** Format: uuid */
+            work_id: string;
+        };
         Album: {
             album_type: components["schemas"]["AlbumType"];
             /** Format: uuid */
@@ -275,6 +1102,19 @@ export interface components {
          * @enum {string}
          */
         Availability: "unknown" | "pending" | "processing" | "partially_available" | "available" | "deleted";
+        /**
+         * @description Minimal household-profile projection for Playarr's 'who is watching'
+         *     screen. Password hashes, email addresses and policy details are never
+         *     exposed.
+         */
+        AvailableProfileResponse: {
+            display_name: string;
+            /** Format: uuid */
+            id: string;
+            is_current: boolean;
+            pin_locked: boolean;
+            username: string;
+        };
         Book: {
             /** Format: uuid */
             author_work_id: string;
@@ -300,9 +1140,9 @@ export interface components {
             media_file_id?: string | null;
         };
         /**
-         * @description Doc-only mirror of [`streamarr_catalog::CatalogPage`] -- the real type
-         *     already derives `Serialize` (and is what handlers actually return), it
-         *     just has no `ToSchema` (`streamarr-catalog` doesn't depend on `utoipa`).
+         * @description Doc-only mirror of `streamarr_catalog::CatalogPage` -- see
+         *     `catalog::CatalogPageSchema`'s own doc comment for why this can't just
+         *     derive `ToSchema` on the real type.
          */
         CatalogPageSchema: {
             items: components["schemas"]["Work"][];
@@ -314,9 +1154,21 @@ export interface components {
          *     (rather than a free-form string) so the compatibility table, the
          *     `X-Streamarr-Client-Platform` header parser, and policy's
          *     `device_allow` list all agree on the same finite set.
+         *
+         *     `StreamarrAdmin` is the odd one out: every other variant is a Playarr
+         *     client (consumer streaming), but Streamarr's own admin UI is also a
+         *     real first-party client surface that authenticates through the same
+         *     `POST /api/v1/auth/login` endpoint, and `login_handler` needs a real,
+         *     honest way to tell the two apart so it knows whether to require
+         *     `Policy::can_stream` for this login attempt -- see that handler's doc
+         *     comment. Declaring `client_platform: "streamarr-admin"` doesn't grant
+         *     anything by itself (a caller can claim whatever platform it wants); it
+         *     only selects which check `login_handler` applies, and every *other*
+         *     endpoint still separately enforces the real, persisted `Policy`
+         *     regardless of what a login request once claimed.
          * @enum {string}
          */
-        ClientPlatform: "android-mobile" | "android-tv" | "ios" | "web" | "tv-webos" | "tv-tizen" | "tv-vidaa";
+        ClientPlatform: "android-mobile" | "android-tv" | "ios" | "web" | "tv-webos" | "tv-tizen" | "tv-vidaa" | "streamarr-admin";
         /**
          * @description One platform's row in the compatibility table: what the latest client
          *     build is, the floor below which the version-gate middleware rejects
@@ -333,6 +1185,67 @@ export interface components {
              *     time rather than being cut off with no notice.
              */
             sunset?: string | null;
+        };
+        CreatePlaylistRequest: {
+            /**
+             * @description Requires [`AdminUser`] when `true` -- a non-admin caller setting
+             *     this is rejected with `403`, not silently downgraded to a personal
+             *     playlist, so a client bug never creates the wrong kind of playlist
+             *     unnoticed.
+             */
+            is_system?: boolean;
+            name: string;
+            /**
+             * Format: uuid
+             * @description `Some(id)` nests this playlist under an existing one the caller can
+             *     already write to (e.g. "Sample Movie Golf" under "MCU") -- checked in
+             *     [`create_playlist_handler`], not structurally enforced here.
+             */
+            parent_playlist_id?: string | null;
+        };
+        /**
+         * @description Request body for provisioning a new account. `password` is write-only
+         *     -- it is hashed via `streamarr_auth::login::hash_password` immediately
+         *     and never echoed back in [`UserResponse`].
+         */
+        CreateUserRequest: {
+            /**
+             * @description Grants Playarr streaming access -- see `streamarr_model::Policy::
+             *     can_stream`'s doc comment. Independent of `is_admin`; defaults to
+             *     `false` (least privilege), same as every other grant this handler
+             *     starts a new account with.
+             */
+            can_stream?: boolean;
+            display_name: string;
+            email?: string | null;
+            is_admin?: boolean;
+            /**
+             * @description Source-instance ids ("libraries") this account may browse/stream --
+             *     see `streamarr_model::Policy::library_allow`'s doc comment. Defaults
+             *     to empty (no grants yet, deny-all -- not all-allow), same
+             *     least-privilege-by-default philosophy as `is_admin`/`can_stream`
+             *     above: an admin still has to explicitly grant library access after
+             *     creating the account.
+             */
+            library_allow?: string[];
+            password: string;
+            username: string;
+        };
+        /**
+         * @description One credit, with its [`Person`] flattened in -- a caller displaying a
+         *     cast/crew list wants the name/headshot right there, not a second
+         *     round trip per credit.
+         */
+        CreditResponse: {
+            /** @description The character played. Present only on a cast credit. */
+            character?: string | null;
+            /** @description Present only on a crew credit. */
+            department?: string | null;
+            /** Format: uuid */
+            id: string;
+            /** @description Present only on a crew credit. */
+            job?: string | null;
+            person: components["schemas"]["PersonResponse"];
         };
         DeviceCodeRequest: {
             client_platform: components["schemas"]["ClientPlatform"];
@@ -368,6 +1281,8 @@ export interface components {
             episode_number: number;
             /** Format: uuid */
             id: string;
+            /** @description Remote-hosted episode stills, normally [`crate::ImageKind::Thumb`]. */
+            images: components["schemas"]["ImageAsset"][];
             monitored: boolean;
             overview?: string | null;
             /** Format: int32 */
@@ -385,12 +1300,14 @@ export interface components {
             episode: components["schemas"]["Episode"];
             /** Format: uuid */
             media_file_id?: string | null;
+            /** Format: int64 */
+            runtime_ms?: number | null;
         };
         /**
          * @description A cross-reference to the identifier this `Work` (or one of its source
          *     records) is known by in an external catalog/metadata provider.
          */
-        ExternalProvider: "tmdb" | "tvdb" | "imdb" | "music_brainz_artist" | "music_brainz_release_group" | "goodreads" | "isbn" | "asin" | {
+        ExternalProvider: "tmdb" | "tvdb" | "imdb" | "music_brainz_artist" | "music_brainz_release_group" | "goodreads" | "isbn" | "asin" | "tpdb" | {
             /**
              * @description Escape hatch for providers we don't have a first-class variant for
              *     yet (e.g. AniDB, Discogs) without needing a migration to add one.
@@ -411,6 +1328,44 @@ export interface components {
         };
         /** @enum {string} */
         ImageKind: "poster" | "backdrop" | "banner" | "logo" | "thumb";
+        /**
+         * @description Request body for both create (`POST /api/v1/admin/views`) and update
+         *     (`PUT /api/v1/admin/views/{id}`). Structurally has no `is_default`/
+         *     `default_order` fields, so an admin can never set them through this
+         *     endpoint -- enforced by omission, not a runtime check (see
+         *     [`create_view_handler`]/[`update_view_handler`]'s doc comments).
+         */
+        LibraryViewRequest: {
+            criteria: components["schemas"]["ViewCriteriaDto"];
+            name: string;
+            /**
+             * @description Ordered, most-significant first -- each element one of `"title"` |
+             *     `"title_desc"` | `"recent"` | `"oldest"` | `"released"` |
+             *     `"last_played"`, same free-string convention as
+             *     `catalog::BrowseQueryParams::sort`, not a typed enum on the wire.
+             *     Empty/omitted defaults to `["title"]`. `"last_played"` orders by
+             *     *each resolving viewer's own* last-played time (see
+             *     `streamarr_model::ViewSort::LastPlayedByUser`'s doc comment) --
+             *     picking it here means every caller who resolves this view sees it
+             *     personalized to them, not a single shared order.
+             */
+            sort?: string[];
+        };
+        LibraryViewResponse: {
+            /** Format: date-time */
+            created_at: string;
+            criteria: components["schemas"]["ViewCriteriaDto"];
+            /** Format: int32 */
+            default_order?: number | null;
+            /** Format: uuid */
+            id: string;
+            is_default: boolean;
+            name: string;
+            /** @description Same ordered, most-significant-first string list `LibraryViewRequest::sort` accepts. */
+            sort: string[];
+            /** Format: date-time */
+            updated_at: string;
+        };
         LoginRequest: {
             client_platform: components["schemas"]["ClientPlatform"];
             client_version: string;
@@ -442,12 +1397,131 @@ export interface components {
             /** Format: uuid */
             user_id: string;
         };
+        /**
+         * @description One real chapter embedded in a media container, as reported by ffprobe.
+         *     Untitled chapters remain untitled rather than receiving a fabricated
+         *     name; Playarr can display their real start time as the label.
+         */
+        MediaChapter: {
+            /** Format: int64 */
+            end_ms?: number | null;
+            /** Format: int32 */
+            index: number;
+            /** Format: int64 */
+            start_ms: number;
+            title?: string | null;
+        };
+        MediaMetadata: {
+            /** Format: int64 */
+            duration_ms: number;
+        };
+        MediaPlaybackOptionsResponse: {
+            audio_tracks: components["schemas"]["PlaybackAudioTrackOption"][];
+            preferences: components["schemas"]["MediaPlaybackPreferenceResponse"];
+            quality_options: components["schemas"]["PlaybackQualityOption"][];
+            subtitle_tracks: components["schemas"]["PlaybackSubtitleTrackOption"][];
+        };
+        MediaPlaybackPreferenceResponse: {
+            audio_track_id?: string | null;
+            quality_id: string;
+            subtitle_track_id?: string | null;
+        };
         OAuthErrorBody: {
             /**
              * @description One of RFC 8628 §3.5's four device-flow error codes, or RFC 6749
              *     §5.2's `unsupported_grant_type`.
              */
             error: string;
+        };
+        PersonResponse: {
+            headshot_url?: string | null;
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        /** @enum {string} */
+        PlayMethod: "direct_play" | "direct_stream" | "transcode";
+        PlaybackAudioTrackOption: {
+            /** Format: int32 */
+            channels?: number | null;
+            codec?: string | null;
+            id: string;
+            is_default: boolean;
+            label: string;
+            language?: string | null;
+            /** Format: int32 */
+            stream_index: number;
+        };
+        /**
+         * @description A single timestamped occurrence within a [`PlaybackSession`]. Kept as a
+         *     tagged enum rather than a generic `{kind: String, payload: Value}` bag
+         *     so the analytics rollup code (`streamarr-telemetry::analytics::rollup`)
+         *     can exhaustively match every event type the compiler knows about.
+         */
+        PlaybackEventKind: {
+            /** @enum {string} */
+            kind: "start";
+        } | {
+            /** @enum {string} */
+            kind: "pause";
+            /** Format: int64 */
+            position_ms: number;
+        } | {
+            /** @enum {string} */
+            kind: "resume";
+            /** Format: int64 */
+            position_ms: number;
+        } | {
+            /** Format: int64 */
+            from_ms: number;
+            /** @enum {string} */
+            kind: "seek";
+            /** Format: int64 */
+            to_ms: number;
+        } | {
+            /** @enum {string} */
+            kind: "buffer_start";
+            /** Format: int64 */
+            position_ms: number;
+        } | {
+            /** Format: int64 */
+            duration_ms: number;
+            /** @enum {string} */
+            kind: "buffer_end";
+        } | {
+            /** Format: int64 */
+            from_bps?: number | null;
+            /** @enum {string} */
+            kind: "bitrate_change";
+            /** Format: int64 */
+            to_bps: number;
+        } | {
+            /**
+             * Format: int64
+             * @description The client's own cumulative bytes-received counter for this
+             *     session (e.g. from the `<video>` element / Shaka Player's
+             *     network stats), if it's cheap for the client to report. `None`
+             *     means the client isn't reporting this yet -- `bytes_streamed`
+             *     on the session simply stays at whatever it last was (usually
+             *     `0`) rather than being fabricated. See
+             *     `streamarr_telemetry::analytics::collector`'s module doc
+             *     comment for how this is applied.
+             */
+            bytes_streamed_total?: number | null;
+            /** @enum {string} */
+            kind: "heartbeat";
+            /** Format: int64 */
+            position_ms: number;
+        } | {
+            /** @enum {string} */
+            kind: "stop";
+            /** Format: int64 */
+            position_ms: number;
+            reason: components["schemas"]["StopReason"];
+        } | {
+            /** @enum {string} */
+            kind: "error";
+            message: string;
         };
         /**
          * @description TODO(streaming): `url` today is a well-known, stable path convention
@@ -460,11 +1534,223 @@ export interface components {
          *     the direct-play/existing-rendition/on-demand-transcode *decision*).
          */
         PlaybackInfoResponse: {
+            /**
+             * @description Source-container audio streams. For on-demand HLS, choosing one
+             *     creates a replacement session that maps this exact stream.
+             */
+            audio_tracks: components["schemas"]["PlaybackAudioTrackOption"][];
+            /**
+             * Format: int64
+             * @description Fixed runtime read from the source media container with ffprobe.
+             *     Zero means probing failed; clients may then fall back to their
+             *     playback engine's duration without failing negotiation.
+             */
+            duration_ms: number;
             mode: components["schemas"]["PlaybackMode"];
+            /**
+             * @description The server-owned quality ladder. Original is always first and is
+             *     the default when the request does not explicitly force a profile.
+             */
+            quality_options: components["schemas"]["PlaybackQualityOption"][];
+            selected_audio_track_id?: string | null;
+            /** @description The option represented by this URL. */
+            selected_quality_id: string;
+            selected_subtitle_track_id?: string | null;
+            /**
+             * Format: uuid
+             * @description The freshly-created [`PlaybackSession`] id -- the client uses this
+             *     for every subsequent `POST .../sessions/{session_id}/events` call
+             *     (heartbeats, buffering, stop). Session creation piggybacks on this
+             *     endpoint entirely: `device_id` comes from the caller's JWT and
+             *     `client_platform`/`client_version` from headers the client already
+             *     sends on every request, so no separate "start session" call is
+             *     needed -- see [`record_playback_event_handler`]'s doc comment.
+             */
+            session_id: string;
+            /**
+             * Format: int64
+             * @description Absolute source timestamp represented by time zero in `url`.
+             *     Non-zero only for a freshly-created on-demand HLS session started
+             *     part-way through the source.
+             */
+            source_offset_ms: number;
+            /**
+             * @description Supported embedded text subtitles, exposed as authenticated WebVTT
+             *     sidecars. Bitmap subtitle codecs are deliberately omitted.
+             */
+            subtitle_tracks: components["schemas"]["PlaybackSubtitleTrackOption"][];
             url: string;
         };
         /** @enum {string} */
         PlaybackMode: "direct" | "hls";
+        /**
+         * @description One quality the server can genuinely deliver through its current
+         *     playback/transcode implementation.
+         */
+        PlaybackQualityOption: {
+            /**
+             * Format: int32
+             * @description Target picture height for a rendition. Original is source-defined.
+             */
+            height?: number | null;
+            /**
+             * @description Stable selector. `"original"` means normal uncapped negotiation;
+             *     profile qualities use their real rendition profile name.
+             */
+            id: string;
+            label: string;
+            /**
+             * @description `None` for Original; otherwise the exact profile accepted by this
+             *     endpoint's `profile` query parameter.
+             */
+            profile?: string | null;
+            /**
+             * Format: int64
+             * @description Target video bitrate for a rendition. Original is source-defined.
+             */
+            video_bitrate_bps?: number | null;
+        };
+        /**
+         * @description One playback attempt from start to finish. Written incrementally: a row
+         *     is inserted at playback start and updated (`ended_at`, `stop_reason`,
+         *     aggregate buffering counters) as the session progresses and closes.
+         */
+        PlaybackSession: {
+            /** Format: int32 */
+            buffering_events: number;
+            /** Format: int64 */
+            buffering_ms_total: number;
+            /** Format: int64 */
+            bytes_streamed: number;
+            client_platform: components["schemas"]["ClientPlatform"];
+            client_version: string;
+            /** Format: uuid */
+            device_id: string;
+            /** Format: date-time */
+            ended_at?: string | null;
+            /** Format: uuid */
+            id: string;
+            ip_address?: string | null;
+            /** Format: uuid */
+            media_file_id: string;
+            play_method: components["schemas"]["PlayMethod"];
+            /**
+             * Format: uuid
+             * @description Set only when `play_method == Transcode` and an existing
+             *     [`crate::Rendition`] served the session (as opposed to a
+             *     short-lived on-demand transcode with no durable rendition record).
+             */
+            rendition_id?: string | null;
+            /** Format: int64 */
+            source_bitrate?: number | null;
+            source_codec: string;
+            source_container: string;
+            /** Format: date-time */
+            started_at: string;
+            stop_reason?: null | components["schemas"]["StopReason"];
+            /** Format: int64 */
+            target_bitrate?: number | null;
+            /**
+             * @description The codec/container/bitrate actually delivered to the client;
+             *     equal to the source fields for `DirectPlay`.
+             */
+            target_codec: string;
+            target_container: string;
+            transcode_reason?: null | components["schemas"]["TranscodeReason"];
+            /** Format: uuid */
+            user_id: string;
+        };
+        PlaybackSubtitleTrackOption: {
+            codec: string;
+            forced: boolean;
+            id: string;
+            is_default: boolean;
+            label: string;
+            language?: string | null;
+            /** Format: int32 */
+            stream_index: number;
+            /** @description Authenticated WebVTT sidecar aligned to this playback URL's timeline. */
+            url: string;
+        };
+        PlayerPreferencesResponse: {
+            preferred_audio_language: string;
+        };
+        PlaylistItemResponse: {
+            /** Format: date-time */
+            added_at: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            playlist_id: string;
+            /** Format: int32 */
+            position: number;
+            /** Format: uuid */
+            work_id: string;
+        };
+        PlaylistResponse: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description `true` for a System (admin-managed, globally visible) playlist,
+             *     `false` for a personal one.
+             */
+            is_system: boolean;
+            name: string;
+            /**
+             * Format: uuid
+             * @description `None` for a System playlist. Present (including for a personal
+             *     playlist that isn't the caller's own) only on the admin
+             *     "view everything" listing ([`list_admin_playlists_handler`]) -- the
+             *     ordinary [`list_playlists_handler`]/[`get_playlist_handler`]
+             *     responses a non-admin caller sees also carry this, but a caller
+             *     only ever gets back playlists they can already read (their own +
+             *     System, see [`can_read`]), so it's never a stranger's id in
+             *     practice for them.
+             */
+            owner_user_id?: string | null;
+            /** Format: uuid */
+            parent_playlist_id?: string | null;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ProfilePinSettingResponse: {
+            pin_locked: boolean;
+        };
+        RefreshRequest: {
+            /**
+             * Format: uuid
+             * @description Same `device_id` the original `POST /api/v1/auth/login` (or RFC
+             *     8628 device-flow) call used -- `RefreshTokenService` keys its store
+             *     by device, not by the opaque token value alone.
+             */
+            device_id: string;
+            refresh_token: string;
+        };
+        RefreshResponse: {
+            access_token: string;
+            /** Format: int64 */
+            expires_in: number;
+            /**
+             * @description Rotated -- a new refresh token, not the one presented. The caller
+             *     must persist this and discard the old one; presenting the old one
+             *     again is treated as reuse (see `RefreshTokenService::rotate`'s doc
+             *     comment) and revokes the whole token family.
+             */
+            refresh_token: string;
+            token_type: string;
+            /** Format: uuid */
+            user_id: string;
+        };
+        ReorderPlaylistItemsRequest: {
+            /**
+             * @description Every item id currently on this playlist, in the desired new order.
+             *     An id that isn't actually one of this playlist's items is silently
+             *     ignored -- see `PlaylistRepo::reorder_items`'s own doc comment.
+             */
+            item_ids: string[];
+        };
         Season: {
             availability: components["schemas"]["Availability"];
             /** Format: uuid */
@@ -493,7 +1779,6 @@ export interface components {
             /** Format: int64 */
             default_quality_profile_id?: number | null;
             default_root_folder_id?: string | null;
-            enabled_for_requests?: boolean;
             /**
              * Format: uuid
              * @description Omit to create a new instance (a fresh id is assigned and returned);
@@ -518,7 +1803,6 @@ export interface components {
             /** Format: int64 */
             default_quality_profile_id?: number | null;
             default_root_folder_id?: string | null;
-            enabled_for_requests: boolean;
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["SourceKind"];
@@ -526,8 +1810,79 @@ export interface components {
             /** Format: int32 */
             priority: number;
         };
+        /**
+         * @description One source instance's most recently reported reconciliation outcome --
+         *     see `streamarr_arr_sync::SyncRunStatus`. `status`/`error`/`finished_at`
+         *     are `None` together when no poller has reported anything for this
+         *     instance yet (e.g. it was registered less than ~10s ago).
+         */
+        SourceInstanceSyncStatusResponse: {
+            /**
+             * @description Only set when `status` is `"running"` and the poller has something
+             *     more specific to report than "running" alone -- see
+             *     `streamarr_arr_sync::SyncRunStatus::Running`'s doc comment (e.g. a
+             *     large missing-media-file backfill's live "N/total" progress).
+             */
+            detail?: string | null;
+            /** @description Only set when `status` is `"failed"`. */
+            error?: string | null;
+            /** Format: date-time */
+            finished_at?: string | null;
+            kind: components["schemas"]["SourceKind"];
+            name: string;
+            /** Format: uuid */
+            source_instance_id: string;
+            /** Format: date-time */
+            started_at?: string | null;
+            /** @description `"running"` | `"succeeded"` | `"failed"`, or absent if unreported. */
+            status?: string | null;
+        };
         /** @enum {string} */
-        SourceKind: "sonarr" | "radarr" | "lidarr" | "bazarr" | "prowlarr" | "readarr";
+        SourceKind: "sonarr" | "radarr" | "lidarr" | "bazarr" | "prowlarr" | "readarr" | "whisparr";
+        StopReason: "completed" | "user_stopped" | "error" | "device_disconnected" | "session_revoked" | "concurrent_limit_exceeded" | "idle_timeout" | {
+            other: string;
+        };
+        /**
+         * @description Request body for registering (or re-registering, to update in place --
+         *     e.g. to rotate the API key) the Tdarr connection. `api_key` is
+         *     write-only -- it is never echoed back in [`TdarrConnectionResponse`].
+         */
+        TdarrConnectionRequest: {
+            /** Format: int32 */
+            active_session_threshold?: number;
+            api_key: string;
+            base_url: string;
+            default_profile?: string;
+            /** Format: int32 */
+            default_worker_limit?: number;
+            tdarr_db_id?: string;
+            /** Format: int64 */
+            throttle_check_interval_secs?: number;
+            /**
+             * Format: int32
+             * @description Worker limit applied while `active_session_threshold` or more
+             *     on-demand sessions are live. Defaults to `0` -- pause background
+             *     transcoding entirely rather than compete with live playback.
+             */
+            throttled_worker_limit?: number;
+            worker_process?: string;
+        };
+        TdarrConnectionResponse: {
+            /** Format: int32 */
+            active_session_threshold: number;
+            base_url: string;
+            default_profile: string;
+            /** Format: int32 */
+            default_worker_limit: number;
+            tdarr_db_id: string;
+            /** Format: int64 */
+            throttle_check_interval_secs: number;
+            /** Format: int32 */
+            throttled_worker_limit: number;
+            /** Format: date-time */
+            updated_at: string;
+            worker_process: string;
+        };
         /** @description Doc-only mirror of [`TokenResponse`]; see [`DeviceCodeResponseSchema`]. */
         TokenResponseSchema: {
             access_token: string;
@@ -557,7 +1912,103 @@ export interface components {
         TrackDetailSchema: {
             /** Format: uuid */
             media_file_id?: string | null;
+            /** Format: int64 */
+            runtime_ms?: number | null;
             track: components["schemas"]["Track"];
+        };
+        /**
+         * @description Why a session couldn't direct-play/direct-stream and had to fall back to
+         *     a transcode. Populated only when `play_method == Transcode`.
+         */
+        TranscodeReason: "container_not_supported" | "video_codec_not_supported" | "audio_codec_not_supported" | "video_bitrate_exceeds_limit" | "resolution_exceeds_limit" | "subtitle_burn_in_required" | "server_policy" | {
+            other: string;
+        };
+        UpdateMediaPlaybackPreferencesRequest: {
+            audio_track_id?: string | null;
+            quality_id: string;
+            subtitle_track_id?: string | null;
+        };
+        UpdatePlayerPreferencesRequest: {
+            preferred_audio_language: string;
+        };
+        UpdatePlaylistRequest: {
+            name: string;
+            /** Format: uuid */
+            parent_playlist_id?: string | null;
+        };
+        UpdateProfilePinRequest: {
+            /** @description Exactly four ASCII decimal digits. `null` removes the profile lock. */
+            pin: string | null;
+        };
+        /**
+         * @description All-optional patch body -- only fields set to `Some` are applied.
+         *     `password`, when set, is re-hashed the same way [`CreateUserRequest`]'s
+         *     is; `is_admin`, when set, updates the user's [`Policy`] rather than the
+         *     `User` row itself (`is_admin` lives on `Policy`, not `User`).
+         */
+        UpdateUserRequest: {
+            can_stream?: boolean | null;
+            disabled?: boolean | null;
+            display_name?: string | null;
+            email?: string | null;
+            is_admin?: boolean | null;
+            /**
+             * @description `Some(ids)` replaces the account's entire `Policy::library_allow`
+             *     with `ids`; `None` (the field omitted from the request body) leaves
+             *     it untouched -- same all-optional-patch shape as every other field
+             *     here. See [`update_user_handler`]'s doc comment for how this is
+             *     folded into the same single conditional policy re-persist
+             *     `is_admin`/`can_stream` already use.
+             */
+            library_allow?: string[] | null;
+            password?: string | null;
+        };
+        UpdateWatchProgressRequest: {
+            completed?: boolean;
+            /** Format: int64 */
+            duration_ms: number;
+            /** Format: int64 */
+            position_ms: number;
+        };
+        /**
+         * @description The redacted, admin-facing projection of [`streamarr_model::User`] --
+         *     same rationale as `admin.rs`'s `SourceInstanceResponse`: `User` itself
+         *     is deliberately not `ToSchema` (it carries `password_hash`), so
+         *     handlers map to this secret-free DTO instead. `is_admin` is pulled in
+         *     from the user's `Policy` (see [`UserResponse::from_user`])
+         *     since it isn't a field on `User` at all.
+         */
+        UserResponse: {
+            /**
+             * @description Whether this account is permitted to sign in to Playarr -- see
+             *     `streamarr_model::Policy::can_stream`'s doc comment. Independent of
+             *     `is_admin`.
+             */
+            can_stream: boolean;
+            /** Format: date-time */
+            created_at: string;
+            disabled: boolean;
+            display_name: string;
+            email?: string | null;
+            /** Format: uuid */
+            id: string;
+            is_admin: boolean;
+            /**
+             * @description Source-instance ids ("libraries") this account may browse/stream --
+             *     see `streamarr_model::Policy::library_allow`'s doc comment. Empty
+             *     means no grants (deny-all), not all-allow; irrelevant (but still
+             *     truthfully reported) for an `is_admin` account, since `is_admin`
+             *     bypasses this check entirely at enforcement time.
+             */
+            library_allow: string[];
+            preferred_audio_language: string;
+            username: string;
+        };
+        VerifyProfilePinRequest: {
+            pin: string;
+        };
+        VerifyProfilePinResponse: {
+            verified: boolean;
         };
         /** @description Response body for `GET /api/system/version`. */
         VersionEnvelope: {
@@ -566,6 +2017,56 @@ export interface components {
             compatibility: components["schemas"]["CompatibilityEntry"][];
             server_version: string;
         };
+        ViewCriteriaDto: {
+            available_only?: boolean;
+            genre?: string | null;
+            kind?: null | components["schemas"]["WorkKind"];
+            /**
+             * Format: int64
+             * @description Only include works whose `release_date` falls within the last N
+             *     days. `None` = no window restriction.
+             */
+            release_window_days?: number | null;
+            /** Format: uuid */
+            source_instance_id?: string | null;
+            tag?: string | null;
+        };
+        /**
+         * @description Public/Playarr-facing list projection -- deliberately doesn't expose
+         *     `criteria` (Playarr never needs to interpret filter internals, only
+         *     call `resolve`).
+         */
+        ViewSummary: {
+            /** Format: int32 */
+            default_order?: number | null;
+            /** Format: uuid */
+            id: string;
+            is_default: boolean;
+            name: string;
+        };
+        /** @description Durable resume position for one user and one media file. */
+        WatchProgress: {
+            /** Format: int64 */
+            duration_ms: number;
+            /** Format: uuid */
+            media_file_id: string;
+            /** Format: int64 */
+            position_ms: number;
+            state: components["schemas"]["WatchState"];
+            /**
+             * Format: date-time
+             * @description `None` is used only for the synthetic unseen response returned when
+             *     no durable progress row exists yet.
+             */
+            updated_at?: string | null;
+            /** Format: uuid */
+            work_id: string;
+        };
+        /**
+         * @description The viewer-facing state derived from a durable playback position.
+         * @enum {string}
+         */
+        WatchState: "unseen" | "part_watched" | "watched";
         /**
          * @description The aggregate root for anything in the catalog. A movie is a `Work` of
          *     kind `Movie` with no children; a series/artist/author is a `Work` whose
@@ -589,6 +2090,18 @@ export interface components {
             monitored: boolean;
             overview?: string | null;
             /**
+             * Format: date-time
+             * @description When this title was actually released, per its source *arr app
+             *     (Radarr `digitalRelease`/`physicalRelease`, Sonarr `firstAired`) --
+             *     distinct from `added_at` (when Streamarr itself learned about the
+             *     work). Populated by `streamarr-arr-sync` for `Movie`/`Series`/`Site`
+             *     kinds only; `Artist`/`Author` works have no single release date of
+             *     their own (their children -- albums/books -- each carry one already),
+             *     so this stays `None` for those kinds. See
+             *     `backend/migrations/{sqlite,postgres}/00{11,14}_work_release_date.sql`.
+             */
+            release_date?: string | null;
+            /**
              * @description Normalized title used for alphabetical sort/browse ("Dark Knight,
              *     The" rather than "The Test Film").
              */
@@ -611,6 +2124,10 @@ export interface components {
         } | {
             Author: components["schemas"]["BookDetailSchema"][];
         };
+        WorkCreditsResponse: {
+            cast: components["schemas"]["CreditResponse"][];
+            crew: components["schemas"]["CreditResponse"][];
+        };
         WorkDetailSchema: {
             children: components["schemas"]["WorkChildrenSchema"];
             /**
@@ -620,6 +2137,12 @@ export interface components {
              *     are their children instead -- see `streamarr_catalog::WorkDetail`.
              */
             media_file_id?: string | null;
+            /**
+             * Format: int64
+             * @description Fixed source-container runtime for a movie. Series runtimes are
+             *     exposed on each `EpisodeDetailSchema`.
+             */
+            runtime_ms?: number | null;
             work: components["schemas"]["Work"];
         };
         /**
@@ -629,7 +2152,7 @@ export interface components {
          *     independent lifecycle/monitoring semantics at the top level.
          * @enum {string}
          */
-        WorkKind: "movie" | "series" | "artist" | "author";
+        WorkKind: "movie" | "series" | "site" | "artist" | "author";
     };
     responses: never;
     parameters: never;
@@ -699,6 +2222,149 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["VersionEnvelope"];
                 };
+            };
+        };
+    };
+    list_active_sessions_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every currently-active playback session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActiveSessionView"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_session_history_handler: {
+        parameters: {
+            query?: {
+                user_id?: string | null;
+                from?: string | null;
+                to?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Filtered, paginated playback session history, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackSession"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    stop_session_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description PlaybackSession id (see ActiveSessionView::session_id) */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session stopped (or was already gone -- stopping a session that already ended is not an error) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_admin_playlists_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every playlist, System and personal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaylistResponse"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -774,6 +2440,40 @@ export interface operations {
             };
             /** @description base_url/api_key rejected, or the instance could not be reached */
             502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sync_status_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every registered instance's last-known sync status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceInstanceSyncStatusResponse"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -865,6 +2565,522 @@ export interface operations {
             };
         };
     };
+    get_tdarr_connection_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The registered connection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TdarrConnectionResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No Tdarr connection has been registered yet */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_tdarr_connection_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TdarrConnectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Registered (or updated) and confirmed reachable */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TdarrConnectionResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description base_url/api_key rejected, or Tdarr could not be reached */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_tdarr_connection_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed (or was already absent) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_users_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All provisioned accounts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_user_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Account created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Username is already taken */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_user_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed (or was already absent) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_user_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No user with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_admin_views_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every view, full projection, in display order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryViewResponse"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_view_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryViewRequest"];
+            };
+        };
+        responses: {
+            /** @description The created view */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryViewResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_view_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description View id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryViewRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated view */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryViewResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No view with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_view_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description View id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No view with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This is a seeded default view and cannot be deleted */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    work_artwork_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Work id */
+                work_id: string;
+                /** @description poster, backdrop, banner, logo, or thumb */
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Streamarr-cached source artwork */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": unknown;
+                };
+            };
+            /** @description The caller already has the current cached artwork */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unsupported artwork kind */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown work or unavailable artwork kind */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The metadata-provider artwork could not be safely cached */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     login_handler: {
         parameters: {
             query?: never;
@@ -901,16 +3117,73 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description authenticated, but this account has no Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    refresh_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description Fresh access + rotated refresh token pair */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshResponse"];
+                };
+            };
+            /** @description refresh token is invalid, expired, revoked, or reused */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     browse_catalog_handler: {
         parameters: {
             query?: {
                 kind?: null | components["schemas"]["WorkKind"];
+                /**
+                 * @description Return only works that own at least one synced media file. Playarr
+                 *     enables this; Streamarr Admin leaves it unset so records without
+                 *     playable leaves remain visible for library reconciliation.
+                 */
+                available_only?: boolean | null;
+                /**
+                 * @description Restricts results to works with at least one synced file from this
+                 *     source instance -- the "library" filter (two source instances of the
+                 *     same kind, e.g. two Radarr instances, browse as separate libraries).
+                 *     See `streamarr_catalog::BrowseQuery::source_instance_id`'s doc
+                 *     comment for how this is resolved.
+                 */
+                source_instance_id?: string | null;
                 genre?: string | null;
                 tag?: string | null;
-                /** @description `"title"` (default) or `"recent"`. */
+                /**
+                 * @description `"title"` (default) or `"date_added"` (`"recent"` remains a
+                 *     backwards-compatible alias for date-added descending).
+                 */
                 sort?: string | null;
+                /** @description `"asc"` (default for title) or `"desc"` (default for date added). */
+                order?: string | null;
                 limit?: number | null;
                 offset?: number | null;
             };
@@ -928,6 +3201,54 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CatalogPageSchema"];
                 };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    catalog_kinds_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Configured catalog kinds visible to the caller */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkKind"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -952,6 +3273,20 @@ export interface operations {
                     "application/json": components["schemas"]["Work"][];
                 };
             };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     get_work_handler: {
@@ -975,8 +3310,594 @@ export interface operations {
                     "application/json": components["schemas"]["WorkDetailSchema"];
                 };
             };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description No work with this id */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    work_credits_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Work id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description This work's cast and crew */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkCreditsResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    similar_works_handler: {
+        parameters: {
+            query?: {
+                limit?: number | null;
+            };
+            header?: never;
+            path: {
+                /** @description Work id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Works ranked by semantic similarity to this one */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Work"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No work with this id, or it has no cached embedding yet */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    serve_rendition_file_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Rendition id */
+                rendition_id: string;
+                /** @description playlist.m3u8 or a segment file name within the rendition's output directory */
+                file_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Full file content */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Partial content for a `Range` request */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description file_name contains a path separator or `..` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown rendition_id, or the file does not exist in its output directory */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    serve_session_file_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description On-demand TranscodeSession id */
+                session_id: string;
+                /** @description playlist.m3u8 or a segment file name within the session's output directory */
+                file_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Full file content */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Partial content for a `Range` request */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description file_name contains a path separator or `..` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or expired session_id, or the file hasn't been written yet */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    media_chapters_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MediaFile id */
+                media_file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Real chapters embedded in the source media container */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaChapter"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown media_file_id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source file could not be probed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    media_metadata_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MediaFile id */
+                media_file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Persisted fixed source-container metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaMetadata"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown media_file_id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source file could not be probed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    media_playback_options_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MediaFile id */
+                media_file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Playback choices and this viewer's remembered selections */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaPlaybackOptionsResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown media_file_id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_media_playback_options_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MediaFile id */
+                media_file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMediaPlaybackPreferencesRequest"];
+            };
+        };
+        responses: {
+            /** @description Remembered selections updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaPlaybackOptionsResponse"];
+                };
+            };
+            /** @description A requested option is not available for this media file */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown media_file_id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    stream_media_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MediaFile id */
+                media_file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Full file content (direct play) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Partial content for a `Range` request */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown media_file_id, or the file no longer exists on disk */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    media_subtitle_handler: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Absolute source timestamp represented by zero in the current media
+                 *     timeline. On-demand HLS sessions use this to keep sidecar cues aligned.
+                 */
+                source_offset_ms?: number;
+            };
+            header?: never;
+            path: {
+                /** @description MediaFile id */
+                media_file_id: string;
+                /** @description Global ffprobe stream index */
+                stream_index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Embedded text subtitle converted to WebVTT */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/vtt": unknown;
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown media file or unsupported/nonexistent subtitle stream */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Subtitle conversion failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    media_thumbnail_handler: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Absolute source timestamp for the extracted frame. Omitted keeps the
+                 *     established 30-second episode-thumbnail default.
+                 */
+                position_ms?: number | null;
+            };
+            header?: never;
+            path: {
+                /** @description MediaFile id */
+                media_file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A real JPEG frame extracted from the source media file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown media_file_id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source file could not be decoded */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source media path is not reachable on this Streamarr node */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1041,6 +3962,174 @@ export interface operations {
             };
         };
     };
+    get_person_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Person id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The person */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No person with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    person_works_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Person id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every work this person has a credit on */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Work"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No person with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_watch_progress_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Durable progress rows for the signed-in viewer, restricted to this account's allowed libraries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchProgress"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    record_playback_event_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description PlaybackSession id, from PlaybackInfoResponse.session_id */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaybackEventKind"];
+            };
+        };
+        responses: {
+            /** @description Event recorded */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description session_id does not belong to the caller */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or already-closed session_id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     playback_info_handler: {
         parameters: {
             query?: {
@@ -1060,6 +4149,29 @@ export interface operations {
                  *     default -- see `TranscodeTargetProfile::resolve`).
                  */
                 profile?: string | null;
+                /**
+                 * @description Skip direct play and produce the requested rendition profile. Used
+                 *     by an explicit player quality choice; omitted/false keeps Original
+                 *     as the default uncapped negotiation behaviour.
+                 */
+                force_transcode?: boolean;
+                /**
+                 * @description Absolute source timestamp at which a newly-created on-demand
+                 *     transcode should begin. Direct play and complete renditions ignore
+                 *     this and remain normally seekable by the player.
+                 */
+                start_position_ms?: number;
+                /**
+                 * @description Global ffprobe stream index of the source audio track to encode into
+                 *     an on-demand HLS session. Supplying this forces a fresh transcode so
+                 *     a track-specific stream never reuses a default-audio rendition.
+                 */
+                audio_stream_index?: number | null;
+                /**
+                 * @description Ignore this viewer's remembered per-media choices for this request.
+                 *     Used when the player explicitly switches back to Original/automatic.
+                 */
+                ignore_saved_preferences?: boolean;
             };
             header?: never;
             path: {
@@ -1070,7 +4182,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Direct-play URL or HLS manifest URL */
+            /** @description Direct-play URL or HLS manifest URL, plus the new PlaybackSession id */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1078,6 +4190,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PlaybackInfoResponse"];
                 };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unknown media_file_id */
             404: {
@@ -1088,6 +4214,788 @@ export interface operations {
             };
             /** @description No on-demand transcode capacity available on this node */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_watch_progress_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MediaFile id */
+                media_file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Viewer progress, including a synthetic unseen state when no row exists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchProgress"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown media_file_id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_watch_progress_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MediaFile id */
+                media_file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWatchProgressRequest"];
+            };
+        };
+        responses: {
+            /** @description Persisted viewer progress */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchProgress"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown media_file_id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_playlists_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every playlist visible to the caller */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaylistResponse"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_playlist_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePlaylistRequest"];
+            };
+        };
+        responses: {
+            /** @description The created playlist */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaylistResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Non-admin caller set is_system, or lacks write access to the requested parent */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such parent_playlist_id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_playlist_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Playlist id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The playlist */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaylistResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such playlist, or not visible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_playlist_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Playlist id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePlaylistRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated playlist */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaylistResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller lacks write access to this playlist, or to the requested new parent */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such playlist, or not visible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_playlist_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Playlist id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller lacks write access to this playlist */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such playlist, or not visible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_playlist_items_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Playlist id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description This playlist's items, position-ordered */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaylistItemResponse"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such playlist, or not visible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_playlist_item_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Playlist id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddPlaylistItemRequest"];
+            };
+        };
+        responses: {
+            /** @description The created item */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaylistItemResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller lacks write access to this playlist */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such playlist, or not visible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reorder_playlist_items_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Playlist id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderPlaylistItemsRequest"];
+            };
+        };
+        responses: {
+            /** @description The playlist's items in their new order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaylistItemResponse"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller lacks write access to this playlist */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such playlist, or not visible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_playlist_item_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Playlist id */
+                id: string;
+                /** @description Playlist item id */
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller lacks write access to this playlist */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such playlist/item, or playlist not visible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_player_preferences_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The signed-in user's player preferences */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayerPreferencesResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The signed-in user no longer exists */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_player_preferences_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePlayerPreferencesRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated player preferences */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayerPreferencesResponse"];
+                };
+            };
+            /** @description Invalid preferred audio language */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The signed-in user no longer exists */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_profile_pin_setting_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The signed-in user's profile PIN setting */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfilePinSettingResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_profile_pin_setting_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProfilePinRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated profile PIN setting */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfilePinSettingResponse"];
+                };
+            };
+            /** @description PIN is not exactly four decimal digits */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The signed-in user no longer exists */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_available_profiles_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Enabled Playarr profiles available on this server */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailableProfileResponse"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    verify_profile_pin_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Profile user id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyProfilePinRequest"];
+            };
+        };
+        responses: {
+            /** @description The profile is unlocked for switching */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerifyProfilePinResponse"];
+                };
+            };
+            /** @description The target profile is unavailable or the PIN is invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_views_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every view, minimal projection, in display order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViewSummary"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resolve_view_handler: {
+        parameters: {
+            query?: {
+                limit?: number | null;
+                offset?: number | null;
+            };
+            header?: never;
+            path: {
+                /** @description View id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of catalog works matching this view */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogPageSchema"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No view with this id */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

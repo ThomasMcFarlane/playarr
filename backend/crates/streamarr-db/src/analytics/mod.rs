@@ -13,15 +13,16 @@
 use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
+use sqlx::any::AnyRow;
 use sqlx::Row;
 use streamarr_model::{ClientPlatform, PlaybackEvent, PlaybackSession, StopReason};
 use uuid::Uuid;
 
 use crate::codec::{
-    decode_err, format_date, format_datetime, parse_date, parse_datetime, play_method_from_str,
-    play_method_to_str, playback_event_kind_discriminant, stop_reason_to_str,
-    transcode_reason_to_str,
+    decode_err, format_date, format_datetime, parse_date, parse_datetime, parse_uuid,
+    play_method_from_str, play_method_to_str, playback_event_kind_discriminant,
+    stop_reason_from_str, stop_reason_to_str, transcode_reason_from_str, transcode_reason_to_str,
 };
 use crate::error::DbError;
 use crate::pool::{Backend, DbPool};
@@ -78,6 +79,32 @@ pub trait AnalyticsStore: Send + Sync {
         from: NaiveDate,
         to: NaiveDate,
     ) -> Result<Vec<DailyStat>, DbError>;
+
+    /// Writes a batch of events in one transaction wrapping N of the same
+    /// per-row inserts [`AnalyticsStore::record_event`] uses — cuts DB
+    /// round-trips for [`streamarr_telemetry`]'s `AnalyticsFlusher`, which
+    /// coalesces the high-frequency, low-importance event kinds
+    /// (heartbeat/pause/resume/seek/buffer/bitrate-change) rather than
+    /// writing each one synchronously. A no-op (not an error) for an empty
+    /// slice.
+    async fn record_events_batch(&self, events: &[PlaybackEvent]) -> Result<(), DbError>;
+
+    /// Filtered, paginated read of raw `playback_sessions` rows, newest
+    /// first — backs the admin session-history endpoint. Unlike every
+    /// other method on this trait, this one reads a full [`PlaybackSession`]
+    /// back out, hence the `_from_str` decode counterparts in `crate::codec`
+    /// this needed (`transcode_reason_from_str`/`stop_reason_from_str`).
+    async fn list_sessions(&self, filter: &SessionFilter) -> Result<Vec<PlaybackSession>, DbError>;
+}
+
+/// Filter/pagination parameters for [`AnalyticsStore::list_sessions`].
+#[derive(Debug, Clone, Default)]
+pub struct SessionFilter {
+    pub user_id: Option<Uuid>,
+    pub from: Option<DateTime<Utc>>,
+    pub to: Option<DateTime<Utc>>,
+    pub limit: i64,
+    pub offset: i64,
 }
 
 pub struct SqlxAnalyticsStore {
@@ -89,6 +116,76 @@ impl SqlxAnalyticsStore {
     pub fn new(pool: DbPool) -> Self {
         let backend = Backend::detect(&pool);
         Self { pool, backend }
+    }
+
+    const SESSION_COLUMNS: &'static str = "id, user_id, device_id, media_file_id, rendition_id, \
+         started_at, ended_at, play_method, transcode_reason, source_codec, source_container, \
+         source_bitrate, target_codec, target_container, target_bitrate, client_platform, \
+         client_version, ip_address, bytes_streamed, buffering_events, buffering_ms_total, \
+         stop_reason";
+
+    fn session_from_row(row: &AnyRow) -> Result<PlaybackSession, DbError> {
+        let id: String = row.try_get("id")?;
+        let user_id: String = row.try_get("user_id")?;
+        let device_id: String = row.try_get("device_id")?;
+        let media_file_id: String = row.try_get("media_file_id")?;
+        let rendition_id: Option<String> = row.try_get("rendition_id")?;
+        let started_at: String = row.try_get("started_at")?;
+        let ended_at: Option<String> = row.try_get("ended_at")?;
+        let play_method: String = row.try_get("play_method")?;
+        let transcode_reason: Option<String> = row.try_get("transcode_reason")?;
+        let source_codec: String = row.try_get("source_codec")?;
+        let source_container: String = row.try_get("source_container")?;
+        let source_bitrate: Option<i64> = row.try_get("source_bitrate")?;
+        let target_codec: String = row.try_get("target_codec")?;
+        let target_container: String = row.try_get("target_container")?;
+        let target_bitrate: Option<i64> = row.try_get("target_bitrate")?;
+        let client_platform: String = row.try_get("client_platform")?;
+        let client_version: String = row.try_get("client_version")?;
+        let ip_address: Option<String> = row.try_get("ip_address")?;
+        let bytes_streamed: i64 = row.try_get("bytes_streamed")?;
+        let buffering_events: i64 = row.try_get("buffering_events")?;
+        let buffering_ms_total: i64 = row.try_get("buffering_ms_total")?;
+        let stop_reason: Option<String> = row.try_get("stop_reason")?;
+
+        Ok(PlaybackSession {
+            id: parse_uuid(&id)?,
+            user_id: parse_uuid(&user_id)?,
+            device_id: parse_uuid(&device_id)?,
+            media_file_id: parse_uuid(&media_file_id)?,
+            rendition_id: rendition_id.map(|id| parse_uuid(&id)).transpose()?,
+            started_at: parse_datetime(&started_at)?,
+            ended_at: ended_at.map(|at| parse_datetime(&at)).transpose()?,
+            play_method: play_method_from_str(&play_method)?,
+            transcode_reason: transcode_reason.as_deref().map(transcode_reason_from_str),
+            source_codec,
+            source_container,
+            source_bitrate: source_bitrate.map(|b| b as u64),
+            target_codec,
+            target_container,
+            target_bitrate: target_bitrate.map(|b| b as u64),
+            client_platform: ClientPlatform::from_wire_name(&client_platform).ok_or_else(|| {
+                decode_err(format!("unknown client platform {client_platform:?}"))
+            })?,
+            client_version,
+            ip_address,
+            bytes_streamed: bytes_streamed.max(0) as u64,
+            buffering_events: buffering_events.max(0) as u32,
+            buffering_ms_total: buffering_ms_total.max(0) as u64,
+            stop_reason: stop_reason.as_deref().map(stop_reason_from_str),
+        })
+    }
+
+    /// SQLite uses positional `?` placeholders throughout; Postgres needs
+    /// `$1`, `$2`, ... in bind order — [`AnalyticsStore::list_sessions`] is
+    /// the only query in this store whose placeholder count varies at
+    /// runtime (an optional `WHERE` clause), so it's the only one that
+    /// needs this rather than a fixed `match self.backend { ... }` literal.
+    fn placeholder(&self, index: usize) -> String {
+        match self.backend {
+            Backend::Sqlite => "?".to_string(),
+            Backend::Postgres => format!("${index}"),
+        }
     }
 }
 
@@ -396,6 +493,86 @@ impl AnalyticsStore for SqlxAnalyticsStore {
             })
             .collect()
     }
+
+    async fn record_events_batch(&self, events: &[PlaybackEvent]) -> Result<(), DbError> {
+        if events.is_empty() {
+            return Ok(());
+        }
+
+        let sql = match self.backend {
+            Backend::Sqlite => {
+                "INSERT INTO playback_events (id, session_id, occurred_at, kind, payload) \
+                 VALUES (?, ?, ?, ?, ?)"
+            }
+            Backend::Postgres => {
+                "INSERT INTO playback_events (id, session_id, occurred_at, kind, payload) \
+                 VALUES ($1, $2, $3, $4, $5)"
+            }
+        };
+
+        let mut tx = self.pool.begin().await?;
+        for event in events {
+            let payload = serde_json::to_string(&event.kind)?;
+            sqlx::query(sql)
+                .bind(event.id.to_string())
+                .bind(event.session_id.to_string())
+                .bind(format_datetime(event.occurred_at))
+                .bind(playback_event_kind_discriminant(&event.kind))
+                .bind(payload)
+                .execute(&mut *tx)
+                .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn list_sessions(&self, filter: &SessionFilter) -> Result<Vec<PlaybackSession>, DbError> {
+        let mut conditions: Vec<String> = Vec::new();
+        let mut next_index = 1;
+
+        if filter.user_id.is_some() {
+            conditions.push(format!("user_id = {}", self.placeholder(next_index)));
+            next_index += 1;
+        }
+        if filter.from.is_some() {
+            conditions.push(format!("started_at >= {}", self.placeholder(next_index)));
+            next_index += 1;
+        }
+        if filter.to.is_some() {
+            conditions.push(format!("started_at <= {}", self.placeholder(next_index)));
+            next_index += 1;
+        }
+
+        let where_clause = if conditions.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", conditions.join(" AND "))
+        };
+        let limit_placeholder = self.placeholder(next_index);
+        next_index += 1;
+        let offset_placeholder = self.placeholder(next_index);
+
+        let sql = format!(
+            "SELECT {} FROM playback_sessions {where_clause} \
+             ORDER BY started_at DESC LIMIT {limit_placeholder} OFFSET {offset_placeholder}",
+            Self::SESSION_COLUMNS,
+        );
+
+        let mut query = sqlx::query(&sql);
+        if let Some(user_id) = filter.user_id {
+            query = query.bind(user_id.to_string());
+        }
+        if let Some(from) = filter.from {
+            query = query.bind(format_datetime(from));
+        }
+        if let Some(to) = filter.to {
+            query = query.bind(format_datetime(to));
+        }
+        query = query.bind(filter.limit).bind(filter.offset);
+
+        let rows = query.fetch_all(&self.pool).await?;
+        rows.iter().map(Self::session_from_row).collect()
+    }
 }
 
 #[cfg(test)]
@@ -577,5 +754,119 @@ mod tests {
 
         let out_of_range = store.get_daily_stats(day, day).await.unwrap();
         assert!(out_of_range.is_empty());
+    }
+
+    #[tokio::test]
+    async fn record_events_batch_writes_every_event_in_one_transaction() {
+        let pool = test_sqlite_pool().await;
+        let store = SqlxAnalyticsStore::new(pool);
+        let session = sample_session(ClientPlatform::Web);
+        store.record_session_start(&session).await.unwrap();
+
+        let events = vec![
+            PlaybackEvent {
+                id: Uuid::new_v4(),
+                session_id: session.id,
+                occurred_at: Utc::now(),
+                kind: PlaybackEventKind::Heartbeat {
+                    position_ms: 1_000,
+                    bytes_streamed_total: Some(2_000),
+                },
+            },
+            PlaybackEvent {
+                id: Uuid::new_v4(),
+                session_id: session.id,
+                occurred_at: Utc::now(),
+                kind: PlaybackEventKind::BufferStart { position_ms: 2_000 },
+            },
+        ];
+        store.record_events_batch(&events).await.unwrap();
+
+        let count: i64 = sqlx::query("SELECT COUNT(*) as c FROM playback_events")
+            .fetch_one(&store.pool)
+            .await
+            .unwrap()
+            .try_get("c")
+            .unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[tokio::test]
+    async fn record_events_batch_is_a_no_op_for_an_empty_slice() {
+        let pool = test_sqlite_pool().await;
+        let store = SqlxAnalyticsStore::new(pool);
+        store.record_events_batch(&[]).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn list_sessions_filters_by_user_and_date_range_newest_first() {
+        let pool = test_sqlite_pool().await;
+        let store = SqlxAnalyticsStore::new(pool);
+
+        let user_a = Uuid::new_v4();
+        let user_b = Uuid::new_v4();
+        let now = Utc::now();
+
+        let mut older = sample_session(ClientPlatform::Web);
+        older.user_id = user_a;
+        older.started_at = now - chrono::Duration::hours(2);
+
+        let mut newer = sample_session(ClientPlatform::Web);
+        newer.user_id = user_a;
+        newer.started_at = now - chrono::Duration::hours(1);
+        newer.play_method = streamarr_model::PlayMethod::Transcode;
+        newer.transcode_reason = Some(streamarr_model::TranscodeReason::VideoCodecNotSupported);
+        newer.stop_reason = None;
+
+        let mut other_user = sample_session(ClientPlatform::Web);
+        other_user.user_id = user_b;
+        other_user.started_at = now;
+
+        for s in [&older, &newer, &other_user] {
+            store.record_session_start(s).await.unwrap();
+        }
+
+        let filter = SessionFilter {
+            user_id: Some(user_a),
+            from: None,
+            to: None,
+            limit: 10,
+            offset: 0,
+        };
+        let results = store.list_sessions(&filter).await.unwrap();
+        assert_eq!(results.len(), 2);
+        // Newest first.
+        assert_eq!(results[0].id, newer.id);
+        assert_eq!(results[1].id, older.id);
+        assert_eq!(
+            results[0].transcode_reason,
+            Some(streamarr_model::TranscodeReason::VideoCodecNotSupported)
+        );
+
+        let date_filtered = store
+            .list_sessions(&SessionFilter {
+                user_id: None,
+                from: Some(now - chrono::Duration::minutes(90)),
+                to: None,
+                limit: 10,
+                offset: 0,
+            })
+            .await
+            .unwrap();
+        assert_eq!(date_filtered.len(), 2);
+        assert!(date_filtered.iter().all(|s| s.id != older.id));
+
+        let limited = store
+            .list_sessions(&SessionFilter {
+                user_id: None,
+                from: None,
+                to: None,
+                limit: 1,
+                offset: 0,
+            })
+            .await
+            .unwrap();
+        assert_eq!(limited.len(), 1);
+        assert_eq!(limited[0].id, other_user.id);
     }
 }

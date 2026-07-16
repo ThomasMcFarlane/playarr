@@ -1,10 +1,10 @@
 //! `streamarr-arr-client` — typed HTTP clients for the *arr apps Streamarr
 //! reads catalog/download state from. One struct per app
 //! ([`SonarrClient`], [`RadarrClient`], [`LidarrClient`], [`ProwlarrClient`],
-//! [`BazarrClient`], [`ReadarrClient`]), each implementing the shared
-//! [`ArrConnector`] trait for the handful of operations (base URL, health
-//! check) that are genuinely uniform across all of them — everything else
-//! is app-specific because the *arr apps' REST APIs, while similar in
+//! [`BazarrClient`], [`ReadarrClient`], [`WhisparrClient`]), each implementing
+//! the shared [`ArrConnector`] trait for the handful of operations (base URL,
+//! health check) that are genuinely uniform across all of them — everything
+//! else is app-specific because the *arr apps' REST APIs, while similar in
 //! spirit, disagree on API version prefix, resource shape, and terminology
 //! (Sonarr's "series" vs Radarr's "movie" vs Lidarr's "artist"/"album").
 //!
@@ -21,24 +21,29 @@ mod prowlarr;
 mod radarr;
 mod readarr;
 mod sonarr;
+mod whisparr;
 
 pub use bazarr::{BazarrClient, BazarrSeries, BazarrSubtitleLanguage, BazarrWantedEpisode};
 pub use lidarr::{
-    LidarrAlbum, LidarrArtist, LidarrClient, LidarrMediaInfo, LidarrQuality, LidarrQualityInfo,
-    LidarrRevision, LidarrTrackFile,
+    LidarrAlbum, LidarrArtist, LidarrArtistStatistics, LidarrClient, LidarrImage, LidarrMediaInfo,
+    LidarrQuality, LidarrQualityInfo, LidarrRevision, LidarrTrack, LidarrTrackFile,
 };
 pub use prowlarr::{ProwlarrClient, ProwlarrIndexer};
 pub use radarr::{
-    RadarrClient, RadarrMediaInfo, RadarrMovie, RadarrMovieFile, RadarrQuality, RadarrQualityInfo,
-    RadarrRevision,
+    RadarrClient, RadarrCredit, RadarrImage, RadarrMediaInfo, RadarrMovie, RadarrMovieFile,
+    RadarrQuality, RadarrQualityInfo, RadarrRevision,
 };
 pub use readarr::{
     ReadarrAuthor, ReadarrBook, ReadarrBookFile, ReadarrClient, ReadarrQuality, ReadarrQualityInfo,
     ReadarrRevision,
 };
 pub use sonarr::{
-    SonarrClient, SonarrEpisode, SonarrEpisodeFile, SonarrMediaInfo, SonarrQuality,
+    SonarrClient, SonarrEpisode, SonarrEpisodeFile, SonarrImage, SonarrMediaInfo, SonarrQuality,
     SonarrQualityInfo, SonarrRevision, SonarrSeries,
+};
+pub use whisparr::{
+    WhisparrClient, WhisparrEpisode, WhisparrEpisodeFile, WhisparrImage, WhisparrMediaInfo,
+    WhisparrQuality, WhisparrQualityInfo, WhisparrRevision, WhisparrSeries,
 };
 
 use async_trait::async_trait;
