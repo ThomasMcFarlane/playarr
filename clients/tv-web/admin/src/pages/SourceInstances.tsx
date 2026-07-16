@@ -5,6 +5,8 @@ import {
   type SourceInstanceResponse,
   type SourceInstanceSyncStatus,
   type SourceKind,
+  type TdarrConnectionRequest,
+  type TdarrConnectionResponse,
 } from "@streamarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
@@ -20,6 +22,18 @@ const SOURCE_KINDS: SourceKind[] = [
   "whisparr",
 ];
 
+/**
+ * "tdarr" isn't a `SourceKind` -- Tdarr has no catalog to reconcile, so it
+ * isn't backed by `POST/GET/DELETE /api/v1/admin/source-instances` like the
+ * *arr apps above. It's a wholly separate singleton resource
+ * (`POST/GET/DELETE /api/v1/admin/tdarr`, see
+ * `backend/crates/streamarr-api/src/tdarr.rs`), but it's still "an instance
+ * you connect", so it shows up as a selectable create-modal kind and a card
+ * in this same grid rather than a dedicated page -- only its extra fields
+ * and which API it submits to differ.
+ */
+type CreateKind = SourceKind | "tdarr";
+
 const EMPTY_FORM: SourceInstanceRequest = {
   kind: "sonarr",
   name: "",
@@ -27,6 +41,18 @@ const EMPTY_FORM: SourceInstanceRequest = {
   api_key: "",
   priority: 0,
   best_effort: false,
+};
+
+const EMPTY_TDARR_FORM: TdarrConnectionRequest = {
+  base_url: "",
+  api_key: "",
+  tdarr_db_id: "streamarr",
+  default_profile: "h264-720p-4mbps",
+  worker_process: "transcodecpu",
+  default_worker_limit: 2,
+  throttled_worker_limit: 0,
+  active_session_threshold: 2,
+  throttle_check_interval_secs: 30,
 };
 
 const SYNC_STATUS_POLL_INTERVAL_MS = 5000;
@@ -90,14 +116,21 @@ function PlusIcon() {
 }
 
 /** Which modal (if any) is open, and what it needs to render itself. */
-type ModalState = { mode: "create" } | { mode: "details"; instance: SourceInstanceResponse } | null;
+type ModalState =
+  | { mode: "create" }
+  | { mode: "details"; instance: SourceInstanceResponse }
+  | { mode: "tdarr-details" }
+  | null;
 
 /**
- * Registers/lists/removes the *arr apps Streamarr talks to -- the web UI
- * for `POST/GET/DELETE /api/v1/admin/source-instances`
- * (backend/crates/streamarr-api/src/admin.rs). Every other *arr app ships
- * this as a first-class settings screen; this is that screen for
- * Streamarr, not a curl-only feature.
+ * Registers/lists/removes the *arr apps (and Tdarr) Streamarr talks to --
+ * the web UI for `POST/GET/DELETE /api/v1/admin/source-instances` plus
+ * `POST/GET/DELETE /api/v1/admin/tdarr` (backend/crates/streamarr-api/src/
+ * {admin,tdarr}.rs). Every other *arr app ships this as a first-class
+ * settings screen; this is that screen for Streamarr, not a curl-only
+ * feature. Tdarr is presented as just another card/kind here even though
+ * it's backed by a separate singleton API under the hood -- see
+ * `CreateKind`'s doc comment.
  *
  * Laid out to match the real Radarr "Settings > Download Clients" pattern
  * (see DESIGN.md Sec 4.1/4.2/4.3): a card grid where each card at rest
@@ -118,6 +151,7 @@ export function SourceInstancesPage() {
   useDocumentTitle("Source instances");
   const client = useApiClient();
   const [instances, setInstances] = useState<SourceInstanceResponse[] | null>(null);
+  const [tdarr, setTdarr] = useState<TdarrConnectionResponse | null | undefined>(undefined);
   const [syncStatuses, setSyncStatuses] = useState<SourceInstanceSyncStatus[]>([]);
   const [syncRequests, setSyncRequests] = useState<Record<string, SyncRequestState>>({});
   const [error, setError] = useState<string | null>(null);
@@ -125,11 +159,13 @@ export function SourceInstancesPage() {
   const [modal, setModal] = useState<ModalState>(null);
 
   // Create-modal state.
+  const [createKind, setCreateKind] = useState<CreateKind>("sonarr");
   const [form, setForm] = useState<SourceInstanceRequest>(EMPTY_FORM);
+  const [tdarrForm, setTdarrForm] = useState<TdarrConnectionRequest>(EMPTY_TDARR_FORM);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  // Details-modal state.
+  // Details-modal state (shared by *arr instance details and Tdarr details).
   const [deleting, setDeleting] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
 
@@ -138,6 +174,13 @@ export function SourceInstancesPage() {
     client
       .listSourceInstances()
       .then(setInstances)
+      .catch((err: unknown) => setError(describeApiError(err)));
+  }
+
+  function refreshTdarr() {
+    client
+      .getTdarrConnection()
+      .then((existing) => setTdarr(existing ?? null))
       .catch((err: unknown) => setError(describeApiError(err)));
   }
 
@@ -179,13 +222,16 @@ export function SourceInstancesPage() {
 
   useEffect(() => {
     refresh();
+    refreshTdarr();
     void refreshSyncStatuses();
     const interval = window.setInterval(() => void refreshSyncStatuses(), SYNC_STATUS_POLL_INTERVAL_MS);
     return () => window.clearInterval(interval);
   }, [client]);
 
   function openCreateModal() {
+    setCreateKind("sonarr");
     setForm(EMPTY_FORM);
+    setTdarrForm(EMPTY_TDARR_FORM);
     setCreateError(null);
     setModal({ mode: "create" });
   }
@@ -193,6 +239,11 @@ export function SourceInstancesPage() {
   function openDetailsModal(instance: SourceInstanceResponse) {
     setDetailsError(null);
     setModal({ mode: "details", instance });
+  }
+
+  function openTdarrDetailsModal() {
+    setDetailsError(null);
+    setModal({ mode: "tdarr-details" });
   }
 
   function closeModal() {
@@ -204,11 +255,15 @@ export function SourceInstancesPage() {
     setCreating(true);
     setCreateError(null);
     try {
-      await client.createSourceInstance(form);
-      setForm(EMPTY_FORM);
+      if (createKind === "tdarr") {
+        const saved = await client.createTdarrConnection(tdarrForm);
+        setTdarr(saved);
+      } else {
+        await client.createSourceInstance(form);
+        refresh();
+        void refreshSyncStatuses();
+      }
       setModal(null);
-      refresh();
-      void refreshSyncStatuses();
     } catch (err) {
       // Most commonly a 502 -- base_url/api_key rejected, or the instance
       // couldn't be reached. The server confirms connectivity before
@@ -233,6 +288,20 @@ export function SourceInstancesPage() {
         delete next[instance.id];
         return next;
       });
+      setModal(null);
+    } catch (err) {
+      setDetailsError(describeApiError(err));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function handleTdarrDelete() {
+    setDeleting(true);
+    setDetailsError(null);
+    try {
+      await client.deleteTdarrConnection();
+      setTdarr(null);
       setModal(null);
     } catch (err) {
       setDetailsError(describeApiError(err));
@@ -296,12 +365,19 @@ export function SourceInstancesPage() {
     return effectiveSyncStatus(instanceId) === "running";
   }
 
+  const loaded = instances !== null && tdarr !== undefined;
+  // Tdarr is a singleton -- once registered, it drops out of the "+" tile's
+  // kind options (there's nothing left to add) and only appears as its own
+  // card, same as how a second Tdarr can't be created.
+  const createKinds: CreateKind[] = tdarr ? SOURCE_KINDS : [...SOURCE_KINDS, "tdarr"];
+
   return (
     <div className="page">
       <h1 className="page-title">Source instances</h1>
       <p className="muted" style={{ maxWidth: 640, marginBottom: "1rem" }}>
-        The Sonarr/Radarr/Lidarr/Bazarr/Prowlarr/Readarr/Whisparr instances Streamarr treats as a source of
-        catalog/download truth. Registering one confirms it's actually reachable before accepting it.
+        The Sonarr/Radarr/Lidarr/Bazarr/Prowlarr/Readarr/Whisparr instances Streamarr treats as a
+        source of catalog/download truth, plus Streamarr's Tdarr connection (the background
+        transcode pipeline). Registering one confirms it's actually reachable before accepting it.
       </p>
 
       {error && <p className="error-text" style={{ marginBottom: "1rem" }}>{error}</p>}
@@ -311,13 +387,13 @@ export function SourceInstancesPage() {
         </p>
       )}
 
-      {instances !== null && instances.length === 0 && (
+      {loaded && instances.length === 0 && !tdarr && (
         <p className="muted" style={{ marginBottom: "1rem" }}>
           No source instances registered yet -- use the "+" tile below to add one.
         </p>
       )}
 
-      {instances !== null && (
+      {loaded && (
         <div className="provider-grid">
           {instances.map((instance) => {
             const status = effectiveSyncStatus(instance.id);
@@ -355,6 +431,21 @@ export function SourceInstancesPage() {
               </div>
             );
           })}
+          {tdarr && (
+            <div className="provider-card provider-card-instance">
+              <button
+                type="button"
+                className="provider-card-main provider-card-clickable"
+                onClick={openTdarrDetailsModal}
+              >
+                <div className="provider-card-name">Tdarr</div>
+                <div className="provider-card-tags">
+                  <span className="badge badge-neutral badge-pill">tdarr</span>
+                </div>
+                <div className="provider-card-status muted">{tdarr.base_url}</div>
+              </button>
+            </div>
+          )}
           <button
             type="button"
             className="provider-card provider-card-add"
@@ -422,67 +513,234 @@ export function SourceInstancesPage() {
                 id="source-instance-kind"
                 className="input"
                 style={{ width: "100%" }}
-                value={form.kind}
-                onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value as SourceKind }))}
+                value={createKind}
+                onChange={(e) => {
+                  const kind = e.target.value as CreateKind;
+                  setCreateKind(kind);
+                  if (kind !== "tdarr") {
+                    setForm((current) => ({ ...current, kind }));
+                  }
+                }}
               >
-                {SOURCE_KINDS.map((kind) => (
+                {createKinds.map((kind) => (
                   <option key={kind} value={kind}>
                     {kind}
                   </option>
                 ))}
               </select>
             </div>
-            <div className="modal-field">
-              <label className="form-label" htmlFor="source-instance-name">
-                Name
-              </label>
-              <input
-                id="source-instance-name"
-                name="source-instance-name"
-                className="input"
-                style={{ width: "100%" }}
-                placeholder="e.g. My Radarr"
-                autoComplete="off"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="modal-field">
-              <label className="form-label" htmlFor="source-instance-base-url">
-                Base URL
-              </label>
-              <input
-                id="source-instance-base-url"
-                name="source-instance-base-url"
-                type="url"
-                className="input"
-                style={{ width: "100%" }}
-                placeholder="e.g. http://192.168.1.10:7878"
-                autoComplete="off"
-                value={form.base_url}
-                onChange={(e) => setForm((f) => ({ ...f, base_url: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="modal-field">
-              <label className="form-label" htmlFor="source-instance-api-key">
-                API key
-              </label>
-              <input
-                id="source-instance-api-key"
-                name="source-instance-api-key"
-                type="text"
-                className="input"
-                style={{ width: "100%" }}
-                placeholder="API key"
-                autoComplete="off"
-                spellCheck={false}
-                value={form.api_key}
-                onChange={(e) => setForm((f) => ({ ...f, api_key: e.target.value }))}
-                required
-              />
-            </div>
+
+            {createKind === "tdarr" ? (
+              <>
+                <div className="modal-field">
+                  <label className="form-label" htmlFor="tdarr-base-url">
+                    Base URL
+                  </label>
+                  <input
+                    id="tdarr-base-url"
+                    type="url"
+                    className="input"
+                    style={{ width: "100%" }}
+                    placeholder="e.g. http://192.168.1.10:8265"
+                    autoComplete="off"
+                    value={tdarrForm.base_url}
+                    onChange={(e) => setTdarrForm((f) => ({ ...f, base_url: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="modal-field">
+                  <label className="form-label" htmlFor="tdarr-api-key">
+                    API key
+                  </label>
+                  <input
+                    id="tdarr-api-key"
+                    type="text"
+                    className="input"
+                    style={{ width: "100%" }}
+                    placeholder="API key"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={tdarrForm.api_key}
+                    onChange={(e) => setTdarrForm((f) => ({ ...f, api_key: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="modal-field">
+                  <label className="form-label" htmlFor="tdarr-db-id">
+                    Tdarr library database id
+                  </label>
+                  <input
+                    id="tdarr-db-id"
+                    className="input"
+                    style={{ width: "100%" }}
+                    value={tdarrForm.tdarr_db_id}
+                    onChange={(e) => setTdarrForm((f) => ({ ...f, tdarr_db_id: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="modal-field">
+                  <label className="form-label" htmlFor="tdarr-profile">
+                    Default transcode profile
+                  </label>
+                  <input
+                    id="tdarr-profile"
+                    className="input"
+                    style={{ width: "100%" }}
+                    value={tdarrForm.default_profile}
+                    onChange={(e) => setTdarrForm((f) => ({ ...f, default_profile: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="modal-field">
+                  <label className="form-label" htmlFor="tdarr-worker-process">
+                    Worker process
+                  </label>
+                  <input
+                    id="tdarr-worker-process"
+                    className="input"
+                    style={{ width: "100%" }}
+                    value={tdarrForm.worker_process}
+                    onChange={(e) => setTdarrForm((f) => ({ ...f, worker_process: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div style={{ display: "flex", gap: "1rem" }}>
+                  <div className="modal-field" style={{ flex: 1 }}>
+                    <label className="form-label" htmlFor="tdarr-default-worker-limit">
+                      Default worker limit
+                    </label>
+                    <input
+                      id="tdarr-default-worker-limit"
+                      type="number"
+                      min={0}
+                      className="input"
+                      style={{ width: "100%" }}
+                      value={tdarrForm.default_worker_limit}
+                      onChange={(e) =>
+                        setTdarrForm((f) => ({ ...f, default_worker_limit: Number(e.target.value) }))
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="modal-field" style={{ flex: 1 }}>
+                    <label className="form-label" htmlFor="tdarr-throttled-worker-limit">
+                      Throttled worker limit
+                    </label>
+                    <input
+                      id="tdarr-throttled-worker-limit"
+                      type="number"
+                      min={0}
+                      className="input"
+                      style={{ width: "100%" }}
+                      value={tdarrForm.throttled_worker_limit}
+                      onChange={(e) =>
+                        setTdarrForm((f) => ({
+                          ...f,
+                          throttled_worker_limit: Number(e.target.value),
+                        }))
+                      }
+                      required
+                    />
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: "1rem" }}>
+                  <div className="modal-field" style={{ flex: 1 }}>
+                    <label className="form-label" htmlFor="tdarr-active-session-threshold">
+                      Active session threshold
+                    </label>
+                    <input
+                      id="tdarr-active-session-threshold"
+                      type="number"
+                      min={0}
+                      className="input"
+                      style={{ width: "100%" }}
+                      value={tdarrForm.active_session_threshold}
+                      onChange={(e) =>
+                        setTdarrForm((f) => ({
+                          ...f,
+                          active_session_threshold: Number(e.target.value),
+                        }))
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="modal-field" style={{ flex: 1 }}>
+                    <label className="form-label" htmlFor="tdarr-throttle-check-interval">
+                      Throttle check interval (seconds)
+                    </label>
+                    <input
+                      id="tdarr-throttle-check-interval"
+                      type="number"
+                      min={1}
+                      className="input"
+                      style={{ width: "100%" }}
+                      value={tdarrForm.throttle_check_interval_secs}
+                      onChange={(e) =>
+                        setTdarrForm((f) => ({
+                          ...f,
+                          throttle_check_interval_secs: Number(e.target.value),
+                        }))
+                      }
+                      required
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="modal-field">
+                  <label className="form-label" htmlFor="source-instance-name">
+                    Name
+                  </label>
+                  <input
+                    id="source-instance-name"
+                    name="source-instance-name"
+                    className="input"
+                    style={{ width: "100%" }}
+                    placeholder="e.g. My Radarr"
+                    autoComplete="off"
+                    value={form.name}
+                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value, kind: createKind as SourceKind }))}
+                    required
+                  />
+                </div>
+                <div className="modal-field">
+                  <label className="form-label" htmlFor="source-instance-base-url">
+                    Base URL
+                  </label>
+                  <input
+                    id="source-instance-base-url"
+                    name="source-instance-base-url"
+                    type="url"
+                    className="input"
+                    style={{ width: "100%" }}
+                    placeholder="e.g. http://192.168.1.10:7878"
+                    autoComplete="off"
+                    value={form.base_url}
+                    onChange={(e) => setForm((f) => ({ ...f, base_url: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="modal-field">
+                  <label className="form-label" htmlFor="source-instance-api-key">
+                    API key
+                  </label>
+                  <input
+                    id="source-instance-api-key"
+                    name="source-instance-api-key"
+                    type="text"
+                    className="input"
+                    style={{ width: "100%" }}
+                    placeholder="API key"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={form.api_key}
+                    onChange={(e) => setForm((f) => ({ ...f, api_key: e.target.value }))}
+                    required
+                  />
+                </div>
+              </>
+            )}
           </form>
         </Modal>
       )}
@@ -551,6 +809,75 @@ export function SourceInstancesPage() {
               {syncDetail(modal.instance.id)}
             </p>
           )}
+        </Modal>
+      )}
+
+      {modal?.mode === "tdarr-details" && tdarr && (
+        <Modal
+          title="Tdarr"
+          onClose={closeModal}
+          footer={
+            <>
+              <div className="modal-footer-left">
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => void handleTdarrDelete()}
+                  disabled={deleting}
+                >
+                  {deleting ? "Removing..." : "Delete"}
+                </button>
+              </div>
+              <div className="modal-footer-right">
+                <button type="button" className="btn btn-primary" onClick={closeModal}>
+                  Close
+                </button>
+              </div>
+            </>
+          }
+        >
+          {detailsError && (
+            <p className="error-text hint" style={{ margin: 0 }}>
+              {detailsError}
+            </p>
+          )}
+          <p className="muted hint" style={{ marginTop: 0 }}>
+            The background transcode pipeline that proactively produces renditions ahead of
+            playback, and is throttled automatically while live on-demand sessions need headroom.
+            Changing these settings needs a restart to take effect.
+          </p>
+          <div className="modal-detail-row">
+            <span className="muted">Base URL</span>
+            <span>{tdarr.base_url}</span>
+          </div>
+          <div className="modal-detail-row">
+            <span className="muted">Tdarr library database id</span>
+            <span>{tdarr.tdarr_db_id}</span>
+          </div>
+          <div className="modal-detail-row">
+            <span className="muted">Default transcode profile</span>
+            <span>{tdarr.default_profile}</span>
+          </div>
+          <div className="modal-detail-row">
+            <span className="muted">Worker process</span>
+            <span>{tdarr.worker_process}</span>
+          </div>
+          <div className="modal-detail-row">
+            <span className="muted">Default worker limit</span>
+            <span>{tdarr.default_worker_limit}</span>
+          </div>
+          <div className="modal-detail-row">
+            <span className="muted">Throttled worker limit</span>
+            <span>{tdarr.throttled_worker_limit}</span>
+          </div>
+          <div className="modal-detail-row">
+            <span className="muted">Active session threshold</span>
+            <span>{tdarr.active_session_threshold}</span>
+          </div>
+          <div className="modal-detail-row">
+            <span className="muted">Throttle check interval</span>
+            <span>{tdarr.throttle_check_interval_secs}s</span>
+          </div>
         </Modal>
       )}
     </div>

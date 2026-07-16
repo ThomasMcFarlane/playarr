@@ -7,7 +7,6 @@ import { LibraryPage } from "./pages/Library";
 import { WorkDetailPage } from "./pages/WorkDetail";
 import { TasksPage } from "./pages/Tasks";
 import { ActivityPage } from "./pages/Activity";
-import { TdarrPage } from "./pages/TdarrPage";
 import { ViewsPage } from "./pages/ViewsPage";
 import { ViewEditPage } from "./pages/ViewEditPage";
 import { PlaylistsPage } from "./pages/PlaylistsPage";
@@ -32,7 +31,6 @@ const NAV_LINKS = [
 const SYSTEM_NAV_LINKS = [
   { to: "/tasks", label: "Tasks", end: false },
   { to: "/activity", label: "Activity", end: false },
-  { to: "/tdarr", label: "Tdarr", end: false },
 ] as const;
 
 /**
@@ -241,7 +239,6 @@ export function App() {
                     <Route path="/users" element={<UsersPage />} />
                     <Route path="/tasks" element={<TasksPage />} />
                     <Route path="/activity" element={<ActivityPage />} />
-                    <Route path="/tdarr" element={<TdarrPage />} />
                     <Route path="/views" element={<ViewsPage />} />
                     <Route path="/views/new" element={<ViewEditPage />} />
                     <Route path="/views/:id" element={<ViewEditPage />} />
