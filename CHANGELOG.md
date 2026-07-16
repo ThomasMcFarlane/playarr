@@ -74,6 +74,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   single attached picture.
 - Suppress Android's restricted-API lint false positive on the public Activity key-dispatch
   override used for TV remotes.
+- Reload visible Playarr library kinds for each signed-in user so profile switches cannot retain
+  navigation from the previous user's permissions.
 
 ### Security
 

@@ -126,9 +126,16 @@ const NAV_GROUPS: ReadonlyArray<NavGroup> = [
  */
 function AppShell() {
   const client = useApiClient();
-  const { authFailed, currentUserName } = useAuth();
-  const [availableWorkKinds, setAvailableWorkKinds] =
-    useState<ReadonlySet<WorkKind> | null>(null);
+  const { authFailed, currentUserId, currentUserName } = useAuth();
+  const [availableWorkKindsState, setAvailableWorkKindsState] = useState<{
+    userId: string | undefined;
+    kinds: ReadonlySet<WorkKind>;
+  } | null>(null);
+  const availableWorkKinds =
+    availableWorkKindsState &&
+    availableWorkKindsState.userId === currentUserId
+      ? availableWorkKindsState.kinds
+      : null;
   const appUpdate = useAppUpdate(client, "web");
   const location = useLocation();
   const navigate = useNavigate();
@@ -158,19 +165,29 @@ function AppShell() {
 
   useEffect(() => {
     let cancelled = false;
-    setAvailableWorkKinds(null);
+    setAvailableWorkKindsState(null);
     void client
       .listCatalogKinds()
       .then((kinds) => {
-        if (!cancelled) setAvailableWorkKinds(new Set(kinds));
+        if (!cancelled) {
+          setAvailableWorkKindsState({
+            userId: currentUserId,
+            kinds: new Set(kinds),
+          });
+        }
       })
       .catch(() => {
-        if (!cancelled) setAvailableWorkKinds(new Set());
+        if (!cancelled) {
+          setAvailableWorkKindsState({
+            userId: currentUserId,
+            kinds: new Set(),
+          });
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [client, currentUserId]);
 
   useEffect(() => {
     if (!routeMediaFileId) return;
