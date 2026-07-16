@@ -137,7 +137,6 @@ export function PlayerControls({
   const [qualityMenuOpen, setQualityMenuOpen] = useState(false);
   const [audioMenuOpen, setAudioMenuOpen] = useState(false);
   const [subtitleMenuOpen, setSubtitleMenuOpen] = useState(false);
-  const [hasControlsFocus, setHasControlsFocus] = useState(false);
   const [pendingSeek, setPendingSeek] = useState<{
     positionSeconds: number;
     requestedAt: number;
@@ -149,12 +148,10 @@ export function PlayerControls({
         audioMenuOpen ||
         subtitleMenuOpen ||
         playlistOpen ||
-        hasControlsFocus ||
         scrubPositionSeconds !== null ||
         pendingSeek !== null
     );
   }, [
-    hasControlsFocus,
     audioMenuOpen,
     onQualityMenuOpenChange,
     pendingSeek,
@@ -416,7 +413,8 @@ export function PlayerControls({
       event: ReactKeyboardEvent<HTMLDivElement>,
       optionRefs: Array<HTMLButtonElement | null>,
       optionCount: number,
-      closeMenu: () => void
+      closeMenu: () => void,
+      leftTarget?: HTMLButtonElement | null
     ) => {
       const focusedIndex = optionRefs.findIndex((element) => element === document.activeElement);
       let nextIndex: number | undefined;
@@ -440,6 +438,13 @@ export function PlayerControls({
           nextIndex = optionCount - 1;
           break;
         case "ArrowLeft":
+          event.preventDefault();
+          event.stopPropagation();
+          closeMenu();
+          if (leftTarget) {
+            window.requestAnimationFrame(() => leftTarget.focus());
+          }
+          return;
         case "Escape":
         case "BrowserBack":
         case "GoBack":
@@ -566,15 +571,7 @@ export function PlayerControls({
       className={`player-controls${visible ? "" : " is-hidden"}`}
       onKeyDown={handleControlsKeyDown}
       onPointerMove={onActivity}
-      onFocusCapture={() => {
-        setHasControlsFocus(true);
-        onActivity();
-      }}
-      onBlurCapture={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-          setHasControlsFocus(false);
-        }
-      }}
+      onFocusCapture={onActivity}
     >
       <div
         ref={trackRef}
@@ -758,7 +755,8 @@ export function PlayerControls({
               event,
               subtitleOptionRefs.current,
               subtitleTracks.length + 1,
-              closeSubtitleMenu
+              closeSubtitleMenu,
+              audioButtonRef.current
             )
           }
           onBlur={(event) => {
@@ -978,15 +976,17 @@ export function PlayerControls({
           </button>
         </div>
 
-        <button
-          ref={fullscreenButtonRef}
-          type="button"
-          className="player-btn"
-          onClick={onToggleFullscreen}
-          aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-        >
-          {isFullscreen ? <FullscreenExitIcon /> : <FullscreenEnterIcon />}
-        </button>
+        {!systemVolumeOnly && (
+          <button
+            ref={fullscreenButtonRef}
+            type="button"
+            className="player-btn"
+            onClick={onToggleFullscreen}
+            aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+          >
+            {isFullscreen ? <FullscreenExitIcon /> : <FullscreenEnterIcon />}
+          </button>
+        )}
       </div>
     </div>
   );

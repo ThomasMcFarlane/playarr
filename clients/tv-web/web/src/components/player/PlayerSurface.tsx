@@ -118,7 +118,7 @@ function PlayerMinimiseButton({
   onNavigateToBack: () => void;
   onNavigateToControls: () => void;
   onFocus: () => void;
-  onBlur: () => void;
+  onBlur?: () => void;
 }) {
   return (
     <button
@@ -179,7 +179,8 @@ const musicAudioGraphs = new WeakMap<HTMLMediaElement, MusicAudioGraph>();
 function useMusicAudioVisualiser(
   mediaRef: RefObject<HTMLVideoElement>,
   active: boolean,
-  playing: boolean
+  playing: boolean,
+  reducedMotion: boolean
 ) {
   const graphRef = useRef<MusicAudioGraph | null>(null);
   const [ready, setReady] = useState(false);
@@ -245,9 +246,16 @@ function useMusicAudioVisualiser(
 
     let animationFrame = 0;
     let cancelled = false;
-    const render = () => {
+    let lastRenderAt = 0;
+    const render = (now = 0) => {
       const graph = graphRef.current;
       if (!graph || cancelled) return;
+
+      if (reducedMotion && now - lastRenderAt < 50) {
+        animationFrame = window.requestAnimationFrame(render);
+        return;
+      }
+      lastRenderAt = now;
 
       graph.analyser.getByteFrequencyData(graph.frequencyData);
       for (const visualiser of visualisers()) {
@@ -279,7 +287,7 @@ function useMusicAudioVisualiser(
       cancelled = true;
       window.cancelAnimationFrame(animationFrame);
     };
-  }, [activate, active, playing, ready]);
+  }, [activate, active, playing, ready, reducedMotion]);
 
   return activate;
 }
@@ -295,12 +303,14 @@ function MusicPlayerVisual({
   title: string;
   inlineVisualiserHost: HTMLElement | null;
 }) {
+  const barCount =
+    document.documentElement.dataset.platform === "android-tv" ? 18 : MUSIC_VISUALISER_BAR_COUNT;
   const visualiser = (
     <div
       className="player-music-visualiser"
       data-player-music-visualiser
     >
-      {Array.from({ length: MUSIC_VISUALISER_BAR_COUNT }, (_, index) => (
+      {Array.from({ length: barCount }, (_, index) => (
         <i key={index} />
       ))}
     </div>
@@ -462,8 +472,6 @@ export function PlayerSurface({
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [controlsPinned, setControlsPinned] = useState(false);
-  const [backButtonFocused, setBackButtonFocused] = useState(false);
-  const [minimiseButtonFocused, setMinimiseButtonFocused] = useState(false);
   const [playlistOpen, setPlaylistOpen] = useState(false);
   const [inlineVisualiserHost, setInlineVisualiserHost] =
     useState<HTMLElement | null>(null);
@@ -472,13 +480,12 @@ export function PlayerSurface({
   const activateMusicVisualiser = useMusicAudioVisualiser(
     videoRef,
     Boolean(musicContext),
-    engineState.state === "playing"
+    engineState.state === "playing",
+    systemVolumeOnly
   );
   const playlistContext = useMediaContextMenu();
   const interactionPinned =
     controlsPinned ||
-    backButtonFocused ||
-    minimiseButtonFocused ||
     playlistOpen ||
     playlistContext.isOpen ||
     qualitySwitching ||
@@ -574,8 +581,17 @@ export function PlayerSurface({
 
   const scheduleHide = useCallback(() => {
     window.clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = window.setTimeout(() => setShowControls(false), AUTO_HIDE_MS);
-  }, []);
+    hideTimerRef.current = window.setTimeout(() => {
+      setShowControls(false);
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLElement &&
+        activeElement.closest(".player-controls, .player-back, .player-minimise")
+      ) {
+        videoRef.current?.focus({ preventScroll: true });
+      }
+    }, AUTO_HIDE_MS);
+  }, [videoRef]);
 
   const handleActivity = useCallback(() => {
     setShowControls(true);
@@ -636,10 +652,8 @@ export function PlayerSurface({
     return () => window.cancelAnimationFrame(frame);
   }, [engineState.state, minimised, videoRef]);
 
-  // The Play button is the correct initial TV focus target, but retaining
-  // focus there after playback starts would pin the controls forever. Once
-  // playback is active, hand focus to the video surface so inactivity can
-  // hide the overlay. Explicitly focused controls remain pinned.
+  // The Play button is the correct initial TV focus target. Once playback is
+  // active, hand focus to the video surface so inactivity can hide the overlay.
   useEffect(() => {
     if (engineState.state !== "playing") return;
     const activeElement = document.activeElement;
@@ -834,9 +848,7 @@ export function PlayerSurface({
   return (
     <div
       ref={shellRef}
-      className={`player-shell${
-        showControls || inlineMusic ? "" : " player-shell-idle"
-      }${
+      className={`player-shell${showControls ? "" : " player-shell-idle"}${
         minimised ? " player-shell-minimised" : ""
       }${musicContext ? " player-shell-music" : ""}${
         inlineMusic ? " player-shell-inline-music" : ""
@@ -905,11 +917,7 @@ export function PlayerSurface({
                 ?.querySelector<HTMLButtonElement>(".player-minimise")
                 ?.focus()
             }
-            onFocus={() => {
-              setBackButtonFocused(true);
-              handleActivity();
-            }}
-            onBlur={() => setBackButtonFocused(false)}
+            onFocus={handleActivity}
           />
           <PlayerMinimiseButton
             onMinimise={() => void minimisePlayer()}
@@ -917,11 +925,7 @@ export function PlayerSurface({
               shellRef.current?.querySelector<HTMLButtonElement>(".player-back")?.focus()
             }
             onNavigateToControls={focusSeekControl}
-            onFocus={() => {
-              setMinimiseButtonFocused(true);
-              handleActivity();
-            }}
-            onBlur={() => setMinimiseButtonFocused(false)}
+            onFocus={handleActivity}
           />
         </>
       )}
@@ -1160,7 +1164,7 @@ export function PlayerSurface({
       {(!minimised || inlineMusic) && (
         <PlayerControls
           engineState={engineState}
-          visible={inlineMusic || showControls}
+          visible={showControls}
           isFullscreen={isFullscreen}
           systemVolumeOnly={systemVolumeOnly}
           onTogglePlay={togglePlayback}

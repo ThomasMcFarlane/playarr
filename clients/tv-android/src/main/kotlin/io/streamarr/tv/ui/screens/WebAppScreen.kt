@@ -89,6 +89,9 @@ fun StreamarrWebAppScreen(
     val activity = context as Activity
     val lifecycleOwner = LocalLifecycleOwner.current
     val baseUrl = BuildConfig.PLAYARR_BASE_URL
+    val appUrl = remember(baseUrl) {
+        "${baseUrl.trimEnd('/')}/?androidBuild=${BuildConfig.VERSION_CODE}"
+    }
     var addressDraft by remember(baseUrl) { mutableStateOf(baseUrl) }
     var addressError by remember { mutableStateOf<String?>(null) }
     var loadError by remember { mutableStateOf<String?>(null) }
@@ -173,10 +176,13 @@ fun StreamarrWebAppScreen(
                 )
             },
             update = { view ->
-                val request = WebLoadRequest(baseUrl, reloadGeneration)
+                val request = WebLoadRequest(appUrl, reloadGeneration)
                 if (view.tag != request) {
                     view.tag = request
-                    view.loadUrl(baseUrl)
+                    // Version the document URL without changing its origin.
+                    // This preserves cookies/localStorage while bypassing a
+                    // stale service-worker-cached app shell after APK updates.
+                    view.loadUrl(appUrl)
                 }
             },
         )

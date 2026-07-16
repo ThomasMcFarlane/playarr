@@ -8732,3 +8732,122 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     grid-template-columns: 1fr;
   }
 }
+
+/* Android TV WebView keeps the full motion and glass design, but avoids
+ * animating paint-heavy properties. Blurs are rendered once at a slightly
+ * lower radius, while entrances and focus changes stay on the compositor via
+ * opacity/transform. This is deliberately separate from prefers-reduced-motion:
+ * Android viewers still get motion; the implementation is simply cheaper. */
+@keyframes android-tv-stage-in {
+  from {
+    opacity: 0;
+    transform: translate3d(-24px, 0, 0) scale(1.025);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes android-tv-panel-in {
+  from {
+    opacity: 0;
+    transform: translate3d(36px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes android-tv-rise-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 20px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+html[data-platform="android-tv"] .page {
+  animation: android-tv-rise-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+html[data-platform="android-tv"] .tv-key-art {
+  animation: android-tv-stage-in 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+html[data-platform="android-tv"] .home-feature-art,
+html[data-platform="android-tv"] .tv-library-preview {
+  animation: android-tv-rise-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+html[data-platform="android-tv"] .tv-rail-panel,
+html[data-platform="android-tv"] .tv-library-grid-panel,
+html[data-platform="android-tv"] .tv-rail-surface {
+  animation: android-tv-panel-in 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+html[data-platform="android-tv"] .tv-title-panel,
+html[data-platform="android-tv"] .tv-home-feature,
+html[data-platform="android-tv"] .tv-detail-overview,
+html[data-platform="android-tv"] .tv-search-copy {
+  animation-duration: 320ms;
+}
+
+html[data-platform="android-tv"] .tv-filter-drawer,
+html[data-platform="android-tv"] .player-playlist-panel {
+  animation-duration: 240ms;
+}
+
+html[data-platform="android-tv"] .theme-toggle,
+html[data-platform="android-tv"] .app-nav,
+html[data-platform="android-tv"] .tv-primary-action,
+html[data-platform="android-tv"] .tv-filter-launcher,
+html[data-platform="android-tv"] .tv-page-back,
+html[data-platform="android-tv"] .tv-back,
+html[data-platform="android-tv"] .player-back,
+html[data-platform="android-tv"] .player-minimise,
+html[data-platform="android-tv"] .player-btn-primary,
+html[data-platform="android-tv"] .player-quality-menu {
+  backdrop-filter: blur(12px) saturate(112%);
+  -webkit-backdrop-filter: blur(12px) saturate(112%);
+}
+
+html[data-platform="android-tv"] .tv-rail-panel:not(.tv-library-grid-panel),
+html[data-platform="android-tv"] .tv-filter-drawer,
+html[data-platform="android-tv"] .player-playlist-panel,
+html[data-platform="android-tv"] .player-shell:not(.player-shell-placeholder)
+  .player-overlay-status {
+  backdrop-filter: blur(16px) saturate(116%);
+  -webkit-backdrop-filter: blur(16px) saturate(116%);
+}
+
+html[data-platform="android-tv"] .player-music-backdrop {
+  opacity: 0.58;
+  filter: blur(24px) saturate(1.1);
+}
+
+html[data-platform="android-tv"]
+  .tv-library-grid-panel.is-cover-flow
+  .tv-title-card,
+html[data-platform="android-tv"]
+  .tv-music-album-cover-flow
+  .tv-music-album-card {
+  backface-visibility: hidden;
+  will-change: auto;
+  transition:
+    opacity 140ms ease-out,
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html[data-platform="android-tv"] .tv-title-card,
+html[data-platform="android-tv"] .tv-episode-card,
+html[data-platform="android-tv"] .tv-music-track-row,
+html[data-platform="android-tv"] .player-btn,
+html[data-platform="android-tv"] .player-quality-button,
+html[data-platform="android-tv"] .player-quality-option {
+  transition-duration: 150ms;
+}

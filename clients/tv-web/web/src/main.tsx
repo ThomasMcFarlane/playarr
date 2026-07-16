@@ -11,6 +11,10 @@ if (!container) {
   throw new Error("#root element not found -- check index.html");
 }
 
+if (navigator.userAgent.includes("PlayarrAndroidTV/")) {
+  document.documentElement.dataset.platform = "android-tv";
+}
+
 createRoot(container).render(
   <StrictMode>
     <BrowserRouter>
