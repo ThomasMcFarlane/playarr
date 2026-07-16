@@ -1,9 +1,13 @@
 package io.streamarr.tv
 
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import dagger.hilt.android.AndroidEntryPoint
 import io.streamarr.tv.ui.screens.StreamarrWebAppScreen
 import io.streamarr.tv.ui.theme.StreamarrTvTheme
@@ -11,6 +15,8 @@ import io.streamarr.tv.update.AppUpdateEffect
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    private var openServerEditorRequest by mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -23,8 +29,22 @@ class MainActivity : ComponentActivity() {
         setContent {
             StreamarrTvTheme {
                 AppUpdateEffect()
-                StreamarrWebAppScreen()
+                StreamarrWebAppScreen(
+                    openServerEditorRequest = openServerEditorRequest,
+                )
             }
         }
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (
+            event.keyCode == KeyEvent.KEYCODE_MENU &&
+            event.action == KeyEvent.ACTION_DOWN &&
+            event.repeatCount == 0
+        ) {
+            openServerEditorRequest += 1
+            return true
+        }
+        return super.dispatchKeyEvent(event)
     }
 }

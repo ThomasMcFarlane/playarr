@@ -29,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text as MaterialText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -108,6 +109,7 @@ internal fun normaliseServerUrl(value: String): String {
 @Composable
 fun StreamarrWebAppScreen(
     modifier: Modifier = Modifier,
+    openServerEditorRequest: Int = 0,
     viewModel: TvWebAppViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -124,6 +126,14 @@ fun StreamarrWebAppScreen(
     var fullscreenView by remember { mutableStateOf<View?>(null) }
     var fullscreenCallback by remember {
         mutableStateOf<WebChromeClient.CustomViewCallback?>(null)
+    }
+
+    LaunchedEffect(openServerEditorRequest) {
+        if (openServerEditorRequest > 0) {
+            addressDraft = baseUrl
+            addressError = null
+            showServerEditor = true
+        }
     }
 
     fun closeFullscreen(notifyWebView: Boolean) {
