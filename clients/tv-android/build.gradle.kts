@@ -6,6 +6,10 @@ plugins {
     alias(libs.plugins.hilt.android)
 }
 
+val playarrBaseUrl = providers
+    .gradleProperty("playarrBaseUrl")
+    .orElse("http://10.0.2.2:18080")
+
 android {
     namespace = "io.streamarr.tv"
     compileSdk = 37
@@ -20,12 +24,9 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // No STREAMARR_BASE_URL/DEVICE_AUTH_CLIENT_ID buildConfigFields:
-        // the server base URL is a runtime-configurable, DataStore-backed
-        // setting now (see core-data's ServerConfigStore + the Settings
-        // screen), and the real oauth/device/code request body identifies
-        // the pairing client by `client_platform` (an enum), not a
-        // free-form `client_id` string -- see core-auth's DeviceCodeRequest.
+        // Override with -PplayarrBaseUrl=http://<development-host>:18080 when
+        // deploying to a physical TV. The default is Android's emulator host.
+        buildConfigField("String", "PLAYARR_BASE_URL", "\"${playarrBaseUrl.get()}\"")
     }
 
     buildTypes {

@@ -33,6 +33,7 @@ export interface PlayerControlsProps {
   engineState: PlaybackEngineState;
   visible: boolean;
   isFullscreen: boolean;
+  systemVolumeOnly?: boolean;
   onTogglePlay: () => void;
   onSeek: (positionSeconds: number) => void;
   onSetVolume: (volume: number) => void;
@@ -85,6 +86,7 @@ export function PlayerControls({
   engineState,
   visible,
   isFullscreen,
+  systemVolumeOnly = false,
   onTogglePlay,
   onSeek,
   onSetVolume,
@@ -643,32 +645,38 @@ export function PlayerControls({
           <span>{formatTime(duration)}</span>
         </div>
 
-        <div className="player-volume">
-          <button
-            ref={muteButtonRef}
-            type="button"
-            className="player-btn"
-            onClick={() => onSetMuted(!engineState.muted)}
-            aria-label={engineState.muted ? "Unmute" : "Mute"}
-          >
-            {engineState.muted || engineState.volume === 0 ? <VolumeMutedIcon /> : <VolumeHighIcon />}
-          </button>
-          <input
-            type="range"
-            className="player-volume-range"
-            min={0}
-            max={100}
-            value={volumePct}
-            tabIndex={-1}
-            style={volumeTrackStyle}
-            onChange={(event) => {
-              const next = Number(event.target.value) / 100;
-              if (engineState.muted && next > 0) onSetMuted(false);
-              onSetVolume(next);
-            }}
-            aria-label="Volume"
-          />
-        </div>
+        {!systemVolumeOnly && (
+          <div className="player-volume">
+            <button
+              ref={muteButtonRef}
+              type="button"
+              className="player-btn"
+              onClick={() => onSetMuted(!engineState.muted)}
+              aria-label={engineState.muted ? "Unmute" : "Mute"}
+            >
+              {engineState.muted || engineState.volume === 0 ? (
+                <VolumeMutedIcon />
+              ) : (
+                <VolumeHighIcon />
+              )}
+            </button>
+            <input
+              type="range"
+              className="player-volume-range"
+              min={0}
+              max={100}
+              value={volumePct}
+              tabIndex={-1}
+              style={volumeTrackStyle}
+              onChange={(event) => {
+                const next = Number(event.target.value) / 100;
+                if (engineState.muted && next > 0) onSetMuted(false);
+                onSetVolume(next);
+              }}
+              aria-label="Volume"
+            />
+          </div>
+        )}
 
         <div className="player-controls-spacer" />
 

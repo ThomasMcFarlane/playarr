@@ -38,6 +38,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Let Android TV builds configure their Playarr server at build time, use the television's
+  system volume, and apply a stable 1920 by 1080 web viewport.
 - Require completed changes to be committed and pushed promptly as small, atomic Conventional
   Commits, with a changelog entry and validation in the same commit.
 - Default new deployments to full-account authentication with a durable bootstrap administrator,
@@ -59,6 +61,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Route Android TV Back actions through Playarr so active and minimised playback sessions close
+  before native WebView history navigation, while retaining login cookies across lifecycle events.
 - Pin scroll-edge shadows to the visible viewport and only show each edge when content remains in
   that direction.
 - Migrate legacy Whisparr series records to site records without breaking catalogue references,

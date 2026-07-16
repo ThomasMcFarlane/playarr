@@ -124,6 +124,16 @@ const NAV_GROUPS: ReadonlyArray<NavGroup> = [
   },
 ];
 
+function isBackKey(event: KeyboardEvent): boolean {
+  return (
+    event.key === "Escape" ||
+    event.key === "BrowserBack" ||
+    event.key === "GoBack" ||
+    event.keyCode === 10009 ||
+    event.keyCode === 461
+  );
+}
+
 /**
  * The sidebar/header chrome, shared by every authenticated route (a React
  * Router v6 layout route -- its matched children render into `<Outlet/>`).
@@ -181,6 +191,26 @@ function AppShell() {
     },
     [currentUserId]
   );
+
+  useEffect(() => {
+    if (!playerSession || isPlayerRoute) return;
+    const closeMinimisedPlayer = (event: Event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setPlayerSession(null);
+      clearActivePlayerSession();
+    };
+    const closeMinimisedPlayerOnBack = (event: KeyboardEvent) => {
+      if (!isBackKey(event)) return;
+      closeMinimisedPlayer(event);
+    };
+    window.addEventListener("playarr:back", closeMinimisedPlayer);
+    window.addEventListener("keydown", closeMinimisedPlayerOnBack, true);
+    return () => {
+      window.removeEventListener("playarr:back", closeMinimisedPlayer);
+      window.removeEventListener("keydown", closeMinimisedPlayerOnBack, true);
+    };
+  }, [isPlayerRoute, playerSession]);
 
   useEffect(() => {
     let cancelled = false;

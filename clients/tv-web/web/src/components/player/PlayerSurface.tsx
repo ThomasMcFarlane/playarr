@@ -452,6 +452,9 @@ export function PlayerSurface({
     subtitleSwitching,
     subtitleError,
   } = player;
+  const systemVolumeOnly =
+    typeof navigator !== "undefined" &&
+    navigator.userAgent.includes("PlayarrAndroidTV/");
 
   const shellRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<number | undefined>(undefined);
@@ -480,6 +483,29 @@ export function PlayerSurface({
     playlistContext.isOpen ||
     qualitySwitching ||
     subtitleSwitching;
+
+  useEffect(() => {
+    if (!systemVolumeOnly) return;
+    const media = videoRef.current;
+    const forceMaximumPlayerVolume = () => {
+      if (media) {
+        media.volume = 1;
+        media.muted = false;
+      }
+      setVolume(1);
+      setMuted(false);
+    };
+    forceMaximumPlayerVolume();
+    media?.addEventListener("loadedmetadata", forceMaximumPlayerVolume);
+    return () =>
+      media?.removeEventListener("loadedmetadata", forceMaximumPlayerVolume);
+  }, [
+    negotiation.kind,
+    setMuted,
+    setVolume,
+    systemVolumeOnly,
+    videoRef,
+  ]);
 
   useEffect(() => {
     if (!inlineMusic) {
@@ -744,7 +770,7 @@ export function PlayerSurface({
           focusSeekControl();
           break;
         case "m":
-          setMuted(!current.muted);
+          if (!systemVolumeOnly) setMuted(!current.muted);
           break;
         case "f":
           toggleFullscreen();
@@ -767,6 +793,7 @@ export function PlayerSurface({
     minimised,
     activateMusicVisualiser,
     focusSeekControl,
+    systemVolumeOnly,
   ]);
 
   // Read directly from the <video> element's own `buffered` TimeRanges
@@ -1135,6 +1162,7 @@ export function PlayerSurface({
           engineState={engineState}
           visible={inlineMusic || showControls}
           isFullscreen={isFullscreen}
+          systemVolumeOnly={systemVolumeOnly}
           onTogglePlay={togglePlayback}
           onSeek={seek}
           onSetVolume={setVolume}

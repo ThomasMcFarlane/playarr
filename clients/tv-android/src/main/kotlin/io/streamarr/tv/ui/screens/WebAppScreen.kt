@@ -30,7 +30,6 @@ import androidx.compose.material3.Text as MaterialText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -42,39 +41,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.viewModelScope
 import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import dagger.hilt.android.lifecycle.HiltViewModel
-import io.streamarr.shared.data.config.ServerConfigStore
 import io.streamarr.tv.BuildConfig
 import io.streamarr.tv.R
 import java.net.URI
-import javax.inject.Inject
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
-
-@HiltViewModel
-class TvWebAppViewModel @Inject constructor(
-    private val serverConfigStore: ServerConfigStore,
-) : ViewModel() {
-    val baseUrl = serverConfigStore.baseUrl.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5_000),
-        ServerConfigStore.DEFAULT_BASE_URL,
-    )
-
-    fun saveBaseUrl(url: String) {
-        viewModelScope.launch { serverConfigStore.setBaseUrl(url) }
-    }
-}
 
 /**
  * Normalises the operator-entered address without changing paths used by
@@ -109,12 +84,11 @@ internal fun normaliseServerUrl(value: String): String {
 fun StreamarrWebAppScreen(
     modifier: Modifier = Modifier,
     openServerEditorRequest: Int = 0,
-    viewModel: TvWebAppViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
     val activity = context as Activity
     val lifecycleOwner = LocalLifecycleOwner.current
-    val baseUrl by viewModel.baseUrl.collectAsState()
+    val baseUrl = BuildConfig.PLAYARR_BASE_URL
     var addressDraft by remember(baseUrl) { mutableStateOf(baseUrl) }
     var addressError by remember { mutableStateOf<String?>(null) }
     var loadError by remember { mutableStateOf<String?>(null) }
@@ -153,8 +127,19 @@ fun StreamarrWebAppScreen(
                 addressError = null
                 showServerEditor = false
             }
-            webView?.canGoBack() == true -> webView?.goBack()
-            else -> activity.finish()
+            else -> {
+                val activeWebView = webView
+                if (activeWebView == null) {
+                    activity.finish()
+                } else {
+                    activeWebView.dispatchBackToWebApp { handled ->
+                        if (!handled) {
+                            if (activeWebView.canGoBack()) activeWebView.goBack()
+                            else activity.finish()
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -218,13 +203,14 @@ fun StreamarrWebAppScreen(
                 onConnect = {
                     runCatching { normaliseServerUrl(addressDraft) }
                         .onSuccess { normalised ->
-                            loadError = null
-                            loading = true
-                            showServerEditor = false
                             if (normalised == baseUrl) {
+                                loadError = null
+                                loading = true
+                                showServerEditor = false
                                 reloadGeneration += 1
                             } else {
-                                viewModel.saveBaseUrl(normalised)
+                                addressError =
+                                    "This test build is temporarily fixed to $baseUrl."
                             }
                         }
                         .onFailure {
@@ -249,8 +235,13 @@ fun StreamarrWebAppScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> activeWebView?.onResume()
-                Lifecycle.Event.ON_PAUSE -> activeWebView?.onPause()
+                Lifecycle.Event.ON_PAUSE -> {
+                    CookieManager.getInstance().flush()
+                    activeWebView?.onPause()
+                }
+                Lifecycle.Event.ON_STOP -> CookieManager.getInstance().flush()
                 Lifecycle.Event.ON_DESTROY -> {
+                    CookieManager.getInstance().flush()
                     activeWebView?.stopLoading()
                     activeWebView?.destroy()
                 }
@@ -283,12 +274,15 @@ private fun createPlayarrWebView(
         domStorageEnabled = true
         mediaPlaybackRequiresUserGesture = false
         mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+        useWideViewPort = true
+        loadWithOverviewMode = true
         setSupportZoom(false)
         builtInZoomControls = false
         displayZoomControls = false
         setSupportMultipleWindows(false)
         userAgentString = "$userAgentString PlayarrAndroidTV/${BuildConfig.VERSION_NAME}"
     }
+    setInitialScale(TV_INITIAL_SCALE_PERCENT)
 
     val playarrWebView = this
     CookieManager.getInstance().apply {
@@ -303,7 +297,9 @@ private fun createPlayarrWebView(
 
         override fun onPageFinished(view: WebView, url: String?) {
             onLoadingChanged(false)
+            view.syncTvViewport()
             view.requestFocus()
+            CookieManager.getInstance().flush()
         }
 
         override fun onReceivedError(
@@ -360,9 +356,78 @@ private fun createPlayarrWebView(
         true
     }
 
+    addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
+        (view as WebView).syncTvViewport()
+    }
+
     onWebViewReady(this)
     requestFocus()
 }
+
+private fun WebView.syncTvViewport() {
+    if (width <= 0 || height <= 0) return
+    evaluateJavascript(
+        """
+        (() => {
+          let viewport = document.querySelector('meta[name="viewport"]');
+          if (!viewport) {
+            viewport = document.createElement("meta");
+            viewport.name = "viewport";
+            document.head.appendChild(viewport);
+          }
+          viewport.content =
+            "width=$TV_LAYOUT_WIDTH_CSS_PX, height=$TV_LAYOUT_HEIGHT_CSS_PX, " +
+            "initial-scale=$TV_LAYOUT_SCALE, minimum-scale=$TV_LAYOUT_SCALE, " +
+            "maximum-scale=$TV_LAYOUT_SCALE, user-scalable=no";
+          document.documentElement.style.setProperty(
+            "--viewport-height",
+            "${TV_LAYOUT_HEIGHT_CSS_PX}px"
+          );
+          document.documentElement.style.setProperty(
+            "--viewport-half-height",
+            "${TV_LAYOUT_HEIGHT_CSS_PX / 2}px"
+          );
+        })();
+        """.trimIndent(),
+        null,
+    )
+}
+
+/**
+ * Gives Playarr first refusal on Android's Back action. The player route
+ * clears its persisted/minimised playback session when handling Escape;
+ * calling WebView.goBack() directly only changed the URL and left that
+ * session playing over the previous page.
+ */
+private fun WebView.dispatchBackToWebApp(onResult: (Boolean) -> Unit) {
+    evaluateJavascript(
+        """
+        (() => {
+          const appEvent = new Event("playarr:back", { cancelable: true });
+          window.dispatchEvent(appEvent);
+          if (appEvent.defaultPrevented) return true;
+
+          const event = new KeyboardEvent("keydown", {
+            key: "Escape",
+            code: "Escape",
+            keyCode: 27,
+            which: 27,
+            bubbles: true,
+            cancelable: true
+          });
+          window.dispatchEvent(event);
+          return event.defaultPrevented;
+        })();
+        """.trimIndent(),
+    ) { result ->
+        onResult(result == "true")
+    }
+}
+
+private const val TV_LAYOUT_WIDTH_CSS_PX = 1920
+private const val TV_LAYOUT_HEIGHT_CSS_PX = 1080
+private const val TV_LAYOUT_SCALE = 0.5f
+private const val TV_INITIAL_SCALE_PERCENT = 50
 
 private data class WebLoadRequest(
     val baseUrl: String,
