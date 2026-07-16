@@ -354,6 +354,7 @@ impl ArrClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use streamarr_arr_client::LidarrArtistStatistics;
 
     fn sonarr_series(id: i64, title: &str, tvdb_id: i64, monitored: bool) -> SonarrSeries {
         SonarrSeries {
@@ -412,6 +413,26 @@ mod tests {
         }
     }
 
+    fn lidarr_artist(track_file_count: i64) -> LidarrArtist {
+        LidarrArtist {
+            id: 7,
+            artist_name: "Sample Band".to_string(),
+            sort_name: Some("Sample Band".to_string()),
+            foreign_artist_id: "a74b1b7f-71a5-4011-9441-d0b5e4122711".to_string(),
+            monitored: true,
+            path: "/music/Sample Band".to_string(),
+            overview: None,
+            genres: Vec::new(),
+            images: Vec::new(),
+            statistics: Some(LidarrArtistStatistics {
+                album_count: 9,
+                track_file_count,
+                track_count: 112,
+                total_track_count: 112,
+            }),
+        }
+    }
+
     #[test]
     fn sonarr_maps_tvdb_id_as_external_id_and_leaves_availability_unknown() {
         let series = sonarr_series(42, "Example Show", 12345, true);
@@ -420,6 +441,16 @@ mod tests {
         assert_eq!(remote.title, "Example Show");
         assert!(remote.monitored);
         assert_eq!(remote.availability, None);
+    }
+
+    #[test]
+    fn lidarr_maps_sort_name_and_file_availability() {
+        let remote = map_lidarr(&lidarr_artist(112));
+        assert_eq!(remote.sort_title, "Sample Band");
+        assert_eq!(remote.availability, Some(Availability::Available));
+
+        let remote = map_lidarr(&lidarr_artist(0));
+        assert_eq!(remote.availability, Some(Availability::Pending));
     }
 
     #[test]

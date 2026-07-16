@@ -115,12 +115,12 @@ fn lidarr_track_number(track: &LidarrTrack) -> i64 {
         .then_some(track.absolute_track_number)
         .or_else(|| {
             track
-        .track_number
+                .track_number
                 .as_deref()
                 .unwrap_or_default()
-        .split(|character: char| !character.is_ascii_digit())
-        .find(|part| !part.is_empty())
-        .and_then(|part| part.parse::<i64>().ok())
+                .split(|character: char| !character.is_ascii_digit())
+                .find(|part| !part.is_empty())
+                .and_then(|part| part.parse::<i64>().ok())
         })
         .unwrap_or(track.id)
 }
@@ -593,11 +593,17 @@ impl MediaSync {
             let Some(album) = albums_by_id.get(&track.album_id) else {
                 continue;
             };
-            let Some(album_title) = album.title.as_deref().filter(|title| !title.trim().is_empty())
+            let Some(album_title) = album
+                .title
+                .as_deref()
+                .filter(|title| !title.trim().is_empty())
             else {
                 continue;
             };
-            let Some(track_title) = track.title.as_deref().filter(|title| !title.trim().is_empty())
+            let Some(track_title) = track
+                .title
+                .as_deref()
+                .filter(|title| !title.trim().is_empty())
             else {
                 continue;
             };

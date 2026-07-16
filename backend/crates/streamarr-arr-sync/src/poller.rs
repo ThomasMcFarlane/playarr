@@ -674,7 +674,11 @@ impl ReconciliationPoller {
             false
         };
 
-        if needs_duration || (!has_files && availability == Availability::Available) {
+        let should_backfill_missing = !has_files
+            && (availability == Availability::Available
+                || (self.source_kind == SourceKind::Lidarr
+                    && availability == Availability::Unknown));
+        if needs_duration || should_backfill_missing {
             if needs_duration {
                 tracing::info!(
                     source_instance_id = %self.source_instance_id,

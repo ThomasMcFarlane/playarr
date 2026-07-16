@@ -30,6 +30,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Backfill missing Lidarr media files even when the source reports an unknown availability state.
 - Preserve client sessions across backend restarts and rotate expired access tokens through the
   newly exposed refresh endpoint.
 - Keep playback sessions alive beyond their initial transcode window, wait for cold HLS manifests,

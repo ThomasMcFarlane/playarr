@@ -450,7 +450,10 @@ mod tests {
         assert_eq!(artist.genres, vec!["Alternative Rock", "Art Rock"]);
         assert_eq!(artist.sort_name.as_deref(), Some("Sample Band"));
         assert_eq!(
-            artist.statistics.as_ref().map(|stats| stats.track_file_count),
+            artist
+                .statistics
+                .as_ref()
+                .map(|stats| stats.track_file_count),
             Some(112)
         );
         assert_eq!(artist.images.len(), 2);
