@@ -34,7 +34,8 @@ type TypePermission = {
  */
 const TYPE_PERMISSIONS: readonly TypePermission[] = [
   { kind: "movie", sourceKinds: ["radarr"] },
-  { kind: "series", sourceKinds: ["sonarr", "whisparr"] },
+  { kind: "series", sourceKinds: ["sonarr"] },
+  { kind: "site", sourceKinds: ["whisparr"] },
   { kind: "artist", sourceKinds: ["lidarr"] },
   { kind: "author", sourceKinds: ["readarr"] },
 ];

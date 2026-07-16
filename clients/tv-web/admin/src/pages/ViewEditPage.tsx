@@ -28,6 +28,7 @@ const KIND_OPTIONS: { value: WorkKind | ""; label: string }[] = [
   { value: "", label: "Any" },
   { value: "movie", label: "Movie" },
   { value: "series", label: "Series" },
+  { value: "site", label: "Site" },
   { value: "artist", label: "Artist" },
   { value: "author", label: "Author" },
 ];

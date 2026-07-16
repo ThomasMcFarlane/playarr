@@ -306,7 +306,14 @@ impl ReconciliationPoller {
             .map(|r| (r.external_id.clone(), r.source_id))
             .collect();
 
-        let local = self.list_all_local(work_kind).await?;
+        let mut local = self.list_all_local(work_kind).await?;
+        let mut ops = Vec::new();
+        if self.source_kind == SourceKind::Whisparr {
+            let legacy_series = self.list_all_local(WorkKind::Series).await?;
+            let (normalised, cleanup_ops) = normalise_whisparr_locals(local, legacy_series);
+            local = normalised;
+            ops.extend(cleanup_ops);
+        }
         // Snapshot before `diff_works` moves `local` -- needed below to
         // find works the diff *didn't* touch (no catalog-level change) but
         // whose file-level sync may still be outstanding. See
@@ -314,7 +321,7 @@ impl ReconciliationPoller {
         // necessary at all.
         let local_snapshot = local.clone();
 
-        let ops = diff_works(work_kind, &provider, remote, local);
+        ops.extend(diff_works(work_kind, &provider, remote, local));
         tracing::info!(
             source_instance_id = %self.source_instance_id,
             inserts = ops.iter().filter(|op| matches!(op, SyncOp::Insert(_))).count(),
@@ -338,6 +345,14 @@ impl ReconciliationPoller {
     /// `entity_id` is `None` (Bazarr/Prowlarr signals, or any *arr payload
     /// shape `webhook::extract_entity_id` didn't recognize).
     async fn reconcile_one(&self, entity_id: Option<i64>) -> Result<(), PollError> {
+        // A Whisparr full pass also adopts legacy TPDB-backed `Series`
+        // rows and removes duplicates created before `WorkKind::Site`
+        // existed. Keep targeted webhooks on that safe path until every
+        // deployment has completed at least one normalising pass.
+        if self.source_kind == SourceKind::Whisparr {
+            return self.reconcile_all().await;
+        }
+
         let Some(id) = entity_id else {
             return self.reconcile_all().await;
         };
@@ -378,7 +393,7 @@ impl ReconciliationPoller {
 
         let op = match existing {
             Some(existing) => {
-                let merged = merge_work(&existing, &remote);
+                let merged = merge_work(&existing, work_kind, &remote);
                 if merged == existing {
                     if self
                         .media_sync
@@ -741,8 +756,9 @@ fn new_work(kind: WorkKind, provider: ExternalProvider, remote: &RemoteWork) -> 
 /// diffs by comparing the *merged* result against `existing` rather than
 /// just always emitting an `Update` — a remote entity that hasn't
 /// meaningfully changed since the last pass shouldn't generate a write.
-fn merge_work(existing: &Work, remote: &RemoteWork) -> Work {
+fn merge_work(existing: &Work, kind: WorkKind, remote: &RemoteWork) -> Work {
     let mut merged = existing.clone();
+    merged.kind = kind;
     merged.title = remote.title.clone();
     merged.sort_title = remote.sort_title.clone();
     merged.monitored = remote.monitored;
@@ -785,7 +801,7 @@ fn diff_works(
     for remote_work in remote {
         match local_by_external_id.remove(&remote_work.external_id) {
             Some(existing) => {
-                let merged = merge_work(&existing, &remote_work);
+                let merged = merge_work(&existing, kind, &remote_work);
                 if merged != existing {
                     ops.push(SyncOp::Update(merged));
                 }
@@ -805,6 +821,52 @@ fn diff_works(
     }
 
     ops
+}
+
+/// Normalises the one historical taxonomy change in the catalogue:
+/// Whisparr used to write TPDB-backed works as `Series`, and now writes
+/// them as `Site`.
+///
+/// A legacy-only row is retained (same `Work::id`) and fed into the normal
+/// diff as a `Site`, preserving references such as playlist membership.
+/// If a newer `Site` duplicate already exists for the same TPDB id, that
+/// canonical row is retained instead: media-file upserts move the playable
+/// files to it by source-file identity, while the legacy duplicate is
+/// scheduled for deletion.
+fn normalise_whisparr_locals(
+    sites: Vec<Work>,
+    legacy_series: Vec<Work>,
+) -> (Vec<Work>, Vec<SyncOp>) {
+    let site_external_ids: std::collections::HashSet<String> = sites
+        .iter()
+        .filter_map(|work| {
+            work.external_refs
+                .iter()
+                .find(|reference| reference.provider == ExternalProvider::Tpdb)
+                .map(|reference| reference.external_id.clone())
+        })
+        .collect();
+    let mut normalised = sites;
+    let mut cleanup = Vec::new();
+
+    for mut legacy in legacy_series {
+        let Some(external_id) = legacy
+            .external_refs
+            .iter()
+            .find(|reference| reference.provider == ExternalProvider::Tpdb)
+            .map(|reference| reference.external_id.clone())
+        else {
+            continue;
+        };
+        if site_external_ids.contains(&external_id) {
+            cleanup.push(SyncOp::Delete(legacy.id));
+        } else {
+            legacy.kind = WorkKind::Site;
+            normalised.push(legacy);
+        }
+    }
+
+    (normalised, cleanup)
 }
 
 #[cfg(test)]
@@ -1058,6 +1120,91 @@ mod tests {
         assert!(ops.is_empty());
     }
 
+    #[test]
+    fn whisparr_adopts_a_legacy_series_row_without_changing_its_id() {
+        let legacy = work_with_ref(
+            WorkKind::Series,
+            ExternalProvider::Tpdb,
+            "101",
+            "Legacy Site",
+            true,
+            Availability::Available,
+        );
+        let legacy_id = legacy.id;
+        let (local, cleanup) = normalise_whisparr_locals(Vec::new(), vec![legacy]);
+
+        assert!(cleanup.is_empty());
+        assert_eq!(local.len(), 1);
+        assert_eq!(local[0].id, legacy_id);
+        assert_eq!(local[0].kind, WorkKind::Site);
+
+        let mut remote_site = remote("101", "Legacy Site", true);
+        remote_site.overview = local[0].overview.clone();
+        remote_site.genres = local[0].genres.clone();
+        let ops = diff_works(
+            WorkKind::Site,
+            &ExternalProvider::Tpdb,
+            vec![remote_site],
+            local,
+        );
+        assert!(ops.is_empty());
+    }
+
+    #[test]
+    fn whisparr_keeps_the_site_row_and_deletes_a_legacy_duplicate() {
+        let site = work_with_ref(
+            WorkKind::Site,
+            ExternalProvider::Tpdb,
+            "101",
+            "Canonical Site",
+            true,
+            Availability::Available,
+        );
+        let legacy = work_with_ref(
+            WorkKind::Series,
+            ExternalProvider::Tpdb,
+            "101",
+            "Legacy Duplicate",
+            true,
+            Availability::Available,
+        );
+        let site_id = site.id;
+        let legacy_id = legacy.id;
+
+        let (local, cleanup) = normalise_whisparr_locals(vec![site], vec![legacy]);
+
+        assert_eq!(local.len(), 1);
+        assert_eq!(local[0].id, site_id);
+        assert_eq!(cleanup, vec![SyncOp::Delete(legacy_id)]);
+    }
+
+    #[test]
+    fn diff_reclassifies_a_matching_work_to_the_requested_kind() {
+        let legacy = work_with_ref(
+            WorkKind::Series,
+            ExternalProvider::Tpdb,
+            "101",
+            "Site",
+            true,
+            Availability::Available,
+        );
+        let legacy_id = legacy.id;
+        let mut remote_site = remote("101", "Site", true);
+        remote_site.overview = legacy.overview.clone();
+        remote_site.genres = legacy.genres.clone();
+
+        let ops = diff_works(
+            WorkKind::Site,
+            &ExternalProvider::Tpdb,
+            vec![remote_site],
+            vec![legacy],
+        );
+
+        assert!(
+            matches!(&ops[..], [SyncOp::Update(work)] if work.id == legacy_id && work.kind == WorkKind::Site)
+        );
+    }
+
     // ---- reconcile_all / reconcile_one against an in-memory WorkRepo fake ----
 
     /// Hand-written HashMap-backed `WorkRepo` test double — no database, no
@@ -1254,7 +1401,7 @@ mod tests {
         );
         let remote_entity = remote("1", "New", true);
 
-        let merged = merge_work(&existing, &remote_entity);
+        let merged = merge_work(&existing, WorkKind::Series, &remote_entity);
 
         assert_eq!(merged.title, "New");
         assert!(merged.monitored);
@@ -1294,7 +1441,7 @@ mod tests {
             height: None,
         }];
 
-        let merged = merge_work(&existing, &remote_entity);
+        let merged = merge_work(&existing, WorkKind::Series, &remote_entity);
 
         assert_eq!(merged.overview.as_deref(), Some("A new synopsis."));
         assert_eq!(merged.genres, vec!["Thriller".to_string()]);
@@ -1332,7 +1479,7 @@ mod tests {
         let mut remote_entity = remote("1", "Old", true);
         remote_entity.release_date = Some(release_date);
 
-        let merged = merge_work(&existing, &remote_entity);
+        let merged = merge_work(&existing, WorkKind::Movie, &remote_entity);
 
         assert_eq!(merged.release_date, Some(release_date));
     }
@@ -1350,7 +1497,7 @@ mod tests {
         let mut remote_entity = remote("1", "Old", true);
         remote_entity.availability = Some(Availability::Available);
 
-        let merged = merge_work(&existing, &remote_entity);
+        let merged = merge_work(&existing, WorkKind::Movie, &remote_entity);
 
         assert_eq!(merged.availability, Availability::Available);
     }

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { describeApiError, type LibraryViewResponse } from "@streamarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { KIND_LABELS } from "../components/PosterCard";
 
 /**
  * Builds a short, human-readable summary of a view's `criteria` for the
@@ -13,7 +14,7 @@ import { useDocumentTitle } from "../lib/useDocumentTitle";
 function summarizeCriteria(view: LibraryViewResponse): string {
   const parts: string[] = [];
   if (view.criteria.kind) {
-    parts.push(view.criteria.kind === "movie" ? "Movies" : `${view.criteria.kind}s`);
+    parts.push(KIND_LABELS[view.criteria.kind]);
   }
   if (view.criteria.genre) parts.push(view.criteria.genre);
   if (view.criteria.tag) parts.push(`tag:${view.criteria.tag}`);

@@ -3,7 +3,13 @@ import type { SourceInstanceResponse, WorkKind } from "@streamarr-tv/api-client"
 import { useApiClient } from "../lib/ApiClientProvider";
 import { KIND_LABELS } from "./PosterCard";
 
-const KIND_OPTIONS: WorkKind[] = ["movie", "series", "artist", "author"];
+const KIND_OPTIONS: WorkKind[] = [
+  "movie",
+  "series",
+  "site",
+  "artist",
+  "author",
+];
 
 /** Layers/funnel glyph -- the "Type" toolbar button's icon. */
 function TypeIcon() {

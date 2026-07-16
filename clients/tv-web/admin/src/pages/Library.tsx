@@ -12,7 +12,13 @@ const BATCH_SIZE = 500;
 /** `searchCatalog` doesn't paginate server-side -- a search result set is expected to be small. */
 const SEARCH_RESULT_LIMIT = 50;
 
-const WORK_KINDS: readonly WorkKind[] = ["movie", "series", "artist", "author"];
+const WORK_KINDS: readonly WorkKind[] = [
+  "movie",
+  "series",
+  "site",
+  "artist",
+  "author",
+];
 
 function parseKind(value: string | null): WorkKind | null {
   return value !== null && (WORK_KINDS as readonly string[]).includes(value) ? (value as WorkKind) : null;
