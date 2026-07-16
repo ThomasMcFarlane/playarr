@@ -675,6 +675,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/oauth/device/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Completes the human side of the device flow. The streaming-policy
+         *     extractor is deliberate: approving a TV signs that TV in as this user,
+         *     so an account that cannot use Playarr must not be able to mint a Playarr
+         *     session through pairing either.
+         */
+        post: operations["authorize_device_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/oauth/device/code": {
         parameters: {
             query?: never;
@@ -1264,6 +1286,13 @@ export interface components {
             job?: string | null;
             person: components["schemas"]["PersonResponse"];
         };
+        /**
+         * @description The short code displayed by a TV and entered (or supplied by a QR-code
+         *     link) on an already-authenticated browser or mobile device.
+         */
+        DeviceAuthorizationRequest: {
+            user_code: string;
+        };
         DeviceCodeRequest: {
             client_platform: components["schemas"]["ClientPlatform"];
         };
@@ -1319,6 +1348,16 @@ export interface components {
             media_file_id?: string | null;
             /** Format: int64 */
             runtime_ms?: number | null;
+        };
+        ErrorBody: {
+            /**
+             * @description A short, stable, machine-matchable code -- e.g. `"not_found"`,
+             *     `"invalid_transition"`. Deliberately not the `Display` text of the
+             *     underlying error (which can change wording without that being a
+             *     breaking API change); `message` carries that instead.
+             */
+            error: string;
+            message: string;
         };
         /**
          * @description A cross-reference to the identifier this `Work` (or one of its source
@@ -3990,6 +4029,55 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    authorize_device_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceAuthorizationRequest"];
+            };
+        };
+        responses: {
+            /** @description Device approved */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Account is not permitted to use Playarr */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unknown or expired user code */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
             };
         };
     };

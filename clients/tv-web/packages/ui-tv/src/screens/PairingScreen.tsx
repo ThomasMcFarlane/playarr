@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 import { color, radius, spacing, typeScale } from "@streamarr-tv/design-tokens";
 import { useFocusable } from "../SpatialNavContext";
+import { QrCode } from "../QrCode";
 
 export interface PairingScreenProps {
   /** RFC 8628 §3.2's short user-facing code, e.g. "ABCD-1234". */
@@ -53,33 +54,41 @@ export function PairingScreen({
 
       {(status === "pending" || status === "slow_down") && userCode && (
         <>
-          <p style={{ fontSize: typeScale.subtitle.fontSize, color: color.text.secondary, margin: 0 }}>
-            To link this TV, visit
-          </p>
-          <p style={{ fontSize: typeScale.title.fontSize, fontWeight: 700, margin: 0 }}>
-            {verificationUri}
-          </p>
-          <p style={{ fontSize: typeScale.subtitle.fontSize, color: color.text.secondary, margin: 0 }}>
-            and enter the code
-          </p>
-          <p
+          <div
             style={{
-              fontSize: 64,
-              fontWeight: 700,
-              letterSpacing: 8,
-              margin: 0,
-              padding: `${spacing.md}px ${spacing.xl}px`,
-              borderRadius: radius.lg,
-              backgroundColor: color.background.raised,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: spacing.xxxl,
+              width: "100%",
             }}
           >
-            {userCode}
-          </p>
-          {verificationUriComplete && (
-            <p style={{ fontSize: typeScale.caption.fontSize, color: color.text.disabled, margin: 0 }}>
-              (or scan/visit: {verificationUriComplete})
-            </p>
-          )}
+            {verificationUriComplete && <QrCode value={verificationUriComplete} size={260} />}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: spacing.md }}>
+              <p style={{ fontSize: typeScale.subtitle.fontSize, color: color.text.secondary, margin: 0 }}>
+                Scan the QR code, or visit
+              </p>
+              <p style={{ fontSize: typeScale.title.fontSize, fontWeight: 700, margin: 0 }}>
+                {verificationUri}
+              </p>
+              <p style={{ fontSize: typeScale.subtitle.fontSize, color: color.text.secondary, margin: 0 }}>
+                and enter the code
+              </p>
+              <p
+                style={{
+                  fontSize: 64,
+                  fontWeight: 700,
+                  letterSpacing: 8,
+                  margin: 0,
+                  padding: `${spacing.md}px ${spacing.xl}px`,
+                  borderRadius: radius.lg,
+                  backgroundColor: color.background.raised,
+                }}
+              >
+                {userCode}
+              </p>
+            </div>
+          </div>
           {status === "slow_down" && (
             <p style={{ fontSize: typeScale.caption.fontSize, color: color.text.disabled }}>
               Still waiting...

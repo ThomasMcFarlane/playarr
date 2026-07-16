@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApiClient } from "@streamarr-tv/api-client";
-import { pollDeviceToken, pollForToken, requestDeviceCode } from "./index";
+import { createQrCodeSvg, pollDeviceToken, pollForToken, requestDeviceCode } from "./index";
 
 function mockFetch(handler: (request: Request) => Response | Promise<Response>) {
   return vi.fn(async (request: Request) => handler(request));
@@ -14,6 +14,14 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 const BASE_URL = "http://localhost:8080";
+
+describe("createQrCodeSvg", () => {
+  it("renders the complete verification URL locally as an SVG", async () => {
+    const svg = await createQrCodeSvg("https://streamarr.example/link?user_code=WXYZ-1234", 180);
+    expect(svg).toContain("<svg");
+    expect(svg).toContain('width="180"');
+  });
+});
 
 describe("requestDeviceCode", () => {
   it("posts the real DeviceCodeRequest shape and normalizes the response to camelCase", async () => {

@@ -13,6 +13,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with fresh-on-reload app shells, an equivalent local command, and an operator setup guide.
 - Allow each Playarr Web login to select an absolute Streamarr server URL, connect to it
   directly from the browser, and keep saved profile sessions scoped to that server.
+- Add QR and manual-code TV sign-in with an authenticated, phone-friendly approval page for
+  Android TV, VIDAA, webOS, Tizen, and the fallback TV client.
 - Add a VIDAA-aware hosted Playarr Web App with launcher artwork, persistent
   platform identification, television-safe playback negotiation, and a Hisense
   installation guide.

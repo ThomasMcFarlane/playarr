@@ -24,6 +24,7 @@ import {
 } from "./pages/Player";
 import { SettingsPage } from "./pages/Settings";
 import { LoginPage } from "./pages/Login";
+import { DeviceLinkPage } from "./pages/DeviceLink";
 import { SearchPage } from "./pages/Search";
 import { PlaylistsPage } from "./pages/Playlists";
 import { ProfilesPage } from "./pages/Profiles";
@@ -480,6 +481,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/link" element={<DeviceLinkPage />} />
       <Route element={<AppShell />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/search" element={<SearchPage />} />

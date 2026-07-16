@@ -40,6 +40,15 @@ describe("resolveClientPlatform", () => {
     ).toBe("tv-vidaa");
   });
 
+  it("detects the Android TV WebView host", () => {
+    expect(
+      resolveClientPlatform({
+        search: "",
+        userAgent: "Mozilla/5.0 PlayarrAndroidTV/0.1.2",
+      })
+    ).toBe("android-tv");
+  });
+
   it("defaults to web and supports explicitly clearing the saved TV profile", () => {
     const storage = createMemoryStorage();
     storage.setItem("playarr.clientPlatform", "tv-vidaa");

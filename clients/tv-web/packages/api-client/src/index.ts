@@ -93,6 +93,7 @@ export type RefreshRequest = components["schemas"]["RefreshRequest"];
 export type RefreshResponse = components["schemas"]["RefreshResponse"];
 export type DeviceCodeRequest = components["schemas"]["DeviceCodeRequest"];
 export type DeviceCodeResponse = components["schemas"]["DeviceCodeResponseSchema"];
+export type DeviceAuthorizationRequest = components["schemas"]["DeviceAuthorizationRequest"];
 export type DeviceTokenRequest = components["schemas"]["DeviceTokenRequest"];
 export type TokenResponse = components["schemas"]["TokenResponseSchema"];
 export type OAuthErrorBody = components["schemas"]["OAuthErrorBody"];
@@ -256,6 +257,7 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/users/me/profile-pin", method: "PATCH" },
   { schemaPath: "/api/v1/users/profiles", method: "GET" },
   { schemaPath: "/api/v1/users/profiles/{id}/verify-pin", method: "POST" },
+  { schemaPath: "/api/v1/oauth/device/authorize", method: "POST" },
   { schemaPath: "/api/v1/catalog", method: "GET" },
   { schemaPath: "/api/v1/catalog/kinds", method: "GET" },
   { schemaPath: "/api/v1/catalog/{id}", method: "GET" },
@@ -433,6 +435,11 @@ export class ApiClient {
 
   async requestDeviceCode(body: DeviceCodeRequest): Promise<DeviceCodeResponse> {
     return this.unwrap(await this.raw.POST("/api/v1/oauth/device/code", { body }));
+  }
+
+  /** Approves the TV code as the currently authenticated Playarr user. */
+  async authorizeDevice(body: DeviceAuthorizationRequest): Promise<void> {
+    this.assertOk(await this.raw.POST("/api/v1/oauth/device/authorize", { body }));
   }
 
   async requestDeviceToken(body: DeviceTokenRequest): Promise<TokenResponse> {

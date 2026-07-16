@@ -19,6 +19,7 @@
  */
 import { ApiError, DEVICE_CODE_GRANT_TYPE } from "@streamarr-tv/api-client";
 import type { ApiClient, ClientPlatform, OAuthErrorBody } from "@streamarr-tv/api-client";
+import QRCode from "qrcode";
 
 export { DEVICE_CODE_GRANT_TYPE };
 export type { ClientPlatform };
@@ -26,7 +27,17 @@ export type { ClientPlatform };
 export { getOrCreateDeviceId } from "./deviceId";
 export { TokenStore, type StoredSession } from "./tokenStore";
 export { ensureAccessToken, toStoredSession, type EnsureAccessTokenIdentity } from "./session";
-export { decodeAccessTokenUserId } from "./jwt";
+export { decodeAccessTokenDeviceId, decodeAccessTokenUserId } from "./jwt";
+
+/** Generates an offline SVG QR code without sending the pairing URL to a third party. */
+export function createQrCodeSvg(value: string, width = 240): Promise<string> {
+  return QRCode.toString(value, {
+    type: "svg",
+    errorCorrectionLevel: "M",
+    margin: 2,
+    width,
+  });
+}
 
 /** RFC 8628 §3.2 device authorization response, normalized to camelCase for callers. */
 export interface DeviceCodeResponse {

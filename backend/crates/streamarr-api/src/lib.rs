@@ -99,6 +99,7 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(readiness::readiness_handler))
         .routes(routes!(version::version_handler))
         .routes(routes!(oauth::device_code_handler))
+        .routes(routes!(oauth::authorize_device_handler))
         .routes(routes!(oauth::device_token_handler))
         .routes(routes!(login::login_handler))
         .routes(routes!(refresh::refresh_handler))
@@ -544,6 +545,7 @@ mod tests {
         assert!(json.contains("/api/system/health"));
         assert!(json.contains("/api/system/version"));
         assert!(json.contains("/api/v1/oauth/device/code"));
+        assert!(json.contains("/api/v1/oauth/device/authorize"));
         assert!(json.contains("/api/v1/oauth/token"));
         assert!(json.contains("/api/v1/auth/login"));
         assert!(json.contains("/webhooks/{instance_id}"));

@@ -889,7 +889,7 @@ async fn boot_api(
             code_ttl: chrono::Duration::minutes(10),
             polling_interval: chrono::Duration::seconds(5),
             verification_base_uri: std::env::var("STREAMARR_DEVICE_VERIFICATION_URI")
-                .unwrap_or_else(|_| format!("http://{}/link", config.http_bind_addr)),
+                .unwrap_or_else(|_| "/link".to_string()),
             refresh_ttl: chrono::Duration::days(30),
         },
     ));

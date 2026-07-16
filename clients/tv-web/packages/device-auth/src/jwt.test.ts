@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeAccessTokenUserId } from "./jwt";
+import { decodeAccessTokenDeviceId, decodeAccessTokenUserId } from "./jwt";
 
 function base64UrlEncode(json: unknown): string {
   const raw = Buffer.from(JSON.stringify(json), "utf-8").toString("base64");
@@ -16,6 +16,14 @@ describe("decodeAccessTokenUserId", () => {
   it("extracts sub from a well-formed access token", () => {
     const token = fakeJwt({ sub: "00000000-0000-0000-0000-000000000009", exp: 9999999999 });
     expect(decodeAccessTokenUserId(token)).toBe("00000000-0000-0000-0000-000000000009");
+  });
+
+  it("extracts the device id needed for refresh after pairing", () => {
+    expect(
+      decodeAccessTokenDeviceId(
+        fakeJwt({ sub: "user-1", device_id: "device-42", exp: 9999999999 })
+      )
+    ).toBe("device-42");
   });
 
   it("returns undefined for a token missing a payload segment", () => {

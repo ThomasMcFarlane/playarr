@@ -3,6 +3,8 @@ import { useLocation, useNavigate, type Location } from "react-router-dom";
 import { ApiError } from "@streamarr-tv/api-client";
 import { useApiBaseUrl, useAuth } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { DeviceLogin } from "../components/DeviceLogin";
+import { IS_TV } from "../lib/clientPlatform";
 
 interface LocationState {
   /** Set by `App.tsx`'s app-shell redirect so a successful login returns to wherever the user was headed. */
@@ -27,7 +29,7 @@ interface LocationState {
  */
 export function LoginPage() {
   useDocumentTitle("Sign in");
-  const { login } = useAuth();
+  const { login, loginWithDeviceToken } = useAuth();
   const [apiBaseUrl] = useApiBaseUrl();
   const navigate = useNavigate();
   const location = useLocation();
@@ -38,26 +40,38 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  function finishLogin() {
+    const destination = state?.from ?? "/";
+    const destinationState =
+      state?.fromState ??
+      (typeof destination === "object" && "state" in destination
+        ? destination.state
+        : undefined);
+    navigate(destination, { replace: true, state: destinationState });
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
     try {
       await login({ serverUrl, username, password });
-      const destination = state?.from ?? "/";
-      const destinationState =
-        state?.fromState ??
-        (typeof destination === "object" && "state" in destination
-          ? destination.state
-          : undefined);
-      navigate(destination, {
-        replace: true,
-        state: destinationState,
-      });
+      finishLogin();
     } catch (err) {
       setError(loginErrorMessage(err));
       setSubmitting(false);
     }
+  }
+
+  if (IS_TV) {
+    return (
+      <DeviceLogin
+        onAuthenticated={(token) => {
+          loginWithDeviceToken(token);
+          finishLogin();
+        }}
+      />
+    );
   }
 
   return (

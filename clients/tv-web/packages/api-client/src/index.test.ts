@@ -323,6 +323,22 @@ describe("ApiClient", () => {
     expect(response.interval).toBe(5);
   });
 
+  it("approves a TV code with the viewer bearer token", async () => {
+    const fetchImpl = mockFetch(async (request) => {
+      expect(new URL(request.url).pathname).toBe("/api/v1/oauth/device/authorize");
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+      expect(await request.json()).toEqual({ user_code: "WXYZ-1234" });
+      return new Response(null, { status: 204 });
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "viewer-token",
+    });
+
+    await client.authorizeDevice({ user_code: "WXYZ-1234" });
+  });
+
   it("surfaces the RFC 8628 OAuthErrorBody on a 400 token response via ApiError.body", async () => {
     const fetchImpl = mockFetch(async (request) => {
       expect(new URL(request.url).pathname).toBe("/api/v1/oauth/token");

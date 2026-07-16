@@ -1,11 +1,13 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import { ApiClient, type LoginRequest } from "@streamarr-tv/api-client";
 import {
+  decodeAccessTokenDeviceId,
   decodeAccessTokenUserId,
   ensureAccessToken,
   getOrCreateDeviceId,
   toStoredSession,
   TokenStore,
+  type DeviceTokenSuccess,
   type StoredSession,
 } from "@streamarr-tv/device-auth";
 import {
@@ -25,7 +27,12 @@ import { PLAYARR_CLIENT_PLATFORM } from "./clientPlatform";
  * same as `lib/appUpdate.ts` uses.
  */
 const PLAYARR_LOGIN_IDENTITY = {
-  deviceName: PLAYARR_CLIENT_PLATFORM === "tv-vidaa" ? "Playarr for VIDAA" : "Playarr Web",
+  deviceName:
+    PLAYARR_CLIENT_PLATFORM === "tv-vidaa"
+      ? "Playarr for VIDAA"
+      : PLAYARR_CLIENT_PLATFORM === "android-tv"
+        ? "Playarr for Android TV"
+        : "Playarr Web",
   clientPlatform: PLAYARR_CLIENT_PLATFORM,
   clientVersion: __APP_VERSION__,
 };
@@ -188,6 +195,8 @@ interface ApiClientContextValue {
    * disabled, etc.); the caller surfaces that to the user.
    */
   login: (credentials: LoginCredentials) => Promise<void>;
+  /** Stores the token pair returned by the TV device-code flow. */
+  loginWithDeviceToken: (token: DeviceTokenSuccess) => void;
   /** Activates a profile session already saved in this browser and validates/refreshes it. */
   switchProfile: (userId: string) => Promise<void>;
   /** True when this browser already has a reusable session for the profile. */
@@ -472,6 +481,32 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     [applyApiBaseUrl, persistProfileSession, storedProfileSessions]
   );
 
+  const loginWithDeviceToken = useCallback(
+    (token: DeviceTokenSuccess) => {
+      const userId = decodeAccessTokenUserId(token.accessToken);
+      const deviceId = decodeAccessTokenDeviceId(token.accessToken);
+      if (!userId || !deviceId) {
+        throw new Error("The server returned an invalid device login token.");
+      }
+
+      const session = toStoredSession({
+        access_token: token.accessToken,
+        refresh_token: token.refreshToken,
+        token_type: token.tokenType,
+        expires_in: token.expiresInSeconds,
+      });
+      const name = "Viewer";
+      (tokenStoreRef.current as TokenStore).set(session);
+      window.localStorage.removeItem(CURRENT_USER_NAME_STORAGE_KEY);
+      activeProfileRef.current = { apiBaseUrl, userId, name, deviceId };
+      persistProfileSession(apiBaseUrl, userId, name, deviceId, session);
+      setAuthFailed(false);
+      setCurrentUserId(userId);
+      setCurrentUserName(undefined);
+    },
+    [apiBaseUrl, persistProfileSession]
+  );
+
   const switchProfile = useCallback(
     async (userId: string) => {
       if (!client) {
@@ -578,6 +613,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
           .map(({ userId, name }) => ({ userId, name })),
         authFailed,
         login,
+        loginWithDeviceToken,
         switchProfile,
         isProfileSaved,
         logout,
@@ -622,6 +658,7 @@ export function useAuth(): {
   currentUserName: string | undefined;
   savedProfiles: SavedProfile[];
   login: (credentials: LoginCredentials) => Promise<void>;
+  loginWithDeviceToken: (token: DeviceTokenSuccess) => void;
   switchProfile: (userId: string) => Promise<void>;
   isProfileSaved: (userId: string) => boolean;
   logout: () => void;
@@ -632,6 +669,7 @@ export function useAuth(): {
     currentUserName,
     savedProfiles,
     login,
+    loginWithDeviceToken,
     switchProfile,
     isProfileSaved,
     logout,
@@ -642,6 +680,7 @@ export function useAuth(): {
     currentUserName,
     savedProfiles,
     login,
+    loginWithDeviceToken,
     switchProfile,
     isProfileSaved,
     logout,

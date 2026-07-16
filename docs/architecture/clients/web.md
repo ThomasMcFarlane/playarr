@@ -100,8 +100,11 @@ itself). What differs per app is confined to:
   local-dev default.
 - **Whether RFC 8628 pairing or trusted-network login is used** — the TV
   shells always pair first (`PairingScreenContainer`, since there is no
-  keyboard for credentials); the Web app has no pairing UI. It signs in
-  directly against the selected server with username/password, while
+  keyboard for credentials). The hosted Web bundle also switches to the
+  same QR/manual-code pairing screen when embedded by Android TV or running
+  on VIDAA; ordinary desktop/mobile browsers sign in directly against the
+  selected server with username/password and serve the authenticated
+  `/link` approval page. In every case,
   `@streamarr-tv/device-auth`'s `ensureAccessToken` retains the transparent
   trusted-network fallback and refresh path for subsequent requests.
 - **Whether `spatial-nav`'s D-pad focus engine is mounted at all** — the

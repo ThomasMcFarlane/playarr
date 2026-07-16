@@ -1242,6 +1242,43 @@ paths:
           description: The source file could not be decoded
         '503':
           description: The source media path is not reachable on this Streamarr node
+  /api/v1/oauth/device/authorize:
+    post:
+      tags:
+      - oauth
+      summary: |-
+        Completes the human side of the device flow. The streaming-policy
+        extractor is deliberate: approving a TV signs that TV in as this user,
+        so an account that cannot use Playarr must not be able to mint a Playarr
+        session through pairing either.
+      operationId: authorize_device_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceAuthorizationRequest'
+        required: true
+      responses:
+        '204':
+          description: Device approved
+        '401':
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: Account is not permitted to use Playarr
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: Unknown or expired user code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
   /api/v1/oauth/device/code:
     post:
       tags:
@@ -2439,6 +2476,16 @@ components:
           description: Present only on a crew credit.
         person:
           $ref: '#/components/schemas/PersonResponse'
+    DeviceAuthorizationRequest:
+      type: object
+      description: |-
+        The short code displayed by a TV and entered (or supplied by a QR-code
+        link) on an already-authenticated browser or mobile device.
+      required:
+      - user_code
+      properties:
+        user_code:
+          type: string
     DeviceCodeRequest:
       type: object
       required:
@@ -2556,6 +2603,21 @@ components:
           - 'null'
           format: int64
           minimum: 0
+    ErrorBody:
+      type: object
+      required:
+      - error
+      - message
+      properties:
+        error:
+          type: string
+          description: |-
+            A short, stable, machine-matchable code -- e.g. `"not_found"`,
+            `"invalid_transition"`. Deliberately not the `Display` text of the
+            underlying error (which can change wording without that being a
+            breaking API change); `message` carries that instead.
+        message:
+          type: string
     ExternalProvider:
       oneOf:
       - type: string

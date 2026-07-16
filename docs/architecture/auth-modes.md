@@ -148,16 +148,6 @@ a fully-built system:
   implementations, not test doubles — login, refresh, and device pairing
   all genuinely function — but neither survives a restart or is visible to
   a second node in a multi-node deployment.
-- **There is no HTTP endpoint to approve or deny a pending device-pairing
-  code.** `DeviceFlowHandler::approve_user_code`/`deny_user_code` are fully
-  implemented and unit-tested, but `streamarr-api::oauth` only wires up
-  `POST /api/v1/oauth/device/code` and `POST /api/v1/oauth/token` (the
-  TV-side start/poll calls) — the "a logged-in human, on a phone or
-  laptop, enters the code and approves it" step described below has no
-  corresponding route yet. The device flow is therefore only exercisable
-  today by calling `approve_user_code` directly (as this crate's own tests
-  do), not through the public API.
-
 None of this is silently papered over in code — every in-memory store above
 documents its own "real, not a mock, but pending real persistence" status
 directly in its module doc comment, with a `TODO(persistence)` pointing at
@@ -251,17 +241,21 @@ paths an earlier draft of this doc used):
 
    `expires_in`/`interval` are configuration (`DeviceFlowConfig::code_ttl`/
    `polling_interval`), not hardcoded — `backend/src/main.rs` wires them to
-   10 minutes and 5 seconds respectively today.
+   10 minutes and 5 seconds respectively today. Unless
+   `STREAMARR_DEVICE_VERIFICATION_URI` supplies a public URL, the API builds
+   the `/link` origin from the request's `Host` and standard forwarded host/
+   protocol headers so a LAN TV does not display the server's unusable
+   `0.0.0.0` bind address.
 
 2. **The device displays `user_code`** (and, where the platform can render
    one, a QR code encoding `verification_uri_complete`) and begins polling.
 
-3. **A logged-in human, on a separate device, approves it.** RFC 8628
-   itself doesn't specify this step's transport, and — as noted under
-   ["What's actually wired up today"](#whats-actually-wired-up-today) above
-   — Streamarr has no HTTP route for it yet. `streamarr_auth::DeviceFlowHandler::approve_user_code(user_code, user_id)` /
-   `deny_user_code(user_code)` implement the logic; nothing in
-   `streamarr-api` calls them outside tests.
+3. **A logged-in human, on a separate device, approves it.** The QR code
+   opens Playarr Web's `/link` page with the code pre-filled; the same page
+   also accepts the displayed code manually. After normal sign-in and an
+   explicit confirmation, it calls the bearer-authenticated
+   `POST /api/v1/oauth/device/authorize` endpoint. That endpoint requires
+   `can_stream` and binds the pending code to the authenticated user's id.
 
 4. **The device polls for a token:**
 

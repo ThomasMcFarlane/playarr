@@ -387,9 +387,19 @@ impl DeviceFlowHandler for DashMapDeviceFlowHandler {
             return Err(DeviceFlowError::NotFound);
         }
 
-        authorization.status = DeviceAuthorizationStatus::Approved { user_id };
-        self.store.update(authorization).await;
-        Ok(())
+        match authorization.status {
+            DeviceAuthorizationStatus::Pending => {
+                authorization.status = DeviceAuthorizationStatus::Approved { user_id };
+                self.store.update(authorization).await;
+                Ok(())
+            }
+            DeviceAuthorizationStatus::Approved {
+                user_id: approved_user_id,
+            } if approved_user_id == user_id => Ok(()),
+            DeviceAuthorizationStatus::Approved { .. } | DeviceAuthorizationStatus::Denied => {
+                Err(DeviceFlowError::NotFound)
+            }
+        }
     }
 
     async fn deny_user_code(&self, user_code: &str) -> Result<(), DeviceFlowError> {
@@ -399,9 +409,15 @@ impl DeviceFlowHandler for DashMapDeviceFlowHandler {
             .await
             .ok_or(DeviceFlowError::NotFound)?;
 
-        authorization.status = DeviceAuthorizationStatus::Denied;
-        self.store.update(authorization).await;
-        Ok(())
+        match authorization.status {
+            DeviceAuthorizationStatus::Pending => {
+                authorization.status = DeviceAuthorizationStatus::Denied;
+                self.store.update(authorization).await;
+                Ok(())
+            }
+            DeviceAuthorizationStatus::Denied => Ok(()),
+            DeviceAuthorizationStatus::Approved { .. } => Err(DeviceFlowError::NotFound),
+        }
     }
 }
 
@@ -530,5 +546,29 @@ mod tests {
         let handler = handler();
         let result = handler.approve_user_code("ZZZZ-9999", Uuid::new_v4()).await;
         assert!(matches!(result, Err(DeviceFlowError::NotFound)));
+    }
+
+    #[tokio::test]
+    async fn an_approved_code_cannot_be_reassigned_or_denied() {
+        let handler = handler();
+        let code = handler
+            .start_device_authorization(ClientPlatform::AndroidTv)
+            .await
+            .unwrap();
+        handler
+            .approve_user_code(&code.user_code, Uuid::new_v4())
+            .await
+            .unwrap();
+
+        assert!(matches!(
+            handler
+                .approve_user_code(&code.user_code, Uuid::new_v4())
+                .await,
+            Err(DeviceFlowError::NotFound)
+        ));
+        assert!(matches!(
+            handler.deny_user_code(&code.user_code).await,
+            Err(DeviceFlowError::NotFound)
+        ));
     }
 }

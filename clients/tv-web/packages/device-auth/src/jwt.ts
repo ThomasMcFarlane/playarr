@@ -9,14 +9,30 @@
  * anything that doesn't parse as a three-segment JWT with a string `sub`.
  */
 export function decodeAccessTokenUserId(accessToken: string): string | undefined {
+  return decodeAccessTokenStringClaim(accessToken, "sub");
+}
+
+/**
+ * Best-effort device id for persisting a device-flow refresh session. The
+ * backend remains the security boundary; this is only used to send the same
+ * device id back when rotating the opaque refresh token.
+ */
+export function decodeAccessTokenDeviceId(accessToken: string): string | undefined {
+  return decodeAccessTokenStringClaim(accessToken, "device_id");
+}
+
+function decodeAccessTokenStringClaim(
+  accessToken: string,
+  claim: "sub" | "device_id"
+): string | undefined {
   const parts = accessToken.split(".");
   if (parts.length !== 3) return undefined;
   const payloadSegment = parts[1];
   if (!payloadSegment) return undefined;
   try {
     const payload: unknown = JSON.parse(base64UrlDecode(payloadSegment));
-    const sub = (payload as { sub?: unknown } | null)?.sub;
-    return typeof sub === "string" ? sub : undefined;
+    const value = (payload as Record<string, unknown> | null)?.[claim];
+    return typeof value === "string" ? value : undefined;
   } catch {
     return undefined;
   }
