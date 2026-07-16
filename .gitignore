@@ -124,6 +124,12 @@ desktop.ini
 *~
 .history/
 
+# Local browser automation helpers and runtime state
+.chrome-mcp-extension/
+.local-data/
+**/.fastembed_cache/
+/backend/run-dev.sh
+
 # ------------------------------------------------------------------------
 # Logs, env files, and local secrets that should never be committed
 # ------------------------------------------------------------------------
