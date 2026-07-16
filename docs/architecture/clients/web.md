@@ -163,7 +163,7 @@ hand-written service worker, not Workbox-generated:
    matching the "background fetch without interrupting an in-progress
    session" principle either way it was triggered.
 
-VIDAA now installs this same co-hosted Web build by URL. It therefore receives
+VIDAA opens this same co-hosted Web build by URL. It therefore receives
 the Web bundle's update behaviour without maintaining a separate OTA channel;
-on LAN HTTP origins where service workers are unavailable, launching the app
+on LAN HTTP origins where service workers are unavailable, opening the app
 still fetches the server's currently deployed bundle.

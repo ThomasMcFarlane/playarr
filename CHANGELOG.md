@@ -67,6 +67,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Correct the VIDAA guide to use the reachable Playarr Web endpoint in the TV
+  Browser instead of presenting the unsupported `hisense://debug` scheme as a
+  generally available launcher installer.
 - Fetch Lidarr-local artist posters, backdrops, banners, and logos through the authenticated
   backend artwork cache, and prefer artist backdrops for music-detail wallpapers.
 - Route Android TV Back actions through Playarr so active and minimised playback sessions close

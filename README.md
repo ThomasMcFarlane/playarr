@@ -20,8 +20,9 @@ Android Mobile, Android TV, iOS, LG webOS, Samsung Tizen, Hisense VIDAA, and a
 browser-based Web client, all speaking the same versioned API contract.
 
 Hisense owners can follow the
-[VIDAA installation guide](docs/clients/vidaa.md) to add the hosted Playarr Web
-App to supported television launchers.
+[VIDAA guide](docs/clients/vidaa.md) to open the hosted Playarr Web App in the
+television Browser. A dedicated launcher tile requires VIDAA distribution or
+developer access.
 
 Streamarr is designed to run at three tiers without a different codebase or a
 data-migration story at each step: a single systemd-managed binary against

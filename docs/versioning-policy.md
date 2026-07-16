@@ -223,10 +223,10 @@ live server, since the compatibility array it reads is always empty.
 
 ### VIDAA — hosted Playarr Web
 
-VIDAA launches the co-hosted Playarr Web URL with `?platform=tv-vidaa`, so it
+VIDAA opens the co-hosted Playarr Web URL with `?platform=tv-vidaa`, so it
 uses Web's service-worker/build-manifest update flow and evaluates the
 `tv-vidaa` compatibility row. On a plain LAN HTTP origin the service worker may
-be unavailable, but a fresh launcher start still loads the server's deployed
+be unavailable, but a fresh Browser visit still loads the server's deployed
 bundle; there is no separately published VIDAA package to update.
 
 ## Automation: the client-compatibility bump bot

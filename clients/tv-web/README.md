@@ -102,9 +102,9 @@ no dependency resolution errors) as part of scaffolding this workspace.
 - **webOS CLI and Tizen Studio are not installed in this environment.** Each
   packaged `apps/*` target produces a real
   static Vite `dist/` bundle; turning that into an installable `.ipk`
-  (webOS) or `.wgt` (Tizen) requires those platform SDKs. VIDAA instead points
-  its documented Web App installer at the co-hosted `web/` build; this still
-  needs validation on a real television. See the
+  (webOS) or `.wgt` (Tizen) requires those platform SDKs. VIDAA can open the
+  co-hosted `web/` build in its Browser, but a launcher tile requires VIDAA
+  distribution or device-specific developer access. See the
   [VIDAA installation guide](../../docs/clients/vidaa.md).
 - **No backend is running anywhere in this workspace.** `packages/api-client`
   and `web/src/pages/Library.tsx` point at `http://localhost:8080/v1` as a

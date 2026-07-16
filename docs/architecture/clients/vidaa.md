@@ -1,24 +1,21 @@
 # Client Architecture: VIDAA (Hisense Smart TVs)
 
-VIDAA runs hosted television applications: the TV launcher stores an HTTP or
-HTTPS URL and opens that application in VIDAA's embedded browser. Playarr uses
-that supported Web App model to run the current, co-hosted Playarr Web client
-instead of maintaining a second user interface or shipping a downloadable TV
-package.
+VIDAA runs hosted television applications in its embedded browser. Playarr uses
+the same browser-compatible model to run the current, co-hosted Playarr Web
+client instead of maintaining a second user interface or shipping a
+downloadable TV package.
 
 ## Delivery decision
 
 There is no public, self-service VIDAA App Store submission route comparable to
-LG Seller Lounge or Samsung Seller Office. Store distribution still requires a
-VIDAA partner relationship. A private household installation does not need a
-store package, however: VIDAA's official Web App Development Technical Guide
-documents a debug installer that accepts an app name, URL, icon URLs, and
-resolution, then adds the hosted app to the TV launcher.
+LG Seller Lounge or Samsung Seller Office. Store and developer deployment
+require a VIDAA partner relationship or device-specific developer access. The
+older `hisense://debug` browser scheme is not a supported household installation
+route: current firmware may reject it or require credentials.
 
-The resulting Playarr entry is a VIDAA Web App, not an APK, `.ipk`, `.wgt`, or
-USB-installable binary. The Streamarr server remains the deployment origin, so
-the TV receives the latest co-hosted Playarr bundle whenever the server is
-updated.
+Playarr remains a hosted Web App, not an APK, `.ipk`, `.wgt`, or USB-installable
+binary. The Streamarr server is the deployment origin, so opening Playarr in the
+TV Browser receives the latest co-hosted bundle whenever the server is updated.
 
 ## Implementation
 
@@ -42,14 +39,13 @@ installation because it does not contain the current Playarr Web experience.
 
 ## Installation and support boundary
 
-Follow [Installing Playarr on a Hisense VIDAA TV](../../clients/vidaa.md).
+Follow [Using Playarr on a Hisense VIDAA TV](../../clients/vidaa.md).
 
-The debug installer is firmware-dependent. The official guide documents it for
-VIDAA U-era hardware, but newer or region-specific firmware may hide it, require
-partner credentials, or remove the Browser application. If
-`hisense://debug` does not open an app-install form, there is no repository-side
-package that can bypass that restriction. Use the ordinary Browser app, casting,
-or an external Android TV/Google TV device instead.
+The Browser route is available only when the television can reach the
+Streamarr host and its embedded browser supports the required media features.
+There is no repository-side package that can bypass VIDAA launcher restrictions.
+Use a Browser favourite, casting, or an external Android TV/Google TV device
+unless a VIDAA partner deployment is available.
 
 No real VIDAA television or simulator is available in this development
 environment. Builds and platform-selection behaviour are testable here;
@@ -58,5 +54,4 @@ verified on the target television.
 
 ## References
 
-- [VIDAA Web App Development Technical Guide](https://www.vidaa.com/wp-content/uploads/2020/12/WebApp_Development_Guide_for_VIDAA.pdf)
 - [VIDAA support: find the installed OS version](https://www.vidaa.com/support/)
