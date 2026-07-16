@@ -3688,6 +3688,7 @@ code {
 }
 
 .tv-alphabet button {
+  position: relative;
   width: clamp(18px, 1.35vw, 24px);
   height: clamp(18px, 1.35vw, 24px);
   flex: 0 0 auto;
@@ -3736,19 +3737,20 @@ code {
 }
 
 .tv-alphabet button.is-active::before {
-  background: var(--ink);
+  width: 76%;
+  background: color-mix(in srgb, var(--ink) 78%, transparent);
 }
 
 .tv-alphabet button:focus-visible,
 .tv-alphabet button:hover {
   outline: 0;
   color: var(--bg);
-  transform: scale(1.14);
+  transform: scale(1.18);
 }
 
 .tv-alphabet button:focus-visible::before,
 .tv-alphabet button:hover::before {
-  width: 100%;
+  width: 110%;
   background: var(--ink);
 }
 
@@ -4374,6 +4376,10 @@ code {
   gap: 0.5rem;
 }
 
+.tv-filter-view-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .tv-filter-choice-grid-wide {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -4440,6 +4446,30 @@ code {
 
 .tv-view-icon-cover i {
   height: 13px;
+}
+
+.tv-view-icon-cover-flow {
+  width: 22px;
+  grid-template-columns: 4px 8px 4px;
+  align-items: center;
+  gap: 2px;
+  perspective: 30px;
+}
+
+.tv-view-icon-cover-flow i {
+  height: 11px;
+}
+
+.tv-view-icon-cover-flow i:first-child {
+  transform: rotateY(42deg);
+}
+
+.tv-view-icon-cover-flow i:nth-child(2) {
+  height: 13px;
+}
+
+.tv-view-icon-cover-flow i:last-child {
+  transform: rotateY(-42deg);
 }
 
 .tv-page-back {
@@ -4631,6 +4661,50 @@ code {
   opacity: 0.54;
 }
 
+.tv-library-grid-panel.is-cover-flow::before,
+.tv-library-grid-panel.is-cover-flow::after {
+  top: var(--library-rail-top);
+  bottom: var(--library-rail-bottom);
+  width: clamp(38px, 4.5vw, 76px);
+  height: auto;
+  border-radius: 0;
+  opacity: 0;
+}
+
+.tv-library-grid-panel.is-cover-flow::before {
+  right: auto;
+  left: 0;
+  background: radial-gradient(
+    ellipse 100% 88% at -24% 50%,
+    rgba(31, 14, 20, 0.52),
+    rgba(31, 14, 20, 0.18) 48%,
+    transparent 80%
+  );
+  box-shadow: inset 18px 0 24px -22px rgba(31, 14, 20, 0.72);
+}
+
+.tv-library-grid-panel.is-cover-flow::after {
+  right: var(--library-rail-right);
+  left: auto;
+  background: radial-gradient(
+    ellipse 100% 88% at 124% 50%,
+    rgba(31, 14, 20, 0.52),
+    rgba(31, 14, 20, 0.18) 48%,
+    transparent 80%
+  );
+  box-shadow: inset -18px 0 24px -22px rgba(31, 14, 20, 0.72);
+}
+
+.tv-library-grid-panel.is-cover-flow.can-scroll-left::before,
+.tv-library-grid-panel.is-cover-flow.can-scroll-right::after {
+  opacity: 0.62;
+}
+
+:root[data-theme="dark"] .tv-library-grid-panel.is-cover-flow.can-scroll-left::before,
+:root[data-theme="dark"] .tv-library-grid-panel.is-cover-flow.can-scroll-right::after {
+  opacity: 0.54;
+}
+
 .tv-title-grid {
   flex: 1 1 auto;
   min-height: 0;
@@ -4732,6 +4806,139 @@ code {
 
 .tv-library-grid-panel.is-cover .tv-title-card-copy small {
   display: none;
+}
+
+.tv-library-grid-panel.is-cover-flow {
+  --cover-flow-card-width: clamp(190px, 16vw, 290px);
+}
+
+.tv-library-grid-panel.is-cover-flow.artwork-small {
+  --cover-flow-card-width: clamp(150px, 12.5vw, 225px);
+}
+
+.tv-library-grid-panel.is-cover-flow.artwork-large {
+  --cover-flow-card-width: clamp(235px, 19vw, 350px);
+}
+
+.tv-library-grid-panel.is-cover-flow .tv-title-grid {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-padding-inline: calc(50% - var(--cover-flow-card-width) / 2);
+}
+
+.tv-library-grid-panel.is-cover-flow .tv-title-grid-content {
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding:
+    var(--library-rail-top)
+    max(
+      var(--library-rail-right),
+      calc(50% - var(--cover-flow-card-width) / 2)
+    )
+    var(--library-rail-bottom)
+    max(
+      var(--library-rail-left),
+      calc(50% - var(--cover-flow-card-width) / 2)
+    );
+  perspective: 1200px;
+  transform-style: preserve-3d;
+}
+
+.tv-library-grid-panel.is-cover-flow .tv-title-card {
+  position: relative;
+  z-index: 4;
+  width: var(--cover-flow-card-width);
+  flex: 0 0 var(--cover-flow-card-width);
+  margin-inline: calc(var(--cover-flow-card-width) * -0.13);
+  opacity: 1;
+  filter: brightness(0.78) saturate(0.82);
+  transform: perspective(1000px) rotateY(58deg) translateX(18%) scale(0.79);
+  transform-origin: 100% 50%;
+  transition:
+    filter 360ms ease,
+    transform 440ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+.tv-library-grid-panel.is-cover-flow .tv-title-card.is-after {
+  transform: perspective(1000px) rotateY(-58deg) translateX(-18%) scale(0.79);
+  transform-origin: 0 50%;
+}
+
+.tv-library-grid-panel.is-cover-flow .tv-title-card.cover-flow-offset-1 {
+  z-index: 16;
+  filter: brightness(0.88) saturate(0.92);
+  transform: perspective(1000px) rotateY(48deg) translateX(12%) scale(0.88);
+}
+
+.tv-library-grid-panel.is-cover-flow .tv-title-card.cover-flow-offset-1.is-after {
+  transform: perspective(1000px) rotateY(-48deg) translateX(-12%) scale(0.88);
+}
+
+.tv-library-grid-panel.is-cover-flow .tv-title-card.cover-flow-offset-2 {
+  z-index: 12;
+  transform: perspective(1000px) rotateY(54deg) translateX(15%) scale(0.83);
+}
+
+.tv-library-grid-panel.is-cover-flow .tv-title-card.cover-flow-offset-2.is-after {
+  transform: perspective(1000px) rotateY(-54deg) translateX(-15%) scale(0.83);
+}
+
+.tv-library-grid-panel.is-cover-flow .tv-title-card.cover-flow-offset-3 {
+  z-index: 8;
+}
+
+.tv-library-grid-panel.is-cover-flow .tv-title-card.is-selected,
+.tv-library-grid-panel.is-cover-flow .tv-title-card.is-selected:hover,
+.tv-library-grid-panel.is-cover-flow .tv-title-card.is-selected:focus-visible,
+.tv-library-grid-panel.is-cover-flow .tv-title-grid:focus-within .tv-title-card.is-selected {
+  z-index: 24;
+  opacity: 1;
+  filter: none;
+  transform: perspective(1000px) rotateY(0) translateX(0) scale(1);
+  transform-origin: 50% 50%;
+}
+
+.tv-library-grid-panel.is-cover-flow .tv-title-card-art {
+  aspect-ratio: 2 / 3;
+  overflow: visible;
+  border-radius: clamp(8px, 0.65vw, 13px);
+  background: var(--surface-soft);
+  box-shadow: 0 24px 54px rgba(31, 14, 20, 0.26);
+  -webkit-box-reflect: below 8px
+    linear-gradient(transparent 58%, rgba(255, 255, 255, 0.16));
+}
+
+.tv-library-grid-panel.is-cover-flow .tv-title-card-art img,
+.tv-library-grid-panel.is-cover-flow
+  .tv-title-card-art
+  > span:not(.tv-watch-progress):not(.tv-watch-unseen) {
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.tv-library-grid-panel.is-cover-flow .tv-title-card-copy {
+  display: none;
+}
+
+.tv-library-grid-panel.is-cover-flow .tv-title-card.is-selected .tv-title-card-copy {
+  display: grid;
+  padding-top: clamp(42px, 5.5vh, 72px);
+  text-align: center;
+}
+
+.tv-library-grid-panel.is-cover-flow .tv-title-card-copy strong {
+  font-size: clamp(0.68rem, 0.8vw, 1.05rem);
+}
+
+.tv-library-grid-panel.is-cover-flow .tv-grid-sentinel {
+  width: 90px;
+  min-width: 90px;
+  align-self: stretch;
 }
 
 .tv-library-grid-panel.is-list .tv-title-grid-content {

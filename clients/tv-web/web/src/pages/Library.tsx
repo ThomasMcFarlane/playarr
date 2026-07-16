@@ -13,7 +13,10 @@ import {
 import { useMediaContextMenu } from "../components/MediaContextMenu";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { CachedArtworkImage } from "../lib/artwork";
-import { useNavigationLayer } from "../lib/navigationLayer";
+import {
+  isNavigationLayerRestoring,
+  useNavigationLayer,
+} from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useScrollEdges } from "../lib/useScrollEdges";
 import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
@@ -58,14 +61,16 @@ function afterTwoFrames(): Promise<void> {
 }
 
 type LibraryKind = Extract<WorkKind, "movie" | "series" | "site" | "artist">;
-type LibraryView = "list" | "screen" | "cover";
+type LibraryView = "list" | "screen" | "cover" | "cover-flow";
 type ArtworkSize = "small" | "medium" | "large";
 type LibrarySort = "title" | "date_added";
 type SortOrder = "asc" | "desc";
 
 function storedView(kind: LibraryKind): LibraryView {
   const value = window.localStorage.getItem(`playarr.libraryView.${kind}`);
-  return value === "list" || value === "cover" ? value : "screen";
+  return value === "list" || value === "cover" || value === "cover-flow"
+    ? value
+    : "screen";
 }
 
 function storedArtworkSize(kind: LibraryKind): ArtworkSize {
@@ -145,7 +150,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const loadedKindRef = useRef(kind);
   const scrollEdges = useScrollEdges(
     gridRef,
-    "vertical",
+    view === "cover-flow" ? "horizontal" : "vertical",
     `${kind}:${view}:${artworkSize}:${items?.length ?? 0}`
   );
 
@@ -262,13 +267,34 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     if (!grid) return;
 
     const gridRect = grid.getBoundingClientRect();
+    if (view === "cover-flow") {
+      const trackingLine = gridRect.left + gridRect.width / 2;
+      const closestCard = Array.from(
+        grid.querySelectorAll<HTMLElement>(".tv-title-card")
+      )
+        .filter((card) => {
+          const rect = card.getBoundingClientRect();
+          return rect.right > gridRect.left && rect.left < gridRect.right;
+        })
+        .sort((a, b) => {
+          const aRect = a.getBoundingClientRect();
+          const bRect = b.getBoundingClientRect();
+          const aDistance = Math.abs(aRect.left + aRect.width / 2 - trackingLine);
+          const bDistance = Math.abs(bRect.left + bRect.width / 2 - trackingLine);
+          return aDistance - bDistance;
+        })[0];
+      const visibleLetter = closestCard?.dataset.libraryLetter;
+      if (visibleLetter) setActiveLetter(visibleLetter);
+      return;
+    }
+
     const trackingLine = gridRect.top + Math.min(64, grid.clientHeight * 0.1);
     const firstVisibleCard = Array.from(
       grid.querySelectorAll<HTMLElement>(".tv-title-card")
     ).find((card) => card.getBoundingClientRect().bottom > trackingLine);
     const visibleLetter = firstVisibleCard?.dataset.libraryLetter;
     if (visibleLetter) setActiveLetter(visibleLetter);
-  }, []);
+  }, [view]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(updateActiveLetter);
@@ -341,11 +367,16 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
           void appendNextPage().catch(() => undefined);
         }
       },
-      { root: grid, rootMargin: "0px 0px 800px 0px", threshold: 0 }
+      {
+        root: grid,
+        rootMargin:
+          view === "cover-flow" ? "0px 800px 0px 0px" : "0px 0px 800px 0px",
+        threshold: 0,
+      }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [appendNextPage, hasMore]);
+  }, [appendNextPage, hasMore, view]);
 
   const selected = useMemo(
     () => items?.find((work) => work.id === selectedId) ?? items?.[0] ?? null,
@@ -462,6 +493,10 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   }
 
   const alphabet = order === "desc" ? [...ALPHABET].reverse() : [...ALPHABET];
+  const selectedIndex = Math.max(
+    0,
+    items.findIndex((item) => item.id === selected.id)
+  );
 
   return (
     <TvStageShell
@@ -501,8 +536,18 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
 
       <TvRailSurface
         className={`tv-rail-panel tv-library-grid-panel is-${view} artwork-${artworkSize}${
-          scrollEdges.start ? " can-scroll-up" : ""
-        }${scrollEdges.end ? " can-scroll-down" : ""}`}
+          scrollEdges.start
+            ? view === "cover-flow"
+              ? " can-scroll-left"
+              : " can-scroll-up"
+            : ""
+        }${
+          scrollEdges.end
+            ? view === "cover-flow"
+              ? " can-scroll-right"
+              : " can-scroll-down"
+            : ""
+        }`}
         mode="content"
         ariaLabel={`${plural} ${collectionNoun}`}
       >
@@ -516,34 +561,60 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
           ref={gridRef}
           onScroll={updateActiveLetter}
           data-tv-scroll-container
-          data-tv-scroll-axis="vertical"
+          data-tv-scroll-axis={view === "cover-flow" ? "horizontal" : "vertical"}
           data-navigation-scroll-key={`library:${kind}:grid`}
           aria-busy={refreshing}
         >
           <div className="tv-title-grid-content">
             {items.map((work, index) => {
               const imageKinds =
-                view === "cover"
+                view === "cover" || view === "cover-flow"
                   ? (["poster", "backdrop"] as const)
                   : (["backdrop", "poster"] as const);
               const letter = workLetter(work);
               const isFirstForLetter = index === 0 || workLetter(items[index - 1]!) !== letter;
               const isSelected = work.id === selected.id;
+              const coverFlowOffset =
+                view === "cover-flow"
+                  ? Math.max(-4, Math.min(4, index - selectedIndex))
+                  : 0;
 
               return (
                 <Link
                   key={work.id}
                   to={`${routeBase}/${work.id}`}
                   state={{ backTo: routeBase, navigationOrigin: navigationLayer.origin }}
-                  className={`tv-title-card${isSelected ? " is-selected" : ""}`}
+                  className={`tv-title-card${isSelected ? " is-selected" : ""}${
+                    view === "cover-flow"
+                      ? ` cover-flow-offset-${Math.abs(coverFlowOffset)}${
+                          coverFlowOffset < 0
+                            ? " is-before"
+                            : coverFlowOffset > 0
+                              ? " is-after"
+                              : ""
+                        }`
+                      : ""
+                  }`}
                   ref={(element) => {
                     if (isFirstForLetter) {
                       if (element) letterRefs.current.set(letter, element);
                       else letterRefs.current.delete(letter);
                     }
                   }}
-                  onFocus={() => {
+                  onFocus={(event) => {
                     setSelectedId(work.id);
+                    if (view === "cover-flow" && !isNavigationLayerRestoring()) {
+                      const card = event.currentTarget;
+                      const grid = gridRef.current;
+                      if (grid) {
+                        const targetLeft =
+                          card.offsetLeft + card.offsetWidth / 2 - grid.clientWidth / 2;
+                        grid.scrollTo({
+                          left: Math.max(0, targetLeft),
+                          behavior: "smooth",
+                        });
+                      }
+                    }
                     if (index >= items.length - 12 && hasMore) {
                       void appendNextPage().catch(() => undefined);
                     }
@@ -640,7 +711,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
           <section>
             <h3>View</h3>
             <div className="tv-filter-choice-grid tv-filter-view-options">
-              {(["list", "screen", "cover"] as LibraryView[]).map((option) => (
+              {(["list", "screen", "cover", "cover-flow"] as LibraryView[]).map((option) => (
                 <button
                   key={option}
                   type="button"
@@ -653,7 +724,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                     <i />
                     <i />
                   </span>
-                  <strong>{option}</strong>
+                  <strong>{option === "cover-flow" ? "Cover Flow" : option}</strong>
                 </button>
               ))}
             </div>

@@ -29,6 +29,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   episodic watch-progress handling.
 - Add a dedicated music playback visual with album artwork, track metadata, responsive audio
   visualisation, and track-aware queue labels.
+- Add a cover-flow library view with horizontal loading, centred remote focus, reflected artwork,
+  scroll-edge cues, and clearer alphabet focus states.
 
 ### Changed
 
