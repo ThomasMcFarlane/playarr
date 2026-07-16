@@ -16,32 +16,16 @@ export function UpdateToast({ state }: UpdateToastProps) {
   if (!state.updateAvailable) return null;
 
   return (
-    <div
-      role="status"
-      className="card"
-      style={{
-        position: "fixed",
-        bottom: "1.5rem",
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 1000,
-        display: "flex",
-        alignItems: "center",
-        gap: "0.75rem",
-        padding: "0.75rem 1rem",
-        boxShadow: "0 4px 16px rgba(0, 0, 0, 0.4)",
-      }}
-    >
-      <span>A new version of Streamarr is available.</span>
+    <div role="status" className="update-toast">
+      <span>A new version of Playarr is available.</span>
       <button type="button" className="btn btn-primary btn-sm" onClick={state.reloadNow}>
         Reload
       </button>
       <button
         type="button"
-        className="btn btn-ghost"
+        className="update-toast-dismiss"
         onClick={state.dismiss}
         aria-label="Dismiss"
-        style={{ fontSize: "1rem", padding: "0 0.25rem" }}
       >
         &times;
       </button>

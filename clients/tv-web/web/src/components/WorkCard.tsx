@@ -1,31 +1,40 @@
 import { Link } from "react-router-dom";
-import type { Availability, Work } from "@streamarr-tv/api-client";
-import { pickImage } from "../lib/images";
+import type { Work } from "@streamarr-tv/api-client";
+import { CachedArtworkImage } from "../lib/artwork";
+import { useMediaContextMenu } from "./MediaContextMenu";
 
 /** Poster tile for a `Work`, shared by Home's "recently added" shelf and the full Library grid. */
 export function WorkCard({ work }: { work: Work }) {
-  const posterUrl = pickImage(work.images, "poster");
-
+  const routeBase =
+    work.kind === "series"
+      ? "/series"
+      : work.kind === "site"
+        ? "/sites"
+        : "/movies";
+  const mediaContext = useMediaContextMenu();
   return (
     <li className="poster-card">
-      <Link to={`/library/${work.id}`}>
+      <Link
+        to={`${routeBase}/${work.id}`}
+        {...mediaContext.itemProps({
+          work,
+          detailRoute: `${routeBase}/${work.id}`,
+          parentRoute: routeBase,
+        })}
+      >
         <div className="poster-art">
-          {posterUrl ? (
-            <img src={posterUrl} alt="" loading="lazy" />
-          ) : (
-            <div className="poster-placeholder">{work.title}</div>
-          )}
+          <CachedArtworkImage
+            work={work}
+            kinds={["poster"]}
+            alt=""
+            loading="lazy"
+            fallback={<div className="poster-placeholder">{work.title}</div>}
+          />
         </div>
         <span className="poster-title">{work.title}</span>
-        <span className="poster-meta">
-          {work.kind}
-          {work.availability !== "available" ? ` · ${availabilityBadgeLabel(work.availability)}` : ""}
-        </span>
+        <span className="poster-meta">{work.kind}</span>
       </Link>
+      {mediaContext.contextMenu}
     </li>
   );
-}
-
-function availabilityBadgeLabel(availability: Availability): string {
-  return availability.replace(/_/g, " ");
 }

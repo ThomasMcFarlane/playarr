@@ -18,6 +18,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Add Whisparr source support and persisted, administrator-managed Tdarr connection settings.
 - Add a dedicated Streamarr administrator web application for source instances, users, library
   browsing, saved views, playlists, tasks, playback activity, and Tdarr configuration.
+- Redesign Playarr Web with light and dark themes, TV-friendly navigation, profiles, search,
+  playlists, saved-view shelves, infinite catalogue browsing, media actions, and richer detail
+  pages for video, episodic, music, and site content.
+- Add reusable web, Shaka, and Samsung AVPlay playback surfaces with quality, audio, subtitle,
+  chapter, progress, retry, minimised-player, and remote-control support.
 
 ### Changed
 
@@ -31,6 +36,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   visual language.
 - Resolve remote media paths through configurable local mount roots and treat live transcode
   expiry as an idle timeout that advances while playback remains active.
+- Separate the consumer Playarr experience from the Streamarr administrator application and remove
+  the obsolete in-client administration screen.
 
 ### Fixed
 

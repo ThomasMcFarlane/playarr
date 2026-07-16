@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ApiError, type VersionEnvelope } from "@streamarr-tv/api-client";
 import { DEFAULT_API_BASE_URL } from "@streamarr-tv/domain";
-import { useApiBaseUrl, useApiClient } from "../lib/ApiClientProvider";
+import { useApiBaseUrl, useApiClient, useAuth } from "../lib/ApiClientProvider";
+import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { useTheme, type ThemePreference } from "../lib/theme";
 
 /** Restores the actual default (this page's own origin -- see `ApiClientProvider.tsx`) when the field is cleared. */
 function defaultApiBaseUrl(): string {
@@ -14,6 +17,41 @@ type ConnectionTestState =
   | { status: "success"; version: VersionEnvelope }
   | { status: "error"; message: string };
 
+const AUDIO_LANGUAGE_OPTIONS = [
+  { value: "en", label: "English" },
+  { value: "es", label: "Spanish" },
+  { value: "fr", label: "French" },
+  { value: "de", label: "German" },
+  { value: "it", label: "Italian" },
+  { value: "pt", label: "Portuguese" },
+  { value: "ja", label: "Japanese" },
+  { value: "ko", label: "Korean" },
+  { value: "zh", label: "Chinese" },
+  { value: "hi", label: "Hindi" },
+  { value: "ar", label: "Arabic" },
+  { value: "th", label: "Thai" },
+] as const;
+
+type AudioLanguage = (typeof AUDIO_LANGUAGE_OPTIONS)[number]["value"];
+
+type PlayerPreferenceState =
+  | { status: "loading" }
+  | { status: "ready" }
+  | { status: "saving" }
+  | { status: "saved" }
+  | { status: "error"; message: string };
+
+type ProfilePinState =
+  | { status: "loading" }
+  | { status: "ready" }
+  | { status: "saving" }
+  | { status: "saved" }
+  | { status: "error"; message: string };
+
+function isAudioLanguage(value: string): value is AudioLanguage {
+  return AUDIO_LANGUAGE_OPTIONS.some((option) => option.value === value);
+}
+
 /**
  * Base API URL configuration (task: "make the base URL configurable"), plus
  * a "Test connection" button that calls the real `GET /api/system/version`
@@ -21,10 +59,78 @@ type ConnectionTestState =
  * compatible Streamarr instance before relying on it elsewhere in the app.
  */
 export function SettingsPage() {
+  useDocumentTitle("Settings");
   const [apiBaseUrl, setApiBaseUrl] = useApiBaseUrl();
   const client = useApiClient();
+  const { currentUserName, logout } = useAuth();
+  const navigate = useNavigate();
+  const { preference, setPreference } = useTheme();
   const [draft, setDraft] = useState(apiBaseUrl);
   const [testState, setTestState] = useState<ConnectionTestState>({ status: "idle" });
+  const [audioLanguage, setAudioLanguage] = useState<AudioLanguage>("en");
+  const [playerPreferenceState, setPlayerPreferenceState] = useState<PlayerPreferenceState>({
+    status: "loading",
+  });
+  const playerPreferenceRequestRef = useRef(0);
+  const [profilePin, setProfilePin] = useState("");
+  const [profilePinLocked, setProfilePinLocked] = useState(false);
+  const [profilePinState, setProfilePinState] = useState<ProfilePinState>({
+    status: "loading",
+  });
+  const profilePinRequestRef = useRef(0);
+
+  useEffect(() => {
+    const requestId = ++playerPreferenceRequestRef.current;
+    setPlayerPreferenceState({ status: "loading" });
+
+    void client
+      .getPlayerPreferences()
+      .then((preferences) => {
+        if (playerPreferenceRequestRef.current !== requestId) return;
+        const language = preferences.preferred_audio_language;
+        setAudioLanguage(isAudioLanguage(language) ? language : "en");
+        setPlayerPreferenceState({ status: "ready" });
+      })
+      .catch((error) => {
+        if (playerPreferenceRequestRef.current !== requestId) return;
+        const message = error instanceof ApiError ? error.message : String(error);
+        setPlayerPreferenceState({ status: "error", message });
+      });
+
+    return () => {
+      if (playerPreferenceRequestRef.current === requestId) {
+        playerPreferenceRequestRef.current += 1;
+      }
+    };
+  }, [client]);
+
+  useEffect(() => {
+    const requestId = ++profilePinRequestRef.current;
+    setProfilePinState({ status: "loading" });
+    void client
+      .getProfilePinSetting()
+      .then((setting) => {
+        if (profilePinRequestRef.current !== requestId) return;
+        setProfilePinLocked(setting.pin_locked);
+        setProfilePinState({ status: "ready" });
+      })
+      .catch((error) => {
+        if (profilePinRequestRef.current !== requestId) return;
+        const message = error instanceof ApiError ? error.message : String(error);
+        setProfilePinState({ status: "error", message });
+      });
+
+    return () => {
+      if (profilePinRequestRef.current === requestId) {
+        profilePinRequestRef.current += 1;
+      }
+    };
+  }, [client]);
+
+  function handleSignOut() {
+    logout();
+    navigate("/login", { replace: true });
+  }
 
   function handleSave(event: React.FormEvent) {
     event.preventDefault();
@@ -45,66 +151,303 @@ export function SettingsPage() {
     }
   }
 
+  async function handleAudioLanguageChange(nextLanguage: AudioLanguage) {
+    if (
+      nextLanguage === audioLanguage ||
+      playerPreferenceState.status === "loading" ||
+      playerPreferenceState.status === "saving"
+    ) {
+      return;
+    }
+
+    const previousLanguage = audioLanguage;
+    const requestId = ++playerPreferenceRequestRef.current;
+    setAudioLanguage(nextLanguage);
+    setPlayerPreferenceState({ status: "saving" });
+
+    try {
+      const preferences = await client.updatePlayerPreferences({
+        preferred_audio_language: nextLanguage,
+      });
+      if (playerPreferenceRequestRef.current !== requestId) return;
+      const savedLanguage = preferences.preferred_audio_language;
+      setAudioLanguage(isAudioLanguage(savedLanguage) ? savedLanguage : nextLanguage);
+      setPlayerPreferenceState({ status: "saved" });
+    } catch (error) {
+      if (playerPreferenceRequestRef.current !== requestId) return;
+      setAudioLanguage(previousLanguage);
+      const message = error instanceof ApiError ? error.message : String(error);
+      setPlayerPreferenceState({ status: "error", message });
+    }
+  }
+
+  async function handleProfilePinSave(event: React.FormEvent) {
+    event.preventDefault();
+    if (profilePinState.status === "saving") return;
+    if (!/^\d{4}$/.test(profilePin)) {
+      setProfilePinState({ status: "error", message: "Enter exactly four digits." });
+      return;
+    }
+
+    const requestId = ++profilePinRequestRef.current;
+    setProfilePinState({ status: "saving" });
+    try {
+      const setting = await client.updateProfilePinSetting({ pin: profilePin });
+      if (profilePinRequestRef.current !== requestId) return;
+      setProfilePinLocked(setting.pin_locked);
+      setProfilePin("");
+      setProfilePinState({ status: "saved" });
+    } catch (error) {
+      if (profilePinRequestRef.current !== requestId) return;
+      const message = error instanceof ApiError ? error.message : String(error);
+      setProfilePinState({ status: "error", message });
+    }
+  }
+
+  async function handleProfilePinRemove() {
+    if (profilePinState.status === "saving") return;
+    const requestId = ++profilePinRequestRef.current;
+    setProfilePinState({ status: "saving" });
+    try {
+      const setting = await client.updateProfilePinSetting({ pin: null });
+      if (profilePinRequestRef.current !== requestId) return;
+      setProfilePinLocked(setting.pin_locked);
+      setProfilePin("");
+      setProfilePinState({ status: "saved" });
+    } catch (error) {
+      if (profilePinRequestRef.current !== requestId) return;
+      const message = error instanceof ApiError ? error.message : String(error);
+      setProfilePinState({ status: "error", message });
+    }
+  }
+
+  const selectedAudioLanguage =
+    AUDIO_LANGUAGE_OPTIONS.find((option) => option.value === audioLanguage)?.label ?? "English";
+
   return (
-    <div className="page">
-      <h1 className="page-title">Settings</h1>
-
-      <div className="card" style={{ maxWidth: 560 }}>
-        <h2 className="section-title">Server connection</h2>
-        <p className="muted" style={{ marginBottom: "1rem" }}>
-          This app is normally served by your Streamarr instance itself, so it talks to that same
-          server by default -- nothing to configure. Only change this if you're running the web app
-          separately from the API (a split reverse-proxy setup, or pointing a local dev build at a
-          different instance).
-        </p>
-
-        <form onSubmit={handleSave} style={{ display: "flex", gap: "0.5rem" }}>
-          <label htmlFor="api-base-url" style={{ display: "none" }}>
-            API base URL
-          </label>
-          <input
-            id="api-base-url"
-            type="text"
-            className="input"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder={defaultApiBaseUrl()}
-            style={{ flex: 1 }}
-          />
-          <button type="submit" className="btn btn-primary">
-            Save
-          </button>
-        </form>
-
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          onClick={() => void handleTestConnection()}
-          disabled={testState.status === "testing"}
-          style={{ marginTop: "0.75rem" }}
-        >
-          {testState.status === "testing" ? "Testing..." : "Test connection"}
-        </button>
-
-        {testState.status === "success" && (
-          <p className="success-text" style={{ marginTop: "0.5rem" }}>
-            Connected -- server {testState.version.server_version} (API {testState.version.api_version}).
-          </p>
-        )}
-        {testState.status === "error" && (
-          <p className="error-text" style={{ marginTop: "0.5rem" }}>
-            Could not connect ({testState.message}).
-          </p>
-        )}
+    <div className="page settings-page">
+      <div className="page-intro">
+        <p className="page-kicker">Make it yours</p>
+        <h1 className="page-title">Preferences</h1>
+        <p className="page-description">Choose how Playarr looks and where it connects.</p>
       </div>
 
-      <p className="hint" style={{ marginTop: "1.5rem", maxWidth: 560 }}>
-        The TV apps (webOS, Tizen, VIDAA) have no keyboard to type a URL into: they resolve theirs from
-        a <code>?apiBaseUrl=...</code> launch query param or an operator-editable{" "}
-        <code>streamarr-config.json</code> file shipped alongside the app bundle, falling back to{" "}
-        <code>{DEFAULT_API_BASE_URL}</code>. See each TV app's README for details. Linked-device
-        management for TV pairing lives on each TV itself (see the pairing screen shown before Browse).
-      </p>
+      <div className="settings-grid">
+        <section className="card settings-card">
+          <div className="settings-card-heading">
+            <span className="settings-card-number">01</span>
+            <div>
+              <h2 className="section-title">Appearance</h2>
+              <p className="muted">Follow this device or keep a theme fixed.</p>
+            </div>
+          </div>
+          <div className="theme-choice" role="group" aria-label="Colour theme">
+            {(["system", "light", "dark"] as ThemePreference[]).map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={`theme-choice-button${preference === option ? " is-active" : ""}`}
+                onClick={() => setPreference(option)}
+                aria-pressed={preference === option}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="card settings-card">
+          <div className="settings-card-heading">
+            <span className="settings-card-number">02</span>
+            <div>
+              <h2 className="section-title">Player</h2>
+              <p className="muted">Choose the audio language Playarr should prioritise.</p>
+            </div>
+          </div>
+
+          <div
+            className="player-language-choice"
+            role="radiogroup"
+            aria-label="Preferred audio language"
+            aria-busy={
+              playerPreferenceState.status === "loading" ||
+              playerPreferenceState.status === "saving"
+            }
+          >
+            {AUDIO_LANGUAGE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                className={`player-language-button${
+                  audioLanguage === option.value ? " is-active" : ""
+                }`}
+                aria-checked={audioLanguage === option.value}
+                onClick={() => void handleAudioLanguageChange(option.value)}
+              >
+                <span>{option.label}</span>
+                <small>{option.value}</small>
+              </button>
+            ))}
+          </div>
+
+          <p
+            className={`player-preference-status${
+              playerPreferenceState.status === "error" ? " is-error" : ""
+            }`}
+            aria-live="polite"
+          >
+            {playerPreferenceState.status === "loading"
+              ? "Loading your player preference…"
+              : playerPreferenceState.status === "saving"
+                ? `Saving ${selectedAudioLanguage}…`
+                : playerPreferenceState.status === "error"
+                  ? `Could not update the player preference (${playerPreferenceState.message}).`
+                  : `${selectedAudioLanguage} will be selected when it is available.`}
+          </p>
+        </section>
+
+        <section className="card settings-card settings-card-wide">
+          <div className="settings-card-heading">
+            <span className="settings-card-number">03</span>
+            <div>
+              <h2 className="section-title">Server connection</h2>
+              <p className="muted">
+                Playarr normally uses the Streamarr server that delivered this page.
+              </p>
+            </div>
+          </div>
+
+          <form onSubmit={handleSave} className="connection-form">
+            <label className="form-label" htmlFor="api-base-url">
+              API base URL
+            </label>
+            <div className="connection-form-row">
+              <input
+                id="api-base-url"
+                type="text"
+                className={`input${testState.status === "error" ? " is-error" : ""}`}
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder={defaultApiBaseUrl()}
+              />
+              <button type="submit" className="btn btn-primary">
+                Save
+              </button>
+            </div>
+          </form>
+
+          <div className="connection-actions">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => void handleTestConnection()}
+              disabled={testState.status === "testing"}
+            >
+              {testState.status === "testing" ? "Testing…" : "Test connection"}
+            </button>
+
+            {testState.status === "success" && (
+              <p className="success-text">
+                Connected — server {testState.version.server_version} (API {testState.version.api_version}).
+              </p>
+            )}
+            {testState.status === "error" && (
+              <p className="error-text">Could not connect ({testState.message}).</p>
+            )}
+          </div>
+
+          <details className="settings-details">
+            <summary>TV app connection details</summary>
+            <p className="hint">
+              TV apps resolve their server from an <code>?apiBaseUrl=...</code> launch query or an
+              operator-editable <code>streamarr-config.json</code>, falling back to{" "}
+              <code>{DEFAULT_API_BASE_URL}</code>.
+            </p>
+          </details>
+        </section>
+
+        <section className="card settings-card">
+          <div className="settings-card-heading">
+            <span className="settings-card-number">04</span>
+            <div>
+              <h2 className="section-title">Profile lock</h2>
+              <p className="muted">
+                Require a four-digit PIN before switching to {currentUserName ?? "this profile"}.
+              </p>
+            </div>
+          </div>
+
+          <form className="profile-pin-settings" onSubmit={(event) => void handleProfilePinSave(event)}>
+            <label className="form-label" htmlFor="profile-lock-pin">
+              {profilePinLocked ? "Replace PIN" : "New PIN"}
+            </label>
+            <div className="connection-form-row">
+              <input
+                id="profile-lock-pin"
+                type="password"
+                className={`input${profilePinState.status === "error" ? " is-error" : ""}`}
+                inputMode="numeric"
+                autoComplete="new-password"
+                maxLength={4}
+                pattern="[0-9]{4}"
+                placeholder="••••"
+                value={profilePin}
+                disabled={profilePinState.status === "loading" || profilePinState.status === "saving"}
+                onChange={(event) => setProfilePin(event.target.value.replace(/\D/g, "").slice(0, 4))}
+              />
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={
+                  profilePin.length !== 4 ||
+                  profilePinState.status === "loading" ||
+                  profilePinState.status === "saving"
+                }
+              >
+                {profilePinState.status === "saving" ? "Saving…" : profilePinLocked ? "Replace" : "Set PIN"}
+              </button>
+            </div>
+          </form>
+
+          <div className="profile-pin-settings-status" aria-live="polite">
+            <p className={profilePinState.status === "error" ? "error-text" : "muted"}>
+              {profilePinState.status === "loading"
+                ? "Loading profile lock…"
+                : profilePinState.status === "saving"
+                  ? "Updating profile lock…"
+                  : profilePinState.status === "error"
+                    ? profilePinState.message
+                    : profilePinLocked
+                      ? "PIN lock is on."
+                      : "PIN lock is off."}
+            </p>
+            {profilePinLocked ? (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                disabled={profilePinState.status === "saving"}
+                onClick={() => void handleProfilePinRemove()}
+              >
+                Remove PIN
+              </button>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="card settings-card">
+          <div className="settings-card-heading">
+            <span className="settings-card-number">05</span>
+            <div>
+              <h2 className="section-title">Account</h2>
+              <p className="muted">End this browser session and return to sign in.</p>
+            </div>
+          </div>
+          <button type="button" className="btn btn-danger" onClick={handleSignOut}>
+            Sign out
+          </button>
+        </section>
+      </div>
     </div>
   );
 }

@@ -1,83 +1,434 @@
-import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
-import { usePlaybackInfo } from "@streamarr-tv/api-client/react";
-import { ShakaPlaybackEngine } from "@streamarr-tv/player-shaka";
-import type { PlaybackEngineState } from "@streamarr-tv/player-core";
-import { useApiClient } from "../lib/ApiClientProvider";
-import { WEB_PLAYBACK_CAPABILITIES } from "../lib/playbackCapabilities";
+import { useCallback, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  usePlaybackEngine,
+  type PlaybackLaunchSettings,
+} from "../lib/usePlaybackEngine";
+import { useDocumentTitle } from "../lib/useDocumentTitle";
+import {
+  navigationOriginFromState,
+  type NavigationOrigin,
+} from "../lib/navigationLayer";
+import {
+  PlayerBackButton,
+  PlayerSurface,
+  type PlayerPlaylistItem,
+} from "../components/player/PlayerSurface";
+import {
+  ErrorIcon,
+  LockIcon,
+  MaximiseIcon,
+  SpinnerIcon,
+} from "../components/player/PlayerIcons";
+
+export interface PlayerLocationState {
+  /** Set by `WorkDetailPage`'s Play link so the tab shows the real title instead of a generic one. */
+  title?: string;
+  /** Exact app detail route that launched playback. */
+  backTo?: string;
+  /** The detail page's own parent, restored when playback returns to it. */
+  detailParentBackTo?: string;
+  /** Optional explicit chapter offset; takes precedence over saved resume progress. */
+  startPositionSeconds?: number;
+  /** Episode selection restored when playback returns to series details. */
+  episodeId?: string;
+  /** Exact playable leaf restored when playback returns to series details. */
+  mediaFileId?: string;
+  /** Ordered playback context used by the player's playlist and previous/next controls. */
+  playlistItems?: PlayerPlaylistItem[];
+  /** Immediate history layer that launched this player route. */
+  navigationOrigin?: NavigationOrigin;
+  /** The detail route's own Home/Library origin, used only by fallback navigation. */
+  detailNavigationOrigin?: NavigationOrigin | null;
+  /** Movie-specific quality/track choices resolved before playback starts. */
+  playbackSettings?: PlaybackLaunchSettings | null;
+}
+
+function isDetailRoute(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    (/^\/(?:movies|series|music)\/[^/?]+$/.test(value) ||
+      /^\/search\/[^/?]+(?:\?.*)?$/.test(value))
+  );
+}
+
+function isDetailParentRoute(value: unknown): value is string {
+  return (
+    value === "/" ||
+    value === "/movies" ||
+    value === "/series" ||
+    value === "/music" ||
+    (typeof value === "string" && /^\/search(?:\?.*)?$/.test(value))
+  );
+}
+
+function isPlayerPlaylistItem(value: unknown): value is PlayerPlaylistItem {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  return (
+    typeof item.mediaFileId === "string" &&
+    item.mediaFileId.length > 0 &&
+    typeof item.title === "string" &&
+    item.title.length > 0 &&
+    (item.subtitle === undefined || typeof item.subtitle === "string") &&
+    (item.episodeId === undefined || typeof item.episodeId === "string") &&
+    (item.seasonNumber === undefined ||
+      (typeof item.seasonNumber === "number" && Number.isFinite(item.seasonNumber))) &&
+    (item.episodeNumber === undefined ||
+      (typeof item.episodeNumber === "number" && Number.isFinite(item.episodeNumber)))
+  );
+}
+
+function isPlaybackLaunchSettings(value: unknown): value is PlaybackLaunchSettings {
+  if (!value || typeof value !== "object") return false;
+  const settings = value as Record<string, unknown>;
+  return (
+    typeof settings.qualityId === "string" &&
+    (settings.profile === null || typeof settings.profile === "string") &&
+    typeof settings.forceTranscode === "boolean" &&
+    (settings.audioTrackId === null || typeof settings.audioTrackId === "string") &&
+    (settings.audioStreamIndex === null ||
+      (typeof settings.audioStreamIndex === "number" &&
+        Number.isInteger(settings.audioStreamIndex))) &&
+    (settings.subtitleTrackId === null ||
+      typeof settings.subtitleTrackId === "string")
+  );
+}
 
 /**
  * Standalone-web playback surface. Calls the real
- * `GET /api/v1/playback/{media_file_id}` negotiation endpoint, then
- * configures `@streamarr-tv/player-shaka` (the same adapter the
- * webOS/VIDAA TV shells use) with whatever it returns, via the shared
- * `PlaybackEngine` interface from `@streamarr-tv/player-core`.
+ * `GET /api/v1/playback/{media_file_id}` negotiation endpoint via
+ * `usePlaybackEngine`, then either renders a real, specific error state (a
+ * failed negotiation never reaches a `<video>` element at all) or the real
+ * custom player (`PlayerSurface`) once a source is ready.
+ *
+ * `usePlaybackEngine` attaches `@streamarr-tv/player-shaka`'s
+ * `ShakaPlaybackEngine` -- the same adapter the webOS/VIDAA TV shells use,
+ * via the shared `PlaybackEngine` interface from `@streamarr-tv/player-core`
+ * -- rather than a second, web-only playback pipeline, so Playarr Web stays
+ * on the same tested engine as the rest of the Playarr client family.
  *
  * `mediaFileId` is the real, resolved `MediaFile` id from
  * `WorkDetailSchema.media_file_id` -- see `WorkDetail.tsx`, which only
  * links here once that field is non-null.
  */
-export function PlayerPage() {
-  const { mediaFileId } = useParams<{ mediaFileId: string }>();
-  const client = useApiClient();
-  const playbackState = usePlaybackInfo(client, mediaFileId, WEB_PLAYBACK_CAPABILITIES);
-
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const engineRef = useRef<ShakaPlaybackEngine | null>(null);
-  const loadedForUrl = useRef<string | null>(null);
-  const [engineState, setEngineState] = useState<PlaybackEngineState | null>(null);
+export function PlayerPage({
+  mediaFileId,
+  locationState,
+  minimised,
+  onClose,
+  onMaximise,
+}: {
+  mediaFileId: string;
+  locationState: PlayerLocationState | null;
+  minimised: boolean;
+  onClose: () => void;
+  onMaximise: () => void;
+}) {
+  const navigate = useNavigate();
+  const navigationOrigin = navigationOriginFromState(locationState);
+  const title = locationState?.title;
+  const backTo = isDetailRoute(locationState?.backTo) ? locationState.backTo : "/";
+  const detailParentBackTo = isDetailParentRoute(locationState?.detailParentBackTo)
+    ? locationState.detailParentBackTo
+    : undefined;
+  const startPositionSeconds =
+    typeof locationState?.startPositionSeconds === "number" &&
+    Number.isFinite(locationState.startPositionSeconds) &&
+    locationState.startPositionSeconds >= 0
+      ? locationState.startPositionSeconds
+      : undefined;
+  const playbackSettings = isPlaybackLaunchSettings(locationState?.playbackSettings)
+    ? locationState.playbackSettings
+    : null;
+  const playlistItems = useMemo<PlayerPlaylistItem[]>(() => {
+    const items = Array.isArray(locationState?.playlistItems)
+      ? locationState.playlistItems.filter(isPlayerPlaylistItem)
+      : [];
+    if (items.some((item) => item.mediaFileId === mediaFileId)) return items;
+    return mediaFileId
+      ? [
+          {
+            mediaFileId,
+            title: title ?? "Now playing",
+            episodeId: locationState?.episodeId,
+          },
+        ]
+      : [];
+  }, [locationState?.episodeId, locationState?.playlistItems, mediaFileId, title]);
+  const activePlaylistIndex = Math.max(
+    0,
+    playlistItems.findIndex((item) => item.mediaFileId === mediaFileId)
+  );
+  const activePlaylistItem = playlistItems[activePlaylistIndex];
+  useDocumentTitle(title ?? "Now playing", !minimised);
+  const player = usePlaybackEngine(
+    mediaFileId,
+    startPositionSeconds,
+    playbackSettings
+  );
+  const { negotiation, retryNegotiation } = player;
+  const handleBack = useCallback(() => {
+    onClose();
+    if (navigationOrigin) {
+      navigate(-1);
+      return;
+    }
+    navigate(backTo, {
+      replace: true,
+      state: detailParentBackTo
+        ? {
+            backTo: detailParentBackTo,
+            episodeId: activePlaylistItem?.episodeId ?? locationState?.episodeId,
+            mediaFileId: activePlaylistItem?.mediaFileId ?? locationState?.mediaFileId,
+            navigationOrigin: locationState?.detailNavigationOrigin ?? undefined,
+          }
+        : undefined,
+    });
+  }, [
+    activePlaylistItem?.episodeId,
+    activePlaylistItem?.mediaFileId,
+    backTo,
+    detailParentBackTo,
+    locationState?.episodeId,
+    locationState?.detailNavigationOrigin,
+    locationState?.mediaFileId,
+    navigate,
+    navigationOrigin,
+    onClose,
+  ]);
+  const handleMinimise = useCallback(() => {
+    navigate(backTo, {
+      replace: true,
+      state: detailParentBackTo
+        ? {
+            backTo: detailParentBackTo,
+            episodeId: activePlaylistItem?.episodeId ?? locationState?.episodeId,
+            mediaFileId: activePlaylistItem?.mediaFileId ?? locationState?.mediaFileId,
+            navigationOrigin: locationState?.detailNavigationOrigin ?? undefined,
+          }
+        : undefined,
+    });
+  }, [
+    activePlaylistItem?.episodeId,
+    activePlaylistItem?.mediaFileId,
+    backTo,
+    detailParentBackTo,
+    locationState?.detailNavigationOrigin,
+    locationState?.episodeId,
+    locationState?.mediaFileId,
+    navigate,
+  ]);
+  const navigateToPlaylistItem = useCallback(
+    (item: PlayerPlaylistItem) => {
+      navigate(`/player/${item.mediaFileId}`, {
+        replace: true,
+        state: {
+          title: item.subtitle ? `${item.subtitle} · ${item.title}` : item.title,
+          backTo,
+          detailParentBackTo,
+          episodeId: item.episodeId,
+          mediaFileId: item.mediaFileId,
+          playlistItems,
+          navigationOrigin: navigationOrigin ?? undefined,
+          detailNavigationOrigin: locationState?.detailNavigationOrigin,
+          playbackSettings,
+        } satisfies PlayerLocationState,
+      });
+    },
+    [
+      backTo,
+      detailParentBackTo,
+      locationState?.detailNavigationOrigin,
+      navigate,
+      navigationOrigin,
+      playbackSettings,
+      playlistItems,
+    ]
+  );
+  const handleSelectPlaylistItem = useCallback(
+    (index: number) => {
+      const item = playlistItems[index];
+      if (item) navigateToPlaylistItem(item);
+    },
+    [navigateToPlaylistItem, playlistItems]
+  );
+  const handlePrevious = useCallback(() => {
+    const previous = playlistItems[activePlaylistIndex - 1];
+    if (previous) navigateToPlaylistItem(previous);
+  }, [activePlaylistIndex, navigateToPlaylistItem, playlistItems]);
+  const handleNext = useCallback(() => {
+    const next = playlistItems[activePlaylistIndex + 1];
+    if (next) navigateToPlaylistItem(next);
+  }, [activePlaylistIndex, navigateToPlaylistItem, playlistItems]);
 
   useEffect(() => {
-    if (!videoRef.current) return;
-
-    const engine = new ShakaPlaybackEngine();
-    engine.attach(videoRef.current);
-    engineRef.current = engine;
-
-    const unsubscribe = engine.onStateChange(setEngineState);
-
-    return () => {
-      unsubscribe();
-      void engine.destroy();
-      engineRef.current = null;
+    if (minimised) return;
+    const handleBackKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      const isBack =
+        event.key === "Escape" ||
+        event.key === "BrowserBack" ||
+        event.key === "GoBack" ||
+        event.keyCode === 10009 ||
+        event.keyCode === 461;
+      if (!isBack) return;
+      const webkitDocument = document as Document & {
+        webkitFullscreenElement?: Element | null;
+        webkitExitFullscreen?: () => Promise<void> | void;
+      };
+      const fullscreenElement =
+        document.fullscreenElement ?? webkitDocument.webkitFullscreenElement;
+      const video = document.querySelector<HTMLVideoElement>(".player-video") as
+        | (HTMLVideoElement & {
+            webkitDisplayingFullscreen?: boolean;
+            webkitExitFullscreen?: () => void;
+          })
+        | null;
+      if (fullscreenElement || video?.webkitDisplayingFullscreen) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (document.fullscreenElement && document.exitFullscreen) {
+          void document.exitFullscreen();
+        } else if (webkitDocument.webkitFullscreenElement) {
+          void webkitDocument.webkitExitFullscreen?.();
+        } else {
+          video?.webkitExitFullscreen?.();
+        }
+        return;
+      }
+      event.preventDefault();
+      handleBack();
     };
-  }, []);
+    window.addEventListener("keydown", handleBackKey);
+    return () => window.removeEventListener("keydown", handleBackKey);
+  }, [handleBack, minimised]);
 
-  useEffect(() => {
-    if (playbackState.status !== "ready" || !engineRef.current) return;
-    if (loadedForUrl.current === playbackState.data.url) return;
-    loadedForUrl.current = playbackState.data.url;
+  if (negotiation.kind === "loading") {
+    if (minimised) {
+      return (
+        <MinimisedPlayerStatus
+          title={title ?? activePlaylistItem?.title ?? "Now playing"}
+          status="Preparing playback"
+          onMaximise={onMaximise}
+        />
+      );
+    }
+    return (
+      <div className="player-page">
+        <div className="player-shell player-shell-placeholder">
+          <PlayerBackButton onBack={handleBack} />
+          <div className="player-overlay player-overlay-status">
+            <div className="player-status-card" role="status">
+              <SpinnerIcon className="player-spinner" />
+              <p className="player-status-kicker">One moment</p>
+              <p className="player-error-title">Preparing playback</p>
+              <p className="player-error-message">
+                Large files can take a few seconds while a stream is prepared.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-    void engineRef.current
-      .load({
-        url: client.resolveUrl(playbackState.data.url),
-        mimeType: playbackState.data.mode === "hls" ? "application/x-mpegURL" : "video/mp4",
-      })
-      .then(() => engineRef.current?.play());
-  }, [playbackState, client]);
+  if (negotiation.kind === "error") {
+    if (minimised) {
+      return (
+        <MinimisedPlayerStatus
+          title={title ?? activePlaylistItem?.title ?? "Now playing"}
+          status="Playback unavailable"
+          onMaximise={onMaximise}
+        />
+      );
+    }
+    return (
+      <div className="player-page">
+        <div className="player-shell player-shell-placeholder">
+          <PlayerBackButton onBack={handleBack} />
+          <div className="player-overlay player-overlay-status" role="alert" aria-live="assertive">
+            <div className="player-status-card player-status-card-error">
+              {negotiation.forbidden ? (
+                <LockIcon className="player-error-icon" />
+              ) : (
+                <ErrorIcon className="player-error-icon" />
+              )}
+              <p className="player-status-kicker">
+                {negotiation.forbidden ? "Access restricted" : "Playback unavailable"}
+              </p>
+              <p className="player-error-title">
+                {negotiation.forbidden ? "No streaming access" : "Couldn’t start this title"}
+              </p>
+              <p className="player-error-message">{negotiation.message}</p>
+              <div className="player-error-actions">
+                {!negotiation.forbidden && (
+                  <button type="button" className="btn btn-primary" onClick={retryNegotiation}>
+                    Try again
+                  </button>
+                )}
+                <button type="button" className="btn btn-player-secondary" onClick={handleBack}>
+                  Back to details
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="page">
-      <h1 className="page-title">Player</h1>
-
-      {(playbackState.status === "loading" || playbackState.status === "idle") && (
-        <p className="muted">Preparing playback...</p>
-      )}
-      {playbackState.status === "error" && (
-        <p className="error-text">Could not start playback ({playbackState.message}).</p>
-      )}
-      {playbackState.status === "empty" && <p className="muted">No playable source was returned for this title.</p>}
-
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption -- captions not modeled by the backend yet */}
-      <video
-        ref={videoRef}
-        controls
-        style={{ width: "100%", maxWidth: 960, background: "#000", borderRadius: 8 }}
+    <div className={`player-page${minimised ? " is-minimised" : ""}`}>
+      <PlayerSurface
+        player={player}
+        title={title ?? activePlaylistItem?.title ?? "Now playing"}
+        minimised={minimised}
+        onBack={handleBack}
+        onMinimise={handleMinimise}
+        onMaximise={onMaximise}
+        playlistItems={playlistItems}
+        activePlaylistIndex={activePlaylistIndex}
+        onSelectPlaylistItem={handleSelectPlaylistItem}
+        onPrevious={activePlaylistIndex > 0 ? handlePrevious : undefined}
+        onNext={activePlaylistIndex < playlistItems.length - 1 ? handleNext : undefined}
+        detailRoute={backTo}
+        detailParentRoute={detailParentBackTo ?? "/"}
       />
-      <p className="hint" style={{ marginTop: "0.75rem" }}>
-        engine state: {engineState?.state ?? "not initialized"}
-        {engineState?.error ? ` -- ${engineState.error.message}` : ""}
-      </p>
+    </div>
+  );
+}
+
+function MinimisedPlayerStatus({
+  title,
+  status,
+  onMaximise,
+}: {
+  title: string;
+  status: string;
+  onMaximise: () => void;
+}) {
+  return (
+    <div className="player-page is-minimised">
+      <div className="player-shell player-shell-placeholder player-shell-minimised">
+        <button
+          type="button"
+          className="mini-player-hit-target"
+          data-navigation-focus-key="shell:mini-player"
+          onClick={onMaximise}
+          aria-label={`Maximise ${title}`}
+        />
+        <div className="mini-player-details" aria-hidden="true">
+          <span className="mini-player-title">{title}</span>
+          <span className="mini-player-time">{status}</span>
+          <span className="mini-player-track">
+            <span style={{ width: 0 }} />
+          </span>
+        </div>
+        <span className="mini-player-maximise" aria-hidden="true">
+          <MaximiseIcon />
+        </span>
+      </div>
     </div>
   );
 }

@@ -44,6 +44,37 @@ export interface PlaybackError {
   message: string;
   /** Fatal errors mean the engine has entered `"error"` state and requires a fresh `load()`. */
   fatal: boolean;
+  /** HTTP response status when the playback failure came from a network request. */
+  httpStatus?: number;
+  /** Final request URI when the playback failure came from a network request. */
+  requestUri?: string;
+}
+
+export interface PlaybackAudioTrack {
+  id: string;
+  label: string;
+  language?: string;
+  roles: string[];
+  channelsCount?: number;
+  selected: boolean;
+}
+
+export interface PlaybackSubtitleTrack {
+  id: string;
+  label: string;
+  language?: string;
+  roles: string[];
+  forced: boolean;
+  selected: boolean;
+}
+
+export interface ExternalSubtitleTrack {
+  /** Caller-owned stable id, preserved by the playback adapter. */
+  id: string;
+  url: string;
+  label: string;
+  language?: string;
+  forced?: boolean;
 }
 
 export interface PlaybackEngineState {
@@ -54,6 +85,11 @@ export interface PlaybackEngineState {
   /** 0.0 - 1.0 */
   volume: number;
   muted: boolean;
+  audioTracks: PlaybackAudioTrack[];
+  subtitleTracks: PlaybackSubtitleTrack[];
+  selectedAudioTrackId: string | null;
+  /** `null` means subtitles are switched off. */
+  selectedSubtitleTrackId: string | null;
   error?: PlaybackError;
 }
 
@@ -70,6 +106,11 @@ export interface PlaybackEngine {
   seek(positionSeconds: number): Promise<void>;
   setVolume(volume: number): void;
   setMuted(muted: boolean): void;
+  selectAudioTrack(trackId: string): Promise<void>;
+  /** Adds authenticated WebVTT sidecars after the media source has loaded. */
+  addExternalSubtitleTracks(tracks: ExternalSubtitleTrack[]): Promise<void>;
+  /** Pass `null` to switch subtitles off. */
+  selectSubtitleTrack(trackId: string | null): Promise<void>;
   getState(): PlaybackEngineState;
   /** Releases underlying native/DOM resources. The engine instance is unusable after this resolves. */
   destroy(): Promise<void>;
@@ -86,6 +127,10 @@ export abstract class BasePlaybackEngine implements PlaybackEngine {
     bufferedSeconds: 0,
     volume: 1,
     muted: false,
+    audioTracks: [],
+    subtitleTracks: [],
+    selectedAudioTrackId: null,
+    selectedSubtitleTrackId: null,
   };
 
   private readonly listeners = new Set<(state: PlaybackEngineState) => void>();
@@ -96,6 +141,9 @@ export abstract class BasePlaybackEngine implements PlaybackEngine {
   abstract seek(positionSeconds: number): Promise<void>;
   abstract setVolume(volume: number): void;
   abstract setMuted(muted: boolean): void;
+  abstract selectAudioTrack(trackId: string): Promise<void>;
+  abstract addExternalSubtitleTracks(tracks: ExternalSubtitleTrack[]): Promise<void>;
+  abstract selectSubtitleTrack(trackId: string | null): Promise<void>;
   abstract destroy(): Promise<void>;
 
   getState(): PlaybackEngineState {

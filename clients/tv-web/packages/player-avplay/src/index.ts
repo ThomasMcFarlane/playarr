@@ -15,7 +15,10 @@ import {
   BasePlaybackEngine,
   type DrmConfig,
   type DrmSystemId,
+  type ExternalSubtitleTrack,
+  type PlaybackAudioTrack,
   type PlaybackSource,
+  type PlaybackSubtitleTrack,
 } from "@streamarr-tv/player-core";
 
 function toAvplayDrmType(systemId: DrmSystemId): AVPlayDrmType | undefined {
@@ -46,6 +49,30 @@ function toPlaybackState(avplayState: AVPlayState): "idle" | "ready" | "playing"
 export interface TizenAvplayEngineOptions {
   /** Display plane rect in output pixels, e.g. the full 1920x1080 canvas. Defaults to full-screen 1080p. */
   displayRect?: { x: number; y: number; width: number; height: number };
+}
+
+interface AvplayTrackMetadata {
+  language?: string;
+  track_lang?: string;
+  title?: string;
+  label?: string;
+  channels?: number;
+  channel?: number;
+  role?: string;
+  forced?: boolean;
+}
+
+function parseTrackMetadata(extraInfo: string): AvplayTrackMetadata {
+  try {
+    const parsed: unknown = JSON.parse(extraInfo);
+    return parsed && typeof parsed === "object" ? (parsed as AvplayTrackMetadata) : {};
+  } catch {
+    return {};
+  }
+}
+
+function avplayTrackId(type: "audio" | "subtitle", index: number): string {
+  return `${type}:${index}`;
 }
 
 /** `PlaybackEngine` adapter over Tizen's native `webapis.avplay`. */
@@ -88,8 +115,69 @@ export class TizenAvplayEngine extends BasePlaybackEngine {
     });
   }
 
+  private syncTrackState(): void {
+    const streamInfo = webapis.avplay.getTotalTrackInfo();
+    const currentStreamInfo = webapis.avplay.getCurrentStreamInfo();
+    const currentAudioId =
+      this.state.selectedAudioTrackId ??
+      currentStreamInfo
+        .filter((track) => track.type === "AUDIO")
+        .map((track) => avplayTrackId("audio", track.index))[0] ??
+      null;
+    const currentSubtitleId =
+      this.state.selectedSubtitleTrackId ??
+      currentStreamInfo
+        .filter((track) => track.type === "TEXT")
+        .map((track) => avplayTrackId("subtitle", track.index))[0] ??
+      null;
+    const audioTracks: PlaybackAudioTrack[] = streamInfo
+      .filter((track) => track.type === "AUDIO")
+      .map((track, position) => {
+        const metadata = parseTrackMetadata(track.extra_info);
+        const id = avplayTrackId("audio", track.index);
+        const language = metadata.language ?? metadata.track_lang;
+        return {
+          id,
+          label: metadata.title ?? metadata.label ?? language ?? `Audio ${position + 1}`,
+          language,
+          roles: metadata.role ? [metadata.role] : [],
+          channelsCount: metadata.channels ?? metadata.channel,
+          selected: currentAudioId ? currentAudioId === id : position === 0,
+        };
+      });
+    const subtitleTracks: PlaybackSubtitleTrack[] = streamInfo
+      .filter((track) => track.type === "TEXT")
+      .map((track, position) => {
+        const metadata = parseTrackMetadata(track.extra_info);
+        const id = avplayTrackId("subtitle", track.index);
+        const language = metadata.language ?? metadata.track_lang;
+        return {
+          id,
+          label: metadata.title ?? metadata.label ?? language ?? `Subtitles ${position + 1}`,
+          language,
+          roles: metadata.role ? [metadata.role] : [],
+          forced: metadata.forced ?? false,
+          selected: currentSubtitleId === id,
+        };
+      });
+
+    this.setState({
+      audioTracks,
+      subtitleTracks,
+      selectedAudioTrackId: audioTracks.find((track) => track.selected)?.id ?? null,
+      selectedSubtitleTrackId:
+        subtitleTracks.find((track) => track.selected)?.id ?? null,
+    });
+  }
+
   async load(source: PlaybackSource): Promise<void> {
-    this.setState({ state: "loading" });
+    this.setState({
+      state: "loading",
+      audioTracks: [],
+      subtitleTracks: [],
+      selectedAudioTrackId: null,
+      selectedSubtitleTrackId: null,
+    });
 
     webapis.avplay.open(source.url);
     this.attachListener();
@@ -115,6 +203,7 @@ export class TizenAvplayEngine extends BasePlaybackEngine {
       state: "ready",
       durationSeconds: webapis.avplay.getDuration() / 1000,
     });
+    this.syncTrackState();
 
     if (source.startPositionSeconds) {
       await this.seek(source.startPositionSeconds);
@@ -151,6 +240,54 @@ export class TizenAvplayEngine extends BasePlaybackEngine {
 
   setMuted(muted: boolean): void {
     this.setState({ muted });
+  }
+
+  async selectAudioTrack(trackId: string): Promise<void> {
+    const track = this.state.audioTracks.find((candidate) => candidate.id === trackId);
+    if (!track) return;
+    const index = Number(trackId.slice("audio:".length));
+    if (!Number.isInteger(index)) return;
+    webapis.avplay.setSelectTrack("AUDIO", index);
+    this.setState({
+      audioTracks: this.state.audioTracks.map((candidate) => ({
+        ...candidate,
+        selected: candidate.id === trackId,
+      })),
+      selectedAudioTrackId: trackId,
+    });
+  }
+
+  async addExternalSubtitleTracks(_tracks: ExternalSubtitleTrack[]): Promise<void> {
+    // AVPlay cannot attach arbitrary WebVTT URLs to an already-open source.
+    // Native embedded tracks remain available through `getTotalTrackInfo`.
+  }
+
+  async selectSubtitleTrack(trackId: string | null): Promise<void> {
+    if (trackId === null) {
+      webapis.avplay.setSilentSubtitle(true);
+      this.setState({
+        subtitleTracks: this.state.subtitleTracks.map((track) => ({
+          ...track,
+          selected: false,
+        })),
+        selectedSubtitleTrackId: null,
+      });
+      return;
+    }
+
+    const track = this.state.subtitleTracks.find((candidate) => candidate.id === trackId);
+    if (!track) return;
+    const index = Number(trackId.slice("subtitle:".length));
+    if (!Number.isInteger(index)) return;
+    webapis.avplay.setSelectTrack("TEXT", index);
+    webapis.avplay.setSilentSubtitle(false);
+    this.setState({
+      subtitleTracks: this.state.subtitleTracks.map((candidate) => ({
+        ...candidate,
+        selected: candidate.id === trackId,
+      })),
+      selectedSubtitleTrackId: trackId,
+    });
   }
 
   async destroy(): Promise<void> {

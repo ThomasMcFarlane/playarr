@@ -3,13 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#121212" />
-    <link
-      rel="icon"
-      type="image/svg+xml"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23121212'/%3E%3Cpath d='M11 9h11l-2 4H13l-1 2h9l-2 8H8l2-4h9l1-2h-9z' fill='%23e50914'/%3E%3C/svg%3E"
-    />
-    <title>Streamarr</title>
+    <meta name="theme-color" content="#f7f5f4" />
+    <link rel="icon" type="image/svg+xml" href="/playarr-icon.svg" />
+    <title>Playarr</title>
+    <script>
+      (() => {
+        const stored = localStorage.getItem("playarr-theme");
+        const theme =
+          stored === "light" || stored === "dark"
+            ? stored
+            : matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -20,6 +20,13 @@ type AVPlayDisplayMethod =
   | "PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO";
 
 type AVPlayDrmType = "PLAYREADY" | "WIDEVINE_CDM" | "VERIMATRIX";
+type AVPlayTrackType = "AUDIO" | "TEXT" | "VIDEO";
+
+interface AVPlayStreamInfo {
+  index: number;
+  type: AVPlayTrackType;
+  extra_info: string;
+}
 
 interface AVPlayListener {
   onbufferingstart?: () => void;
@@ -81,6 +88,10 @@ interface AVPlayApi {
   getState(): AVPlayState;
   getDuration(): number;
   getCurrentTime(): number;
+  getTotalTrackInfo(): AVPlayStreamInfo[];
+  getCurrentStreamInfo(): AVPlayStreamInfo[];
+  setSelectTrack(trackType: "AUDIO" | "TEXT", trackIndex: number): void;
+  setSilentSubtitle(silent: boolean): void;
 }
 
 interface TizenWebApis {

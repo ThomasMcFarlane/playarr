@@ -15,9 +15,12 @@ import shaka from "shaka-player";
 import {
   BasePlaybackEngine,
   type DrmConfig,
+  type ExternalSubtitleTrack,
+  type PlaybackAudioTrack,
   type PlaybackEngine,
   type PlaybackEngineState,
   type PlaybackSource,
+  type PlaybackSubtitleTrack,
 } from "@streamarr-tv/player-core";
 
 let polyfillsInstalled = false;
@@ -48,11 +51,148 @@ function getBufferedEndSeconds(mediaElement: HTMLMediaElement): number {
   return buffered.length > 0 ? buffered.end(buffered.length - 1) : 0;
 }
 
+function trackLanguageLabel(language: string): string {
+  const normalized = language.trim();
+  if (!normalized || normalized === "und") return "";
+  try {
+    return new Intl.DisplayNames(undefined, { type: "language" }).of(normalized) ?? normalized;
+  } catch {
+    return normalized;
+  }
+}
+
+function joinTrackLabel(
+  label: string | null,
+  language: string,
+  roles: string[],
+  fallback: string
+): string {
+  const parts = [
+    label?.trim() || trackLanguageLabel(language),
+    ...roles.filter((role) => role && role !== "main"),
+  ].filter(Boolean);
+  return [...new Set(parts)].join(" · ") || fallback;
+}
+
+function audioTrackId(track: shaka.extern.AudioTrack): string {
+  return JSON.stringify([
+    track.language,
+    track.label,
+    track.roles,
+    track.channelsCount,
+    track.codecs,
+    track.audioSamplingRate,
+    track.spatialAudio,
+  ]);
+}
+
 /** `PlaybackEngine` adapter over `shaka.Player` + a `<video>` element. */
 export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackEngine {
   private player: shaka.Player | null = null;
   private mediaElement: HTMLMediaElement | null = null;
   private detachListeners: (() => void) | null = null;
+  private authHeaderProvider: (() => string | undefined) | null = null;
+  private readonly externalSubtitleTrackIds = new Map<string, number>();
+
+  private subtitleTrackId(track: shaka.extern.TextTrack): string {
+    return (
+      [...this.externalSubtitleTrackIds.entries()].find(
+        ([, shakaTrackId]) => shakaTrackId === track.id
+      )?.[0] ?? String(track.id)
+    );
+  }
+
+  private getDurationSeconds(): number {
+    if (!this.mediaElement) return this.state.durationSeconds;
+    if (Number.isFinite(this.mediaElement.duration) && this.mediaElement.duration > 0) {
+      return this.mediaElement.duration;
+    }
+
+    const seekRange = this.player?.seekRange();
+    if (seekRange && Number.isFinite(seekRange.end) && seekRange.end > 0) {
+      return seekRange.end;
+    }
+
+    // `durationchange` can transiently report NaN/0 while MSE swaps or
+    // extends buffers. Keep the last useful duration instead of flashing the
+    // controls back to 0:00 during buffering or a seek.
+    return this.state.durationSeconds;
+  }
+
+  private syncTimelineState(): void {
+    if (!this.mediaElement) return;
+    const mediaCurrentTime = Number.isFinite(this.mediaElement.currentTime)
+      ? this.mediaElement.currentTime
+      : this.state.currentTimeSeconds;
+    const currentTimeSeconds =
+      this.state.state === "loading" &&
+      this.state.currentTimeSeconds > 0 &&
+      mediaCurrentTime === 0
+        ? this.state.currentTimeSeconds
+        : mediaCurrentTime;
+    this.setState({
+      currentTimeSeconds,
+      durationSeconds: this.getDurationSeconds(),
+      bufferedSeconds: getBufferedEndSeconds(this.mediaElement),
+    });
+  }
+
+  private syncTrackState(): void {
+    if (!this.player) return;
+
+    const audioTracks: PlaybackAudioTrack[] = this.player.getAudioTracks().map((track, index) => ({
+      id: audioTrackId(track),
+      label: joinTrackLabel(track.label, track.language, track.roles, `Audio ${index + 1}`),
+      language: track.language && track.language !== "und" ? track.language : undefined,
+      roles: [...track.roles],
+      channelsCount: track.channelsCount ?? undefined,
+      selected: track.active,
+    }));
+    const subtitlesVisible = this.player.isTextTrackVisible();
+    const subtitleTracks: PlaybackSubtitleTrack[] = this.player
+      .getTextTracks()
+      .map((track, index) => ({
+        id: this.subtitleTrackId(track),
+        label: joinTrackLabel(
+          track.label,
+          track.language,
+          track.roles,
+          `Subtitles ${index + 1}`
+        ),
+        language: track.language && track.language !== "und" ? track.language : undefined,
+        roles: [...track.roles],
+        forced: track.forced,
+        selected: subtitlesVisible && track.active,
+      }));
+
+    this.setState({
+      audioTracks,
+      subtitleTracks,
+      selectedAudioTrackId: audioTracks.find((track) => track.selected)?.id ?? null,
+      selectedSubtitleTrackId:
+        subtitleTracks.find((track) => track.selected)?.id ?? null,
+    });
+  }
+
+  /**
+   * Registers a callback consulted on every request Shaka's own
+   * `NetworkingEngine` makes (manifest, segment, license, ...) -- whatever
+   * it returns is attached as an `Authorization: Bearer <token>` header.
+   * Streamarr's playback-adjacent routes (HLS manifest/segment serving in
+   * particular) require this header -- see
+   * `backend/crates/streamarr-api/src/auth_extractor.rs`'s `StreamingUser`
+   * extractor.
+   *
+   * Safe to call before or after `attach()`/`load()`: the request filter
+   * (registered once, in `attach()`) reads `authHeaderProvider` fresh on
+   * every request rather than closing over a snapshot, so calling this
+   * again later (e.g. after a token refresh) takes effect on the very next
+   * request with no reload needed. Never calling this at all is also fine
+   * -- callers with no auth requirement simply skip it.
+   */
+  setAuthHeaderProvider(provider: () => string | undefined): void {
+    this.authHeaderProvider = provider;
+  }
 
   /** Attaches to a `<video>` element. Must be called once before `load()`. */
   attach(mediaElement: HTMLMediaElement): void {
@@ -66,15 +206,73 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
     this.player = new shaka.Player();
     void this.player.attach(mediaElement);
 
+    // Force MSE-based HLS parsing on every browser, Safari included. Safari
+    // has real native HLS support and Shaka defaults to preferring it there
+    // (`preferNativeHls`), but native HLS playback bypasses
+    // `NetworkingEngine` entirely -- the browser's own network stack fetches
+    // the manifest/segments directly, with no way for the request filter
+    // below to run or attach a header. Forcing MSE playback everywhere keeps
+    // auth-header injection (and error/state reporting) uniform across
+    // browsers instead of silently 401ing only on Safari.
+    //
+    // `manifest.retryParameters` is widened well past Shaka's default (a
+    // couple of quick attempts, gone in a few seconds total) because a
+    // freshly-negotiated on-demand session's `playlist.m3u8` (see
+    // `streamarr-transcode::spawn_on_demand_transcode`) does not exist on
+    // disk until ffmpeg actually starts writing it -- multiple seconds away
+    // for a real 4K source, confirmed live (~7-10s cold start). Confirmed
+    // live without this: Shaka 404s on the manifest fetch, exhausts its
+    // default retry budget in under two seconds, and fires a fatal `error`
+    // event -- the exact "can't load/play anything" symptom, with no
+    // negotiation error and no obviously-broken network request to explain
+    // it. `streamarr-api`'s `serve_session_file_handler` doc comment already
+    // assumed "real HLS players retry"; this is what actually makes that
+    // true. `streaming.retryParameters` gets the same treatment for
+    // segment requests, which hit the same not-written-yet race for
+    // whichever segment is currently at the encode's leading edge.
+    const transcodeAwareRetry = {
+      timeout: 30_000,
+      maxAttempts: 15,
+      baseDelay: 1_000,
+      backoffFactor: 1.3,
+      fuzzFactor: 0.5,
+    };
+    this.player.configure({
+      streaming: { preferNativeHls: false, retryParameters: transcodeAwareRetry },
+      manifest: { retryParameters: transcodeAwareRetry },
+    });
+
+    // See `setAuthHeaderProvider` above -- reads `this.authHeaderProvider`
+    // fresh on every request rather than a value captured at registration
+    // time.
+    this.player.getNetworkingEngine()?.registerRequestFilter((_type, request) => {
+      const token = this.authHeaderProvider?.();
+      if (token) {
+        request.headers["Authorization"] = `Bearer ${token}`;
+      }
+    });
+
     const handleError = (event: Event) => {
       const shakaError = (event as unknown as { detail?: InstanceType<typeof shaka.util.Error> })
         .detail;
+      const isBadHttpStatus =
+        shakaError?.code === shaka.util.Error.Code.BAD_HTTP_STATUS;
+      const httpStatus =
+        isBadHttpStatus && typeof shakaError.data?.[1] === "number"
+          ? shakaError.data[1]
+          : undefined;
+      const requestUri =
+        isBadHttpStatus && typeof (shakaError.data?.[5] ?? shakaError.data?.[0]) === "string"
+          ? (shakaError.data[5] ?? shakaError.data[0])
+          : undefined;
       this.setState({
         state: "error",
         error: {
           code: shakaError ? String(shakaError.code) : "UNKNOWN",
           message: shakaError?.message ?? "Unknown Shaka Player error",
           fatal: shakaError?.severity === shaka.util.Error.Severity.CRITICAL,
+          httpStatus,
+          requestUri,
         },
       });
     };
@@ -86,14 +284,8 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
       });
     };
 
-    const handleTimeUpdate = () => {
-      if (!this.mediaElement) return;
-      this.setState({
-        currentTimeSeconds: this.mediaElement.currentTime,
-        durationSeconds: Number.isFinite(this.mediaElement.duration) ? this.mediaElement.duration : 0,
-        bufferedSeconds: getBufferedEndSeconds(this.mediaElement),
-      });
-    };
+    const handleTimelineChange = () => this.syncTimelineState();
+    const handleTracksChange = () => this.syncTrackState();
     const handlePlay = () => this.setState({ state: "playing" });
     const handlePause = () =>
       this.setState({ state: this.state.state === "ended" ? "ended" : "paused" });
@@ -105,7 +297,16 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
 
     this.player.addEventListener("error", handleError);
     this.player.addEventListener("buffering", handleBuffering);
-    mediaElement.addEventListener("timeupdate", handleTimeUpdate);
+    this.player.addEventListener("trackschanged", handleTracksChange);
+    this.player.addEventListener("variantchanged", handleTracksChange);
+    this.player.addEventListener("textchanged", handleTracksChange);
+    this.player.addEventListener("texttrackvisibility", handleTracksChange);
+    mediaElement.addEventListener("loadedmetadata", handleTimelineChange);
+    mediaElement.addEventListener("durationchange", handleTimelineChange);
+    mediaElement.addEventListener("timeupdate", handleTimelineChange);
+    mediaElement.addEventListener("progress", handleTimelineChange);
+    mediaElement.addEventListener("seeking", handleTimelineChange);
+    mediaElement.addEventListener("seeked", handleTimelineChange);
     mediaElement.addEventListener("play", handlePlay);
     mediaElement.addEventListener("pause", handlePause);
     mediaElement.addEventListener("ended", handleEnded);
@@ -114,7 +315,16 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
     this.detachListeners = () => {
       this.player?.removeEventListener("error", handleError);
       this.player?.removeEventListener("buffering", handleBuffering);
-      mediaElement.removeEventListener("timeupdate", handleTimeUpdate);
+      this.player?.removeEventListener("trackschanged", handleTracksChange);
+      this.player?.removeEventListener("variantchanged", handleTracksChange);
+      this.player?.removeEventListener("textchanged", handleTracksChange);
+      this.player?.removeEventListener("texttrackvisibility", handleTracksChange);
+      mediaElement.removeEventListener("loadedmetadata", handleTimelineChange);
+      mediaElement.removeEventListener("durationchange", handleTimelineChange);
+      mediaElement.removeEventListener("timeupdate", handleTimelineChange);
+      mediaElement.removeEventListener("progress", handleTimelineChange);
+      mediaElement.removeEventListener("seeking", handleTimelineChange);
+      mediaElement.removeEventListener("seeked", handleTimelineChange);
       mediaElement.removeEventListener("play", handlePlay);
       mediaElement.removeEventListener("pause", handlePause);
       mediaElement.removeEventListener("ended", handleEnded);
@@ -127,7 +337,18 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
       throw new Error("ShakaPlaybackEngine.attach(videoElement) must be called before load().");
     }
 
-    this.setState({ state: "loading" });
+    this.externalSubtitleTrackIds.clear();
+    this.setState({
+      state: "loading",
+      currentTimeSeconds: source.startPositionSeconds ?? this.state.currentTimeSeconds,
+      durationSeconds: this.state.durationSeconds,
+      bufferedSeconds: 0,
+      audioTracks: [],
+      subtitleTracks: [],
+      selectedAudioTrackId: null,
+      selectedSubtitleTrackId: null,
+      error: undefined,
+    });
 
     if (source.drm) {
       const drmConfig = buildDrmConfiguration(source.drm);
@@ -136,9 +357,11 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
 
     await this.player.load(source.url, source.startPositionSeconds ?? null, source.mimeType);
 
+    this.syncTimelineState();
+    this.syncTrackState();
     this.setState({
       state: "ready",
-      durationSeconds: Number.isFinite(this.mediaElement.duration) ? this.mediaElement.duration : 0,
+      durationSeconds: this.getDurationSeconds(),
     });
   }
 
@@ -152,8 +375,18 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
 
   async seek(positionSeconds: number): Promise<void> {
     if (!this.mediaElement) return;
-    this.mediaElement.currentTime = positionSeconds;
-    this.setState({ currentTimeSeconds: positionSeconds });
+    const durationSeconds = this.getDurationSeconds();
+    const nextPosition = Math.min(
+      durationSeconds > 0 ? durationSeconds : Number.POSITIVE_INFINITY,
+      Math.max(0, positionSeconds)
+    );
+
+    // Updating currentTime is Shaka's supported seek mechanism. Its internal
+    // playhead/streaming engine observes the native `seeking` event, abandons
+    // the old buffering target and requests the segment range around this
+    // position. It does not change the element's paused state.
+    this.setState({ currentTimeSeconds: nextPosition });
+    this.mediaElement.currentTime = nextPosition;
   }
 
   setVolume(volume: number): void {
@@ -166,14 +399,68 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
     this.setState({ muted });
   }
 
+  async selectAudioTrack(trackId: string): Promise<void> {
+    const track = this.player
+      ?.getAudioTracks()
+      .find((candidate) => audioTrackId(candidate) === trackId);
+    if (!track || !this.player) return;
+    this.player.selectAudioTrack(track, 0);
+    this.syncTrackState();
+  }
+
+  async addExternalSubtitleTracks(tracks: ExternalSubtitleTrack[]): Promise<void> {
+    if (!this.player) return;
+    for (const track of tracks) {
+      if (this.externalSubtitleTrackIds.has(track.id)) continue;
+      const added = await this.player.addTextTrackAsync(
+        track.url,
+        track.language ?? "und",
+        "subtitles",
+        "text/vtt",
+        "",
+        track.label,
+        track.forced ?? false
+      );
+      this.externalSubtitleTrackIds.set(track.id, added.id);
+    }
+    this.player.setTextTrackVisibility(false);
+    this.syncTrackState();
+  }
+
+  async selectSubtitleTrack(trackId: string | null): Promise<void> {
+    if (!this.player) return;
+    if (trackId === null) {
+      this.player.setTextTrackVisibility(false);
+      this.syncTrackState();
+      return;
+    }
+
+    const track = this.player
+      .getTextTracks()
+      .find((candidate) => this.subtitleTrackId(candidate) === trackId);
+    if (!track) return;
+    this.player.selectTextTrack(track);
+    this.player.setTextTrackVisibility(true);
+    this.syncTrackState();
+  }
+
   async destroy(): Promise<void> {
     this.detachListeners?.();
     await this.player?.destroy();
     this.player = null;
     this.mediaElement = null;
+    this.externalSubtitleTrackIds.clear();
     this.setState({ state: "idle" });
   }
 }
 
 /** Re-exported for convenience so consumers don't need a second dependency on player-core. */
-export type { PlaybackEngine, PlaybackEngineState, PlaybackSource, DrmConfig };
+export type {
+  PlaybackAudioTrack,
+  ExternalSubtitleTrack,
+  PlaybackEngine,
+  PlaybackEngineState,
+  PlaybackSource,
+  PlaybackSubtitleTrack,
+  DrmConfig,
+};
