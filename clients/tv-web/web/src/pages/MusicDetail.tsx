@@ -222,6 +222,17 @@ export function MusicDetailPage() {
                 subtitle: `${state.status === "ready" ? state.data.work.title : ""} · ${
                   album.album.title
                 }`,
+                music:
+                  state.status === "ready"
+                    ? {
+                        artistName: state.data.work.title,
+                        albumTitle: album.album.title,
+                        artworkWork: {
+                          id: state.data.work.id,
+                          images: state.data.work.images,
+                        },
+                      }
+                    : undefined,
               },
             ]
           : []

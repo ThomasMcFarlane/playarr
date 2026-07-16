@@ -27,6 +27,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   handling, fullscreen playback, and recoverable connection errors.
 - Include Whisparr sites in Playarr home rails, return navigation, playlists, context actions, and
   episodic watch-progress handling.
+- Add a dedicated music playback visual with album artwork, track metadata, responsive audio
+  visualisation, and track-aware queue labels.
 
 ### Changed
 
@@ -66,6 +68,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   source MIME type through the playback API to the web player.
 - Preserve the Android TV WebView across server reloads and dispose it only with the Activity
   lifecycle, avoiding premature destruction during Compose updates.
+- Retry audio thumbnail generation without seeking when FFmpeg exposes embedded cover art as a
+  single attached picture.
 
 ### Security
 

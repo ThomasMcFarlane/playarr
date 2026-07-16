@@ -924,7 +924,7 @@ async fn ensure_media_thumbnail_at(
     // Keep the `.jpg` suffix on the temporary file so ffmpeg can infer the
     // image muxer without relying on a shell or a hand-built pipe.
     let temp_path = parent.join(format!("{media_file_id}-{}.tmp.jpg", Uuid::new_v4()));
-    let output = tokio::time::timeout(
+    let mut output = tokio::time::timeout(
         Duration::from_secs(30),
         Command::new(binary)
             .args(["-hide_banner", "-loglevel", "error", "-ss"])
@@ -949,7 +949,36 @@ async fn ensure_media_thumbnail_at(
     .map_err(|_| ApiError::internal("ffmpeg thumbnail extraction timed out"))?
     .map_err(|error| ApiError::internal(format!("could not start {binary}: {error}")))?;
 
-    if !output.status.success() {
+    // Audio containers commonly expose cover art as an attached-picture
+    // video stream. Seeking before the input can make ffmpeg exit
+    // successfully without ever emitting that single static frame. Retry
+    // without `-ss` when that exact success-with-no-output case occurs.
+    if output.status.success() && !tokio::fs::try_exists(&temp_path).await.unwrap_or(false) {
+        output = tokio::time::timeout(
+            Duration::from_secs(30),
+            Command::new(binary)
+                .args(["-hide_banner", "-loglevel", "error", "-i"])
+                .arg(source_path)
+                .args([
+                    "-map",
+                    "0:v:0",
+                    "-frames:v",
+                    "1",
+                    "-vf",
+                    "scale=640:-2:force_original_aspect_ratio=decrease",
+                    "-q:v",
+                    "4",
+                    "-y",
+                ])
+                .arg(&temp_path)
+                .output(),
+        )
+        .await
+        .map_err(|_| ApiError::internal("ffmpeg cover-art extraction timed out"))?
+        .map_err(|error| ApiError::internal(format!("could not start {binary}: {error}")))?;
+    }
+
+    if !output.status.success() || !tokio::fs::try_exists(&temp_path).await.unwrap_or(false) {
         let _ = tokio::fs::remove_file(&temp_path).await;
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(ApiError::internal(format!(

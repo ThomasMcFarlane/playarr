@@ -1,7 +1,17 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import type { Work } from "@streamarr-tv/api-client";
 import type { PlaybackEngineController } from "../../lib/usePlaybackEngine";
 import { MediaThumbnailArtwork } from "../MediaThumbnailArtwork";
 import { useMediaContextMenu } from "../MediaContextMenu";
+import { CachedArtworkImage } from "../../lib/artwork";
 import { PlayerControls } from "./PlayerControls";
 import {
   BackIcon,
@@ -144,6 +154,95 @@ export interface PlayerPlaylistItem {
   episodeId?: string;
   seasonNumber?: number;
   episodeNumber?: number;
+  music?: PlayerMusicContext;
+}
+
+export interface PlayerMusicContext {
+  artistName: string;
+  albumTitle: string;
+  artworkWork: Pick<Work, "id" | "images">;
+}
+
+const MUSIC_VISUALISER_BARS = Array.from({ length: 36 }, (_, index) => {
+  const distanceFromCentre = Math.abs(index - 17.5) / 17.5;
+  const centreLift = 1 - distanceFromCentre * 0.54;
+  return {
+    delay: -((index * 83) % 740),
+    peak: Math.max(0.34, centreLift * (0.68 + ((index * 17) % 29) / 100)),
+    rest: 0.1 + ((index * 7) % 10) / 100,
+    speed: 760 + ((index * 97) % 520),
+  };
+});
+
+function MusicPlayerVisual({
+  context,
+  mediaFileId,
+  title,
+  playing,
+}: {
+  context: PlayerMusicContext;
+  mediaFileId: string;
+  title: string;
+  playing: boolean;
+}) {
+  return (
+    <div
+      className={`player-music-visual${playing ? " is-playing" : " is-settled"}`}
+      aria-hidden="true"
+    >
+      <div className="player-music-backdrop">
+        <CachedArtworkImage
+          work={context.artworkWork}
+          kinds={["backdrop", "poster"]}
+          alt=""
+          fallback={<span />}
+        />
+      </div>
+      <div className="player-music-colour-wash" />
+      <div className="player-music-stage">
+        <div className="player-music-cover">
+          <MediaThumbnailArtwork
+            mediaFileId={mediaFileId}
+            positionMs={0}
+            fallback={null}
+            className="player-music-cover-media"
+          >
+            <CachedArtworkImage
+              work={context.artworkWork}
+              kinds={["poster", "backdrop"]}
+              alt=""
+              fallback={
+                <span className="player-music-cover-fallback">
+                  {context.albumTitle.slice(0, 1)}
+                </span>
+              }
+            />
+            <div className="player-music-visualiser">
+              {MUSIC_VISUALISER_BARS.map((bar, index) => (
+                <i
+                  key={index}
+                  style={
+                    {
+                      "--music-bar-delay": `${bar.delay}ms`,
+                      "--music-bar-peak": bar.peak,
+                      "--music-bar-rest": bar.rest,
+                      "--music-bar-speed": `${bar.speed}ms`,
+                    } as CSSProperties
+                  }
+                />
+              ))}
+            </div>
+          </MediaThumbnailArtwork>
+          <div className="player-music-cover-glass" />
+        </div>
+        <div className="player-music-copy">
+          <span>{context.albumTitle}</span>
+          <strong>{title}</strong>
+          <small>{context.artistName}</small>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function PlayerSurface({
@@ -202,6 +301,8 @@ export function PlayerSurface({
   const [backButtonFocused, setBackButtonFocused] = useState(false);
   const [minimiseButtonFocused, setMinimiseButtonFocused] = useState(false);
   const [playlistOpen, setPlaylistOpen] = useState(false);
+  const activePlaylistItem = playlistItems[activePlaylistIndex];
+  const musicContext = activePlaylistItem?.music;
   const playlistContext = useMediaContextMenu();
   const interactionPinned =
     controlsPinned ||
@@ -496,7 +597,7 @@ export function PlayerSurface({
       ref={shellRef}
       className={`player-shell${showControls ? "" : " player-shell-idle"}${
         minimised ? " player-shell-minimised" : ""
-      }`}
+      }${musicContext ? " player-shell-music" : ""}`}
       onMouseEnter={minimised ? undefined : handleActivity}
       onMouseMove={minimised ? undefined : handleActivity}
       onPointerDownCapture={minimised ? undefined : handleActivity}
@@ -543,6 +644,15 @@ export function PlayerSurface({
         </>
       )}
 
+      {!minimised && musicContext && activePlaylistItem ? (
+        <MusicPlayerVisual
+          context={musicContext}
+          mediaFileId={activePlaylistItem.mediaFileId}
+          title={title}
+          playing={engineState.state === "playing"}
+        />
+      ) : null}
+
       {/* eslint-disable-next-line jsx-a11y/media-has-caption -- captions not modeled by the backend yet */}
       <video
         ref={videoRef}
@@ -550,7 +660,13 @@ export function PlayerSurface({
         playsInline
         tabIndex={minimised ? -1 : 0}
         aria-hidden={minimised}
-        aria-label={minimised ? undefined : "Video playback surface"}
+        aria-label={
+          minimised
+            ? undefined
+            : musicContext
+              ? "Audio playback surface"
+              : "Video playback surface"
+        }
         onFocus={minimised ? undefined : handleActivity}
       />
 
@@ -650,7 +766,16 @@ export function PlayerSurface({
           <header>
             <div>
               <p>Up next</p>
-              <span>{playlistItems.length} {playlistItems.length === 1 ? "item" : "episodes"}</span>
+              <span>
+                {playlistItems.length}{" "}
+                {musicContext
+                  ? playlistItems.length === 1
+                    ? "track"
+                    : "tracks"
+                  : playlistItems.length === 1
+                    ? "item"
+                    : "episodes"}
+              </span>
             </div>
             <button type="button" onClick={() => closePlaylist()} aria-label="Close playlist">
               ×
@@ -717,7 +842,9 @@ export function PlayerSurface({
                             ).padStart(2, "0")}`
                           : active
                             ? "Now playing"
-                            : "Movie"}
+                            : musicContext
+                              ? "Track"
+                              : "Movie"}
                       </small>
                       <strong>{item.title}</strong>
                       {item.subtitle ? <span>{item.subtitle}</span> : null}

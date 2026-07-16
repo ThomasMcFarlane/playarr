@@ -12,6 +12,7 @@ import {
 import {
   PlayerBackButton,
   PlayerSurface,
+  type PlayerMusicContext,
   type PlayerPlaylistItem,
 } from "../components/player/PlayerSurface";
 import {
@@ -76,7 +77,22 @@ function isPlayerPlaylistItem(value: unknown): value is PlayerPlaylistItem {
     (item.seasonNumber === undefined ||
       (typeof item.seasonNumber === "number" && Number.isFinite(item.seasonNumber))) &&
     (item.episodeNumber === undefined ||
-      (typeof item.episodeNumber === "number" && Number.isFinite(item.episodeNumber)))
+      (typeof item.episodeNumber === "number" && Number.isFinite(item.episodeNumber))) &&
+    (item.music === undefined || isPlayerMusicContext(item.music))
+  );
+}
+
+function isPlayerMusicContext(value: unknown): value is PlayerMusicContext {
+  if (!value || typeof value !== "object") return false;
+  const context = value as Record<string, unknown>;
+  const artworkWork = context.artworkWork;
+  return (
+    typeof context.artistName === "string" &&
+    typeof context.albumTitle === "string" &&
+    Boolean(artworkWork) &&
+    typeof artworkWork === "object" &&
+    typeof (artworkWork as Record<string, unknown>).id === "string" &&
+    Array.isArray((artworkWork as Record<string, unknown>).images)
   );
 }
 
