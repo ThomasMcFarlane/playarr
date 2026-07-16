@@ -32,7 +32,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -160,38 +159,42 @@ fun StreamarrWebAppScreen(
     }
 
     Box(modifier = modifier.fillMaxSize().background(Color(0xFF151315))) {
-        key(baseUrl, reloadGeneration) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { webContext ->
-                    createPlayarrWebView(
-                        context = webContext,
-                        baseUrl = baseUrl,
-                        onWebViewReady = { webView = it },
-                        onLoadingChanged = { loading = it },
-                        onLoadError = { message ->
-                            loadError = message
-                            showServerEditor = true
-                        },
-                        onOpenServerEditor = {
-                            addressDraft = baseUrl
-                            addressError = null
-                            showServerEditor = true
-                        },
-                        onShowFullscreen = { view, callback ->
-                            if (fullscreenView != null) {
-                                closeFullscreen(notifyWebView = true)
-                            }
-                            fullscreenView = view
-                            fullscreenCallback = callback
-                        },
-                        onHideFullscreen = {
-                            closeFullscreen(notifyWebView = false)
-                        },
-                    )
-                },
-            )
-        }
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { webContext ->
+                createPlayarrWebView(
+                    context = webContext,
+                    onWebViewReady = { webView = it },
+                    onLoadingChanged = { loading = it },
+                    onLoadError = { message ->
+                        loadError = message
+                        showServerEditor = true
+                    },
+                    onOpenServerEditor = {
+                        addressDraft = baseUrl
+                        addressError = null
+                        showServerEditor = true
+                    },
+                    onShowFullscreen = { view, callback ->
+                        if (fullscreenView != null) {
+                            closeFullscreen(notifyWebView = true)
+                        }
+                        fullscreenView = view
+                        fullscreenCallback = callback
+                    },
+                    onHideFullscreen = {
+                        closeFullscreen(notifyWebView = false)
+                    },
+                )
+            },
+            update = { view ->
+                val request = WebLoadRequest(baseUrl, reloadGeneration)
+                if (view.tag != request) {
+                    view.tag = request
+                    view.loadUrl(baseUrl)
+                }
+            },
+        )
 
         if (loading && !showServerEditor) {
             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -241,20 +244,16 @@ fun StreamarrWebAppScreen(
         }
     }
 
-    DisposableEffect(webView) {
-        val activeWebView = webView
-        onDispose {
-            activeWebView?.stopLoading()
-            activeWebView?.destroy()
-        }
-    }
-
     DisposableEffect(lifecycleOwner, webView) {
         val activeWebView = webView
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> activeWebView?.onResume()
                 Lifecycle.Event.ON_PAUSE -> activeWebView?.onPause()
+                Lifecycle.Event.ON_DESTROY -> {
+                    activeWebView?.stopLoading()
+                    activeWebView?.destroy()
+                }
                 else -> Unit
             }
         }
@@ -266,7 +265,6 @@ fun StreamarrWebAppScreen(
 @SuppressLint("SetJavaScriptEnabled")
 private fun createPlayarrWebView(
     context: android.content.Context,
-    baseUrl: String,
     onWebViewReady: (WebView) -> Unit,
     onLoadingChanged: (Boolean) -> Unit,
     onLoadError: (String) -> Unit,
@@ -363,9 +361,13 @@ private fun createPlayarrWebView(
     }
 
     onWebViewReady(this)
-    loadUrl(baseUrl)
     requestFocus()
 }
+
+private data class WebLoadRequest(
+    val baseUrl: String,
+    val generation: Int,
+)
 
 @Composable
 private fun FullscreenWebVideo(

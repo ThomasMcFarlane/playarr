@@ -64,6 +64,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   remains reachable even when WebView consumes the event.
 - Negotiate direct playback for audio-only files using audio codec capabilities and pass the
   source MIME type through the playback API to the web player.
+- Preserve the Android TV WebView across server reloads and dispose it only with the Activity
+  lifecycle, avoiding premature destruction during Compose updates.
 
 ### Security
 
