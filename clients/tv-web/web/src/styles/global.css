@@ -31,6 +31,12 @@
   --screen-x: clamp(28px, 4.5vw, 92px);
   --screen-y: clamp(24px, 3.5vh, 54px);
   --focus-outline: #675961;
+  /*
+   * Android TV's native WebView host overrides these from its measured
+   * bounds because some WebView builds resolve viewport units to zero.
+   */
+  --viewport-height: max(100vh, 100dvh);
+  --viewport-half-height: max(50vh, 50dvh);
 }
 
 /* Media-item context drawer: long-press OK/Enter or right-click. */
@@ -130,7 +136,7 @@
 }
 
 .media-context-playlist-actions {
-  max-height: calc(100dvh - 280px);
+  max-height: calc(var(--viewport-height) - 280px);
   padding: 4px 4px 24px;
   margin: -4px;
   overflow-y: auto;
@@ -325,7 +331,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 
 .app-shell {
   width: 100%;
-  height: 100dvh;
+  height: var(--viewport-height);
   min-width: 0;
   display: grid;
   grid-template-rows: var(--header-height) minmax(0, 1fr);
@@ -720,7 +726,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .home-feature {
-  min-height: calc(100dvh - var(--header-height) - 2 * var(--screen-y));
+  min-height: calc(var(--viewport-height) - var(--header-height) - 2 * var(--screen-y));
   display: grid;
   grid-template-columns: minmax(230px, 0.82fr) minmax(310px, 1.18fr) minmax(280px, 0.9fr);
   grid-template-rows: minmax(0, 1fr) auto;
@@ -1220,7 +1226,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   position: sticky;
   top: 0;
   height: min(70vh, 680px);
-  max-height: calc(100dvh - var(--header-height) - 2 * var(--screen-y));
+  max-height: calc(var(--viewport-height) - var(--header-height) - 2 * var(--screen-y));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1316,7 +1322,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .detail-editorial {
-  min-height: calc(100dvh - var(--header-height) - 2 * var(--screen-y) - 60px);
+  min-height: calc(var(--viewport-height) - var(--header-height) - 2 * var(--screen-y) - 60px);
   display: grid;
   grid-template-columns: minmax(230px, 0.84fr) minmax(310px, 1.15fr) minmax(290px, 0.9fr);
   gap: clamp(28px, 4vw, 82px);
@@ -1644,7 +1650,7 @@ code {
 .auth-page {
   position: relative;
   width: 100%;
-  min-height: 100dvh;
+  min-height: var(--viewport-height);
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(340px, 0.72fr);
   align-items: stretch;
@@ -1781,7 +1787,7 @@ code {
   position: fixed;
   inset: 0;
   width: 100vw;
-  height: 100dvh;
+  height: var(--viewport-height);
   max-width: none;
   margin: 0;
   display: block;
@@ -1800,6 +1806,13 @@ code {
   border-radius: 18px;
   background: transparent;
   filter: drop-shadow(0 22px 44px rgba(0, 0, 0, 0.34));
+}
+
+.player-page.is-minimised:not(.is-inline-music) {
+  display: block;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .player-shell,
@@ -1987,6 +2000,11 @@ code {
   object-fit: cover;
 }
 
+.player-music-backdrop-media {
+  position: absolute;
+  inset: 0;
+}
+
 .player-music-backdrop::after {
   background:
     radial-gradient(circle at 50% 42%, rgba(8, 5, 7, 0.04), rgba(8, 5, 7, 0.6) 66%),
@@ -2116,33 +2134,12 @@ code {
   box-shadow:
     0 0 10px rgba(207, 49, 87, 0.38),
     0 0 22px rgba(255, 137, 171, 0.16);
-  opacity: 0.82;
-  transform: scaleY(var(--music-bar-rest));
+  opacity: 0.58;
+  transform: scaleY(0.08);
   transform-origin: bottom;
   transition:
-    transform 460ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 360ms ease;
-}
-
-.player-music-visual.is-playing .player-music-visualiser i {
-  animation: player-music-bar var(--music-bar-speed) ease-in-out
-    var(--music-bar-delay) infinite alternate;
-  opacity: 1;
-}
-
-@keyframes player-music-bar {
-  0% {
-    transform: scaleY(var(--music-bar-rest));
-  }
-  42% {
-    transform: scaleY(var(--music-bar-peak));
-  }
-  68% {
-    transform: scaleY(var(--music-bar-rest));
-  }
-  100% {
-    transform: scaleY(var(--music-bar-peak));
-  }
+    transform 72ms linear,
+    opacity 110ms linear;
 }
 
 .player-music-copy {
@@ -2219,6 +2216,110 @@ code {
   width: 48%;
   height: 100%;
   object-fit: cover;
+}
+
+.player-shell-minimised.player-shell-music .player-music-visual {
+  inset: 0 auto 0 0;
+  width: 48%;
+  border-radius: inherit;
+}
+
+.player-shell-minimised.player-shell-music .player-music-backdrop {
+  display: none;
+}
+
+.player-shell-minimised.player-shell-music .player-music-colour-wash {
+  opacity: 0.5;
+}
+
+.player-shell-minimised.player-shell-music .player-music-stage {
+  inset: 0;
+  width: 100%;
+  display: block;
+  transform: none;
+}
+
+.player-shell-minimised.player-shell-music .player-music-cover {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: inherit;
+  box-shadow: none;
+}
+
+.player-shell-minimised.player-shell-music .player-music-cover-glass {
+  border: 0;
+}
+
+.player-shell-minimised.player-shell-music .player-music-visualiser {
+  right: 7%;
+  bottom: 9%;
+  left: 7%;
+  height: 42%;
+  gap: 2px;
+  padding: 3%;
+}
+
+.player-shell-minimised.player-shell-music .player-music-copy {
+  display: none;
+}
+
+.player-page.is-minimised.is-inline-music {
+  inset: 0 0 auto auto;
+  z-index: 18;
+  width: 62%;
+  height: var(--viewport-height);
+  border-radius: 0;
+  filter: none;
+  pointer-events: none;
+}
+
+.player-shell-inline-music {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.player-shell-inline-music::after {
+  display: none;
+}
+
+.player-shell-inline-music .player-video {
+  pointer-events: none;
+}
+
+.player-shell-inline-music .player-controls {
+  top: calc(clamp(104px, 13vh, 142px) + clamp(330px, 50vh, 540px) - 92px);
+  right: auto;
+  bottom: auto;
+  left: 50%;
+  width: min(76%, 720px);
+  gap: clamp(9px, 1.1vh, 14px);
+  padding: 0;
+  opacity: 1;
+  transform: translateX(-50%);
+  color: #ffffff;
+  pointer-events: auto;
+  filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.72));
+}
+
+.player-shell-inline-music .player-controls-row {
+  justify-content: center;
+}
+
+.player-shell-inline-music .player-volume,
+.player-shell-inline-music .player-controls-spacer,
+.player-shell-inline-music .player-controls-row > .player-quality,
+.player-shell-inline-music .player-controls-row > .player-tool-button,
+.player-shell-inline-music .player-controls-row > button:last-child {
+  display: none;
+}
+
+.player-shell-inline-music .player-time {
+  margin-left: clamp(8px, 0.8vw, 14px);
 }
 
 .mini-player-hit-target {
@@ -2333,13 +2434,14 @@ body[data-input-mode="remote"]
 .app-shell.is-player-route,
 .app-shell.is-player-route .app-main {
   width: 100vw;
-  height: 100dvh;
+  height: var(--viewport-height);
   overflow: hidden;
   background: #000000;
 }
 
 .player-overlay {
   position: absolute;
+  z-index: 30;
   inset: 0;
   display: flex;
   align-items: center;
@@ -2350,6 +2452,7 @@ body[data-input-mode="remote"]
 }
 
 .player-overlay-status {
+  z-index: 45;
   background: transparent;
   pointer-events: auto;
 }
@@ -2440,6 +2543,7 @@ body[data-input-mode="remote"]
 
 .player-scrim {
   position: absolute;
+  z-index: 10;
   right: 0;
   bottom: 0;
   left: 0;
@@ -2456,6 +2560,7 @@ body[data-input-mode="remote"]
 
 .player-controls {
   position: absolute;
+  z-index: 20;
   right: 0;
   bottom: 0;
   left: 0;
@@ -2487,6 +2592,7 @@ body[data-input-mode="remote"]
 
 .player-seek-track:hover,
 .player-seek-track:focus-visible,
+body[data-input-mode="remote"] .player-seek-track:focus,
 .player-seek-track.is-scrubbing {
   height: 9px;
   outline: 0;
@@ -2522,6 +2628,7 @@ body[data-input-mode="remote"]
 
 .player-seek-track:hover .player-seek-thumb,
 .player-seek-track:focus-visible .player-seek-thumb,
+body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb,
 .player-seek-track.is-scrubbing .player-seek-thumb {
   opacity: 1;
 }
@@ -2553,7 +2660,8 @@ body[data-input-mode="remote"]
 }
 
 .player-btn:hover,
-.player-btn:focus-visible {
+.player-btn:focus-visible,
+body[data-input-mode="remote"] .player-btn:focus {
   outline: 0;
   background: rgba(255, 255, 255, 0.15);
   transform: scale(1.12);
@@ -2682,6 +2790,7 @@ body[data-input-mode="remote"]
 
 .player-quality-button:hover,
 .player-quality-button:focus-visible,
+body[data-input-mode="remote"] .player-quality-button:focus,
 .player-quality-button[aria-expanded="true"] {
   outline: 0;
   border: 0;
@@ -2777,7 +2886,8 @@ body[data-input-mode="remote"]
 }
 
 .player-quality-option:hover,
-.player-quality-option:focus-visible {
+.player-quality-option:focus-visible,
+body[data-input-mode="remote"] .player-quality-option:focus {
   outline: 0;
   background: rgba(255, 255, 255, 0.14);
   transform: scale(1.025);
@@ -3287,7 +3397,7 @@ body[data-input-mode="remote"]
 
 .app-main {
   width: 100%;
-  height: 100dvh;
+  height: var(--viewport-height);
   min-height: 0;
   padding: 0;
   overflow: auto;
@@ -3369,7 +3479,7 @@ body[data-input-mode="remote"]
 .tv-detail {
   position: relative;
   width: 100%;
-  height: 100dvh;
+  height: var(--viewport-height);
   min-height: 620px;
   overflow: hidden;
   background: var(--surface);
@@ -3919,7 +4029,7 @@ body[data-input-mode="remote"]
 }
 
 .tv-state-page {
-  min-height: 100dvh;
+  min-height: var(--viewport-height);
   display: grid;
   place-items: center;
   padding: 12vh 8vw;
@@ -3952,7 +4062,7 @@ body[data-input-mode="remote"]
 }
 
 .settings-page {
-  min-height: 100dvh;
+  min-height: var(--viewport-height);
   padding-top: max(var(--screen-y), 11vh);
   padding-bottom: 130px;
 }
@@ -5056,7 +5166,7 @@ body[data-input-mode="remote"]
 .tv-home {
   position: relative;
   width: 100%;
-  height: 100dvh;
+  height: var(--viewport-height);
   min-height: 620px;
   overflow: hidden;
   background: var(--surface);
@@ -5475,7 +5585,7 @@ body[data-input-mode="remote"]
   gap: clamp(38px, 5vh, 64px);
   min-width: 0;
   max-width: none;
-  padding-block: 50dvh;
+  padding-block: var(--viewport-half-height);
   overflow-x: hidden;
   overflow-y: auto;
   background: linear-gradient(
@@ -5984,11 +6094,11 @@ body[data-input-mode="remote"]
 }
 
 .tv-rail-surface.is-vertical-tracks {
-  padding: 50dvh 0;
+  padding: var(--viewport-half-height) 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scroll-padding-block: 50dvh;
+  scroll-padding-block: var(--viewport-half-height);
   scrollbar-width: none;
 }
 
@@ -6214,6 +6324,215 @@ body[data-input-mode="remote"]
   letter-spacing: -0.06em;
 }
 
+.tv-music-album-flow {
+  position: relative;
+  flex: 0 0 clamp(330px, 50vh, 540px);
+  min-height: 0;
+  padding-left: clamp(22px, 2.4vw, 46px);
+}
+
+.tv-music-browser.is-content {
+  padding: clamp(104px, 13vh, 142px) 0 clamp(34px, 5vh, 62px);
+  overflow: hidden;
+}
+
+.tv-music-detail-backdrop {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.tv-music-album-cover-flow {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  perspective: 1200px;
+  transform-style: preserve-3d;
+}
+
+.tv-music-album-cover-flow .tv-music-album-card {
+  position: absolute;
+  z-index: var(--music-flow-z);
+  top: 40%;
+  left: 50%;
+  width: clamp(176px, 14vw, 260px);
+  flex: none;
+  opacity: 0.86;
+  filter: brightness(0.78) saturate(0.82);
+  transform:
+    translateX(calc(-50% + var(--music-flow-x)))
+    translateY(-50%)
+    rotateY(var(--music-flow-rotate))
+    scale(var(--music-flow-scale));
+  transform-origin: 50% 50%;
+  transition:
+    opacity 320ms ease,
+    filter 320ms ease,
+    transform 480ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+.tv-music-album-cover-flow .tv-music-album-card.is-distant {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tv-music-album-cover-flow .tv-music-album-card.is-selected,
+.tv-music-album-cover-flow .tv-music-album-card.is-selected:hover,
+.tv-music-album-cover-flow .tv-music-album-card.is-selected:focus-visible {
+  z-index: 40;
+  opacity: 1;
+  filter: none;
+  transform:
+    translateX(-50%)
+    translateY(-50%)
+    rotateY(0)
+    scale(1.12);
+}
+
+.tv-music-album-cover-flow .tv-music-album-card .tv-title-card-art {
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: clamp(8px, 0.65vw, 13px);
+  background: var(--surface-soft);
+  box-shadow: 0 24px 54px rgba(31, 14, 20, 0.3);
+  -webkit-box-reflect: below 8px
+    linear-gradient(transparent 58%, rgba(255, 255, 255, 0.16));
+}
+
+.tv-music-album-cover-flow .tv-music-album-art-fallback {
+  position: absolute;
+  inset: 0;
+  display: block;
+  padding: 0;
+}
+
+.tv-music-cover-visualiser-host {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.tv-music-cover-visualiser-host .player-music-visualiser {
+  right: 7%;
+  bottom: 8%;
+  left: 7%;
+  height: 38%;
+  padding: 4% 5%;
+}
+
+.tv-music-album-cover-flow .tv-music-album-card .tv-title-card-copy {
+  display: none;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.2rem;
+  padding-top: clamp(38px, 5vh, 64px);
+  text-align: center;
+}
+
+.tv-music-album-cover-flow .tv-music-album-card.is-selected .tv-title-card-copy {
+  display: grid;
+}
+
+.tv-music-track-list {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  padding-left: clamp(22px, 2.4vw, 46px);
+}
+
+.tv-music-track-list-heading {
+  flex: 0 0 auto;
+  padding: 0 clamp(22px, 2.4vw, 46px) clamp(10px, 1.4vh, 16px) 0;
+}
+
+.tv-music-track-list-heading h2 {
+  overflow: hidden;
+  font-size: clamp(0.78rem, 0.96vw, 1.22rem);
+  font-weight: 620;
+  letter-spacing: -0.03em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-music-track-list-heading span {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--ink-muted);
+  font-size: clamp(0.44rem, 0.5vw, 0.62rem);
+}
+
+.tv-music-track-list-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(5px, 0.65vh, 9px);
+  padding: 4px clamp(22px, 2.4vw, 46px) clamp(34px, 5vh, 58px) 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+  scroll-padding-block: 4px clamp(34px, 5vh, 58px);
+  scrollbar-width: none;
+}
+
+.tv-music-track-list-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.tv-music-track-row {
+  position: relative;
+  min-height: clamp(42px, 5.2vh, 58px);
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: clamp(32px, 2.6vw, 48px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(8px, 0.8vw, 14px);
+  overflow: hidden;
+  padding: 0 clamp(14px, 1.25vw, 22px);
+  border-radius: clamp(7px, 0.55vw, 11px);
+  background: color-mix(in srgb, var(--surface-strong) 68%, transparent);
+  color: var(--ink);
+  transition:
+    background 180ms ease,
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.tv-music-track-row:hover,
+.tv-music-track-row:focus-visible,
+.tv-music-track-row.is-selected {
+  outline: 0;
+  background: color-mix(in srgb, #cf3157 22%, var(--surface-strong));
+  transform: scale(1.012);
+}
+
+.tv-music-track-row-number,
+.tv-music-track-row-duration {
+  color: var(--ink-muted);
+  font-size: clamp(0.44rem, 0.5vw, 0.62rem);
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-music-track-row strong {
+  overflow: hidden;
+  font-size: clamp(0.5rem, 0.58vw, 0.72rem);
+  font-weight: 610;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-music-track-row .tv-watch-unseen {
+  top: 50%;
+  right: clamp(5px, 0.4vw, 8px);
+  width: clamp(6px, 0.5vw, 9px);
+  transform: translateY(-50%);
+}
+
 .tv-library-grid-panel,
 .tv-rail-surface {
   animation-name: tv-rail-surface-in;
@@ -6363,7 +6682,7 @@ body[data-input-mode="remote"]
 .tv-search {
   position: relative;
   width: 100%;
-  height: 100dvh;
+  height: var(--viewport-height);
   min-height: 620px;
   overflow: hidden;
   background: var(--surface);
@@ -6859,7 +7178,7 @@ body[data-input-mode="remote"]
 .profiles-page {
   position: relative;
   width: 100%;
-  height: 100dvh;
+  height: var(--viewport-height);
   min-height: 620px;
   overflow: hidden;
   background:
@@ -7351,6 +7670,10 @@ body[data-input-mode="remote"]
     width: 59%;
   }
 
+  .player-page.is-minimised.is-inline-music {
+    width: 59%;
+  }
+
   .tv-search-copy {
     left: 7.5vw;
     width: 33vw;
@@ -7480,7 +7803,7 @@ body[data-input-mode="remote"]
     right: 0;
     left: 40%;
     width: auto;
-    padding-bottom: calc(50dvh + 88px);
+    padding-bottom: calc(var(--viewport-half-height) + 88px);
   }
 
   .tv-detail-copy {
@@ -7498,6 +7821,10 @@ body[data-input-mode="remote"]
     right: 0;
     width: 52%;
     height: 100%;
+  }
+
+  .player-page.is-minimised.is-inline-music {
+    width: 52%;
   }
 
   .tv-media-track-scroll .tv-episode-card {
@@ -7528,7 +7855,7 @@ body[data-input-mode="remote"]
 
   .profiles-row {
     top: 220px;
-    height: calc(100dvh - 220px);
+    height: calc(var(--viewport-height) - 220px);
     padding-right: 7vw;
     padding-left: 7vw;
     scroll-padding-inline: 7vw;

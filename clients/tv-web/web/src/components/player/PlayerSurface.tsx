@@ -5,13 +5,13 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
+  type RefObject,
 } from "react";
+import { createPortal } from "react-dom";
 import type { Work } from "@streamarr-tv/api-client";
 import type { PlaybackEngineController } from "../../lib/usePlaybackEngine";
 import { MediaThumbnailArtwork } from "../MediaThumbnailArtwork";
 import { useMediaContextMenu } from "../MediaContextMenu";
-import { CachedArtworkImage } from "../../lib/artwork";
 import { PlayerControls } from "./PlayerControls";
 import {
   BackIcon,
@@ -22,7 +22,6 @@ import {
 } from "./PlayerIcons";
 
 const SEEK_STEP_SECONDS = 5;
-const VOLUME_STEP = 0.05;
 const AUTO_HIDE_MS = 3000;
 
 interface WebKitFullscreenDocument extends Document {
@@ -163,40 +162,165 @@ export interface PlayerMusicContext {
   artworkWork: Pick<Work, "id" | "images">;
 }
 
-const MUSIC_VISUALISER_BARS = Array.from({ length: 36 }, (_, index) => {
-  const distanceFromCentre = Math.abs(index - 17.5) / 17.5;
-  const centreLift = 1 - distanceFromCentre * 0.54;
-  return {
-    delay: -((index * 83) % 740),
-    peak: Math.max(0.34, centreLift * (0.68 + ((index * 17) % 29) / 100)),
-    rest: 0.1 + ((index * 7) % 10) / 100,
-    speed: 760 + ((index * 97) % 520),
-  };
-});
+const MUSIC_VISUALISER_BAR_COUNT = 36;
+
+interface MusicAudioGraph {
+  context: AudioContext;
+  analyser: AnalyserNode;
+  frequencyData: Uint8Array<ArrayBuffer>;
+}
+
+interface WebKitAudioWindow extends Window {
+  webkitAudioContext?: typeof AudioContext;
+}
+
+const musicAudioGraphs = new WeakMap<HTMLMediaElement, MusicAudioGraph>();
+
+function useMusicAudioVisualiser(
+  mediaRef: RefObject<HTMLVideoElement>,
+  active: boolean,
+  playing: boolean
+) {
+  const graphRef = useRef<MusicAudioGraph | null>(null);
+  const [ready, setReady] = useState(false);
+
+  const activate = useCallback(async () => {
+    if (!active || !mediaRef.current) return;
+    const mediaElement = mediaRef.current;
+    let graph = musicAudioGraphs.get(mediaElement);
+
+    if (!graph) {
+      const AudioContextConstructor =
+        window.AudioContext ?? (window as WebKitAudioWindow).webkitAudioContext;
+      if (!AudioContextConstructor) return;
+
+      const context = new AudioContextConstructor();
+      try {
+        await context.resume();
+        if (context.state !== "running") {
+          await context.close();
+          return;
+        }
+        const analyser = context.createAnalyser();
+        analyser.fftSize = 128;
+        analyser.smoothingTimeConstant = 0.78;
+        const source = context.createMediaElementSource(mediaElement);
+        source.connect(analyser);
+        analyser.connect(context.destination);
+        graph = {
+          context,
+          analyser,
+          frequencyData: new Uint8Array(analyser.frequencyBinCount),
+        };
+        musicAudioGraphs.set(mediaElement, graph);
+      } catch {
+        // If a TV browser blocks Web Audio, leave native playback untouched.
+        // Bars remain at rest rather than pretending to react.
+        if (context.state !== "closed") void context.close();
+        return;
+      }
+    } else if (graph.context.state === "suspended") {
+      await graph.context.resume().catch(() => undefined);
+    }
+
+    graphRef.current = graph;
+    setReady(true);
+  }, [active, mediaRef]);
+
+  useEffect(() => {
+    const visualisers = () =>
+      document.querySelectorAll<HTMLElement>(
+        "[data-player-music-visualiser]"
+      );
+
+    if (!active || !playing) {
+      for (const visualiser of visualisers()) {
+        for (const bar of visualiser.querySelectorAll<HTMLElement>("i")) {
+          bar.style.transform = "scaleY(0.08)";
+          bar.style.opacity = "0.58";
+        }
+      }
+      return;
+    }
+
+    let animationFrame = 0;
+    let cancelled = false;
+    const render = () => {
+      const graph = graphRef.current;
+      if (!graph || cancelled) return;
+
+      graph.analyser.getByteFrequencyData(graph.frequencyData);
+      for (const visualiser of visualisers()) {
+        const bars = visualiser.querySelectorAll<HTMLElement>("i");
+        const finalBin = Math.max(1, graph.frequencyData.length - 1);
+        bars.forEach((bar, index) => {
+          const position = index / Math.max(1, bars.length - 1);
+          const bin = Math.min(
+            finalBin,
+            Math.max(1, Math.round(Math.pow(position, 1.55) * finalBin))
+          );
+          const neighbouringBin = Math.min(finalBin, bin + 1);
+          const level =
+            ((graph.frequencyData[bin] ?? 0) * 0.72 +
+              (graph.frequencyData[neighbouringBin] ?? 0) * 0.28) /
+            255;
+          const scale = Math.min(1, 0.07 + Math.pow(level, 0.78) * 0.93);
+          bar.style.transform = `scaleY(${scale.toFixed(3)})`;
+          bar.style.opacity = `${Math.min(1, 0.55 + level * 0.45).toFixed(3)}`;
+        });
+      }
+      animationFrame = window.requestAnimationFrame(render);
+    };
+
+    void activate().then(() => {
+      if (!cancelled && graphRef.current) render();
+    });
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(animationFrame);
+    };
+  }, [activate, active, playing, ready]);
+
+  return activate;
+}
 
 function MusicPlayerVisual({
   context,
   mediaFileId,
   title,
-  playing,
+  inlineVisualiserHost,
 }: {
   context: PlayerMusicContext;
   mediaFileId: string;
   title: string;
-  playing: boolean;
+  inlineVisualiserHost: HTMLElement | null;
 }) {
-  return (
+  const visualiser = (
     <div
-      className={`player-music-visual${playing ? " is-playing" : " is-settled"}`}
-      aria-hidden="true"
+      className="player-music-visualiser"
+      data-player-music-visualiser
     >
+      {Array.from({ length: MUSIC_VISUALISER_BAR_COUNT }, (_, index) => (
+        <i key={index} />
+      ))}
+    </div>
+  );
+
+  if (inlineVisualiserHost) {
+    return createPortal(visualiser, inlineVisualiserHost);
+  }
+
+  return (
+    <div className="player-music-visual" aria-hidden="true">
       <div className="player-music-backdrop">
-        <CachedArtworkImage
-          work={context.artworkWork}
-          kinds={["backdrop", "poster"]}
-          alt=""
-          fallback={<span />}
-        />
+        <MediaThumbnailArtwork
+          mediaFileId={mediaFileId}
+          positionMs={0}
+          fallback={null}
+          className="player-music-backdrop-media"
+        >
+          <span />
+        </MediaThumbnailArtwork>
       </div>
       <div className="player-music-colour-wash" />
       <div className="player-music-stage">
@@ -207,31 +331,10 @@ function MusicPlayerVisual({
             fallback={null}
             className="player-music-cover-media"
           >
-            <CachedArtworkImage
-              work={context.artworkWork}
-              kinds={["poster", "backdrop"]}
-              alt=""
-              fallback={
-                <span className="player-music-cover-fallback">
-                  {context.albumTitle.slice(0, 1)}
-                </span>
-              }
-            />
-            <div className="player-music-visualiser">
-              {MUSIC_VISUALISER_BARS.map((bar, index) => (
-                <i
-                  key={index}
-                  style={
-                    {
-                      "--music-bar-delay": `${bar.delay}ms`,
-                      "--music-bar-peak": bar.peak,
-                      "--music-bar-rest": bar.rest,
-                      "--music-bar-speed": `${bar.speed}ms`,
-                    } as CSSProperties
-                  }
-                />
-              ))}
-            </div>
+            <span className="player-music-cover-fallback">
+              {context.albumTitle.slice(0, 1)}
+            </span>
+            {visualiser}
           </MediaThumbnailArtwork>
           <div className="player-music-cover-glass" />
         </div>
@@ -245,10 +348,63 @@ function MusicPlayerVisual({
   );
 }
 
+function InlineMusicMiniPlayer({
+  context,
+  mediaFileId,
+  title,
+  positionSeconds,
+  durationSeconds,
+  progressPercentage,
+  onMaximise,
+}: {
+  context: PlayerMusicContext;
+  mediaFileId: string;
+  title: string;
+  positionSeconds: number;
+  durationSeconds: number;
+  progressPercentage: number;
+  onMaximise: () => void;
+}) {
+  return createPortal(
+    <div className="player-page is-minimised player-inline-music-mini">
+      <div className="player-shell player-shell-minimised player-shell-music">
+        <MusicPlayerVisual
+          context={context}
+          mediaFileId={mediaFileId}
+          title={title}
+          inlineVisualiserHost={null}
+        />
+        <button
+          type="button"
+          className="mini-player-hit-target"
+          data-navigation-focus-key="shell:mini-player"
+          onClick={onMaximise}
+          aria-label={`Open Cover Flow for ${title}`}
+        />
+        <div className="mini-player-details" aria-hidden="true">
+          <span className="mini-player-title">{title}</span>
+          <span className="mini-player-time">
+            {formatPlayerTime(positionSeconds)} /{" "}
+            {formatPlayerTime(durationSeconds)}
+          </span>
+          <span className="mini-player-track">
+            <span style={{ width: `${progressPercentage}%` }} />
+          </span>
+        </div>
+        <span className="mini-player-maximise" aria-hidden="true">
+          <MaximiseIcon />
+        </span>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 export function PlayerSurface({
   player,
   title,
   minimised = false,
+  inlineMusic = false,
   onBack,
   onMinimise,
   onMaximise,
@@ -263,6 +419,7 @@ export function PlayerSurface({
   player: PlaybackEngineController;
   title: string;
   minimised?: boolean;
+  inlineMusic?: boolean;
   onBack: () => void;
   onMinimise: () => void;
   onMaximise: () => void;
@@ -301,8 +458,15 @@ export function PlayerSurface({
   const [backButtonFocused, setBackButtonFocused] = useState(false);
   const [minimiseButtonFocused, setMinimiseButtonFocused] = useState(false);
   const [playlistOpen, setPlaylistOpen] = useState(false);
+  const [inlineVisualiserHost, setInlineVisualiserHost] =
+    useState<HTMLElement | null>(null);
   const activePlaylistItem = playlistItems[activePlaylistIndex];
   const musicContext = activePlaylistItem?.music;
+  const activateMusicVisualiser = useMusicAudioVisualiser(
+    videoRef,
+    Boolean(musicContext),
+    engineState.state === "playing"
+  );
   const playlistContext = useMediaContextMenu();
   const interactionPinned =
     controlsPinned ||
@@ -312,6 +476,32 @@ export function PlayerSurface({
     playlistContext.isOpen ||
     qualitySwitching ||
     subtitleSwitching;
+
+  useEffect(() => {
+    if (!inlineMusic) {
+      setInlineVisualiserHost(null);
+      return;
+    }
+
+    const syncHost = () => {
+      const nextHost = document.querySelector<HTMLElement>(
+        "[data-music-visualiser-host]"
+      );
+      setInlineVisualiserHost((current) =>
+        current === nextHost ? current : nextHost
+      );
+    };
+    syncHost();
+
+    const observer = new MutationObserver(syncHost);
+    const coverFlow =
+      document.querySelector(".tv-music-album-cover-flow") ?? document.body;
+    observer.observe(coverFlow, {
+      childList: true,
+      subtree: true,
+    });
+    return () => observer.disconnect();
+  }, [inlineMusic]);
 
   const closePlaylist = useCallback((restoreTriggerFocus = true) => {
     setPlaylistOpen(false);
@@ -405,17 +595,13 @@ export function PlayerSurface({
   }, []);
 
   useEffect(() => {
-    if (minimised) return;
+    if (minimised || !initialFocusPendingRef.current) return;
     const frame = window.requestAnimationFrame(() => {
-      if (engineState.state === "playing" || engineState.state === "buffering") {
-        videoRef.current?.focus({ preventScroll: true });
-      } else {
-        shellRef.current
-          ?.querySelector<HTMLButtonElement>("[data-player-default-focus]")
-          ?.focus({
-            preventScroll: true,
-          });
-      }
+      shellRef.current
+        ?.querySelector<HTMLButtonElement>("[data-player-default-focus]")
+        ?.focus({
+          preventScroll: true,
+        });
     });
     return () => window.cancelAnimationFrame(frame);
   }, [engineState.state, minimised, videoRef]);
@@ -507,6 +693,14 @@ export function PlayerSurface({
         return;
       }
       const current = engineStateRef.current;
+      if (
+        event.key === "Enter" ||
+        event.key === " " ||
+        event.key.startsWith("Arrow")
+      ) {
+        document.body.dataset.inputMode = "remote";
+        void activateMusicVisualiser();
+      }
 
       switch (event.key) {
         case " ":
@@ -525,12 +719,13 @@ export function PlayerSurface({
           break;
         case "ArrowUp":
           event.preventDefault();
-          setMuted(false);
-          setVolume(Math.min(1, current.volume + VOLUME_STEP));
+          shellRef.current
+            ?.querySelector<HTMLButtonElement>(".player-back")
+            ?.focus({ preventScroll: true });
           break;
         case "ArrowDown":
           event.preventDefault();
-          setVolume(Math.max(0, current.volume - VOLUME_STEP));
+          focusSeekControl();
           break;
         case "m":
           setMuted(!current.muted);
@@ -554,6 +749,8 @@ export function PlayerSurface({
     toggleFullscreen,
     handleActivity,
     minimised,
+    activateMusicVisualiser,
+    focusSeekControl,
   ]);
 
   // Read directly from the <video> element's own `buffered` TimeRanges
@@ -591,17 +788,64 @@ export function PlayerSurface({
     if (isFullscreen) await toggleFullscreen();
     onMinimise();
   }, [isFullscreen, onMinimise, toggleFullscreen]);
+  const toggleMusicPlayback = useCallback(() => {
+    void activateMusicVisualiser();
+    togglePlay();
+  }, [activateMusicVisualiser, togglePlay]);
 
   return (
     <div
       ref={shellRef}
-      className={`player-shell${showControls ? "" : " player-shell-idle"}${
+      className={`player-shell${
+        showControls || inlineMusic ? "" : " player-shell-idle"
+      }${
         minimised ? " player-shell-minimised" : ""
-      }${musicContext ? " player-shell-music" : ""}`}
+      }${musicContext ? " player-shell-music" : ""}${
+        inlineMusic ? " player-shell-inline-music" : ""
+      }`}
       onMouseEnter={minimised ? undefined : handleActivity}
       onMouseMove={minimised ? undefined : handleActivity}
-      onPointerDownCapture={minimised ? undefined : handleActivity}
-      onKeyDownCapture={minimised ? undefined : handleActivity}
+      onPointerDownCapture={
+        minimised && !inlineMusic
+          ? undefined
+          : () => {
+              handleActivity();
+              void activateMusicVisualiser();
+            }
+      }
+      onKeyDownCapture={
+        minimised && !inlineMusic
+          ? undefined
+          : (event) => {
+              handleActivity();
+              const target = event.target;
+              if (
+                inlineMusic &&
+                target instanceof HTMLElement &&
+                target.closest(".player-controls") &&
+                (event.key === "ArrowUp" || event.key === "ArrowDown")
+              ) {
+                event.preventDefault();
+                event.stopPropagation();
+                const selector =
+                  event.key === "ArrowUp"
+                    ? ".tv-music-album-card.is-selected"
+                    : ".tv-music-track-row.is-selected";
+                document
+                  .querySelector<HTMLElement>(selector)
+                  ?.focus({ preventScroll: true });
+                return;
+              }
+              if (
+                event.key === "Enter" ||
+                event.key === " " ||
+                event.key.startsWith("Arrow")
+              ) {
+                document.body.dataset.inputMode = "remote";
+                void activateMusicVisualiser();
+              }
+            }
+      }
       onClick={(event) => {
         if (minimised) return;
         handleActivity();
@@ -644,13 +888,17 @@ export function PlayerSurface({
         </>
       )}
 
-      {!minimised && musicContext && activePlaylistItem ? (
-        <MusicPlayerVisual
-          context={musicContext}
-          mediaFileId={activePlaylistItem.mediaFileId}
-          title={title}
-          playing={engineState.state === "playing"}
-        />
+      {musicContext && activePlaylistItem ? (
+        inlineMusic && !inlineVisualiserHost ? null : (
+          <MusicPlayerVisual
+            context={musicContext}
+            mediaFileId={activePlaylistItem.mediaFileId}
+            title={title}
+            inlineVisualiserHost={
+              inlineMusic ? inlineVisualiserHost : null
+            }
+          />
+        )
       ) : null}
 
       {/* eslint-disable-next-line jsx-a11y/media-has-caption -- captions not modeled by the backend yet */}
@@ -670,7 +918,7 @@ export function PlayerSurface({
         onFocus={minimised ? undefined : handleActivity}
       />
 
-      {minimised && (
+      {minimised && !inlineMusic && (
         <>
           <button
             type="button"
@@ -693,6 +941,18 @@ export function PlayerSurface({
           </span>
         </>
       )}
+
+      {inlineMusic && musicContext && activePlaylistItem ? (
+        <InlineMusicMiniPlayer
+          context={musicContext}
+          mediaFileId={activePlaylistItem.mediaFileId}
+          title={title}
+          positionSeconds={positionSeconds}
+          durationSeconds={durationSeconds}
+          progressPercentage={progressPercentage}
+          onMaximise={onMaximise}
+        />
+      ) : null}
 
       {isBusy && !isFatalError && !minimised && (
         <div className="player-overlay player-overlay-loading">
@@ -859,12 +1119,12 @@ export function PlayerSurface({
       )}
       {!minimised && playlistContext.contextMenu}
 
-      {!minimised && (
+      {(!minimised || inlineMusic) && (
         <PlayerControls
           engineState={engineState}
-          visible={showControls}
+          visible={inlineMusic || showControls}
           isFullscreen={isFullscreen}
-          onTogglePlay={togglePlay}
+          onTogglePlay={musicContext ? toggleMusicPlayback : togglePlay}
           onSeek={seek}
           onSetVolume={setVolume}
           onSetMuted={setMuted}

@@ -60,7 +60,7 @@ use streamarr_model::media::LeafRef;
 use streamarr_model::{Credit, CreditRole, ImageAsset, MediaFile, Person};
 use uuid::Uuid;
 
-use crate::arr_client::{sonarr_images, whisparr_images, ArrClient};
+use crate::arr_client::{lidarr_album_images, sonarr_images, whisparr_images, ArrClient};
 
 #[derive(Debug, thiserror::Error)]
 pub enum MediaSyncError {
@@ -832,20 +832,23 @@ impl MediaSync {
         let id = Uuid::new_v4();
         let album_type = lidarr_album_type(album);
         let release_date = lidarr_release_date(album.release_date.as_deref());
+        let images_json = serde_json::to_string(&lidarr_album_images(album))
+            .map_err(streamarr_db::DbError::from)?;
         let insert_sql = match self.backend {
             Backend::Sqlite => {
-                "INSERT INTO albums (id, artist_work_id, title, album_type, release_date, monitored, availability) \
-                 VALUES (?, ?, ?, ?, ?, ?, 'available')"
+                "INSERT INTO albums (id, artist_work_id, title, images, album_type, release_date, monitored, availability) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 'available')"
             }
             Backend::Postgres => {
-                "INSERT INTO albums (id, artist_work_id, title, album_type, release_date, monitored, availability) \
-                 VALUES ($1, $2, $3, $4, $5, $6, 'available')"
+                "INSERT INTO albums (id, artist_work_id, title, images, album_type, release_date, monitored, availability) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, 'available')"
             }
         };
         sqlx::query(insert_sql)
             .bind(id.to_string())
             .bind(artist_work_id.to_string())
             .bind(title)
+            .bind(images_json)
             .bind(album_type)
             .bind(release_date)
             .bind(album.monitored as i64)
@@ -859,17 +862,20 @@ impl MediaSync {
         album_id: Uuid,
         album: &LidarrAlbum,
     ) -> Result<(), MediaSyncError> {
+        let images_json = serde_json::to_string(&lidarr_album_images(album))
+            .map_err(streamarr_db::DbError::from)?;
         let update_sql = match self.backend {
             Backend::Sqlite => {
-                "UPDATE albums SET album_type = ?, release_date = ?, monitored = ?, availability = 'available' \
+                "UPDATE albums SET images = ?, album_type = ?, release_date = ?, monitored = ?, availability = 'available' \
                  WHERE id = ?"
             }
             Backend::Postgres => {
-                "UPDATE albums SET album_type = $1, release_date = $2, monitored = $3, availability = 'available' \
-                 WHERE id = $4"
+                "UPDATE albums SET images = $1, album_type = $2, release_date = $3, monitored = $4, availability = 'available' \
+                 WHERE id = $5"
             }
         };
         sqlx::query(update_sql)
+            .bind(images_json)
             .bind(lidarr_album_type(album))
             .bind(lidarr_release_date(album.release_date.as_deref()))
             .bind(album.monitored as i64)
@@ -1721,7 +1727,12 @@ mod tests {
                     "albumType": "Album",
                     "secondaryTypes": ["Live"],
                     "releaseDate": "1997-05-21T00:00:00Z",
-                    "duration": 3_200_000
+                    "duration": 3_200_000,
+                    "images": [{
+                        "coverType": "cover",
+                        "url": "/MediaCover/Albums/100/cover.jpg",
+                        "remoteUrl": "https://images.lidarr.audio/cache/cover.jpg"
+                    }]
                 }
             ])))
             .mount(&server)
@@ -1786,16 +1797,23 @@ mod tests {
         assert_eq!(files[0].bitrate, Some(1_000_000));
         assert_eq!(files[0].duration_ms, Some(284_000));
 
-        let album_row: (String, String, Option<String>) = sqlx::query_as(
-            "SELECT title, album_type, release_date FROM albums WHERE artist_work_id = ?",
+        let album_row: (String, String, String, Option<String>) = sqlx::query_as(
+            "SELECT title, images, album_type, release_date FROM albums WHERE artist_work_id = ?",
         )
         .bind(work_id.to_string())
         .fetch_one(&pool)
         .await
         .unwrap();
         assert_eq!(album_row.0, "Sample Album");
-        assert_eq!(album_row.1, "live");
-        assert_eq!(album_row.2.as_deref(), Some("1997-05-21"));
+        let album_images: Vec<ImageAsset> = serde_json::from_str(&album_row.1).unwrap();
+        assert_eq!(album_images.len(), 1);
+        assert_eq!(album_images[0].kind, streamarr_model::ImageKind::Poster);
+        assert_eq!(
+            album_images[0].url,
+            "https://images.lidarr.audio/cache/cover.jpg"
+        );
+        assert_eq!(album_row.2, "live");
+        assert_eq!(album_row.3.as_deref(), Some("1997-05-21"));
 
         let track_row: (i64, i64, String, Option<i64>) =
             sqlx::query_as("SELECT disc_number, track_number, title, duration_seconds FROM tracks")

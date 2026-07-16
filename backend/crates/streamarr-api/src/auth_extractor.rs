@@ -277,6 +277,29 @@ impl FromRequestParts<AppState> for StreamingUser {
     }
 }
 
+/// Optional [`StreamingUser`] authentication for endpoints that also accept
+/// a narrowly-scoped playback capability. A missing bearer header produces
+/// `None`; a present but invalid bearer header still fails closed.
+#[derive(Debug, Clone)]
+pub struct OptionalStreamingUser(pub Option<StreamingUser>);
+
+impl FromRequestParts<AppState> for OptionalStreamingUser {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        if !parts.headers.contains_key(header::AUTHORIZATION) {
+            return Ok(Self(None));
+        }
+
+        StreamingUser::from_request_parts(parts, state)
+            .await
+            .map(|streaming| Self(Some(streaming)))
+    }
+}
+
 /// [`AuthUser`] plus proof the caller may *view* the catalog -- either a
 /// real Playarr streaming grant (`can_stream`) or an admin account. This is
 /// deliberately more permissive than [`StreamingUser`]: an admin needs to

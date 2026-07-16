@@ -262,6 +262,10 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/catalog/{id}/credits", method: "GET" },
   { schemaPath: "/api/v1/catalog/{id}/similar", method: "GET" },
   { schemaPath: "/api/v1/catalog/search", method: "GET" },
+  {
+    schemaPath: "/api/v1/artwork/album/{artist_work_id}/{album_id}/{kind}",
+    method: "GET",
+  },
   { schemaPath: "/api/v1/artwork/work/{work_id}/{kind}", method: "GET" },
   { schemaPath: "/api/v1/media/{media_file_id}/chapters", method: "GET" },
   { schemaPath: "/api/v1/media/{media_file_id}/metadata", method: "GET" },
@@ -519,6 +523,32 @@ export class ApiClient {
         params: { path: { work_id: workId, kind } },
         parseAs: "blob",
       })
+    ) as Blob;
+  }
+
+  /**
+   * Source album artwork fetched and durably cached by Streamarr. The
+   * artist work id keeps album lookup within the caller's visible library.
+   */
+  async getAlbumArtwork(
+    artistWorkId: string,
+    albumId: string,
+    kind: ImageKind
+  ): Promise<Blob> {
+    return this.unwrap(
+      await this.raw.GET(
+        "/api/v1/artwork/album/{artist_work_id}/{album_id}/{kind}",
+        {
+          params: {
+            path: {
+              artist_work_id: artistWorkId,
+              album_id: albumId,
+              kind,
+            },
+          },
+          parseAs: "blob",
+        }
+      )
     ) as Blob;
   }
 

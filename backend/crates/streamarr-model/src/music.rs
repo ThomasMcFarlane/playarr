@@ -5,7 +5,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::work::Availability;
+use crate::work::{Availability, ImageAsset};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -32,6 +32,7 @@ pub struct Album {
     pub id: Uuid,
     pub artist_work_id: Uuid,
     pub title: String,
+    pub images: Vec<ImageAsset>,
     pub album_type: AlbumType,
     pub release_date: Option<NaiveDate>,
     pub monitored: bool,

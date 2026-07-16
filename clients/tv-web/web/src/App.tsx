@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type ComponentType } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+} from "react";
 import {
   matchPath,
   Navigate,
@@ -62,6 +68,8 @@ interface NavGroup {
 
 export interface AppShellOutletContext {
   availableWorkKinds: ReadonlySet<WorkKind> | null;
+  activePlayerSession: ActivePlayerSession | null;
+  startPlayerSession: (session: ActivePlayerSession) => void;
 }
 
 const NAV_GROUPS: ReadonlyArray<NavGroup> = [
@@ -166,6 +174,13 @@ function AppShell() {
   const backTo = typeof requestedBackTo === "string" ? requestedBackTo : undefined;
   const navigationOrigin = navigationOriginFromState(location.state);
   useTvNavigation(location.pathname, isPlayerRoute, backTo, navigationOrigin);
+  const startPlayerSession = useCallback(
+    (session: ActivePlayerSession) => {
+      setPlayerSession(session);
+      writeActivePlayerSession(currentUserId, session);
+    },
+    [currentUserId]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -219,6 +234,12 @@ function AppShell() {
     }
   }, [currentUserId, playerSession]);
 
+  useEffect(() => {
+    if (!isProfilesRoute) return;
+    setPlayerSession(null);
+    clearActivePlayerSession();
+  }, [isProfilesRoute]);
+
   if (authFailed) {
     // Carries where the viewer was headed so `LoginPage` can return them
     // there on success, instead of always landing on Home.
@@ -231,6 +252,14 @@ function AppShell() {
         locationState: routePlayerState,
       }
     : playerSession;
+  const activePlayerBackTo = activePlayerSession?.locationState?.backTo;
+  const activePlayerIsMusic =
+    typeof activePlayerBackTo === "string" &&
+    /^\/music\/[^/?]+$/.test(activePlayerBackTo);
+  const inlineMusicPlayer =
+    !isPlayerRoute &&
+    activePlayerIsMusic &&
+    location.pathname === activePlayerBackTo;
 
   return (
     <div
@@ -256,7 +285,13 @@ function AppShell() {
       )}
 
       <main className="app-main">
-        <Outlet context={{ availableWorkKinds } satisfies AppShellOutletContext} />
+        <Outlet
+          context={{
+            availableWorkKinds,
+            activePlayerSession,
+            startPlayerSession,
+          } satisfies AppShellOutletContext}
+        />
       </main>
 
       {activePlayerSession && (
@@ -264,11 +299,28 @@ function AppShell() {
           mediaFileId={activePlayerSession.mediaFileId}
           locationState={activePlayerSession.locationState}
           minimised={!isPlayerRoute}
+          inlineMusic={inlineMusicPlayer}
+          onSessionChange={(mediaFileId, locationState) =>
+            startPlayerSession({ mediaFileId, locationState })
+          }
           onClose={() => {
             setPlayerSession(null);
             clearActivePlayerSession();
           }}
           onMaximise={() => {
+            if (activePlayerIsMusic && activePlayerBackTo) {
+              navigate(activePlayerBackTo, {
+                state: {
+                  backTo:
+                    activePlayerSession.locationState?.detailParentBackTo ??
+                    "/music",
+                  mediaFileId: activePlayerSession.mediaFileId,
+                  navigationOrigin:
+                    activePlayerSession.locationState?.detailNavigationOrigin,
+                },
+              });
+              return;
+            }
             navigate(`/player/${activePlayerSession.mediaFileId}`, {
               state: activePlayerSession.locationState,
             });

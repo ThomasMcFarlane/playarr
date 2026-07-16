@@ -109,6 +109,7 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(catalog::search_catalog_handler))
         .routes(routes!(catalog::similar_works_handler))
         .routes(routes!(artwork::work_artwork_handler))
+        .routes(routes!(artwork::album_artwork_handler))
         .routes(routes!(playback::playback_info_handler))
         .routes(routes!(playback::record_playback_event_handler))
         .routes(routes!(playback::list_watch_progress_handler))
@@ -550,6 +551,7 @@ mod tests {
         assert!(json.contains("/api/v1/catalog/{id}"));
         assert!(json.contains("/api/v1/catalog/search"));
         assert!(json.contains("/api/v1/artwork/work/{work_id}/{kind}"));
+        assert!(json.contains("/api/v1/artwork/album/{artist_work_id}/{album_id}/{kind}"));
         assert!(json.contains("/api/v1/playback/{media_file_id}"));
         assert!(json.contains("/api/v1/admin/source-instances"));
         assert!(json.contains("/api/v1/admin/views"));

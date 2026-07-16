@@ -55,7 +55,7 @@ use tower_http::services::ServeFile;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::auth_extractor::{ensure_library_allowed, StreamingUser};
+use crate::auth_extractor::{ensure_library_allowed, OptionalStreamingUser, StreamingUser};
 use crate::error::ApiError;
 use crate::playback::{
     playback_quality_options, playback_subtitle_options, PlaybackAudioTrackOption,
@@ -1054,6 +1054,11 @@ async fn wait_for_live_hls_file(path: &std::path::Path) {
     }
 }
 
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct DirectStreamQuery {
+    playback_session_id: Option<Uuid>,
+}
+
 #[utoipa::path(
     get,
     path = "/api/v1/media/{media_file_id}/stream",
@@ -1069,8 +1074,9 @@ async fn wait_for_live_hls_file(path: &std::path::Path) {
 )]
 pub async fn stream_media_handler(
     State(state): State<AppState>,
-    streaming: StreamingUser,
+    OptionalStreamingUser(streaming): OptionalStreamingUser,
     Path(media_file_id): Path<Uuid>,
+    Query(query): Query<DirectStreamQuery>,
     request: Request,
 ) -> Result<Response, ApiError> {
     let media_file = state
@@ -1078,10 +1084,35 @@ pub async fn stream_media_handler(
         .get(media_file_id)
         .await
         .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
-    ensure_library_allowed(
-        media_file.source_instance_id,
-        streaming.allowed_libraries().as_deref(),
-    )?;
+
+    if let Some(streaming) = streaming {
+        ensure_library_allowed(
+            media_file.source_instance_id,
+            streaming.allowed_libraries().as_deref(),
+        )?;
+    } else {
+        let session_id = query.playback_session_id.ok_or_else(|| {
+            ApiError::new(
+                axum::http::StatusCode::UNAUTHORIZED,
+                "unauthorized",
+                "missing playback authorisation",
+            )
+        })?;
+        let session = state.session_registry.get(session_id).ok_or_else(|| {
+            ApiError::new(
+                axum::http::StatusCode::UNAUTHORIZED,
+                "unauthorized",
+                "invalid or expired playback session",
+            )
+        })?;
+        if session.media_file_id != media_file_id {
+            return Err(ApiError::new(
+                axum::http::StatusCode::UNAUTHORIZED,
+                "unauthorized",
+                "playback session does not authorise this media file",
+            ));
+        }
+    }
 
     let resolved_path = streamarr_model::resolve_media_path(&media_file.path);
     serve_file(&resolved_path, request).await
@@ -1559,7 +1590,9 @@ mod tests {
         seed_streaming_user_with_library_allow, test_state,
     };
     use axum::body::Body;
+    use axum::extract::ConnectInfo;
     use axum::http::{Request as HttpRequest, StatusCode};
+    use std::net::SocketAddr;
     use std::path::PathBuf;
     use streamarr_model::media::LeafRef;
     use streamarr_model::MediaFile;
@@ -2226,6 +2259,56 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(bytes.as_ref(), b"01234");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[tokio::test]
+    async fn active_playback_session_authorises_native_range_requests() {
+        let (router, state) = test_state().await;
+        let contents = b"0123456789abcdefghij".to_vec();
+        let path = write_temp_file(&contents);
+        let mut file = media_file_at(path.clone());
+        file.duration_ms = Some(180_000);
+        let id = file.id;
+        let source_instance_id = file.source_instance_id;
+        state.media_files.insert(file);
+        let user_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user_id, vec![source_instance_id]).await;
+        let token = mint_access_token(&state, user_id);
+
+        let mut negotiation_request = HttpRequest::builder()
+            .uri(format!(
+                "/api/v1/playback/{id}?containers=mp4&video_codecs=h264"
+            ))
+            .header("Authorization", bearer_header(&token))
+            .body(Body::empty())
+            .unwrap();
+        negotiation_request
+            .extensions_mut()
+            .insert(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 51234))));
+        let negotiation_response = router.clone().oneshot(negotiation_request).await.unwrap();
+        assert_eq!(negotiation_response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(negotiation_response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let info: crate::playback::PlaybackInfoResponse = serde_json::from_slice(&body).unwrap();
+
+        let response = router
+            .oneshot(
+                HttpRequest::builder()
+                    .uri(info.url)
+                    .header("Range", "bytes=5-9")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(bytes.as_ref(), b"56789");
 
         let _ = std::fs::remove_file(&path);
     }

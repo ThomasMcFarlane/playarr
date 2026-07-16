@@ -31,6 +31,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   visualisation, and track-aware queue labels.
 - Add a cover-flow library view with horizontal loading, centred remote focus, reflected artwork,
   scroll-edge cues, and clearer alphabet focus states.
+- Surface and cache Lidarr album covers in artist details, and use the first available album
+  cover when Lidarr only reports unusable local paths for artist artwork.
+- Play albums directly from artist Cover Flow with inline controls, a live visualiser attached to
+  the active cover, album-scoped track queues, and a persistent artwork-rich minimised player.
 
 ### Changed
 
@@ -72,6 +76,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   lifecycle, avoiding premature destruction during Compose updates.
 - Retry audio thumbnail generation without seeking when FFmpeg exposes embedded cover art as a
   single attached picture.
+- Authorise native progressive audio with its active playback session, keep seeking and timeline
+  state accurate, and advance previous, next, and ended actions through tracks rather than albums.
 - Suppress Android's restricted-API lint false positive on the public Activity key-dispatch
   override used for TV remotes.
 - Reload visible Playarr library kinds for each signed-in user so profile switches cannot retain
@@ -79,6 +85,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Make minimised-player focus unmistakable for keyboard and remote users with layered focus rings,
   title contrast, and maximise-button feedback.
 - Restore the active Playarr item after refreshing a tab while playback is minimised.
+- Stop and clear playback on the user-selection screen, and treat pausing music as stopping its
+  playback session rather than retaining a hidden player.
 
 ### Security
 

@@ -220,6 +220,29 @@ describe("ApiClient", () => {
     expect(getAccessToken).toHaveBeenCalledOnce();
   });
 
+  it("fetches authenticated Streamarr-cached album artwork as a blob", async () => {
+    const artistWorkId = "3f8b3e2a-1111-4a11-9a11-000000000001";
+    const albumId = "4f8b3e2a-1111-4a11-9a11-000000000002";
+    const getAccessToken = vi.fn(async () => "access-token");
+    const fetchImpl = mockFetch((request) => {
+      expect(new URL(request.url).pathname).toBe(
+        `/api/v1/artwork/album/${artistWorkId}/${albumId}/poster`
+      );
+      expect(request.headers.get("Authorization")).toBe("Bearer access-token");
+      return new Response(new Uint8Array([0xff, 0xd8, 0xff]), {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      });
+    });
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken });
+
+    const artwork = await client.getAlbumArtwork(artistWorkId, albumId, "poster");
+
+    expect(artwork).toBeInstanceOf(Blob);
+    expect(artwork.type).toBe("image/jpeg");
+    expect(getAccessToken).toHaveBeenCalledOnce();
+  });
+
   it("resolves media_file_id to null for a series whose leaves live on its episodes instead", async () => {
     const workId = "3f8b3e2a-1111-4a11-9a11-000000000003";
     const episodeMediaFileId = "9c1d2e3f-2222-4b22-9b22-000000000004";

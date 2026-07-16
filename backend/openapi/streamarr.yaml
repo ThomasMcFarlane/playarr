@@ -584,6 +584,49 @@ paths:
           description: No view with this id
         '409':
           description: This is a seeded default view and cannot be deleted
+  /api/v1/artwork/album/{artist_work_id}/{album_id}/{kind}:
+    get:
+      tags:
+      - catalog
+      operationId: album_artwork_handler
+      parameters:
+      - name: artist_work_id
+        in: path
+        description: Artist work id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: album_id
+        in: path
+        description: Album id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: kind
+        in: path
+        description: poster, backdrop, banner, logo, or thumb
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Streamarr-cached album artwork
+          content:
+            image/*: {}
+        '304':
+          description: The caller already has the current cached artwork
+        '400':
+          description: Unsupported artwork kind
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+        '404':
+          description: Unknown artist, album, or unavailable artwork kind
+        '502':
+          description: The metadata-provider artwork could not be safely cached
   /api/v1/artwork/work/{work_id}/{kind}:
     get:
       tags:
@@ -2085,6 +2128,7 @@ components:
       - id
       - artist_work_id
       - title
+      - images
       - album_type
       - monitored
       - availability
@@ -2099,6 +2143,10 @@ components:
         id:
           type: string
           format: uuid
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImageAsset'
         monitored:
           type: boolean
         release_date:

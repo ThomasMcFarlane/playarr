@@ -372,6 +372,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/artwork/album/{artist_work_id}/{album_id}/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["album_artwork_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/artwork/work/{work_id}/{kind}": {
         parameters: {
             query?: never;
@@ -1083,6 +1099,7 @@ export interface components {
             availability: components["schemas"]["Availability"];
             /** Format: uuid */
             id: string;
+            images: components["schemas"]["ImageAsset"][];
             monitored: boolean;
             /** Format: date */
             release_date?: string | null;
@@ -3009,6 +3026,75 @@ export interface operations {
             };
             /** @description This is a seeded default view and cannot be deleted */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    album_artwork_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Artist work id */
+                artist_work_id: string;
+                /** @description Album id */
+                album_id: string;
+                /** @description poster, backdrop, banner, logo, or thumb */
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Streamarr-cached album artwork */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": unknown;
+                };
+            };
+            /** @description The caller already has the current cached artwork */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unsupported artwork kind */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown artist, album, or unavailable artwork kind */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The metadata-provider artwork could not be safely cached */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

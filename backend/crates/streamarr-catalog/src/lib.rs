@@ -1055,7 +1055,7 @@ impl CatalogService {
         artist_work_id: Uuid,
     ) -> Result<Vec<AlbumDetail>, CatalogError> {
         let rows = sqlx::query(
-            "SELECT id, title, album_type, release_date, monitored, availability \
+            "SELECT id, title, images, album_type, release_date, monitored, availability \
              FROM albums WHERE artist_work_id = ? ORDER BY release_date ASC",
         )
         .bind(artist_work_id.to_string())
@@ -1069,10 +1069,15 @@ impl CatalogService {
                 Some(raw) => Some(codec::parse_date(&raw)?),
                 None => None,
             };
+            let images_json: String = row.try_get("images")?;
+            let images: Vec<ImageAsset> = serde_json::from_str(&images_json).map_err(|error| {
+                CatalogError::Data(format!("invalid album images JSON for {id}: {error}"))
+            })?;
             let album = Album {
                 id,
                 artist_work_id,
                 title: row.try_get("title")?,
+                images,
                 album_type: album_type_from_str(&row.try_get::<String, _>("album_type")?)?,
                 release_date,
                 monitored: row.try_get::<i64, _>("monitored")? != 0,

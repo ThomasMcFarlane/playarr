@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { ApiClient } from "@streamarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 
 interface MediaThumbnailArtworkProps {
@@ -9,6 +10,54 @@ interface MediaThumbnailArtworkProps {
   intersectionRootSelector?: string;
   rootMargin?: string;
   positionMs?: number;
+}
+
+interface MediaThumbnailRecord {
+  promise: Promise<string>;
+  url?: string;
+}
+
+const mediaThumbnailsByClient = new WeakMap<
+  ApiClient,
+  Map<string, MediaThumbnailRecord>
+>();
+
+function mediaThumbnailCache(client: ApiClient): Map<string, MediaThumbnailRecord> {
+  let cache = mediaThumbnailsByClient.get(client);
+  if (!cache) {
+    cache = new Map();
+    mediaThumbnailsByClient.set(client, cache);
+  }
+  return cache;
+}
+
+function mediaThumbnailKey(mediaFileId: string, positionMs?: number): string {
+  return `${mediaFileId}:${positionMs ?? 30_000}`;
+}
+
+function loadMediaThumbnail(
+  client: ApiClient,
+  mediaFileId: string,
+  positionMs?: number
+): MediaThumbnailRecord {
+  const cache = mediaThumbnailCache(client);
+  const key = mediaThumbnailKey(mediaFileId, positionMs);
+  const existing = cache.get(key);
+  if (existing) return existing;
+
+  const record: MediaThumbnailRecord = {
+    promise: client.getMediaThumbnail(mediaFileId, positionMs).then((blob) => {
+      if (blob.size === 0) throw new Error("The thumbnail response was empty.");
+      const url = URL.createObjectURL(blob);
+      record.url = url;
+      return url;
+    }),
+  };
+  record.promise.catch(() => {
+    if (cache.get(key) === record) cache.delete(key);
+  });
+  cache.set(key, record);
+  return record;
 }
 
 /**
@@ -34,7 +83,14 @@ export function MediaThumbnailArtwork({
   const [source, setSource] = useState<string | null>(fallback);
 
   useEffect(() => {
-    setSource(fallback);
+    const cachedSource = mediaThumbnailCache(client).get(
+      mediaThumbnailKey(mediaFileId, positionMs)
+    )?.url;
+    setSource(cachedSource ?? fallback);
+    if (cachedSource) {
+      setShouldLoad(true);
+      return;
+    }
     setShouldLoad(false);
     const container = containerRef.current;
     if (!container || typeof IntersectionObserver === "undefined") {
@@ -55,31 +111,24 @@ export function MediaThumbnailArtwork({
     );
     observer.observe(container);
     return () => observer.disconnect();
-  }, [fallback, intersectionRootSelector, mediaFileId, positionMs, rootMargin]);
+  }, [client, fallback, intersectionRootSelector, mediaFileId, positionMs, rootMargin]);
 
   useEffect(() => {
     if (!shouldLoad) return;
     let cancelled = false;
-    let objectUrl: string | null = null;
     let retryTimer: number | undefined;
     let retryAttempt = 0;
     const retryDelays = [1_500, 3_000, 6_000, 12_000, 30_000, 60_000];
 
     const loadThumbnail = () => {
-      client
-        .getMediaThumbnail(mediaFileId, positionMs)
-        .then((blob) => {
-          if (blob.size === 0) {
-            throw new Error("The thumbnail response was empty.");
-          }
-          if (objectUrl) URL.revokeObjectURL(objectUrl);
-          objectUrl = URL.createObjectURL(blob);
-          if (cancelled) {
-            URL.revokeObjectURL(objectUrl);
-            objectUrl = null;
-            return;
-          }
-          setSource(objectUrl);
+      const record = loadMediaThumbnail(client, mediaFileId, positionMs);
+      if (record.url) {
+        setSource(record.url);
+        return;
+      }
+      record.promise
+        .then((url) => {
+          if (!cancelled) setSource(url);
         })
         .catch((error: unknown) => {
           if (cancelled) return;
@@ -100,7 +149,6 @@ export function MediaThumbnailArtwork({
     return () => {
       cancelled = true;
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [client, mediaFileId, positionMs, shouldLoad]);
 

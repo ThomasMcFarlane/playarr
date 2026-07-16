@@ -93,6 +93,7 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
   private detachListeners: (() => void) | null = null;
   private authHeaderProvider: (() => string | undefined) | null = null;
   private readonly externalSubtitleTrackIds = new Map<string, number>();
+  private nativeDirect = false;
 
   private subtitleTrackId(track: shaka.extern.TextTrack): string {
     return (
@@ -139,6 +140,15 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
 
   private syncTrackState(): void {
     if (!this.player) return;
+    if (this.nativeDirect) {
+      this.setState({
+        audioTracks: [],
+        subtitleTracks: [],
+        selectedAudioTrackId: null,
+        selectedSubtitleTrackId: null,
+      });
+      return;
+    }
 
     const audioTracks: PlaybackAudioTrack[] = this.player.getAudioTracks().map((track, index) => ({
       id: audioTrackId(track),
@@ -290,6 +300,26 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
     const handlePause = () =>
       this.setState({ state: this.state.state === "ended" ? "ended" : "paused" });
     const handleEnded = () => this.setState({ state: "ended" });
+    const handleWaiting = () => {
+      if (this.nativeDirect) this.setState({ state: "buffering" });
+    };
+    const handleCanPlay = () => {
+      if (!this.nativeDirect) return;
+      this.syncTimelineState();
+      this.setState({ state: mediaElement.paused ? "paused" : "playing" });
+    };
+    const handleNativeError = () => {
+      if (!this.nativeDirect) return;
+      const mediaError = mediaElement.error;
+      this.setState({
+        state: "error",
+        error: {
+          code: mediaError ? `MEDIA_${mediaError.code}` : "MEDIA_UNKNOWN",
+          message: mediaError?.message || "The browser could not load this audio source.",
+          fatal: true,
+        },
+      });
+    };
     const handleVolumeChange = () => {
       if (!this.mediaElement) return;
       this.setState({ volume: this.mediaElement.volume, muted: this.mediaElement.muted });
@@ -310,6 +340,10 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
     mediaElement.addEventListener("play", handlePlay);
     mediaElement.addEventListener("pause", handlePause);
     mediaElement.addEventListener("ended", handleEnded);
+    mediaElement.addEventListener("waiting", handleWaiting);
+    mediaElement.addEventListener("stalled", handleWaiting);
+    mediaElement.addEventListener("canplay", handleCanPlay);
+    mediaElement.addEventListener("error", handleNativeError);
     mediaElement.addEventListener("volumechange", handleVolumeChange);
 
     this.detachListeners = () => {
@@ -328,6 +362,10 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
       mediaElement.removeEventListener("play", handlePlay);
       mediaElement.removeEventListener("pause", handlePause);
       mediaElement.removeEventListener("ended", handleEnded);
+      mediaElement.removeEventListener("waiting", handleWaiting);
+      mediaElement.removeEventListener("stalled", handleWaiting);
+      mediaElement.removeEventListener("canplay", handleCanPlay);
+      mediaElement.removeEventListener("error", handleNativeError);
       mediaElement.removeEventListener("volumechange", handleVolumeChange);
     };
   }
@@ -355,7 +393,61 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
       if (drmConfig) this.player.configure({ drm: drmConfig });
     }
 
-    await this.player.load(source.url, source.startPositionSeconds ?? null, source.mimeType);
+    const isDirectAudio = (source.mimeType.split(";", 1)[0] ?? "")
+      .trim()
+      .toLowerCase()
+      .startsWith("audio/");
+
+    if (isDirectAudio) {
+      // Shaka deliberately switches progressive audio to its native
+      // `src=` path. That path bypasses Shaka's NetworkingEngine (and its
+      // bearer-header filter), so make the native behaviour explicit and
+      // use the session-scoped URL returned by playback negotiation.
+      await this.player.unload();
+      this.nativeDirect = true;
+      this.mediaElement.preload = "auto";
+      this.mediaElement.src = source.url;
+      this.mediaElement.load();
+
+      await new Promise<void>((resolve, reject) => {
+        if (!this.mediaElement) {
+          reject(new Error("Media element detached while loading audio."));
+          return;
+        }
+        const mediaElement = this.mediaElement;
+        const cleanup = () => {
+          mediaElement.removeEventListener("loadedmetadata", handleLoaded);
+          mediaElement.removeEventListener("error", handleError);
+        };
+        const handleLoaded = () => {
+          cleanup();
+          resolve();
+        };
+        const handleError = () => {
+          cleanup();
+          reject(
+            new Error(
+              mediaElement.error?.message || "The browser could not load this audio source."
+            )
+          );
+        };
+
+        if (mediaElement.readyState >= HTMLMediaElement.HAVE_METADATA) {
+          resolve();
+          return;
+        }
+        mediaElement.addEventListener("loadedmetadata", handleLoaded, { once: true });
+        mediaElement.addEventListener("error", handleError, { once: true });
+      });
+    } else {
+      if (this.nativeDirect) {
+        this.mediaElement.pause();
+        this.mediaElement.removeAttribute("src");
+        this.mediaElement.load();
+      }
+      this.nativeDirect = false;
+      await this.player.load(source.url, source.startPositionSeconds ?? null, source.mimeType);
+    }
 
     this.syncTimelineState();
     this.syncTrackState();
@@ -400,6 +492,7 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
   }
 
   async selectAudioTrack(trackId: string): Promise<void> {
+    if (this.nativeDirect) return;
     const track = this.player
       ?.getAudioTracks()
       .find((candidate) => audioTrackId(candidate) === trackId);
@@ -409,7 +502,7 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
   }
 
   async addExternalSubtitleTracks(tracks: ExternalSubtitleTrack[]): Promise<void> {
-    if (!this.player) return;
+    if (!this.player || this.nativeDirect) return;
     for (const track of tracks) {
       if (this.externalSubtitleTrackIds.has(track.id)) continue;
       const added = await this.player.addTextTrackAsync(
@@ -428,7 +521,7 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
   }
 
   async selectSubtitleTrack(trackId: string | null): Promise<void> {
-    if (!this.player) return;
+    if (!this.player || this.nativeDirect) return;
     if (trackId === null) {
       this.player.setTextTrackVisibility(false);
       this.syncTrackState();
@@ -446,9 +539,15 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
 
   async destroy(): Promise<void> {
     this.detachListeners?.();
+    if (this.nativeDirect && this.mediaElement) {
+      this.mediaElement.pause();
+      this.mediaElement.removeAttribute("src");
+      this.mediaElement.load();
+    }
     await this.player?.destroy();
     this.player = null;
     this.mediaElement = null;
+    this.nativeDirect = false;
     this.externalSubtitleTrackIds.clear();
     this.setState({ state: "idle" });
   }

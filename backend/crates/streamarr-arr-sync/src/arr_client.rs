@@ -7,9 +7,9 @@
 
 use chrono::{DateTime, Utc};
 use streamarr_arr_client::{
-    ArrClientError, BazarrClient, LidarrArtist, LidarrClient, LidarrImage, ProwlarrClient,
-    RadarrClient, RadarrImage, RadarrMovie, ReadarrAuthor, ReadarrClient, SonarrClient,
-    SonarrImage, SonarrSeries, WhisparrClient, WhisparrImage, WhisparrSeries,
+    ArrClientError, BazarrClient, LidarrAlbum, LidarrArtist, LidarrClient, LidarrImage,
+    ProwlarrClient, RadarrClient, RadarrImage, RadarrMovie, ReadarrAuthor, ReadarrClient,
+    SonarrClient, SonarrImage, SonarrSeries, WhisparrClient, WhisparrImage, WhisparrSeries,
 };
 use streamarr_model::{
     Availability, ExternalProvider, ImageAsset, ImageKind, SourceInstance, SourceKind, WorkKind,
@@ -25,8 +25,12 @@ use streamarr_model::{
 /// being skipped, not by guessing).
 fn image_asset(cover_type: &str, remote_url: Option<&str>) -> Option<ImageAsset> {
     let url = remote_url?;
+    let parsed = reqwest::Url::parse(url).ok()?;
+    if !matches!(parsed.scheme(), "http" | "https") || parsed.host_str().is_none() {
+        return None;
+    }
     let kind = match cover_type {
-        "poster" => ImageKind::Poster,
+        "poster" | "cover" => ImageKind::Poster,
         "fanart" => ImageKind::Backdrop,
         "banner" => ImageKind::Banner,
         "clearlogo" | "logo" => ImageKind::Logo,
@@ -61,6 +65,10 @@ fn lidarr_images(images: &[LidarrImage]) -> Vec<ImageAsset> {
         .iter()
         .filter_map(|img| image_asset(&img.cover_type, img.remote_url.as_deref()))
         .collect()
+}
+
+pub(crate) fn lidarr_album_images(album: &LidarrAlbum) -> Vec<ImageAsset> {
+    lidarr_images(&album.images)
 }
 
 pub(crate) fn whisparr_images(images: &[WhisparrImage]) -> Vec<ImageAsset> {
@@ -192,6 +200,24 @@ fn map_lidarr(artist: &LidarrArtist) -> RemoteWork {
     }
 }
 
+fn map_lidarr_with_album_fallback(artist: &LidarrArtist, albums: &[LidarrAlbum]) -> RemoteWork {
+    let mut remote = map_lidarr(artist);
+    if !remote
+        .images
+        .iter()
+        .any(|image| image.kind == ImageKind::Poster)
+    {
+        remote.images.extend(
+            albums
+                .iter()
+                .filter(|album| album.artist_id == artist.id)
+                .flat_map(lidarr_album_images)
+                .find(|image| image.kind == ImageKind::Poster),
+        );
+    }
+    remote
+}
+
 fn map_readarr(author: &ReadarrAuthor) -> RemoteWork {
     RemoteWork {
         external_id: author.foreign_author_id.clone(),
@@ -314,12 +340,14 @@ impl ArrClient {
             ArrClient::Radarr(client) => {
                 Ok(client.list_movies().await?.iter().map(map_radarr).collect())
             }
-            ArrClient::Lidarr(client) => Ok(client
-                .list_artists()
-                .await?
-                .iter()
-                .map(map_lidarr)
-                .collect()),
+            ArrClient::Lidarr(client) => {
+                let (artists, albums) =
+                    tokio::try_join!(client.list_artists(), client.list_albums())?;
+                Ok(artists
+                    .iter()
+                    .map(|artist| map_lidarr_with_album_fallback(artist, &albums))
+                    .collect())
+            }
             ArrClient::Readarr(client) => Ok(client
                 .list_authors()
                 .await?
@@ -343,7 +371,11 @@ impl ArrClient {
         match self {
             ArrClient::Sonarr(client) => Ok(Some(map_sonarr(&client.get_series(id).await?))),
             ArrClient::Radarr(client) => Ok(Some(map_radarr(&client.get_movie(id).await?))),
-            ArrClient::Lidarr(client) => Ok(Some(map_lidarr(&client.get_artist(id).await?))),
+            ArrClient::Lidarr(client) => {
+                let (artist, albums) =
+                    tokio::try_join!(client.get_artist(id), client.list_albums_for_artist(id))?;
+                Ok(Some(map_lidarr_with_album_fallback(&artist, &albums)))
+            }
             ArrClient::Readarr(client) => Ok(Some(map_readarr(&client.get_author(id).await?))),
             ArrClient::Whisparr(client) => Ok(Some(map_whisparr(&client.get_series(id).await?))),
             ArrClient::Bazarr(_) | ArrClient::Prowlarr(_) => Ok(None),
@@ -451,6 +483,41 @@ mod tests {
 
         let remote = map_lidarr(&lidarr_artist(0));
         assert_eq!(remote.availability, Some(Availability::Pending));
+    }
+
+    #[test]
+    fn lidarr_uses_an_album_cover_when_artist_artwork_is_only_a_local_path() {
+        let mut artist = lidarr_artist(112);
+        artist.images = vec![LidarrImage {
+            cover_type: "poster".to_string(),
+            url: "/MediaCover/7/poster.jpg".to_string(),
+            remote_url: Some("/var/lib/lidarr/MediaCover/7/poster.jpg".to_string()),
+        }];
+        let album = LidarrAlbum {
+            id: 100,
+            title: Some("Sample Album".to_string()),
+            foreign_album_id: Some("d6591261-daa1-32e1-8d0e-a60e6f97a698".to_string()),
+            artist_id: artist.id,
+            monitored: true,
+            album_type: Some("Album".to_string()),
+            secondary_types: Vec::new(),
+            release_date: Some("1997-05-21T00:00:00Z".to_string()),
+            duration: Some(3_200_000),
+            images: vec![LidarrImage {
+                cover_type: "cover".to_string(),
+                url: "/MediaCover/Albums/100/cover.jpg".to_string(),
+                remote_url: Some("https://images.lidarr.audio/cache/cover.jpg".to_string()),
+            }],
+        };
+
+        let remote = map_lidarr_with_album_fallback(&artist, &[album]);
+
+        assert_eq!(remote.images.len(), 1);
+        assert_eq!(remote.images[0].kind, ImageKind::Poster);
+        assert_eq!(
+            remote.images[0].url,
+            "https://images.lidarr.audio/cache/cover.jpg"
+        );
     }
 
     #[test]

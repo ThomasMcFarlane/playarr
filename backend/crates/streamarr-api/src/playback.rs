@@ -895,7 +895,12 @@ pub async fn playback_info_handler(
         state.transcode.expire_playback_session(session_id).await?;
         return Ok(Json(PlaybackInfoResponse {
             mode: PlaybackMode::Direct,
-            url: format!("/api/v1/media/{media_file_id}/stream"),
+            // Native progressive media loading (`<audio>/<video src>`) cannot
+            // attach Shaka's bearer request filter. The active, random
+            // playback-session id is therefore a capability scoped to this
+            // exact media file. It stops authorising reads as soon as the
+            // session leaves the in-memory active registry.
+            url: format!("/api/v1/media/{media_file_id}/stream?playback_session_id={session_id}"),
             mime_type: direct_play_mime_type(&media_file.container).to_string(),
             duration_ms,
             source_offset_ms: 0,
@@ -1223,6 +1228,13 @@ mod tests {
             vec![1080, 720, 480]
         );
         assert_ne!(info.session_id, Uuid::nil());
+        assert_eq!(
+            info.url,
+            format!(
+                "/api/v1/media/{id}/stream?playback_session_id={}",
+                info.session_id
+            )
+        );
 
         // The session was actually recorded, both durably and in the live
         // registry -- proves `start_analytics_session` really ran, not

@@ -1,0 +1,1 @@
+ALTER TABLE albums ADD COLUMN images TEXT NOT NULL DEFAULT '[]';

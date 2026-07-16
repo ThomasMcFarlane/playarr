@@ -85,6 +85,8 @@ pub struct LidarrAlbum {
     pub release_date: Option<String>,
     #[serde(default)]
     pub duration: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_null_default")]
+    pub images: Vec<LidarrImage>,
 }
 
 /// A track as Lidarr's `/api/v1/track` endpoint returns it. This resource is
@@ -532,7 +534,12 @@ mod tests {
                     "title": "Sample Album",
                     "foreignAlbumId": "d6591261-daa1-32e1-8d0e-a60e6f97a698",
                     "artistId": 1,
-                    "monitored": true
+                    "monitored": true,
+                    "images": [{
+                        "coverType": "cover",
+                        "url": "/MediaCover/Albums/100/cover.jpg",
+                        "remoteUrl": "https://images.lidarr.audio/cache/cover.jpg"
+                    }]
                 }
             ])))
             .mount(&server)
@@ -547,6 +554,12 @@ mod tests {
         assert_eq!(albums.len(), 1);
         assert_eq!(albums[0].title.as_deref(), Some("Sample Album"));
         assert_eq!(albums[0].artist_id, 1);
+        assert_eq!(albums[0].images.len(), 1);
+        assert_eq!(albums[0].images[0].cover_type, "cover");
+        assert_eq!(
+            albums[0].images[0].remote_url.as_deref(),
+            Some("https://images.lidarr.audio/cache/cover.jpg")
+        );
     }
 
     #[tokio::test]

@@ -21,7 +21,8 @@ use axum::http::header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, ETAG, IF_N
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::Response;
 use streamarr_artwork::ArtworkCacheError;
-use streamarr_model::{ImageKind, Work};
+use streamarr_catalog::WorkChildren;
+use streamarr_model::{ImageAsset, ImageKind, Work};
 use uuid::Uuid;
 
 use crate::auth_extractor::CatalogViewer;
@@ -77,17 +78,19 @@ fn parse_image_kind(raw: &str) -> Result<ImageKind, ApiError> {
     }
 }
 
-fn source_url(work: &Work, kind: ImageKind) -> Result<reqwest::Url, ApiError> {
-    let raw = work
-        .images
+fn source_url_from_images(
+    images: &[ImageAsset],
+    owner: &str,
+    kind: ImageKind,
+) -> Result<reqwest::Url, ApiError> {
+    let raw = images
         .iter()
         .find(|image| image.kind == kind)
         .map(|image| image.url.as_str())
         .ok_or_else(|| {
             ApiError::not_found(format!(
-                "{} artwork is not available for work {}",
+                "{} artwork is not available for {owner}",
                 streamarr_artwork::image_kind_segment(kind),
-                work.id
             ))
         })?;
     let url = reqwest::Url::parse(raw)
@@ -98,6 +101,10 @@ fn source_url(work: &Work, kind: ImageKind) -> Result<reqwest::Url, ApiError> {
         ));
     }
     Ok(url)
+}
+
+fn source_url(work: &Work, kind: ImageKind) -> Result<reqwest::Url, ApiError> {
+    source_url_from_images(&work.images, &format!("work {}", work.id), kind)
 }
 
 async fn artwork_response(
@@ -166,6 +173,57 @@ pub async fn work_artwork_handler(
     let url = source_url(&detail.work, kind)?;
     let cached = streamarr_artwork::shared()
         .ensure_cached(work_id, kind, &url)
+        .await?;
+    artwork_response(&cached.path, cached.content_type, cached.url_hash, &headers).await
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/artwork/album/{artist_work_id}/{album_id}/{kind}",
+    tag = "catalog",
+    params(
+        ("artist_work_id" = Uuid, Path, description = "Artist work id"),
+        ("album_id" = Uuid, Path, description = "Album id"),
+        ("kind" = String, Path, description = "poster, backdrop, banner, logo, or thumb")
+    ),
+    responses(
+        (status = 200, description = "Streamarr-cached album artwork", content_type = "image/*"),
+        (status = 304, description = "The caller already has the current cached artwork"),
+        (status = 400, description = "Unsupported artwork kind"),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Caller has neither Playarr streaming access nor admin access"),
+        (status = 404, description = "Unknown artist, album, or unavailable artwork kind"),
+        (status = 502, description = "The metadata-provider artwork could not be safely cached")
+    )
+)]
+pub async fn album_artwork_handler(
+    State(state): State<AppState>,
+    viewer: CatalogViewer,
+    Path((artist_work_id, album_id, kind)): Path<(Uuid, Uuid, String)>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    let kind = parse_image_kind(&kind)?;
+    let allowed = viewer.allowed_libraries();
+    let detail = state
+        .catalog
+        .get_by_id(artist_work_id, allowed.as_deref())
+        .await?;
+    let WorkChildren::Artist(albums) = detail.children else {
+        return Err(ApiError::not_found(format!(
+            "artist {artist_work_id} was not found"
+        )));
+    };
+    let album = albums
+        .iter()
+        .find(|album| album.album.id == album_id)
+        .ok_or_else(|| ApiError::not_found(format!("album {album_id} was not found")))?;
+    let url = source_url_from_images(
+        &album.album.images,
+        &format!("album {}", album.album.id),
+        kind,
+    )?;
+    let cached = streamarr_artwork::shared()
+        .ensure_cached(album_id, kind, &url)
         .await?;
     artwork_response(&cached.path, cached.content_type, cached.url_hash, &headers).await
 }

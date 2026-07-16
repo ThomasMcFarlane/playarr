@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   usePlaybackEngine,
@@ -133,14 +133,21 @@ export function PlayerPage({
   mediaFileId,
   locationState,
   minimised,
+  inlineMusic = false,
   onClose,
   onMaximise,
+  onSessionChange,
 }: {
   mediaFileId: string;
   locationState: PlayerLocationState | null;
   minimised: boolean;
+  inlineMusic?: boolean;
   onClose: () => void;
   onMaximise: () => void;
+  onSessionChange: (
+    mediaFileId: string,
+    locationState: PlayerLocationState
+  ) => void;
 }) {
   const navigate = useNavigate();
   const navigationOrigin = navigationOriginFromState(locationState);
@@ -184,6 +191,10 @@ export function PlayerPage({
     startPositionSeconds,
     playbackSettings
   );
+  const previousPlaybackStateRef = useRef({
+    mediaFileId,
+    state: "idle" as typeof player.engineState.state,
+  });
   const { negotiation, retryNegotiation } = player;
   const handleBack = useCallback(() => {
     onClose();
@@ -238,27 +249,34 @@ export function PlayerPage({
   ]);
   const navigateToPlaylistItem = useCallback(
     (item: PlayerPlaylistItem) => {
+      const nextLocationState = {
+        title: item.subtitle ? `${item.subtitle} · ${item.title}` : item.title,
+        backTo,
+        detailParentBackTo,
+        episodeId: item.episodeId,
+        mediaFileId: item.mediaFileId,
+        playlistItems,
+        navigationOrigin: navigationOrigin ?? undefined,
+        detailNavigationOrigin: locationState?.detailNavigationOrigin,
+        playbackSettings,
+      } satisfies PlayerLocationState;
+      if (minimised) {
+        onSessionChange(item.mediaFileId, nextLocationState);
+        return;
+      }
       navigate(`/player/${item.mediaFileId}`, {
         replace: true,
-        state: {
-          title: item.subtitle ? `${item.subtitle} · ${item.title}` : item.title,
-          backTo,
-          detailParentBackTo,
-          episodeId: item.episodeId,
-          mediaFileId: item.mediaFileId,
-          playlistItems,
-          navigationOrigin: navigationOrigin ?? undefined,
-          detailNavigationOrigin: locationState?.detailNavigationOrigin,
-          playbackSettings,
-        } satisfies PlayerLocationState,
+        state: nextLocationState,
       });
     },
     [
       backTo,
       detailParentBackTo,
       locationState?.detailNavigationOrigin,
+      minimised,
       navigate,
       navigationOrigin,
+      onSessionChange,
       playbackSettings,
       playlistItems,
     ]
@@ -278,6 +296,44 @@ export function PlayerPage({
     const next = playlistItems[activePlaylistIndex + 1];
     if (next) navigateToPlaylistItem(next);
   }, [activePlaylistIndex, navigateToPlaylistItem, playlistItems]);
+
+  useEffect(() => {
+    const previous = previousPlaybackStateRef.current;
+    previousPlaybackStateRef.current = {
+      mediaFileId,
+      state: player.engineState.state,
+    };
+    if (
+      previous.mediaFileId === mediaFileId &&
+      previous.state === "playing" &&
+      player.engineState.state === "paused" &&
+      activePlaylistItem?.music
+    ) {
+      onClose();
+      return;
+    }
+    if (
+      previous.mediaFileId !== mediaFileId ||
+      player.engineState.state !== "ended" ||
+      previous.state === "ended" ||
+      !activePlaylistItem?.music
+    ) {
+      return;
+    }
+    const next = playlistItems[activePlaylistIndex + 1];
+    if (!next) return;
+
+    const frame = window.requestAnimationFrame(() => navigateToPlaylistItem(next));
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    activePlaylistIndex,
+    activePlaylistItem?.music,
+    mediaFileId,
+    navigateToPlaylistItem,
+    onClose,
+    player.engineState.state,
+    playlistItems,
+  ]);
 
   useEffect(() => {
     if (minimised) return;
@@ -396,11 +452,16 @@ export function PlayerPage({
   }
 
   return (
-    <div className={`player-page${minimised ? " is-minimised" : ""}`}>
+    <div
+      className={`player-page${minimised ? " is-minimised" : ""}${
+        inlineMusic ? " is-inline-music" : ""
+      }`}
+    >
       <PlayerSurface
         player={player}
         title={title ?? activePlaylistItem?.title ?? "Now playing"}
         minimised={minimised}
+        inlineMusic={inlineMusic}
         onBack={handleBack}
         onMinimise={handleMinimise}
         onMaximise={onMaximise}

@@ -40,6 +40,8 @@ function detailRoute(work: Work): string {
     ? `/sites/${work.id}`
     : work.kind === "series"
       ? `/series/${work.id}`
+      : work.kind === "artist"
+        ? `/music/${work.id}`
       : `/movies/${work.id}`;
 }
 
@@ -52,6 +54,8 @@ function workKindLabel(work: Work): string {
     ? "Site"
     : work.kind === "series"
       ? "Series"
+      : work.kind === "artist"
+        ? "Artist"
       : "Movie";
 }
 
@@ -563,6 +567,11 @@ function HomeRail({
       {items.map((work) => {
             const onDeckEntry = onDeckByWork.get(work.id);
             const episode = onDeckEntry?.episode;
+            const mediaFileId =
+              episode?.detail.media_file_id ??
+              (work.kind === "artist"
+                ? onDeckEntry?.progress.media_file_id
+                : undefined);
             const progress = onDeckEntry?.progress ?? progressByWork.get(work.id);
             const title =
               episode?.detail.episode.title ??
@@ -582,7 +591,7 @@ function HomeRail({
                 state={{
                   backTo: "/",
                   episodeId: episode?.detail.episode.id,
-                  mediaFileId: episode?.detail.media_file_id,
+                  mediaFileId,
                   navigationOrigin,
                 }}
                 className={`tv-home-card${
@@ -605,13 +614,13 @@ function HomeRail({
                   detailRoute: detailRoute(work),
                   parentRoute: "/",
                   progress,
-                  preferredMediaFileId: episode?.detail.media_file_id,
+                  preferredMediaFileId: mediaFileId,
                   preferredEpisodeId: episode?.detail.episode.id,
                 })}
               >
                 <HomeRailArtwork
                   work={work}
-                  mediaFileId={episode?.detail.media_file_id}
+                  mediaFileId={mediaFileId}
                   title={title}
                 >
                   <WatchStateOverlay progress={progress} showUnwatched={progressReady} />
