@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add a VIDAA-aware hosted Playarr Web App with launcher artwork, persistent
+  platform identification, television-safe playback negotiation, and a Hisense
+  installation guide.
 - Add durable users, policies, rotating refresh-token families, profile PINs, player preferences,
   per-title playback preferences, and watch-progress storage for SQLite and PostgreSQL.
 - Add saved library views, nested personal and system playlists, cast and crew credits, people

@@ -52,6 +52,7 @@ import {
   type ActivePlayerSession,
 } from "./lib/playerSession";
 import { useTvNavigation } from "./lib/useTvNavigation";
+import { PLAYARR_CLIENT_PLATFORM } from "./lib/clientPlatform";
 
 interface NavItem {
   to: string;
@@ -160,7 +161,7 @@ function AppShell() {
     availableWorkKindsState.userId === currentUserId
       ? availableWorkKindsState.kinds
       : null;
-  const appUpdate = useAppUpdate(client, "web");
+  const appUpdate = useAppUpdate(client, PLAYARR_CLIENT_PLATFORM);
   const location = useLocation();
   const navigate = useNavigate();
   const now = useMinuteClock();

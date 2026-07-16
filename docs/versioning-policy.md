@@ -208,19 +208,26 @@ call site currently sets the platform/version headers for this client either,
 mechanism 2 cannot currently fire against a real deployment — only mechanism
 1 (the CDN-manifest OTA path) is exercisable today.
 
-### webOS / Tizen / VIDAA fallback — `VersionBanner.tsx`
+### webOS / Tizen — `VersionBanner.tsx`
 
-All three TV shells share the `tv-web`/`ui-tv` codebase and render the same
+Both packaged TV shells share the `tv-web`/`ui-tv` codebase and render the same
 [`VersionBanner`](../clients/tv-web/packages/ui-tv/src/screens/VersionBanner.tsx):
 a simple, non-blocking (`pointerEvents: "none"`), check-on-launch banner shown
 whenever `evaluateClientVersion` returns `"deprecated"` or `"unsupported"`,
 telling the viewer to update via their TV's app store. Unlike Web, there is no
 forced-reload path here, because these platforms have no OTA mechanism at
 all: webOS and Tizen require a full store resubmission and review cycle for
-every release, including patches, and VIDAA has no native app at all (only
-the optional, unsupported PWA sideload reusing the Web build). As with the
-other clients, this banner currently has nothing real to react to against a
+every release, including patches. As with the other clients, this banner
+currently has nothing real to react to against a
 live server, since the compatibility array it reads is always empty.
+
+### VIDAA — hosted Playarr Web
+
+VIDAA launches the co-hosted Playarr Web URL with `?platform=tv-vidaa`, so it
+uses Web's service-worker/build-manifest update flow and evaluates the
+`tv-vidaa` compatibility row. On a plain LAN HTTP origin the service worker may
+be unavailable, but a fresh launcher start still loads the server's deployed
+bundle; there is no separately published VIDAA package to update.
 
 ## Automation: the client-compatibility bump bot
 

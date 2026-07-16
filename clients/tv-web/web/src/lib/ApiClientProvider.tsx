@@ -9,6 +9,7 @@ import {
   type StoredSession,
 } from "@streamarr-tv/device-auth";
 import { API_BASE_URL_QUERY_PARAM, getStoredApiBaseUrl, setStoredApiBaseUrl } from "@streamarr-tv/domain";
+import { PLAYARR_CLIENT_PLATFORM } from "./clientPlatform";
 
 /**
  * This build's own identity for the transparent `POST /api/v1/auth/login`
@@ -18,9 +19,9 @@ import { API_BASE_URL_QUERY_PARAM, getStoredApiBaseUrl, setStoredApiBaseUrl } fr
  * calls). `__APP_VERSION__` is injected at build time by `vite.config.ts`,
  * same as `lib/appUpdate.ts` uses.
  */
-const WEB_LOGIN_IDENTITY = {
-  deviceName: "Playarr Web",
-  clientPlatform: "web" as const,
+const PLAYARR_LOGIN_IDENTITY = {
+  deviceName: PLAYARR_CLIENT_PLATFORM === "tv-vidaa" ? "Playarr for VIDAA" : "Playarr Web",
+  clientPlatform: PLAYARR_CLIENT_PLATFORM,
   clientVersion: __APP_VERSION__,
 };
 
@@ -296,11 +297,18 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     // runs later (on a protected request), by which point `instance` is bound.
     const instance: ApiClient = new ApiClient({
       baseUrl: apiBaseUrl,
+      defaultHeaders:
+        PLAYARR_CLIENT_PLATFORM === "tv-vidaa"
+          ? {
+              "X-Streamarr-Client-Platform": PLAYARR_LOGIN_IDENTITY.clientPlatform,
+              "X-Streamarr-Client-Version": PLAYARR_LOGIN_IDENTITY.clientVersion,
+            }
+          : undefined,
       getAccessToken: async () => {
         try {
           const activeProfile = activeProfileRef.current;
           const token = await ensureAccessToken(instance, tokenStore, {
-            ...WEB_LOGIN_IDENTITY,
+            ...PLAYARR_LOGIN_IDENTITY,
             deviceId: activeProfile?.deviceId,
           });
           const userId = decodeAccessTokenUserId(token);
@@ -343,9 +351,9 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         )?.deviceId ?? createProfileDeviceId();
       const body: LoginRequest = {
         device_id: profileDeviceId,
-        device_name: WEB_LOGIN_IDENTITY.deviceName,
-        client_platform: WEB_LOGIN_IDENTITY.clientPlatform,
-        client_version: WEB_LOGIN_IDENTITY.clientVersion,
+        device_name: PLAYARR_LOGIN_IDENTITY.deviceName,
+        client_platform: PLAYARR_LOGIN_IDENTITY.clientPlatform,
+        client_version: PLAYARR_LOGIN_IDENTITY.clientVersion,
         username,
         password,
       };
@@ -394,7 +402,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
 
       try {
         const token = await ensureAccessToken(client, tokenStore, {
-          ...WEB_LOGIN_IDENTITY,
+          ...PLAYARR_LOGIN_IDENTITY,
           deviceId: target.deviceId,
         });
         const resolvedUserId = decodeAccessTokenUserId(token);

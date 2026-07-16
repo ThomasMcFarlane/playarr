@@ -163,10 +163,7 @@ hand-written service worker, not Workbox-generated:
    matching the "background fetch without interrupting an in-progress
    session" principle either way it was triggered.
 
-This same mechanism is what the VIDAA PWA fallback in
-[`vidaa.md`](vidaa.md) is intended to rely on once its own OTA feature flag
-is enabled — which is precisely why that path carries its own
-ToS-re-verification obligation: an OTA mechanism that quietly keeps
-updating a sideloaded/PWA-installed app is exactly the kind of ongoing
-reliance that needs Hisense's terms checked release over release, not just
-once.
+VIDAA now installs this same co-hosted Web build by URL. It therefore receives
+the Web bundle's update behaviour without maintaining a separate OTA channel;
+on LAN HTTP origins where service workers are unavailable, launching the app
+still fetches the server's currently deployed bundle.

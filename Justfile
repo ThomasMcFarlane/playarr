@@ -66,16 +66,16 @@ backend-run *ARGS:
     cd {{backend_dir}} && cargo run --bin streamarr -- {{ARGS}}
 
 # ------------------------------------------------------------------------
-# Playarr tv-web client (shared web app: browser Web + LG webOS + Samsung
-# Tizen + Hisense VIDAA, each a thin native wrapper around the same
-# TypeScript/web codebase).
+# Playarr tv-web client: browser Web, the hosted Hisense VIDAA Web App, and
+# packaged LG webOS/Samsung Tizen shells over shared TypeScript code.
 # ------------------------------------------------------------------------
 
 # Start the tv-web dev server with hot reload.
 tv-web-dev:
     cd {{tv_web_dir}} && pnpm install --frozen-lockfile && pnpm run dev
 
-# Build production bundles for every tv-web target (web, webOS, Tizen, VIDAA).
+# Build production bundles for Web/hosted VIDAA, webOS, Tizen, and the legacy
+# experimental VIDAA shell.
 tv-web-build:
     cd {{tv_web_dir}} && pnpm install --frozen-lockfile && pnpm run build
 

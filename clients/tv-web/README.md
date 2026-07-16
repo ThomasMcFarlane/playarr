@@ -1,8 +1,9 @@
 # Streamarr TV & Web clients
 
 A pnpm workspace covering every TV/web surface: shared TypeScript packages,
-three TV app shells (webOS, Tizen, VIDAA fallback PWA), and the standalone
-web app. Verified with `pnpm install` + a full recursive `pnpm -r run build`
+two packaged TV app shells (webOS and Tizen), a legacy experimental VIDAA
+shell, and the standalone Web app that also serves as the current hosted VIDAA
+client. Verified with `pnpm install` + a full recursive `pnpm -r run build`
 (typecheck + Vite bundling for every app) on Node v23.10.0 / pnpm 11.13.0.
 
 ## Layout
@@ -31,9 +32,10 @@ clients/tv-web/
   apps/                  thin per-platform TV shells
     tv-webos/               webOS app shell (TvApp + player-shaka)
     tv-tizen/                Tizen app shell (TvApp + player-avplay)
-    tv-vidaa-fallback/       VIDAA PWA shell (TvApp + player-shaka)
+    tv-vidaa-fallback/       legacy experimental VIDAA PWA shell
   web/                    standalone Vite + React app (Home/Library/WorkDetail/Player/
-                          Settings/Admin), wired to the same real API endpoints
+                          Settings/Admin), also installed directly as the current
+                          hosted VIDAA Web App
 ```
 
 ## Package naming & versioning
@@ -97,12 +99,13 @@ no dependency resolution errors) as part of scaffolding this workspace.
 
 ## Known gaps
 
-- **webOS CLI, Tizen Studio, and any VIDAA-specific tooling are not
-  installed in this environment.** Each `apps/*` package produces a real
+- **webOS CLI and Tizen Studio are not installed in this environment.** Each
+  packaged `apps/*` target produces a real
   static Vite `dist/` bundle; turning that into an installable `.ipk`
-  (webOS) or `.wgt` (Tizen), or validating the VIDAA PWA install/OTA flow,
-  requires those platform SDKs. See the `README.md` in each `apps/*`
-  directory for the exact follow-up commands once the SDK is available.
+  (webOS) or `.wgt` (Tizen) requires those platform SDKs. VIDAA instead points
+  its documented Web App installer at the co-hosted `web/` build; this still
+  needs validation on a real television. See the
+  [VIDAA installation guide](../../docs/clients/vidaa.md).
 - **No backend is running anywhere in this workspace.** `packages/api-client`
   and `web/src/pages/Library.tsx` point at `http://localhost:8080/v1` as a
   placeholder and will fail requests until a real API exists -- that failure

@@ -19,6 +19,10 @@ that already do it well. Playarr is what you actually install to watch things:
 Android Mobile, Android TV, iOS, LG webOS, Samsung Tizen, Hisense VIDAA, and a
 browser-based Web client, all speaking the same versioned API contract.
 
+Hisense owners can follow the
+[VIDAA installation guide](docs/clients/vidaa.md) to add the hosted Playarr Web
+App to supported television launchers.
+
 Streamarr is designed to run at three tiers without a different codebase or a
 data-migration story at each step: a single systemd-managed binary against
 SQLite on a home server, a small Docker Compose stack against Postgres, or a
@@ -44,7 +48,7 @@ app shell — for every screen people actually watch on.
                     ┌───────────────────────────────────────────┐
                     │              Playarr clients               │
                     │  Android Mobile · Android TV · iOS · Web    │
-                    │      webOS · Tizen · VIDAA (TV shell)       │
+                    │  webOS · Tizen · VIDAA (hosted Web App)     │
                     └───────────────────┬─────────────────────────┘
                                         │  versioned HTTP/JSON API
                     ┌───────────────────▼─────────────────────────┐

@@ -1,6 +1,11 @@
 # @streamarr-tv/app-vidaa-fallback
 
-Minimal PWA shell for VIDAA (Hisense) TVs. VIDAA has no dedicated native app
+Legacy experimental PWA shell for VIDAA (Hisense) TVs. The supported household
+installation now points VIDAA's hosted Web App launcher at the current Playarr
+Web client; see `../../../../docs/clients/vidaa.md`. This package is retained as
+an earlier shared-TV-shell prototype and is not the recommended client.
+
+VIDAA has no dedicated native app
 SDK target in the current plan, so this app runs as an installable Progressive
 Web App against VIDAA's Chromium-based browser instead of a packaged native
 bundle -- bootstraps `@streamarr-tv/ui-tv` with `@streamarr-tv/player-shaka`

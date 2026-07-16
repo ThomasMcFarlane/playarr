@@ -208,13 +208,14 @@ someone runs them for real.
   over the shared TV shell using `player-shaka`.
 - **Tizen.** **Built.** `clients/tv-web/apps/tv-tizen/`, using the
   `player-avplay` adapter for Samsung's `AVPlay`.
-- **VIDAA fallback.** **Built** as scoped: `clients/tv-web/apps/tv-vidaa-fallback/`
-  exists as the optional PWA sideload reusing the shared TV shell, per the
-  original "not a build workstream in the conventional sense" framing —
-  there is still no native VIDAA app, by design.
+- **VIDAA hosted Web App.** **Built.** Supported televisions install the current
+  co-hosted Playarr Web URL through VIDAA's documented debug installer. The Web
+  client persists a `tv-vidaa` identity and negotiates a conservative television
+  playback profile. The older `apps/tv-vidaa-fallback/` PWA remains an
+  experimental prototype, not the recommended installation.
 
-All four TV surfaces (plus webOS/Tizen/VIDAA) share `VersionBanner.tsx`
-for the simple, non-blocking check-on-launch update nag described in
+The packaged webOS/Tizen shells share `VersionBanner.tsx`; hosted VIDAA uses
+Playarr Web's update flow described in
 [`versioning-policy.md`](versioning-policy.md).
 
 ## Wave 7 — Hardening and Versioning Rollout
@@ -239,8 +240,9 @@ for the simple, non-blocking check-on-launch update nag described in
   enforcement power — Apple prohibits OTA code execution) plus a secondary,
   display-only App Store Lookup client; Web has a real, working service-
   worker-driven OTA path (`sw.js` + `build-manifest.json` polling) that can
-  actually deliver a new bundle without a store review; webOS/Tizen/VIDAA
-  correctly have no OTA path and instead show `VersionBanner`. All of this
+  actually deliver a new bundle without a store review and is also the hosted
+  VIDAA delivery path; webOS/Tizen correctly have no OTA path and instead show
+  `VersionBanner`. All of this
   is real, working client code — its only real limitation is the empty
   `compatibility` array noted above, which means none of it can currently
   see real floor/deprecation data from a live server.

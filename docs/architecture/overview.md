@@ -238,12 +238,10 @@ follows the grain of the platforms themselves:
   (`:core`, `:playback`, `:api-client` modules) with separate `:mobile` and
   `:tv` UI modules, because they share a language, a DRM stack (Widevine via
   Media3), and a store.
-- webOS, Tizen, and (where the fallback applies) VIDAA are all
-  Chromium/WebKit-based TV runtimes, so they share a "TV shell" — the same
-  React/TypeScript codebase used by the Web client, with a platform-adapter
-  layer that swaps out remote-control input handling and the platform's
-  native playback/DRM API (LG's webOS `<video>`+EME, Samsung's `AVPlay`)
-  underneath a common player interface.
+- webOS and Tizen share a React/TypeScript TV shell with platform player
+  adapters (LG's webOS `<video>`+EME and Samsung's `AVPlay`). VIDAA installs
+  the current Playarr Web client as a hosted Web App and selects its television
+  identity and playback profile at runtime.
 - iOS stands alone at the UI layer (SwiftUI, AVFoundation, FairPlay) because
   nothing else shares Swift or Apple's DRM stack, but still consumes the
   same OpenAPI-generated client contract as every other platform.

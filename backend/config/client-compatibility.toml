@@ -69,9 +69,9 @@ deprecatedBelow = "0.9.0"
 sunset = "2026-12-31"
 
 [tv-vidaa]
-# VIDAA support ships later than the other TV platforms (see the plan's
-# webOS/Tizen-first TV rollout note) and starts from a lower baseline.
-latestVersion = "0.5.0"
-minSupported = "0.5.0"
-deprecatedBelow = "0.5.0"
+# VIDAA launches the co-hosted Playarr Web bundle by URL, so its compatibility
+# version follows that bundle rather than a separately packaged application.
+latestVersion = "0.1.0"
+minSupported = "0.1.0"
+deprecatedBelow = "0.1.0"
 sunset = "2026-12-31"
