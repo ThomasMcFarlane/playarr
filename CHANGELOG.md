@@ -78,6 +78,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   navigation from the previous user's permissions.
 - Make minimised-player focus unmistakable for keyboard and remote users with layered focus rings,
   title contrast, and maximise-button feedback.
+- Restore the active Playarr item after refreshing a tab while playback is minimised.
 
 ### Security
 

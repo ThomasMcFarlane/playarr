@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   matchPath,
   Navigate,
@@ -39,6 +39,12 @@ import {
   captureNavigationLayer,
   navigationOriginFromState,
 } from "./lib/navigationLayer";
+import {
+  clearActivePlayerSession,
+  readActivePlayerSession,
+  writeActivePlayerSession,
+  type ActivePlayerSession,
+} from "./lib/playerSession";
 import { useTvNavigation } from "./lib/useTvNavigation";
 
 interface NavItem {
@@ -146,17 +152,15 @@ function AppShell() {
   const routePlayerState = isPlayerRoute
     ? (location.state as PlayerLocationState | null)
     : null;
-  const [playerSession, setPlayerSession] = useState<{
-    mediaFileId: string;
-    locationState: PlayerLocationState | null;
-  } | null>(() =>
+  const [playerSession, setPlayerSession] = useState<ActivePlayerSession | null>(() =>
     routeMediaFileId
       ? {
           mediaFileId: routeMediaFileId,
           locationState: routePlayerState,
         }
-      : null
+      : readActivePlayerSession(currentUserId)
   );
+  const playerSessionUserIdRef = useRef(currentUserId);
   const isProfilesRoute = location.pathname === "/profiles";
   const requestedBackTo = (location.state as { backTo?: unknown } | null)?.backTo;
   const backTo = typeof requestedBackTo === "string" ? requestedBackTo : undefined;
@@ -191,11 +195,29 @@ function AppShell() {
 
   useEffect(() => {
     if (!routeMediaFileId) return;
-    setPlayerSession({
+    const session = {
       mediaFileId: routeMediaFileId,
       locationState: routePlayerState,
-    });
-  }, [location.key, location.state, routeMediaFileId]);
+    };
+    setPlayerSession(session);
+    writeActivePlayerSession(currentUserId, session);
+  }, [currentUserId, location.key, location.state, routeMediaFileId]);
+
+  useEffect(() => {
+    const previousUserId = playerSessionUserIdRef.current;
+    if (previousUserId === currentUserId) return;
+    playerSessionUserIdRef.current = currentUserId;
+
+    if (previousUserId !== undefined || currentUserId === undefined) {
+      setPlayerSession(null);
+      clearActivePlayerSession();
+      return;
+    }
+
+    if (playerSession) {
+      writeActivePlayerSession(currentUserId, playerSession);
+    }
+  }, [currentUserId, playerSession]);
 
   if (authFailed) {
     // Carries where the viewer was headed so `LoginPage` can return them
@@ -242,7 +264,10 @@ function AppShell() {
           mediaFileId={activePlayerSession.mediaFileId}
           locationState={activePlayerSession.locationState}
           minimised={!isPlayerRoute}
-          onClose={() => setPlayerSession(null)}
+          onClose={() => {
+            setPlayerSession(null);
+            clearActivePlayerSession();
+          }}
           onMaximise={() => {
             navigate(`/player/${activePlayerSession.mediaFileId}`, {
               state: activePlayerSession.locationState,
