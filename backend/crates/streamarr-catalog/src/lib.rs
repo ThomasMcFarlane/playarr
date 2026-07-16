@@ -1644,12 +1644,13 @@ mod tests {
         id
     }
 
-    async fn insert_track(pool: &DbPool, album_id: Uuid, track_number: u32, title: &str) {
+    async fn insert_track(pool: &DbPool, album_id: Uuid, track_number: u32, title: &str) -> Uuid {
+        let id = Uuid::new_v4();
         sqlx::query(
             "INSERT INTO tracks (id, album_id, disc_number, track_number, title, duration_seconds, availability) \
              VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
-        .bind(Uuid::new_v4().to_string())
+        .bind(id.to_string())
         .bind(album_id.to_string())
         .bind(1i64)
         .bind(track_number as i64)
@@ -1659,6 +1660,7 @@ mod tests {
         .execute(pool)
         .await
         .expect("insert track");
+        id
     }
 
     async fn insert_book(pool: &DbPool, author_work_id: Uuid, title: &str) {
@@ -2476,8 +2478,9 @@ mod tests {
         repo.upsert(&artist).await.unwrap();
 
         let album_id = insert_album(&pool, artist_id, "Test Album").await;
-        insert_track(&pool, album_id, 1, "Track One").await;
+        let track_id = insert_track(&pool, album_id, 1, "Track One").await;
         insert_track(&pool, album_id, 2, "Track Two").await;
+        let media_file_id = seed_media_file(&pool, artist_id, LeafRef::Track(track_id)).await;
 
         let svc = service(pool, repo);
         let detail = svc.get_by_id(artist_id, None).await.unwrap();
@@ -2488,7 +2491,10 @@ mod tests {
                 assert_eq!(albums.len(), 1);
                 assert_eq!(albums[0].tracks.len(), 2);
                 assert_eq!(albums[0].tracks[0].track.track_number, 1);
-                assert_eq!(albums[0].tracks[0].media_file_id, None);
+                assert_eq!(albums[0].tracks[0].media_file_id, Some(media_file_id));
+                assert_eq!(albums[0].tracks[0].runtime_ms, Some(3_600_000));
+                assert_eq!(albums[0].tracks[1].media_file_id, None);
+                assert_eq!(albums[0].tracks[1].runtime_ms, None);
             }
             other => panic!("expected WorkChildren::Artist, got {other:?}"),
         }

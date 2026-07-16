@@ -56,3 +56,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   be committed accidentally.
 - Constrain artwork fetching to stored catalogue URLs, return secret-free administrator DTOs, and
   enforce least-privilege library and streaming grants across catalogue and playback routes.
+
+### Testing
+
+- Verify artist catalogue details attach media identifiers and runtimes only to tracks that have
+  matching media files.
