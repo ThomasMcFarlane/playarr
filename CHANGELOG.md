@@ -122,5 +122,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- Document VIDAA's invite-only partner registration and App Store release gates,
+  including the production bootstrap decision required for self-hosted Playarr.
 - Document the Streamarr and Playarr design research snapshot and preserve a sanitised historical
   Playarr redesign handover for future implementation and debugging context.

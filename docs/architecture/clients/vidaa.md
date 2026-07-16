@@ -41,6 +41,17 @@ installation because it does not contain the current Playarr Web experience.
 
 Follow [Using Playarr on a Hisense VIDAA TV](../../clients/vidaa.md).
 
+Public registration only requests access to VIDAA's invite-only Partner Portal;
+it does not create an immediately deployable developer account. The restricted
+portal and VIDAA partner contact own the current DevKit, certification, and App
+Store release process.
+
+The existing per-household hosted URL is not yet an App Store distribution
+artifact. Store publication requires VIDAA to approve either a public HTTPS
+bootstrap/configuration origin or a packaged shell that can connect to the
+user's private Streamarr server. That decision must account for mixed-content
+rules, local-network access, reviewer access, and territory/device certification.
+
 The Browser route is available only when the television can reach the
 Streamarr host and its embedded browser supports the required media features.
 There is no repository-side package that can bypass VIDAA launcher restrictions.
@@ -54,4 +65,7 @@ verified on the target television.
 
 ## References
 
+- [VIDAA Partner Support and registration](https://www.vidaa.com/partner-support/)
+- [VIDAA Partner Portal terms](https://www.vidaa.com/terms-and-conditions/)
+- [VIDAA privacy notice](https://www.vidaa.com/privacy-policy-2026/)
 - [VIDAA support: find the installed OS version](https://www.vidaa.com/support/)
