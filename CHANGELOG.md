@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Allow each Playarr Web login to select an absolute Streamarr server URL, connect to it
+  directly from the browser, and keep saved profile sessions scoped to that server.
 - Add a VIDAA-aware hosted Playarr Web App with launcher artwork, persistent
   platform identification, television-safe playback negotiation, and a Hisense
   installation guide.

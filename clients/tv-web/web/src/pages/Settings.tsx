@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ApiError, type VersionEnvelope } from "@streamarr-tv/api-client";
-import { DEFAULT_API_BASE_URL } from "@streamarr-tv/domain";
+import { DEFAULT_API_BASE_URL, normaliseApiBaseUrl } from "@streamarr-tv/domain";
 import { useApiBaseUrl, useApiClient, useAuth } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useTheme, type ThemePreference } from "../lib/theme";
@@ -134,10 +134,21 @@ export function SettingsPage() {
 
   function handleSave(event: React.FormEvent) {
     event.preventDefault();
-    const trimmed = draft.trim() || defaultApiBaseUrl();
-    setApiBaseUrl(trimmed);
-    setDraft(trimmed);
-    setTestState({ status: "idle" });
+    try {
+      const normalised = normaliseApiBaseUrl(draft.trim() || defaultApiBaseUrl());
+      if (normalised !== apiBaseUrl) {
+        setApiBaseUrl(normalised);
+        navigate("/login", { replace: true });
+        return;
+      }
+      setDraft(normalised);
+      setTestState({ status: "idle" });
+    } catch (error) {
+      setTestState({
+        status: "error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   async function handleTestConnection() {
@@ -313,7 +324,7 @@ export function SettingsPage() {
             <div>
               <h2 className="section-title">Server connection</h2>
               <p className="muted">
-                Playarr normally uses the Streamarr server that delivered this page.
+                Playarr connects directly from this browser to the server selected at sign-in.
               </p>
             </div>
           </div>
@@ -332,7 +343,7 @@ export function SettingsPage() {
                 placeholder={defaultApiBaseUrl()}
               />
               <button type="submit" className="btn btn-primary">
-                Save
+                Change server
               </button>
             </div>
           </form>
@@ -356,6 +367,11 @@ export function SettingsPage() {
               <p className="error-text">Could not connect ({testState.message}).</p>
             )}
           </div>
+
+          <p className="hint">
+            Changing server signs out the current profile so credentials and sessions stay scoped
+            to the correct Streamarr instance.
+          </p>
 
           <details className="settings-details">
             <summary>TV app connection details</summary>

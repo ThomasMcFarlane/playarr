@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate, type Location } from "react-router-dom";
 import { ApiError } from "@streamarr-tv/api-client";
-import { useAuth } from "../lib/ApiClientProvider";
+import { useApiBaseUrl, useAuth } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 
 interface LocationState {
@@ -28,9 +28,11 @@ interface LocationState {
 export function LoginPage() {
   useDocumentTitle("Sign in");
   const { login } = useAuth();
+  const [apiBaseUrl] = useApiBaseUrl();
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as LocationState | null;
+  const [serverUrl, setServerUrl] = useState(apiBaseUrl);
   const [username, setUsername] = useState(state?.initialUsername ?? "");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -41,7 +43,7 @@ export function LoginPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await login({ username, password });
+      await login({ serverUrl, username, password });
       const destination = state?.from ?? "/";
       const destinationState =
         state?.fromState ??
@@ -71,10 +73,32 @@ export function LoginPage() {
         <p className="page-kicker">Welcome home</p>
         <h1 className="auth-title">Sign in to Playarr</h1>
         <p className="muted auth-description">
-          Sign in to save this profile on the current browser.
+          Choose your Streamarr server, then save this profile on the current browser.
         </p>
 
         <form onSubmit={(event) => void handleSubmit(event)}>
+          <label className="auth-label" htmlFor="login-server-url">
+            Server URL
+          </label>
+          <input
+            id="login-server-url"
+            name="server-url"
+            type="url"
+            className="input auth-input"
+            autoComplete="url"
+            inputMode="url"
+            autoCapitalize="none"
+            spellCheck={false}
+            autoFocus
+            required
+            value={serverUrl}
+            onChange={(event) => setServerUrl(event.target.value)}
+            placeholder="https://streamarr.example.com"
+          />
+          <p className="hint auth-server-hint">
+            Your browser connects directly to this server. Playarr does not proxy your login.
+          </p>
+
           <label className="auth-label" htmlFor="login-username">
             Username
           </label>
@@ -84,7 +108,6 @@ export function LoginPage() {
             type="text"
             className="input auth-input"
             autoComplete="username"
-            autoFocus
             required
             value={username}
             onChange={(event) => setUsername(event.target.value)}
@@ -143,6 +166,9 @@ function loginErrorMessage(err: unknown): string {
       return "This server requires a username and password to sign in.";
     }
     return "Sign-in failed. Check your username and password and try again.";
+  }
+  if (err instanceof TypeError) {
+    return "Could not reach this server directly from the browser. Check the URL, HTTPS, and the server's CORS settings.";
   }
   return err instanceof Error ? err.message : String(err);
 }

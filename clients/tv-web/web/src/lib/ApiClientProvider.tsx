@@ -8,7 +8,12 @@ import {
   TokenStore,
   type StoredSession,
 } from "@streamarr-tv/device-auth";
-import { API_BASE_URL_QUERY_PARAM, getStoredApiBaseUrl, setStoredApiBaseUrl } from "@streamarr-tv/domain";
+import {
+  API_BASE_URL_QUERY_PARAM,
+  getStoredApiBaseUrl,
+  normaliseApiBaseUrl,
+  setStoredApiBaseUrl,
+} from "@streamarr-tv/domain";
 import { PLAYARR_CLIENT_PLATFORM } from "./clientPlatform";
 
 /**
@@ -26,7 +31,8 @@ const PLAYARR_LOGIN_IDENTITY = {
 };
 
 const CURRENT_USER_NAME_STORAGE_KEY = "playarr.currentUserName";
-const SAVED_PROFILE_SESSIONS_STORAGE_KEY = "playarr.profileSessions.v2";
+const SAVED_PROFILE_SESSIONS_STORAGE_KEY = "playarr.profileSessions.v3";
+const LEGACY_SAVED_PROFILE_SESSIONS_STORAGE_KEY = "playarr.profileSessions.v2";
 
 function readStoredCurrentUserName(): string | undefined {
   const value = window.localStorage.getItem(CURRENT_USER_NAME_STORAGE_KEY)?.trim();
@@ -34,6 +40,7 @@ function readStoredCurrentUserName(): string | undefined {
 }
 
 interface StoredProfileSession {
+  apiBaseUrl: string;
   userId: string;
   name: string;
   deviceId: string;
@@ -56,22 +63,44 @@ function isStoredSession(value: unknown): value is StoredSession {
   );
 }
 
-function readStoredProfileSessions(): StoredProfileSession[] {
+function readStoredProfileSessions(fallbackApiBaseUrl: string): StoredProfileSession[] {
   try {
-    const raw = window.localStorage.getItem(SAVED_PROFILE_SESSIONS_STORAGE_KEY);
+    const currentRaw = window.localStorage.getItem(SAVED_PROFILE_SESSIONS_STORAGE_KEY);
+    const raw =
+      currentRaw ??
+      window.localStorage.getItem(LEGACY_SAVED_PROFILE_SESSIONS_STORAGE_KEY);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((value): value is StoredProfileSession => {
-      if (!value || typeof value !== "object") return false;
+    const profiles = parsed.flatMap((value): StoredProfileSession[] => {
+      if (!value || typeof value !== "object") return [];
       const profile = value as Partial<StoredProfileSession>;
-      return (
+      if (
         typeof profile.userId === "string" &&
         typeof profile.name === "string" &&
         typeof profile.deviceId === "string" &&
         isStoredSession(profile.session)
-      );
+      ) {
+        return [
+          {
+            apiBaseUrl:
+              typeof profile.apiBaseUrl === "string"
+                ? profile.apiBaseUrl
+                : fallbackApiBaseUrl,
+            userId: profile.userId,
+            name: profile.name,
+            deviceId: profile.deviceId,
+            session: profile.session,
+          },
+        ];
+      }
+      return [];
     });
+    if (!currentRaw) {
+      writeStoredProfileSessions(profiles);
+      window.localStorage.removeItem(LEGACY_SAVED_PROFILE_SESSIONS_STORAGE_KEY);
+    }
+    return profiles;
   } catch {
     return [];
   }
@@ -110,6 +139,7 @@ function createProfileDeviceId(): string {
 
 /** Credentials for the real username/password login flow -- see `ApiClientContextValue.login`. */
 export interface LoginCredentials {
+  serverUrl: string;
   username: string;
   password: string;
 }
@@ -117,7 +147,7 @@ export interface LoginCredentials {
 interface ApiClientContextValue {
   client: ApiClient;
   apiBaseUrl: string;
-  /** Persists to localStorage (the web app's Settings page) and rebuilds the shared `ApiClient`. */
+  /** Persists to localStorage, clears the current session, and rebuilds the shared `ApiClient`. */
   setApiBaseUrl: (value: string) => void;
   /**
    * The signed-in user's id, decoded (unverified -- see
@@ -148,8 +178,9 @@ interface ApiClientContextValue {
    */
   authFailed: boolean;
   /**
-   * Real username/password login (`pages/Login.tsx`'s form) -- calls
-   * `POST /api/v1/auth/login` directly with credentials (unlike
+   * Real username/password login (`pages/Login.tsx`'s form) -- calls the
+   * selected server's `POST /api/v1/auth/login` directly from the browser
+   * with credentials (unlike
    * `ensureAccessToken`'s transparent, credential-less call) and persists
    * the result through the same `TokenStore` transparent login already
    * uses, via the shared `toStoredSession` mapping -- one place stores a
@@ -199,15 +230,14 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
   // config-file fetch) is the fallback -- see `resolveInitialApiBaseUrl` --
   // so this is a plain lazy initializer, not a `null`-until-resolved effect.
   const [apiBaseUrl, setApiBaseUrlState] = useState<string>(resolveInitialApiBaseUrl);
-  // One `TokenStore` for the lifetime of this provider (survives an `apiBaseUrl`
-  // change, e.g. from the Settings page) -- see `ensureAccessToken`'s doc comment
-  // on why the login path and any future pairing path must share exactly one.
+  // One `TokenStore` for the lifetime of this provider. A server change clears
+  // its current value before reusing it so no token is sent to another instance.
   const tokenStoreRef = useRef<TokenStore>();
   if (!tokenStoreRef.current) {
     tokenStoreRef.current = new TokenStore();
   }
 
-  const setApiBaseUrl = useCallback((value: string) => {
+  const applyApiBaseUrl = useCallback((value: string) => {
     setStoredApiBaseUrl(value);
     setApiBaseUrlState(value);
   }, []);
@@ -223,17 +253,25 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     readStoredCurrentUserName
   );
   const [storedProfileSessions, setStoredProfileSessions] = useState<StoredProfileSession[]>(() => {
-    const stored = readStoredProfileSessions();
+    const stored = readStoredProfileSessions(apiBaseUrl);
     const activeSession = tokenStoreRef.current?.get();
     const activeUserId = activeSession
       ? decodeAccessTokenUserId(activeSession.accessToken)
       : undefined;
-    if (!activeSession || !activeUserId || stored.some((profile) => profile.userId === activeUserId)) {
+    if (
+      !activeSession ||
+      !activeUserId ||
+      stored.some(
+        (profile) =>
+          profile.apiBaseUrl === apiBaseUrl && profile.userId === activeUserId
+      )
+    ) {
       return stored;
     }
     const migrated = [
       ...stored,
       {
+        apiBaseUrl,
         userId: activeUserId,
         name: readStoredCurrentUserName() ?? "Viewer",
         deviceId: getOrCreateDeviceId(),
@@ -248,13 +286,17 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     ? decodeAccessTokenUserId(initialActiveSession.accessToken)
     : undefined;
   const initialStoredProfile = initialActiveUserId
-    ? storedProfileSessions.find((profile) => profile.userId === initialActiveUserId)
+    ? storedProfileSessions.find(
+        (profile) =>
+          profile.apiBaseUrl === apiBaseUrl && profile.userId === initialActiveUserId
+      )
     : undefined;
   const activeProfileRef = useRef<
-    { userId: string; name: string; deviceId: string } | undefined
+    { apiBaseUrl: string; userId: string; name: string; deviceId: string } | undefined
   >(
     initialActiveUserId
       ? {
+          apiBaseUrl,
           userId: initialActiveUserId,
           name: initialStoredProfile?.name ?? readStoredCurrentUserName() ?? "Viewer",
           deviceId: initialStoredProfile?.deviceId ?? getOrCreateDeviceId(),
@@ -263,10 +305,33 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
   );
   const [authFailed, setAuthFailed] = useState(false);
 
+  const setApiBaseUrl = useCallback(
+    (value: string) => {
+      if (value === apiBaseUrl) return;
+      tokenStoreRef.current?.clear();
+      window.localStorage.removeItem(CURRENT_USER_NAME_STORAGE_KEY);
+      activeProfileRef.current = undefined;
+      setAuthFailed(false);
+      setCurrentUserId(undefined);
+      setCurrentUserName(undefined);
+      applyApiBaseUrl(value);
+    },
+    [apiBaseUrl, applyApiBaseUrl]
+  );
+
   const persistProfileSession = useCallback(
-    (userId: string, name: string, deviceId: string, session: StoredSession) => {
+    (
+      sessionApiBaseUrl: string,
+      userId: string,
+      name: string,
+      deviceId: string,
+      session: StoredSession
+    ) => {
       setStoredProfileSessions((existing) => {
-        const currentIndex = existing.findIndex((profile) => profile.userId === userId);
+        const currentIndex = existing.findIndex(
+          (profile) =>
+            profile.apiBaseUrl === sessionApiBaseUrl && profile.userId === userId
+        );
         const current = currentIndex >= 0 ? existing[currentIndex] : undefined;
         if (
           current &&
@@ -279,9 +344,14 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         const next =
           currentIndex >= 0
             ? existing.map((profile, index) =>
-                index === currentIndex ? { userId, name, deviceId, session } : profile
+                index === currentIndex
+                  ? { apiBaseUrl: sessionApiBaseUrl, userId, name, deviceId, session }
+                  : profile
               )
-            : [...existing, { userId, name, deviceId, session }];
+            : [
+                ...existing,
+                { apiBaseUrl: sessionApiBaseUrl, userId, name, deviceId, session },
+              ];
         writeStoredProfileSessions(next);
         return next;
       });
@@ -313,8 +383,14 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
           });
           const userId = decodeAccessTokenUserId(token);
           const activeSession = tokenStore.get();
-          if (userId && activeSession && activeProfile?.userId === userId) {
+          if (
+            userId &&
+            activeSession &&
+            activeProfile?.apiBaseUrl === apiBaseUrl &&
+            activeProfile.userId === userId
+          ) {
             persistProfileSession(
+              apiBaseUrl,
               userId,
               activeProfile.name,
               activeProfile.deviceId,
@@ -339,16 +415,26 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
   }, [apiBaseUrl, persistProfileSession]);
 
   const login = useCallback(
-    async ({ username, password }: LoginCredentials) => {
-      if (!client) {
-        throw new Error("Cannot log in before the API client is ready.");
-      }
+    async ({ serverUrl, username, password }: LoginCredentials) => {
+      const targetApiBaseUrl = normaliseApiBaseUrl(serverUrl);
       const tokenStore = tokenStoreRef.current as TokenStore;
       const normalizedUsername = username.trim();
       const profileDeviceId =
         storedProfileSessions.find(
-          (profile) => profile.name.toLowerCase() === normalizedUsername.toLowerCase()
+          (profile) =>
+            profile.apiBaseUrl === targetApiBaseUrl &&
+            profile.name.toLowerCase() === normalizedUsername.toLowerCase()
         )?.deviceId ?? createProfileDeviceId();
+      const loginClient = new ApiClient({
+        baseUrl: targetApiBaseUrl,
+        defaultHeaders:
+          PLAYARR_CLIENT_PLATFORM === "tv-vidaa"
+            ? {
+                "X-Streamarr-Client-Platform": PLAYARR_LOGIN_IDENTITY.clientPlatform,
+                "X-Streamarr-Client-Version": PLAYARR_LOGIN_IDENTITY.clientVersion,
+              }
+            : undefined,
+      });
       const body: LoginRequest = {
         device_id: profileDeviceId,
         device_name: PLAYARR_LOGIN_IDENTITY.deviceName,
@@ -357,7 +443,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         username,
         password,
       };
-      const response = await client.login(body);
+      const response = await loginClient.login(body);
       const session = toStoredSession(response);
       tokenStore.set(session);
       const userId = decodeAccessTokenUserId(response.access_token);
@@ -373,11 +459,17 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
       setCurrentUserId(userId);
       if (userId) {
         const name = displayName || "Viewer";
-        activeProfileRef.current = { userId, name, deviceId: profileDeviceId };
-        persistProfileSession(userId, name, profileDeviceId, session);
+        activeProfileRef.current = {
+          apiBaseUrl: targetApiBaseUrl,
+          userId,
+          name,
+          deviceId: profileDeviceId,
+        };
+        persistProfileSession(targetApiBaseUrl, userId, name, profileDeviceId, session);
       }
+      applyApiBaseUrl(targetApiBaseUrl);
     },
-    [client, persistProfileSession, storedProfileSessions]
+    [applyApiBaseUrl, persistProfileSession, storedProfileSessions]
   );
 
   const switchProfile = useCallback(
@@ -385,7 +477,9 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
       if (!client) {
         throw new Error("Cannot switch profiles before the API client is ready.");
       }
-      const target = storedProfileSessions.find((profile) => profile.userId === userId);
+      const target = storedProfileSessions.find(
+        (profile) => profile.apiBaseUrl === apiBaseUrl && profile.userId === userId
+      );
       if (!target) {
         throw new Error("This profile has not been signed in on this browser yet.");
       }
@@ -395,6 +489,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
       const previousProfile = activeProfileRef.current;
       tokenStore.set(target.session);
       activeProfileRef.current = {
+        apiBaseUrl,
         userId: target.userId,
         name: target.name,
         deviceId: target.deviceId,
@@ -411,7 +506,13 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         }
         const refreshedSession = tokenStore.get();
         if (refreshedSession) {
-          persistProfileSession(userId, target.name, target.deviceId, refreshedSession);
+          persistProfileSession(
+            apiBaseUrl,
+            userId,
+            target.name,
+            target.deviceId,
+            refreshedSession
+          );
         }
         window.localStorage.setItem(CURRENT_USER_NAME_STORAGE_KEY, target.name);
         setCurrentUserId(userId);
@@ -427,22 +528,29 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         throw error;
       }
     },
-    [client, persistProfileSession, storedProfileSessions]
+    [apiBaseUrl, client, persistProfileSession, storedProfileSessions]
   );
 
   const isProfileSaved = useCallback(
-    (userId: string) => storedProfileSessions.some((profile) => profile.userId === userId),
-    [storedProfileSessions]
+    (userId: string) =>
+      storedProfileSessions.some(
+        (profile) => profile.apiBaseUrl === apiBaseUrl && profile.userId === userId
+      ),
+    [apiBaseUrl, storedProfileSessions]
   );
 
   const logout = useCallback(() => {
-    const activeUserId = activeProfileRef.current?.userId;
+    const activeProfile = activeProfileRef.current;
     tokenStoreRef.current?.clear();
     window.localStorage.removeItem(CURRENT_USER_NAME_STORAGE_KEY);
     activeProfileRef.current = undefined;
-    if (activeUserId) {
+    if (activeProfile) {
       setStoredProfileSessions((existing) => {
-        const next = existing.filter((profile) => profile.userId !== activeUserId);
+        const next = existing.filter(
+          (profile) =>
+            profile.apiBaseUrl !== activeProfile.apiBaseUrl ||
+            profile.userId !== activeProfile.userId
+        );
         writeStoredProfileSessions(next);
         return next;
       });
@@ -465,7 +573,9 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         setApiBaseUrl,
         currentUserId,
         currentUserName,
-        savedProfiles: storedProfileSessions.map(({ userId, name }) => ({ userId, name })),
+        savedProfiles: storedProfileSessions
+          .filter((profile) => profile.apiBaseUrl === apiBaseUrl)
+          .map(({ userId, name }) => ({ userId, name })),
         authFailed,
         login,
         switchProfile,

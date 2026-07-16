@@ -87,18 +87,23 @@ itself). What differs per app is confined to:
   `ShakaPlaybackEngine` (Web, webOS, VIDAA) or `TizenAvplayEngine`
   (Tizen) — both implementing the same `PlaybackEngine` interface from
   `player-core`.
-- **How the API base URL is resolved** — the Web app has a real Settings
-  text field (`getStoredApiBaseUrl`/`setStoredApiBaseUrl`, localStorage);
+- **How the API base URL is resolved** — each Web login selects an absolute
+  HTTP(S) Streamarr server URL. The browser calls that server directly and
+  persists the last successful choice (`getStoredApiBaseUrl`/
+  `setStoredApiBaseUrl`, localStorage); the same value remains editable in
+  Settings, where changing it signs out the current profile. Saved profile
+  sessions are keyed by both server URL and user id so tokens cannot cross
+  instance boundaries;
   the TV shells have no keyboard, so they resolve it from a
   `?apiBaseUrl=` launch query param, then a `streamarr-config.json` file
   shipped in the package and overwritable on-device, then a hardcoded
   local-dev default.
 - **Whether RFC 8628 pairing or trusted-network login is used** — the TV
   shells always pair first (`PairingScreenContainer`, since there is no
-  keyboard for credentials); the Web app has no pairing UI and instead
-  obtains a session transparently via `POST /api/v1/auth/login`
-  (`@streamarr-tv/device-auth`'s `ensureAccessToken`) the first time an
-  authenticated call needs one.
+  keyboard for credentials); the Web app has no pairing UI. It signs in
+  directly against the selected server with username/password, while
+  `@streamarr-tv/device-auth`'s `ensureAccessToken` retains the transparent
+  trusted-network fallback and refresh path for subsequent requests.
 - **Whether `spatial-nav`'s D-pad focus engine is mounted at all** — the
   three TV shells use it; the Web app doesn't, since it has ordinary
   pointer/keyboard/anchor-tag navigation via `react-router-dom` instead.

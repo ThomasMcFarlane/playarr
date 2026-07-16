@@ -1695,6 +1695,12 @@ code {
   margin-top: 0;
 }
 
+.auth-server-hint {
+  margin-top: 0.55rem;
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
 .auth-input,
 .auth-submit {
   width: 100%;

@@ -38,6 +38,39 @@ export const DEFAULT_API_BASE_URL = "http://localhost:8080";
 export const API_BASE_URL_QUERY_PARAM = "apiBaseUrl";
 
 /**
+ * Validates and canonicalises an operator-entered API base URL. Browser
+ * clients require an absolute HTTP(S) URL so every request goes directly to
+ * the selected Streamarr server instead of resolving against (or being
+ * proxied through) the page that hosts Playarr.
+ */
+export function normaliseApiBaseUrl(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error("Enter the full HTTP or HTTPS URL for your Streamarr server.");
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error("Enter a valid, absolute Streamarr server URL.");
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("The Streamarr server URL must use HTTP or HTTPS.");
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("Do not include a username or password in the server URL.");
+  }
+  if (parsed.search || parsed.hash) {
+    throw new Error("The Streamarr server URL cannot include a query or fragment.");
+  }
+
+  parsed.pathname = parsed.pathname.replace(/\/+$/, "");
+  return parsed.toString().replace(/\/$/, "");
+}
+
+/**
  * Path (relative to the app's own base, see `import.meta.env.BASE_URL`) of an
  * optional operator-editable JSON file shipped alongside the built TV app
  * bundle -- e.g. dropped onto the device/USB image post-install, no rebuild
