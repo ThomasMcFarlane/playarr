@@ -1546,6 +1546,8 @@ export interface components {
              *     playback engine's duration without failing negotiation.
              */
             duration_ms: number;
+            /** @description MIME type for the direct media file or adaptive manifest in `url`. */
+            mime_type: string;
             mode: components["schemas"]["PlaybackMode"];
             /**
              * @description The server-owned quality ladder. Original is always first and is

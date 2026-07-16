@@ -58,6 +58,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   unavailable.
 - Capture the Android TV remote's Menu key at the Activity boundary so the server-address editor
   remains reachable even when WebView consumes the event.
+- Negotiate direct playback for audio-only files using audio codec capabilities and pass the
+  source MIME type through the playback API to the web player.
 
 ### Security
 

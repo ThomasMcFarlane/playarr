@@ -311,6 +311,8 @@ pub(crate) fn playback_quality_options() -> Vec<PlaybackQualityOption> {
 pub struct PlaybackInfoResponse {
     pub mode: PlaybackMode,
     pub url: String,
+    /// MIME type for the direct media file or adaptive manifest in `url`.
+    pub mime_type: String,
     /// Fixed runtime read from the source media container with ffprobe.
     /// Zero means probing failed; clients may then fall back to their
     /// playback engine's duration without failing negotiation.
@@ -340,6 +342,19 @@ pub struct PlaybackInfoResponse {
     /// sends on every request, so no separate "start session" call is
     /// needed -- see [`record_playback_event_handler`]'s doc comment.
     pub session_id: Uuid,
+}
+
+fn direct_play_mime_type(container: &str) -> &'static str {
+    match container.to_ascii_lowercase().as_str() {
+        "mp3" => "audio/mpeg",
+        "flac" => "audio/flac",
+        "m4a" => "audio/mp4",
+        "ogg" | "oga" => "audio/ogg",
+        "opus" => "audio/ogg; codecs=opus",
+        "wav" => "audio/wav",
+        "webm" => "video/webm",
+        _ => "video/mp4",
+    }
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -881,6 +896,7 @@ pub async fn playback_info_handler(
         return Ok(Json(PlaybackInfoResponse {
             mode: PlaybackMode::Direct,
             url: format!("/api/v1/media/{media_file_id}/stream"),
+            mime_type: direct_play_mime_type(&media_file.container).to_string(),
             duration_ms,
             source_offset_ms: 0,
             audio_tracks,
@@ -936,6 +952,7 @@ pub async fn playback_info_handler(
         return Ok(Json(PlaybackInfoResponse {
             mode: PlaybackMode::Hls,
             url: format!("/api/v1/media/renditions/{}/playlist.m3u8", rendition.id),
+            mime_type: "application/x-mpegURL".to_string(),
             duration_ms,
             source_offset_ms: 0,
             audio_tracks,
@@ -993,6 +1010,7 @@ pub async fn playback_info_handler(
             "/api/v1/media/sessions/{}/playlist.m3u8",
             transcode_session.id
         ),
+        mime_type: "application/x-mpegURL".to_string(),
         duration_ms,
         source_offset_ms,
         audio_tracks,

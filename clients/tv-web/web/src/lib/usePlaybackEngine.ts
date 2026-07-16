@@ -131,6 +131,7 @@ export type NegotiationState =
       kind: "ready";
       mode: PlaybackMode;
       url: string;
+      mimeType: string;
       /** Fixed source-file duration; never the growing edge of an event HLS playlist. */
       durationSeconds: number;
       /** Absolute source time represented by zero in this media timeline. */
@@ -513,6 +514,7 @@ export function usePlaybackEngine(
           kind: "ready",
           mode: info.mode,
           url: info.url,
+          mimeType: info.mime_type,
           durationSeconds: Math.max(0, info.duration_ms / 1000),
           sourceOffsetSeconds: sourceOffsetSecondsRef.current,
         });
@@ -638,7 +640,7 @@ export function usePlaybackEngine(
     void engineRef.current
       .load({
         url: resolvedUrl,
-        mimeType: negotiation.mode === "hls" ? "application/x-mpegURL" : "video/mp4",
+        mimeType: negotiation.mimeType,
       })
       .then(async () => {
         if (loadedForUrl.current !== resolvedUrl) return;
@@ -889,6 +891,7 @@ export function usePlaybackEngine(
             kind: "ready",
             mode: info.mode,
             url: info.url,
+            mimeType: info.mime_type,
             durationSeconds: Math.max(0, info.duration_ms / 1000),
             sourceOffsetSeconds: sourceOffsetSecondsRef.current,
           });
@@ -986,6 +989,7 @@ export function usePlaybackEngine(
             kind: "ready",
             mode: info.mode,
             url: info.url,
+            mimeType: info.mime_type,
             durationSeconds: Math.max(0, info.duration_ms / 1000),
             sourceOffsetSeconds: sourceOffsetSecondsRef.current,
           });
@@ -1127,6 +1131,7 @@ export function usePlaybackEngine(
             kind: "ready",
             mode: info.mode,
             url: info.url,
+            mimeType: info.mime_type,
             durationSeconds: Math.max(0, info.duration_ms / 1000),
             sourceOffsetSeconds: sourceOffsetSecondsRef.current,
           });

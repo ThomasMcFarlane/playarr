@@ -3038,6 +3038,7 @@ components:
       required:
       - mode
       - url
+      - mime_type
       - duration_ms
       - source_offset_ms
       - audio_tracks
@@ -3061,6 +3062,9 @@ components:
             Zero means probing failed; clients may then fall back to their
             playback engine's duration without failing negotiation.
           minimum: 0
+        mime_type:
+          type: string
+          description: MIME type for the direct media file or adaptive manifest in `url`.
         mode:
           $ref: '#/components/schemas/PlaybackMode'
         quality_options:

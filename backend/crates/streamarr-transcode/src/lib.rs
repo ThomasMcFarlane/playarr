@@ -491,9 +491,10 @@ impl TranscodeOrchestrator {
             .iter()
             .any(|c| c.eq_ignore_ascii_case(&media_file.container));
 
-        let video_codec_ok = capabilities
+        let codec_ok = capabilities
             .supported_video_codecs
             .iter()
+            .chain(capabilities.supported_audio_codecs.iter())
             .any(|c| c.eq_ignore_ascii_case(&media_file.codec));
 
         // An unknown source bitrate (the source *arr instance didn't
@@ -505,7 +506,7 @@ impl TranscodeOrchestrator {
             _ => true,
         };
 
-        container_ok && video_codec_ok && bitrate_ok
+        container_ok && codec_ok && bitrate_ok
     }
 
     /// Step 2: looks up whether a `Ready` rendition already exists for
@@ -1121,6 +1122,20 @@ mod tests {
             media_file.bitrate = Some(4_000_000);
 
             assert!(orchestrator.can_direct_play(&media_file, &sample_capabilities()));
+        }
+
+        #[test]
+        fn audio_only_file_matches_audio_capabilities() {
+            let orchestrator = test_orchestrator(Arc::new(FakeRenditionRepo::default()));
+            let mut media_file = sample_media_file();
+            media_file.container = "mp3".to_string();
+            media_file.codec = "mp3".to_string();
+            media_file.bitrate = Some(320_000);
+            let mut capabilities = sample_capabilities();
+            capabilities.supported_containers.push("mp3".to_string());
+            capabilities.supported_audio_codecs.push("mp3".to_string());
+
+            assert!(orchestrator.can_direct_play(&media_file, &capabilities));
         }
 
         #[test]
