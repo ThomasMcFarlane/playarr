@@ -9,6 +9,7 @@ import {
   navigationOriginFromState,
   type NavigationOrigin,
 } from "../lib/navigationLayer";
+import { advanceMusicPlaybackLifecycle } from "../lib/musicPlaybackLifecycle";
 import {
   PlayerBackButton,
   PlayerSurface,
@@ -185,15 +186,18 @@ export function PlayerPage({
     playlistItems.findIndex((item) => item.mediaFileId === mediaFileId)
   );
   const activePlaylistItem = playlistItems[activePlaylistIndex];
+  const isMusicPlayback =
+    Boolean(activePlaylistItem?.music) ||
+    /^\/music\/[^/?]+$/.test(locationState?.backTo ?? "");
   useDocumentTitle(title ?? "Now playing", !minimised);
   const player = usePlaybackEngine(
     mediaFileId,
     startPositionSeconds,
     playbackSettings
   );
-  const previousPlaybackStateRef = useRef({
+  const musicPlaybackStateRef = useRef({
     mediaFileId,
-    state: "idle" as typeof player.engineState.state,
+    hasPlayed: false,
   });
   const { negotiation, retryNegotiation } = player;
   const handleBack = useCallback(() => {
@@ -298,25 +302,20 @@ export function PlayerPage({
   }, [activePlaylistIndex, navigateToPlaylistItem, playlistItems]);
 
   useEffect(() => {
-    const previous = previousPlaybackStateRef.current;
-    previousPlaybackStateRef.current = {
+    const nextPlaybackState = advanceMusicPlaybackLifecycle(
+      musicPlaybackStateRef.current,
       mediaFileId,
-      state: player.engineState.state,
-    };
-    if (
-      previous.mediaFileId === mediaFileId &&
-      previous.state === "playing" &&
-      player.engineState.state === "paused" &&
-      activePlaylistItem?.music
-    ) {
+      player.engineState.state,
+      isMusicPlayback
+    );
+    musicPlaybackStateRef.current = nextPlaybackState.lifecycle;
+    if (nextPlaybackState.shouldStop) {
       onClose();
       return;
     }
     if (
-      previous.mediaFileId !== mediaFileId ||
       player.engineState.state !== "ended" ||
-      previous.state === "ended" ||
-      !activePlaylistItem?.music
+      !isMusicPlayback
     ) {
       return;
     }
@@ -327,7 +326,7 @@ export function PlayerPage({
     return () => window.cancelAnimationFrame(frame);
   }, [
     activePlaylistIndex,
-    activePlaylistItem?.music,
+    isMusicPlayback,
     mediaFileId,
     navigateToPlaylistItem,
     onClose,
@@ -462,7 +461,9 @@ export function PlayerPage({
         title={title ?? activePlaylistItem?.title ?? "Now playing"}
         minimised={minimised}
         inlineMusic={inlineMusic}
+        stopPlaybackOnPause={isMusicPlayback}
         onBack={handleBack}
+        onStop={onClose}
         onMinimise={handleMinimise}
         onMaximise={onMaximise}
         playlistItems={playlistItems}

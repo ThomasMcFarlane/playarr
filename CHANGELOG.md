@@ -78,6 +78,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   lifecycle, avoiding premature destruction during Compose updates.
 - Retry audio thumbnail generation without seeking when FFmpeg exposes embedded cover art as a
   single attached picture.
+- Treat pausing music as a stopped session so buffering transitions cannot leave a stale
+  minimised player visible.
 - Authorise native progressive audio with its active playback session, keep seeking and timeline
   state accurate, and advance previous, next, and ended actions through tracks rather than albums.
 - Suppress Android's restricted-API lint false positive on the public Activity key-dispatch

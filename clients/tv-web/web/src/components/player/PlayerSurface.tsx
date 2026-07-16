@@ -405,7 +405,9 @@ export function PlayerSurface({
   title,
   minimised = false,
   inlineMusic = false,
+  stopPlaybackOnPause = false,
   onBack,
+  onStop,
   onMinimise,
   onMaximise,
   playlistItems = [],
@@ -420,7 +422,9 @@ export function PlayerSurface({
   title: string;
   minimised?: boolean;
   inlineMusic?: boolean;
+  stopPlaybackOnPause?: boolean;
   onBack: () => void;
+  onStop: () => void;
   onMinimise: () => void;
   onMaximise: () => void;
   playlistItems?: PlayerPlaylistItem[];
@@ -675,6 +679,18 @@ export function PlayerSurface({
   // `window`-level listener that often.
   const engineStateRef = useRef(engineState);
   engineStateRef.current = engineState;
+  const togglePlayback = useCallback(() => {
+    const currentState = engineStateRef.current.state;
+    if (
+      stopPlaybackOnPause &&
+      (currentState === "playing" || currentState === "buffering")
+    ) {
+      onStop();
+      return;
+    }
+    void activateMusicVisualiser();
+    togglePlay();
+  }, [activateMusicVisualiser, onStop, stopPlaybackOnPause, togglePlay]);
 
   // Keyboard shortcuts remain available on the video surface: space/k/Enter
   // play-pause, arrows seek/volume, m mute, and f fullscreen. Player controls
@@ -707,7 +723,7 @@ export function PlayerSurface({
         case "k":
         case "Enter":
           event.preventDefault();
-          togglePlay();
+          togglePlayback();
           break;
         case "ArrowLeft":
           event.preventDefault();
@@ -742,7 +758,7 @@ export function PlayerSurface({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
-    togglePlay,
+    togglePlayback,
     seek,
     setVolume,
     setMuted,
@@ -788,11 +804,6 @@ export function PlayerSurface({
     if (isFullscreen) await toggleFullscreen();
     onMinimise();
   }, [isFullscreen, onMinimise, toggleFullscreen]);
-  const toggleMusicPlayback = useCallback(() => {
-    void activateMusicVisualiser();
-    togglePlay();
-  }, [activateMusicVisualiser, togglePlay]);
-
   return (
     <div
       ref={shellRef}
@@ -853,7 +864,7 @@ export function PlayerSurface({
         // bar, which stops propagation on its own interactive elements)
         // toggles play/pause -- the standard click-to-toggle pattern.
         if (event.target === event.currentTarget || (event.target as HTMLElement).tagName === "VIDEO") {
-          togglePlay();
+          togglePlayback();
         }
       }}
     >
@@ -1124,7 +1135,7 @@ export function PlayerSurface({
           engineState={engineState}
           visible={inlineMusic || showControls}
           isFullscreen={isFullscreen}
-          onTogglePlay={musicContext ? toggleMusicPlayback : togglePlay}
+          onTogglePlay={togglePlayback}
           onSeek={seek}
           onSetVolume={setVolume}
           onSetMuted={setMuted}
