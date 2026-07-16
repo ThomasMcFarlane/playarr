@@ -341,12 +341,15 @@ private fun createPlayarrWebView(
     }
 
     setOnKeyListener { _, keyCode, event ->
-        if (keyCode == KeyEvent.KEYCODE_MENU && event.action == KeyEvent.ACTION_UP) {
+        if (keyCode != KeyEvent.KEYCODE_MENU) return@setOnKeyListener false
+
+        // WebView consumes some remote keys on ACTION_DOWN. Intercept both
+        // halves of the Menu press and open the editor on the first one so
+        // the escape hatch works even while a page is still loading.
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
             onOpenServerEditor()
-            true
-        } else {
-            false
         }
+        true
     }
 
     onWebViewReady(this)

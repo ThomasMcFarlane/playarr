@@ -56,6 +56,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and enforce library access on both negotiation and media delivery.
 - Allow sideloaded and debug Android TV builds to continue when the Play Store update API is
   unavailable.
+- Intercept both halves of the Android TV remote's Menu key so the server-address editor remains
+  reachable while WebView is loading.
 
 ### Security
 
