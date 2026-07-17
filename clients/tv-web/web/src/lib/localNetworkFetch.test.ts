@@ -52,4 +52,17 @@ describe("createLocalNetworkFetch", () => {
     await expect(createLocalNetworkFetch(nativeFetch)(input)).resolves.toBe(response);
     expect(nativeFetch).toHaveBeenCalledWith(input);
   });
+
+  it("hands off a public HTTP request before the browser can block it as mixed content", async () => {
+    const nativeFetch = vi.fn<typeof fetch>();
+    const assign = vi.fn();
+    const input = new Request("http://203.0.113.10:8080/api/system/version");
+
+    await expect(
+      createLocalNetworkFetch(nativeFetch, { protocol: "https:", assign })(input)
+    ).rejects.toThrow("same-origin Playarr client");
+
+    expect(assign).toHaveBeenCalledWith("http://203.0.113.10:8080/playarr/login");
+    expect(nativeFetch).not.toHaveBeenCalled();
+  });
 });

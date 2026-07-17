@@ -80,6 +80,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Hand off saved, query-configured, invited, and automatically retried public HTTP servers before
+  the hosted HTTPS app can issue a mixed-content request, and prevent Playarr's service worker
+  from returning the HTML app shell to failed cross-origin API requests.
 - Hand public HTTP Streamarr IPs from hosted Playarr to the server-cohosted `/playarr`
   client instead of misclassifying them as LAN requests, while retaining direct Local
   Network Access for private and loopback addresses.

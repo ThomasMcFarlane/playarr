@@ -165,17 +165,17 @@ hand-written service worker, not Workbox-generated:
 2. `useAppUpdate` polls two independent, always-defensive signals on
    foreground/focus and every 15 minutes: the build manifest (`bundleVersion`
    newer than this running build → dismissible "Update available" toast,
-   plus asking the waiting service worker to precache the new bundle in the
+   plus asking the service worker to precache the new bundle in the
    background without interrupting the session) and `GET
    /api/system/version`'s `CompatibilityEntry` for this platform (running
    build below `min_supported_version` → `mustReload` set, forcing an
    automatic reload rather than merely offering one — no dismiss, no `else`
    branch).
-3. The service worker itself never force-activates on install
-   (`self.skipWaiting()` only runs on an explicit `postMessage("SKIP_WAITING")`
-   from the page); reload is what tells the waiting worker to take over,
-   matching the "background fetch without interrupting an in-progress
-   session" principle either way it was triggered.
+3. The service worker activates immediately so routing fixes cannot remain
+   stuck behind an older worker. Activation does not reload an open page or
+   interrupt playback; the toast/compatibility flow above still controls when
+   the visible application bundle reloads. The worker handles only same-origin
+   static assets and navigations, never cross-origin or `/api/*` requests.
 
 VIDAA opens this same co-hosted Web build by URL. It therefore receives
 the Web bundle's update behaviour without maintaining a separate OTA channel;

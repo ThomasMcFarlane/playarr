@@ -191,12 +191,12 @@ mechanisms:
 1. **OTA bundle delivery.** `/build-manifest.json` is polled every 15
    minutes plus on focus/visibility change, and compared against the
    bundle's own baked-in `__APP_VERSION__` via `isNewerBundleAvailable`. A
-   versioned service worker (`web/public/sw.js`) precaches the new bundle on
-   `install` but deliberately does **not** call `self.skipWaiting()`
-   unconditionally — it only activates once the page posts `SKIP_WAITING`,
-   either because the viewer clicked "reload now" on a dismissible toast, or
-   because of mechanism 2 below. This is the one genuinely OTA-capable
-   client update path in the whole system.
+   versioned service worker (`web/public/sw.js`) precaches the new bundle and
+   activates immediately so request-routing fixes cannot remain stuck behind
+   an older worker. Activation does not reload the page; the viewer's "reload
+   now" action or mechanism 2 below still controls when the visible bundle
+   changes. This is the one genuinely OTA-capable client update path in the
+   whole system.
 2. **Compatibility check.** `evaluateClientVersion()` (from
    `@streamarr-tv/domain`'s `version-check.ts`) computes a tri-state
    `"supported" | "deprecated" | "unsupported"` against
