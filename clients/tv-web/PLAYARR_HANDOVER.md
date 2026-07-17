@@ -199,7 +199,7 @@ watch. Purely backend/architecture, no frontend implication.
 
 ## Dev environment
 
-- Backend: `streamarr-backend` devserver session, `http://localhost:8080`
+- Backend: `streamarr-backend` devserver session, `http://localhost:8484`
   (native `cargo run`, not Docker). Real SQLite DB with two registered *arr
   instances (Sonarr + Radarr) and a real, large synced catalog (~2800
   items) — test against this, not a mock.

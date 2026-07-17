@@ -47,7 +47,7 @@ Both roles expose the same two ports from the same binary:
 
 | Port | Purpose |
 |------|---------|
-| `8080` (`http`) | Application traffic (`api`) / probe-only (`worker`) |
+| `8484` (`http`) | Application traffic (`api`) / probe-only (`worker`) |
 | `9090` (`metrics`) | Prometheus `/metrics` |
 
 and the same two probe paths, both real, tested routes in `streamarr-api`
@@ -101,10 +101,10 @@ containers:
     envFrom:
       - configMapRef: { name: <configmap-name> }   # STREAMARR_LOG/STREAMARR_HTTP_BIND_ADDR/STREAMARR_METRICS_BIND_ADDR
     ports:
-      - { name: http, containerPort: 8080 }
+      - { name: http, containerPort: 8484 }
       - { name: metrics, containerPort: 9090 }
-    readinessProbe: { httpGet: { path: /readyz, port: 8080 } }
-    livenessProbe:  { httpGet: { path: /healthz, port: 8080 } }
+    readinessProbe: { httpGet: { path: /readyz, port: 8484 } }
+    livenessProbe:  { httpGet: { path: /healthz, port: 8484 } }
 ```
 
 The `worker` Deployment template is identical apart from
@@ -139,7 +139,7 @@ misconfiguration hazard the chart does nothing to prevent.
 ### Config keys, and the manual sync a fixed bug left behind
 
 `values.yaml`'s non-secret `config:` block (`STREAMARR_LOG: "info"`,
-`STREAMARR_HTTP_BIND_ADDR: "0.0.0.0:8080"`,
+`STREAMARR_HTTP_BIND_ADDR: "0.0.0.0:8484"`,
 `STREAMARR_METRICS_BIND_ADDR: "0.0.0.0:9090"`) is rendered into a
 ConfigMap and consumed via `envFrom` — these are the real names
 `streamarr-config::Config::from_env` reads (`backend/crates/streamarr-config`).
@@ -152,7 +152,7 @@ The container/Service port fields (`containerPort`/`port` in
 `STREAMARR_METRICS_BIND_ADDR` directly — it's a full socket address
 string (`"0.0.0.0:9090"`), and Kubernetes port fields need a plain
 integer — so a separate top-level `metricsPort: 9090` value exists
-specifically for that (same reasoning as `probes.port: 8080` for the HTTP
+specifically for that (same reasoning as `probes.port: 8484` for the HTTP
 side, which already existed). **Nothing derives one from the other**:
 `metricsPort`/`probes.port` and the port numbers embedded in
 `config.STREAMARR_METRICS_BIND_ADDR`/`STREAMARR_HTTP_BIND_ADDR` must be

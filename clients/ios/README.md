@@ -182,7 +182,7 @@ both with real values at that point.
 Streamarr is operator-run software, so this client can never hardcode a
 single host. `AppEnvironment.serverBaseURL` is backed by `UserDefaults`
 (key `com.streamarr.ios.serverBaseURL`), defaults to
-`http://localhost:8080`, and rebuilds both `apiClient` and
+`http://localhost:8484`, and rebuilds both `apiClient` and
 `deviceFlowClient` whenever it changes. `SettingsView` has the one field
 in the UI that changes it (`Server` section, `Save` button).
 

@@ -17,7 +17,7 @@ is reachable — see `backend.Dockerfile`'s own header comment for why):
 - `backend.Dockerfile` — the multi-stage build (`cargo-chef` for layer
   caching) of the single `streamarr` binary (`backend/`, package
   `streamarr-bin`) into a slim, non-root (`uid`/`gid` `10001`),
-  read-only-root-filesystem-friendly runtime image. `EXPOSE 8080` (HTTP)
+  read-only-root-filesystem-friendly runtime image. `EXPOSE 8484` (HTTP)
   and `EXPOSE 9090` (metrics); `HEALTHCHECK` curls `/healthz`.
 - `docker-compose.dev.yml` — the local dev stack: Postgres 16 + the six
   *arr apps (Sonarr/Radarr/Lidarr/Bazarr/Prowlarr/Readarr) + Tdarr, **plus
@@ -87,7 +87,7 @@ there is no separate worker image to build, version, or keep in sync.
 reads exactly these variables: `DATABASE_URL` (required), `REDIS_URL`
 (optional), `STREAMARR_ROLE` (`all`/`api`/`worker`, default `all`),
 `STREAMARR_LOG` (default `info`), `STREAMARR_HTTP_BIND_ADDR` (default
-`0.0.0.0:8080`), `STREAMARR_METRICS_BIND_ADDR` (default `0.0.0.0:9090`),
+`0.0.0.0:8484`), `STREAMARR_METRICS_BIND_ADDR` (default `0.0.0.0:9090`),
 and `STREAMARR_OTLP_ENDPOINT` (optional). Every compose file in this
 directory now sets these real names consistently — an earlier pass had
 `backend.Dockerfile`, `docker-compose.ci.yml`, and `docker-compose.prod.yml`
@@ -137,7 +137,7 @@ before serving traffic (the same `sqlx::migrate!` mechanism described in
 [ADR 0001](../adr/0001-storage-engine.md), against the Postgres migration
 set). `caddy` is the only service that publishes host ports (`80`, `443`,
 `443/udp`); every `streamarr-api*`/`streamarr-worker*` container only
-`expose`s `8080`/`9090` on the internal `streamarr-net` network, reached
+`expose`s `8484`/`9090` on the internal `streamarr-net` network, reached
 through Caddy's reverse proxy (`prod/Caddyfile`: round-robin across every
 healthy `streamarr-api*` upstream, health-checked against `/healthz`).
 

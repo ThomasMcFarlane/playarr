@@ -13,14 +13,14 @@ import StreamarrKit
 /// user-settable: Streamarr is operator-run software, so this client can
 /// never hardcode a single host. It's backed by `UserDefaults` (see
 /// `serverBaseURLDefaultsKey`) so the value survives relaunch, and defaults
-/// to `http://localhost:8080` for local development against a
+/// to `http://localhost:8484` for local development against a
 /// same-machine/simulator-accessible backend. `SettingsView` is the one
 /// place in the UI that changes it.
 @MainActor
 @Observable
 public final class AppEnvironment {
     static let serverBaseURLDefaultsKey = "com.streamarr.ios.serverBaseURL"
-    static let defaultServerBaseURL = URL(string: "http://localhost:8080")!
+    static let defaultServerBaseURL = URL(string: "http://localhost:8484")!
     static let deviceIDDefaultsKey = "com.streamarr.ios.deviceID"
     /// `LoginRequest.deviceName` — a fixed, human-readable label rather than
     /// a `UIKit`-sourced device name (`UIDevice.current.name`), since

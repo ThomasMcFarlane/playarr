@@ -185,7 +185,7 @@ services:
       # valid single-container role; "standalone" is rejected by Role::parse
       # and the container refuses to boot.
       STREAMARR_LOG: debug
-      STREAMARR_HTTP_BIND_ADDR: 0.0.0.0:8080
+      STREAMARR_HTTP_BIND_ADDR: 0.0.0.0:8484
       STREAMARR_METRICS_BIND_ADDR: 0.0.0.0:9090
       STREAMARR_ROLE: all
       DATABASE_URL: postgres://streamarr:streamarr_ci_only@postgres:5432/streamarr
@@ -229,10 +229,10 @@ services:
     tmpfs:
       - /tmp
     ports:
-      - "8080:8080"
+      - "8484:8484"
       - "9090:9090"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8484/healthz"]
       <<: *ci-healthcheck-defaults
     networks:
       - streamarr-net

@@ -12,8 +12,8 @@ developer access supplied by VIDAA for the target television.
 2. Put the TV and Streamarr server on the same trusted home network.
 3. Find the Playarr Web address exposed by the Streamarr server. For example,
    a development server configured on port 18080 might be available as
-   `http://streamarr.local:18080`. Do not assume port 8080: deployments can use
-   a different port, and development services on 8080 may listen only on the
+   `http://streamarr.local:18080`. Do not assume port 8484: deployments can use
+   a different port, and development services on 8484 may listen only on the
    server itself.
 4. Open that address from another phone or computer on the same LAN. Do not use
    `localhost`: on the TV that means the television itself.

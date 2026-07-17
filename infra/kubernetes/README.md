@@ -26,7 +26,7 @@ Both roles expose the same two ports from the same binary:
 
 | Port | Purpose |
 |------|---------|
-| `8080` (`http`) | Application traffic (api) / probe-only (worker) - see `probes.port` |
+| `8484` (`http`) | Application traffic (api) / probe-only (worker) - see `probes.port` |
 | `9090` (`metrics`) | Prometheus `/metrics` |
 
 And the same two probe paths:
@@ -190,7 +190,7 @@ other change.
 
 ## Known gaps / assumptions made while scaffolding
 
-- **Ports and probe paths** (`8080`/`9090`, `/healthz`/`/readyz`) are
+- **Ports and probe paths** (`8484`/`9090`, `/healthz`/`/readyz`) are
   assumptions, not read from the real `streamarr` binary - see the table
   above.
 - **Image repository** (`ghcr.io/streamarr/streamarr`) is a placeholder;

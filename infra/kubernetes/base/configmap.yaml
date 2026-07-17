@@ -11,5 +11,5 @@ metadata:
 # used elsewhere in this kustomize tree (Service/container port fields).
 data:
   STREAMARR_LOG: "info"
-  STREAMARR_HTTP_BIND_ADDR: "0.0.0.0:8080"
+  STREAMARR_HTTP_BIND_ADDR: "0.0.0.0:8484"
   STREAMARR_METRICS_BIND_ADDR: "0.0.0.0:9090"

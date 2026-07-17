@@ -43,7 +43,7 @@ import { check, group, sleep } from "k6";
 import { Trend, Rate, Counter } from "k6/metrics";
 import { SharedArray } from "k6/data";
 
-const BASE_URL = __ENV.BASE_URL || "http://localhost:8080";
+const BASE_URL = __ENV.BASE_URL || "http://localhost:8484";
 const TARGET_PROFILE = __ENV.TARGET_PROFILE || "av1-1080p-open";
 // Whether to poll the created job until it leaves the queue. Off by default
 // because this script's job is to characterise *submission* burst

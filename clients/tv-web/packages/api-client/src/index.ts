@@ -201,7 +201,7 @@ export interface SessionHistoryParams {
 }
 
 export interface ApiClientConfig {
-  /** API origin, e.g. "http://localhost:8080" (no trailing slash required). */
+  /** API origin, e.g. "http://localhost:8484" (no trailing slash required). */
   baseUrl: string;
   /**
    * Called before each of the *protected* requests (the admin source-

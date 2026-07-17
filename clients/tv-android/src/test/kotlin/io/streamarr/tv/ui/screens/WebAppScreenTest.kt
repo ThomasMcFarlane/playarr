@@ -8,8 +8,8 @@ class WebAppScreenTest {
     @Test
     fun `adds an http scheme to a home network address`() {
         assertEquals(
-            "http://192.168.1.23:8080",
-            normaliseServerUrl("192.168.1.23:8080/"),
+            "http://192.168.1.23:8484",
+            normaliseServerUrl("192.168.1.23:8484/"),
         )
     }
 

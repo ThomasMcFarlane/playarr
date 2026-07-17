@@ -22,13 +22,13 @@ and validated against a real VIDAA device or simulator.
 This TV has no keyboard, so the app resolves which Streamarr instance to
 talk to (via `@streamarr-tv/domain`'s `resolveApiBaseUrl`) in this order:
 
-1. A `?apiBaseUrl=http://192.168.1.50:8080` query param the PWA was opened
+1. A `?apiBaseUrl=http://192.168.1.50:8484` query param the PWA was opened
    with.
 2. `apiBaseUrl` in `streamarr-config.json`, shipped in this app's `public/`
    directory and copied verbatim into `dist/` at build time. An operator can
    overwrite this file on the serving origin to repoint the app without a
    rebuild.
-3. `DEFAULT_API_BASE_URL` (`http://localhost:8080`), for local development.
+3. `DEFAULT_API_BASE_URL` (`http://localhost:8484`), for local development.
 
 ## Building
 

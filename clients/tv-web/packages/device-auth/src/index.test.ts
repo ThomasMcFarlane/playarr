@@ -13,7 +13,7 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
-const BASE_URL = "http://localhost:8080";
+const BASE_URL = "http://localhost:8484";
 
 describe("createQrCodeSvg", () => {
   it("renders the complete verification URL locally as an SVG", async () => {

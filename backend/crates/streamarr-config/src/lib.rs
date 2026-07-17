@@ -12,6 +12,7 @@
 use std::env::VarError;
 use std::fmt;
 use std::net::{AddrParseError, SocketAddr};
+use std::path::PathBuf;
 
 /// Which responsibilities this process instance takes on. Set via
 /// `STREAMARR_ROLE`; determines whether `streamarr-bin` boots the Axum
@@ -116,12 +117,21 @@ pub struct Config {
     /// the Kubernetes Helm chart, and `infra/docker/observability/prometheus/prometheus.yml`).
     pub metrics_bind_addr: SocketAddr,
     /// `STREAMARR_HTTP_BIND_ADDR` — where `streamarr-api`'s Axum router
-    /// listens. Defaults to `0.0.0.0:8080`.
+    /// listens. Defaults to `0.0.0.0:8484`.
     pub http_bind_addr: SocketAddr,
+    /// Optional native TLS certificate and private key. Both paths must be
+    /// configured together; when absent, the listener serves plain HTTP.
+    pub tls: Option<TlsConfig>,
     /// `STREAMARR_OTLP_ENDPOINT` — optional OTLP collector endpoint; when
     /// unset, `streamarr-telemetry::otel` is a no-op layer.
     pub otlp_endpoint: Option<String>,
     pub deployment_tier: DeploymentTier,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TlsConfig {
+    pub cert_path: PathBuf,
+    pub key_path: PathBuf,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -160,7 +170,28 @@ impl Config {
 
         let log_filter = optional(lookup, "STREAMARR_LOG").unwrap_or_else(|| "info".to_string());
         let metrics_bind_addr = parse_addr(lookup, "STREAMARR_METRICS_BIND_ADDR", "0.0.0.0:9090")?;
-        let http_bind_addr = parse_addr(lookup, "STREAMARR_HTTP_BIND_ADDR", "0.0.0.0:8080")?;
+        let http_bind_addr = parse_addr(lookup, "STREAMARR_HTTP_BIND_ADDR", "0.0.0.0:8484")?;
+        let tls = match (
+            optional(lookup, "STREAMARR_TLS_CERT_PATH"),
+            optional(lookup, "STREAMARR_TLS_KEY_PATH"),
+        ) {
+            (None, None) => None,
+            (Some(cert_path), Some(key_path)) => Some(TlsConfig {
+                cert_path: cert_path.into(),
+                key_path: key_path.into(),
+            }),
+            (cert_path, key_path) => {
+                return Err(ConfigError::InvalidValue {
+                    var: "STREAMARR_TLS_CERT_PATH/STREAMARR_TLS_KEY_PATH".to_string(),
+                    value: format!(
+                        "cert={}, key={}",
+                        if cert_path.is_some() { "set" } else { "unset" },
+                        if key_path.is_some() { "set" } else { "unset" }
+                    ),
+                    reason: "both paths must be set together".to_string(),
+                });
+            }
+        };
         let otlp_endpoint = optional(lookup, "STREAMARR_OTLP_ENDPOINT");
 
         let deployment_tier = DeploymentTier::resolve(&database_url, redis_url.as_deref());
@@ -172,6 +203,7 @@ impl Config {
             log_filter,
             metrics_bind_addr,
             http_bind_addr,
+            tls,
             otlp_endpoint,
             deployment_tier,
         })
@@ -228,6 +260,41 @@ mod tests {
         assert_eq!(config.deployment_tier, DeploymentTier::SingleNode);
         assert_eq!(config.role, Role::All);
         assert_eq!(config.log_filter, "info");
+        assert_eq!(config.http_bind_addr, "0.0.0.0:8484".parse().unwrap());
+        assert_eq!(config.tls, None);
+    }
+
+    #[test]
+    fn tls_paths_must_be_configured_together() {
+        let lookup = lookup_from(HashMap::from([
+            ("DATABASE_URL", "sqlite://streamarr.db"),
+            (
+                "STREAMARR_TLS_CERT_PATH",
+                "/etc/streamarr/tls/fullchain.pem",
+            ),
+        ]));
+        let err = Config::from_env_source(&lookup).unwrap_err();
+        assert!(matches!(err, ConfigError::InvalidValue { var, .. } if var.contains("TLS")));
+    }
+
+    #[test]
+    fn tls_paths_enable_native_tls() {
+        let lookup = lookup_from(HashMap::from([
+            ("DATABASE_URL", "sqlite://streamarr.db"),
+            (
+                "STREAMARR_TLS_CERT_PATH",
+                "/etc/streamarr/tls/fullchain.pem",
+            ),
+            ("STREAMARR_TLS_KEY_PATH", "/etc/streamarr/tls/privkey.pem"),
+        ]));
+        let config = Config::from_env_source(&lookup).unwrap();
+        assert_eq!(
+            config.tls,
+            Some(TlsConfig {
+                cert_path: "/etc/streamarr/tls/fullchain.pem".into(),
+                key_path: "/etc/streamarr/tls/privkey.pem".into(),
+            })
+        );
     }
 
     #[test]

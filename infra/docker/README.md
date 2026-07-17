@@ -35,9 +35,9 @@ selection is entirely via the `STREAMARR_ROLE` *environment variable*
 are valid) -- the container would have refused to boot as shipped (fixed to
 `all`).
 
-- **App HTTP port: `8080`, metrics port: `9090`.** Confirmed as the real
+- **App HTTP port: `8484`, metrics port: `9090`.** Confirmed as the real
   defaults in `streamarr-config::Config::from_env` (`STREAMARR_HTTP_BIND_ADDR`
-  defaults to `0.0.0.0:8080`, `STREAMARR_METRICS_BIND_ADDR` to `0.0.0.0:9090`).
+  defaults to `0.0.0.0:8484`, `STREAMARR_METRICS_BIND_ADDR` to `0.0.0.0:9090`).
   Every compose file's `HTTP_PORT`/`METRICS_PORT` (Dockerfile-local
   convenience vars used only by `HEALTHCHECK`'s curl command, not read by
   the binary) are kept in sync with these by hand -- there's no single
@@ -47,7 +47,7 @@ are valid) -- the container would have refused to boot as shipped (fixed to
   `STREAMARR_ROLE`, `STREAMARR_LOG`, `STREAMARR_HTTP_BIND_ADDR`,
   `STREAMARR_METRICS_BIND_ADDR`, `STREAMARR_OTLP_ENDPOINT` -- nothing else.
   `STREAMARR_HTTP_BIND_ADDR`/`STREAMARR_METRICS_BIND_ADDR` are full socket
-  addresses (`"0.0.0.0:8080"`), not bare port numbers. Earlier drafts of
+  addresses (`"0.0.0.0:8484"`), not bare port numbers. Earlier drafts of
   these compose files used `APP_ENV`/`LOG_LEVEL`/`LOG_FORMAT`/
   `METRICS_ENABLED`/`HTTP_PORT`/`METRICS_PORT` as if the binary read them
   directly -- it never did; those names are now only used where noted above

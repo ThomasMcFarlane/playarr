@@ -48,7 +48,7 @@ Text fields use Android TV's system keyboard.
 ## Server configuration
 
 `ServerConfigStore` persists the origin in DataStore. The default
-emulator address is `http://10.0.2.2:8080`; physical devices normally
+emulator address is `http://10.0.2.2:8484`; physical devices normally
 use the server's LAN address.
 
 The address editor appears automatically if the main document cannot be

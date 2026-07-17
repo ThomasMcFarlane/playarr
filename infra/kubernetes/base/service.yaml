@@ -10,7 +10,7 @@ spec:
   ports:
     - name: http
       port: 80
-      targetPort: 8080
+      targetPort: 8484
     - name: metrics
       port: 9090
       targetPort: metrics
@@ -30,8 +30,8 @@ spec:
   clusterIP: None
   ports:
     - name: http
-      port: 8080
-      targetPort: 8080
+      port: 8484
+      targetPort: 8484
     - name: metrics
       port: 9090
       targetPort: metrics

@@ -14,7 +14,7 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
-const BASE_URL = "http://localhost:8080";
+const BASE_URL = "http://localhost:8484";
 const IDENTITY = { deviceName: "Streamarr Web", clientPlatform: "web" as const, clientVersion: "1.0.0" };
 
 afterEach(() => {

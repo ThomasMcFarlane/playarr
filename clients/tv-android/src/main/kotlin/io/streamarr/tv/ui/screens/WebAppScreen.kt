@@ -494,7 +494,7 @@ private fun ServerAddressEditor(
                 value = address,
                 onValueChange = onAddressChanged,
                 label = { MaterialText("Server address") },
-                placeholder = { MaterialText("http://192.168.1.23:8080") },
+                placeholder = { MaterialText("http://192.168.1.23:8484") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )

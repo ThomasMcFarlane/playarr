@@ -21,9 +21,9 @@ export default defineConfig({
     // the server selected by the viewer. Proxying here keeps local development
     // convenient against a backend listening on the standard development port.
     proxy: {
-      "/api": "http://localhost:8080",
-      "/healthz": "http://localhost:8080",
-      "/readyz": "http://localhost:8080",
+      "/api": "http://localhost:8484",
+      "/healthz": "http://localhost:8484",
+      "/readyz": "http://localhost:8484",
     },
   },
   build: {

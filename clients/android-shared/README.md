@@ -190,7 +190,7 @@ enum field (no free-form `client_id`).
 
 The operator server base URL is a runtime-configurable,
 `DataStore`-backed setting (`core-data`'s `ServerConfigStore`, default
-`http://10.0.2.2:8080` for the Android emulator's host-loopback
+`http://10.0.2.2:8484` for the Android emulator's host-loopback
 convention) surfaced on each app's Settings screen, not a value baked into
 the build via `BuildConfig`. Both apps ship a network security config
 permitting cleartext HTTP, since a self-hosted Streamarr instance is

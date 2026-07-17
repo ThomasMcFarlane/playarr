@@ -64,7 +64,7 @@ For non-interactive local use, export `CLOUDFLARE_API_TOKEN` and
 
 Playarr is only the static playback client; each viewer still connects it to
 their own Streamarr server. Enter an IP address such as
-`http://192.168.1.50:8080` or `http://203.0.113.10:8080` on the sign-in screen.
+`http://192.168.1.50:8484` or `http://203.0.113.10:8484` on the sign-in screen.
 Cloudflare never proxies the API, and the client stores server-specific profile
 sessions in the browser.
 

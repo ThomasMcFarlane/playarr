@@ -11,9 +11,9 @@ export default defineConfig({
     // also defaults to a same-origin API base URL. Proxying here
     // reproduces that for `pnpm run dev`.
     proxy: {
-      "/api": "http://localhost:8080",
-      "/healthz": "http://localhost:8080",
-      "/readyz": "http://localhost:8080",
+      "/api": "http://localhost:8484",
+      "/healthz": "http://localhost:8484",
+      "/readyz": "http://localhost:8484",
     },
   },
   build: {

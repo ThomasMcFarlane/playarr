@@ -1000,23 +1000,34 @@ async fn boot_api(
     let (router, _openapi) = build_router(state, version_gate, web_assets_dir_from_env());
 
     let listener = tokio::net::TcpListener::bind(config.http_bind_addr).await?;
-    tracing::info!(addr = %config.http_bind_addr, "http server listening");
 
     // Only flip to ready once the listener is actually bound — a readiness
     // probe passing before this point would tell a load balancer to send
     // traffic to a port nothing is listening on yet.
-    readiness.set_ready(true);
-
     // `POST /api/v1/auth/login`'s `AuthMode::TrustedNetwork` tier needs the
     // caller's real source IP (`ConnectInfo`) to decide whether to
     // auto-login -- `into_make_service_with_connect_info` is what actually
     // populates that extractor; plain `axum::serve(listener, router)` would
     // leave it unpopulated and every trusted-network login would 401.
-    axum::serve(
-        listener,
-        router.into_make_service_with_connect_info::<std::net::SocketAddr>(),
-    )
-    .await?;
+    if let Some(tls) = &config.tls {
+        let tls_config =
+            axum_server::tls_rustls::RustlsConfig::from_pem_file(&tls.cert_path, &tls.key_path)
+                .await?;
+        let listener = listener.into_std()?;
+        tracing::info!(addr = %config.http_bind_addr, "https server listening");
+        readiness.set_ready(true);
+        axum_server::from_tcp_rustls(listener, tls_config)
+            .serve(router.into_make_service_with_connect_info::<std::net::SocketAddr>())
+            .await?;
+    } else {
+        tracing::info!(addr = %config.http_bind_addr, "http server listening");
+        readiness.set_ready(true);
+        axum::serve(
+            listener,
+            router.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        )
+        .await?;
+    }
     Ok(())
 }
 

@@ -19,7 +19,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Server")
                 } footer: {
-                    Text("Defaults to http://localhost:8080. Point this at whichever Streamarr server instance you run.")
+                    Text("Defaults to http://localhost:8484. Point this at whichever Streamarr server instance you run.")
                 }
 
                 Section("Account") {

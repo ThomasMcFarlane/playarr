@@ -28,7 +28,7 @@
 
     <string name="settings_server">Server</string>
     <string name="settings_server_url">Server address</string>
-    <string name="settings_server_url_hint">e.g. http://10.0.2.2:8080 for the emulator, or your host machine\'s LAN IP for a physical device.</string>
+    <string name="settings_server_url_hint">e.g. http://10.0.2.2:8484 for the emulator, or your host machine\'s LAN IP for a physical device.</string>
     <string name="settings_save">Save</string>
     <string name="settings_account">Account</string>
     <string name="settings_sign_out">Sign out</string>

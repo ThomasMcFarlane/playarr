@@ -57,7 +57,7 @@ x-streamarr-env: &streamarr-env
   # binary actually reads (a prior pass invented those against a
   # docs-described-but-never-implemented config surface).
   STREAMARR_LOG: ${STREAMARR_LOG_LEVEL:-info}
-  STREAMARR_HTTP_BIND_ADDR: 0.0.0.0:8080
+  STREAMARR_HTTP_BIND_ADDR: 0.0.0.0:8484
   STREAMARR_METRICS_BIND_ADDR: 0.0.0.0:9090
   DATABASE_URL: postgres://streamarr:${STREAMARR_DB_PASSWORD:?Set STREAMARR_DB_PASSWORD (e.g. in a .env file) before starting the prod stack}@postgres:5432/streamarr
   STREAMARR_ARTWORK_CACHE_DIR: /data/streamarr-cache/artwork
@@ -137,7 +137,7 @@ services:
       postgres:
         condition: service_healthy
     expose:
-      - "8080"
+      - "8484"
       - "9090"
     volumes:
       - streamarr_prod_artwork_cache:/data/streamarr-cache/artwork
@@ -173,7 +173,7 @@ services:
       postgres:
         condition: service_healthy
     expose:
-      - "8080"
+      - "8484"
       - "9090"
     volumes:
       - streamarr_prod_artwork_cache:/data/streamarr-cache/artwork
@@ -207,7 +207,7 @@ services:
       postgres:
         condition: service_healthy
     expose:
-      - "8080"
+      - "8484"
       - "9090"
     networks:
       - streamarr-net
@@ -235,7 +235,7 @@ services:
       postgres:
         condition: service_healthy
     expose:
-      - "8080"
+      - "8484"
       - "9090"
     networks:
       - streamarr-net

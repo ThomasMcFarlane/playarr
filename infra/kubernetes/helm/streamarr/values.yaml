@@ -52,7 +52,7 @@ metricsPort: 9090
 # `port` has the same manual-sync caveat as metricsPort above, against
 # config.STREAMARR_HTTP_BIND_ADDR.
 probes:
-  port: 8080
+  port: 8484
   livenessPath: /healthz
   readinessPath: /readyz
   initialDelaySeconds: 5
@@ -76,7 +76,7 @@ preStopSleepSeconds: 15
 # below if either changes; nothing derives one from the other.
 config:
   STREAMARR_LOG: "info"
-  STREAMARR_HTTP_BIND_ADDR: "0.0.0.0:8080"
+  STREAMARR_HTTP_BIND_ADDR: "0.0.0.0:8484"
   STREAMARR_METRICS_BIND_ADDR: "0.0.0.0:9090"
 
 # -- DATABASE_URL / REDIS_URL are secret-shaped values. This chart never
@@ -109,7 +109,7 @@ api:
   service:
     type: ClusterIP
     port: 80
-    targetPort: 8080
+    targetPort: 8484
 
   resources:
     requests:
@@ -140,8 +140,8 @@ worker:
   # /healthz, /readyz and /metrics on the same port, so a headless-style
   # ClusterIP Service is still created for probes/Prometheus scraping.
   service:
-    port: 8080
-    targetPort: 8080
+    port: 8484
+    targetPort: 8484
 
   resources:
     requests:

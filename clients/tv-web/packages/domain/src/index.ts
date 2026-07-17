@@ -32,7 +32,7 @@ export {
 } from "./bundle-manifest";
 
 /** Default Streamarr API origin for local development. */
-export const DEFAULT_API_BASE_URL = "http://localhost:8080";
+export const DEFAULT_API_BASE_URL = "http://localhost:8484";
 
 /** Query param TV apps (no keyboard input) can be launched with to point at a non-default API origin. */
 export const API_BASE_URL_QUERY_PARAM = "apiBaseUrl";

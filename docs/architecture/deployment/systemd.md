@@ -75,8 +75,11 @@ REDIS_URL=                # redis://<host>:6379/0
 # --- Optional (defaults shown match values.yaml's Kubernetes ConfigMap;
 #     these are the real names streamarr-config::Config::from_env reads) ---
 STREAMARR_LOG=info
-STREAMARR_HTTP_BIND_ADDR=0.0.0.0:8080
+STREAMARR_HTTP_BIND_ADDR=0.0.0.0:8484
 STREAMARR_METRICS_BIND_ADDR=0.0.0.0:9090
+# Set both to serve native HTTPS on STREAMARR_HTTP_BIND_ADDR:
+# STREAMARR_TLS_CERT_PATH=/etc/streamarr/tls/fullchain.pem
+# STREAMARR_TLS_KEY_PATH=/etc/streamarr/tls/privkey.pem
 STREAMARR_WEB_ASSETS_DIR=/var/lib/streamarr/web
 ```
 
@@ -108,10 +111,10 @@ selection happens purely through the `STREAMARR_ROLE` environment
 variable, which accepts `all`, `api`, or `worker` (case-insensitively) and
 fails the process at startup on anything else.
 
-Bringing a reverse proxy (Caddy, nginx, Traefik) in front of
-`STREAMARR_HTTP_BIND_ADDR` for TLS termination and remote access is the
-operator's own choice — `streamarr.service` binds locally and does not
-manage certificates itself.
+Streamarr serves native HTTPS when both `STREAMARR_TLS_CERT_PATH` and
+`STREAMARR_TLS_KEY_PATH` are configured. It reads the PEM certificate chain
+and private key at startup and terminates TLS inside the Streamarr process;
+no reverse proxy is required. Leave both unset for a private HTTP deployment.
 
 ## Operating
 

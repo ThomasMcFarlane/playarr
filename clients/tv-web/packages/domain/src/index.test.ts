@@ -9,8 +9,8 @@ describe("normaliseApiBaseUrl", () => {
   });
 
   it("preserves an explicit port", () => {
-    expect(normaliseApiBaseUrl("http://192.0.2.10:8080/")).toBe(
-      "http://192.0.2.10:8080"
+    expect(normaliseApiBaseUrl("http://192.0.2.10:8484/")).toBe(
+      "http://192.0.2.10:8484"
     );
   });
 

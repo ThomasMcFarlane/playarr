@@ -38,7 +38,7 @@ services:
       DATABASE_URL: sqlite:///data/streamarr.db
       STREAMARR_ARTWORK_CACHE_DIR: /data/cache/artwork
       STREAMARR_LOG: ${STREAMARR_LOG:-info,streamarr_api=debug}
-      STREAMARR_HTTP_BIND_ADDR: 0.0.0.0:8080
+      STREAMARR_HTTP_BIND_ADDR: 0.0.0.0:8484
       STREAMARR_METRICS_BIND_ADDR: 0.0.0.0:9090
       # Unset means streamarr-bin generates a boot-lifetime JWT secret and
       # logs a warning (backend/src/main.rs's jwt_secret_from_env) -- fine
@@ -62,7 +62,7 @@ services:
       # see streamarr-transcode's own docs), REDIS_URL (SQLite tier has no
       # use for it).
     ports:
-      - "8080:8080"
+      - "8484:8484"
       - "9090:9090"
     volumes:
       - streamarr_standalone_data:/data

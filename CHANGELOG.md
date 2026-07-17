@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add native TLS certificate support to the Streamarr server without requiring a reverse proxy.
 - Notify Playarr users in Chrome, Android mobile, and Android TV when an admin approves their friend-invite request.
 - Let Playarr users request a friend-invite QR, let Streamarr admins approve or deny it, and start the one-use invite's 24-hour lifetime only when the approved user generates it.
 - Show accessible confirmation toasts when Playarr settings, watch state, and playlists change.
@@ -54,6 +55,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Standardise Streamarr's direct application port on `8484`.
 - Let Playarr convert public IPv4 HTTP addresses to deterministic DNS-only HTTPS names without
   proxying application or media traffic.
 - Split Playarr Web's settings screen into a hub with one focused page per section (appearance,

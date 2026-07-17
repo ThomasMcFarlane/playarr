@@ -111,7 +111,7 @@ no dependency resolution errors) as part of scaffolding this workspace.
   distribution or device-specific developer access. See the
   [VIDAA installation guide](../../docs/clients/vidaa.md).
 - **No backend is running anywhere in this workspace.** `packages/api-client`
-  and `web/src/pages/Library.tsx` point at `http://localhost:8080/v1` as a
+  and `web/src/pages/Library.tsx` point at `http://localhost:8484/v1` as a
   placeholder and will fail requests until a real API exists -- that failure
   is surfaced in the UI rather than mocked away, deliberately.
 - **`packages/api-client` is fully hand-written.** Per the task brief, it's

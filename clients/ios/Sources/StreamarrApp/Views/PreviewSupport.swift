@@ -5,7 +5,7 @@ import StreamarrKit
 /// directory, so previews render without a live server. Never referenced
 /// from `App.swift`/`AppEnvironment` at runtime.
 struct PreviewAPIClient: StreamarrAPIClient {
-    var baseURL: URL { URL(string: "http://localhost:8080")! }
+    var baseURL: URL { URL(string: "http://localhost:8484")! }
 
     func fetchHealth() async throws {}
     func fetchReadiness() async throws {}

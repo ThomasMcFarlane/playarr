@@ -22,13 +22,13 @@ before running them for real:
 
 ```sh
 k6 run infra/k6/smoke.js
-k6 run -e BASE_URL=http://localhost:8080 infra/k6/load.js
-k6 run -e BASE_URL=http://localhost:8080 infra/k6/transcode-stress.js
+k6 run -e BASE_URL=http://localhost:8484 infra/k6/load.js
+k6 run -e BASE_URL=http://localhost:8484 infra/k6/transcode-stress.js
 ```
 
 ## Assumptions to revisit once the backend lands
 
-- **Base URL / port**: defaults to `http://localhost:8080`, matching
+- **Base URL / port**: defaults to `http://localhost:8484`, matching
   `HTTP_PORT` in `infra/kubernetes/helm/streamarr/values.yaml`.
 - **`/healthz` and `/readyz`**: confirmed against
   `infra/kubernetes/base/deployment-api.yaml` and the Helm chart's

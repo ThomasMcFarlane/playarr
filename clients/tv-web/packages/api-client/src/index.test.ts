@@ -13,7 +13,7 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
-const BASE_URL = "http://localhost:8080";
+const BASE_URL = "http://localhost:8484";
 
 describe("ApiClient", () => {
   it("browses the catalog and parses a real CatalogPageSchema response", async () => {
@@ -520,7 +520,7 @@ describe("ApiClient", () => {
 
     expect(info.mode).toBe("hls");
     expect(client.resolveUrl(info.url)).toBe(
-      "http://localhost:8080/api/v1/media/sessions/session-1/playlist.m3u8"
+      "http://localhost:8484/api/v1/media/sessions/session-1/playlist.m3u8"
     );
   });
 

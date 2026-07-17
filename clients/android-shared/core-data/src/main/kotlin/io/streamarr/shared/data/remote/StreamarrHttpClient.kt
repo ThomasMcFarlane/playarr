@@ -42,7 +42,7 @@ object StreamarrHttpClient {
 
     /**
      * @param baseUrlProvider returns the operator server's current base
-     *   URL (e.g. `"http://10.0.2.2:8080"`, see
+     *   URL (e.g. `"http://10.0.2.2:8484"`, see
      *   `io.streamarr.shared.data.config.ServerConfigStore`), re-invoked on
      *   every request via [dynamicBaseUrlInterceptor] so a base-URL change
      *   saved from the Settings screen takes effect on the very next call --

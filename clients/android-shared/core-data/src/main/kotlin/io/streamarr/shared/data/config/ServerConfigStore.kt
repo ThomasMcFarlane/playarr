@@ -43,10 +43,10 @@ class ServerConfigStore @Inject constructor(
          * https://developer.android.com/studio/run/emulator-networking).
          * It only works from inside the emulator. A **physical** device
          * cannot reach it at all; point this at the host machine's real
-         * LAN IP instead (e.g. `http://192.168.1.23:8080`) via the
+         * LAN IP instead (e.g. `http://192.168.1.23:8484`) via the
          * Settings screen this store backs.
          */
-        const val DEFAULT_BASE_URL = "http://10.0.2.2:8080"
+        const val DEFAULT_BASE_URL = "http://10.0.2.2:8484"
 
         private val BASE_URL_KEY = stringPreferencesKey("streamarr_base_url")
     }
