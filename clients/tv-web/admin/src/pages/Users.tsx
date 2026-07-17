@@ -4,6 +4,7 @@ import {
   type CreateUserRequest,
   type SourceInstanceResponse,
   type SourceKind,
+  type UserInviteRequestResponse,
   type UserResponse,
   type WorkKind,
 } from "@streamarr-tv/api-client";
@@ -278,6 +279,8 @@ export function UsersPage() {
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteCopied, setInviteCopied] = useState(false);
+  const [inviteRequests, setInviteRequests] = useState<UserInviteRequestResponse[] | null>(null);
+  const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(null);
 
   // Source instances back the type-first permission picker below -- fetched
   // once on mount, same call `SourceInstancesPage`/`LibraryToolbarMenus`
@@ -308,6 +311,25 @@ export function UsersPage() {
       .listUsers()
       .then(setUsers)
       .catch((err: unknown) => setError(describeApiError(err)));
+    client
+      .listUserInviteRequests()
+      .then(setInviteRequests)
+      .catch((err: unknown) => setError(describeApiError(err)));
+  }
+
+  async function handleReviewInviteRequest(id: string, approved: boolean) {
+    setReviewingRequestId(id);
+    setError(null);
+    try {
+      const reviewed = await client.reviewUserInviteRequest(id, { approved });
+      setInviteRequests((current) =>
+        current?.map((request) => (request.id === reviewed.id ? reviewed : request)) ?? current
+      );
+    } catch (err) {
+      setError(describeApiError(err));
+    } finally {
+      setReviewingRequestId(null);
+    }
   }
 
   async function handleCreateInvite() {
@@ -508,6 +530,57 @@ export function UsersPage() {
       {inviteError && !inviteLink && (
         <p className="error-text" style={{ marginBottom: "1rem" }}>{inviteError}</p>
       )}
+
+      {inviteRequests?.some((request) => request.status === "pending") ? (
+        <section className="card" style={{ marginBottom: "1.5rem" }}>
+          <h2 className="section-title" style={{ marginBottom: "0.4rem" }}>Friend invite requests</h2>
+          <p className="muted" style={{ marginBottom: "1rem" }}>
+            Approving grants the requester one QR generation. Its 24-hour expiry starts only when
+            they generate it in Playarr.
+          </p>
+          <div style={{ display: "grid", gap: "0.75rem" }}>
+            {inviteRequests
+              .filter((request) => request.status === "pending")
+              .map((request) => (
+                <div
+                  key={request.id}
+                  style={{
+                    display: "flex",
+                    gap: "1rem",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div>
+                    <strong>{request.display_name}</strong>
+                    <p className="muted" style={{ margin: 0 }}>
+                      @{request.username} · requested {new Date(request.requested_at).toLocaleString()}
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      disabled={reviewingRequestId !== null}
+                      onClick={() => void handleReviewInviteRequest(request.id, false)}
+                    >
+                      Deny
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      disabled={reviewingRequestId !== null}
+                      onClick={() => void handleReviewInviteRequest(request.id, true)}
+                    >
+                      {reviewingRequestId === request.id ? "Reviewing..." : "Approve"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </section>
+      ) : null}
 
       {users !== null && users.length > 0 && (
         <div className="provider-grid" style={{ marginBottom: "1.5rem" }}>

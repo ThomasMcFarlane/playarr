@@ -112,6 +112,9 @@ export type TdarrConnectionResponse = components["schemas"]["TdarrConnectionResp
 export type CreateUserRequest = components["schemas"]["CreateUserRequest"];
 export type SignupRequest = components["schemas"]["SignupRequest"];
 export type UserInviteResponse = components["schemas"]["UserInviteResponse"];
+export type UserInviteRequestResponse = components["schemas"]["UserInviteRequestResponse"];
+export type UserInviteRequestStatus = components["schemas"]["UserInviteRequestStatus"];
+export type ReviewUserInviteRequest = components["schemas"]["ReviewUserInviteRequest"];
 export type UpdateUserRequest = components["schemas"]["UpdateUserRequest"];
 export type UserResponse = components["schemas"]["UserResponse"];
 export type PlayerPreferences = components["schemas"]["PlayerPreferencesResponse"];
@@ -252,6 +255,11 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/admin/users", method: "POST" },
   { schemaPath: "/api/v1/admin/users", method: "GET" },
   { schemaPath: "/api/v1/admin/user-invites", method: "POST" },
+  { schemaPath: "/api/v1/admin/user-invite-requests", method: "GET" },
+  { schemaPath: "/api/v1/admin/user-invite-requests/{id}", method: "PATCH" },
+  { schemaPath: "/api/v1/users/me/user-invite-request", method: "GET" },
+  { schemaPath: "/api/v1/users/me/user-invite-request", method: "POST" },
+  { schemaPath: "/api/v1/users/me/user-invite-request/generate", method: "POST" },
   { schemaPath: "/api/v1/admin/users/{id}", method: "PATCH" },
   { schemaPath: "/api/v1/admin/users/{id}", method: "DELETE" },
   { schemaPath: "/api/v1/users/me/player-preferences", method: "GET" },
@@ -671,6 +679,36 @@ export class ApiClient {
   /** Issues a 24-hour, one-use invitation for the Playarr sign-up flow. */
   async createUserInvite(): Promise<UserInviteResponse> {
     return this.unwrap(await this.raw.POST("/api/v1/admin/user-invites", {}));
+  }
+
+  async listUserInviteRequests(): Promise<UserInviteRequestResponse[]> {
+    return this.unwrap(await this.raw.GET("/api/v1/admin/user-invite-requests", {}));
+  }
+
+  async reviewUserInviteRequest(
+    id: string,
+    body: ReviewUserInviteRequest
+  ): Promise<UserInviteRequestResponse> {
+    return this.unwrap(
+      await this.raw.PATCH("/api/v1/admin/user-invite-requests/{id}", {
+        params: { path: { id } },
+        body,
+      })
+    );
+  }
+
+  async getMyUserInviteRequest(): Promise<UserInviteRequestResponse | null> {
+    return this.unwrap(await this.raw.GET("/api/v1/users/me/user-invite-request", {}));
+  }
+
+  async createUserInviteRequest(): Promise<UserInviteRequestResponse> {
+    return this.unwrap(await this.raw.POST("/api/v1/users/me/user-invite-request", {}));
+  }
+
+  async generateApprovedUserInvite(): Promise<UserInviteResponse> {
+    return this.unwrap(
+      await this.raw.POST("/api/v1/users/me/user-invite-request/generate", {})
+    );
   }
 
   /** All-optional patch -- only fields set in `body` are changed. */

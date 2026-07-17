@@ -21,13 +21,13 @@ use streamarr_db::analytics::{AnalyticsStore, SqlxAnalyticsStore};
 use streamarr_db::repo::{
     seed_default_views, PlaylistRepo, SqlxCreditRepo, SqlxDeviceRepo, SqlxLibraryViewRepo,
     SqlxMediaFileRepo, SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo, SqlxRenditionRepo,
-    SqlxSourceInstanceRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo, SqlxUserRepo,
-    SqlxWatchProgressRepo, SqlxWorkRepo,
+    SqlxSourceInstanceRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo,
+    SqlxUserRepo, SqlxWatchProgressRepo, SqlxWorkRepo,
 };
 use streamarr_db::{
     CreditRepo, DbPool, DeviceRepo, LibraryViewRepo, MediaFileRepo, PolicyRepo, ProfilePinRepo,
-    RenditionRepo, SourceInstanceRepo, TdarrConnectionRepo, UserInviteRepo, UserRepo,
-    WatchProgressRepo, WorkRepo,
+    RenditionRepo, SourceInstanceRepo, TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo,
+    UserRepo, WatchProgressRepo, WorkRepo,
 };
 use streamarr_model::{Availability, Policy, Sensitive, User, Work, WorkKind};
 use streamarr_telemetry::analytics::{
@@ -311,6 +311,8 @@ pub async fn test_state() -> (Router, TestState) {
         Arc::new(SqlxSourceInstanceRepo::new(pool.clone()));
     let user_repo: Arc<dyn UserRepo> = Arc::new(SqlxUserRepo::new(pool.clone()));
     let user_invite_repo: Arc<dyn UserInviteRepo> = Arc::new(SqlxUserInviteRepo::new(pool.clone()));
+    let user_invite_request_repo: Arc<dyn UserInviteRequestRepo> =
+        Arc::new(SqlxUserInviteRequestRepo::new(pool.clone()));
     let profile_pin_repo: Arc<dyn ProfilePinRepo> = Arc::new(SqlxProfilePinRepo::new(pool.clone()));
     let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
     let watch_progress: Arc<dyn WatchProgressRepo> =
@@ -482,6 +484,7 @@ pub async fn test_state() -> (Router, TestState) {
         user_directory,
         user_repo: user_repo.clone(),
         user_invite_repo,
+        user_invite_request_repo,
         profile_pin_repo,
         policy_repo: policy_repo.clone(),
         sessions: refresh,

@@ -151,6 +151,13 @@ fn api_router() -> OpenApiRouter<AppState> {
         ))
         .routes(routes!(users::create_user_invite_handler))
         .routes(routes!(
+            users::create_user_invite_request_handler,
+            users::get_my_user_invite_request_handler
+        ))
+        .routes(routes!(users::generate_user_invite_handler))
+        .routes(routes!(users::list_user_invite_requests_handler))
+        .routes(routes!(users::review_user_invite_request_handler))
+        .routes(routes!(
             users::update_user_handler,
             users::delete_user_handler
         ))
@@ -305,6 +312,9 @@ pub struct AppState {
     /// Expiring, one-use account invitations issued by administrators and
     /// redeemed by the unauthenticated Playarr sign-up endpoint.
     pub user_invite_repo: Arc<dyn streamarr_db::UserInviteRepo>,
+    /// Approval workflow for ordinary Playarr users asking permission to
+    /// generate one friend-invite QR code.
+    pub user_invite_request_repo: Arc<dyn streamarr_db::UserInviteRequestRepo>,
     /// Optional profile-lock PIN hashes. Kept behind a distinct repository
     /// so they cannot be confused with or overwrite account passwords.
     pub profile_pin_repo: Arc<dyn streamarr_db::ProfilePinRepo>,

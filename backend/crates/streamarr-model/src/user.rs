@@ -48,6 +48,30 @@ pub struct UserInvite {
     pub expires_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub enum UserInviteRequestStatus {
+    Pending,
+    Approved,
+    Denied,
+    Generated,
+}
+
+/// A user's request for permission to generate one friend invitation. The
+/// approval itself does not expire and carries no bearer secret; the final
+/// 24-hour [`UserInvite`] is created only when the requester uses it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UserInviteRequest {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub status: UserInviteRequestStatus,
+    pub requested_at: DateTime<Utc>,
+    pub reviewed_by: Option<Uuid>,
+    pub reviewed_at: Option<DateTime<Utc>>,
+    pub generated_at: Option<DateTime<Utc>>,
+}
+
 /// A signed-in viewer's remembered choices for one concrete media file.
 /// Track ids are the stable source ids exposed by playback negotiation
 /// (`source-audio-*` / `source-subtitle-*`); `None` means automatic audio

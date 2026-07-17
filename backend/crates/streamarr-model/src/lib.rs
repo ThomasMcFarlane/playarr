@@ -49,7 +49,7 @@ pub use source::{SourceInstance, SourceKind};
 pub use tdarr::TdarrConnection;
 pub use user::{
     Device, MediaPlaybackPreferences, RefreshTokenRecord, Session, User, UserInvite,
-    DEFAULT_PREFERRED_AUDIO_LANGUAGE,
+    UserInviteRequest, UserInviteRequestStatus, DEFAULT_PREFERRED_AUDIO_LANGUAGE,
 };
 pub use work::{
     Availability, ExternalProvider, ExternalRef, ImageAsset, ImageKind, Work, WorkKind,

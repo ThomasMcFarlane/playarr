@@ -19,7 +19,9 @@ use axum::Json;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use streamarr_auth::PasswordVerifier;
-use streamarr_model::{Policy, Sensitive, User, UserInvite};
+use streamarr_model::{
+    Policy, Sensitive, User, UserInvite, UserInviteRequest, UserInviteRequestStatus,
+};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -77,7 +79,50 @@ pub struct UserInviteResponse {
     pub expires_at: DateTime<Utc>,
 }
 
+/// One Playarr user's request for permission to invite a friend. User
+/// identity is included so the admin console can review the queue without
+/// making a second request per row.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UserInviteRequestResponse {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub username: String,
+    pub display_name: String,
+    pub status: UserInviteRequestStatus,
+    pub requested_at: DateTime<Utc>,
+    pub reviewed_at: Option<DateTime<Utc>>,
+    pub generated_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ReviewUserInviteRequest {
+    /// `true` grants exactly one generation; `false` denies this request.
+    pub approved: bool,
+}
+
 const USER_INVITE_TTL: Duration = Duration::hours(24);
+
+async fn invite_request_response(
+    state: &AppState,
+    request: UserInviteRequest,
+) -> Result<UserInviteRequestResponse, ApiError> {
+    let user = state
+        .user_repo
+        .find_by_id(request.user_id)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to resolve invite requester: {err}")))?
+        .ok_or_else(|| ApiError::not_found("invite requester no longer exists"))?;
+    Ok(UserInviteRequestResponse {
+        id: request.id,
+        user_id: request.user_id,
+        username: user.username,
+        display_name: user.display_name,
+        status: request.status,
+        requested_at: request.requested_at,
+        reviewed_at: request.reviewed_at,
+        generated_at: request.generated_at,
+    })
+}
 
 /// All-optional patch body -- only fields set to `Some` are applied.
 /// `password`, when set, is re-hashed the same way [`CreateUserRequest`]'s
@@ -418,6 +463,224 @@ pub async fn create_user_invite_handler(
         invite_token,
         expires_at,
     }))
+}
+
+/// Opens (or returns) the signed-in user's current invitation request. A
+/// pending or approved request remains the one active request; denied and
+/// generated requests may be followed by a new request.
+#[utoipa::path(
+    post,
+    path = "/api/v1/users/me/user-invite-request",
+    tag = "users",
+    responses(
+        (status = 200, description = "Current invitation request", body = UserInviteRequestResponse),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Account cannot use Playarr")
+    )
+)]
+pub async fn create_user_invite_request_handler(
+    State(state): State<AppState>,
+    streaming: StreamingUser,
+) -> Result<Json<UserInviteRequestResponse>, ApiError> {
+    if let Some(existing) = state
+        .user_invite_request_repo
+        .find_latest_for_user(streaming.user_id)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to read invitation request: {err}")))?
+    {
+        if matches!(
+            existing.status,
+            UserInviteRequestStatus::Pending | UserInviteRequestStatus::Approved
+        ) {
+            return Ok(Json(invite_request_response(&state, existing).await?));
+        }
+    }
+
+    let request = UserInviteRequest {
+        id: Uuid::new_v4(),
+        user_id: streaming.user_id,
+        status: UserInviteRequestStatus::Pending,
+        requested_at: Utc::now(),
+        reviewed_by: None,
+        reviewed_at: None,
+        generated_at: None,
+    };
+    state
+        .user_invite_request_repo
+        .create(&request)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to create invitation request: {err}")))?;
+    tracing::info!(request_id = %request.id, user_id = %request.user_id, "requested friend invitation");
+    Ok(Json(invite_request_response(&state, request).await?))
+}
+
+/// Returns the signed-in user's most recent request, or `null` before they
+/// have requested permission.
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/me/user-invite-request",
+    tag = "users",
+    responses(
+        (status = 200, description = "Latest invitation request, if any", body = Option<UserInviteRequestResponse>),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Account cannot use Playarr")
+    )
+)]
+pub async fn get_my_user_invite_request_handler(
+    State(state): State<AppState>,
+    streaming: StreamingUser,
+) -> Result<Json<Option<UserInviteRequestResponse>>, ApiError> {
+    let request = state
+        .user_invite_request_repo
+        .find_latest_for_user(streaming.user_id)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to read invitation request: {err}")))?;
+    let response = match request {
+        Some(request) => Some(invite_request_response(&state, request).await?),
+        None => None,
+    };
+    Ok(Json(response))
+}
+
+/// Consumes one approval and creates the final one-use invitation. Its
+/// 24-hour lifetime begins here, not when the administrator approved it.
+#[utoipa::path(
+    post,
+    path = "/api/v1/users/me/user-invite-request/generate",
+    tag = "users",
+    responses(
+        (status = 200, description = "Friend invitation generated", body = UserInviteResponse),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Account cannot use Playarr"),
+        (status = 409, description = "No unused approval is available")
+    )
+)]
+pub async fn generate_user_invite_handler(
+    State(state): State<AppState>,
+    streaming: StreamingUser,
+) -> Result<Json<UserInviteResponse>, ApiError> {
+    let request = state
+        .user_invite_request_repo
+        .find_latest_for_user(streaming.user_id)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to read invitation request: {err}")))?
+        .filter(|request| request.status == UserInviteRequestStatus::Approved)
+        .ok_or_else(|| ApiError::conflict("no unused invitation approval is available"))?;
+
+    let invite_token = streamarr_auth::secret::opaque_token();
+    let now = Utc::now();
+    let expires_at = now + USER_INVITE_TTL;
+    let generated = state
+        .user_invite_request_repo
+        .generate_invite(
+            request.id,
+            streaming.user_id,
+            now,
+            &UserInvite {
+                token_hash: streamarr_auth::secret::hash_token(&invite_token),
+                created_by: streaming.user_id,
+                created_at: now,
+                expires_at,
+            },
+        )
+        .await
+        .map_err(|err| {
+            ApiError::internal(format!("failed to generate friend invitation: {err}"))
+        })?;
+    if !generated {
+        return Err(ApiError::conflict(
+            "this invitation approval has already been used",
+        ));
+    }
+    tracing::info!(request_id = %request.id, user_id = %streaming.user_id, %expires_at, "generated approved friend invitation");
+    Ok(Json(UserInviteResponse {
+        invite_token,
+        expires_at,
+    }))
+}
+
+/// Lists every invitation request for the Streamarr admin console, newest
+/// first.
+#[utoipa::path(
+    get,
+    path = "/api/v1/admin/user-invite-requests",
+    tag = "users",
+    responses(
+        (status = 200, description = "Invitation requests", body = Vec<UserInviteRequestResponse>),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Caller is authenticated but not an admin")
+    )
+)]
+pub async fn list_user_invite_requests_handler(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+) -> Result<Json<Vec<UserInviteRequestResponse>>, ApiError> {
+    let requests = state
+        .user_invite_request_repo
+        .list_all()
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to list invitation requests: {err}")))?;
+    let mut responses = Vec::with_capacity(requests.len());
+    for request in requests {
+        responses.push(invite_request_response(&state, request).await?);
+    }
+    Ok(Json(responses))
+}
+
+/// Approves or denies one pending request. Review is compare-and-set so a
+/// second admin cannot overwrite the first decision.
+#[utoipa::path(
+    patch,
+    path = "/api/v1/admin/user-invite-requests/{id}",
+    tag = "users",
+    params(("id" = Uuid, Path, description = "Invitation request id")),
+    request_body = ReviewUserInviteRequest,
+    responses(
+        (status = 200, description = "Reviewed invitation request", body = UserInviteRequestResponse),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Caller is authenticated but not an admin"),
+        (status = 404, description = "Invitation request not found"),
+        (status = 409, description = "Invitation request was already reviewed")
+    )
+)]
+pub async fn review_user_invite_request_handler(
+    State(state): State<AppState>,
+    admin: AdminUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<ReviewUserInviteRequest>,
+) -> Result<Json<UserInviteRequestResponse>, ApiError> {
+    if state
+        .user_invite_request_repo
+        .find_by_id(id)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to read invitation request: {err}")))?
+        .is_none()
+    {
+        return Err(ApiError::not_found("invitation request not found"));
+    }
+    let status = if body.approved {
+        UserInviteRequestStatus::Approved
+    } else {
+        UserInviteRequestStatus::Denied
+    };
+    let reviewed = state
+        .user_invite_request_repo
+        .review(id, admin.user_id, status, Utc::now())
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to review invitation request: {err}")))?;
+    if !reviewed {
+        return Err(ApiError::conflict(
+            "this invitation request has already been reviewed",
+        ));
+    }
+    let request = state
+        .user_invite_request_repo
+        .find_by_id(id)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to reload invitation request: {err}")))?
+        .ok_or_else(|| ApiError::not_found("invitation request not found"))?;
+    tracing::info!(request_id = %id, reviewed_by = %admin.user_id, ?status, "reviewed friend invitation request");
+    Ok(Json(invite_request_response(&state, request).await?))
 }
 
 /// Redeems one valid invitation and creates an ordinary Playarr account.
@@ -1015,10 +1278,13 @@ pub async fn delete_user_handler(
 mod tests {
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
+    use chrono::{DateTime, Duration, Utc};
     use tower::ServiceExt;
     use uuid::Uuid;
 
-    use crate::test_support::{bearer_header, mint_access_token, seed_admin_user, test_state};
+    use crate::test_support::{
+        bearer_header, mint_access_token, seed_admin_user, seed_streaming_user, test_state,
+    };
 
     async fn issue_invite(router: &axum::Router, token: &str) -> String {
         let response = router
@@ -1802,5 +2068,129 @@ mod tests {
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json["pin_locked"], false);
+    }
+
+    #[tokio::test]
+    async fn friend_invite_requires_approval_and_starts_expiry_when_generated() {
+        let (router, state) = test_state().await;
+        let requester_id = Uuid::new_v4();
+        seed_streaming_user(&state, requester_id).await;
+        let requester_token = mint_access_token(&state, requester_id);
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+        let admin_token = mint_access_token(&state, admin_id);
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/users/me/user-invite-request")
+                    .header("Authorization", bearer_header(&requester_token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let request: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(request["status"], "pending");
+        let request_id = request["id"].as_str().unwrap();
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/users/me/user-invite-request/generate")
+                    .header("Authorization", bearer_header(&requester_token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri(format!("/api/v1/admin/user-invite-requests/{request_id}"))
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&admin_token))
+                    .body(Body::from(r#"{"approved":true}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let approved: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(approved["status"], "approved");
+        assert!(approved["reviewed_at"].is_string());
+
+        let generated_at = Utc::now();
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/users/me/user-invite-request/generate")
+                    .header("Authorization", bearer_header(&requester_token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let invite: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(invite["invite_token"].is_string());
+        let expires_at = DateTime::parse_from_rfc3339(invite["expires_at"].as_str().unwrap())
+            .unwrap()
+            .with_timezone(&Utc);
+        let remaining = expires_at - generated_at;
+        assert!(remaining >= Duration::hours(23));
+        assert!(remaining <= Duration::hours(24) + Duration::seconds(2));
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/users/me/user-invite-request")
+                    .header("Authorization", bearer_header(&requester_token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let request: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(request["status"], "generated");
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/users/me/user-invite-request/generate")
+                    .header("Authorization", bearer_header(&requester_token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
     }
 }

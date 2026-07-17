@@ -356,6 +356,64 @@ paths:
           description: Missing or invalid access token
         '403':
           description: Caller is authenticated but not an admin
+  /api/v1/admin/user-invite-requests:
+    get:
+      tags:
+      - users
+      summary: |-
+        Lists every invitation request for the Streamarr admin console, newest
+        first.
+      operationId: list_user_invite_requests_handler
+      responses:
+        '200':
+          description: Invitation requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserInviteRequestResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+  /api/v1/admin/user-invite-requests/{id}:
+    patch:
+      tags:
+      - users
+      summary: |-
+        Approves or denies one pending request. Review is compare-and-set so a
+        second admin cannot overwrite the first decision.
+      operationId: review_user_invite_request_handler
+      parameters:
+      - name: id
+        in: path
+        description: Invitation request id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewUserInviteRequest'
+        required: true
+      responses:
+        '200':
+          description: Reviewed invitation request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInviteRequestResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '404':
+          description: Invitation request not found
+        '409':
+          description: Invitation request was already reviewed
   /api/v1/admin/user-invites:
     post:
       tags:
@@ -1976,6 +2034,67 @@ paths:
           description: Missing or invalid access token
         '404':
           description: The signed-in user no longer exists
+  /api/v1/users/me/user-invite-request:
+    get:
+      tags:
+      - users
+      summary: |-
+        Returns the signed-in user's most recent request, or `null` before they
+        have requested permission.
+      operationId: get_my_user_invite_request_handler
+      responses:
+        '200':
+          description: Latest invitation request, if any
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/UserInviteRequestResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Account cannot use Playarr
+    post:
+      tags:
+      - users
+      summary: |-
+        Opens (or returns) the signed-in user's current invitation request. A
+        pending or approved request remains the one active request; denied and
+        generated requests may be followed by a new request.
+      operationId: create_user_invite_request_handler
+      responses:
+        '200':
+          description: Current invitation request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInviteRequestResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Account cannot use Playarr
+  /api/v1/users/me/user-invite-request/generate:
+    post:
+      tags:
+      - users
+      summary: |-
+        Consumes one approval and creates the final one-use invitation. Its
+        24-hour lifetime begins here, not when the administrator approved it.
+      operationId: generate_user_invite_handler
+      responses:
+        '200':
+          description: Friend invitation generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInviteResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Account cannot use Playarr
+        '409':
+          description: No unused approval is available
   /api/v1/users/profiles:
     get:
       tags:
@@ -3585,6 +3704,14 @@ components:
             Every item id currently on this playlist, in the desired new order.
             An id that isn't actually one of this playlist's items is silently
             ignored -- see `PlaylistRepo::reorder_items`'s own doc comment.
+    ReviewUserInviteRequest:
+      type: object
+      required:
+      - approved
+      properties:
+        approved:
+          type: boolean
+          description: '`true` grants exactly one generation; `false` denies this request.'
     Season:
       type: object
       required:
@@ -4105,6 +4232,52 @@ components:
           type: integer
           format: int64
           minimum: 0
+    UserInviteRequestResponse:
+      type: object
+      description: |-
+        One Playarr user's request for permission to invite a friend. User
+        identity is included so the admin console can review the queue without
+        making a second request per row.
+      required:
+      - id
+      - user_id
+      - username
+      - display_name
+      - status
+      - requested_at
+      properties:
+        display_name:
+          type: string
+        generated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        requested_at:
+          type: string
+          format: date-time
+        reviewed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        status:
+          $ref: '#/components/schemas/UserInviteRequestStatus'
+        user_id:
+          type: string
+          format: uuid
+        username:
+          type: string
+    UserInviteRequestStatus:
+      type: string
+      enum:
+      - pending
+      - approved
+      - denied
+      - generated
     UserInviteResponse:
       type: object
       description: |-

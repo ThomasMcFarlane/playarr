@@ -258,6 +258,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/user-invite-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lists every invitation request for the Streamarr admin console, newest
+         *     first.
+         */
+        get: operations["list_user_invite_requests_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/user-invite-requests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Approves or denies one pending request. Review is compare-and-set so a
+         *     second admin cannot overwrite the first decision.
+         */
+        patch: operations["review_user_invite_request_handler"];
+        trace?: never;
+    };
     "/api/v1/admin/user-invites": {
         parameters: {
             query?: never;
@@ -1012,6 +1052,51 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["update_profile_pin_setting_handler"];
+        trace?: never;
+    };
+    "/api/v1/users/me/user-invite-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Returns the signed-in user's most recent request, or `null` before they
+         *     have requested permission.
+         */
+        get: operations["get_my_user_invite_request_handler"];
+        put?: never;
+        /**
+         * Opens (or returns) the signed-in user's current invitation request. A
+         *     pending or approved request remains the one active request; denied and
+         *     generated requests may be followed by a new request.
+         */
+        post: operations["create_user_invite_request_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/user-invite-request/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Consumes one approval and creates the final one-use invitation. Its
+         *     24-hour lifetime begins here, not when the administrator approved it.
+         */
+        post: operations["generate_user_invite_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/users/profiles": {
@@ -1851,6 +1936,10 @@ export interface components {
              */
             item_ids: string[];
         };
+        ReviewUserInviteRequest: {
+            /** @description `true` grants exactly one generation; `false` denies this request. */
+            approved: boolean;
+        };
         Season: {
             availability: components["schemas"]["Availability"];
             /** Format: uuid */
@@ -2082,6 +2171,28 @@ export interface components {
             /** Format: int64 */
             position_ms: number;
         };
+        /**
+         * @description One Playarr user's request for permission to invite a friend. User
+         *     identity is included so the admin console can review the queue without
+         *     making a second request per row.
+         */
+        UserInviteRequestResponse: {
+            display_name: string;
+            /** Format: date-time */
+            generated_at?: string | null;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            requested_at: string;
+            /** Format: date-time */
+            reviewed_at?: string | null;
+            status: components["schemas"]["UserInviteRequestStatus"];
+            /** Format: uuid */
+            user_id: string;
+            username: string;
+        };
+        /** @enum {string} */
+        UserInviteRequestStatus: "pending" | "approved" | "denied" | "generated";
         /**
          * @description The raw invite token is returned only when it is issued. Persistence
          *     stores its digest, so this response is the administrator's sole chance to
@@ -2798,6 +2909,95 @@ export interface operations {
             };
             /** @description Caller is authenticated but not an admin */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_user_invite_requests_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Invitation requests */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserInviteRequestResponse"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    review_user_invite_request_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Invitation request id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewUserInviteRequest"];
+            };
+        };
+        responses: {
+            /** @description Reviewed invitation request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserInviteRequestResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invitation request not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invitation request was already reviewed */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5152,6 +5352,115 @@ export interface operations {
             };
             /** @description The signed-in user no longer exists */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_my_user_invite_request_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Latest invitation request, if any */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": null | components["schemas"]["UserInviteRequestResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Account cannot use Playarr */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_user_invite_request_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current invitation request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserInviteRequestResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Account cannot use Playarr */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    generate_user_invite_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Friend invitation generated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserInviteResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Account cannot use Playarr */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No unused approval is available */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

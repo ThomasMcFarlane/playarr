@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import { createQrCodeSvg } from "@streamarr-tv/device-auth";
 
-export function QrCode({ value, size = 240 }: { value: string; size?: number }) {
+export function QrCode({
+  value,
+  size = 240,
+  label = "QR code for the Playarr TV sign-in link",
+}: {
+  value: string;
+  size?: number;
+  label?: string;
+}) {
   const [svg, setSvg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -19,7 +27,7 @@ export function QrCode({ value, size = 240 }: { value: string; size?: number }) 
     <div
       className="device-login-qr"
       role="img"
-      aria-label="QR code for the Playarr TV sign-in link"
+      aria-label={label}
       dangerouslySetInnerHTML={svg ? { __html: svg } : undefined}
     />
   );
