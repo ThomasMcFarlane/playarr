@@ -34,6 +34,83 @@ mod relay_dns;
 
 const CLIENT_COMPATIBILITY_TOML: &str = include_str!("../config/client-compatibility.toml");
 
+#[derive(Clone)]
+struct HttpRedirectAcceptor<A> {
+    inner: A,
+    https_origin: Arc<str>,
+}
+
+impl<A> HttpRedirectAcceptor<A> {
+    fn new(inner: A, https_origin: String) -> Self {
+        Self {
+            inner,
+            https_origin: https_origin.into(),
+        }
+    }
+}
+
+impl<A, S> axum_server::accept::Accept<tokio::net::TcpStream, S> for HttpRedirectAcceptor<A>
+where
+    A: axum_server::accept::Accept<tokio::net::TcpStream, S, Service = S>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    A::Stream: Send + 'static,
+    A::Future: Send + 'static,
+    S: Send + 'static,
+{
+    type Stream = A::Stream;
+    type Service = S;
+    type Future = std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = std::io::Result<(Self::Stream, Self::Service)>> + Send,
+        >,
+    >;
+
+    fn accept(&self, mut stream: tokio::net::TcpStream, service: S) -> Self::Future {
+        let inner = self.inner.clone();
+        let https_origin = self.https_origin.clone();
+        Box::pin(async move {
+            let mut first_byte = [0_u8; 1];
+            let read = stream.peek(&mut first_byte).await?;
+            if read > 0 && first_byte[0].is_ascii_uppercase() {
+                use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+                let mut request = vec![0_u8; 8 * 1024];
+                let request_len = stream.read(&mut request).await?;
+                let target = plaintext_http_target(&request[..request_len]);
+                let location = format!("{https_origin}{target}");
+                let response = format!(
+                    "HTTP/1.1 308 Permanent Redirect\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n"
+                );
+                stream.write_all(response.as_bytes()).await?;
+                stream.shutdown().await?;
+                return Err(std::io::Error::other("redirected plaintext HTTP to HTTPS"));
+            }
+
+            inner.accept(stream, service).await
+        })
+    }
+}
+
+fn plaintext_http_target(request: &[u8]) -> &str {
+    std::str::from_utf8(request)
+        .ok()
+        .and_then(|request| request.lines().next())
+        .and_then(|line| line.split_ascii_whitespace().nth(1))
+        .filter(|target| target.starts_with('/') && !target.starts_with("//"))
+        .unwrap_or("/")
+}
+
+fn https_origin(domain: &str, port: u16) -> String {
+    if port == 443 {
+        format!("https://{domain}")
+    } else {
+        format!("https://{domain}:{port}")
+    }
+}
+
 #[derive(Parser)]
 #[command(
     name = "streamarr",
@@ -1034,9 +1111,9 @@ async fn serve_application_router(
         use futures::StreamExt;
         use rustls_acme::{AcmeConfig, EventOk, UseChallenge};
 
-        // HTTP-01 intentionally gets its own challenge-only listener. It
-        // never exposes the Streamarr API over cleartext; every non-challenge
-        // path receives Axum's normal 404 response.
+        // HTTP-01 intentionally gets its own listener. It never exposes the
+        // Streamarr API over cleartext: challenge paths stay local and every
+        // other request redirects to this node's browser-trusted HTTPS name.
         let challenge_listener = tokio::net::TcpListener::bind(acme.http01_bind_addr).await?;
         let contacts: Vec<String> = acme.contact.iter().cloned().collect();
         let mut state = AcmeConfig::new([acme.domain.as_str()])
@@ -1045,12 +1122,24 @@ async fn serve_application_router(
             .directory_lets_encrypt(acme.environment.is_production())
             .challenge_type(UseChallenge::Http01)
             .state();
-        let acceptor = state.axum_acceptor(state.default_rustls_config());
-        let challenge_service = state.http01_challenge_tower_service();
-        let challenge_router = axum::Router::new().route_service(
-            "/.well-known/acme-challenge/{challenge_token}",
-            challenge_service,
+        let redirect_origin = https_origin(&acme.domain, config.http_bind_addr.port());
+        let acceptor = HttpRedirectAcceptor::new(
+            state.axum_acceptor(state.default_rustls_config()),
+            redirect_origin.clone(),
         );
+        let challenge_service = state.http01_challenge_tower_service();
+        let challenge_router = axum::Router::new()
+            .route_service(
+                "/.well-known/acme-challenge/{challenge_token}",
+                challenge_service,
+            )
+            .fallback({
+                let redirect_origin = redirect_origin.clone();
+                move |axum::extract::OriginalUri(uri): axum::extract::OriginalUri| {
+                    let location = format!("{redirect_origin}{uri}");
+                    async move { axum::response::Redirect::permanent(&location) }
+                }
+            });
 
         let environment = if acme.environment.is_production() {
             "production"
@@ -1878,5 +1967,64 @@ mod bootstrap_tests {
         let b = generate_bootstrap_password();
         assert_ne!(a, b, "must never generate the same password twice");
         assert!(a.len() >= 20, "must be comfortably longer than 20 chars");
+    }
+
+    #[test]
+    fn plaintext_redirect_preserves_only_origin_form_targets() {
+        assert_eq!(
+            plaintext_http_target(
+                b"GET /api/system/health?full=1 HTTP/1.1\r\nHost: example\r\n\r\n"
+            ),
+            "/api/system/health?full=1"
+        );
+        assert_eq!(
+            plaintext_http_target(b"GET https://attacker.example/ HTTP/1.1\r\n\r\n"),
+            "/"
+        );
+        assert_eq!(plaintext_http_target(b"garbage"), "/");
+    }
+
+    #[test]
+    fn https_redirect_origin_keeps_nonstandard_streamarr_port() {
+        assert_eq!(
+            https_origin("v4-203-0-113-10.relay.playarr.app", 8484),
+            "https://v4-203-0-113-10.relay.playarr.app:8484"
+        );
+        assert_eq!(
+            https_origin("streamarr.example.com", 443),
+            "https://streamarr.example.com"
+        );
+    }
+
+    #[tokio::test]
+    async fn plaintext_http_on_tls_socket_receives_https_redirect() {
+        use axum_server::accept::Accept as _;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let mut client = tokio::net::TcpStream::connect(address).await.unwrap();
+        let (server, _) = listener.accept().await.unwrap();
+        let acceptor = HttpRedirectAcceptor::new(
+            axum_server::accept::DefaultAcceptor::new(),
+            "https://v4-203-0-113-10.relay.playarr.app:8484".to_string(),
+        );
+
+        let redirect = tokio::spawn(async move {
+            let error = acceptor.accept(server, ()).await.unwrap_err();
+            assert_eq!(error.kind(), std::io::ErrorKind::Other);
+        });
+        client
+            .write_all(b"GET /api/system/health?full=1 HTTP/1.1\r\nHost: 203.0.113.10:8484\r\n\r\n")
+            .await
+            .unwrap();
+        let mut response = String::new();
+        client.read_to_string(&mut response).await.unwrap();
+        redirect.await.unwrap();
+
+        assert!(response.starts_with("HTTP/1.1 308 Permanent Redirect\r\n"));
+        assert!(response.contains(
+            "Location: https://v4-203-0-113-10.relay.playarr.app:8484/api/system/health?full=1\r\n"
+        ));
     }
 }

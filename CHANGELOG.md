@@ -92,6 +92,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Redirect plaintext requests on Streamarr's HTTP and HTTPS ports to the configured browser-trusted
+  HTTPS hostname instead of returning a 404 or an invalid TLS response.
 - Load cross-origin media with CORS enabled so Playarr's Web Audio visualiser receives real audio
   samples instead of browser-sanitised zeroes.
 - Use cached catalogue artwork in the music player instead of requesting video-frame thumbnails
