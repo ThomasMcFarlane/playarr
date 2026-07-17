@@ -92,6 +92,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Load cross-origin media with CORS enabled so Playarr's Web Audio visualiser receives real audio
+  samples instead of browser-sanitised zeroes.
+- Use cached catalogue artwork in the music player instead of requesting video-frame thumbnails
+  from audio files.
 - Accept bare IP addresses in Playarr server fields without native browser URL validation blocking
   submission.
 - Reuse Streamarr's existing Rustls crypto provider for native TLS builds instead of requiring an

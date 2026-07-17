@@ -10,6 +10,7 @@ import {
 import { createPortal } from "react-dom";
 import type { Work } from "@streamarr-tv/api-client";
 import type { PlaybackEngineController } from "../../lib/usePlaybackEngine";
+import { CachedArtworkImage } from "../../lib/artwork";
 import { MediaThumbnailArtwork } from "../MediaThumbnailArtwork";
 import { useMediaContextMenu } from "../MediaContextMenu";
 import { PlayerControls } from "./PlayerControls";
@@ -294,12 +295,10 @@ function useMusicAudioVisualiser(
 
 function MusicPlayerVisual({
   context,
-  mediaFileId,
   title,
   inlineVisualiserHost,
 }: {
   context: PlayerMusicContext;
-  mediaFileId: string;
   title: string;
   inlineVisualiserHost: HTMLElement | null;
 }) {
@@ -323,29 +322,29 @@ function MusicPlayerVisual({
   return (
     <div className="player-music-visual" aria-hidden="true">
       <div className="player-music-backdrop">
-        <MediaThumbnailArtwork
-          mediaFileId={mediaFileId}
-          positionMs={0}
-          fallback={null}
-          className="player-music-backdrop-media"
-        >
+        <span className="player-music-backdrop-media">
+          <CachedArtworkImage
+            work={context.artworkWork}
+            kinds={["backdrop", "poster"]}
+            alt=""
+          />
           <span />
-        </MediaThumbnailArtwork>
+        </span>
       </div>
       <div className="player-music-colour-wash" />
       <div className="player-music-stage">
         <div className="player-music-cover">
-          <MediaThumbnailArtwork
-            mediaFileId={mediaFileId}
-            positionMs={0}
-            fallback={null}
-            className="player-music-cover-media"
-          >
+          <span className="player-music-cover-media">
+            <CachedArtworkImage
+              work={context.artworkWork}
+              kinds={["poster", "backdrop"]}
+              alt=""
+            />
             <span className="player-music-cover-fallback">
               {context.albumTitle.slice(0, 1)}
             </span>
             {visualiser}
-          </MediaThumbnailArtwork>
+          </span>
           <div className="player-music-cover-glass" />
         </div>
         <div className="player-music-copy">
@@ -360,7 +359,6 @@ function MusicPlayerVisual({
 
 function InlineMusicMiniPlayer({
   context,
-  mediaFileId,
   title,
   positionSeconds,
   durationSeconds,
@@ -368,7 +366,6 @@ function InlineMusicMiniPlayer({
   onMaximise,
 }: {
   context: PlayerMusicContext;
-  mediaFileId: string;
   title: string;
   positionSeconds: number;
   durationSeconds: number;
@@ -380,7 +377,6 @@ function InlineMusicMiniPlayer({
       <div className="player-shell player-shell-minimised player-shell-music">
         <MusicPlayerVisual
           context={context}
-          mediaFileId={mediaFileId}
           title={title}
           inlineVisualiserHost={null}
         />
@@ -934,7 +930,6 @@ export function PlayerSurface({
         inlineMusic && !inlineVisualiserHost ? null : (
           <MusicPlayerVisual
             context={musicContext}
-            mediaFileId={activePlaylistItem.mediaFileId}
             title={title}
             inlineVisualiserHost={
               inlineMusic ? inlineVisualiserHost : null
@@ -947,6 +942,7 @@ export function PlayerSurface({
       <video
         ref={videoRef}
         className="player-video"
+        crossOrigin="anonymous"
         playsInline
         tabIndex={minimised ? -1 : 0}
         aria-hidden={minimised}
@@ -987,7 +983,6 @@ export function PlayerSurface({
       {inlineMusic && musicContext && activePlaylistItem ? (
         <InlineMusicMiniPlayer
           context={musicContext}
-          mediaFileId={activePlaylistItem.mediaFileId}
           title={title}
           positionSeconds={positionSeconds}
           durationSeconds={durationSeconds}
