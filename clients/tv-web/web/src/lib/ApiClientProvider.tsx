@@ -17,6 +17,9 @@ import {
   setStoredApiBaseUrl,
 } from "@streamarr-tv/domain";
 import { PLAYARR_CLIENT_PLATFORM } from "./clientPlatform";
+import { createLocalNetworkFetch } from "./localNetworkFetch";
+
+const browserFetch = createLocalNetworkFetch();
 
 /**
  * This build's own identity for the transparent `POST /api/v1/auth/login`
@@ -376,6 +379,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     // runs later (on a protected request), by which point `instance` is bound.
     const instance: ApiClient = new ApiClient({
       baseUrl: apiBaseUrl,
+      fetchImpl: browserFetch,
       defaultHeaders:
         PLAYARR_CLIENT_PLATFORM === "tv-vidaa"
           ? {
@@ -436,6 +440,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         )?.deviceId ?? createProfileDeviceId();
       const loginClient = new ApiClient({
         baseUrl: targetApiBaseUrl,
+        fetchImpl: browserFetch,
         defaultHeaders:
           PLAYARR_CLIENT_PLATFORM === "tv-vidaa"
             ? {

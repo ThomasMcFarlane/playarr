@@ -63,13 +63,18 @@ For non-interactive local use, export `CLOUDFLARE_API_TOKEN` and
 ## Connect the hosted client to Streamarr
 
 Playarr is only the static playback client; each viewer still connects it to
-their own Streamarr server. Enter the externally reachable server URL on the
-Playarr sign-in screen. The client stores server-specific profile sessions in
-the browser.
+their own LAN-only Streamarr server. Enter its private address, for example
+`http://192.168.1.50:8080`, on the Playarr sign-in screen. The browser connects
+straight to that address; Cloudflare never proxies the API, and Streamarr does
+not need a tunnel, port-forward, or public internet route. The client stores
+server-specific profile sessions in the browser.
 
-The Streamarr server must be reachable from the viewer's browser over HTTPS;
-an HTTPS page cannot call a plain-HTTP server because browsers block mixed
-content.
+On browsers that implement Local Network Access, approve the browser prompt
+the first time `playarr.app` connects to the LAN. Playarr explicitly marks
+all HTTP addresses as local-network requests so that permission can relax
+mixed-content blocking. Browser support is still evolving; a browser without
+Local Network Access cannot connect from the HTTPS hosted app to a plain-HTTP
+LAN server. In that case, use Streamarr's co-hosted Playarr bundle on the LAN.
 
 ## Domain changes
 

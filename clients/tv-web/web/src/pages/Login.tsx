@@ -185,7 +185,7 @@ function loginErrorMessage(err: unknown): string {
     return "Sign-in failed. Check your username and password and try again.";
   }
   if (err instanceof TypeError) {
-    return "Could not reach this server directly from the browser. Check the URL, HTTPS, and the server's CORS settings.";
+    return "Could not reach this LAN server. Check the URL and allow Local Network Access when your browser asks.";
   }
   return err instanceof Error ? err.message : String(err);
 }

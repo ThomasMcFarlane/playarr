@@ -94,6 +94,9 @@ itself). What differs per app is confined to:
   Settings, where changing it signs out the current profile. Saved profile
   sessions are keyed by both server URL and user id so tokens cannot cross
   instance boundaries;
+  the hosted `playarr.app` build marks all HTTP server addresses as Local
+  Network Access requests, allowing supporting browsers to ask permission and
+  connect directly to LAN-only Streamarr without a public route;
   the TV shells have no keyboard, so they resolve it from a
   `?apiBaseUrl=` launch query param, then a `streamarr-config.json` file
   shipped in the package and overwritable on-device, then a hardcoded
