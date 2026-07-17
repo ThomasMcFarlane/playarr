@@ -29,6 +29,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use streamarr_config::{Config, DeploymentTier};
 use streamarr_db::DbPool;
 
+mod acme_cache;
 mod relay_dns;
 
 const CLIENT_COMPATIBILITY_TOML: &str = include_str!("../config/client-compatibility.toml");
@@ -1010,29 +1011,133 @@ async fn boot_api(
 
     let (router, _openapi) = build_router(state, version_gate, web_assets_dir_from_env());
 
+    serve_application_router(config, router, Some(readiness)).await
+}
+
+/// Serves an application router over exactly one configured transport:
+/// automatic ACME HTTPS, static-certificate HTTPS, or plain HTTP. The ACME
+/// state is continuously polled for the lifetime of the process, so renewed
+/// certificates are installed into the shared rustls resolver without a
+/// Streamarr restart.
+///
+/// `POST /api/v1/auth/login`'s `AuthMode::TrustedNetwork` tier needs the
+/// caller's real source IP (`ConnectInfo`) to decide whether to auto-login.
+/// Every transport therefore uses `into_make_service_with_connect_info`.
+async fn serve_application_router(
+    config: &Config,
+    router: axum::Router,
+    readiness: Option<streamarr_api::ReadinessState>,
+) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(config.http_bind_addr).await?;
 
-    // Only flip to ready once the listener is actually bound — a readiness
-    // probe passing before this point would tell a load balancer to send
-    // traffic to a port nothing is listening on yet.
-    // `POST /api/v1/auth/login`'s `AuthMode::TrustedNetwork` tier needs the
-    // caller's real source IP (`ConnectInfo`) to decide whether to
-    // auto-login -- `into_make_service_with_connect_info` is what actually
-    // populates that extractor; plain `axum::serve(listener, router)` would
-    // leave it unpopulated and every trusted-network login would 401.
-    if let Some(tls) = &config.tls {
+    if let Some(acme) = &config.acme {
+        use futures::StreamExt;
+        use rustls_acme::{AcmeConfig, EventOk, UseChallenge};
+
+        // HTTP-01 intentionally gets its own challenge-only listener. It
+        // never exposes the Streamarr API over cleartext; every non-challenge
+        // path receives Axum's normal 404 response.
+        let challenge_listener = tokio::net::TcpListener::bind(acme.http01_bind_addr).await?;
+        let contacts: Vec<String> = acme.contact.iter().cloned().collect();
+        let mut state = AcmeConfig::new([acme.domain.as_str()])
+            .contact(&contacts)
+            .cache(acme_cache::SecureDirCache::new(acme.cache_dir.clone()))
+            .directory_lets_encrypt(acme.environment.is_production())
+            .challenge_type(UseChallenge::Http01)
+            .state();
+        let acceptor = state.axum_acceptor(state.default_rustls_config());
+        let challenge_service = state.http01_challenge_tower_service();
+        let challenge_router = axum::Router::new().route_service(
+            "/.well-known/acme-challenge/{challenge_token}",
+            challenge_service,
+        );
+
+        let environment = if acme.environment.is_production() {
+            "production"
+        } else {
+            "staging"
+        };
+        tracing::info!(
+            domain = %acme.domain,
+            environment,
+            cache_dir = %acme.cache_dir.display(),
+            https_addr = %config.http_bind_addr,
+            http01_addr = %acme.http01_bind_addr,
+            "automatic HTTPS enabled with Let's Encrypt ACME HTTP-01"
+        );
+        let acme_state_future = async move {
+            let initial_deadline = tokio::time::Instant::now() + Duration::from_secs(120);
+            let mut certificate_deployed = false;
+            loop {
+                let next = if certificate_deployed {
+                    state.next().await
+                } else {
+                    tokio::time::timeout_at(initial_deadline, state.next())
+                        .await
+                        .map_err(|_| {
+                            anyhow::anyhow!(
+                            "Let's Encrypt did not deploy an initial certificate within 120 seconds"
+                        )
+                        })?
+                };
+                let Some(event) = next else {
+                    return Err::<(), anyhow::Error>(anyhow::anyhow!(
+                        "Let's Encrypt ACME state stream ended unexpectedly"
+                    ));
+                };
+                match event {
+                    Ok(EventOk::DeployedCachedCert) => {
+                        tracing::info!("deployed cached Let's Encrypt certificate");
+                        certificate_deployed = true;
+                        if let Some(readiness) = &readiness {
+                            readiness.set_ready(true);
+                        }
+                    }
+                    Ok(EventOk::DeployedNewCert) => {
+                        tracing::info!(
+                            "deployed newly issued or renewed Let's Encrypt certificate without restart"
+                        );
+                        certificate_deployed = true;
+                        if let Some(readiness) = &readiness {
+                            readiness.set_ready(true);
+                        }
+                    }
+                    Ok(EventOk::CertCacheStore) => {
+                        tracing::debug!("stored Let's Encrypt certificate in ACME cache")
+                    }
+                    Ok(EventOk::AccountCacheStore) => {
+                        tracing::debug!("stored Let's Encrypt account in ACME cache")
+                    }
+                    Err(err) => tracing::error!(error = %err, "Let's Encrypt ACME state error"),
+                }
+            }
+        };
+
+        let https_server = axum_server::from_tcp(listener.into_std()?)?
+            .acceptor(acceptor)
+            .serve(router.into_make_service_with_connect_info::<std::net::SocketAddr>());
+        let challenge_server = axum::serve(challenge_listener, challenge_router);
+        tokio::try_join!(
+            async { https_server.await.map_err(anyhow::Error::from) },
+            async { challenge_server.await.map_err(anyhow::Error::from) },
+            acme_state_future,
+        )?;
+    } else if let Some(tls) = &config.tls {
         let tls_config =
             axum_server::tls_rustls::RustlsConfig::from_pem_file(&tls.cert_path, &tls.key_path)
                 .await?;
-        let listener = listener.into_std()?;
-        tracing::info!(addr = %config.http_bind_addr, "https server listening");
-        readiness.set_ready(true);
-        axum_server::from_tcp_rustls(listener, tls_config)
+        tracing::info!(addr = %config.http_bind_addr, "https server listening with static certificate");
+        if let Some(readiness) = readiness {
+            readiness.set_ready(true);
+        }
+        axum_server::from_tcp_rustls(listener.into_std()?, tls_config)?
             .serve(router.into_make_service_with_connect_info::<std::net::SocketAddr>())
             .await?;
     } else {
         tracing::info!(addr = %config.http_bind_addr, "http server listening");
-        readiness.set_ready(true);
+        if let Some(readiness) = readiness {
+            readiness.set_ready(true);
+        }
         axum::serve(
             listener,
             router.into_make_service_with_connect_info::<std::net::SocketAddr>(),
@@ -1558,6 +1663,7 @@ async fn run_minimal_health_listener(config: &Config) -> anyhow::Result<()> {
         "/healthz",
         axum::routing::get(|| async { axum::http::StatusCode::OK }),
     );
+    tracing::info!(addr = %config.http_bind_addr, "worker-only minimal health listener starting");
     let listener = tokio::net::TcpListener::bind(config.http_bind_addr).await?;
     tracing::info!(addr = %config.http_bind_addr, "worker-only minimal health listener listening");
     axum::serve(listener, router).await?;

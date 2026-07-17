@@ -75,11 +75,15 @@ mixed-content blocking. Browser support is still evolving; a browser without
 Local Network Access cannot connect from the HTTPS hosted app to a private
 plain-HTTP server.
 
-For a public plain-HTTP IP or domain, allow insecure content explicitly for
-`playarr.app` in the browser's site settings and reload Playarr. The browser
-then sends the request directly to the operator-entered URL. HTTPS servers work
-directly without that permission. Playarr never relays requests through
-Cloudflare, and Streamarr never installs or serves a copy of Playarr.
+For a public IPv4 address, Playarr converts the address to the deterministic
+`https://v4-A-B-C-D.relay.playarr.app:8484` hostname. The parent Cloudflare
+records are DNS-only: Streamarr's built-in authoritative DNS resolves that name
+straight back to the entered IP, and Streamarr terminates HTTPS itself. Enable
+the matching `STREAMARR_ACME_DOMAIN` in production mode so Streamarr acquires
+and renews the browser-trusted certificate; the operator must also explicitly
+accept the certificate authority's terms with
+`STREAMARR_ACME_ACCEPT_TERMS=true`. Playarr never relays requests
+through Cloudflare, and Streamarr never installs or serves a copy of Playarr.
 
 ## Domain changes
 

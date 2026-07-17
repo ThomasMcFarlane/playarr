@@ -122,6 +122,9 @@ pub struct Config {
     /// Optional native TLS certificate and private key. Both paths must be
     /// configured together; when absent, the listener serves plain HTTP.
     pub tls: Option<TlsConfig>,
+    /// Optional automatic HTTPS configuration. Enabled by
+    /// `STREAMARR_ACME_DOMAIN`; mutually exclusive with static TLS paths.
+    pub acme: Option<AcmeConfig>,
     /// Optional authoritative DNS listener for deterministic
     /// `v4-A-B-C-D.relay.playarr.app` names. Disabled when unset.
     pub relay_dns_bind_addr: Option<SocketAddr>,
@@ -135,6 +138,41 @@ pub struct Config {
 pub struct TlsConfig {
     pub cert_path: PathBuf,
     pub key_path: PathBuf,
+}
+
+/// Automatic certificate management using Let's Encrypt's ACME service and
+/// a dedicated HTTP-01 challenge listener.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AcmeConfig {
+    pub domain: String,
+    pub environment: AcmeEnvironment,
+    pub contact: Option<String>,
+    pub cache_dir: PathBuf,
+    pub http01_bind_addr: SocketAddr,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AcmeEnvironment {
+    Production,
+    Staging,
+}
+
+impl AcmeEnvironment {
+    fn parse(raw: &str) -> Result<Self, ConfigError> {
+        match raw.to_ascii_lowercase().as_str() {
+            "production" => Ok(Self::Production),
+            "staging" => Ok(Self::Staging),
+            _ => Err(ConfigError::InvalidValue {
+                var: "STREAMARR_ACME_ENVIRONMENT".to_string(),
+                value: raw.to_string(),
+                reason: "expected one of: production, staging".to_string(),
+            }),
+        }
+    }
+
+    pub fn is_production(self) -> bool {
+        matches!(self, Self::Production)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -195,6 +233,88 @@ impl Config {
                 });
             }
         };
+        let acme_domain = optional(lookup, "STREAMARR_ACME_DOMAIN");
+        let acme_environment = optional(lookup, "STREAMARR_ACME_ENVIRONMENT");
+        let acme_accept_terms = optional(lookup, "STREAMARR_ACME_ACCEPT_TERMS");
+        let acme_contact = optional(lookup, "STREAMARR_ACME_CONTACT");
+        let acme_cache_dir = optional(lookup, "STREAMARR_ACME_CACHE_DIR");
+        let acme_http01_bind_addr = optional(lookup, "STREAMARR_ACME_HTTP01_BIND_ADDR");
+        let acme = match acme_domain {
+            Some(domain) => {
+                if tls.is_some() {
+                    return Err(ConfigError::InvalidValue {
+                        var: "STREAMARR_ACME_DOMAIN/STREAMARR_TLS_CERT_PATH/STREAMARR_TLS_KEY_PATH"
+                            .to_string(),
+                        value: "ACME and static TLS both configured".to_string(),
+                        reason: "automatic ACME HTTPS and static TLS are mutually exclusive"
+                            .to_string(),
+                    });
+                }
+                validate_acme_domain(&domain)?;
+                let environment = acme_environment
+                    .as_deref()
+                    .ok_or_else(|| {
+                        ConfigError::MissingVar("STREAMARR_ACME_ENVIRONMENT".to_string())
+                    })
+                    .and_then(AcmeEnvironment::parse)?;
+                match acme_accept_terms.as_deref() {
+                    Some("true") => {}
+                    Some(value) => {
+                        return Err(ConfigError::InvalidValue {
+                            var: "STREAMARR_ACME_ACCEPT_TERMS".to_string(),
+                            value: value.to_string(),
+                            reason:
+                                "must be exactly `true` to accept Let's Encrypt's terms of service"
+                                    .to_string(),
+                        });
+                    }
+                    None => {
+                        return Err(ConfigError::MissingVar(
+                            "STREAMARR_ACME_ACCEPT_TERMS".to_string(),
+                        ));
+                    }
+                }
+                let http01_bind_addr = acme_http01_bind_addr
+                    .as_deref()
+                    .unwrap_or("0.0.0.0:80")
+                    .parse()
+                    .map_err(|err: AddrParseError| ConfigError::InvalidValue {
+                        var: "STREAMARR_ACME_HTTP01_BIND_ADDR".to_string(),
+                        value: acme_http01_bind_addr
+                            .clone()
+                            .unwrap_or_else(|| "0.0.0.0:80".to_string()),
+                        reason: err.to_string(),
+                    })?;
+                Some(AcmeConfig {
+                    domain,
+                    environment,
+                    contact: acme_contact
+                        .as_deref()
+                        .map(normalize_acme_contact)
+                        .transpose()?,
+                    cache_dir: acme_cache_dir
+                        .unwrap_or_else(|| "/var/lib/streamarr/acme".to_string())
+                        .into(),
+                    http01_bind_addr,
+                })
+            }
+            None => {
+                if acme_environment.is_some()
+                    || acme_accept_terms.is_some()
+                    || acme_contact.is_some()
+                    || acme_cache_dir.is_some()
+                    || acme_http01_bind_addr.is_some()
+                {
+                    return Err(ConfigError::InvalidValue {
+                        var: "STREAMARR_ACME_DOMAIN".to_string(),
+                        value: "unset".to_string(),
+                        reason: "must be set when any other STREAMARR_ACME_* variable is set"
+                            .to_string(),
+                    });
+                }
+                None
+            }
+        };
         let relay_dns_bind_addr = match optional(lookup, "STREAMARR_RELAY_DNS_BIND_ADDR") {
             Some(raw) => {
                 Some(
@@ -220,9 +340,56 @@ impl Config {
             metrics_bind_addr,
             http_bind_addr,
             tls,
+            acme,
             relay_dns_bind_addr,
             otlp_endpoint,
             deployment_tier,
+        })
+    }
+}
+
+fn validate_acme_domain(domain: &str) -> Result<(), ConfigError> {
+    if is_valid_dns_name(domain) {
+        Ok(())
+    } else {
+        Err(ConfigError::InvalidValue {
+            var: "STREAMARR_ACME_DOMAIN".to_string(),
+            value: domain.to_string(),
+            reason: "expected a DNS hostname, without a scheme, port, path, or trailing dot"
+                .to_string(),
+        })
+    }
+}
+
+fn is_valid_dns_name(domain: &str) -> bool {
+    domain.len() <= 253
+        && domain.contains('.')
+        && !domain.starts_with('.')
+        && !domain.ends_with('.')
+        && domain.split('.').all(|label| {
+            !label.is_empty()
+                && label.len() <= 63
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+                && label
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        })
+}
+
+fn normalize_acme_contact(contact: &str) -> Result<String, ConfigError> {
+    let email = contact.strip_prefix("mailto:").unwrap_or(contact);
+    let valid = !email.bytes().any(|byte| byte.is_ascii_whitespace())
+        && email
+            .split_once('@')
+            .is_some_and(|(local, domain)| !local.is_empty() && is_valid_dns_name(domain));
+    if valid {
+        Ok(format!("mailto:{email}"))
+    } else {
+        Err(ConfigError::InvalidValue {
+            var: "STREAMARR_ACME_CONTACT".to_string(),
+            value: contact.to_string(),
+            reason: "expected an email address or mailto: URI".to_string(),
         })
     }
 }
@@ -279,6 +446,7 @@ mod tests {
         assert_eq!(config.log_filter, "info");
         assert_eq!(config.http_bind_addr, "0.0.0.0:8484".parse().unwrap());
         assert_eq!(config.tls, None);
+        assert_eq!(config.acme, None);
         assert_eq!(config.relay_dns_bind_addr, None);
     }
 
@@ -312,6 +480,144 @@ mod tests {
                 cert_path: "/etc/streamarr/tls/fullchain.pem".into(),
                 key_path: "/etc/streamarr/tls/privkey.pem".into(),
             })
+        );
+    }
+
+    #[test]
+    fn acme_requires_an_explicit_environment() {
+        let lookup = lookup_from(HashMap::from([
+            ("DATABASE_URL", "sqlite://streamarr.db"),
+            ("STREAMARR_ACME_DOMAIN", "v4-192-0-2-1.relay.playarr.app"),
+            ("STREAMARR_ACME_ACCEPT_TERMS", "true"),
+        ]));
+        let err = Config::from_env_source(&lookup).unwrap_err();
+        assert!(matches!(err, ConfigError::MissingVar(var) if var == "STREAMARR_ACME_ENVIRONMENT"));
+    }
+
+    #[test]
+    fn acme_requires_explicit_terms_acceptance() {
+        let missing = lookup_from(HashMap::from([
+            ("DATABASE_URL", "sqlite://streamarr.db"),
+            ("STREAMARR_ACME_DOMAIN", "streamarr.example.com"),
+            ("STREAMARR_ACME_ENVIRONMENT", "production"),
+        ]));
+        let err = Config::from_env_source(&missing).unwrap_err();
+        assert!(
+            matches!(err, ConfigError::MissingVar(var) if var == "STREAMARR_ACME_ACCEPT_TERMS")
+        );
+
+        let rejected = lookup_from(HashMap::from([
+            ("DATABASE_URL", "sqlite://streamarr.db"),
+            ("STREAMARR_ACME_DOMAIN", "streamarr.example.com"),
+            ("STREAMARR_ACME_ENVIRONMENT", "production"),
+            ("STREAMARR_ACME_ACCEPT_TERMS", "false"),
+        ]));
+        let err = Config::from_env_source(&rejected).unwrap_err();
+        assert!(
+            matches!(err, ConfigError::InvalidValue { var, .. } if var == "STREAMARR_ACME_ACCEPT_TERMS")
+        );
+    }
+
+    #[test]
+    fn acme_defaults_cache_and_http01_listener() {
+        let lookup = lookup_from(HashMap::from([
+            ("DATABASE_URL", "sqlite://streamarr.db"),
+            ("STREAMARR_ACME_DOMAIN", "v4-192-0-2-1.relay.playarr.app"),
+            ("STREAMARR_ACME_ENVIRONMENT", "production"),
+            ("STREAMARR_ACME_ACCEPT_TERMS", "true"),
+        ]));
+        let config = Config::from_env_source(&lookup).unwrap();
+        assert_eq!(
+            config.acme,
+            Some(AcmeConfig {
+                domain: "v4-192-0-2-1.relay.playarr.app".to_string(),
+                environment: AcmeEnvironment::Production,
+                contact: None,
+                cache_dir: "/var/lib/streamarr/acme".into(),
+                http01_bind_addr: "0.0.0.0:80".parse().unwrap(),
+            })
+        );
+    }
+
+    #[test]
+    fn acme_staging_accepts_contact_and_custom_paths() {
+        let lookup = lookup_from(HashMap::from([
+            ("DATABASE_URL", "sqlite://streamarr.db"),
+            ("STREAMARR_ACME_DOMAIN", "streamarr.example.com"),
+            ("STREAMARR_ACME_ENVIRONMENT", "staging"),
+            ("STREAMARR_ACME_ACCEPT_TERMS", "true"),
+            ("STREAMARR_ACME_CONTACT", "operator@example.com"),
+            ("STREAMARR_ACME_CACHE_DIR", "/tmp/streamarr-acme"),
+            ("STREAMARR_ACME_HTTP01_BIND_ADDR", "127.0.0.1:8081"),
+        ]));
+        let config = Config::from_env_source(&lookup).unwrap();
+        let acme = config.acme.unwrap();
+        assert_eq!(acme.environment, AcmeEnvironment::Staging);
+        assert_eq!(acme.contact.as_deref(), Some("mailto:operator@example.com"));
+        assert_eq!(acme.cache_dir, PathBuf::from("/tmp/streamarr-acme"));
+        assert_eq!(acme.http01_bind_addr, "127.0.0.1:8081".parse().unwrap());
+    }
+
+    #[test]
+    fn acme_rejects_invalid_environment_and_domain() {
+        let invalid_environment = lookup_from(HashMap::from([
+            ("DATABASE_URL", "sqlite://streamarr.db"),
+            ("STREAMARR_ACME_DOMAIN", "streamarr.example.com"),
+            ("STREAMARR_ACME_ENVIRONMENT", "maybe"),
+            ("STREAMARR_ACME_ACCEPT_TERMS", "true"),
+        ]));
+        let err = Config::from_env_source(&invalid_environment).unwrap_err();
+        assert!(
+            matches!(err, ConfigError::InvalidValue { var, .. } if var == "STREAMARR_ACME_ENVIRONMENT")
+        );
+
+        let invalid_domain = lookup_from(HashMap::from([
+            ("DATABASE_URL", "sqlite://streamarr.db"),
+            ("STREAMARR_ACME_DOMAIN", "https://streamarr.example.com"),
+            ("STREAMARR_ACME_ENVIRONMENT", "staging"),
+            ("STREAMARR_ACME_ACCEPT_TERMS", "true"),
+        ]));
+        let err = Config::from_env_source(&invalid_domain).unwrap_err();
+        assert!(
+            matches!(err, ConfigError::InvalidValue { var, .. } if var == "STREAMARR_ACME_DOMAIN")
+        );
+
+        let invalid_contact = lookup_from(HashMap::from([
+            ("DATABASE_URL", "sqlite://streamarr.db"),
+            ("STREAMARR_ACME_DOMAIN", "streamarr.example.com"),
+            ("STREAMARR_ACME_ENVIRONMENT", "staging"),
+            ("STREAMARR_ACME_ACCEPT_TERMS", "true"),
+            ("STREAMARR_ACME_CONTACT", "https://example.com"),
+        ]));
+        let err = Config::from_env_source(&invalid_contact).unwrap_err();
+        assert!(
+            matches!(err, ConfigError::InvalidValue { var, .. } if var == "STREAMARR_ACME_CONTACT")
+        );
+    }
+
+    #[test]
+    fn acme_rejects_static_tls_and_partial_configuration() {
+        let both = lookup_from(HashMap::from([
+            ("DATABASE_URL", "sqlite://streamarr.db"),
+            ("STREAMARR_TLS_CERT_PATH", "/tmp/cert.pem"),
+            ("STREAMARR_TLS_KEY_PATH", "/tmp/key.pem"),
+            ("STREAMARR_ACME_DOMAIN", "streamarr.example.com"),
+            ("STREAMARR_ACME_ENVIRONMENT", "staging"),
+            ("STREAMARR_ACME_ACCEPT_TERMS", "true"),
+        ]));
+        let err = Config::from_env_source(&both).unwrap_err();
+        assert!(
+            matches!(err, ConfigError::InvalidValue { reason, .. } if reason.contains("mutually exclusive"))
+        );
+
+        let missing_domain = lookup_from(HashMap::from([
+            ("DATABASE_URL", "sqlite://streamarr.db"),
+            ("STREAMARR_ACME_ENVIRONMENT", "staging"),
+            ("STREAMARR_ACME_ACCEPT_TERMS", "true"),
+        ]));
+        let err = Config::from_env_source(&missing_domain).unwrap_err();
+        assert!(
+            matches!(err, ConfigError::InvalidValue { var, .. } if var == "STREAMARR_ACME_DOMAIN")
         );
     }
 

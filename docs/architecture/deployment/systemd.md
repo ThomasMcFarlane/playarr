@@ -80,6 +80,13 @@ STREAMARR_METRICS_BIND_ADDR=0.0.0.0:9090
 # Set both to serve native HTTPS on STREAMARR_HTTP_BIND_ADDR:
 # STREAMARR_TLS_CERT_PATH=/etc/streamarr/tls/fullchain.pem
 # STREAMARR_TLS_KEY_PATH=/etc/streamarr/tls/privkey.pem
+# Or enable automatic Let's Encrypt HTTPS inside Streamarr (HTTP-01 on port 80):
+# STREAMARR_ACME_DOMAIN=v4-203-0-113-10.relay.playarr.app
+# STREAMARR_ACME_ENVIRONMENT=production
+# STREAMARR_ACME_ACCEPT_TERMS=true
+# STREAMARR_ACME_CONTACT=admin@example.com
+# STREAMARR_ACME_CACHE_DIR=/var/lib/streamarr/acme
+# STREAMARR_ACME_HTTP01_BIND_ADDR=0.0.0.0:80
 # Optional authoritative DNS in this same Streamarr process:
 # STREAMARR_RELAY_DNS_BIND_ADDR=0.0.0.0:53
 STREAMARR_WEB_ASSETS_DIR=/var/lib/streamarr/web
@@ -118,10 +125,24 @@ Streamarr serves native HTTPS when both `STREAMARR_TLS_CERT_PATH` and
 and private key at startup and terminates TLS inside the Streamarr process;
 no reverse proxy is required. Leave both unset for a private HTTP deployment.
 
+Alternatively, set `STREAMARR_ACME_DOMAIN` and explicitly choose
+`STREAMARR_ACME_ENVIRONMENT=production` or `staging`. Streamarr then uses
+Let's Encrypt ACME HTTP-01 itself: it listens on
+`STREAMARR_ACME_HTTP01_BIND_ADDR` (port 80 by default), persists the account
+and certificate under `STREAMARR_ACME_CACHE_DIR`, serves HTTPS on
+`STREAMARR_HTTP_BIND_ADDR`, and hot-renews the certificate without restarting.
+The hostname must already resolve publicly to this server and inbound port 80
+must be reachable. `STREAMARR_ACME_CONTACT` is optional and accepts either an
+email address or a `mailto:` URI. Automatic ACME and the static
+`STREAMARR_TLS_*` paths are mutually exclusive. Setting
+`STREAMARR_ACME_ACCEPT_TERMS=true` explicitly accepts Let's Encrypt's current
+subscriber agreement; automatic HTTPS will not start without that setting.
+
 Setting `STREAMARR_RELAY_DNS_BIND_ADDR` also serves the authoritative
 `relay.playarr.app` DNS zone from this same Streamarr process over UDP and
 TCP. The systemd unit grants only the low-port bind capability needed for
-port 53; the DNS mode remains disabled unless the variable is set.
+ports 53 and 80; DNS and automatic ACME remain disabled unless their variables
+are set.
 
 ## Operating
 

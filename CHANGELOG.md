@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Acquire and hot-renew browser-trusted HTTPS certificates inside Streamarr through an explicitly
+  configured Let's Encrypt ACME environment and a built-in HTTP-01 challenge listener.
 - Serve authoritative DNS-only public IPv4 hostnames inside the Streamarr process when enabled.
 - Add native TLS certificate support to the Streamarr server without requiring a reverse proxy.
 - Notify Playarr users in Chrome, Android mobile, and Android TV when an admin approves their friend-invite request.
