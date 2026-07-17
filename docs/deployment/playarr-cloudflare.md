@@ -63,18 +63,24 @@ For non-interactive local use, export `CLOUDFLARE_API_TOKEN` and
 ## Connect the hosted client to Streamarr
 
 Playarr is only the static playback client; each viewer still connects it to
-their own LAN-only Streamarr server. Enter its private address, for example
-`http://192.168.1.50:8080`, on the Playarr sign-in screen. The browser connects
-straight to that address; Cloudflare never proxies the API, and Streamarr does
-not need a tunnel, port-forward, or public internet route. The client stores
-server-specific profile sessions in the browser.
+their own Streamarr server. Enter an IP address such as
+`http://192.168.1.50:8080` or `http://203.0.113.10:8080` on the sign-in screen.
+Cloudflare never proxies the API, and the client stores server-specific profile
+sessions in the browser.
 
 On browsers that implement Local Network Access, approve the browser prompt
-the first time `playarr.app` connects to the LAN. Playarr explicitly marks
-all HTTP addresses as local-network requests so that permission can relax
+the first time `playarr.app` connects to a private or loopback IP. Playarr marks
+only those addresses as local-network requests so that permission can relax
 mixed-content blocking. Browser support is still evolving; a browser without
-Local Network Access cannot connect from the HTTPS hosted app to a plain-HTTP
-LAN server. In that case, use Streamarr's co-hosted Playarr bundle on the LAN.
+Local Network Access cannot connect from the HTTPS hosted app to a private
+plain-HTTP server. In that case, open Streamarr's co-hosted `/playarr/` client.
+
+A public plain-HTTP IP is not eligible for Local Network Access, and an HTTPS
+page cannot fetch it as mixed content. For those addresses, hosted Playarr
+navigates the top-level browser to `http://<server>:<port>/playarr/login`.
+Streamarr serves that Playarr build and the API on the same HTTP origin, so no
+hostname, reverse proxy, or HTTPS certificate is required. Build the co-hosted
+bundle with `PLAYARR_BASE_PATH=/playarr/`.
 
 ## Domain changes
 

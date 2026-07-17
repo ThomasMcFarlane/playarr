@@ -2,20 +2,20 @@
   "name": "Playarr",
   "short_name": "Playarr",
   "description": "Browse and play media from your Streamarr server.",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "fullscreen",
   "orientation": "landscape",
   "background_color": "#12080d",
   "theme_color": "#d83f6b",
   "icons": [
     {
-      "src": "/playarr-icon-192.png",
+      "src": "playarr-icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/playarr-icon-512.png",
+      "src": "playarr-icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }

@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { createLocalNetworkFetch, targetAddressSpaceForUrl } from "./localNetworkFetch";
+import {
+  createLocalNetworkFetch,
+  isPublicHttpIpUrl,
+  targetAddressSpaceForUrl,
+} from "./localNetworkFetch";
 
 describe("targetAddressSpaceForUrl", () => {
   it.each([
@@ -8,7 +12,6 @@ describe("targetAddressSpaceForUrl", () => {
     "http://172.16.0.5:8080",
     "http://streamarr.local:8080",
     "http://[fd00::5]:8080",
-    "http://203.0.113.10:8080",
     "http://streamarr.example.com:8080",
   ])("marks %s as local", (url) => {
     expect(targetAddressSpaceForUrl(url)).toBe("local");
@@ -23,6 +26,11 @@ describe("targetAddressSpaceForUrl", () => {
 
   it("does not mark an HTTPS request", () => {
     expect(targetAddressSpaceForUrl("https://192.168.1.50:8080")).toBeUndefined();
+  });
+
+  it("does not mislabel a public HTTP IP as local", () => {
+    expect(targetAddressSpaceForUrl("http://203.0.113.10:8080")).toBeUndefined();
+    expect(isPublicHttpIpUrl("http://203.0.113.10:8080")).toBe(true);
   });
 });
 

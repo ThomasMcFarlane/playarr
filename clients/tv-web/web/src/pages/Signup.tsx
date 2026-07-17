@@ -60,7 +60,11 @@ export function SignupPage() {
       <div className="auth-card">
         <div className="auth-header">
           <span className="app-logo">
-            <img className="app-logo-icon" src="/playarr-icon.svg" alt="" />
+            <img
+              className="app-logo-icon"
+              src={`${import.meta.env.BASE_URL}playarr-icon.svg`}
+              alt=""
+            />
             <span><span className="app-logo-accent">Play</span>arr</span>
           </span>
         </div>

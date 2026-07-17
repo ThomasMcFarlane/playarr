@@ -12,13 +12,16 @@ if (!container) {
   throw new Error("#root element not found -- check index.html");
 }
 
+const routerBase =
+  import.meta.env.BASE_URL === "/" ? undefined : import.meta.env.BASE_URL.replace(/\/$/, "");
+
 if (navigator.userAgent.includes("PlayarrAndroidTV/")) {
   document.documentElement.dataset.platform = "android-tv";
 }
 
 createRoot(container).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={routerBase}>
       <ThemeProvider>
         <ApiClientProvider>
           <ToastProvider>

@@ -14,6 +14,8 @@
  */
 
 const CACHE_PREFIX = "streamarr-web-";
+const APP_BASE_URL = new URL(self.registration.scope).pathname;
+const appUrl = (path = "") => `${APP_BASE_URL}${path}`;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(precacheNewBundle());
@@ -21,7 +23,7 @@ self.addEventListener("install", (event) => {
 
 async function fetchManifest() {
   try {
-    const response = await fetch("/build-manifest.json", { cache: "no-store" });
+    const response = await fetch(appUrl("build-manifest.json"), { cache: "no-store" });
     if (!response.ok) return null;
     const manifest = await response.json();
     return typeof manifest?.bundleVersion === "string" ? manifest : null;
@@ -39,7 +41,7 @@ async function precacheNewBundle() {
   // pulled in lazily by the fetch handler below (cache-as-you-go) rather
   // than needing a full precache asset list generated at build time.
   try {
-    await cache.addAll(["/", "/index.html"]);
+    await cache.addAll([APP_BASE_URL, appUrl("index.html")]);
   } catch {
     // A precache miss (e.g. offline during install) isn't fatal -- the
     // fetch handler below still falls through to the network per-request.
@@ -81,7 +83,7 @@ self.addEventListener("fetch", (event) => {
   // Never intercept the manifest/version-check itself -- the app must
   // always see a live, uncached answer to "is there a newer build".
   const url = new URL(event.request.url);
-  if (url.pathname === "/build-manifest.json") return;
+  if (url.pathname === appUrl("build-manifest.json")) return;
 
   // Production deploys can update the bundle without changing the package
   // version. Fetching navigations from the network first means a reload sees
@@ -103,7 +105,7 @@ self.addEventListener("fetch", (event) => {
         .catch(() =>
           caches
             .match(event.request)
-            .then((cached) => cached || caches.match("/index.html"))
+            .then((cached) => cached || caches.match(appUrl("index.html")))
         )
     );
     return;
@@ -123,7 +125,7 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() => caches.match("/index.html"));
+        .catch(() => caches.match(appUrl("index.html")));
     })
   );
 });
@@ -140,17 +142,17 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(notification.title || "Playarr", {
       body: notification.body || "Your friend invite request was approved.",
-      icon: "/playarr-icon-192.png",
-      badge: "/playarr-icon-192.png",
+      icon: appUrl("playarr-icon-192.png"),
+      badge: appUrl("playarr-icon-192.png"),
       tag: "invite-approved",
-      data: { link: data.link || "https://playarr.app/settings" },
+      data: { link: data.link || appUrl("settings") },
     })
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const link = event.notification.data?.link || "https://playarr.app/settings";
+  const link = event.notification.data?.link || appUrl("settings");
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       const existing = clients.find((client) => client.url.startsWith(self.location.origin));

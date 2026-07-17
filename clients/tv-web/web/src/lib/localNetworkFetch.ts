@@ -10,7 +10,53 @@ function stripIpv6Brackets(hostname: string): string {
     : hostname;
 }
 
-/** Returns the requested address space for any direct HTTP server URL. */
+function parseIpv4(hostname: string): [number, number, number, number] | undefined {
+  const octets = hostname.split(".");
+  if (octets.length !== 4) return undefined;
+  const parsed = octets.map((octet) => Number(octet));
+  return parsed.every((octet) => Number.isInteger(octet) && octet >= 0 && octet <= 255)
+    ? (parsed as [number, number, number, number])
+    : undefined;
+}
+
+/** Public IP literals cannot use Local Network Access's HTTP exemption. */
+export function isPublicIpLiteral(hostname: string): boolean {
+  const unwrapped = stripIpv6Brackets(hostname.toLowerCase());
+  const ipv4 = parseIpv4(unwrapped);
+  if (ipv4) {
+    const [first, second] = ipv4;
+    return !(
+      first === 0 ||
+      first === 10 ||
+      first === 127 ||
+      (first === 100 && second >= 64 && second <= 127) ||
+      (first === 169 && second === 254) ||
+      (first === 172 && second >= 16 && second <= 31) ||
+      (first === 192 && second === 168) ||
+      first >= 224
+    );
+  }
+
+  if (!unwrapped.includes(":")) return false;
+  return !(
+    unwrapped === "::" ||
+    unwrapped === "::1" ||
+    unwrapped.startsWith("fc") ||
+    unwrapped.startsWith("fd") ||
+    /^fe[89ab]/.test(unwrapped)
+  );
+}
+
+export function isPublicHttpIpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" && isPublicIpLiteral(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** Returns the requested address space for a private or loopback HTTP URL. */
 export function targetAddressSpaceForUrl(value: string): TargetAddressSpace | undefined {
   const url = new URL(value);
   if (url.protocol !== "http:") return undefined;
@@ -19,13 +65,15 @@ export function targetAddressSpaceForUrl(value: string): TargetAddressSpace | un
   if (hostname === "localhost" || hostname === "::1" || hostname.startsWith("127.")) {
     return "loopback";
   }
+  if (isPublicIpLiteral(hostname)) return undefined;
   return "local";
 }
 
 /**
- * Marks every direct HTTP request to Streamarr so supporting browsers
+ * Marks private and loopback HTTP requests to Streamarr so supporting browsers
  * can ask the viewer for Local Network Access and relax mixed-content blocking.
- * Browsers without this API ignore the additional fetch option.
+ * Public IPs are left unmarked because browsers correctly classify them as
+ * public-network destinations. Browsers without this API ignore the option.
  */
 export function createLocalNetworkFetch(
   nativeFetch: typeof fetch = globalThis.fetch.bind(globalThis)

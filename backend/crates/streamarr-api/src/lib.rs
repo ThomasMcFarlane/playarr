@@ -406,8 +406,8 @@ impl FromRef<AppState> for VersionState {
 /// logic that would otherwise reject it for having no `Authorization`
 /// header.
 ///
-/// `web_assets_dir`, when `Some`, mounts the standalone Web app's built
-/// static assets (`clients/tv-web/web/dist`) as this router's fallback —
+/// `web_assets_dir`, when `Some`, mounts Streamarr Admin's built static
+/// assets (`clients/tv-web/admin/dist`) as this router's fallback —
 /// any request that doesn't match an `/api/*` route, `/healthz`, or
 /// `/readyz` is served a static file from that directory, falling back to
 /// `index.html` for anything not found on disk (React Router's
@@ -418,10 +418,16 @@ impl FromRef<AppState> for VersionState {
 /// `streamarr-bin` resolves the directory (env override or a path next to
 /// the binary) and passes `None` when it can't find a built `index.html`
 /// there, in which case this router serves API-only, exactly as before.
+///
+/// `playarr_assets_dir`, when present, mounts a Playarr build compiled with
+/// `PLAYARR_BASE_PATH=/playarr/` below `/playarr`. This gives public HTTP
+/// deployments a same-origin consumer client without weakening browser
+/// mixed-content protections or proxying credentials through a third party.
 pub fn build_router(
     state: AppState,
     version_gate: VersionGateLayer,
     web_assets_dir: Option<PathBuf>,
+    playarr_assets_dir: Option<PathBuf>,
 ) -> (Router, utoipa::openapi::OpenApi) {
     let readiness_for_alias = state.readiness.clone();
     let (router, api) = api_router().with_state(state).split_for_parts();
@@ -436,6 +442,14 @@ pub fn build_router(
         );
 
     let router = router.layer(version_gate).layer(CorsLayer::permissive());
+
+    let router = match playarr_assets_dir {
+        Some(dir) => {
+            let index_html = ServeFile::new(dir.join("index.html"));
+            router.nest_service("/playarr", ServeDir::new(dir).fallback(index_html))
+        }
+        None => router,
+    };
 
     let router = match web_assets_dir {
         Some(dir) => {
@@ -521,6 +535,79 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(ready.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn serves_admin_at_root_and_playarr_under_its_own_base_path() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "streamarr-static-assets-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let admin_dir = temp_root.join("admin");
+        let playarr_dir = temp_root.join("playarr");
+        std::fs::create_dir_all(&admin_dir).expect("create admin asset directory");
+        std::fs::create_dir_all(&playarr_dir).expect("create Playarr asset directory");
+        std::fs::write(admin_dir.join("index.html"), "streamarr-admin-marker")
+            .expect("write admin index");
+        std::fs::write(playarr_dir.join("index.html"), "playarr-marker")
+            .expect("write Playarr index");
+
+        let (_default_router, state) = test_support::test_state().await;
+        let (router, _api) = build_router(
+            state.app,
+            test_support::test_version_gate(),
+            Some(admin_dir),
+            Some(playarr_dir),
+        );
+
+        let root_response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(root_response.status(), StatusCode::OK);
+        let root_body = axum::body::to_bytes(root_response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(&root_body[..], b"streamarr-admin-marker");
+
+        let bare_playarr_response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/playarr")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(bare_playarr_response.status(), StatusCode::OK);
+        let bare_playarr_body = axum::body::to_bytes(bare_playarr_response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(&bare_playarr_body[..], b"playarr-marker");
+
+        let playarr_response = router
+            .oneshot(
+                Request::builder()
+                    .uri("/playarr/login")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(playarr_response.status(), StatusCode::OK);
+        let playarr_body = axum::body::to_bytes(playarr_response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(&playarr_body[..], b"playarr-marker");
+
+        std::fs::remove_dir_all(temp_root).expect("remove static asset test directory");
     }
 
     #[tokio::test]

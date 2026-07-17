@@ -61,15 +61,20 @@ have been fixed:
   yet), so this unit runs and exits 0 every time regardless, but the
   invocation itself is now correct for when that lands.
 - Config/env var names in `streamarr.env.example` (`STREAMARR_LOG`,
-  `STREAMARR_HTTP_BIND_ADDR`, `STREAMARR_METRICS_BIND_ADDR`) are the real
-  ones `Config::from_env` reads, matching
-  `helm/streamarr/values.yaml`'s `config` block exactly, so the two
+  `STREAMARR_HTTP_BIND_ADDR`, `STREAMARR_METRICS_BIND_ADDR`, and the optional
+  static-asset paths) are the real ones the binary reads. The core config
+  names match `helm/streamarr/values.yaml`'s `config` block, so the two
   deployment paths configure the binary identically.
 - `WorkingDirectory=/var/lib/streamarr` is assumed to be an acceptable
   location for any local state (cache, temp media processing, etc.) the
   binary writes. `ReadWritePaths` in the unit's sandboxing section is
   scoped to that plus `/var/log/streamarr` - widen it if the real binary
   needs to write elsewhere.
+- `STREAMARR_WEB_ASSETS_DIR` serves Streamarr Admin at `/`.
+  `STREAMARR_PLAYARR_ASSETS_DIR` serves a Playarr build compiled with
+  `PLAYARR_BASE_PATH=/playarr/` at `/playarr/`. This lets a public plain-HTTP
+  IP host Playarr and its API on the same origin, without a proxy, hostname,
+  or TLS certificate.
 
 ## Validation gap: no systemd on this machine
 

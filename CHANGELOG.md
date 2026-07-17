@@ -80,10 +80,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Hand public HTTP Streamarr IPs from hosted Playarr to the server-cohosted `/playarr`
+  client instead of misclassifying them as LAN requests, while retaining direct Local
+  Network Access for private and loopback addresses.
 - Apply the systemd service restart-rate limit from the valid unit section instead of silently
   ignoring it during installation.
-- Request browser Local Network Access for every direct HTTP connection from `playarr.app`,
-  without requiring Streamarr to be exposed publicly.
+- Request browser Local Network Access for direct private HTTP connections from `playarr.app`,
+  without requiring Streamarr to be exposed publicly or use HTTPS.
 - Leave the Streamarr server field blank on `playarr.app` instead of suggesting the hosted
   client origin, while retaining explicit and self-hosted server defaults.
 - Build Playarr Web's workspace dependencies before local or CI Cloudflare deployments.

@@ -6,6 +6,7 @@ import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { DeviceLogin } from "../components/DeviceLogin";
 import { IS_TV } from "../lib/clientPlatform";
 import { initialLoginServerUrl } from "../lib/loginServerUrl";
+import { publicHttpServerHandoffUrl } from "../lib/httpServerHandoff";
 
 interface LocationState {
   /** Set by `App.tsx`'s app-shell redirect so a successful login returns to wherever the user was headed. */
@@ -42,6 +43,10 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const handoffUrl =
+    window.location.protocol === "https:"
+      ? publicHttpServerHandoffUrl(serverUrl)
+      : undefined;
 
   function finishLogin() {
     const destination = state?.from ?? "/";
@@ -57,6 +62,10 @@ export function LoginPage() {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
+    if (handoffUrl) {
+      window.location.assign(handoffUrl);
+      return;
+    }
     try {
       await login({ serverUrl, username, password });
       finishLogin();
@@ -83,7 +92,11 @@ export function LoginPage() {
       <div className="auth-card">
         <div className="auth-header">
           <span className="app-logo">
-            <img className="app-logo-icon" src="/playarr-icon.svg" alt="" />
+            <img
+              className="app-logo-icon"
+              src={`${import.meta.env.BASE_URL}playarr-icon.svg`}
+              alt=""
+            />
             <span><span className="app-logo-accent">Play</span>arr</span>
           </span>
         </div>
@@ -113,36 +126,42 @@ export function LoginPage() {
             placeholder="https://streamarr.example.com"
           />
           <p className="hint auth-server-hint">
-            Your browser connects directly to this server. Playarr does not proxy your login.
+            {handoffUrl
+              ? "This public HTTP server will open its own Playarr client so the connection stays same-origin."
+              : "Your browser connects directly to this server. Playarr does not proxy your login."}
           </p>
 
-          <label className="auth-label" htmlFor="login-username">
-            Username
-          </label>
-          <input
-            id="login-username"
-            name="username"
-            type="text"
-            className="input auth-input"
-            autoComplete="username"
-            required
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-          />
+          {!handoffUrl && (
+            <>
+              <label className="auth-label" htmlFor="login-username">
+                Username
+              </label>
+              <input
+                id="login-username"
+                name="username"
+                type="text"
+                className="input auth-input"
+                autoComplete="username"
+                required
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+              />
 
-          <label className="auth-label" htmlFor="login-password">
-            Password
-          </label>
-          <input
-            id="login-password"
-            name="password"
-            type="password"
-            className={`input auth-input${error ? " is-error" : ""}`}
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-          />
+              <label className="auth-label" htmlFor="login-password">
+                Password
+              </label>
+              <input
+                id="login-password"
+                name="password"
+                type="password"
+                className={`input auth-input${error ? " is-error" : ""}`}
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </>
+          )}
 
           {error && (
             <p className="error-text auth-error">
@@ -155,7 +174,7 @@ export function LoginPage() {
             className="btn btn-primary auth-submit"
             disabled={submitting}
           >
-            {submitting ? "Signing in…" : "Sign in"}
+            {handoffUrl ? "Continue on server" : submitting ? "Signing in…" : "Sign in"}
           </button>
         </form>
       </div>

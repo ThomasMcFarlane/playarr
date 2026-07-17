@@ -371,7 +371,7 @@ fn default_admin_user_id_from_env(fallback: uuid::Uuid) -> uuid::Uuid {
     }
 }
 
-/// Resolves the directory the standalone Web app's built static assets
+/// Resolves the directory Streamarr Admin's built static assets
 /// (`index.html` + `assets/`) live in, so `boot_api` can co-host the UI on
 /// the same origin/port as the API -- see [`streamarr_api::build_router`]'s
 /// `web_assets_dir` doc comment for why that's the goal (parity with how
@@ -400,7 +400,28 @@ fn web_assets_dir_from_env() -> Option<std::path::PathBuf> {
         tracing::info!(
             path = %candidate.display(),
             "no built web UI found at this path; serving API only. Set STREAMARR_WEB_ASSETS_DIR, \
-             or build clients/tv-web/web and place its dist/ output there, to co-host the Web app."
+             or build clients/tv-web/admin and place its dist/ output there, to co-host Streamarr Admin."
+        );
+        None
+    }
+}
+
+/// Resolves an optional Playarr build mounted below `/playarr` for public
+/// HTTP servers that cannot be fetched directly from hosted HTTPS Playarr.
+fn playarr_assets_dir_from_env() -> Option<std::path::PathBuf> {
+    let candidate = match std::env::var("STREAMARR_PLAYARR_ASSETS_DIR") {
+        Ok(raw) => std::path::PathBuf::from(raw),
+        Err(_) => std::env::current_exe().ok()?.parent()?.join("playarr"),
+    };
+
+    if candidate.join("index.html").is_file() {
+        Some(candidate)
+    } else {
+        tracing::info!(
+            path = %candidate.display(),
+            "no server-hosted Playarr UI found; public HTTP servers cannot hand off to /playarr. \
+             Set STREAMARR_PLAYARR_ASSETS_DIR to a Playarr build compiled with \
+             PLAYARR_BASE_PATH=/playarr/."
         );
         None
     }
@@ -997,7 +1018,12 @@ async fn boot_api(
     );
     tokio::spawn(analytics_flusher.run());
 
-    let (router, _openapi) = build_router(state, version_gate, web_assets_dir_from_env());
+    let (router, _openapi) = build_router(
+        state,
+        version_gate,
+        web_assets_dir_from_env(),
+        playarr_assets_dir_from_env(),
+    );
 
     let listener = tokio::net::TcpListener::bind(config.http_bind_addr).await?;
     tracing::info!(addr = %config.http_bind_addr, "http server listening");
