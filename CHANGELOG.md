@@ -54,6 +54,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Split Playarr Web's settings screen into a hub with one focused page per section (appearance,
+  player, server connection, profile lock, invite a friend, account) instead of one long
+  scrolling page.
 - Make Playarr Web responsive on mobile with safe-area-aware navigation, touch-sized controls,
   stacked content regions, and phone-friendly library, detail, search, profile, settings, and
   player layouts while preserving the existing desktop and television presentation.
@@ -80,6 +83,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Let ArrowUp and ArrowDown move remote/keyboard focus out of a text field on Playarr Web instead
+  of getting stuck there, since those keys have no native effect in a single-line input.
 - Leave the hosted server field blank instead of pre-filling the previously selected address.
 - Connect directly from `playarr.app` to operator-entered HTTP or HTTPS IPs and domains, using
   Local Network Access for private addresses and the browser's explicit insecure-content

@@ -22,7 +22,13 @@ import {
   PlayerPage,
   type PlayerLocationState,
 } from "./pages/Player";
-import { SettingsPage } from "./pages/Settings";
+import { SettingsIndexPage } from "./pages/settings/Index";
+import { SettingsAppearancePage } from "./pages/settings/Appearance";
+import { SettingsPlayerPage } from "./pages/settings/Player";
+import { SettingsServerPage } from "./pages/settings/Server";
+import { SettingsProfileLockPage } from "./pages/settings/ProfileLock";
+import { SettingsInvitePage } from "./pages/settings/Invite";
+import { SettingsAccountPage } from "./pages/settings/Account";
 import { LoginPage } from "./pages/Login";
 import { SignupPage } from "./pages/Signup";
 import { DeviceLinkPage } from "./pages/DeviceLink";
@@ -506,7 +512,13 @@ export function App() {
         <Route path="/playlists/:workId" element={<WorkDetailPage />} />
         <Route path="/player/:mediaFileId" element={null} />
         <Route path="/profiles" element={<ProfilesPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings" element={<SettingsIndexPage />} />
+        <Route path="/settings/appearance" element={<SettingsAppearancePage />} />
+        <Route path="/settings/player" element={<SettingsPlayerPage />} />
+        <Route path="/settings/server" element={<SettingsServerPage />} />
+        <Route path="/settings/profile-lock" element={<SettingsProfileLockPage />} />
+        <Route path="/settings/invite" element={<SettingsInvitePage />} />
+        <Route path="/settings/account" element={<SettingsAccountPage />} />
       </Route>
     </Routes>
   );

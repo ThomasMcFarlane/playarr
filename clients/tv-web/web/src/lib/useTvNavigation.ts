@@ -13,6 +13,20 @@ const FOCUSABLE_SELECTOR = [
 
 type Direction = "up" | "down" | "left" | "right";
 
+// Types with no native meaning for Up/Down: a single-line field never moves
+// its caret vertically or changes value on those keys, so remote/TV focus
+// navigation can safely claim them. Left/Right stay native everywhere (caret
+// movement), and range/number/select/textarea keep every arrow key native
+// since those types (or a future multi-line field) do assign it real meaning.
+const VERTICALLY_ESCAPABLE_INPUT_TYPES = new Set([
+  "text",
+  "url",
+  "email",
+  "password",
+  "search",
+  "tel",
+]);
+
 function visibleFocusables(): HTMLElement[] {
   const modal = document.querySelector<HTMLElement>('[aria-modal="true"]');
   const scope: Document | HTMLElement = modal ?? document;
@@ -328,6 +342,7 @@ function parentRoute(pathname: string, requestedBackTo?: string): string {
     requestedBackTo === "/sites" ||
     requestedBackTo === "/music" ||
     requestedBackTo === "/profiles" ||
+    requestedBackTo === "/settings" ||
     (typeof requestedBackTo === "string" &&
       /^\/playlists(?:\?playlist=[^&]+(?:&.*)?)?$/.test(requestedBackTo)) ||
     (typeof requestedBackTo === "string" && /^\/search(?:\?.*)?$/.test(requestedBackTo))
@@ -340,6 +355,7 @@ function parentRoute(pathname: string, requestedBackTo?: string): string {
   if (/^\/sites\/[^/]+$/.test(pathname)) return "/sites";
   if (/^\/music\/[^/]+$/.test(pathname)) return "/music";
   if (/^\/playlists\/[^/]+$/.test(pathname)) return "/playlists";
+  if (/^\/settings\/[^/]+$/.test(pathname)) return "/settings";
   if (
     pathname === "/search" ||
     pathname === "/series" ||
@@ -372,12 +388,18 @@ export function useTvNavigation(
 
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target;
-      if (
+      const isFormControl =
         target instanceof HTMLInputElement ||
         target instanceof HTMLTextAreaElement ||
-        target instanceof HTMLSelectElement
-      ) {
-        return;
+        target instanceof HTMLSelectElement;
+      if (isFormControl) {
+        const isVerticalArrow = event.key === "ArrowUp" || event.key === "ArrowDown";
+        const canEscapeVertically =
+          target instanceof HTMLInputElement &&
+          VERTICALLY_ESCAPABLE_INPUT_TYPES.has(target.type);
+        if (!(isVerticalArrow && canEscapeVertically)) {
+          return;
+        }
       }
 
       const direction: Direction | undefined =
