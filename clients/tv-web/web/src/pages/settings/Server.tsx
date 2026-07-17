@@ -109,7 +109,7 @@ export function SettingsServerPage() {
               spellCheck={false}
               value={serverUrl}
               onChange={(event) => setServerUrl(event.target.value)}
-              placeholder="203.0.113.10 or https://streamarr.example.com"
+              placeholder="Server address or URL"
               required
             />
             <input

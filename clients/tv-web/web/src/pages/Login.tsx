@@ -117,7 +117,7 @@ export function LoginPage() {
             required
             value={serverUrl}
             onChange={(event) => setServerUrl(event.target.value)}
-            placeholder="203.0.113.10 or https://streamarr.example.com"
+            placeholder="Server address or URL"
           />
           <p className="hint auth-server-hint">
             {needsInsecureContentPermission

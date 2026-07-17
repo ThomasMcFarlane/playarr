@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ApiClient, ApiError } from "@streamarr-tv/api-client";
 import { useAuth } from "../lib/ApiClientProvider";
 import { createLocalNetworkFetch } from "../lib/localNetworkFetch";
 import { parseSignupInvite } from "../lib/signupInvite";
 import { publicIpv4RelayUrl } from "../lib/loginServerUrl";
+import { useToast } from "../lib/toast";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 
 const invite = parseSignupInvite(window.location.search);
@@ -14,6 +15,7 @@ export function SignupPage() {
   useDocumentTitle("Create account");
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { showToast } = useToast();
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -53,6 +55,11 @@ export function SignupPage() {
       await login({ serverUrl: invite.serverUrl, username, password });
       navigate("/", { replace: true });
     } catch (err) {
+      if (err instanceof ApiError && err.status === 410) {
+        showToast("This invite has already been used. Log in instead.");
+        navigate("/login", { replace: true, state: { initialUsername: username } });
+        return;
+      }
       setError(signupErrorMessage(err));
       setSubmitting(false);
     }
@@ -76,6 +83,13 @@ export function SignupPage() {
         <h1 className="auth-title">Create your Playarr account</h1>
         <p className="muted auth-description">
           Choose your account details for the Streamarr server that invited you.
+        </p>
+
+        <p className="auth-switch">
+          Already have an account?{" "}
+          <Link to="/login" className="auth-switch-link">
+            Log in
+          </Link>
         </p>
 
         {!invite ? (
@@ -178,7 +192,6 @@ function signupErrorMessage(err: unknown): string {
   if (err instanceof ApiError) {
     const body = err.body as { message?: unknown } | undefined;
     if (typeof body?.message === "string" && body.message.length > 0) return body.message;
-    if (err.status === 410) return "This invitation has expired or has already been used.";
     if (err.status === 409) return "That username is already taken.";
     return "Could not create the account. Ask your administrator for a new invitation.";
   }

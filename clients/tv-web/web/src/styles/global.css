@@ -1861,6 +1861,20 @@ code {
   margin-top: 1.5rem;
 }
 
+.auth-switch {
+  margin-top: 1.5rem;
+  font-size: 0.78rem;
+}
+
+.auth-switch-link {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.auth-switch-link:hover {
+  text-decoration: underline;
+}
+
 .device-login-page {
   grid-template-columns: minmax(260px, 0.55fr) minmax(680px, 1.45fr);
 }
