@@ -44,17 +44,23 @@ function publicIpv4Octets(hostname: string): [number, number, number, number] | 
  * Playarr nor Cloudflare relays the request or its response.
  */
 export function publicIpv4RelayUrl(value: string): string {
+  const input = value.trim();
+  const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(input)
+    ? input
+    : input.startsWith("//")
+      ? `http:${input}`
+      : `http://${input}`;
+
   try {
-    const url = new URL(value);
-    if (url.protocol !== "http:") return value;
+    const url = new URL(candidate);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return value;
 
     const octets = publicIpv4Octets(url.hostname);
     if (!octets) return value;
 
-    url.protocol = "https:";
-    url.hostname = `v4-${octets.join("-")}.${PUBLIC_IPV4_RELAY_HOSTNAME}`;
-    url.port = STREAMARR_PORT;
-    return url.toString().replace(/\/$/, "");
+    const hostname = `v4-${octets.join("-")}.${PUBLIC_IPV4_RELAY_HOSTNAME}`;
+    const path = url.pathname === "/" ? "" : url.pathname;
+    return `https://${hostname}:${STREAMARR_PORT}${path}${url.search}${url.hash}`;
   } catch {
     return value;
   }

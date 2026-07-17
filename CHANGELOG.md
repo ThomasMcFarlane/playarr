@@ -58,6 +58,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Normalise bare, HTTP, and HTTPS public IPv4 server inputs, with or without a port, to the
+  deterministic direct relay hostname on port `8484`.
 - Standardise Streamarr's direct application port on `8484`.
 - Let Playarr convert public IPv4 HTTP addresses to deterministic DNS-only HTTPS names without
   proxying application or media traffic.
