@@ -5,7 +5,7 @@ import { useApiBaseUrl, useAuth } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { DeviceLogin } from "../components/DeviceLogin";
 import { IS_TV } from "../lib/clientPlatform";
-import { initialLoginServerUrl } from "../lib/loginServerUrl";
+import { initialLoginServerUrl, publicIpv4RelayUrl } from "../lib/loginServerUrl";
 import { isPublicHttpUrl } from "../lib/localNetworkFetch";
 
 interface LocationState {
@@ -44,7 +44,7 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const needsInsecureContentPermission =
-    window.location.protocol === "https:" && isPublicHttpUrl(serverUrl);
+    window.location.protocol === "https:" && isPublicHttpUrl(publicIpv4RelayUrl(serverUrl));
 
   function finishLogin() {
     const destination = state?.from ?? "/";

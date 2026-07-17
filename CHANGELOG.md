@@ -54,6 +54,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Let Playarr convert public IPv4 HTTP addresses to deterministic DNS-only HTTPS names without
+  proxying application or media traffic.
 - Split Playarr Web's settings screen into a hub with one focused page per section (appearance,
   player, server connection, profile lock, invite a friend, account) instead of one long
   scrolling page.

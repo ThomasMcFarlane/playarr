@@ -18,6 +18,7 @@ import {
 } from "@streamarr-tv/domain";
 import { PLAYARR_CLIENT_PLATFORM } from "./clientPlatform";
 import { createLocalNetworkFetch } from "./localNetworkFetch";
+import { publicIpv4RelayUrl } from "./loginServerUrl";
 import {
   clearJoinedServerRegistry,
   createJoinedApiClient,
@@ -115,10 +116,11 @@ function readStoredProfileSessions(fallbackApiBaseUrl: string): StoredProfileSes
               typeof profile.profileKey === "string"
                 ? profile.profileKey
                 : `legacy:${profile.name.trim().toLocaleLowerCase()}`,
-            apiBaseUrl:
+            apiBaseUrl: publicIpv4RelayUrl(
               typeof profile.apiBaseUrl === "string"
                 ? profile.apiBaseUrl
-                : fallbackApiBaseUrl,
+                : fallbackApiBaseUrl
+            ),
             userId: profile.userId,
             name: profile.name,
             deviceId: profile.deviceId,
@@ -294,10 +296,10 @@ const ApiClientContext = createContext<ApiClientContextValue | null>(null);
  */
 function resolveInitialApiBaseUrl(): string {
   const stored = getStoredApiBaseUrl();
-  if (stored) return stored;
+  if (stored) return publicIpv4RelayUrl(stored);
 
   const fromQuery = new URLSearchParams(window.location.search).get(API_BASE_URL_QUERY_PARAM);
-  if (fromQuery) return fromQuery;
+  if (fromQuery) return publicIpv4RelayUrl(fromQuery);
 
   return window.location.origin;
 }
@@ -568,7 +570,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async ({ serverUrl, username, password }: LoginCredentials) => {
-      const targetApiBaseUrl = normaliseApiBaseUrl(serverUrl);
+      const targetApiBaseUrl = normaliseApiBaseUrl(publicIpv4RelayUrl(serverUrl));
       const tokenStore = tokenStoreRef.current as TokenStore;
       const normalizedUsername = username.trim();
       const existingProfile = storedProfileSessions.find(
@@ -641,7 +643,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
       if (!activeProfile) {
         throw new Error("Sign in before adding another server.");
       }
-      const targetApiBaseUrl = normaliseApiBaseUrl(serverUrl);
+      const targetApiBaseUrl = normaliseApiBaseUrl(publicIpv4RelayUrl(serverUrl));
       if (targetApiBaseUrl === apiBaseUrl) {
         throw new Error("This is already your primary server.");
       }

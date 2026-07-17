@@ -4,6 +4,7 @@ import { ApiClient, ApiError } from "@streamarr-tv/api-client";
 import { useAuth } from "../lib/ApiClientProvider";
 import { createLocalNetworkFetch } from "../lib/localNetworkFetch";
 import { parseSignupInvite } from "../lib/signupInvite";
+import { publicIpv4RelayUrl } from "../lib/loginServerUrl";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 
 const invite = parseSignupInvite(window.location.search);
@@ -23,7 +24,10 @@ export function SignupPage() {
   const signupClient = useMemo(
     () =>
       invite
-        ? new ApiClient({ baseUrl: invite.serverUrl, fetchImpl: browserFetch })
+        ? new ApiClient({
+            baseUrl: publicIpv4RelayUrl(invite.serverUrl),
+            fetchImpl: browserFetch,
+          })
         : null,
     []
   );
