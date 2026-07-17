@@ -73,6 +73,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Build Playarr Web's workspace dependencies before local or CI Cloudflare deployments.
 - Correct the VIDAA guide to use the reachable Playarr Web endpoint in the TV
   Browser instead of presenting the unsupported `hisense://debug` scheme as a
   generally available launcher installer.
