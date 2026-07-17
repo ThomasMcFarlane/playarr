@@ -24,6 +24,8 @@ import {
 } from "../components/player/PlayerIcons";
 
 export interface PlayerLocationState {
+  /** Server that owns the selected media file; omitted for the primary server. */
+  serverUrl?: string;
   /** Set by `WorkDetailPage`'s Play link so the tab shows the real title instead of a generic one. */
   title?: string;
   /** Exact app detail route that launched playback. */
@@ -193,7 +195,8 @@ export function PlayerPage({
   const player = usePlaybackEngine(
     mediaFileId,
     startPositionSeconds,
-    playbackSettings
+    playbackSettings,
+    locationState?.serverUrl
   );
   const musicPlaybackStateRef = useRef({
     mediaFileId,
@@ -254,6 +257,7 @@ export function PlayerPage({
   const navigateToPlaylistItem = useCallback(
     (item: PlayerPlaylistItem) => {
       const nextLocationState = {
+        serverUrl: locationState?.serverUrl,
         title: item.subtitle ? `${item.subtitle} · ${item.title}` : item.title,
         backTo,
         detailParentBackTo,
@@ -277,6 +281,7 @@ export function PlayerPage({
       backTo,
       detailParentBackTo,
       locationState?.detailNavigationOrigin,
+      locationState?.serverUrl,
       minimised,
       navigate,
       navigationOrigin,

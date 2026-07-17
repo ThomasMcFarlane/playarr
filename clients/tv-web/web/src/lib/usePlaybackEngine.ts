@@ -23,8 +23,7 @@ import type {
   PlaybackEngineState,
   PlaybackSubtitleTrack,
 } from "@streamarr-tv/player-core";
-import { TokenStore } from "@streamarr-tv/device-auth";
-import { useApiClient } from "./ApiClientProvider";
+import { useServerAccessToken, useServerClient } from "./ApiClientProvider";
 import { WEB_PLAYBACK_CAPABILITIES } from "./playbackCapabilities";
 
 const initialNegotiations = new WeakMap<
@@ -197,7 +196,7 @@ export interface PlaybackLaunchSettings {
  * alone, so this hook doesn't need its own direct-vs-HLS branch.
  *
  * Wires `ShakaPlaybackEngine.setAuthHeaderProvider` to the current access
- * token (`TokenStore`, the same store `ApiClientProvider` uses) so every
+ * token selected by `ApiClientProvider` for this media's server so every
  * manifest/segment/license request Shaka's `NetworkingEngine` makes carries
  * `Authorization: Bearer <token>` -- see that method's doc comment in
  * `player-shaka` for why this is necessary (those requests are made by
@@ -207,9 +206,11 @@ export interface PlaybackLaunchSettings {
 export function usePlaybackEngine(
   mediaFileId: string | undefined,
   startPositionSeconds?: number,
-  initialSettings?: PlaybackLaunchSettings | null
+  initialSettings?: PlaybackLaunchSettings | null,
+  serverUrl?: string
 ): PlaybackEngineController {
-  const client = useApiClient();
+  const client = useServerClient(serverUrl);
+  const getAccessToken = useServerAccessToken(serverUrl);
   const videoRef = useRef<HTMLVideoElement>(null);
   const engineRef = useRef<ShakaPlaybackEngine | null>(null);
   const loadedForUrl = useRef<string | null>(null);
@@ -613,7 +614,7 @@ export function usePlaybackEngine(
       return;
     }
 
-    engine.setAuthHeaderProvider(() => new TokenStore().get()?.accessToken);
+    engine.setAuthHeaderProvider(getAccessToken);
     engineRef.current = engine;
     setEngineState(engine.getState());
     const unsubscribe = engine.onStateChange(setEngineState);
@@ -624,7 +625,7 @@ export function usePlaybackEngine(
       engineRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the loading/error <-> ready transition (see comment above), not on every negotiation object identity change.
-  }, [negotiation.kind === "ready"]);
+  }, [negotiation.kind === "ready", getAccessToken]);
 
   // Load whatever the negotiation resolved to, once there's both a ready
   // negotiation result and an attached engine. Guarded by `loadedForUrl` so

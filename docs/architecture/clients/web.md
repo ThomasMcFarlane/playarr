@@ -87,13 +87,16 @@ itself). What differs per app is confined to:
   `ShakaPlaybackEngine` (Web, webOS, VIDAA) or `TizenAvplayEngine`
   (Tizen) — both implementing the same `PlaybackEngine` interface from
   `player-core`.
-- **How the API base URL is resolved** — each Web login selects an absolute
-  HTTP(S) Streamarr server URL. The browser calls that server directly and
-  persists the last successful choice (`getStoredApiBaseUrl`/
-  `setStoredApiBaseUrl`, localStorage); the same value remains editable in
-  Settings, where changing it signs out the current profile. Saved profile
-  sessions are keyed by both server URL and user id so tokens cannot cross
-  instance boundaries;
+- **How API base URLs are resolved** — each Web login selects an absolute
+  HTTP(S) Streamarr server URL as its primary connection. Settings can attach
+  further authenticated servers to that local profile; the browser calls every
+  server directly, keeps each refresh session isolated, and overlays catalogue
+  and search results into one joined library. Works with the same external
+  catalogue identity are shown once. Starting duplicate media opens a server
+  chooser, then routes detail, artwork, media, progress, and playback requests
+  through the selected server and token. The primary URL remains the home for
+  profile and player preferences and is persisted with
+  `getStoredApiBaseUrl`/`setStoredApiBaseUrl` in localStorage;
   the hosted `playarr.app` build marks all HTTP server addresses as Local
   Network Access requests, allowing supporting browsers to ask permission and
   connect directly to LAN-only Streamarr without a public route;

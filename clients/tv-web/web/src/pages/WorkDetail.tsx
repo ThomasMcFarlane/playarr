@@ -11,6 +11,7 @@ import type {
   Work,
   WorkChildren,
   WorkCreditsResponse,
+  WorkDetail,
 } from "@streamarr-tv/api-client";
 import { describeApiError } from "@streamarr-tv/api-client";
 import { useWorkDetail } from "@streamarr-tv/api-client/react";
@@ -25,9 +26,15 @@ import {
   type NavigationOrigin,
 } from "../lib/navigationLayer";
 import { MediaThumbnailArtwork } from "../components/MediaThumbnailArtwork";
+import { ServerChoiceModal } from "../components/ServerChoiceModal";
 import { WatchStateOverlay } from "../components/WatchStateOverlay";
 import { useMediaContextMenu } from "../components/MediaContextMenu";
 import type { PlayerPlaylistItem } from "../components/player/PlayerSurface";
+import type { PlayerLocationState } from "./Player";
+import {
+  getJoinedWorkSources,
+  type JoinedWorkSource,
+} from "../lib/joinedServers";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 import {
   TvMediaTrack,
@@ -48,6 +55,27 @@ type MoviePlaybackOptionsState =
 
 function isEpisodicKind(kind: Work["kind"]): boolean {
   return kind === "series" || kind === "site";
+}
+
+function playlistFromWorkDetail(detail: WorkDetail): PlayerPlaylistItem[] {
+  if (detail.work.kind === "movie") {
+    return detail.media_file_id
+      ? [{ mediaFileId: detail.media_file_id, title: detail.work.title }]
+      : [];
+  }
+  if (typeof detail.children !== "object" || !("Series" in detail.children)) return [];
+  return [...detail.children.Series]
+    .sort((left, right) => left.season.season_number - right.season.season_number)
+    .flatMap((season) =>
+      playableEpisodes(season).map((episode) => ({
+        mediaFileId: episode.media_file_id!,
+        title: episode.episode.title ?? `Episode ${episode.episode.episode_number}`,
+        subtitle: detail.work.title,
+        episodeId: episode.episode.id,
+        seasonNumber: season.season.season_number,
+        episodeNumber: episode.episode.episode_number,
+      }))
+    );
 }
 
 function detailRouteBase(work: Work): string {
@@ -408,6 +436,8 @@ function MovieChapterTrack({
   detailNavigationOrigin,
   playbackSettings,
   onNavigate,
+  workSources,
+  onChooseServer,
 }: {
   chapters: MediaChapter[];
   generated: boolean;
@@ -424,6 +454,8 @@ function MovieChapterTrack({
   detailNavigationOrigin: NavigationOrigin | null;
   playbackSettings: PlaybackLaunchSettings | null;
   onNavigate: ReturnType<typeof useNavigationLayer>["captureLink"];
+  workSources: JoinedWorkSource[];
+  onChooseServer: (state: PlayerLocationState) => void;
 }) {
   const [selectedChapterIndex, setSelectedChapterIndex] = useState(
     chapters[0]?.index ?? 0
@@ -453,6 +485,7 @@ function MovieChapterTrack({
           key={`${chapter.index}-${chapter.start_ms}`}
           to={`/player/${mediaFileId}`}
           state={{
+            serverUrl: workSources[0]?.url,
             title: movieTitle,
             backTo: detailRoute,
             detailParentBackTo,
@@ -469,7 +502,23 @@ function MovieChapterTrack({
           data-navigation-focus-key={`detail:${workId}:chapter:${chapter.index}`}
           onFocus={() => setSelectedChapterIndex(chapter.index)}
           onMouseEnter={() => setSelectedChapterIndex(chapter.index)}
-          onClick={onNavigate}
+          onClick={(event) => {
+            onNavigate(event);
+            if (workSources.length > 1) {
+              event.preventDefault();
+              onChooseServer({
+                title: movieTitle,
+                backTo: detailRoute,
+                detailParentBackTo,
+                startPositionSeconds: chapter.start_ms / 1000,
+                mediaFileId,
+                playlistItems,
+                navigationOrigin,
+                detailNavigationOrigin,
+                playbackSettings,
+              });
+            }
+          }}
           aria-label={`Play ${movieTitle} from ${
             chapter.title ?? formatClock(chapter.start_ms)
           }`}
@@ -697,6 +746,8 @@ function SeasonEpisodeTrack({
   navigationOrigin,
   detailNavigationOrigin,
   onNavigate,
+  workSources,
+  onChooseServer,
 }: {
   season: SeasonDetail;
   seriesTitle: string;
@@ -712,6 +763,8 @@ function SeasonEpisodeTrack({
   navigationOrigin: NavigationOrigin;
   detailNavigationOrigin: NavigationOrigin | null;
   onNavigate: ReturnType<typeof useNavigationLayer>["captureLink"];
+  workSources: JoinedWorkSource[];
+  onChooseServer: (state: PlayerLocationState) => void;
 }) {
   const episodes = playableEpisodes(season);
   const seasonNumber = season.season.season_number;
@@ -749,6 +802,7 @@ function SeasonEpisodeTrack({
                 key={episode.episode.id}
                 to={`/player/${mediaFileId}`}
                 state={{
+                  serverUrl: workSources[0]?.url,
                   title: `${seriesTitle} · ${
                     episode.episode.title ?? `Episode ${episode.episode.episode_number}`
                   }`,
@@ -769,6 +823,21 @@ function SeasonEpisodeTrack({
                 onClick={(event) => {
                   onSelect(seasonNumber, episode.episode.id);
                   onNavigate(event);
+                  if (workSources.length > 1) {
+                    event.preventDefault();
+                    onChooseServer({
+                      title: `${seriesTitle} · ${
+                        episode.episode.title ?? `Episode ${episode.episode.episode_number}`
+                      }`,
+                      backTo: detailRoute,
+                      detailParentBackTo,
+                      episodeId: episode.episode.id,
+                      mediaFileId,
+                      playlistItems,
+                      navigationOrigin,
+                      detailNavigationOrigin,
+                    });
+                  }
                 }}
                 aria-current={isSelected ? "true" : undefined}
                 data-tv-focus-default={isSelected ? true : undefined}
@@ -913,6 +982,48 @@ export function WorkDetailPage() {
       : `${workId ?? "detail"}:${state.status}`,
     state.status === "ready",
     state.status === "ready"
+  );
+  const workSources = detailWork ? getJoinedWorkSources(detailWork.id) : [];
+  const [pendingServerPlayback, setPendingServerPlayback] =
+    useState<PlayerLocationState | null>(null);
+  const choosePlaybackServer = useCallback(
+    async (source: JoinedWorkSource) => {
+      if (!pendingServerPlayback) return;
+      const sourceDetail = await source.client.getWork(source.work.id);
+      const sourcePlaylist = playlistFromWorkDetail(sourceDetail);
+      const requested = pendingServerPlayback.playlistItems?.find(
+        (item) => item.mediaFileId === pendingServerPlayback.mediaFileId
+      );
+      const selected =
+        sourceDetail.work.kind === "movie"
+          ? sourcePlaylist[0]
+          : sourcePlaylist.find(
+              (item) =>
+                item.seasonNumber === requested?.seasonNumber &&
+                item.episodeNumber === requested?.episodeNumber
+            );
+      if (!selected) {
+        throw new Error("The selected server does not have this playable item.");
+      }
+      setPendingServerPlayback(null);
+      navigate(`/player/${selected.mediaFileId}`, {
+        state: {
+          ...pendingServerPlayback,
+          serverUrl: source.url,
+          title: selected.subtitle
+            ? `${selected.subtitle} · ${selected.title}`
+            : selected.title,
+          episodeId: selected.episodeId,
+          mediaFileId: selected.mediaFileId,
+          playlistItems: sourcePlaylist,
+          playbackSettings:
+            source.url === workSources[0]?.url
+              ? pendingServerPlayback.playbackSettings
+              : null,
+        } satisfies PlayerLocationState,
+      });
+    },
+    [navigate, pendingServerPlayback, workSources]
   );
 
   const runtimeTarget = useMemo(() => {
@@ -1538,6 +1649,7 @@ export function WorkDetailPage() {
             <Link
               to={`/player/${playMediaFileId}`}
               state={{
+                serverUrl: workSources[0]?.url,
                 title: work.title,
                 backTo: detailRoute,
                 detailParentBackTo: backTo,
@@ -1550,7 +1662,22 @@ export function WorkDetailPage() {
               className="tv-detail-play"
               data-tv-focus-default
               data-navigation-focus-key={`detail:${work.id}:play`}
-              onClick={navigationLayer.captureLink}
+              onClick={(event) => {
+                navigationLayer.captureLink(event);
+                if (workSources.length > 1) {
+                  event.preventDefault();
+                  setPendingServerPlayback({
+                    title: work.title,
+                    backTo: detailRoute,
+                    detailParentBackTo: backTo,
+                    mediaFileId: playMediaFileId,
+                    playlistItems,
+                    navigationOrigin: navigationLayer.origin,
+                    detailNavigationOrigin: parentNavigationOrigin,
+                    playbackSettings: moviePlaybackSettings,
+                  });
+                }
+              }}
               data-watch-state={activeProgress?.state}
               aria-label={
                 activeProgress?.state === "part_watched"
@@ -1608,6 +1735,8 @@ export function WorkDetailPage() {
               navigationOrigin={navigationLayer.origin}
               detailNavigationOrigin={parentNavigationOrigin}
               onNavigate={navigationLayer.captureLink}
+              workSources={workSources}
+              onChooseServer={setPendingServerPlayback}
               onSelect={(seasonNumber, episodeId) => {
                 setSelectedSeasonNumber(seasonNumber);
                 setSelectedEpisodeId(episodeId);
@@ -1658,6 +1787,8 @@ export function WorkDetailPage() {
               detailNavigationOrigin={parentNavigationOrigin}
               playbackSettings={moviePlaybackSettings}
               onNavigate={navigationLayer.captureLink}
+              workSources={workSources}
+              onChooseServer={setPendingServerPlayback}
             />
           ) : null}
           {workCredits?.cast.length ? (
@@ -1690,6 +1821,15 @@ export function WorkDetailPage() {
       ) : null}
 
       {detailMediaContext.contextMenu}
+
+      {pendingServerPlayback && workSources.length > 1 ? (
+        <ServerChoiceModal
+          sources={workSources}
+          title={work.title}
+          onCancel={() => setPendingServerPlayback(null)}
+          onSelect={choosePlaybackServer}
+        />
+      ) : null}
 
       {work.kind === "movie" && moviePlaybackSettingsOpen ? (
         <MoviePlaybackSettingsDrawer

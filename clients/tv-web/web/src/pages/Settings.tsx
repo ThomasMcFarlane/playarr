@@ -1,20 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ApiError, type VersionEnvelope } from "@streamarr-tv/api-client";
-import { DEFAULT_API_BASE_URL, normaliseApiBaseUrl } from "@streamarr-tv/domain";
-import { useApiBaseUrl, useApiClient, useAuth } from "../lib/ApiClientProvider";
+import { DEFAULT_API_BASE_URL } from "@streamarr-tv/domain";
+import { useApiBaseUrl, usePrimaryApiClient, useAuth } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useTheme, type ThemePreference } from "../lib/theme";
-
-/** Restores the actual default (this page's own origin -- see `ApiClientProvider.tsx`) when the field is cleared. */
-function defaultApiBaseUrl(): string {
-  return typeof window !== "undefined" ? window.location.origin : DEFAULT_API_BASE_URL;
-}
 
 type ConnectionTestState =
   | { status: "idle" }
   | { status: "testing" }
   | { status: "success"; version: VersionEnvelope }
+  | { status: "error"; message: string };
+
+type AddServerState =
+  | { status: "idle" | "adding" | "success" }
   | { status: "error"; message: string };
 
 const AUDIO_LANGUAGE_OPTIONS = [
@@ -60,12 +59,21 @@ function isAudioLanguage(value: string): value is AudioLanguage {
  */
 export function SettingsPage() {
   useDocumentTitle("Settings");
-  const [apiBaseUrl, setApiBaseUrl] = useApiBaseUrl();
-  const client = useApiClient();
-  const { currentUserName, logout } = useAuth();
+  const [apiBaseUrl] = useApiBaseUrl();
+  const client = usePrimaryApiClient();
+  const {
+    connectedServers,
+    connectServer,
+    currentUserName,
+    disconnectServer,
+    logout,
+  } = useAuth();
   const navigate = useNavigate();
   const { preference, setPreference } = useTheme();
-  const [draft, setDraft] = useState(apiBaseUrl);
+  const [serverUrl, setServerUrl] = useState("");
+  const [serverUsername, setServerUsername] = useState(currentUserName ?? "");
+  const [serverPassword, setServerPassword] = useState("");
+  const [addServerState, setAddServerState] = useState<AddServerState>({ status: "idle" });
   const [testState, setTestState] = useState<ConnectionTestState>({ status: "idle" });
   const [audioLanguage, setAudioLanguage] = useState<AudioLanguage>("en");
   const [playerPreferenceState, setPlayerPreferenceState] = useState<PlayerPreferenceState>({
@@ -132,19 +140,21 @@ export function SettingsPage() {
     navigate("/login", { replace: true });
   }
 
-  function handleSave(event: React.FormEvent) {
+  async function handleAddServer(event: React.FormEvent) {
     event.preventDefault();
+    if (addServerState.status === "adding") return;
+    setAddServerState({ status: "adding" });
     try {
-      const normalised = normaliseApiBaseUrl(draft.trim() || defaultApiBaseUrl());
-      if (normalised !== apiBaseUrl) {
-        setApiBaseUrl(normalised);
-        navigate("/login", { replace: true });
-        return;
-      }
-      setDraft(normalised);
-      setTestState({ status: "idle" });
+      await connectServer({
+        serverUrl: serverUrl.trim(),
+        username: serverUsername.trim(),
+        password: serverPassword,
+      });
+      setServerUrl("");
+      setServerPassword("");
+      setAddServerState({ status: "success" });
     } catch (error) {
-      setTestState({
+      setAddServerState({
         status: "error",
         message: error instanceof Error ? error.message : String(error),
       });
@@ -324,28 +334,81 @@ export function SettingsPage() {
             <div>
               <h2 className="section-title">Server connection</h2>
               <p className="muted">
-                Playarr connects directly from this browser to the server selected at sign-in.
+                Combine libraries from multiple servers in one Playarr interface.
               </p>
             </div>
           </div>
 
-          <form onSubmit={handleSave} className="connection-form">
-            <label className="form-label" htmlFor="api-base-url">
-              API base URL
+          <div className="connected-server-list" aria-label="Connected servers">
+            {connectedServers.map((server) => (
+              <div className="connected-server" key={server.url}>
+                <div>
+                  <strong>{server.label}</strong>
+                  <span>{server.username}</span>
+                  <small>{server.url}</small>
+                </div>
+                {server.primary ? (
+                  <span className="connected-server-badge">Primary</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => disconnectServer(server.url)}
+                  >
+                    Disconnect
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <form onSubmit={(event) => void handleAddServer(event)} className="connection-form">
+            <label className="form-label" htmlFor="additional-server-url">
+              Add another server
             </label>
-            <div className="connection-form-row">
+            <div className="connection-server-fields">
               <input
-                id="api-base-url"
-                type="text"
-                className={`input${testState.status === "error" ? " is-error" : ""}`}
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                placeholder={defaultApiBaseUrl()}
+                id="additional-server-url"
+                type="url"
+                className={`input${addServerState.status === "error" ? " is-error" : ""}`}
+                value={serverUrl}
+                onChange={(event) => setServerUrl(event.target.value)}
+                placeholder="https://streamarr.example.com"
+                required
               />
-              <button type="submit" className="btn btn-primary">
-                Change server
+              <input
+                type="text"
+                className="input"
+                value={serverUsername}
+                onChange={(event) => setServerUsername(event.target.value)}
+                autoComplete="username"
+                placeholder="Username"
+                aria-label="Username for additional server"
+              />
+              <input
+                type="password"
+                className="input"
+                value={serverPassword}
+                onChange={(event) => setServerPassword(event.target.value)}
+                autoComplete="current-password"
+                placeholder="Password"
+                aria-label="Password for additional server"
+              />
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={addServerState.status === "adding"}
+              >
+                {addServerState.status === "adding" ? "Connecting…" : "Connect"}
               </button>
             </div>
+            <p className={addServerState.status === "error" ? "error-text" : "hint"} aria-live="polite">
+              {addServerState.status === "error"
+                ? addServerState.message
+                : addServerState.status === "success"
+                  ? "Server connected. Its library is now joined with this profile."
+                  : "Credentials and requests go directly from this browser to that server."}
+            </p>
           </form>
 
           <div className="connection-actions">
@@ -369,8 +432,7 @@ export function SettingsPage() {
           </div>
 
           <p className="hint">
-            Changing server signs out the current profile so credentials and sessions stay scoped
-            to the correct Streamarr instance.
+            {apiBaseUrl} remains the primary server for profile and player preferences.
           </p>
 
           <details className="settings-details">

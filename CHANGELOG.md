@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Let each Playarr Web profile connect directly to multiple Streamarr servers, browse their
+  libraries as one joined catalogue, and choose a server when duplicate media is played.
 - Add expiring, one-use QR invitations from Streamarr Admin that open `playarr.app`, lock the
   inviting server address, and let a new Playarr user create and sign into their account.
 - Deploy Playarr Web to `playarr.app` through Cloudflare Workers after successful main-branch CI,

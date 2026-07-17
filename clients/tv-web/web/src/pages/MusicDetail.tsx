@@ -23,6 +23,7 @@ import {
 import { useWorkDetail } from "@streamarr-tv/api-client/react";
 import { useMediaContextMenu } from "../components/MediaContextMenu";
 import { MediaThumbnailArtwork } from "../components/MediaThumbnailArtwork";
+import { ServerChoiceModal } from "../components/ServerChoiceModal";
 import type { PlayerPlaylistItem } from "../components/player/PlayerSurface";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 import {
@@ -39,6 +40,10 @@ import {
 } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useScrollEdges } from "../lib/useScrollEdges";
+import {
+  getJoinedWorkSources,
+  type JoinedWorkSource,
+} from "../lib/joinedServers";
 import type { AppShellOutletContext } from "../App";
 
 function artistChildren(children: WorkChildren): AlbumDetail[] {
@@ -393,6 +398,11 @@ export function MusicDetailPage() {
     selectedAlbumTracks[0] ??
     null;
   const artistWork = state.status === "ready" ? state.data.work : null;
+  const workSources = artistWork ? getJoinedWorkSources(artistWork.id) : [];
+  const [pendingServerTrack, setPendingServerTrack] = useState<{
+    album: AlbumDetail;
+    track: TrackDetail;
+  } | null>(null);
   const buildPlaylistItems = useCallback(
     (album: AlbumDetail): PlayerPlaylistItem[] =>
       playableTracks(album).flatMap((track) =>
@@ -434,9 +444,14 @@ export function MusicDetailPage() {
       if (!track.media_file_id || !artistWork) return;
       setSelectedAlbumId(album.album.id);
       setSelectedTrackId(track.track.id);
+      if (workSources.length > 1) {
+        setPendingServerTrack({ album, track });
+        return;
+      }
       startPlayerSession({
         mediaFileId: track.media_file_id,
         locationState: {
+          serverUrl: workSources[0]?.url,
           title: track.track.title,
           backTo: `/music/${artistWork.id}`,
           detailParentBackTo: backTo,
@@ -453,6 +468,63 @@ export function MusicDetailPage() {
       buildPlaylistItems,
       navigationLayer.origin,
       parentNavigationOrigin,
+      startPlayerSession,
+      workSources,
+    ]
+  );
+
+  const chooseMusicServer = useCallback(
+    async (source: JoinedWorkSource) => {
+      if (!pendingServerTrack) return;
+      const detail = await source.client.getWork(source.work.id);
+      const sourceAlbums = artistChildren(detail.children);
+      const album = sourceAlbums.find(
+        (candidate) =>
+          candidate.album.title.trim().toLocaleLowerCase() ===
+            pendingServerTrack.album.album.title.trim().toLocaleLowerCase() &&
+          (candidate.album.release_date?.slice(0, 10) ?? "") ===
+            (pendingServerTrack.album.album.release_date?.slice(0, 10) ?? "")
+      );
+      const track = album?.tracks.find(
+        (candidate) =>
+          candidate.track.track_number === pendingServerTrack.track.track.track_number ||
+          candidate.track.title.trim().toLocaleLowerCase() ===
+            pendingServerTrack.track.track.title.trim().toLocaleLowerCase()
+      );
+      if (!album || !track?.media_file_id) {
+        throw new Error("The selected server does not have this playable track.");
+      }
+      const sourcePlaylist = playableTracks(album).map((candidate) => ({
+        mediaFileId: candidate.media_file_id!,
+        title: candidate.track.title,
+        subtitle: `${detail.work.title} · ${album.album.title}`,
+        music: {
+          artistName: detail.work.title,
+          albumTitle: album.album.title,
+          artworkWork: { id: detail.work.id, images: detail.work.images },
+        },
+      }));
+      setPendingServerTrack(null);
+      startPlayerSession({
+        mediaFileId: track.media_file_id,
+        locationState: {
+          serverUrl: source.url,
+          title: track.track.title,
+          backTo: `/music/${artistWork?.id ?? source.work.id}`,
+          detailParentBackTo: backTo,
+          mediaFileId: track.media_file_id,
+          playlistItems: sourcePlaylist,
+          navigationOrigin: navigationLayer.origin,
+          detailNavigationOrigin: parentNavigationOrigin,
+        },
+      });
+    },
+    [
+      artistWork?.id,
+      backTo,
+      navigationLayer.origin,
+      parentNavigationOrigin,
+      pendingServerTrack,
       startPlayerSession,
     ]
   );
@@ -687,6 +759,15 @@ export function MusicDetailPage() {
           />
         </div>
       )}
+
+      {pendingServerTrack && workSources.length > 1 ? (
+        <ServerChoiceModal
+          sources={workSources}
+          title={pendingServerTrack.track.track.title}
+          onCancel={() => setPendingServerTrack(null)}
+          onSelect={chooseMusicServer}
+        />
+      ) : null}
 
       <div className="tv-stage-footer" aria-hidden="true">
         <span>Music</span>
