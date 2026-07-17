@@ -8861,7 +8861,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
 
   .auth-page {
     display: block;
-    min-height: var(--viewport-height);
+    height: var(--viewport-height);
     overflow-x: hidden;
     overflow-y: auto;
   }
@@ -8869,6 +8869,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   .auth-card {
     width: 100%;
     min-height: var(--viewport-height);
+    max-height: none;
     display: flex;
     flex-direction: column;
     justify-content: center;
