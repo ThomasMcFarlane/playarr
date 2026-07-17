@@ -1794,7 +1794,7 @@ code {
 .auth-page {
   position: relative;
   width: 100%;
-  min-height: var(--viewport-height);
+  height: var(--viewport-height);
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(340px, 0.72fr);
   align-items: stretch;
@@ -1811,8 +1811,10 @@ code {
 .auth-card {
   align-self: center;
   width: min(100% - 3rem, 560px);
+  max-height: 100%;
   margin: 0 auto;
   padding: clamp(24px, 4vw, 70px);
+  overflow-y: auto;
 }
 
 .auth-header {

@@ -592,6 +592,21 @@ export function SearchPage() {
 
   function handleResultKeyDown(event: KeyboardEvent<HTMLAnchorElement>) {
     if (event.key !== "ArrowLeft") return;
+    const current = event.currentTarget;
+    const currentRect = current.getBoundingClientRect();
+    const hasResultToLeft = Array.from(resultRefs.current.values()).some((node) => {
+      if (node === current) return false;
+      const rect = node.getBoundingClientRect();
+      const verticalOverlap = Math.max(
+        0,
+        Math.min(currentRect.bottom, rect.bottom) - Math.max(currentRect.top, rect.top)
+      );
+      return (
+        rect.left < currentRect.left - 2 &&
+        verticalOverlap >= Math.min(currentRect.height, rect.height) * 0.45
+      );
+    });
+    if (hasResultToLeft) return;
     event.preventDefault();
     event.stopPropagation();
     inputRef.current?.focus({ preventScroll: true });
