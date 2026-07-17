@@ -17,6 +17,7 @@ import {
 } from "@streamarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { captureNavigationLayer } from "../lib/navigationLayer";
+import { useToast } from "../lib/toast";
 import { TvEmptyState } from "./tv/TvEmptyState";
 
 const LONG_PRESS_MS = 650;
@@ -196,6 +197,7 @@ export function useMediaContextMenu({
   const client = useApiClient();
   const location = useLocation();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [activeItem, setActiveItem] = useState<MediaContextItem | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -426,12 +428,13 @@ export function useMediaContextMenu({
         }
         onProgressChanged?.(workId ?? "", updated);
         close();
+        showToast(watched ? "Marked as watched." : "Marked as unwatched.");
       } catch (caught) {
         setBusyAction(null);
         setError(caught instanceof Error ? caught.message : String(caught));
       }
     },
-    [activeItem, busyAction, client, close, getDetail, onProgressChanged]
+    [activeItem, busyAction, client, close, getDetail, onProgressChanged, showToast]
   );
 
   const returnToActions = useCallback(() => {
@@ -515,6 +518,7 @@ export function useMediaContextMenu({
         }
         await client.addPlaylistItem(playlist.id, { work_id: work.id });
         close();
+        showToast(`${work.title} added to ${playlist.name}.`);
       } catch (caught) {
         playlistActionInFlightRef.current = false;
         setBusyAction(null);
@@ -523,7 +527,7 @@ export function useMediaContextMenu({
         );
       }
     },
-    [activeItem, busyAction, client, close, suppressOriginRelease]
+    [activeItem, busyAction, client, close, showToast, suppressOriginRelease]
   );
 
   const choosePlaylist = useCallback(
@@ -587,6 +591,7 @@ export function useMediaContextMenu({
           destinationItemId: destinationItem.id,
         });
         close();
+        showToast(`${work.title} moved to ${playlist.name}.`);
       } catch (caught) {
         playlistActionInFlightRef.current = false;
         setBusyAction(null);
@@ -595,7 +600,7 @@ export function useMediaContextMenu({
         );
       }
     },
-    [activeItem, busyAction, client, close, suppressOriginRelease]
+    [activeItem, busyAction, client, close, showToast, suppressOriginRelease]
   );
 
   const removeFromPlaylist = useCallback(
@@ -613,6 +618,7 @@ export function useMediaContextMenu({
       setBusyAction("playlist:remove");
       setError(null);
       try {
+        const title = activeItem.work?.title ?? activeItem.title ?? "Item";
         await client.removePlaylistItem(
           membership.playlistId,
           membership.itemId
@@ -623,6 +629,7 @@ export function useMediaContextMenu({
           itemId: membership.itemId,
         });
         close();
+        showToast(`${title} removed from playlist.`);
       } catch (caught) {
         playlistActionInFlightRef.current = false;
         setBusyAction(null);
@@ -631,7 +638,7 @@ export function useMediaContextMenu({
         );
       }
     },
-    [activeItem, busyAction, client, close, suppressOriginRelease]
+    [activeItem, busyAction, client, close, showToast, suppressOriginRelease]
   );
 
   const itemProps = useCallback(

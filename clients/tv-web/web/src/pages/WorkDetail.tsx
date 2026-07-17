@@ -19,6 +19,7 @@ import { useApiClient } from "../lib/ApiClientProvider";
 import { CachedArtworkImage, useCachedArtwork } from "../lib/artwork";
 import type { PlaybackLaunchSettings } from "../lib/usePlaybackEngine";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { useToast } from "../lib/toast";
 import {
   isNavigationLayerRestoring,
   navigationOriginFromState,
@@ -897,6 +898,7 @@ function SeasonEpisodeTrack({
 
 /** Immersive movie/series/site detail surface modelled on the supplied TV motion reference. */
 export function WorkDetailPage() {
+  const { showToast } = useToast();
   const { workId } = useParams<{ workId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
@@ -1246,6 +1248,7 @@ export function WorkDetailPage() {
         setMoviePlaybackOptions({ status: "ready", options });
         setMoviePlaybackDraft(playbackDraft(options.preferences));
         closeMoviePlaybackSettings();
+        showToast("Playback settings saved.");
       })
       .catch((error: unknown) => {
         setMoviePlaybackOptions({
@@ -1263,6 +1266,7 @@ export function WorkDetailPage() {
     moviePlaybackDraft,
     moviePlaybackOptions,
     moviePlaybackSettingsSaving,
+    showToast,
   ]);
 
   useEffect(() => {

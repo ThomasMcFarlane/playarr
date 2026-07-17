@@ -31,6 +31,7 @@ import {
 } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useScrollEdges } from "../lib/useScrollEdges";
+import { useToast } from "../lib/toast";
 import {
   useMediaContextMenu,
   type PlaylistMembershipChange,
@@ -166,6 +167,7 @@ function descendantPlaylistTracks(
 
 /** Playlist directory plus an in-route playlist detail surface. */
 export function PlaylistsPage() {
+  const { showToast } = useToast();
   const client = useApiClient();
   const location = useLocation();
   const navigate = useNavigate();
@@ -749,6 +751,7 @@ export function PlaylistsPage() {
         });
       }
       closeDrawer("create");
+      showToast(`Playlist ${created.name} created.`);
     } catch (error: unknown) {
       setCreateState({
         status: "error",

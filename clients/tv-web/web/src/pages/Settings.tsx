@@ -5,6 +5,7 @@ import { DEFAULT_API_BASE_URL } from "@streamarr-tv/domain";
 import { useApiBaseUrl, usePrimaryApiClient, useAuth } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useTheme, type ThemePreference } from "../lib/theme";
+import { useToast } from "../lib/toast";
 
 type ConnectionTestState =
   | { status: "idle" }
@@ -70,6 +71,7 @@ export function SettingsPage() {
   } = useAuth();
   const navigate = useNavigate();
   const { preference, setPreference } = useTheme();
+  const { showToast } = useToast();
   const [serverUrl, setServerUrl] = useState("");
   const [serverUsername, setServerUsername] = useState(currentUserName ?? "");
   const [serverPassword, setServerPassword] = useState("");
@@ -153,6 +155,7 @@ export function SettingsPage() {
       setServerUrl("");
       setServerPassword("");
       setAddServerState({ status: "success" });
+      showToast("Server connected.");
     } catch (error) {
       setAddServerState({
         status: "error",
@@ -194,6 +197,7 @@ export function SettingsPage() {
       const savedLanguage = preferences.preferred_audio_language;
       setAudioLanguage(isAudioLanguage(savedLanguage) ? savedLanguage : nextLanguage);
       setPlayerPreferenceState({ status: "saved" });
+      showToast("Player preference saved.");
     } catch (error) {
       if (playerPreferenceRequestRef.current !== requestId) return;
       setAudioLanguage(previousLanguage);
@@ -211,6 +215,7 @@ export function SettingsPage() {
     }
 
     const requestId = ++profilePinRequestRef.current;
+    const replacingPin = profilePinLocked;
     setProfilePinState({ status: "saving" });
     try {
       const setting = await client.updateProfilePinSetting({ pin: profilePin });
@@ -218,6 +223,7 @@ export function SettingsPage() {
       setProfilePinLocked(setting.pin_locked);
       setProfilePin("");
       setProfilePinState({ status: "saved" });
+      showToast(replacingPin ? "Profile PIN replaced." : "Profile PIN set.");
     } catch (error) {
       if (profilePinRequestRef.current !== requestId) return;
       const message = error instanceof ApiError ? error.message : String(error);
@@ -235,6 +241,7 @@ export function SettingsPage() {
       setProfilePinLocked(setting.pin_locked);
       setProfilePin("");
       setProfilePinState({ status: "saved" });
+      showToast("Profile PIN removed.");
     } catch (error) {
       if (profilePinRequestRef.current !== requestId) return;
       const message = error instanceof ApiError ? error.message : String(error);
@@ -268,7 +275,11 @@ export function SettingsPage() {
                 key={option}
                 type="button"
                 className={`theme-choice-button${preference === option ? " is-active" : ""}`}
-                onClick={() => setPreference(option)}
+                onClick={() => {
+                  if (option === preference) return;
+                  setPreference(option);
+                  showToast("Theme preference saved.");
+                }}
                 aria-pressed={preference === option}
               >
                 {option}
@@ -353,7 +364,10 @@ export function SettingsPage() {
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
-                    onClick={() => disconnectServer(server.url)}
+                    onClick={() => {
+                      disconnectServer(server.url);
+                      showToast("Server disconnected.");
+                    }}
                   >
                     Disconnect
                   </button>

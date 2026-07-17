@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Show accessible confirmation toasts when Playarr settings, watch state, and playlists change.
 - Let each Playarr Web profile connect directly to multiple Streamarr servers, browse their
   libraries as one joined catalogue, and choose a server when duplicate media is played.
 - Add expiring, one-use QR invitations from Streamarr Admin that open `playarr.app`, lock the
