@@ -88,7 +88,7 @@ anyhow = "1"
 # --- http client / server ---
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 axum = "0.8"
-axum-server = { version = "0.7", features = ["tls-rustls"] }
+axum-server = { version = "0.7", features = ["tls-rustls-no-provider"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["trace", "cors", "fs"] }
 utoipa = { version = "5", features = ["axum_extras", "uuid", "chrono"] }

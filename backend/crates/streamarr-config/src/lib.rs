@@ -122,6 +122,9 @@ pub struct Config {
     /// Optional native TLS certificate and private key. Both paths must be
     /// configured together; when absent, the listener serves plain HTTP.
     pub tls: Option<TlsConfig>,
+    /// Optional authoritative DNS listener for deterministic
+    /// `v4-A-B-C-D.relay.playarr.app` names. Disabled when unset.
+    pub relay_dns_bind_addr: Option<SocketAddr>,
     /// `STREAMARR_OTLP_ENDPOINT` — optional OTLP collector endpoint; when
     /// unset, `streamarr-telemetry::otel` is a no-op layer.
     pub otlp_endpoint: Option<String>,
@@ -192,6 +195,19 @@ impl Config {
                 });
             }
         };
+        let relay_dns_bind_addr = match optional(lookup, "STREAMARR_RELAY_DNS_BIND_ADDR") {
+            Some(raw) => {
+                Some(
+                    raw.parse()
+                        .map_err(|err: AddrParseError| ConfigError::InvalidValue {
+                            var: "STREAMARR_RELAY_DNS_BIND_ADDR".to_string(),
+                            value: raw,
+                            reason: err.to_string(),
+                        })?,
+                )
+            }
+            None => None,
+        };
         let otlp_endpoint = optional(lookup, "STREAMARR_OTLP_ENDPOINT");
 
         let deployment_tier = DeploymentTier::resolve(&database_url, redis_url.as_deref());
@@ -204,6 +220,7 @@ impl Config {
             metrics_bind_addr,
             http_bind_addr,
             tls,
+            relay_dns_bind_addr,
             otlp_endpoint,
             deployment_tier,
         })
@@ -262,6 +279,7 @@ mod tests {
         assert_eq!(config.log_filter, "info");
         assert_eq!(config.http_bind_addr, "0.0.0.0:8484".parse().unwrap());
         assert_eq!(config.tls, None);
+        assert_eq!(config.relay_dns_bind_addr, None);
     }
 
     #[test]
@@ -294,6 +312,19 @@ mod tests {
                 cert_path: "/etc/streamarr/tls/fullchain.pem".into(),
                 key_path: "/etc/streamarr/tls/privkey.pem".into(),
             })
+        );
+    }
+
+    #[test]
+    fn relay_dns_listener_is_opt_in() {
+        let lookup = lookup_from(HashMap::from([
+            ("DATABASE_URL", "sqlite://streamarr.db"),
+            ("STREAMARR_RELAY_DNS_BIND_ADDR", "0.0.0.0:53"),
+        ]));
+        let config = Config::from_env_source(&lookup).unwrap();
+        assert_eq!(
+            config.relay_dns_bind_addr,
+            Some("0.0.0.0:53".parse().unwrap())
         );
     }
 

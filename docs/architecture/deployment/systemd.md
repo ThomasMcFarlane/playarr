@@ -80,6 +80,8 @@ STREAMARR_METRICS_BIND_ADDR=0.0.0.0:9090
 # Set both to serve native HTTPS on STREAMARR_HTTP_BIND_ADDR:
 # STREAMARR_TLS_CERT_PATH=/etc/streamarr/tls/fullchain.pem
 # STREAMARR_TLS_KEY_PATH=/etc/streamarr/tls/privkey.pem
+# Optional authoritative DNS in this same Streamarr process:
+# STREAMARR_RELAY_DNS_BIND_ADDR=0.0.0.0:53
 STREAMARR_WEB_ASSETS_DIR=/var/lib/streamarr/web
 ```
 
@@ -115,6 +117,11 @@ Streamarr serves native HTTPS when both `STREAMARR_TLS_CERT_PATH` and
 `STREAMARR_TLS_KEY_PATH` are configured. It reads the PEM certificate chain
 and private key at startup and terminates TLS inside the Streamarr process;
 no reverse proxy is required. Leave both unset for a private HTTP deployment.
+
+Setting `STREAMARR_RELAY_DNS_BIND_ADDR` also serves the authoritative
+`relay.playarr.app` DNS zone from this same Streamarr process over UDP and
+TCP. The systemd unit grants only the low-port bind capability needed for
+port 53; the DNS mode remains disabled unless the variable is set.
 
 ## Operating
 

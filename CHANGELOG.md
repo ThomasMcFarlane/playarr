@@ -9,7 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Add an authoritative DNS-only deployment for deterministic public IPv4 Streamarr hostnames.
+- Serve authoritative DNS-only public IPv4 hostnames inside the Streamarr process when enabled.
 - Add native TLS certificate support to the Streamarr server without requiring a reverse proxy.
 - Notify Playarr users in Chrome, Android mobile, and Android TV when an admin approves their friend-invite request.
 - Let Playarr users request a friend-invite QR, let Streamarr admins approve or deny it, and start the one-use invite's 24-hour lifetime only when the approved user generates it.
@@ -88,6 +88,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Reuse Streamarr's existing Rustls crypto provider for native TLS builds instead of requiring an
+  additional CMake-based provider.
 - Let ArrowUp and ArrowDown move remote/keyboard focus out of a text field on Playarr Web instead
   of getting stuck there, since those keys have no native effect in a single-line input.
 - Leave the hosted server field blank instead of pre-filling the previously selected address.

@@ -19,19 +19,20 @@ describe("initialLoginServerUrl", () => {
 
 describe("publicIpv4RelayUrl", () => {
   it("converts public IPv4 HTTP servers to direct HTTPS relay DNS names", () => {
-    expect(publicIpv4RelayUrl("http://203.0.113.10:8080")).toBe(
-      "https://v4-203-0-113-10.relay.playarr.app:8484"
+    expect(publicIpv4RelayUrl("http://11.22.33.44:8080")).toBe(
+      "https://v4-11-22-33-44.relay.playarr.app:8484"
     );
   });
 
   it("preserves paths, queries, and fragments", () => {
-    expect(publicIpv4RelayUrl("http://203.0.113.10:8080/api?q=one#result")).toBe(
-      "https://v4-203-0-113-10.relay.playarr.app:8484/api?q=one#result"
+    expect(publicIpv4RelayUrl("http://11.22.33.44:8080/api?q=one#result")).toBe(
+      "https://v4-11-22-33-44.relay.playarr.app:8484/api?q=one#result"
     );
   });
 
   it.each([
     "http://192.168.1.20:8484",
+    "http://203.0.113.10:8484",
     "http://localhost:8484",
     "http://media.example.com:8484",
     "https://203.0.113.10:8484",

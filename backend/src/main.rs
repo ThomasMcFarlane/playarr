@@ -29,6 +29,8 @@ use clap::{Parser, Subcommand, ValueEnum};
 use streamarr_config::{Config, DeploymentTier};
 use streamarr_db::DbPool;
 
+mod relay_dns;
+
 const CLIENT_COMPATIBILITY_TOML: &str = include_str!("../config/client-compatibility.toml");
 
 #[derive(Parser)]
@@ -195,24 +197,33 @@ async fn serve() -> anyhow::Result<()> {
         Vec::new()
     };
 
-    if config.role.runs_api() {
-        boot_api(
-            &config,
-            pool,
-            source_instances,
-            active_sessions,
-            tdarr_notify_tx,
-            analytics_store,
-            session_registry,
-            analytics,
-            analytics_event_rx,
-        )
-        .await?;
+    let application_listener = async {
+        if config.role.runs_api() {
+            boot_api(
+                &config,
+                pool,
+                source_instances,
+                active_sessions,
+                tdarr_notify_tx,
+                analytics_store,
+                session_registry,
+                analytics,
+                analytics_event_rx,
+            )
+            .await
+        } else {
+            tracing::info!(
+                "role does not run the public API router; serving only a minimal /healthz listener"
+            );
+            run_minimal_health_listener(&config).await
+        }
+    };
+
+    if let Some(bind_addr) = config.relay_dns_bind_addr {
+        tracing::info!(addr = %bind_addr, "authoritative relay DNS enabled inside streamarr");
+        tokio::try_join!(application_listener, relay_dns::serve(bind_addr))?;
     } else {
-        tracing::info!(
-            "role does not run the public API router; serving only a minimal /healthz listener"
-        );
-        run_minimal_health_listener(&config).await?;
+        application_listener.await?;
     }
 
     Ok(())
