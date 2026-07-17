@@ -9,8 +9,6 @@
  */
 
 const CACHE_PREFIX = "streamarr-web-";
-const APP_BASE_URL = new URL(self.registration.scope).pathname;
-const appUrl = (path = "") => `${APP_BASE_URL}${path}`;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(precacheNewBundle().then(() => self.skipWaiting()));
@@ -18,7 +16,7 @@ self.addEventListener("install", (event) => {
 
 async function fetchManifest() {
   try {
-    const response = await fetch(appUrl("build-manifest.json"), { cache: "no-store" });
+    const response = await fetch("/build-manifest.json", { cache: "no-store" });
     if (!response.ok) return null;
     const manifest = await response.json();
     return typeof manifest?.bundleVersion === "string" ? manifest : null;
@@ -36,7 +34,7 @@ async function precacheNewBundle() {
   // pulled in lazily by the fetch handler below (cache-as-you-go) rather
   // than needing a full precache asset list generated at build time.
   try {
-    await cache.addAll([APP_BASE_URL, appUrl("index.html")]);
+    await cache.addAll(["/", "/index.html"]);
   } catch {
     // A precache miss (e.g. offline during install) isn't fatal -- the
     // fetch handler below still falls through to the network per-request.
@@ -88,7 +86,7 @@ self.addEventListener("fetch", (event) => {
 
   // Never intercept the manifest/version-check itself -- the app must
   // always see a live, uncached answer to "is there a newer build".
-  if (url.pathname === appUrl("build-manifest.json")) return;
+  if (url.pathname === "/build-manifest.json") return;
 
   // Production deploys can update the bundle without changing the package
   // version. Fetching navigations from the network first means a reload sees
@@ -110,7 +108,7 @@ self.addEventListener("fetch", (event) => {
         .catch(() =>
           caches
             .match(event.request)
-            .then((cached) => cached || caches.match(appUrl("index.html")))
+            .then((cached) => cached || caches.match("/index.html"))
         )
     );
     return;

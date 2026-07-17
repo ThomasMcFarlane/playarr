@@ -4,11 +4,6 @@ type LocalNetworkRequestInit = RequestInit & {
   targetAddressSpace: TargetAddressSpace;
 };
 
-interface PageLocation {
-  protocol: string;
-  assign(url: string): void;
-}
-
 function stripIpv6Brackets(hostname: string): string {
   return hostname.startsWith("[") && hostname.endsWith("]")
     ? hostname.slice(1, -1)
@@ -52,10 +47,10 @@ export function isPublicIpLiteral(hostname: string): boolean {
   );
 }
 
-export function isPublicHttpIpUrl(value: string): boolean {
+export function isPublicHttpUrl(value: string): boolean {
   try {
     const url = new URL(value);
-    return url.protocol === "http:" && isPublicIpLiteral(url.hostname);
+    return url.protocol === "http:" && targetAddressSpaceForUrl(value) === undefined;
   } catch {
     return false;
   }
@@ -70,8 +65,11 @@ export function targetAddressSpaceForUrl(value: string): TargetAddressSpace | un
   if (hostname === "localhost" || hostname === "::1" || hostname.startsWith("127.")) {
     return "loopback";
   }
-  if (isPublicIpLiteral(hostname)) return undefined;
-  return "local";
+  if (hostname.endsWith(".local")) return "local";
+  if (parseIpv4(hostname) || hostname.includes(":")) {
+    return isPublicIpLiteral(hostname) ? undefined : "local";
+  }
+  return undefined;
 }
 
 /**
@@ -81,17 +79,9 @@ export function targetAddressSpaceForUrl(value: string): TargetAddressSpace | un
  * public-network destinations. Browsers without this API ignore the option.
  */
 export function createLocalNetworkFetch(
-  nativeFetch: typeof fetch = globalThis.fetch.bind(globalThis),
-  pageLocation: PageLocation | undefined =
-    typeof window === "undefined" ? undefined : window.location
+  nativeFetch: typeof fetch = globalThis.fetch.bind(globalThis)
 ): (input: Request) => Promise<Response> {
   return (input) => {
-    if (pageLocation?.protocol === "https:" && isPublicHttpIpUrl(input.url)) {
-      pageLocation.assign(new URL("/playarr/login", input.url).toString());
-      return Promise.reject(
-        new TypeError("Opening the public HTTP server's same-origin Playarr client.")
-      );
-    }
     const targetAddressSpace = targetAddressSpaceForUrl(input.url);
     return targetAddressSpace
       ? nativeFetch(input, { targetAddressSpace } as LocalNetworkRequestInit)

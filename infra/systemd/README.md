@@ -70,11 +70,8 @@ have been fixed:
   binary writes. `ReadWritePaths` in the unit's sandboxing section is
   scoped to that plus `/var/log/streamarr` - widen it if the real binary
   needs to write elsewhere.
-- `STREAMARR_WEB_ASSETS_DIR` serves Streamarr Admin at `/`.
-  `STREAMARR_PLAYARR_ASSETS_DIR` serves a Playarr build compiled with
-  `PLAYARR_BASE_PATH=/playarr/` at `/playarr/`. This lets a public plain-HTTP
-  IP host Playarr and its API on the same origin, without a proxy, hostname,
-  or TLS certificate.
+- `STREAMARR_WEB_ASSETS_DIR` serves Streamarr Admin at `/`. Playarr remains a
+  separate client hosted at `playarr.app` and is not installed by systemd.
 
 ## Validation gap: no systemd on this machine
 

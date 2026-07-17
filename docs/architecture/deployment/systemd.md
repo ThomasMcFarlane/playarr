@@ -78,14 +78,10 @@ STREAMARR_LOG=info
 STREAMARR_HTTP_BIND_ADDR=0.0.0.0:8080
 STREAMARR_METRICS_BIND_ADDR=0.0.0.0:9090
 STREAMARR_WEB_ASSETS_DIR=/var/lib/streamarr/web
-STREAMARR_PLAYARR_ASSETS_DIR=/var/lib/streamarr/playarr
 ```
 
-The Admin build is served at `/`. Build Playarr with
-`PLAYARR_BASE_PATH=/playarr/` and place its `dist` contents in the configured
-Playarr assets directory to serve it at `/playarr/`. Public plain-HTTP IP
-addresses then use that same-origin Playarr client without needing a proxy,
-hostname, or TLS certificate.
+The Admin build is served at `/`. Playarr is hosted separately at
+`playarr.app`; the systemd deployment never installs or serves it.
 
 One thing worth knowing before copying that file verbatim:
 

@@ -406,27 +406,6 @@ fn web_assets_dir_from_env() -> Option<std::path::PathBuf> {
     }
 }
 
-/// Resolves an optional Playarr build mounted below `/playarr` for public
-/// HTTP servers that cannot be fetched directly from hosted HTTPS Playarr.
-fn playarr_assets_dir_from_env() -> Option<std::path::PathBuf> {
-    let candidate = match std::env::var("STREAMARR_PLAYARR_ASSETS_DIR") {
-        Ok(raw) => std::path::PathBuf::from(raw),
-        Err(_) => std::env::current_exe().ok()?.parent()?.join("playarr"),
-    };
-
-    if candidate.join("index.html").is_file() {
-        Some(candidate)
-    } else {
-        tracing::info!(
-            path = %candidate.display(),
-            "no server-hosted Playarr UI found; public HTTP servers cannot hand off to /playarr. \
-             Set STREAMARR_PLAYARR_ASSETS_DIR to a Playarr build compiled with \
-             PLAYARR_BASE_PATH=/playarr/."
-        );
-        None
-    }
-}
-
 /// Resolves the operator's configured login trust tier
 /// (`STREAMARR_AUTH_MODE` -- `full-account` (the default as of this pass)
 /// or `trusted-network`, opt-in only) for `POST /api/v1/auth/login`.
@@ -1018,12 +997,7 @@ async fn boot_api(
     );
     tokio::spawn(analytics_flusher.run());
 
-    let (router, _openapi) = build_router(
-        state,
-        version_gate,
-        web_assets_dir_from_env(),
-        playarr_assets_dir_from_env(),
-    );
+    let (router, _openapi) = build_router(state, version_gate, web_assets_dir_from_env());
 
     let listener = tokio::net::TcpListener::bind(config.http_bind_addr).await?;
     tracing::info!(addr = %config.http_bind_addr, "http server listening");

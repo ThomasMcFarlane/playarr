@@ -6,7 +6,7 @@ import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { DeviceLogin } from "../components/DeviceLogin";
 import { IS_TV } from "../lib/clientPlatform";
 import { initialLoginServerUrl } from "../lib/loginServerUrl";
-import { publicHttpServerHandoffUrl } from "../lib/httpServerHandoff";
+import { isPublicHttpUrl } from "../lib/localNetworkFetch";
 
 interface LocationState {
   /** Set by `App.tsx`'s app-shell redirect so a successful login returns to wherever the user was headed. */
@@ -43,10 +43,8 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const handoffUrl =
-    window.location.protocol === "https:"
-      ? publicHttpServerHandoffUrl(serverUrl)
-      : undefined;
+  const needsInsecureContentPermission =
+    window.location.protocol === "https:" && isPublicHttpUrl(serverUrl);
 
   function finishLogin() {
     const destination = state?.from ?? "/";
@@ -62,15 +60,11 @@ export function LoginPage() {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
-    if (handoffUrl) {
-      window.location.assign(handoffUrl);
-      return;
-    }
     try {
       await login({ serverUrl, username, password });
       finishLogin();
     } catch (err) {
-      setError(loginErrorMessage(err));
+      setError(loginErrorMessage(err, needsInsecureContentPermission));
       setSubmitting(false);
     }
   }
@@ -94,7 +88,7 @@ export function LoginPage() {
           <span className="app-logo">
             <img
               className="app-logo-icon"
-              src={`${import.meta.env.BASE_URL}playarr-icon.svg`}
+              src="/playarr-icon.svg"
               alt=""
             />
             <span><span className="app-logo-accent">Play</span>arr</span>
@@ -126,42 +120,38 @@ export function LoginPage() {
             placeholder="https://streamarr.example.com"
           />
           <p className="hint auth-server-hint">
-            {handoffUrl
-              ? "This public HTTP server will open its own Playarr client so the connection stays same-origin."
+            {needsInsecureContentPermission
+              ? "Direct HTTP connection. In your browser's site settings for playarr.app, set Insecure content to Allow, then reload Playarr."
               : "Your browser connects directly to this server. Playarr does not proxy your login."}
           </p>
 
-          {!handoffUrl && (
-            <>
-              <label className="auth-label" htmlFor="login-username">
-                Username
-              </label>
-              <input
-                id="login-username"
-                name="username"
-                type="text"
-                className="input auth-input"
-                autoComplete="username"
-                required
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-              />
+          <label className="auth-label" htmlFor="login-username">
+            Username
+          </label>
+          <input
+            id="login-username"
+            name="username"
+            type="text"
+            className="input auth-input"
+            autoComplete="username"
+            required
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+          />
 
-              <label className="auth-label" htmlFor="login-password">
-                Password
-              </label>
-              <input
-                id="login-password"
-                name="password"
-                type="password"
-                className={`input auth-input${error ? " is-error" : ""}`}
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
-            </>
-          )}
+          <label className="auth-label" htmlFor="login-password">
+            Password
+          </label>
+          <input
+            id="login-password"
+            name="password"
+            type="password"
+            className={`input auth-input${error ? " is-error" : ""}`}
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
 
           {error && (
             <p className="error-text auth-error">
@@ -174,7 +164,7 @@ export function LoginPage() {
             className="btn btn-primary auth-submit"
             disabled={submitting}
           >
-            {handoffUrl ? "Continue on server" : submitting ? "Signing in…" : "Sign in"}
+            {submitting ? "Signing in…" : "Sign in"}
           </button>
         </form>
       </div>
@@ -192,7 +182,7 @@ export function LoginPage() {
  * required" 401 text, which reads wrong on the page whose entire purpose
  * is signing in.
  */
-function loginErrorMessage(err: unknown): string {
+function loginErrorMessage(err: unknown, needsInsecureContentPermission: boolean): string {
   if (err instanceof ApiError) {
     const body = err.body as { message?: unknown } | undefined;
     if (typeof body?.message === "string" && body.message.length > 0) {
@@ -204,6 +194,9 @@ function loginErrorMessage(err: unknown): string {
     return "Sign-in failed. Check your username and password and try again.";
   }
   if (err instanceof TypeError) {
+    if (needsInsecureContentPermission) {
+      return "The browser blocked this direct HTTP connection. Open the site settings for playarr.app, set Insecure content to Allow, reload Playarr, then try again.";
+    }
     return "Could not reach this LAN server. Check the URL and allow Local Network Access when your browser asks.";
   }
   return err instanceof Error ? err.message : String(err);

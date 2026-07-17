@@ -73,14 +73,13 @@ the first time `playarr.app` connects to a private or loopback IP. Playarr marks
 only those addresses as local-network requests so that permission can relax
 mixed-content blocking. Browser support is still evolving; a browser without
 Local Network Access cannot connect from the HTTPS hosted app to a private
-plain-HTTP server. In that case, open Streamarr's co-hosted `/playarr/` client.
+plain-HTTP server.
 
-A public plain-HTTP IP is not eligible for Local Network Access, and an HTTPS
-page cannot fetch it as mixed content. For those addresses, hosted Playarr
-navigates the top-level browser to `http://<server>:<port>/playarr/login`.
-Streamarr serves that Playarr build and the API on the same HTTP origin, so no
-hostname, reverse proxy, or HTTPS certificate is required. Build the co-hosted
-bundle with `PLAYARR_BASE_PATH=/playarr/`.
+For a public plain-HTTP IP or domain, allow insecure content explicitly for
+`playarr.app` in the browser's site settings and reload Playarr. The browser
+then sends the request directly to the operator-entered URL. HTTPS servers work
+directly without that permission. Playarr never relays requests through
+Cloudflare, and Streamarr never installs or serves a copy of Playarr.
 
 ## Domain changes
 

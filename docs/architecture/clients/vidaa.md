@@ -1,7 +1,7 @@
 # Client Architecture: VIDAA (Hisense Smart TVs)
 
 VIDAA runs hosted television applications in its embedded browser. Playarr uses
-the same browser-compatible model to run the current, co-hosted Playarr Web
+the same browser-compatible model to run the current Playarr Web
 client instead of maintaining a second user interface or shipping a
 downloadable TV package.
 
@@ -13,9 +13,9 @@ require a VIDAA partner relationship or device-specific developer access. The
 older `hisense://debug` browser scheme is not a supported household installation
 route: current firmware may reject it or require credentials.
 
-Playarr remains a hosted Web App, not an APK, `.ipk`, `.wgt`, or USB-installable
-binary. The Streamarr server is the deployment origin, so opening Playarr in the
-TV Browser receives the latest co-hosted bundle whenever the server is updated.
+Playarr remains a hosted Web App at `playarr.app`, not an APK, `.ipk`, `.wgt`,
+or USB-installable binary. Opening Playarr in the TV Browser receives the latest
+hosted bundle independently of the selected Streamarr server.
 
 ## Implementation
 
@@ -29,9 +29,8 @@ The VIDAA surface is the production client in `clients/tv-web/web/`:
   metadata;
 - remote Back key codes already handled by Playarr Web include VIDAA's common
   browser Back value; and
-- the existing Playarr Web service worker remains best-effort. A LAN HTTP
-  installation can still launch and update from the server even when the
-  browser does not permit service workers outside a secure context.
+- the existing Playarr Web service worker provides the hosted client's update
+  path while leaving cross-origin Streamarr API requests untouched.
 
 The older `clients/tv-web/apps/tv-vidaa-fallback/` package remains an
 experimental shared-TV-shell prototype. It is not the recommended household

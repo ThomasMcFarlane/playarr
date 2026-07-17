@@ -11,19 +11,15 @@ const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.met
 };
 
 export default defineConfig({
-  base: process.env.PLAYARR_BASE_PATH ?? "/",
   plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
   },
   server: {
     port: 5173,
-    // The built app is co-hosted by the backend in production (see
-    // streamarr_api::build_router's `playarr_assets_dir`) and defaults to a
-    // same-origin API base URL accordingly (see ApiClientProvider.tsx).
-    // Proxying here reproduces that "same origin" story for `pnpm run dev`
-    // too, so a fresh checkout works against a locally running backend with
-    // zero required Settings-page configuration.
+    // Production Playarr is hosted at playarr.app and connects directly to
+    // the server selected by the viewer. Proxying here keeps local development
+    // convenient against a backend listening on the standard development port.
     proxy: {
       "/api": "http://localhost:8080",
       "/healthz": "http://localhost:8080",

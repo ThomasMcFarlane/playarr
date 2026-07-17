@@ -80,12 +80,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Hand off saved, query-configured, invited, and automatically retried public HTTP servers before
-  the hosted HTTPS app can issue a mixed-content request, and prevent Playarr's service worker
-  from returning the HTML app shell to failed cross-origin API requests.
-- Hand public HTTP Streamarr IPs from hosted Playarr to the server-cohosted `/playarr`
-  client instead of misclassifying them as LAN requests, while retaining direct Local
-  Network Access for private and loopback addresses.
+- Connect directly from `playarr.app` to operator-entered HTTP or HTTPS IPs and domains, using
+  Local Network Access for private addresses and the browser's explicit insecure-content
+  permission for public HTTP, without a relay or a server-hosted Playarr client.
+- Prevent Playarr's service worker from returning the HTML app shell to failed cross-origin API
+  requests, avoiding JSON parse errors after an ordinary reload.
 - Apply the systemd service restart-rate limit from the valid unit section instead of silently
   ignoring it during installation.
 - Request browser Local Network Access for direct private HTTP connections from `playarr.app`,

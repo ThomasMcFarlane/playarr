@@ -313,7 +313,7 @@ function AppShell() {
             <div className="app-logo" aria-hidden="true">
               <img
                 className="app-logo-icon"
-                src={`${import.meta.env.BASE_URL}playarr-icon.svg`}
+                src="/playarr-icon.svg"
                 alt=""
               />
             </div>

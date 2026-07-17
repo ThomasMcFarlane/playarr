@@ -69,7 +69,7 @@ export function useAppUpdate(client: ApiClient, clientPlatform = "web"): AppUpda
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator) || !import.meta.env.PROD) return;
     let cancelled = false;
     navigator.serviceWorker
-      .register(`${import.meta.env.BASE_URL}sw.js`)
+      .register("/sw.js")
       .then((registration) => {
         if (!cancelled) registrationRef.current = registration;
       })
@@ -84,7 +84,7 @@ export function useAppUpdate(client: ApiClient, clientPlatform = "web"): AppUpda
 
   const checkForUpdate = useCallback(async () => {
     const manifest = await fetchBuildManifest({
-      manifestUrl: `${import.meta.env.BASE_URL}build-manifest.json`,
+      manifestUrl: "/build-manifest.json",
     });
     if (manifest && isNewerBundleAvailable(__APP_VERSION__, manifest)) {
       setUpdateAvailable(true);

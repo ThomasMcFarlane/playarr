@@ -209,7 +209,7 @@ someone runs them for real.
 - **Tizen.** **Built.** `clients/tv-web/apps/tv-tizen/`, using the
   `player-avplay` adapter for Samsung's `AVPlay`.
 - **VIDAA hosted Web App.** **Browser client built; launcher distribution
-  pending.** The co-hosted Playarr Web client persists a `tv-vidaa` identity
+  pending.** The hosted Playarr Web client persists a `tv-vidaa` identity
   and negotiates a conservative television playback profile. Users can open it
   directly in the TV Browser; a dedicated launcher tile requires VIDAA partner
   distribution or device-specific developer access. The older

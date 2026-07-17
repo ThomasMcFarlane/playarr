@@ -280,7 +280,7 @@ apiVersion = "1"
                 auto_login_user_id: admin_id,
             }],
         });
-        let (custom_router, _api) = crate::build_router(app, test_version_gate(), None, None);
+        let (custom_router, _api) = crate::build_router(app, test_version_gate(), None);
 
         let playarr_body = serde_json::json!({
             "device_id": Uuid::new_v4(),
@@ -329,7 +329,7 @@ apiVersion = "1"
                 auto_login_user_id: user_id,
             }],
         });
-        let (custom_router, _api) = crate::build_router(app, test_version_gate(), None, None);
+        let (custom_router, _api) = crate::build_router(app, test_version_gate(), None);
 
         let body = serde_json::json!({
             "device_id": Uuid::new_v4(),

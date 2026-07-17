@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createLocalNetworkFetch,
-  isPublicHttpIpUrl,
+  isPublicHttpUrl,
   targetAddressSpaceForUrl,
 } from "./localNetworkFetch";
 
@@ -12,7 +12,6 @@ describe("targetAddressSpaceForUrl", () => {
     "http://172.16.0.5:8080",
     "http://streamarr.local:8080",
     "http://[fd00::5]:8080",
-    "http://streamarr.example.com:8080",
   ])("marks %s as local", (url) => {
     expect(targetAddressSpaceForUrl(url)).toBe("local");
   });
@@ -30,7 +29,12 @@ describe("targetAddressSpaceForUrl", () => {
 
   it("does not mislabel a public HTTP IP as local", () => {
     expect(targetAddressSpaceForUrl("http://203.0.113.10:8080")).toBeUndefined();
-    expect(isPublicHttpIpUrl("http://203.0.113.10:8080")).toBe(true);
+    expect(isPublicHttpUrl("http://203.0.113.10:8080")).toBe(true);
+  });
+
+  it("does not mislabel a public HTTP domain as local", () => {
+    expect(targetAddressSpaceForUrl("http://streamarr.example.com:8080")).toBeUndefined();
+    expect(isPublicHttpUrl("http://streamarr.example.com:8080")).toBe(true);
   });
 });
 
@@ -53,16 +57,12 @@ describe("createLocalNetworkFetch", () => {
     expect(nativeFetch).toHaveBeenCalledWith(input);
   });
 
-  it("hands off a public HTTP request before the browser can block it as mixed content", async () => {
-    const nativeFetch = vi.fn<typeof fetch>();
-    const assign = vi.fn();
+  it("sends a public HTTP request directly when the browser permits insecure content", async () => {
+    const response = new Response(null, { status: 204 });
+    const nativeFetch = vi.fn(async () => response);
     const input = new Request("http://203.0.113.10:8080/api/system/version");
 
-    await expect(
-      createLocalNetworkFetch(nativeFetch, { protocol: "https:", assign })(input)
-    ).rejects.toThrow("same-origin Playarr client");
-
-    expect(assign).toHaveBeenCalledWith("http://203.0.113.10:8080/playarr/login");
-    expect(nativeFetch).not.toHaveBeenCalled();
+    await expect(createLocalNetworkFetch(nativeFetch)(input)).resolves.toBe(response);
+    expect(nativeFetch).toHaveBeenCalledWith(input);
   });
 });

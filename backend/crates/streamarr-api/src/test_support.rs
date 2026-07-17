@@ -285,7 +285,7 @@ pub async fn seed_streaming_user_with_library_allow(
         .expect("seed restricted streaming test user");
 }
 
-pub(crate) fn test_version_gate() -> VersionGateLayer {
+fn test_version_gate() -> VersionGateLayer {
     VersionGateLayer::new(
         ClientCompatibilityTable::from_toml_str(
             r#"
@@ -523,7 +523,7 @@ pub async fn test_state() -> (Router, TestState) {
         analytics,
     };
 
-    let (router, _api) = build_router(app.clone(), test_version_gate(), None, None);
+    let (router, _api) = build_router(app.clone(), test_version_gate(), None);
 
     (
         router,

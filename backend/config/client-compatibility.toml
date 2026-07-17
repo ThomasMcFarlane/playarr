@@ -69,7 +69,7 @@ deprecatedBelow = "0.9.0"
 sunset = "2026-12-31"
 
 [tv-vidaa]
-# VIDAA launches the co-hosted Playarr Web bundle by URL, so its compatibility
+# VIDAA launches the hosted Playarr Web bundle by URL, so its compatibility
 # version follows that bundle rather than a separately packaged application.
 latestVersion = "0.1.0"
 minSupported = "0.1.0"
