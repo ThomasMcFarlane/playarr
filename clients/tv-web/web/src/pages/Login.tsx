@@ -43,10 +43,6 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [permissionPromptUrl, setPermissionPromptUrl] = useState<string | null>(null);
-  const [approvedInsecureServerUrl, setApprovedInsecureServerUrl] = useState<string | null>(
-    null
-  );
   const needsInsecureContentPermission =
     window.location.protocol === "https:" && isPublicHttpUrl(serverUrl);
 
@@ -60,7 +56,8 @@ export function LoginPage() {
     navigate(destination, { replace: true, state: destinationState });
   }
 
-  async function attemptLogin() {
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
     setSubmitting(true);
     setError(null);
     try {
@@ -68,21 +65,8 @@ export function LoginPage() {
       finishLogin();
     } catch (err) {
       setError(loginErrorMessage(err, needsInsecureContentPermission));
-      if (err instanceof TypeError && needsInsecureContentPermission) {
-        setApprovedInsecureServerUrl(null);
-      }
       setSubmitting(false);
     }
-  }
-
-  function handleSubmit(event: React.FormEvent) {
-    event.preventDefault();
-    setError(null);
-    if (needsInsecureContentPermission && approvedInsecureServerUrl !== serverUrl) {
-      setPermissionPromptUrl(serverUrl);
-      return;
-    }
-    void attemptLogin();
   }
 
   if (IS_TV) {
@@ -116,7 +100,7 @@ export function LoginPage() {
           Choose your Streamarr server, then save this profile on the current browser.
         </p>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(event) => void handleSubmit(event)}>
           <label className="auth-label" htmlFor="login-server-url">
             Server URL
           </label>
@@ -137,7 +121,7 @@ export function LoginPage() {
           />
           <p className="hint auth-server-hint">
             {needsInsecureContentPermission
-              ? "Direct HTTP connection. Playarr will prompt you before sending your credentials."
+              ? "Direct public HTTP connection. Your browser may block this as mixed content."
               : "Your browser connects directly to this server. Playarr does not proxy your login."}
           </p>
 
@@ -184,50 +168,6 @@ export function LoginPage() {
           </button>
         </form>
       </div>
-
-      {permissionPromptUrl && (
-        <div className="auth-permission-backdrop">
-          <section
-            className="auth-permission-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="http-permission-title"
-          >
-            <p className="page-kicker">Browser permission required</p>
-            <h2 id="http-permission-title">Allow this HTTP server</h2>
-            <p>
-              Playarr will connect directly to <code>{permissionPromptUrl}</code>. Open your
-              browser's site settings for <code>playarr.app</code>, set{" "}
-              <strong>Insecure content</strong> to <strong>Allow</strong>, then return here.
-            </p>
-            <ol>
-              <li>Open the site settings for playarr.app.</li>
-              <li>Set Insecure content to Allow.</li>
-              <li>Return here and connect.</li>
-            </ol>
-            <div className="auth-permission-actions">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setPermissionPromptUrl(null)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => {
-                  setApprovedInsecureServerUrl(permissionPromptUrl);
-                  setPermissionPromptUrl(null);
-                  void attemptLogin();
-                }}
-              >
-                I've allowed it — connect
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
     </div>
   );
 }

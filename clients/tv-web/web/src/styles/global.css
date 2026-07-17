@@ -1824,51 +1824,6 @@ code {
   margin-top: 1.5rem;
 }
 
-.auth-permission-backdrop {
-  position: fixed;
-  z-index: 1250;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 1.5rem;
-  background: rgba(14, 9, 12, 0.72);
-  backdrop-filter: blur(18px) saturate(82%);
-}
-
-.auth-permission-dialog {
-  width: min(540px, 100%);
-  padding: clamp(28px, 4vw, 52px);
-  border: 1px solid var(--line);
-  border-radius: 24px;
-  background: var(--bg);
-  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.42);
-}
-
-.auth-permission-dialog h2 {
-  margin-top: 0.45rem;
-  font-size: clamp(1.8rem, 3vw, 3rem);
-  font-weight: 440;
-  letter-spacing: -0.055em;
-}
-
-.auth-permission-dialog > p:not(.page-kicker),
-.auth-permission-dialog ol {
-  margin-top: 1.2rem;
-  color: var(--ink-soft);
-  line-height: 1.65;
-}
-
-.auth-permission-dialog ol {
-  padding-left: 1.35rem;
-}
-
-.auth-permission-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 1.75rem;
-}
-
 .device-login-page {
   grid-template-columns: minmax(260px, 0.55fr) minmax(680px, 1.45fr);
 }

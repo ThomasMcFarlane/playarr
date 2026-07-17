@@ -80,8 +80,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Prompt before a hosted Playarr sign-in sends credentials to a public HTTP server, and leave
-  the hosted server field blank instead of pre-filling the previously selected address.
+- Leave the hosted server field blank instead of pre-filling the previously selected address.
 - Connect directly from `playarr.app` to operator-entered HTTP or HTTPS IPs and domains, using
   Local Network Access for private addresses and the browser's explicit insecure-content
   permission for public HTTP, without a relay or a server-hosted Playarr client.
