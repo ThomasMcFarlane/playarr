@@ -101,11 +101,15 @@ export function SettingsServerPage() {
           <div className="connection-server-fields">
             <input
               id="additional-server-url"
-              type="url"
+              type="text"
               className={`input${addServerState.status === "error" ? " is-error" : ""}`}
+              autoComplete="url"
+              inputMode="url"
+              autoCapitalize="none"
+              spellCheck={false}
               value={serverUrl}
               onChange={(event) => setServerUrl(event.target.value)}
-              placeholder="https://streamarr.example.com"
+              placeholder="203.0.113.10 or https://streamarr.example.com"
               required
             />
             <input

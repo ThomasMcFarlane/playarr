@@ -92,6 +92,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Accept bare IP addresses in Playarr server fields without native browser URL validation blocking
+  submission.
 - Reuse Streamarr's existing Rustls crypto provider for native TLS builds instead of requiring an
   additional CMake-based provider.
 - Let ArrowUp and ArrowDown move remote/keyboard focus out of a text field on Playarr Web instead

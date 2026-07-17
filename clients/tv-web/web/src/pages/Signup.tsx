@@ -89,7 +89,7 @@ export function SignupPage() {
             <input
               id="signup-server-url"
               name="server-url"
-              type="url"
+              type="text"
               className="input auth-input"
               value={invite.serverUrl}
               readOnly

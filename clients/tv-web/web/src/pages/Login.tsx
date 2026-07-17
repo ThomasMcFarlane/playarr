@@ -107,7 +107,7 @@ export function LoginPage() {
           <input
             id="login-server-url"
             name="server-url"
-            type="url"
+            type="text"
             className="input auth-input"
             autoComplete="url"
             inputMode="url"
@@ -117,7 +117,7 @@ export function LoginPage() {
             required
             value={serverUrl}
             onChange={(event) => setServerUrl(event.target.value)}
-            placeholder="https://streamarr.example.com"
+            placeholder="203.0.113.10 or https://streamarr.example.com"
           />
           <p className="hint auth-server-hint">
             {needsInsecureContentPermission
