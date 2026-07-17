@@ -80,6 +80,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apply the systemd service restart-rate limit from the valid unit section instead of silently
+  ignoring it during installation.
 - Request browser Local Network Access for every direct HTTP connection from `playarr.app`,
   without requiring Streamarr to be exposed publicly.
 - Leave the Streamarr server field blank on `playarr.app` instead of suggesting the hosted

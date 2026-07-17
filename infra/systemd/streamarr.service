@@ -3,6 +3,8 @@ Description=Streamarr media automation service
 Documentation=https://github.com/streamarr/streamarr
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
 # If Postgres/Redis run on this same host, uncomment so streamarr starts
 # after them (remove if DATABASE_URL/REDIS_URL point at remote hosts):
 # After=postgresql.service redis.service
@@ -33,8 +35,6 @@ WorkingDirectory=/var/lib/streamarr
 
 Restart=on-failure
 RestartSec=5
-StartLimitIntervalSec=300
-StartLimitBurst=5
 
 # Give the process time to drain in-flight requests/jobs on SIGTERM before
 # systemd escalates to SIGKILL. Keep in sync with any internal graceful
