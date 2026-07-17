@@ -127,3 +127,38 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = {};
+  }
+  const notification = payload.notification || payload.data?.notification || {};
+  const data = payload.data || {};
+  event.waitUntil(
+    self.registration.showNotification(notification.title || "Playarr", {
+      body: notification.body || "Your friend invite request was approved.",
+      icon: "/playarr-icon-192.png",
+      badge: "/playarr-icon-192.png",
+      tag: "invite-approved",
+      data: { link: data.link || "https://playarr.app/settings" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const link = event.notification.data?.link || "https://playarr.app/settings";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const existing = clients.find((client) => client.url.startsWith(self.location.origin));
+      if (existing) {
+        existing.navigate(link);
+        return existing.focus();
+      }
+      return self.clients.openWindow(link);
+    })
+  );
+});

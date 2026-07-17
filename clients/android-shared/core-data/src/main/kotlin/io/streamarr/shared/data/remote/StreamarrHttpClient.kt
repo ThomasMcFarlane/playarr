@@ -60,11 +60,20 @@ object StreamarrHttpClient {
         baseUrlProvider: () -> String,
         clientPlatform: ClientPlatform,
         clientVersion: String,
+        accessTokenProvider: () -> String? = { null },
         enableHttpLogging: Boolean = false,
     ): StreamarrApi {
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor(dynamicBaseUrlInterceptor(baseUrlProvider))
             .addInterceptor(platformHeaderInterceptor(clientPlatform, clientVersion))
+            .addInterceptor { chain ->
+                val token = accessTokenProvider()
+                val request = if (token.isNullOrBlank()) chain.request() else chain.request()
+                    .newBuilder()
+                    .header("Authorization", "Bearer $token")
+                    .build()
+                chain.proceed(request)
+            }
             .apply {
                 if (enableHttpLogging) {
                     addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY })

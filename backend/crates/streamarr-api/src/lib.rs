@@ -32,6 +32,7 @@ pub mod error;
 pub mod health;
 pub mod login;
 pub mod media;
+pub mod notifications;
 pub mod oauth;
 pub mod playback;
 pub mod playlists;
@@ -157,6 +158,8 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(users::generate_user_invite_handler))
         .routes(routes!(users::list_user_invite_requests_handler))
         .routes(routes!(users::review_user_invite_request_handler))
+        .routes(routes!(notifications::push_config_handler))
+        .routes(routes!(notifications::register_push_handler))
         .routes(routes!(
             users::update_user_handler,
             users::delete_user_handler
@@ -315,6 +318,10 @@ pub struct AppState {
     /// Approval workflow for ordinary Playarr users asking permission to
     /// generate one friend-invite QR code.
     pub user_invite_request_repo: Arc<dyn streamarr_db::UserInviteRequestRepo>,
+    /// FCM device/browser registrations for approval notifications.
+    pub push_registration_repo: Arc<dyn streamarr_db::PushRegistrationRepo>,
+    pub push_notifier: Arc<dyn notifications::PushNotifier>,
+    pub firebase_web_config: Option<notifications::FirebaseWebConfig>,
     /// Optional profile-lock PIN hashes. Kept behind a distinct repository
     /// so they cannot be confused with or overwrite account passwords.
     pub profile_pin_repo: Arc<dyn streamarr_db::ProfilePinRepo>,

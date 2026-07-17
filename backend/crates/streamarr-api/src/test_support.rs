@@ -20,14 +20,15 @@ use streamarr_catalog::CatalogService;
 use streamarr_db::analytics::{AnalyticsStore, SqlxAnalyticsStore};
 use streamarr_db::repo::{
     seed_default_views, PlaylistRepo, SqlxCreditRepo, SqlxDeviceRepo, SqlxLibraryViewRepo,
-    SqlxMediaFileRepo, SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo, SqlxRenditionRepo,
-    SqlxSourceInstanceRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo,
-    SqlxUserRepo, SqlxWatchProgressRepo, SqlxWorkRepo,
+    SqlxMediaFileRepo, SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo,
+    SqlxPushRegistrationRepo, SqlxRenditionRepo, SqlxSourceInstanceRepo, SqlxTdarrConnectionRepo,
+    SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxUserRepo, SqlxWatchProgressRepo,
+    SqlxWorkRepo,
 };
 use streamarr_db::{
     CreditRepo, DbPool, DeviceRepo, LibraryViewRepo, MediaFileRepo, PolicyRepo, ProfilePinRepo,
-    RenditionRepo, SourceInstanceRepo, TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo,
-    UserRepo, WatchProgressRepo, WorkRepo,
+    PushRegistrationRepo, RenditionRepo, SourceInstanceRepo, TdarrConnectionRepo, UserInviteRepo,
+    UserInviteRequestRepo, UserRepo, WatchProgressRepo, WorkRepo,
 };
 use streamarr_model::{Availability, Policy, Sensitive, User, Work, WorkKind};
 use streamarr_telemetry::analytics::{
@@ -42,6 +43,26 @@ use crate::user_directory::RepoBackedUserDirectory;
 use crate::version::VersionState;
 use crate::version_gate::{ClientCompatibilityTable, VersionGateLayer};
 use crate::{build_router, AppState, ReadinessState};
+
+#[derive(Default)]
+pub struct RecordingPushNotifier {
+    pub sent: tokio::sync::Mutex<Vec<(String, crate::notifications::PushMessage)>>,
+}
+
+#[async_trait::async_trait]
+impl crate::notifications::PushNotifier for RecordingPushNotifier {
+    async fn send(
+        &self,
+        token: &str,
+        message: &crate::notifications::PushMessage,
+    ) -> Result<crate::notifications::PushSendOutcome, String> {
+        self.sent
+            .lock()
+            .await
+            .push((token.to_string(), message.clone()));
+        Ok(crate::notifications::PushSendOutcome::Delivered)
+    }
+}
 
 pub struct TestState {
     pub app: AppState,
@@ -75,6 +96,7 @@ pub struct TestState {
     /// Real, `SqlxPolicyRepo`-backed persistence for the same in-memory
     /// SQLite pool `app` is built against.
     pub policy_repo: Arc<dyn PolicyRepo>,
+    pub push_notifications: Arc<RecordingPushNotifier>,
     /// The id of the one `User` seeded into `app.user_directory` and bound
     /// to `app.auth_mode`'s trusted-network auto-login -- what
     /// `POST /api/v1/auth/login` resolves to for any source IP in tests
@@ -313,6 +335,8 @@ pub async fn test_state() -> (Router, TestState) {
     let user_invite_repo: Arc<dyn UserInviteRepo> = Arc::new(SqlxUserInviteRepo::new(pool.clone()));
     let user_invite_request_repo: Arc<dyn UserInviteRequestRepo> =
         Arc::new(SqlxUserInviteRequestRepo::new(pool.clone()));
+    let push_registration_repo: Arc<dyn PushRegistrationRepo> =
+        Arc::new(SqlxPushRegistrationRepo::new(pool.clone()));
     let profile_pin_repo: Arc<dyn ProfilePinRepo> = Arc::new(SqlxProfilePinRepo::new(pool.clone()));
     let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
     let watch_progress: Arc<dyn WatchProgressRepo> =
@@ -455,6 +479,7 @@ pub async fn test_state() -> (Router, TestState) {
 
     let media_files = Arc::new(InMemoryMediaFileLookup::new());
 
+    let push_notifications = Arc::new(RecordingPushNotifier::default());
     let app = AppState {
         readiness: ReadinessState::new(),
         version: VersionState {
@@ -485,6 +510,9 @@ pub async fn test_state() -> (Router, TestState) {
         user_repo: user_repo.clone(),
         user_invite_repo,
         user_invite_request_repo,
+        push_registration_repo,
+        push_notifier: push_notifications.clone(),
+        firebase_web_config: None,
         profile_pin_repo,
         policy_repo: policy_repo.clone(),
         sessions: refresh,
@@ -506,6 +534,7 @@ pub async fn test_state() -> (Router, TestState) {
             admin_registry,
             user_repo,
             policy_repo,
+            push_notifications,
             default_user_id,
             device_flow,
             work_repo,

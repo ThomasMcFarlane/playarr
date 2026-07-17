@@ -115,6 +115,8 @@ export type UserInviteResponse = components["schemas"]["UserInviteResponse"];
 export type UserInviteRequestResponse = components["schemas"]["UserInviteRequestResponse"];
 export type UserInviteRequestStatus = components["schemas"]["UserInviteRequestStatus"];
 export type ReviewUserInviteRequest = components["schemas"]["ReviewUserInviteRequest"];
+export type FirebaseWebConfig = components["schemas"]["FirebaseWebConfig"];
+export type RegisterPushRequest = components["schemas"]["RegisterPushRequest"];
 export type UpdateUserRequest = components["schemas"]["UpdateUserRequest"];
 export type UserResponse = components["schemas"]["UserResponse"];
 export type PlayerPreferences = components["schemas"]["PlayerPreferencesResponse"];
@@ -260,6 +262,8 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/users/me/user-invite-request", method: "GET" },
   { schemaPath: "/api/v1/users/me/user-invite-request", method: "POST" },
   { schemaPath: "/api/v1/users/me/user-invite-request/generate", method: "POST" },
+  { schemaPath: "/api/v1/notifications/config", method: "GET" },
+  { schemaPath: "/api/v1/users/me/push-registrations", method: "POST" },
   { schemaPath: "/api/v1/admin/users/{id}", method: "PATCH" },
   { schemaPath: "/api/v1/admin/users/{id}", method: "DELETE" },
   { schemaPath: "/api/v1/users/me/player-preferences", method: "GET" },
@@ -709,6 +713,14 @@ export class ApiClient {
     return this.unwrap(
       await this.raw.POST("/api/v1/users/me/user-invite-request/generate", {})
     );
+  }
+
+  async getPushConfig(): Promise<FirebaseWebConfig> {
+    return this.unwrap(await this.raw.GET("/api/v1/notifications/config", {}));
+  }
+
+  async registerPush(body: RegisterPushRequest): Promise<void> {
+    this.assertOk(await this.raw.POST("/api/v1/users/me/push-registrations", { body }));
   }
 
   /** All-optional patch -- only fields set in `body` are changed. */

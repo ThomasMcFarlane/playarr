@@ -48,8 +48,8 @@ pub use series::{Episode, Season, Series};
 pub use source::{SourceInstance, SourceKind};
 pub use tdarr::TdarrConnection;
 pub use user::{
-    Device, MediaPlaybackPreferences, RefreshTokenRecord, Session, User, UserInvite,
-    UserInviteRequest, UserInviteRequestStatus, DEFAULT_PREFERRED_AUDIO_LANGUAGE,
+    Device, MediaPlaybackPreferences, PushRegistration, RefreshTokenRecord, Session, User,
+    UserInvite, UserInviteRequest, UserInviteRequestStatus, DEFAULT_PREFERRED_AUDIO_LANGUAGE,
 };
 pub use work::{
     Availability, ExternalProvider, ExternalRef, ImageAsset, ImageKind, Work, WorkKind,

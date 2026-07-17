@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Notify Playarr users in Chrome, Android mobile, and Android TV when an admin approves their friend-invite request.
 - Let Playarr users request a friend-invite QR, let Streamarr admins approve or deny it, and start the one-use invite's 24-hour lifetime only when the approved user generates it.
 - Show accessible confirmation toasts when Playarr settings, watch state, and playlists change.
 - Let each Playarr Web profile connect directly to multiple Streamarr servers, browse their

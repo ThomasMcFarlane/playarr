@@ -737,14 +737,16 @@ async fn boot_api(
     };
     use streamarr_db::repo::{
         seed_default_views, SqlxCreditRepo, SqlxDeviceRepo, SqlxLibraryViewRepo, SqlxMediaFileRepo,
-        SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo, SqlxRefreshTokenRepo,
-        SqlxRenditionRepo, SqlxSourceInstanceRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo,
-        SqlxUserInviteRequestRepo, SqlxUserRepo, SqlxWatchProgressRepo, SqlxWorkRepo,
+        SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo, SqlxPushRegistrationRepo,
+        SqlxRefreshTokenRepo, SqlxRenditionRepo, SqlxSourceInstanceRepo, SqlxTdarrConnectionRepo,
+        SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxUserRepo, SqlxWatchProgressRepo,
+        SqlxWorkRepo,
     };
     use streamarr_db::{
         CreditRepo, DeviceRepo, LibraryViewRepo, MediaFileRepo, PlaylistRepo, PolicyRepo,
-        ProfilePinRepo, RenditionRepo, SourceInstanceRepo, TdarrConnectionRepo, UserInviteRepo,
-        UserInviteRequestRepo, UserRepo, WatchProgressRepo, WorkRepo,
+        ProfilePinRepo, PushRegistrationRepo, RenditionRepo, SourceInstanceRepo,
+        TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo, WatchProgressRepo,
+        WorkRepo,
     };
     use streamarr_model::VersionEnvelope;
 
@@ -776,6 +778,21 @@ async fn boot_api(
     let user_invite_repo: Arc<dyn UserInviteRepo> = Arc::new(SqlxUserInviteRepo::new(pool.clone()));
     let user_invite_request_repo: Arc<dyn UserInviteRequestRepo> =
         Arc::new(SqlxUserInviteRequestRepo::new(pool.clone()));
+    let push_registration_repo: Arc<dyn PushRegistrationRepo> =
+        Arc::new(SqlxPushRegistrationRepo::new(pool.clone()));
+    let push_notifier: Arc<dyn streamarr_api::notifications::PushNotifier> =
+        match std::env::var("GOOGLE_APPLICATION_CREDENTIALS") {
+            Ok(path) => Arc::new(
+                streamarr_api::notifications::FcmNotifier::from_service_account_file(path)
+                    .map_err(anyhow::Error::msg)?,
+            ),
+            Err(_) => streamarr_api::notifications::disabled_notifier(),
+        };
+    let firebase_web_config = std::env::var("STREAMARR_FIREBASE_WEB_CONFIG")
+        .ok()
+        .map(|value| serde_json::from_str(&value))
+        .transpose()
+        .map_err(|err| anyhow::anyhow!("invalid STREAMARR_FIREBASE_WEB_CONFIG JSON: {err}"))?;
     let profile_pin_repo: Arc<dyn ProfilePinRepo> = Arc::new(SqlxProfilePinRepo::new(pool.clone()));
     let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
     let watch_progress: Arc<dyn WatchProgressRepo> =
@@ -951,6 +968,9 @@ async fn boot_api(
         user_repo,
         user_invite_repo,
         user_invite_request_repo,
+        push_registration_repo,
+        push_notifier,
+        firebase_web_config,
         profile_pin_repo,
         policy_repo,
         sessions: refresh,

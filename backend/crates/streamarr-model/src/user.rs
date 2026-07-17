@@ -72,6 +72,17 @@ pub struct UserInviteRequest {
     pub generated_at: Option<DateTime<Utc>>,
 }
 
+/// One Firebase Cloud Messaging registration belonging to a signed-in
+/// client installation. Tokens are treated as credentials and never
+/// returned by list APIs.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PushRegistration {
+    pub token: String,
+    pub user_id: Uuid,
+    pub platform: ClientPlatform,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// A signed-in viewer's remembered choices for one concrete media file.
 /// Track ids are the stable source ids exposed by playback negotiation
 /// (`source-audio-*` / `source-subtitle-*`); `None` means automatic audio

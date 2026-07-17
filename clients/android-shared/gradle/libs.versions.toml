@@ -49,6 +49,7 @@ coil = "3.5.0"
 # the server's version envelope reports this build below its floor for
 # this platform.
 playAppUpdate = "2.1.0"
+firebaseBom = "34.15.0"
 
 # --- Testing ----------------------------------------------------------------
 junit4 = "4.13.2"
@@ -116,6 +117,10 @@ coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp"
 # Play In-App Updates
 play-app-update = { group = "com.google.android.play", name = "app-update", version.ref = "playAppUpdate" }
 play-app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "playAppUpdate" }
+
+# Push notifications
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
 
 # Testing
 junit4 = { group = "junit", name = "junit", version.ref = "junit4" }

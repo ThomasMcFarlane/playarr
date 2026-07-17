@@ -680,6 +680,9 @@ pub async fn review_user_invite_request_handler(
         .map_err(|err| ApiError::internal(format!("failed to reload invitation request: {err}")))?
         .ok_or_else(|| ApiError::not_found("invitation request not found"))?;
     tracing::info!(request_id = %id, reviewed_by = %admin.user_id, ?status, "reviewed friend invitation request");
+    if status == UserInviteRequestStatus::Approved {
+        crate::notifications::notify_invite_approved(&state, request.user_id).await;
+    }
     Ok(Json(invite_request_response(&state, request).await?))
 }
 
@@ -2114,6 +2117,18 @@ mod tests {
             .unwrap();
         assert_eq!(response.status(), StatusCode::CONFLICT);
 
+        state
+            .app
+            .push_registration_repo
+            .upsert(&streamarr_model::PushRegistration {
+                token: "requester-installation-id".to_string(),
+                user_id: requester_id,
+                platform: streamarr_model::ClientPlatform::Web,
+                updated_at: Utc::now(),
+            })
+            .await
+            .unwrap();
+
         let response = router
             .clone()
             .oneshot(
@@ -2134,6 +2149,11 @@ mod tests {
         let approved: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(approved["status"], "approved");
         assert!(approved["reviewed_at"].is_string());
+        let notifications = state.push_notifications.sent.lock().await;
+        assert_eq!(notifications.len(), 1);
+        assert_eq!(notifications[0].0, "requester-installation-id");
+        assert_eq!(notifications[0].1.link, "https://playarr.app/settings");
+        drop(notifications);
 
         let generated_at = Utc::now();
         let response = router

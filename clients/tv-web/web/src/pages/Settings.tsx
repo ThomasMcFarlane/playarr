@@ -11,6 +11,7 @@ import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useTheme, type ThemePreference } from "../lib/theme";
 import { useToast } from "../lib/toast";
 import { QrCode } from "../components/QrCode";
+import { enableApprovalPushNotifications } from "../lib/pushNotifications";
 
 type ConnectionTestState =
   | { status: "idle" }
@@ -59,6 +60,8 @@ type FriendInviteState =
   | { status: "saving"; request: UserInviteRequestResponse | null }
   | { status: "error"; request: UserInviteRequestResponse | null; message: string };
 
+type PushState = "idle" | "enabling" | "enabled" | "error";
+
 function isAudioLanguage(value: string): value is AudioLanguage {
   return AUDIO_LANGUAGE_OPTIONS.some((option) => option.value === value);
 }
@@ -105,6 +108,8 @@ export function SettingsPage() {
   const [friendInviteLink, setFriendInviteLink] = useState<string | null>(null);
   const [friendInviteExpiresAt, setFriendInviteExpiresAt] = useState<string | null>(null);
   const [friendInviteCopied, setFriendInviteCopied] = useState(false);
+  const [pushState, setPushState] = useState<PushState>("idle");
+  const [pushError, setPushError] = useState<string | null>(null);
 
   useEffect(() => {
     const requestId = ++playerPreferenceRequestRef.current;
@@ -342,6 +347,19 @@ export function SettingsPage() {
         request: current.status === "loading" ? null : current.request,
         message: "Could not copy the link. Select and copy it manually.",
       }));
+    }
+  }
+
+  async function handleEnablePush() {
+    setPushState("enabling");
+    setPushError(null);
+    try {
+      await enableApprovalPushNotifications(client);
+      setPushState("enabled");
+      showToast("Invite approval notifications enabled.");
+    } catch (error) {
+      setPushState("error");
+      setPushError(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -667,6 +685,21 @@ export function SettingsPage() {
                       ? "Request pending"
                       : "Request invite QR"}
               </button>
+              <div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  disabled={pushState === "enabling" || pushState === "enabled"}
+                  onClick={() => void handleEnablePush()}
+                >
+                  {pushState === "enabled"
+                    ? "Approval notifications enabled"
+                    : pushState === "enabling"
+                      ? "Enabling…"
+                      : "Enable approval notifications"}
+                </button>
+                {pushError ? <p className="error-text" role="alert">{pushError}</p> : null}
+              </div>
             </>
           )}
         </section>

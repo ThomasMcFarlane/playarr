@@ -1346,6 +1346,22 @@ paths:
           description: The source file could not be decoded
         '503':
           description: The source media path is not reachable on this Streamarr node
+  /api/v1/notifications/config:
+    get:
+      tags:
+      - users
+      operationId: push_config_handler
+      responses:
+        '200':
+          description: Firebase Web configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FirebaseWebConfig'
+        '401':
+          description: Missing or invalid access token
+        '404':
+          description: Push notifications are not configured
   /api/v1/oauth/device/authorize:
     post:
       tags:
@@ -2034,6 +2050,26 @@ paths:
           description: Missing or invalid access token
         '404':
           description: The signed-in user no longer exists
+  /api/v1/users/me/push-registrations:
+    post:
+      tags:
+      - users
+      operationId: register_push_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterPushRequest'
+        required: true
+      responses:
+        '204':
+          description: Push registration saved
+        '400':
+          description: Unsupported platform or invalid token
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Account cannot use Playarr
   /api/v1/users/me/user-invite-request:
     get:
       tags:
@@ -2845,6 +2881,31 @@ components:
           type: string
         provider:
           $ref: '#/components/schemas/ExternalProvider'
+    FirebaseWebConfig:
+      type: object
+      required:
+      - api_key
+      - auth_domain
+      - project_id
+      - storage_bucket
+      - messaging_sender_id
+      - app_id
+      - vapid_public_key
+      properties:
+        api_key:
+          type: string
+        app_id:
+          type: string
+        auth_domain:
+          type: string
+        messaging_sender_id:
+          type: string
+        project_id:
+          type: string
+        storage_bucket:
+          type: string
+        vapid_public_key:
+          type: string
     ImageAsset:
       type: object
       required:
@@ -3690,6 +3751,16 @@ components:
         user_id:
           type: string
           format: uuid
+    RegisterPushRequest:
+      type: object
+      required:
+      - token
+      - platform
+      properties:
+        platform:
+          $ref: '#/components/schemas/ClientPlatform'
+        token:
+          type: string
     ReorderPlaylistItemsRequest:
       type: object
       required:

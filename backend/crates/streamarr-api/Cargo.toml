@@ -34,6 +34,7 @@ chrono = { workspace = true }
 async-trait = { workspace = true }
 dashmap = { workspace = true }
 reqwest = { workspace = true }
+jsonwebtoken = { workspace = true }
 
 [dev-dependencies]
 tower = { workspace = true, features = ["util"] }

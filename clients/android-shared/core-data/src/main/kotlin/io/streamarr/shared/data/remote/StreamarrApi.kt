@@ -6,6 +6,7 @@ import io.streamarr.shared.data.model.VersionEnvelope
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkDetail
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.Serializable
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -43,6 +44,9 @@ import retrofit2.http.Query
  * implementation per app process.
  */
 interface StreamarrApi {
+
+    @POST("api/v1/users/me/push-registrations")
+    suspend fun registerPush(@Body request: PushRegistrationRequest): Response<ResponseBody>
 
     // ---- system ------------------------------------------------------------
 
@@ -128,3 +132,9 @@ interface StreamarrApi {
         @Body payload: JsonElement,
     ): Response<ResponseBody>
 }
+
+@Serializable
+data class PushRegistrationRequest(
+    val token: String,
+    val platform: io.streamarr.shared.data.model.ClientPlatform,
+)

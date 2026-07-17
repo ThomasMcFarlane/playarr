@@ -6,6 +6,11 @@ plugins {
     alias(libs.plugins.hilt.android)
 }
 
+val firebaseApiKey = providers.gradleProperty("firebaseApiKey").orElse("")
+val firebaseApplicationId = providers.gradleProperty("firebaseMobileApplicationId").orElse("")
+val firebaseProjectId = providers.gradleProperty("firebaseProjectId").orElse("")
+val firebaseSenderId = providers.gradleProperty("firebaseSenderId").orElse("")
+
 android {
     namespace = "io.streamarr.mobile"
     compileSdk = 37
@@ -19,6 +24,11 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "FIREBASE_API_KEY", "\"${firebaseApiKey.get()}\"")
+        buildConfigField("String", "FIREBASE_APPLICATION_ID", "\"${firebaseApplicationId.get()}\"")
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${firebaseProjectId.get()}\"")
+        buildConfigField("String", "FIREBASE_SENDER_ID", "\"${firebaseSenderId.get()}\"")
 
         // No STREAMARR_BASE_URL buildConfigField: the server base URL is a
         // runtime-configurable, DataStore-backed setting now (see
@@ -87,6 +97,9 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
     implementation(libs.hilt.navigation.compose)
+
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     testImplementation(libs.junit4)
     testImplementation(libs.kotlinx.coroutines.core)

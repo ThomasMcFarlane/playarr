@@ -466,6 +466,27 @@ describe("ApiClient", () => {
     expect(getAccessToken).toHaveBeenCalledOnce();
   });
 
+  it("registers a web push installation with viewer authentication", async () => {
+    const fetchImpl = mockFetch(async (request) => {
+      expect(new URL(request.url).pathname).toBe("/api/v1/users/me/push-registrations");
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+      await expect(request.json()).resolves.toEqual({
+        token: "firebase-installation-id",
+        platform: "web",
+      });
+      return new Response(null, { status: 204 });
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "viewer-token",
+    });
+
+    await expect(
+      client.registerPush({ token: "firebase-installation-id", platform: "web" })
+    ).resolves.toBeUndefined();
+  });
+
   it("builds playback-info query params from PlaybackInfoParams (camelCase -> wire snake_case)", async () => {
     const fetchImpl = mockFetch((request) => {
       const url = new URL(request.url);

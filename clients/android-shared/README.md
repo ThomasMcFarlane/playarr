@@ -62,6 +62,23 @@ cd clients/android-shared
 ./gradlew :tv-android:assembleDebug       # build the Android TV debug APK
 ```
 
+Invite-approval notifications use Firebase Cloud Messaging. Supply the same
+Firebase project's public Android values at build time (never its service
+account key):
+
+```bash
+./gradlew assembleDebug \
+  -PfirebaseApiKey=<api-key> \
+  -PfirebaseMobileApplicationId=<mobile-application-id> \
+  -PfirebaseTvApplicationId=<tv-application-id> \
+  -PfirebaseProjectId=<project-id> \
+  -PfirebaseSenderId=<sender-id>
+```
+
+When these properties are absent, both Android apps build normally with push
+registration disabled. Server-side Firebase credentials are configured
+separately through `GOOGLE_APPLICATION_CREDENTIALS`.
+
 All of the above were run and passed in the environment this project was
 built in (Gradle 9.5.1, AGP 9.3.0, Kotlin 2.3.10, compileSdk/targetSdk 37 —
 auto-downloaded via the Android SDK manager, licenses were pre-accepted).

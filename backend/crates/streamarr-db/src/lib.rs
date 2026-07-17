@@ -16,9 +16,10 @@ pub use error::DbError;
 pub use pool::{connect, run_migrations, DbPool, POSTGRES_MIGRATIONS, SQLITE_MIGRATIONS};
 pub use repo::{
     CreditRepo, DeviceRepo, EmbeddingRepo, InMemoryRefreshTokenStore, LibraryViewRepo,
-    MediaFileRepo, PlaylistRepo, PolicyRepo, ProfilePinRepo, RefreshTokenRepo, RenditionRepo,
-    SourceInstanceRepo, SqlxCreditRepo, SqlxEmbeddingRepo, SqlxLibraryViewRepo, SqlxPlaylistRepo,
-    SqlxProfilePinRepo, SqlxRefreshTokenRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo,
-    SqlxUserInviteRequestRepo, SqlxWatchProgressRepo, TdarrConnectionRepo, UserInviteRepo,
-    UserInviteRequestRepo, UserRepo, WatchProgressRepo, WorkRepo,
+    MediaFileRepo, PlaylistRepo, PolicyRepo, ProfilePinRepo, PushRegistrationRepo,
+    RefreshTokenRepo, RenditionRepo, SourceInstanceRepo, SqlxCreditRepo, SqlxEmbeddingRepo,
+    SqlxLibraryViewRepo, SqlxPlaylistRepo, SqlxProfilePinRepo, SqlxPushRegistrationRepo,
+    SqlxRefreshTokenRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo,
+    SqlxWatchProgressRepo, TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo,
+    WatchProgressRepo, WorkRepo,
 };

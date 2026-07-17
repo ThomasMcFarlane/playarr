@@ -5,7 +5,9 @@ packages:
   - "admin"
 
 allowBuilds:
+  '@firebase/util': true
   esbuild: true
+  protobufjs: true
 
 # Single default catalog so every package in the workspace (libraries, TV app
 # shells, and the standalone web app) shares one resolved version of core

@@ -757,6 +757,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["push_config_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/oauth/device/authorize": {
         parameters: {
             query?: never;
@@ -1052,6 +1068,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["update_profile_pin_setting_handler"];
+        trace?: never;
+    };
+    "/api/v1/users/me/push-registrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["register_push_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/users/me/user-invite-request": {
@@ -1501,6 +1533,15 @@ export interface components {
             external_id: string;
             provider: components["schemas"]["ExternalProvider"];
         };
+        FirebaseWebConfig: {
+            api_key: string;
+            app_id: string;
+            auth_domain: string;
+            messaging_sender_id: string;
+            project_id: string;
+            storage_bucket: string;
+            vapid_public_key: string;
+        };
         ImageAsset: {
             /** Format: int32 */
             height?: number | null;
@@ -1927,6 +1968,10 @@ export interface components {
             token_type: string;
             /** Format: uuid */
             user_id: string;
+        };
+        RegisterPushRequest: {
+            platform: components["schemas"]["ClientPlatform"];
+            token: string;
         };
         ReorderPlaylistItemsRequest: {
             /**
@@ -4368,6 +4413,40 @@ export interface operations {
             };
         };
     };
+    push_config_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Firebase Web configuration */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FirebaseWebConfig"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Push notifications are not configured */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     authorize_device_handler: {
         parameters: {
             query?: never;
@@ -5352,6 +5431,49 @@ export interface operations {
             };
             /** @description The signed-in user no longer exists */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    register_push_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterPushRequest"];
+            };
+        };
+        responses: {
+            /** @description Push registration saved */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unsupported platform or invalid token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Account cannot use Playarr */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

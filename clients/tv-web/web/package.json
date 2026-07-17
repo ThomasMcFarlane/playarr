@@ -19,6 +19,7 @@
     "@streamarr-tv/domain": "workspace:*",
     "@streamarr-tv/player-core": "workspace:*",
     "@streamarr-tv/player-shaka": "workspace:*",
+    "firebase": "12.15.0",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-router-dom": "^6.28.0"

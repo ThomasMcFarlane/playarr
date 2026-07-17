@@ -9,6 +9,10 @@ plugins {
 val playarrBaseUrl = providers
     .gradleProperty("playarrBaseUrl")
     .orElse("http://10.0.2.2:18080")
+val firebaseApiKey = providers.gradleProperty("firebaseApiKey").orElse("")
+val firebaseApplicationId = providers.gradleProperty("firebaseTvApplicationId").orElse("")
+val firebaseProjectId = providers.gradleProperty("firebaseProjectId").orElse("")
+val firebaseSenderId = providers.gradleProperty("firebaseSenderId").orElse("")
 
 android {
     namespace = "io.streamarr.tv"
@@ -27,6 +31,10 @@ android {
         // Override with -PplayarrBaseUrl=http://<development-host>:18080 when
         // deploying to a physical TV. The default is Android's emulator host.
         buildConfigField("String", "PLAYARR_BASE_URL", "\"${playarrBaseUrl.get()}\"")
+        buildConfigField("String", "FIREBASE_API_KEY", "\"${firebaseApiKey.get()}\"")
+        buildConfigField("String", "FIREBASE_APPLICATION_ID", "\"${firebaseApplicationId.get()}\"")
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${firebaseProjectId.get()}\"")
+        buildConfigField("String", "FIREBASE_SENDER_ID", "\"${firebaseSenderId.get()}\"")
     }
 
     buildTypes {
@@ -100,6 +108,9 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
     implementation(libs.hilt.navigation.compose)
+
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     testImplementation(libs.junit4)
     testImplementation(libs.kotlinx.coroutines.core)
