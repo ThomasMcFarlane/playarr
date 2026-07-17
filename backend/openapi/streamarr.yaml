@@ -356,6 +356,26 @@ paths:
           description: Missing or invalid access token
         '403':
           description: Caller is authenticated but not an admin
+  /api/v1/admin/user-invites:
+    post:
+      tags:
+      - users
+      summary: |-
+        Issues a 24-hour, one-use bearer invitation. The administrator console
+        combines this token with its externally visible server origin when it
+        builds the `playarr.app/signup` QR link.
+      operationId: create_user_invite_handler
+      responses:
+        '200':
+          description: Account invitation issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInviteResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
   /api/v1/admin/users:
     get:
       tags:
@@ -707,6 +727,32 @@ paths:
                 $ref: '#/components/schemas/RefreshResponse'
         '401':
           description: refresh token is invalid, expired, revoked, or reused
+  /api/v1/auth/signup:
+    post:
+      tags:
+      - auth
+      summary: |-
+        Redeems one valid invitation and creates an ordinary Playarr account.
+        Invitation consumption is atomic and occurs before persistence, so two
+        concurrent submissions can never create two accounts from one QR code.
+      operationId: signup_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+        required: true
+      responses:
+        '200':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '409':
+          description: Username is already taken
+        '410':
+          description: Invitation is invalid, expired, or already used
   /api/v1/catalog:
     get:
       tags:
@@ -3581,6 +3627,30 @@ components:
             $ref: '#/components/schemas/EpisodeDetailSchema'
         season:
           $ref: '#/components/schemas/Season'
+    SignupRequest:
+      type: object
+      description: |-
+        Public account-creation body. The bearer invitation is write-only and
+        grants exactly one ordinary Playarr account: never administrator access,
+        and no libraries until an administrator shares them after sign-up.
+      required:
+      - invite_token
+      - username
+      - display_name
+      - password
+      properties:
+        display_name:
+          type: string
+        email:
+          type:
+          - string
+          - 'null'
+        invite_token:
+          type: string
+        password:
+          type: string
+        username:
+          type: string
     SourceInstanceRequest:
       type: object
       description: |-
@@ -4035,6 +4105,21 @@ components:
           type: integer
           format: int64
           minimum: 0
+    UserInviteResponse:
+      type: object
+      description: |-
+        The raw invite token is returned only when it is issued. Persistence
+        stores its digest, so this response is the administrator's sole chance to
+        put the bearer token into the QR link.
+      required:
+      - invite_token
+      - expires_at
+      properties:
+        expires_at:
+          type: string
+          format: date-time
+        invite_token:
+          type: string
     UserResponse:
       type: object
       description: |-

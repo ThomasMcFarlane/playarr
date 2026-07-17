@@ -102,6 +102,7 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(oauth::authorize_device_handler))
         .routes(routes!(oauth::device_token_handler))
         .routes(routes!(login::login_handler))
+        .routes(routes!(users::signup_handler))
         .routes(routes!(refresh::refresh_handler))
         .routes(routes!(webhooks::arr_webhook_handler))
         .routes(routes!(catalog::browse_catalog_handler))
@@ -148,6 +149,7 @@ fn api_router() -> OpenApiRouter<AppState> {
             users::create_user_handler,
             users::list_users_handler
         ))
+        .routes(routes!(users::create_user_invite_handler))
         .routes(routes!(
             users::update_user_handler,
             users::delete_user_handler
@@ -300,6 +302,9 @@ pub struct AppState {
     /// the real `Policy`-backed check in [`auth_extractor::AdminUser`], and
     /// `users.rs`'s admin user-management endpoints.
     pub user_repo: Arc<dyn streamarr_db::UserRepo>,
+    /// Expiring, one-use account invitations issued by administrators and
+    /// redeemed by the unauthenticated Playarr sign-up endpoint.
+    pub user_invite_repo: Arc<dyn streamarr_db::UserInviteRepo>,
     /// Optional profile-lock PIN hashes. Kept behind a distinct repository
     /// so they cannot be confused with or overwrite account passwords.
     pub profile_pin_repo: Arc<dyn streamarr_db::ProfilePinRepo>,

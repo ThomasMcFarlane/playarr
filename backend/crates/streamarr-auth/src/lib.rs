@@ -18,7 +18,7 @@ pub mod jwt;
 pub mod login;
 pub mod policy;
 pub mod refresh;
-mod secret;
+pub mod secret;
 #[cfg(test)]
 mod test_support;
 

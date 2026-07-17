@@ -48,7 +48,7 @@ pub use series::{Episode, Season, Series};
 pub use source::{SourceInstance, SourceKind};
 pub use tdarr::TdarrConnection;
 pub use user::{
-    Device, MediaPlaybackPreferences, RefreshTokenRecord, Session, User,
+    Device, MediaPlaybackPreferences, RefreshTokenRecord, Session, User, UserInvite,
     DEFAULT_PREFERRED_AUDIO_LANGUAGE,
 };
 pub use work::{

@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add expiring, one-use QR invitations from Streamarr Admin that open `playarr.app`, lock the
+  inviting server address, and let a new Playarr user create and sign into their account.
 - Deploy Playarr Web to `playarr.app` through Cloudflare Workers after successful main-branch CI,
   with fresh-on-reload app shells, an equivalent local command, and an operator setup guide.
 - Allow each Playarr Web login to select an absolute Streamarr server URL, connect to it

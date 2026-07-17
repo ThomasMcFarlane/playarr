@@ -16,10 +16,10 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use streamarr_auth::PasswordVerifier;
-use streamarr_model::{Policy, Sensitive, User};
+use streamarr_model::{Policy, Sensitive, User, UserInvite};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -54,6 +54,30 @@ pub struct CreateUserRequest {
     #[serde(default)]
     pub library_allow: Vec<Uuid>,
 }
+
+/// Public account-creation body. The bearer invitation is write-only and
+/// grants exactly one ordinary Playarr account: never administrator access,
+/// and no libraries until an administrator shares them after sign-up.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SignupRequest {
+    pub invite_token: String,
+    pub username: String,
+    pub display_name: String,
+    #[serde(default)]
+    pub email: Option<String>,
+    pub password: String,
+}
+
+/// The raw invite token is returned only when it is issued. Persistence
+/// stores its digest, so this response is the administrator's sole chance to
+/// put the bearer token into the QR link.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UserInviteResponse {
+    pub invite_token: String,
+    pub expires_at: DateTime<Utc>,
+}
+
+const USER_INVITE_TTL: Duration = Duration::hours(24);
 
 /// All-optional patch body -- only fields set to `Some` are applied.
 /// `password`, when set, is re-hashed the same way [`CreateUserRequest`]'s
@@ -266,45 +290,28 @@ fn default_policy(
     }
 }
 
-/// Provisions a new account: hashes the password, creates a default
-/// [`Policy`] for it (see [`default_policy`]), and persists the policy
-/// *before* the user -- same write-ordering rationale as `admin.rs`'s
-/// create handler (the durable dependency first), except here it's an
-/// actual foreign key: `User::policy_id` must resolve.
-#[utoipa::path(
-    post,
-    path = "/api/v1/admin/users",
-    tag = "users",
-    request_body = CreateUserRequest,
-    responses(
-        (status = 200, description = "Account created", body = UserResponse),
-        (status = 401, description = "Missing or invalid access token"),
-        (status = 403, description = "Caller is authenticated but not an admin"),
-        (status = 409, description = "Username is already taken")
-    )
-)]
-pub async fn create_user_handler(
-    State(state): State<AppState>,
-    _admin: AdminUser,
-    Json(body): Json<CreateUserRequest>,
-) -> Result<Json<UserResponse>, ApiError> {
+async fn ensure_username_available(state: &AppState, username: &str) -> Result<(), ApiError> {
     let existing = state
         .user_repo
-        .find_by_username(&body.username)
+        .find_by_username(username)
         .await
         .map_err(|err| {
             ApiError::internal(format!(
-                "failed to look up existing username {}: {err}",
-                body.username
+                "failed to look up existing username {username}: {err}"
             ))
         })?;
     if existing.is_some() {
         return Err(ApiError::conflict(format!(
-            "username {} is already taken",
-            body.username
+            "username {username} is already taken"
         )));
     }
+    Ok(())
+}
 
+async fn persist_new_user(
+    state: &AppState,
+    body: CreateUserRequest,
+) -> Result<UserResponse, ApiError> {
     let policy = default_policy(
         Uuid::new_v4(),
         &body.username,
@@ -341,12 +348,141 @@ pub async fn create_user_handler(
 
     tracing::info!(user_id = %user.id, username = %user.username, is_admin = policy.is_admin, can_stream = policy.can_stream, "created user account");
 
-    Ok(Json(UserResponse::from_user(
+    Ok(UserResponse::from_user(
         user,
         policy.is_admin,
         policy.can_stream,
         policy.library_allow,
-    )))
+    ))
+}
+
+/// Provisions a new account: hashes the password, creates a default
+/// [`Policy`] for it (see [`default_policy`]), and persists the policy
+/// *before* the user -- same write-ordering rationale as `admin.rs`'s
+/// create handler (the durable dependency first), except here it's an
+/// actual foreign key: `User::policy_id` must resolve.
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/users",
+    tag = "users",
+    request_body = CreateUserRequest,
+    responses(
+        (status = 200, description = "Account created", body = UserResponse),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Caller is authenticated but not an admin"),
+        (status = 409, description = "Username is already taken")
+    )
+)]
+pub async fn create_user_handler(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+    Json(body): Json<CreateUserRequest>,
+) -> Result<Json<UserResponse>, ApiError> {
+    ensure_username_available(&state, &body.username).await?;
+    Ok(Json(persist_new_user(&state, body).await?))
+}
+
+/// Issues a 24-hour, one-use bearer invitation. The administrator console
+/// combines this token with its externally visible server origin when it
+/// builds the `playarr.app/signup` QR link.
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/user-invites",
+    tag = "users",
+    responses(
+        (status = 200, description = "Account invitation issued", body = UserInviteResponse),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Caller is authenticated but not an admin")
+    )
+)]
+pub async fn create_user_invite_handler(
+    State(state): State<AppState>,
+    admin: AdminUser,
+) -> Result<Json<UserInviteResponse>, ApiError> {
+    let invite_token = streamarr_auth::secret::opaque_token();
+    let now = Utc::now();
+    let expires_at = now + USER_INVITE_TTL;
+    state
+        .user_invite_repo
+        .create(&UserInvite {
+            token_hash: streamarr_auth::secret::hash_token(&invite_token),
+            created_by: admin.user_id,
+            created_at: now,
+            expires_at,
+        })
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to persist user invitation: {err}")))?;
+
+    tracing::info!(created_by = %admin.user_id, %expires_at, "created user invitation");
+    Ok(Json(UserInviteResponse {
+        invite_token,
+        expires_at,
+    }))
+}
+
+/// Redeems one valid invitation and creates an ordinary Playarr account.
+/// Invitation consumption is atomic and occurs before persistence, so two
+/// concurrent submissions can never create two accounts from one QR code.
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/signup",
+    tag = "auth",
+    request_body = SignupRequest,
+    responses(
+        (status = 200, description = "Account created", body = UserResponse),
+        (status = 409, description = "Username is already taken"),
+        (status = 410, description = "Invitation is invalid, expired, or already used")
+    )
+)]
+pub async fn signup_handler(
+    State(state): State<AppState>,
+    Json(body): Json<SignupRequest>,
+) -> Result<Json<UserResponse>, ApiError> {
+    let token_hash = streamarr_auth::secret::hash_token(&body.invite_token);
+    let now = Utc::now();
+    let valid = state
+        .user_invite_repo
+        .is_valid(&token_hash, now)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to validate user invitation: {err}")))?;
+    if !valid {
+        return Err(invalid_invite());
+    }
+
+    ensure_username_available(&state, &body.username).await?;
+    let consumed = state
+        .user_invite_repo
+        .consume(&token_hash, now)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to redeem user invitation: {err}")))?;
+    if !consumed {
+        return Err(invalid_invite());
+    }
+
+    let username = body.username.clone();
+    let user = persist_new_user(
+        &state,
+        CreateUserRequest {
+            username: body.username,
+            display_name: body.display_name,
+            email: body.email,
+            password: body.password,
+            is_admin: false,
+            can_stream: true,
+            library_allow: Vec::new(),
+        },
+    )
+    .await?;
+    tracing::info!(user_id = %user.id, %username, "redeemed user invitation");
+    Ok(Json(user))
+}
+
+fn invalid_invite() -> ApiError {
+    ApiError::new(
+        StatusCode::GONE,
+        "invalid_invite",
+        "this invitation is invalid, expired, or has already been used",
+    )
 }
 
 /// Every provisioned account. A user whose `Policy` has gone missing (a
@@ -883,6 +1019,124 @@ mod tests {
     use uuid::Uuid;
 
     use crate::test_support::{bearer_header, mint_access_token, seed_admin_user, test_state};
+
+    async fn issue_invite(router: &axum::Router, token: &str) -> String {
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/admin/user-invites")
+                    .header("Authorization", bearer_header(token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert!(json["expires_at"].is_string());
+        json["invite_token"].as_str().unwrap().to_string()
+    }
+
+    #[tokio::test]
+    async fn invite_redeems_once_into_a_non_admin_streaming_account() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+        let admin_token = mint_access_token(&state, admin_id);
+        let invite_token = issue_invite(&router, &admin_token).await;
+
+        let signup_body = serde_json::json!({
+            "invite_token": invite_token,
+            "username": "invited-alice",
+            "display_name": "Invited Alice",
+            "email": "alice@example.com",
+            "password": "correct horse battery staple",
+        });
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/auth/signup")
+                    .header("content-type", "application/json")
+                    .body(Body::from(signup_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let created: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(created["username"], "invited-alice");
+        assert_eq!(created["is_admin"], false);
+        assert_eq!(created["can_stream"], true);
+        assert_eq!(created["library_allow"], serde_json::json!([]));
+
+        let second_body = serde_json::json!({
+            "invite_token": signup_body["invite_token"],
+            "username": "second-user",
+            "display_name": "Second User",
+            "password": "another secure password",
+        });
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/auth/signup")
+                    .header("content-type", "application/json")
+                    .body(Body::from(second_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::GONE);
+    }
+
+    #[tokio::test]
+    async fn invite_issuance_requires_an_admin() {
+        let (router, _) = test_state().await;
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/admin/user-invites")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn invalid_invite_does_not_reveal_whether_a_username_exists() {
+        let (router, _) = test_state().await;
+        let body = serde_json::json!({
+            "invite_token": "not-a-real-invite",
+            "username": "test-default",
+            "display_name": "Existing Username Probe",
+            "password": "a reasonably long password",
+        });
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/auth/signup")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::GONE);
+    }
 
     #[tokio::test]
     async fn create_then_list_round_trips() {

@@ -110,6 +110,8 @@ export type TdarrConnectionRequest = components["schemas"]["TdarrConnectionReque
 export type TdarrConnectionResponse = components["schemas"]["TdarrConnectionResponse"];
 
 export type CreateUserRequest = components["schemas"]["CreateUserRequest"];
+export type SignupRequest = components["schemas"]["SignupRequest"];
+export type UserInviteResponse = components["schemas"]["UserInviteResponse"];
 export type UpdateUserRequest = components["schemas"]["UpdateUserRequest"];
 export type UserResponse = components["schemas"]["UserResponse"];
 export type PlayerPreferences = components["schemas"]["PlayerPreferencesResponse"];
@@ -249,6 +251,7 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/admin/tdarr", method: "DELETE" },
   { schemaPath: "/api/v1/admin/users", method: "POST" },
   { schemaPath: "/api/v1/admin/users", method: "GET" },
+  { schemaPath: "/api/v1/admin/user-invites", method: "POST" },
   { schemaPath: "/api/v1/admin/users/{id}", method: "PATCH" },
   { schemaPath: "/api/v1/admin/users/{id}", method: "DELETE" },
   { schemaPath: "/api/v1/users/me/player-preferences", method: "GET" },
@@ -414,6 +417,11 @@ export class ApiClient {
    */
   async login(body: LoginRequest): Promise<LoginResponse> {
     return this.unwrap(await this.raw.POST("/api/v1/auth/login", { body }));
+  }
+
+  /** Redeems an administrator-issued, one-use invitation into a Playarr account. */
+  async signup(body: SignupRequest): Promise<UserResponse> {
+    return this.unwrap(await this.raw.POST("/api/v1/auth/signup", { body }));
   }
 
   /**
@@ -658,6 +666,11 @@ export class ApiClient {
   /** Provisions a new account. 409s if `body.username` is already taken. */
   async createUser(body: CreateUserRequest): Promise<UserResponse> {
     return this.unwrap(await this.raw.POST("/api/v1/admin/users", { body }));
+  }
+
+  /** Issues a 24-hour, one-use invitation for the Playarr sign-up flow. */
+  async createUserInvite(): Promise<UserInviteResponse> {
+    return this.unwrap(await this.raw.POST("/api/v1/admin/user-invites", {}));
   }
 
   /** All-optional patch -- only fields set in `body` are changed. */

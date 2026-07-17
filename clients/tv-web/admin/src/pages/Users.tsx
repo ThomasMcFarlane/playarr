@@ -7,9 +7,10 @@ import {
   type UserResponse,
   type WorkKind,
 } from "@streamarr-tv/api-client";
-import { useApiClient, useCurrentUserId } from "../lib/ApiClientProvider";
+import { useApiBaseUrl, useApiClient, useCurrentUserId } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { Modal } from "../components/Modal";
+import { QrCode } from "../components/QrCode";
 import { KIND_LABELS } from "../components/PosterCard";
 
 const EMPTY_FORM: CreateUserRequest = {
@@ -264,6 +265,7 @@ const SELF_LOCKOUT_WARNINGS: Record<SelfLockoutAction, string> = {
 export function UsersPage() {
   useDocumentTitle("Users");
   const client = useApiClient();
+  const apiBaseUrl = useApiBaseUrl();
   const currentUserId = useCurrentUserId();
   const [users, setUsers] = useState<UserResponse[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -271,6 +273,11 @@ export function UsersPage() {
   const [submitting, setSubmitting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteExpiresAt, setInviteExpiresAt] = useState<string | null>(null);
+  const [creatingInvite, setCreatingInvite] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
 
   // Source instances back the type-first permission picker below -- fetched
   // once on mount, same call `SourceInstancesPage`/`LibraryToolbarMenus`
@@ -301,6 +308,34 @@ export function UsersPage() {
       .listUsers()
       .then(setUsers)
       .catch((err: unknown) => setError(describeApiError(err)));
+  }
+
+  async function handleCreateInvite() {
+    setCreatingInvite(true);
+    setInviteError(null);
+    setInviteCopied(false);
+    try {
+      const invite = await client.createUserInvite();
+      const url = new URL("/signup", "https://playarr.app");
+      url.searchParams.set("server", apiBaseUrl);
+      url.searchParams.set("invite", invite.invite_token);
+      setInviteLink(url.toString());
+      setInviteExpiresAt(invite.expires_at);
+    } catch (err) {
+      setInviteError(describeApiError(err));
+    } finally {
+      setCreatingInvite(false);
+    }
+  }
+
+  async function handleCopyInvite() {
+    if (!inviteLink) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setInviteCopied(true);
+    } catch {
+      setInviteError("Could not copy the link. Select and copy it manually.");
+    }
   }
 
   useEffect(refresh, [client]);
@@ -451,7 +486,17 @@ export function UsersPage() {
 
   return (
     <div className="page">
-      <h1 className="page-title">Users</h1>
+      <div className="page-heading-row">
+        <h1 className="page-title">Users</h1>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => void handleCreateInvite()}
+          disabled={creatingInvite}
+        >
+          {creatingInvite ? "Creating invite..." : "Invite user"}
+        </button>
+      </div>
       <p className="muted" style={{ maxWidth: 640, marginBottom: "1rem" }}>
         Real username/password accounts, each with a Policy controlling admin access and Playarr
         streaming access -- the two are independent grants. A new account starts with no library
@@ -460,6 +505,9 @@ export function UsersPage() {
       </p>
 
       {error && <p className="error-text" style={{ marginBottom: "1rem" }}>{error}</p>}
+      {inviteError && !inviteLink && (
+        <p className="error-text" style={{ marginBottom: "1rem" }}>{inviteError}</p>
+      )}
 
       {users !== null && users.length > 0 && (
         <div className="provider-grid" style={{ marginBottom: "1.5rem" }}>
@@ -693,6 +741,51 @@ export function UsersPage() {
               ))}
             </div>
           )}
+        </Modal>
+      )}
+
+      {inviteLink && (
+        <Modal
+          title="Invite a Playarr user"
+          onClose={() => {
+            setInviteLink(null);
+            setInviteError(null);
+          }}
+          footer={
+            <>
+              <div className="modal-footer-left" />
+              <div className="modal-footer-right">
+                <button type="button" className="btn btn-secondary" onClick={() => setInviteLink(null)}>
+                  Close
+                </button>
+                <button type="button" className="btn btn-primary" onClick={() => void handleCopyInvite()}>
+                  {inviteCopied ? "Copied" : "Copy link"}
+                </button>
+              </div>
+            </>
+          }
+        >
+          <p className="muted" style={{ margin: 0 }}>
+            Ask the new user to scan this code. It opens Playarr with this Streamarr server locked
+            in, then lets them choose their account details.
+          </p>
+          <QrCode value={inviteLink} size={260} />
+          <div className="modal-field">
+            <label htmlFor="user-invite-link">Invite link</label>
+            <input
+              id="user-invite-link"
+              className="input"
+              value={inviteLink}
+              readOnly
+              onFocus={(event) => event.currentTarget.select()}
+            />
+          </div>
+          {inviteExpiresAt && (
+            <p className="hint" style={{ margin: 0 }}>
+              Expires {new Date(inviteExpiresAt).toLocaleString()}. The invite can be used once.
+            </p>
+          )}
+          {inviteError && <p className="error-text hint" style={{ margin: 0 }}>{inviteError}</p>}
         </Modal>
       )}
     </div>

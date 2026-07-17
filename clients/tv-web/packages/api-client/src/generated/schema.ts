@@ -258,6 +258,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/user-invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issues a 24-hour, one-use bearer invitation. The administrator console
+         *     combines this token with its externally visible server origin when it
+         *     builds the `playarr.app/signup` QR link.
+         */
+        post: operations["create_user_invite_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users": {
         parameters: {
             query?: never;
@@ -430,6 +451,27 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["refresh_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeems one valid invitation and creates an ordinary Playarr account.
+         *     Invitation consumption is atomic and occurs before persistence, so two
+         *     concurrent submissions can never create two accounts from one QR code.
+         */
+        post: operations["signup_handler"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1826,6 +1868,18 @@ export interface components {
             season: components["schemas"]["Season"];
         };
         /**
+         * @description Public account-creation body. The bearer invitation is write-only and
+         *     grants exactly one ordinary Playarr account: never administrator access,
+         *     and no libraries until an administrator shares them after sign-up.
+         */
+        SignupRequest: {
+            display_name: string;
+            email?: string | null;
+            invite_token: string;
+            password: string;
+            username: string;
+        };
+        /**
          * @description Request body for registering (or re-registering, by re-POSTing with the
          *     same `id` you got back) a `*arr` connection. `api_key` is write-only --
          *     it is never echoed back in [`SourceInstanceResponse`].
@@ -2027,6 +2081,16 @@ export interface components {
             duration_ms: number;
             /** Format: int64 */
             position_ms: number;
+        };
+        /**
+         * @description The raw invite token is returned only when it is issued. Persistence
+         *     stores its digest, so this response is the administrator's sole chance to
+         *     put the bearer token into the QR link.
+         */
+        UserInviteResponse: {
+            /** Format: date-time */
+            expires_at: string;
+            invite_token: string;
         };
         /**
          * @description The redacted, admin-facing projection of [`streamarr_model::User`] --
@@ -2741,6 +2805,40 @@ export interface operations {
             };
         };
     };
+    create_user_invite_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Account invitation issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserInviteResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_users_handler: {
         parameters: {
             query?: never;
@@ -3277,6 +3375,44 @@ export interface operations {
             };
             /** @description refresh token is invalid, expired, revoked, or reused */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    signup_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignupRequest"];
+            };
+        };
+        responses: {
+            /** @description Account created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description Username is already taken */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invitation is invalid, expired, or already used */
+            410: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -24,6 +24,7 @@ import {
 } from "./pages/Player";
 import { SettingsPage } from "./pages/Settings";
 import { LoginPage } from "./pages/Login";
+import { SignupPage } from "./pages/Signup";
 import { DeviceLinkPage } from "./pages/DeviceLink";
 import { SearchPage } from "./pages/Search";
 import { PlaylistsPage } from "./pages/Playlists";
@@ -481,6 +482,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignupPage />} />
       <Route path="/link" element={<DeviceLinkPage />} />
       <Route element={<AppShell />}>
         <Route path="/" element={<HomePage />} />

@@ -37,6 +37,17 @@ pub struct User {
     pub preferred_audio_language: String,
 }
 
+/// One administrator-issued, time-limited invitation to create a Playarr
+/// account. Only the digest of the bearer token is persisted; the raw token
+/// is returned once to the administrator and carried in the invite link.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UserInvite {
+    pub token_hash: String,
+    pub created_by: Uuid,
+    pub created_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+}
+
 /// A signed-in viewer's remembered choices for one concrete media file.
 /// Track ids are the stable source ids exposed by playback negotiation
 /// (`source-audio-*` / `source-subtitle-*`); `None` means automatic audio

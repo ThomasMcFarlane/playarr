@@ -18,6 +18,7 @@ pub use repo::{
     CreditRepo, DeviceRepo, EmbeddingRepo, InMemoryRefreshTokenStore, LibraryViewRepo,
     MediaFileRepo, PlaylistRepo, PolicyRepo, ProfilePinRepo, RefreshTokenRepo, RenditionRepo,
     SourceInstanceRepo, SqlxCreditRepo, SqlxEmbeddingRepo, SqlxLibraryViewRepo, SqlxPlaylistRepo,
-    SqlxProfilePinRepo, SqlxRefreshTokenRepo, SqlxTdarrConnectionRepo, SqlxWatchProgressRepo,
-    TdarrConnectionRepo, UserRepo, WatchProgressRepo, WorkRepo,
+    SqlxProfilePinRepo, SqlxRefreshTokenRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo,
+    SqlxWatchProgressRepo, TdarrConnectionRepo, UserInviteRepo, UserRepo, WatchProgressRepo,
+    WorkRepo,
 };

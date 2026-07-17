@@ -411,6 +411,61 @@ describe("ApiClient", () => {
     expect(response.user_id).toBe("00000000-0000-0000-0000-000000000009");
   });
 
+  it("redeems a user invite without attaching an access token", async () => {
+    const getAccessToken = vi.fn(() => "should-not-be-used");
+    const fetchImpl = mockFetch(async (request) => {
+      expect(new URL(request.url).pathname).toBe("/api/v1/auth/signup");
+      expect(request.headers.has("Authorization")).toBe(false);
+      expect(await request.json()).toEqual({
+        invite_token: "one-use-token",
+        username: "alice",
+        display_name: "Alice",
+        password: "secure password",
+      });
+      return jsonResponse(200, {
+        id: "00000000-0000-0000-0000-000000000010",
+        username: "alice",
+        display_name: "Alice",
+        email: null,
+        is_admin: false,
+        can_stream: true,
+        library_allow: [],
+        disabled: false,
+        created_at: "2026-07-17T00:00:00Z",
+        preferred_audio_language: "en",
+      });
+    });
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken });
+
+    const user = await client.signup({
+      invite_token: "one-use-token",
+      username: "alice",
+      display_name: "Alice",
+      password: "secure password",
+    });
+
+    expect(user.username).toBe("alice");
+    expect(getAccessToken).not.toHaveBeenCalled();
+  });
+
+  it("attaches administrator authentication when issuing a user invite", async () => {
+    const getAccessToken = vi.fn(() => "admin-token");
+    const fetchImpl = mockFetch((request) => {
+      expect(new URL(request.url).pathname).toBe("/api/v1/admin/user-invites");
+      expect(request.headers.get("Authorization")).toBe("Bearer admin-token");
+      return jsonResponse(200, {
+        invite_token: "one-use-token",
+        expires_at: "2026-07-18T00:00:00Z",
+      });
+    });
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken });
+
+    const invite = await client.createUserInvite();
+
+    expect(invite.invite_token).toBe("one-use-token");
+    expect(getAccessToken).toHaveBeenCalledOnce();
+  });
+
   it("builds playback-info query params from PlaybackInfoParams (camelCase -> wire snake_case)", async () => {
     const fetchImpl = mockFetch((request) => {
       const url = new URL(request.url);

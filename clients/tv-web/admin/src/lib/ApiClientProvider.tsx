@@ -20,6 +20,7 @@ const ADMIN_LOGIN_IDENTITY = {
 
 interface ApiClientContextValue {
   client: ApiClient;
+  apiBaseUrl: string;
   /**
    * The signed-in user's id, decoded (unverified -- see
    * `decodeAccessTokenUserId`'s doc comment) from the current access
@@ -98,7 +99,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
   }, [client]);
 
   return (
-    <ApiClientContext.Provider value={{ client, currentUserId, ensureSignedIn }}>
+    <ApiClientContext.Provider value={{ client, apiBaseUrl, currentUserId, ensureSignedIn }}>
       {children}
     </ApiClientContext.Provider>
   );
@@ -114,6 +115,10 @@ function useApiClientContext(): ApiClientContextValue {
 
 export function useApiClient(): ApiClient {
   return useApiClientContext().client;
+}
+
+export function useApiBaseUrl(): string {
+  return useApiClientContext().apiBaseUrl;
 }
 
 /** See `ApiClientContextValue.currentUserId`'s doc comment. */

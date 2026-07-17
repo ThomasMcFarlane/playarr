@@ -1659,6 +1659,27 @@ button {
   gap: 0.5rem;
 }
 
+.page-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.invite-qr {
+  align-self: center;
+  display: flex;
+  padding: 0.75rem;
+  border-radius: var(--radius-card);
+  background: #fff;
+}
+
+.invite-qr svg {
+  display: block;
+  width: min(260px, 100%);
+  height: auto;
+}
+
 /* Type-first user permissions. Each Type is the bulk-select boundary;
    only source instances capable of supplying that Type appear beneath it. */
 .permission-types {

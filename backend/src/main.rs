@@ -738,13 +738,13 @@ async fn boot_api(
     use streamarr_db::repo::{
         seed_default_views, SqlxCreditRepo, SqlxDeviceRepo, SqlxLibraryViewRepo, SqlxMediaFileRepo,
         SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo, SqlxRefreshTokenRepo,
-        SqlxRenditionRepo, SqlxSourceInstanceRepo, SqlxTdarrConnectionRepo, SqlxUserRepo,
-        SqlxWatchProgressRepo, SqlxWorkRepo,
+        SqlxRenditionRepo, SqlxSourceInstanceRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo,
+        SqlxUserRepo, SqlxWatchProgressRepo, SqlxWorkRepo,
     };
     use streamarr_db::{
         CreditRepo, DeviceRepo, LibraryViewRepo, MediaFileRepo, PlaylistRepo, PolicyRepo,
-        ProfilePinRepo, RenditionRepo, SourceInstanceRepo, TdarrConnectionRepo, UserRepo,
-        WatchProgressRepo, WorkRepo,
+        ProfilePinRepo, RenditionRepo, SourceInstanceRepo, TdarrConnectionRepo, UserInviteRepo,
+        UserRepo, WatchProgressRepo, WorkRepo,
     };
     use streamarr_model::VersionEnvelope;
 
@@ -773,6 +773,7 @@ async fn boot_api(
     let source_instance_repo: Arc<dyn SourceInstanceRepo> =
         Arc::new(SqlxSourceInstanceRepo::new(pool.clone()));
     let user_repo: Arc<dyn UserRepo> = Arc::new(SqlxUserRepo::new(pool.clone()));
+    let user_invite_repo: Arc<dyn UserInviteRepo> = Arc::new(SqlxUserInviteRepo::new(pool.clone()));
     let profile_pin_repo: Arc<dyn ProfilePinRepo> = Arc::new(SqlxProfilePinRepo::new(pool.clone()));
     let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
     let watch_progress: Arc<dyn WatchProgressRepo> =
@@ -946,6 +947,7 @@ async fn boot_api(
         auth_mode,
         user_directory,
         user_repo,
+        user_invite_repo,
         profile_pin_repo,
         policy_repo,
         sessions: refresh,

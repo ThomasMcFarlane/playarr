@@ -21,6 +21,7 @@ mod rendition;
 mod source_instance;
 mod tdarr_connection;
 mod user;
+mod user_invite;
 mod watch_progress;
 mod work;
 
@@ -40,5 +41,6 @@ pub use rendition::{RenditionRepo, SqlxRenditionRepo};
 pub use source_instance::{SourceInstanceRepo, SqlxSourceInstanceRepo};
 pub use tdarr_connection::{SqlxTdarrConnectionRepo, TdarrConnectionRepo};
 pub use user::{SqlxUserRepo, UserRepo};
+pub use user_invite::{SqlxUserInviteRepo, UserInviteRepo};
 pub use watch_progress::{SqlxWatchProgressRepo, WatchProgressRepo};
 pub use work::{SqlxWorkRepo, WorkRepo};
