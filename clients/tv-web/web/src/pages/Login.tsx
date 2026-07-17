@@ -5,6 +5,7 @@ import { useApiBaseUrl, useAuth } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { DeviceLogin } from "../components/DeviceLogin";
 import { IS_TV } from "../lib/clientPlatform";
+import { initialLoginServerUrl } from "../lib/loginServerUrl";
 
 interface LocationState {
   /** Set by `App.tsx`'s app-shell redirect so a successful login returns to wherever the user was headed. */
@@ -34,7 +35,9 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as LocationState | null;
-  const [serverUrl, setServerUrl] = useState(apiBaseUrl);
+  const [serverUrl, setServerUrl] = useState(() =>
+    initialLoginServerUrl(apiBaseUrl, window.location.origin, window.location.hostname)
+  );
   const [username, setUsername] = useState(state?.initialUsername ?? "");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);

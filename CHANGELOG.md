@@ -73,6 +73,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Leave the Streamarr server field blank on `playarr.app` instead of suggesting the hosted
+  client origin, while retaining explicit and self-hosted server defaults.
 - Build Playarr Web's workspace dependencies before local or CI Cloudflare deployments.
 - Correct the VIDAA guide to use the reachable Playarr Web endpoint in the TV
   Browser instead of presenting the unsupported `hisense://debug` scheme as a
