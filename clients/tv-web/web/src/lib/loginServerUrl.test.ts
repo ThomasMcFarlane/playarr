@@ -3,32 +3,16 @@ import { initialLoginServerUrl } from "./loginServerUrl";
 
 describe("initialLoginServerUrl", () => {
   it("leaves the server blank on the hosted Playarr origin", () => {
-    expect(
-      initialLoginServerUrl(
-        "https://playarr.app",
-        "https://playarr.app",
-        "playarr.app"
-      )
-    ).toBe("");
+    expect(initialLoginServerUrl("https://playarr.app", "playarr.app")).toBe("");
   });
 
-  it("preserves an explicit server on the hosted Playarr origin", () => {
-    expect(
-      initialLoginServerUrl(
-        "https://streamarr.example.com",
-        "https://playarr.app",
-        "playarr.app"
-      )
-    ).toBe("https://streamarr.example.com");
+  it("does not prefill a previously selected server on hosted Playarr", () => {
+    expect(initialLoginServerUrl("http://203.0.113.10:8080", "playarr.app")).toBe("");
   });
 
   it("preserves same-origin defaults for self-hosted clients", () => {
-    expect(
-      initialLoginServerUrl(
-        "https://media.example.com",
-        "https://media.example.com",
-        "media.example.com"
-      )
-    ).toBe("https://media.example.com");
+    expect(initialLoginServerUrl("https://media.example.com", "media.example.com")).toBe(
+      "https://media.example.com"
+    );
   });
 });
