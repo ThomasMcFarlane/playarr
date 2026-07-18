@@ -60,6 +60,7 @@ import Foundation
 public enum WorkKind: String, Codable, Sendable, CaseIterable, Hashable {
     case movie
     case series
+    case site
     case artist
     case author
 }
@@ -291,6 +292,155 @@ public struct CatalogPage: Codable, Sendable {
     public init(items: [Work], total: Int64? = nil) {
         self.items = items
         self.total = total
+    }
+}
+
+// MARK: - Viewer library state
+
+public enum WatchState: String, Codable, Sendable, CaseIterable, Hashable {
+    case unseen
+    case partWatched = "part_watched"
+    case watched
+}
+
+public struct WatchProgress: Codable, Identifiable, Hashable, Sendable {
+    public var mediaFileID: UUID
+    public var workID: UUID
+    public var positionMS: Int64
+    public var durationMS: Int64
+    public var state: WatchState
+    public var updatedAt: Date?
+
+    public var id: UUID { mediaFileID }
+
+    enum CodingKeys: String, CodingKey {
+        case mediaFileID = "media_file_id"
+        case workID = "work_id"
+        case positionMS = "position_ms"
+        case durationMS = "duration_ms"
+        case state
+        case updatedAt = "updated_at"
+    }
+
+    public init(
+        mediaFileID: UUID,
+        workID: UUID,
+        positionMS: Int64,
+        durationMS: Int64,
+        state: WatchState,
+        updatedAt: Date? = nil
+    ) {
+        self.mediaFileID = mediaFileID
+        self.workID = workID
+        self.positionMS = positionMS
+        self.durationMS = durationMS
+        self.state = state
+        self.updatedAt = updatedAt
+    }
+}
+
+public enum PlaylistMediaType: String, Codable, Sendable, CaseIterable, Hashable {
+    case video
+    case audio
+}
+
+public struct Playlist: Codable, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public var name: String
+    public var ownerUserID: UUID?
+    public var parentPlaylistID: UUID?
+    public var isSystem: Bool
+    public var mediaType: PlaylistMediaType
+    public var createdAt: Date
+    public var updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case ownerUserID = "owner_user_id"
+        case parentPlaylistID = "parent_playlist_id"
+        case isSystem = "is_system"
+        case mediaType = "media_type"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+
+    public init(
+        id: UUID,
+        name: String,
+        ownerUserID: UUID? = nil,
+        parentPlaylistID: UUID? = nil,
+        isSystem: Bool,
+        mediaType: PlaylistMediaType,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
+        self.id = id
+        self.name = name
+        self.ownerUserID = ownerUserID
+        self.parentPlaylistID = parentPlaylistID
+        self.isSystem = isSystem
+        self.mediaType = mediaType
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+public struct PlaylistItem: Codable, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public var playlistID: UUID
+    public var workID: UUID
+    public var trackID: UUID?
+    public var position: Int32
+    public var addedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case playlistID = "playlist_id"
+        case workID = "work_id"
+        case trackID = "track_id"
+        case position
+        case addedAt = "added_at"
+    }
+
+    public init(
+        id: UUID,
+        playlistID: UUID,
+        workID: UUID,
+        trackID: UUID? = nil,
+        position: Int32,
+        addedAt: Date
+    ) {
+        self.id = id
+        self.playlistID = playlistID
+        self.workID = workID
+        self.trackID = trackID
+        self.position = position
+        self.addedAt = addedAt
+    }
+}
+
+public struct AvailableProfile: Codable, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public var username: String
+    public var displayName: String
+    public var pinLocked: Bool
+    public var isCurrent: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case username
+        case displayName = "display_name"
+        case pinLocked = "pin_locked"
+        case isCurrent = "is_current"
+    }
+
+    public init(id: UUID, username: String, displayName: String, pinLocked: Bool, isCurrent: Bool) {
+        self.id = id
+        self.username = username
+        self.displayName = displayName
+        self.pinLocked = pinLocked
+        self.isCurrent = isCurrent
     }
 }
 

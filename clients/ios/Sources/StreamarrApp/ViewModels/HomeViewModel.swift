@@ -17,6 +17,12 @@ import StreamarrKit
 @MainActor
 @Observable
 public final class HomeViewModel {
+    public struct ProgressItem: Identifiable, Sendable {
+        public var work: Work
+        public var progress: WatchProgress
+        public var id: UUID { work.id }
+    }
+
     public enum LoadState: Equatable, Sendable {
         case idle
         case loading
@@ -26,6 +32,7 @@ public final class HomeViewModel {
 
     public private(set) var loadState: LoadState = .idle
     public private(set) var recentlyAdded: [Work] = []
+    public private(set) var continueWatching: [ProgressItem] = []
 
     private let apiClient: StreamarrAPIClient
 
@@ -36,7 +43,7 @@ public final class HomeViewModel {
     public func load() async {
         loadState = .loading
         do {
-            let page = try await apiClient.browseCatalog(
+            async let catalogRequest = apiClient.browseCatalog(
                 kind: nil,
                 genre: nil,
                 tag: nil,
@@ -44,7 +51,26 @@ public final class HomeViewModel {
                 limit: 20,
                 offset: 0
             )
+            async let progressRequest = apiClient.listWatchProgress()
+            let page = try await catalogRequest
+            let progress = (try? await progressRequest) ?? []
             recentlyAdded = page.items
+
+            var workByID = Dictionary(uniqueKeysWithValues: page.items.map { ($0.id, $0) })
+            let resumable = progress
+                .filter { $0.state == .partWatched }
+                .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+                .prefix(12)
+
+            for item in resumable where workByID[item.workID] == nil {
+                if let detail = try? await apiClient.fetchWork(id: item.workID) {
+                    workByID[item.workID] = detail.work
+                }
+            }
+
+            continueWatching = resumable.compactMap { progress in
+                workByID[progress.workID].map { ProgressItem(work: $0, progress: progress) }
+            }
             loadState = .loaded
         } catch let error as APIError {
             loadState = .failed(error.displayMessage)

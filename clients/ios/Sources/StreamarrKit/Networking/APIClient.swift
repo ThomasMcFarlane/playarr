@@ -170,6 +170,15 @@ public protocol StreamarrAPIClient: Sendable {
 
     func searchCatalog(query: String, limit: Int?) async throws -> [Work]
     func fetchWork(id: UUID) async throws -> WorkDetail
+    func listCatalogKinds() async throws -> [WorkKind]
+    func fetchArtwork(workID: UUID, kind: ImageKind) async throws -> Data
+
+    // Viewer state
+    func listWatchProgress() async throws -> [WatchProgress]
+    func listPlaylists() async throws -> [Playlist]
+    func listPlaylistItems(playlistID: UUID) async throws -> [PlaylistItem]
+    func listProfiles() async throws -> [AvailableProfile]
+    func playbackRequestHeaders() async throws -> [String: String]
 
     // Playback
     func playbackInfo(
@@ -189,6 +198,18 @@ public protocol StreamarrAPIClient: Sendable {
     /// Resolves a possibly-relative URL string (as returned by
     /// `PlaybackInfoResponse.url`) against `baseURL`.
     func resolvedURL(forPath path: String) -> URL?
+}
+
+public extension StreamarrAPIClient {
+    func listCatalogKinds() async throws -> [WorkKind] { [] }
+    func fetchArtwork(workID: UUID, kind: ImageKind) async throws -> Data {
+        throw APIError.notFound(nil)
+    }
+    func listWatchProgress() async throws -> [WatchProgress] { [] }
+    func listPlaylists() async throws -> [Playlist] { [] }
+    func listPlaylistItems(playlistID: UUID) async throws -> [PlaylistItem] { [] }
+    func listProfiles() async throws -> [AvailableProfile] { [] }
+    func playbackRequestHeaders() async throws -> [String: String] { [:] }
 }
 
 /// Real, working `URLSession`-backed implementation of `StreamarrAPIClient`.
@@ -274,6 +295,38 @@ public final class APIClient: StreamarrAPIClient {
         try await get("/api/v1/catalog/\(id.uuidString)")
     }
 
+    public func listCatalogKinds() async throws -> [WorkKind] {
+        try await get("/api/v1/catalog/kinds")
+    }
+
+    public func fetchArtwork(workID: UUID, kind: ImageKind) async throws -> Data {
+        try await authenticatedData(path: "/api/v1/artwork/work/\(workID.uuidString)/\(kind.rawValue)")
+    }
+
+    // MARK: Viewer state
+
+    public func listWatchProgress() async throws -> [WatchProgress] {
+        try await get("/api/v1/playback/progress")
+    }
+
+    public func listPlaylists() async throws -> [Playlist] {
+        try await get("/api/v1/playlists")
+    }
+
+    public func listPlaylistItems(playlistID: UUID) async throws -> [PlaylistItem] {
+        try await get("/api/v1/playlists/\(playlistID.uuidString)/items")
+    }
+
+    public func listProfiles() async throws -> [AvailableProfile] {
+        try await get("/api/v1/users/profiles")
+    }
+
+    public func playbackRequestHeaders() async throws -> [String: String] {
+        guard let accessTokenCoordinator else { return [:] }
+        let token = try await accessTokenCoordinator.accessToken(forceRefresh: false)
+        return ["Authorization": "Bearer \(token.exposeSecret())"]
+    }
+
     // MARK: Playback
 
     public func playbackInfo(
@@ -327,6 +380,17 @@ public final class APIClient: StreamarrAPIClient {
         } catch APIError.unauthorized where authenticated && accessTokenCoordinator != nil {
             try await attachAuthorization(to: &request, forceRefresh: true)
             return try await send(request)
+        }
+    }
+
+    private func authenticatedData(path: String) async throws -> Data {
+        var request = try makeRequest(path: path, method: "GET", query: [])
+        try await attachAuthorization(to: &request)
+        do {
+            return try await sendRaw(request, expectedStatuses: [200])
+        } catch APIError.unauthorized where accessTokenCoordinator != nil {
+            try await attachAuthorization(to: &request, forceRefresh: true)
+            return try await sendRaw(request, expectedStatuses: [200])
         }
     }
 

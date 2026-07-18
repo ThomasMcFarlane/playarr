@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		12DDD6DBB72468965DC3CD6A /* ProfilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 238F31E1B80D5BD46ACA0808 /* ProfilesView.swift */; };
 		2803A8AB28DD8487529C6C88 /* WorkDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8525AEDD13C65F22CAA667F /* WorkDetailViewModel.swift */; };
 		37478F9C0FAA2B8BA6F84F30 /* OpenAPISchemasTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22FB21E00BEA101D1E185EFF /* OpenAPISchemasTests.swift */; };
 		3D9C69CD0BE2BE5CC8DFCA08 /* PlayerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2EA71A178219F9CBB095F37 /* PlayerViewModel.swift */; };
@@ -19,8 +20,10 @@
 		6EE150958738262AC8FC109A /* WorkDetailViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038CD121C4EB96DB14C563E1 /* WorkDetailViewModelTests.swift */; };
 		7FD1A0143CC3F416E989ED08 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 350D67A8517F32D1F1E146CE /* AppEnvironment.swift */; };
 		84B3D28EC80CEF35F73B994D /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14D3D68B86AD7CBFDC9B6CD0 /* SettingsViewModel.swift */; };
+		9109CB34833A61572E4D9198 /* PlayarrComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DE220C6ECB3C9B272667EDE /* PlayarrComponents.swift */; };
 		A49664A4D13847A223A8E1D8 /* WorkDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29A9D57FC10AED2B09ABD965 /* WorkDetailView.swift */; };
 		A7319EAFE4803B028DBEB5AF /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF473E7FBA8AF8F108E8681D /* RootView.swift */; };
+		AB32471D52552A3BA995A453 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A73338120C9A2894BEBC4E8 /* LoginView.swift */; };
 		B46C9E9ED609A2F6DCA3BAE6 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 2B48D116EE8D11FAE6A0A000 /* PrivacyInfo.xcprivacy */; };
 		B53CC88DDC7E6206A8268D89 /* UpdateViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DDB83EE590182C8B4B0F8CB /* UpdateViewModel.swift */; };
 		B58F65AF81397B45E69C8302 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0F7E1DB48F923F799EE1FE26 /* Assets.xcassets */; };
@@ -31,6 +34,7 @@
 		C5E38504D5673A40DC4FF774 /* KeychainTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 256FA958B3E9337D14D9356B /* KeychainTokenStore.swift */; };
 		CA4C4FB65BAB102B1789FF4E /* StreamarrKit in Frameworks */ = {isa = PBXBuildFile; productRef = 508755099FF1F485A8C85771 /* StreamarrKit */; };
 		CB69E35C9C56E7AA3C8363A0 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55C2EDD38D3EE78CF143BE1 /* PlayerView.swift */; };
+		CD51D8C6FC0C2D5E06A16560 /* PlaylistsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AC040680B1DE183A7B9AF48 /* PlaylistsView.swift */; };
 		E1389984B8C1516C94B36CE8 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D1A5D5A4D38A5841E26E836 /* SettingsView.swift */; };
 		FC280A968B55BD609D112F88 /* AppUpdateEvaluatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 530064E9763897EB523F7328 /* AppUpdateEvaluatorTests.swift */; };
 /* End PBXBuildFile section */
@@ -47,12 +51,15 @@
 
 /* Begin PBXFileReference section */
 		038CD121C4EB96DB14C563E1 /* WorkDetailViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkDetailViewModelTests.swift; sourceTree = "<group>"; };
+		0DE220C6ECB3C9B272667EDE /* PlayarrComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayarrComponents.swift; sourceTree = "<group>"; };
 		0F7E1DB48F923F799EE1FE26 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		14D3D68B86AD7CBFDC9B6CD0 /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
 		19C0C6071B91E0F8D40D6B86 /* InstalledAppVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstalledAppVersion.swift; sourceTree = "<group>"; };
 		22FB21E00BEA101D1E185EFF /* OpenAPISchemasTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAPISchemasTests.swift; sourceTree = "<group>"; };
+		238F31E1B80D5BD46ACA0808 /* ProfilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilesView.swift; sourceTree = "<group>"; };
 		256FA958B3E9337D14D9356B /* KeychainTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainTokenStore.swift; sourceTree = "<group>"; };
 		29A9D57FC10AED2B09ABD965 /* WorkDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkDetailView.swift; sourceTree = "<group>"; };
+		2A73338120C9A2894BEBC4E8 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		2B48D116EE8D11FAE6A0A000 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		350D67A8517F32D1F1E146CE /* AppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
 		36C3F8082AE9F92CD9A7EE43 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
@@ -61,6 +68,7 @@
 		530064E9763897EB523F7328 /* AppUpdateEvaluatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateEvaluatorTests.swift; sourceTree = "<group>"; };
 		53254DC47030F03CBEE885D0 /* StreamarrKitTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StreamarrKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5905B69C766B1157D73EDD12 /* UpdateGateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateGateView.swift; sourceTree = "<group>"; };
+		5AC040680B1DE183A7B9AF48 /* PlaylistsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistsView.swift; sourceTree = "<group>"; };
 		612187628792F145153CB63F /* StreamarrAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StreamarrAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		79E923BC7B8EDFAE6617074E /* LibraryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryViewModel.swift; sourceTree = "<group>"; };
 		7D32DDD36FA49320C0031DD9 /* ios */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ios; path = .; sourceTree = SOURCE_ROOT; };
@@ -166,8 +174,12 @@
 			children = (
 				9CEF2A0A2AF58B5FEBE2B5B4 /* HomeView.swift */,
 				36C3F8082AE9F92CD9A7EE43 /* LibraryView.swift */,
+				2A73338120C9A2894BEBC4E8 /* LoginView.swift */,
+				0DE220C6ECB3C9B272667EDE /* PlayarrComponents.swift */,
 				F55C2EDD38D3EE78CF143BE1 /* PlayerView.swift */,
+				5AC040680B1DE183A7B9AF48 /* PlaylistsView.swift */,
 				9343AADF6E982DB2A8A53515 /* PreviewSupport.swift */,
+				238F31E1B80D5BD46ACA0808 /* ProfilesView.swift */,
 				FF473E7FBA8AF8F108E8681D /* RootView.swift */,
 				3D1A5D5A4D38A5841E26E836 /* SettingsView.swift */,
 				5905B69C766B1157D73EDD12 /* UpdateGateView.swift */,
@@ -321,9 +333,13 @@
 				C5E38504D5673A40DC4FF774 /* KeychainTokenStore.swift in Sources */,
 				BCBB4B4AA4EEB3CD63C291F5 /* LibraryView.swift in Sources */,
 				3E14032EE33E2BB498FC281B /* LibraryViewModel.swift in Sources */,
+				AB32471D52552A3BA995A453 /* LoginView.swift in Sources */,
+				9109CB34833A61572E4D9198 /* PlayarrComponents.swift in Sources */,
 				CB69E35C9C56E7AA3C8363A0 /* PlayerView.swift in Sources */,
 				3D9C69CD0BE2BE5CC8DFCA08 /* PlayerViewModel.swift in Sources */,
+				CD51D8C6FC0C2D5E06A16560 /* PlaylistsView.swift in Sources */,
 				529F02E697DC075CF33EDAD5 /* PreviewSupport.swift in Sources */,
+				12DDD6DBB72468965DC3CD6A /* ProfilesView.swift in Sources */,
 				A7319EAFE4803B028DBEB5AF /* RootView.swift in Sources */,
 				E1389984B8C1516C94B36CE8 /* SettingsView.swift in Sources */,
 				84B3D28EC80CEF35F73B994D /* SettingsViewModel.swift in Sources */,

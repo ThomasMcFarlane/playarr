@@ -35,6 +35,33 @@ final class APIClientAuthenticationTests: XCTestCase {
         XCTAssertEqual(storedSession?.refreshToken.exposeSecret(), "refresh-one")
     }
 
+    func testExplicitLoginSendsUsernamePasswordAndIOSIdentity() async throws {
+        URLProtocolStub.handler = { request in
+            XCTAssertEqual(request.url?.path, "/api/v1/auth/login")
+            let body = String(decoding: Self.bodyData(for: request), as: UTF8.self)
+            XCTAssertTrue(body.contains(#""username":"thomas""#))
+            XCTAssertTrue(body.contains(#""password":"correct horse battery staple""#))
+            XCTAssertTrue(body.contains(#""client_platform":"ios""#))
+            return Self.response(
+                request,
+                json: #"{"access_token":"access","refresh_token":"refresh","token_type":"Bearer","expires_in":900,"user_id":"00000000-0000-0000-0000-000000000001"}"#
+            )
+        }
+
+        let response = try await makeClient(store: TestTokenStore()).login(
+            LoginRequest(
+                deviceID: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
+                deviceName: "Playarr Tests",
+                clientPlatform: .ios,
+                clientVersion: "0.1.0",
+                password: "correct horse battery staple",
+                username: "thomas"
+            )
+        )
+
+        XCTAssertEqual(response.userID.uuidString.lowercased(), "00000000-0000-0000-0000-000000000001")
+    }
+
     func testExpiredSessionRotatesRefreshTokenBeforeProtectedRequest() async throws {
         let store = TestTokenStore(
             session: StoredAuthSession(
