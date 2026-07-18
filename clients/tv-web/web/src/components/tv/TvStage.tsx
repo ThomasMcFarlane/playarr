@@ -64,7 +64,6 @@ export function TvDetailHeading({
       </button>
       <h1>{sectionTitle}</h1>
       <span className="tv-detail-heading-item">
-        <i aria-hidden="true">|</i>
         <strong>{itemTitle}</strong>
       </span>
     </header>

@@ -66,6 +66,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Use the standard library-heading divider and spacing between the media section and selected item
+  on music, movie, and series detail pages instead of a hand-drawn pipe.
 - Match music, movie, and series detail-title typography to the established selected-title style
   used by the Series and Movies library pages.
 - Require an explicit click, keyboard focus, or remote action to select media cards and rows instead
