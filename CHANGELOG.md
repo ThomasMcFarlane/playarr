@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add a native Roku SceneGraph client with server setup, device linking, household
+  profiles, paginated library browsing, title details, native playback and session telemetry.
 - Make the Tizen client package-ready by emitting and validating its widget manifest and
   application icon alongside the production bundle.
 - Make the webOS client package-ready with a validated manifest and application icon, and attach
