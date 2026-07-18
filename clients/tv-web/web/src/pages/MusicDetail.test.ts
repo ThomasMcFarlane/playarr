@@ -19,6 +19,11 @@ describe("MusicDetail track list", () => {
 
   it("covers active artwork with a transparent visualiser gradient", () => {
     const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    const detailSource = readFileSync(new URL("./MusicDetail.tsx", import.meta.url), "utf8");
+    const surfaceSource = readFileSync(
+      new URL("../components/player/PlayerSurface.tsx", import.meta.url),
+      "utf8"
+    );
     const visualiserRule = css.match(
       /\.tv-music-cover-visualiser-host \.player-music-visualiser\s*\{(?<declarations>[^}]*)\}/
     )?.groups?.declarations;
@@ -31,6 +36,8 @@ describe("MusicDetail track list", () => {
     expect(visualiserRule).toContain("box-shadow: none");
     expect(visualiserRule).toContain("backdrop-filter: blur(3px) brightness(0.78)");
     expect(visualiserRule).toContain("mix-blend-mode: normal");
+    expect(detailSource).toContain("<MusicVisualiserBars />");
+    expect(surfaceSource).not.toContain("createPortal(visualiser");
   });
 
   it("uses the same inset full-art gradient in the mini-player", () => {
@@ -47,8 +54,11 @@ describe("MusicDetail track list", () => {
     expect(miniVisualiserRule).toContain("mix-blend-mode: normal");
   });
 
-  it("keeps the final track clear of the viewport edge", () => {
+  it("runs the track viewport to the bottom of the page", () => {
     const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    const musicBrowserRule = css.match(
+      /\.tv-music-browser\.is-content\s*\{(?<declarations>[^}]*)\}/
+    )?.groups?.declarations;
     const trackWindowRule = css.match(
       /\.tv-music-track-list-window\s*\{(?<declarations>[^}]*)\}/
     )?.groups?.declarations;
@@ -56,10 +66,12 @@ describe("MusicDetail track list", () => {
       /\.tv-music-track-list-scroll\s*\{(?<declarations>[^}]*)\}/
     )?.groups?.declarations;
 
+    expect(musicBrowserRule).toContain("padding: clamp(104px, 13vh, 142px) 0 0");
     expect(trackWindowRule).toContain("min-height: 0");
     expect(trackWindowRule).toContain("overflow: hidden");
-    expect(trackScrollRule).toContain("max(clamp(72px, 9vh, 110px)");
+    expect(trackScrollRule).toContain("clamp(34px, 5vh, 58px)");
     expect(trackScrollRule).toContain("overflow-y: auto");
+    expect(trackScrollRule).toContain("scroll-behavior: auto");
   });
 
   it("centres persistent inline controls beneath Cover Flow", () => {
@@ -98,6 +110,9 @@ describe("MusicDetail track list", () => {
     expect(detailSource).toContain(
       'index === 0 ? "#inline-music-playback-control" : undefined'
     );
+    expect(detailSource).not.toContain(
+      'data-tv-edge-target-up="#inline-music-playback-control"'
+    );
     expect(detailSource).toMatch(
       /event\.key === "ArrowUp"[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopPropagation\(\);/
     );
@@ -105,6 +120,7 @@ describe("MusicDetail track list", () => {
     expect(controlsSource).toContain("id={seekFocusId}");
     expect(controlsSource).toContain("if (onNavigateAbove) onNavigateAbove()");
     expect(controlsSource).toContain("trackRef.current?.focus()");
+    expect(controlsSource).toContain("playButtonRef.current?.focus()");
     expect(controlsSource).toContain("onNavigateBelow?.()");
     expect(controlsSource).toContain("control.getClientRects().length > 0");
     expect(surfaceSource).not.toContain('target.closest(".player-controls")');

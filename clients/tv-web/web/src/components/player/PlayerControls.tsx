@@ -567,7 +567,7 @@ export function PlayerControls({
           case "ArrowDown":
             event.preventDefault();
             event.stopPropagation();
-            (rowControls()[0] ?? qualityButtonRef.current)?.focus();
+            playButtonRef.current?.focus();
             return;
           default:
             return;

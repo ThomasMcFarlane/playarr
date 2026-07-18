@@ -24,7 +24,10 @@ import { useWorkDetail } from "@streamarr-tv/api-client/react";
 import { useMediaContextMenu } from "../components/MediaContextMenu";
 import { MediaThumbnailArtwork } from "../components/MediaThumbnailArtwork";
 import { ServerChoiceModal } from "../components/ServerChoiceModal";
-import type { PlayerPlaylistItem } from "../components/player/PlayerSurface";
+import {
+  MusicVisualiserBars,
+  type PlayerPlaylistItem,
+} from "../components/player/PlayerSurface";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 import {
   TvRailSurface,
@@ -185,7 +188,9 @@ function AlbumCoverFlow({
                     className="tv-music-cover-visualiser-host"
                     data-music-visualiser-host
                     aria-hidden="true"
-                  />
+                  >
+                    <MusicVisualiserBars />
+                  </span>
                 ) : null}
               </span>
               <span className="tv-title-card-copy">

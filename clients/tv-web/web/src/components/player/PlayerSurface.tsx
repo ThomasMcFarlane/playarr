@@ -7,7 +7,6 @@ import {
   useState,
   type RefObject,
 } from "react";
-import { createPortal } from "react-dom";
 import type { Work } from "@streamarr-tv/api-client";
 import type { PlaybackEngineController } from "../../lib/usePlaybackEngine";
 import { CachedArtworkImage } from "../../lib/artwork";
@@ -316,32 +315,28 @@ function useMusicAudioVisualiser(
   return activate;
 }
 
-function MusicPlayerVisual({
-  context,
-  title,
-  inlineVisualiserHost,
-}: {
-  context: PlayerMusicContext;
-  title: string;
-  inlineVisualiserHost: HTMLElement | null;
-}) {
+export function MusicVisualiserBars() {
   const barCount =
-    document.documentElement.dataset.platform === "android-tv" ? 18 : MUSIC_VISUALISER_BAR_COUNT;
-  const visualiser = (
-    <div
-      className="player-music-visualiser"
-      data-player-music-visualiser
-    >
+    document.documentElement.dataset.platform === "android-tv"
+      ? 18
+      : MUSIC_VISUALISER_BAR_COUNT;
+
+  return (
+    <div className="player-music-visualiser" data-player-music-visualiser>
       {Array.from({ length: barCount }, (_, index) => (
         <i key={index} />
       ))}
     </div>
   );
+}
 
-  if (inlineVisualiserHost) {
-    return createPortal(visualiser, inlineVisualiserHost);
-  }
-
+function MusicPlayerVisual({
+  context,
+  title,
+}: {
+  context: PlayerMusicContext;
+  title: string;
+}) {
   return (
     <div className="player-music-visual" aria-hidden="true">
       <div className="player-music-backdrop">
@@ -366,7 +361,7 @@ function MusicPlayerVisual({
             <span className="player-music-cover-fallback">
               {context.albumTitle.slice(0, 1)}
             </span>
-            {visualiser}
+            <MusicVisualiserBars />
           </span>
           <div className="player-music-cover-glass" />
         </div>
@@ -400,11 +395,7 @@ export function InlineMusicMiniPlayer({
     <div className="player-page is-minimised player-inline-music-mini">
       <div className="player-shell player-shell-minimised player-shell-music">
         {context ? (
-          <MusicPlayerVisual
-            context={context}
-            title={title}
-            inlineVisualiserHost={null}
-          />
+          <MusicPlayerVisual context={context} title={title} />
         ) : (
           <span className="player-inline-music-art-fallback" aria-hidden="true">
             {title.slice(0, 1)}
@@ -501,8 +492,6 @@ export function PlayerSurface({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [controlsPinned, setControlsPinned] = useState(false);
   const [playlistOpen, setPlaylistOpen] = useState(false);
-  const [inlineVisualiserHost, setInlineVisualiserHost] =
-    useState<HTMLElement | null>(null);
   const activePlaylistItem = playlistItems[activePlaylistIndex];
   const musicContext = activePlaylistItem?.music;
   const activateMusicVisualiser = useMusicAudioVisualiser(
@@ -541,32 +530,6 @@ export function PlayerSurface({
     systemVolumeOnly,
     videoRef,
   ]);
-
-  useEffect(() => {
-    if (!inlineMusic) {
-      setInlineVisualiserHost(null);
-      return;
-    }
-
-    const syncHost = () => {
-      const nextHost = document.querySelector<HTMLElement>(
-        "[data-music-visualiser-host]"
-      );
-      setInlineVisualiserHost((current) =>
-        current === nextHost ? current : nextHost
-      );
-    };
-    syncHost();
-
-    const observer = new MutationObserver(syncHost);
-    const coverFlow =
-      document.querySelector(".tv-music-album-cover-flow") ?? document.body;
-    observer.observe(coverFlow, {
-      childList: true,
-      subtree: true,
-    });
-    return () => observer.disconnect();
-  }, [inlineMusic]);
 
   const closePlaylist = useCallback((restoreTriggerFocus = true) => {
     setPlaylistOpen(false);
@@ -964,16 +927,8 @@ export function PlayerSurface({
         </>
       )}
 
-      {musicContext && activePlaylistItem ? (
-        inlineMusic && !inlineVisualiserHost ? null : (
-          <MusicPlayerVisual
-            context={musicContext}
-            title={title}
-            inlineVisualiserHost={
-              inlineMusic ? inlineVisualiserHost : null
-            }
-          />
-        )
+      {musicContext && activePlaylistItem && !inlineMusic ? (
+        <MusicPlayerVisual context={musicContext} title={title} />
       ) : null}
 
       {/* eslint-disable-next-line jsx-a11y/media-has-caption -- captions not modeled by the backend yet */}

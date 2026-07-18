@@ -7269,7 +7269,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
 }
 
 .tv-music-browser.is-content {
-  padding: clamp(104px, 13vh, 142px) 0 clamp(34px, 5vh, 62px);
+  padding: clamp(104px, 13vh, 142px) 0 0;
   overflow: hidden;
 }
 
@@ -7424,13 +7424,12 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   display: flex;
   flex-direction: column;
   gap: clamp(5px, 0.65vh, 9px);
-  padding: 4px clamp(22px, 2.4vw, 46px)
-    max(clamp(72px, 9vh, 110px), env(safe-area-inset-bottom)) 0;
+  padding: 4px clamp(22px, 2.4vw, 46px) clamp(34px, 5vh, 58px) 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scroll-behavior: smooth;
-  scroll-padding-block: 4px max(clamp(72px, 9vh, 110px), env(safe-area-inset-bottom));
+  scroll-behavior: auto;
+  scroll-padding-block: 4px clamp(34px, 5vh, 58px);
   scrollbar-width: none;
 }
 

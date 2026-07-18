@@ -122,10 +122,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Prevent the minimised player from hiding a video element that still retains browser focus.
 - Load authenticated, cached work and album artwork throughout Streamarr Admin, including music,
   with visible loading placeholders and graceful missing-artwork fallbacks.
+- Focus Play/Pause only when moving Up from the first music track or Down from the inline scrubber,
+  and scroll newly focused tracks into view immediately instead of clipping them during animation.
 - Refresh access tokens centrally before authenticated media requests and keep playback buffered
   through the existing stream retry window instead of failing when a short-lived token expires.
-- Inset visualiser bars over the full-cover gradient in Cover Flow and the mini-player, and keep
-  the final music track clear of the viewport edge.
+- Inset visualiser bars over the full-cover gradient in Cover Flow and the mini-player, extend the
+  desktop music track viewport to the bottom of the page, and render the playing cover's bars
+  directly so they remain visible through player remounts.
 - Replace the active-cover visualiser's black panel with a full-artwork transparent gradient and
   evenly applied blur.
 - Focus the inline music scrubber directly when pressing Down from Cover Flow.
