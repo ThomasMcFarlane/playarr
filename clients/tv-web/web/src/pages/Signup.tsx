@@ -8,6 +8,7 @@ import { createLocalNetworkFetch } from "../lib/localNetworkFetch";
 import { parseSignupInvite } from "../lib/signupInvite";
 import { publicIpv4RelayUrl } from "../lib/loginServerUrl";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { ProfileAuthLayout } from "../components/ProfileAuthLayout";
 
 const invite = parseSignupInvite(window.location.search);
 const browserFetch = createLocalNetworkFetch();
@@ -62,20 +63,8 @@ export function SignupPage() {
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-backdrop" aria-hidden="true" />
-      <div className="auth-card">
+    <ProfileAuthLayout className="signup-profile-page">
         <LanguageDropdown className="auth-language-switch" />
-        <div className="auth-header">
-          <span className="app-logo">
-            <img
-              className="app-logo-icon"
-              src="/playarr-icon.svg"
-              alt=""
-            />
-            <span><span className="app-logo-accent">Play</span>arr</span>
-          </span>
-        </div>
         <p className="page-kicker">{t("pages.signup.kicker")}</p>
         <h1 className="auth-title">{t("pages.signup.title")}</h1>
         <p className="muted auth-description">
@@ -172,8 +161,7 @@ export function SignupPage() {
             </button>
           </form>
         )}
-      </div>
-    </div>
+    </ProfileAuthLayout>
   );
 }
 

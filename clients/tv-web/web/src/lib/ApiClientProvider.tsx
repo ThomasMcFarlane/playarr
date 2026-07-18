@@ -244,7 +244,7 @@ interface ApiClientContextValue {
    * True once a protected request's transparent login (`ensureAccessToken`)
    * has failed with nothing else to fall back on -- e.g. the server is
    * configured for `AuthMode::FullAccount`/`ManagedProfiles` and no stored
-   * session covers it. `App.tsx`'s app shell redirects to `/login` on this
+   * session covers it. `App.tsx`'s app shell redirects to `/profiles` on this
    * instead of letting every protected screen render its own opaque
    * "sign-in required" error inline (see `describeApiError`). Cleared
    * again by the next successful token acquisition, or by `login()`.
@@ -272,7 +272,7 @@ interface ApiClientContextValue {
   switchProfile: (userId: string) => Promise<void>;
   /** True when this browser already has a reusable session for the profile. */
   isProfileSaved: (userId: string) => boolean;
-  /** Clears the stored session and `currentUserId`/`authFailed`. Callers still navigate to `/login` themselves. */
+  /** Clears the stored session and `currentUserId`/`authFailed`. Callers still navigate to `/profiles` themselves. */
   logout: () => void;
   /** Clears the saved session for one profile without requiring that profile's PIN. */
   logoutProfile: (userId: string) => void;
@@ -506,7 +506,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         } catch (err) {
           // Transparent login had nothing left to fall back on (no stored
           // session, and the server didn't auto-login this connection) --
-          // the app shell redirects to `/login` on this flag. Still
+          // the app shell redirects to `/profiles` on this flag. Still
           // rethrown so any caller doing its own try/catch (`describeApiError`
           // call sites) keeps working exactly as before.
           setAuthFailed(true);
@@ -960,7 +960,7 @@ export function useCurrentUserId(): string | undefined {
 
 /**
  * Auth state + actions for the Web app's real login/logout flow --
- * `authFailed` drives `App.tsx`'s shell-level redirect to `/login`;
+ * `authFailed` drives `App.tsx`'s shell-level redirect to `/profiles`;
  * `login`/`logout` back `pages/Login.tsx`'s form and `pages/Settings.tsx`'s
  * "Sign out" button respectively.
  */

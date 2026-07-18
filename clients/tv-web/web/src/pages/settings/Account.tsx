@@ -12,7 +12,7 @@ export function SettingsAccountPage() {
 
   function handleSignOut() {
     logout();
-    navigate("/login", { replace: true });
+    navigate("/profiles", { replace: true });
   }
 
   return (

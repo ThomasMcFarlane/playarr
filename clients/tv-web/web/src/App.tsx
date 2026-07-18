@@ -165,9 +165,9 @@ function isBackKey(event: KeyboardEvent): boolean {
  * Also where "not authenticated, nothing worked" is detected and acted on:
  * `authFailed` (see `ApiClientProvider`) flips true the moment a protected
  * request's transparent login fails with no fallback left, and this
- * redirects to `/login` immediately instead of letting the shelled page
+ * redirects to `/profiles` immediately instead of letting the shelled page
  * underneath render its own opaque, un-actionable "sign-in required"
- * error -- exactly the confusing failure mode a real login page fixes.
+ * error. The viewer then chooses a saved profile or opens the sign-in fields.
  */
 function AppShell() {
   const client = useApiClient();
@@ -202,7 +202,6 @@ function AppShell() {
       : readActivePlayerSession(currentUserId)
   );
   const playerSessionUserIdRef = useRef(currentUserId);
-  const isProfilesRoute = location.pathname === "/profiles";
   const requestedBackTo = (location.state as { backTo?: unknown } | null)?.backTo;
   const backTo = typeof requestedBackTo === "string" ? requestedBackTo : undefined;
   const navigationOrigin = navigationOriginFromState(location.state);
@@ -287,16 +286,19 @@ function AppShell() {
     }
   }, [currentUserId, playerSession]);
 
-  useEffect(() => {
-    if (!isProfilesRoute) return;
-    setPlayerSession(null);
-    clearActivePlayerSession();
-  }, [isProfilesRoute]);
-
   if (authFailed) {
-    // Carries where the viewer was headed so `LoginPage` can return them
-    // there on success, instead of always landing on Home.
-    return <Navigate to="/login" replace state={{ from: location }} />;
+    // The profile picker is the unauthenticated landing view. It carries
+    // the requested route forward so sign-in can still return the viewer
+    // to the page they originally opened.
+    return (
+      <Navigate
+        to="/profiles"
+        replace
+        state={{
+          loginFrom: `${location.pathname}${location.search}${location.hash}`,
+        }}
+      />
+    );
   }
 
   const activePlayerSession = routeMediaFileId
@@ -316,9 +318,7 @@ function AppShell() {
 
   return (
     <div
-      className={`app-shell${isPlayerRoute ? " is-player-route" : ""}${
-        isProfilesRoute ? " is-profiles-route" : ""
-      }`}
+      className={`app-shell${isPlayerRoute ? " is-player-route" : ""}`}
     >
       <UpdateToast state={appUpdate} />
 
@@ -390,7 +390,7 @@ function AppShell() {
         />
       )}
 
-      {!isPlayerRoute && !isProfilesRoute && (
+      {!isPlayerRoute && (
         <nav className="app-nav" aria-label={t("shell.nav.ariaLabel")}>
           {NAV_GROUPS.map((group) => (
             <div
@@ -422,7 +422,7 @@ function AppShell() {
         </nav>
       )}
 
-      {!isPlayerRoute && !isProfilesRoute && (
+      {!isPlayerRoute && (
         <button
           type="button"
           className="app-user-identity"
@@ -517,6 +517,7 @@ export function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/link" element={<DeviceLinkPage />} />
+      <Route path="/profiles" element={<ProfilesPage />} />
       <Route element={<AppShell />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/search" element={<SearchPage />} />
@@ -534,7 +535,6 @@ export function App() {
         <Route path="/playlists" element={<PlaylistsPage />} />
         <Route path="/playlists/:workId" element={<WorkDetailPage />} />
         <Route path="/player/:mediaFileId" element={null} />
-        <Route path="/profiles" element={<ProfilesPage />} />
         <Route path="/settings" element={<SettingsIndexPage />} />
         <Route path="/settings/appearance" element={<SettingsAppearancePage />} />
         <Route path="/settings/language" element={<SettingsLanguagePage />} />

@@ -58,6 +58,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Use the profile switcher as Playarr's signed-out landing page, animate sign-in fields into its
+  centred visual treatment, and give invitation sign-up the same design without back navigation.
 - Localise Playarr Web in English, Thai, and Japanese, with system-language detection and a
   searchable language selector on sign-up and settings screens.
 - Centre Playarr profiles beneath the viewer heading, animate them into view, and add

@@ -19,9 +19,13 @@ import {
   navigationOriginFromState,
   useNavigationLayer,
 } from "../lib/navigationLayer";
+import { ProfilePageHeader } from "../components/ProfileAuthLayout";
+import { clearActivePlayerSession } from "../lib/playerSession";
+import { useTvNavigation } from "../lib/useTvNavigation";
 
 interface ProfileLocationState {
   backTo?: unknown;
+  loginFrom?: unknown;
   navigationOrigin?: unknown;
 }
 
@@ -56,6 +60,12 @@ function safeBackTo(value: unknown): string {
   return typeof value === "string" && value.startsWith("/") && value !== "/profiles"
     ? value
     : "/";
+}
+
+function safeLoginFrom(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.startsWith("/") && value !== "/profiles"
+    ? value
+    : fallback;
 }
 
 function initials(name: string, t: (key: TranslationKey) => string): string {
@@ -109,8 +119,11 @@ export function ProfilesPage() {
   const navigate = useNavigate();
   const locationState = location.state as ProfileLocationState | null;
   const backTo = safeBackTo(locationState?.backTo);
+  const loginFrom = safeLoginFrom(locationState?.loginFrom, backTo);
   const navigationOrigin = navigationOriginFromState(locationState);
+  const showBack = Boolean(navigationOrigin || locationState?.backTo);
   const navigationLayer = useNavigationLayer("profiles");
+  useTvNavigation(location.pathname, false, backTo, navigationOrigin);
   const [serverProfiles, setServerProfiles] = useState<ViewerProfile[] | null>(null);
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [selectedId, setSelectedId] = useState<string>(
@@ -123,6 +136,10 @@ export function ProfilesPage() {
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinSubmitting, setPinSubmitting] = useState(false);
   const pinInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    clearActivePlayerSession();
+  }, []);
 
   const fallbackProfiles = useMemo<ViewerProfile[]>(() => {
     const profiles = savedProfiles.map((profile) => ({
@@ -190,6 +207,7 @@ export function ProfilesPage() {
           from: destination,
           fromState: destinationState,
           initialUsername: profile?.username,
+          profileTransition: true,
         },
       });
     },
@@ -197,6 +215,11 @@ export function ProfilesPage() {
   );
 
   useEffect(() => {
+    if (!currentUserId) {
+      setServerProfiles(null);
+      setLoadState({ status: "ready" });
+      return;
+    }
     let cancelled = false;
     setLoadState({ status: "loading" });
     void client
@@ -292,7 +315,7 @@ export function ProfilesPage() {
     try {
       await switchProfile(profile.id);
       if (action === "settings") openSettings();
-      else navigate("/", { replace: true });
+      else navigate(loginFrom, { replace: true });
     } catch (error) {
       setLoadState({ status: "error", message: describeApiError(error) });
       setSwitchingId(null);
@@ -304,7 +327,7 @@ export function ProfilesPage() {
           : undefined;
       continueToLogin(
         profile,
-        action === "settings" ? "/settings" : backTo,
+        action === "settings" ? "/settings" : loginFrom,
         action === "settings"
           ? { backTo: "/profiles", navigationOrigin: settingsOrigin }
           : undefined
@@ -375,14 +398,10 @@ export function ProfilesPage() {
 
   return (
     <div className="profiles-page">
-      <button
-        type="button"
-        className="tv-back profiles-back"
-        aria-label={t("pages.profiles.backAriaLabel")}
-        onClick={returnFromProfiles}
-      >
-        ←
-      </button>
+      <ProfilePageHeader
+        backLabel={showBack ? t("pages.profiles.backAriaLabel") : undefined}
+        onBack={showBack ? returnFromProfiles : undefined}
+      />
 
       <header className="profiles-heading">
         <p>{t("pages.profiles.title")}</p>
@@ -500,7 +519,7 @@ export function ProfilesPage() {
                 lastProfile ? `#profile-${lastProfile.id}` : undefined
               }
               onFocus={() => setSelectedId(ADD_PROFILE_ID)}
-              onClick={() => continueToLogin(null, backTo)}
+              onClick={() => continueToLogin(null, loginFrom)}
             >
               <span className="profile-avatar" aria-hidden="true">
                 <span>+</span>

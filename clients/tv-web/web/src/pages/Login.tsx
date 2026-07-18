@@ -9,6 +9,7 @@ import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
 import { initialLoginServerUrl, publicIpv4RelayUrl } from "../lib/loginServerUrl";
 import { isPublicHttpUrl } from "../lib/localNetworkFetch";
+import { ProfileAuthLayout } from "../components/ProfileAuthLayout";
 
 interface LocationState {
   /** Set by `App.tsx`'s app-shell redirect so a successful login returns to wherever the user was headed. */
@@ -17,15 +18,17 @@ interface LocationState {
   initialUsername?: string;
   /** Optional route state to apply to the post-login destination. */
   fromState?: unknown;
+  /** Enables the profile-to-fields entrance motion when sign-in starts from the profile picker. */
+  profileTransition?: boolean;
 }
 
 /**
  * Real username/password sign-in for Playarr Web -- backs `POST
  * /api/v1/auth/login`'s `AuthMode::FullAccount` tier (see
  * `ApiClientProvider`'s `login`). Reached either by navigating to `/login`
- * directly, or via the app shell's redirect once a protected request's
- * transparent login (`ensureAccessToken`) has failed with nothing left to
- * fall back on -- see `App.tsx`.
+ * directly, or after the profile picker becomes the signed-out landing view
+ * once transparent login (`ensureAccessToken`) has failed with nothing left
+ * to fall back on -- see `App.tsx`.
  *
  * Deliberately outside the sidebar/header chrome (`App.tsx` mounts this
  * as a sibling of the shelled routes, not a child of `AppShell`) -- there
@@ -59,6 +62,13 @@ export function LoginPage() {
     navigate(destination, { replace: true, state: destinationState });
   }
 
+  function returnToProfiles() {
+    navigate("/profiles", {
+      replace: true,
+      state: { loginFrom: loginDestinationPath(state?.from) },
+    });
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setSubmitting(true);
@@ -84,19 +94,12 @@ export function LoginPage() {
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-backdrop" aria-hidden="true" />
-      <div className="auth-card">
-        <div className="auth-header">
-          <span className="app-logo">
-            <img
-              className="app-logo-icon"
-              src="/playarr-icon.svg"
-              alt=""
-            />
-            <span><span className="app-logo-accent">Play</span>arr</span>
-          </span>
-        </div>
+    <ProfileAuthLayout
+      className="login-profile-page"
+      backLabel={t("pages.profiles.backAriaLabel")}
+      onBack={returnToProfiles}
+      transitionFromProfiles={state?.profileTransition}
+    >
         <p className="page-kicker">{t("pages.login.kicker")}</p>
         <h1 className="auth-title">{t("pages.login.heading")}</h1>
         <p className="muted auth-description">
@@ -170,9 +173,14 @@ export function LoginPage() {
             {submitting ? t("pages.login.submitting") : t("pages.login.submit")}
           </button>
         </form>
-      </div>
-    </div>
+    </ProfileAuthLayout>
   );
+}
+
+function loginDestinationPath(from: Location | string | undefined): string | undefined {
+  if (typeof from === "string") return from;
+  if (!from) return undefined;
+  return `${from.pathname}${from.search}${from.hash}`;
 }
 
 /**
