@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Publish downloadable preview artefacts for iOS, Apple TV, LG webOS, Samsung Tizen, and Roku,
+  and link each verified release asset from the public Clients catalogue with its installation
+  requirements stated explicitly.
 - Add a native Playarr Apple TV app with focus-friendly catalogue browsing, search, device-code
   pairing, server configuration, and AVKit playback backed by the shared Swift client kit.
 - Add an installable native Playarr iPhone and iPad project with reusable StreamarrKit business

@@ -790,6 +790,9 @@ export const en = {
     "The TV shell exists, but a signed production package is not published yet.",
   "pages.clients.vidaaSetup": "Install",
   "pages.clients.downloadApk": "Download APK",
+  "pages.clients.downloadPreview": "Download preview",
+  "pages.clients.previewNote":
+    "Preview downloads are for developers and sideloading. Apple packages require Xcode and signing; webOS and Tizen bundles require their vendor SDKs and signing; Roku requires developer mode.",
   "pages.clients.notYetPublished": "Signed download not yet published",
   "pages.clients.footer": "One library. Every screen. Your server stays yours.",
   "pages.clients.androidPage.kicker": "Android",

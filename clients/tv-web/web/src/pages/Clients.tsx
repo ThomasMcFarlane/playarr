@@ -16,8 +16,12 @@ interface PlayarrClient {
   platformKey: TranslationKey;
   status: ClientStatus;
   action?: "android" | "vidaa";
+  downloadFile?: string;
   icon: ClientIcon;
 }
+
+const CLIENT_PREVIEW_RELEASE_BASE =
+  "https://github.com/ThomasMcFarlane/streamarr/releases/download/clients-v0.1.0-preview.1";
 
 const PLAYARR_CLIENTS: readonly PlayarrClient[] = [
   {
@@ -40,35 +44,40 @@ const PLAYARR_CLIENTS: readonly PlayarrClient[] = [
     id: "ios",
     nameKey: "pages.clients.ios.name",
     platformKey: "pages.clients.ios.platform",
-    status: "soon",
+    status: "experimental",
+    downloadFile: "playarr-ios-source.zip",
     icon: "apple",
   },
   {
     id: "apple-tv",
     nameKey: "pages.clients.appleTv.name",
     platformKey: "pages.clients.appleTv.platform",
-    status: "soon",
+    status: "experimental",
+    downloadFile: "playarr-apple-tv-source.zip",
     icon: "apple",
   },
   {
     id: "webos",
     nameKey: "pages.clients.webos.name",
     platformKey: "pages.clients.webos.platform",
-    status: "soon",
+    status: "experimental",
+    downloadFile: "playarr-webos-developer-bundle.zip",
     icon: "lg",
   },
   {
     id: "tizen",
     nameKey: "pages.clients.tizen.name",
     platformKey: "pages.clients.tizen.platform",
-    status: "soon",
+    status: "experimental",
+    downloadFile: "playarr-tizen-developer-bundle.zip",
     icon: "samsung",
   },
   {
     id: "roku",
     nameKey: "pages.clients.roku.name",
     platformKey: "pages.clients.roku.platform",
-    status: "soon",
+    status: "experimental",
+    downloadFile: "playarr-roku.zip",
     icon: "roku",
   },
 ];
@@ -243,6 +252,31 @@ export function ClientsPage() {
                       : t("pages.clients.downloadApk")}
                   </strong>
                 </button>
+              ) : client.downloadFile ? (
+                <a
+                  id={`client-${client.id}-action`}
+                  className="profile-action-button client-choice-action"
+                  href={`${CLIENT_PREVIEW_RELEASE_BASE}/${client.downloadFile}`}
+                  download
+                  data-navigation-focus-key={`clients:${client.id}:download`}
+                  data-tv-edge-stop-left={index === 0 ? true : undefined}
+                  data-tv-edge-stop-right={
+                    index === PLAYARR_CLIENTS.length - 1 ? true : undefined
+                  }
+                  data-tv-edge-target-up={`#client-${client.id}`}
+                  data-tv-edge-target-left={
+                    index > 0
+                      ? `#client-${PLAYARR_CLIENTS[index - 1]?.id}-action`
+                      : undefined
+                  }
+                  data-tv-edge-target-right={
+                    index < PLAYARR_CLIENTS.length - 1
+                      ? `#client-${PLAYARR_CLIENTS[index + 1]?.id}-action`
+                      : undefined
+                  }
+                >
+                  <strong>{t("pages.clients.downloadPreview")}</strong>
+                </a>
               ) : (
                 <button
                   id={`client-${client.id}-action`}
@@ -285,6 +319,7 @@ export function ClientsPage() {
         </div>
       ) : null}
 
+      <p className="clients-preview-note">{t("pages.clients.previewNote")}</p>
       <p className="clients-footer">{t("pages.clients.footer")}</p>
     </PublicClientsLayout>
   );
