@@ -60,12 +60,20 @@ public struct PlayerTrack: Identifiable, Equatable, Sendable {
     public let languageCode: String?
     public let displayName: String
     public let isDefault: Bool
+    public let isForced: Bool
 
-    public init(id: String, languageCode: String?, displayName: String, isDefault: Bool) {
+    public init(
+        id: String,
+        languageCode: String?,
+        displayName: String,
+        isDefault: Bool,
+        isForced: Bool = false
+    ) {
         self.id = id
         self.languageCode = languageCode
         self.displayName = displayName
         self.isDefault = isDefault
+        self.isForced = isForced
     }
 }
 
@@ -327,7 +335,8 @@ public final class AVPlayerEngine: NSObject, PlayerEngine {
                 id: trackID(for: option),
                 languageCode: option.extendedLanguageTag,
                 displayName: option.displayName,
-                isDefault: group.defaultOption == option
+                isDefault: group.defaultOption == option,
+                isForced: option.hasMediaCharacteristic(.containsOnlyForcedSubtitles)
             )
         }
     }
