@@ -5,7 +5,7 @@ struct RootView: View {
     let environment: AppEnvironment
     @State private var updateViewModel: UpdateViewModel
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("com.streamarr.ios.appearance") private var appearance = "system"
+    @AppStorage("com.streamarr.ios.appearance") private var appearance = "dark"
 
     init(environment: AppEnvironment) {
         self.environment = environment
@@ -56,6 +56,9 @@ private struct AuthenticatedPlayarrShell: View {
         case playlists
         case profiles
         case settings
+        #if DEBUG
+        case detail
+        #endif
 
         var title: String {
             switch self {
@@ -65,6 +68,9 @@ private struct AuthenticatedPlayarrShell: View {
             case .playlists: "Playlists"
             case .profiles: "Profiles"
             case .settings: "Profile"
+            #if DEBUG
+            case .detail: "Title"
+            #endif
             }
         }
 
@@ -76,6 +82,9 @@ private struct AuthenticatedPlayarrShell: View {
             case .playlists: "music.note.list"
             case .profiles: "person.2"
             case .settings: "person.crop.circle"
+            #if DEBUG
+            case .detail: "play.rectangle"
+            #endif
             }
         }
     }
@@ -84,13 +93,28 @@ private struct AuthenticatedPlayarrShell: View {
     @State private var selected: Destination = .home
     @State private var availableKinds: Set<WorkKind> = []
     @State private var homeViewModel: HomeViewModel
+    #if DEBUG
+    @State private var demoDetailViewModel: WorkDetailViewModel
+    #endif
 
     init(environment: AppEnvironment) {
         self.environment = environment
         _homeViewModel = State(initialValue: HomeViewModel(apiClient: environment.apiClient))
         #if DEBUG
+        _demoDetailViewModel = State(initialValue: WorkDetailViewModel(
+            apiClient: environment.apiClient,
+            workID: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        ))
         if ProcessInfo.processInfo.arguments.contains("--playarr-demo-profiles") {
             _selected = State(initialValue: .profiles)
+        } else if ProcessInfo.processInfo.arguments.contains("--playarr-demo-library") {
+            _selected = State(initialValue: .library(.movie))
+        } else if ProcessInfo.processInfo.arguments.contains("--playarr-demo-playlists") {
+            _selected = State(initialValue: .playlists)
+        } else if ProcessInfo.processInfo.arguments.contains("--playarr-demo-settings") {
+            _selected = State(initialValue: .settings)
+        } else if ProcessInfo.processInfo.arguments.contains("--playarr-demo-detail") {
+            _selected = State(initialValue: .detail)
         }
         #endif
     }
@@ -137,6 +161,15 @@ private struct AuthenticatedPlayarrShell: View {
             NavigationStack {
                 SettingsView(environment: environment)
             }
+        #if DEBUG
+        case .detail:
+            NavigationStack {
+                WorkDetailView(
+                    viewModel: demoDetailViewModel,
+                    apiClient: environment.apiClient
+                )
+            }
+        #endif
         }
     }
 

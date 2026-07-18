@@ -4,6 +4,7 @@ import SwiftUI
 struct WorkDetailView: View {
     let viewModel: WorkDetailViewModel
     let apiClient: StreamarrAPIClient
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         Group {
@@ -26,70 +27,156 @@ struct WorkDetailView: View {
     }
 
     private func detailContent(_ detail: WorkDetail) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                ZStack(alignment: .bottomLeading) {
-                    PlayarrArtwork(work: detail.work, kind: .backdrop, apiClient: apiClient)
-                        .frame(height: 390)
-                        .overlay {
-                            LinearGradient(
-                                colors: [.clear, PlayarrStyle.background.opacity(0.3), PlayarrStyle.background],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(detail.work.kind.displayName.uppercased())
-                            .font(.caption2.weight(.black))
-                            .tracking(1.3)
-                            .foregroundStyle(PlayarrStyle.pink)
-                        Text(detail.work.title)
-                            .font(.system(size: 42, weight: .medium, design: .rounded))
-                            .tracking(-1.8)
-                            .foregroundStyle(PlayarrStyle.ink)
-                            .lineLimit(3)
-                        if !detail.work.genres.isEmpty {
-                            Text(detail.work.genres.prefix(3).joined(separator: "  •  "))
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(PlayarrStyle.inkSoft)
-                        }
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 10)
+        GeometryReader { proxy in
+            let phone = proxy.size.width <= 760
+            ZStack(alignment: .topLeading) {
+                if phone {
+                    phoneDetail(detail, proxy: proxy)
+                } else {
+                    tabletDetail(detail, proxy: proxy)
                 }
 
-                VStack(alignment: .leading, spacing: 20) {
-                    if let overview = detail.work.overview, !overview.isEmpty {
-                        Text(overview)
-                            .font(.subheadline)
-                            .foregroundStyle(PlayarrStyle.inkSoft)
-                            .lineSpacing(4)
-                    }
-
-                    if let mediaFileID = detail.mediaFileID {
-                        NavigationLink {
-                            PlayerView(
-                                viewModel: PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient),
-                                initialMediaFileID: mediaFileID.uuidString,
-                                initialTitle: detail.work.title
-                            )
-                        } label: {
-                            Label("Play", systemImage: "play.fill")
-                                .frame(minWidth: 110)
-                        }
-                        .buttonStyle(PlayarrPrimaryButtonStyle())
-                    }
-
-                    children(for: detail.children)
+                Button { dismiss() } label: {
+                    Image(systemName: "arrow.left")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(PlayarrStyle.inkSoft)
+                        .frame(width: phone ? 42 : 46, height: phone ? 42 : 46)
+                        .background(PlayarrStyle.surfaceStrong.opacity(0.7), in: Circle())
+                        .overlay { Circle().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
                 }
-                .padding(.horizontal, 18)
-                .padding(.top, 12)
-                .padding(.bottom, 118)
+                .buttonStyle(.plain)
+                .padding(.leading, phone ? 16 : max(102, proxy.size.width * 0.08))
+                .padding(.top, phone ? max(56, proxy.safeAreaInsets.top + 6) : min(76, max(38, proxy.size.height * 0.062)))
             }
         }
-        .ignoresSafeArea(edges: .top)
-        .background(PlayarrStyle.background)
+        .background(PlayarrStyle.surface)
+        .ignoresSafeArea()
+    }
+
+    private func phoneDetail(_ detail: WorkDetail, proxy: GeometryProxy) -> some View {
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 0) {
+                PlayarrArtwork(work: detail.work, kind: .backdrop, apiClient: apiClient)
+                    .frame(height: min(520, proxy.size.height * 0.58))
+                    .opacity(0.58)
+                    .overlay {
+                        LinearGradient(
+                            colors: [.clear, PlayarrStyle.surface.opacity(0.25), PlayarrStyle.surface],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    }
+
+                VStack(alignment: .leading, spacing: 28) {
+                    detailCopy(detail, phone: true)
+                    children(for: detail.children)
+                }
+                .padding(.horizontal, 16)
+                .offset(y: -max(150, proxy.size.height * 0.24))
+                .padding(.bottom, 112 - max(-150, -proxy.size.height * 0.24))
+            }
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private func tabletDetail(_ detail: WorkDetail, proxy: GeometryProxy) -> some View {
+        ZStack(alignment: .topLeading) {
+            PlayarrArtwork(work: detail.work, kind: .backdrop, apiClient: apiClient)
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                .opacity(0.7)
+                .overlay {
+                    LinearGradient(
+                        colors: [PlayarrStyle.surface.opacity(0.48), .clear, PlayarrStyle.surface.opacity(0.18)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                }
+
+            detailCopy(detail, phone: false)
+                .frame(width: proxy.size.width * 0.24, alignment: .leading)
+                .padding(.leading, max(102, proxy.size.width * 0.08))
+                .padding(.top, proxy.size.height * 0.24)
+
+            if hasVisibleChildren(detail.children) {
+                ScrollView(.vertical) {
+                    children(for: detail.children)
+                        .padding(.horizontal, max(28, proxy.size.width * 0.024))
+                        .padding(.top, proxy.size.height * 0.5)
+                        .padding(.bottom, proxy.size.height * 0.5)
+                }
+                .frame(width: proxy.size.width * 0.62, height: proxy.size.height)
+                .offset(x: proxy.size.width * 0.38)
+                .scrollIndicators(.hidden)
+                .background {
+                    LinearGradient(
+                        colors: [.clear, PlayarrStyle.surface.opacity(0.92), PlayarrStyle.surface],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                }
+            }
+        }
+    }
+
+    private func hasVisibleChildren(_ children: WorkChildren) -> Bool {
+        switch children {
+        case .movie:
+            false
+        case .series(let seasons):
+            !seasons.isEmpty
+        case .artist(let albums):
+            !albums.isEmpty
+        case .author(let books):
+            !books.isEmpty
+        }
+    }
+
+    private func detailCopy(_ detail: WorkDetail, phone: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(detail.work.kind.displayName.uppercased())
+                .font(.custom("Avenir Next", fixedSize: phone ? 10.5 : 10).weight(.heavy))
+                .tracking(1.2)
+                .foregroundStyle(PlayarrStyle.pink)
+                .padding(.bottom, phone ? 12 : 22)
+
+            Text(detail.work.title)
+                .font(.custom("Avenir Next", fixedSize: phone ? 42 : 52).weight(.medium))
+                .tracking(phone ? -3 : -3.75)
+                .lineSpacing(-5)
+                .foregroundStyle(PlayarrStyle.ink)
+                .lineLimit(3)
+
+            if !detail.work.genres.isEmpty {
+                Text(detail.work.genres.prefix(3).joined(separator: "  •  "))
+                    .font(.custom("Avenir Next", fixedSize: phone ? 11 : 9.5).weight(.semibold))
+                    .foregroundStyle(PlayarrStyle.inkSoft)
+                    .padding(.top, phone ? 14 : 22)
+            }
+
+            if let overview = detail.work.overview, !overview.isEmpty {
+                Text(overview)
+                    .font(.custom("Avenir Next", fixedSize: phone ? 12 : 10.5))
+                    .foregroundStyle(PlayarrStyle.muted)
+                    .lineSpacing(phone ? 5 : 4)
+                    .lineLimit(phone ? 5 : 6)
+                    .padding(.top, phone ? 12 : 18)
+            }
+
+            if let mediaFileID = detail.mediaFileID {
+                NavigationLink {
+                    PlayerView(
+                        viewModel: PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient),
+                        initialMediaFileID: mediaFileID.uuidString,
+                        initialTitle: detail.work.title
+                    )
+                } label: {
+                    Label("Play", systemImage: "play.fill")
+                        .frame(minWidth: 112)
+                }
+                .buttonStyle(PlayarrPrimaryButtonStyle())
+                .padding(.top, phone ? 24 : 30)
+            }
+        }
     }
 
     @ViewBuilder
@@ -102,7 +189,7 @@ struct WorkDetailView: View {
                 ForEach(seasons, id: \.season.id) { season in
                     VStack(alignment: .leading, spacing: 12) {
                         Text(season.season.title ?? "Season \(season.season.seasonNumber)")
-                            .font(.title3.weight(.bold))
+                            .font(.custom("Avenir Next", fixedSize: 18).weight(.semibold))
                             .foregroundStyle(PlayarrStyle.ink)
                         ForEach(season.episodes) { episode in
                             playableRow(
@@ -119,7 +206,7 @@ struct WorkDetailView: View {
                 ForEach(albums, id: \.album.id) { album in
                     VStack(alignment: .leading, spacing: 12) {
                         Text(album.album.title)
-                            .font(.title3.weight(.bold))
+                            .font(.custom("Avenir Next", fixedSize: 18).weight(.semibold))
                             .foregroundStyle(PlayarrStyle.ink)
                         ForEach(album.tracks) { track in
                             playableRow(
@@ -134,7 +221,7 @@ struct WorkDetailView: View {
         case .author(let books):
             VStack(alignment: .leading, spacing: 12) {
                 Text("Books")
-                    .font(.title3.weight(.bold))
+                    .font(.custom("Avenir Next", fixedSize: 18).weight(.semibold))
                     .foregroundStyle(PlayarrStyle.ink)
                 ForEach(books) { book in
                     playableRow(title: book.book.title, subtitle: "Book", mediaFileID: book.mediaFileID)
@@ -185,8 +272,9 @@ struct WorkDetailView: View {
             }
         }
         .foregroundStyle(PlayarrStyle.ink)
-        .padding(12)
-        .background(PlayarrStyle.surface.opacity(0.78), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .padding(.horizontal, 14)
+        .frame(minHeight: 58)
+        .background(PlayarrStyle.surfaceStrong.opacity(0.68), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 

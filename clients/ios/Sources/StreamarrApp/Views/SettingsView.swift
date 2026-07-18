@@ -3,7 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     let environment: AppEnvironment
 
-    @AppStorage("com.streamarr.ios.appearance") private var appearance = "system"
+    @AppStorage("com.streamarr.ios.appearance") private var appearance = "dark"
     @State private var serverURL: String
     @State private var errorMessage: String?
     @State private var signingOut = false
@@ -14,78 +14,120 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                profileHeader
-                settingsCard(title: "Appearance", icon: "circle.lefthalf.filled") {
-                    Picker("Appearance", selection: $appearance) {
-                        Text("System").tag("system")
-                        Text("Light").tag("light")
-                        Text("Dark").tag("dark")
-                    }
-                    .pickerStyle(.segmented)
+        GeometryReader { proxy in
+            let phone = proxy.size.width <= 760
+            ZStack(alignment: .topLeading) {
+                LinearGradient(
+                    colors: [PlayarrStyle.surface, PlayarrStyle.background],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                RadialGradient(
+                    colors: [PlayarrStyle.pink.opacity(0.1), .clear],
+                    center: UnitPoint(x: phone ? 0.5 : 0.25, y: 0.38),
+                    startRadius: 0,
+                    endRadius: 360
+                )
+
+                if !phone {
+                    profileHeader
+                        .padding(.leading, max(102, proxy.size.width * 0.08))
+                        .padding(.top, proxy.size.height * 0.25)
+                        .zIndex(2)
                 }
 
-                settingsCard(title: "Server", icon: "server.rack") {
-                    TextField("Server URL", text: $serverURL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                        .padding(.horizontal, 14)
-                        .frame(height: 50)
-                        .background(PlayarrStyle.surface.opacity(0.82), in: RoundedRectangle(cornerRadius: 14))
+                ScrollView {
+                    VStack(alignment: .leading, spacing: phone ? 22 : 30) {
+                        if phone { profileHeader }
 
-                    Button("Save server") {
-                        guard let url = URL(string: serverURL), url.scheme != nil, url.host != nil else {
-                            errorMessage = "Enter a valid HTTP or HTTPS server URL."
-                            return
+                        settingsCard(title: "Appearance", icon: "circle.lefthalf.filled") {
+                            Picker("Appearance", selection: $appearance) {
+                                Text("System").tag("system")
+                                Text("Light").tag("light")
+                                Text("Dark").tag("dark")
+                            }
+                            .pickerStyle(.segmented)
                         }
-                        errorMessage = nil
-                        environment.serverBaseURL = url
+
+                        settingsCard(title: "Server", icon: "server.rack") {
+                            TextField("Server URL", text: $serverURL)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .keyboardType(.URL)
+                                .padding(.horizontal, 14)
+                                .frame(height: 50)
+                                .background(PlayarrStyle.surfaceStrong.opacity(0.64))
+                                .overlay { Rectangle().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
+
+                            Button("Save server") { saveServer() }
+                                .buttonStyle(PlayarrPrimaryButtonStyle())
+
+                            Text("Changing server returns you to sign-in. The connection remains direct from this device to your Streamarr server.")
+                                .font(.custom("Avenir Next", fixedSize: 10.5))
+                                .foregroundStyle(PlayarrStyle.muted)
+                                .lineSpacing(4)
+                        }
+
+                        settingsCard(title: "Playback", icon: "play.rectangle") {
+                            settingRow("Quality", value: "Automatic")
+                            settingRow("Direct play", value: "Preferred")
+                            settingRow("Audio language", value: "Server default")
+                        }
+
+                        if let errorMessage {
+                            Text(errorMessage)
+                                .font(.custom("Avenir Next", fixedSize: 11).weight(.semibold))
+                                .foregroundStyle(PlayarrStyle.danger)
+                        }
+
+                        Button(role: .destructive) {
+                            signingOut = true
+                            Task {
+                                try? await environment.signOut()
+                                signingOut = false
+                            }
+                        } label: {
+                            HStack {
+                                if signingOut { ProgressView() }
+                                Text("Sign out")
+                            }
+                            .font(.custom("Avenir Next", fixedSize: 12).weight(.bold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(PlayarrStyle.danger)
+                        .overlay { Capsule().stroke(PlayarrStyle.danger.opacity(0.52), lineWidth: 1) }
                     }
-                    .buttonStyle(PlayarrPrimaryButtonStyle())
-
-                    Text("Changing server returns you to sign-in. The connection remains direct from this device to your Streamarr server.")
-                        .font(.caption)
-                        .foregroundStyle(PlayarrStyle.muted)
+                    .padding(.horizontal, phone ? 16 : max(28, proxy.size.width * 0.028))
+                    .padding(.top, phone ? 92 : max(128, proxy.size.height * 0.15))
+                    .padding(.bottom, phone ? 118 : 70)
                 }
-
-                settingsCard(title: "Playback", icon: "play.rectangle") {
-                    settingRow("Quality", value: "Automatic")
-                    settingRow("Direct play", value: "Preferred")
-                    settingRow("Audio language", value: "Server default")
-                }
-
-                if let errorMessage {
-                    Text(errorMessage)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(PlayarrStyle.pink)
-                }
-
-                Button(role: .destructive) {
-                    signingOut = true
-                    Task {
-                        try? await environment.signOut()
-                        signingOut = false
+                .frame(width: phone ? proxy.size.width : proxy.size.width * 0.65, height: proxy.size.height)
+                .offset(x: phone ? 0 : proxy.size.width * 0.35)
+                .scrollIndicators(.hidden)
+                .background {
+                    if !phone {
+                        LinearGradient(
+                            colors: [.clear, PlayarrStyle.surface.opacity(0.92), PlayarrStyle.surface],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
                     }
-                } label: {
-                    HStack {
-                        if signingOut { ProgressView() }
-                        Text("Sign out")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
                 }
-                .buttonStyle(.bordered)
-                .tint(.red)
+                .zIndex(1)
+
+                Text("Profile")
+                    .font(.custom("Avenir Next", fixedSize: phone ? 22 : min(34, proxy.size.width * 0.0175)).weight(.medium))
+                    .tracking(phone ? -1 : -1.5)
+                    .foregroundStyle(PlayarrStyle.ink)
+                    .padding(.leading, phone ? 16 : max(102, proxy.size.width * 0.08))
+                    .padding(.top, phone ? max(56, proxy.safeAreaInsets.top + 6) : min(66, max(34, proxy.size.height * 0.052)))
+                    .zIndex(3)
             }
-            .frame(maxWidth: 760)
-            .padding(.horizontal, 18)
-            .padding(.top, 74)
-            .padding(.bottom, 112)
-            .frame(maxWidth: .infinity)
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
-        .background(PlayarrStyle.background)
+        .ignoresSafeArea()
         .navigationBarHidden(true)
     }
 
@@ -101,10 +143,11 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(environment.currentUserName ?? "Playarr viewer")
-                    .font(.title2.weight(.bold))
+                    .font(.custom("Avenir Next", fixedSize: 24).weight(.semibold))
+                    .tracking(-1)
                     .foregroundStyle(PlayarrStyle.ink)
                 Text(environment.serverBaseURL.host ?? environment.serverBaseURL.absoluteString)
-                    .font(.caption)
+                    .font(.custom("Avenir Next", fixedSize: 10.5).weight(.semibold))
                     .foregroundStyle(PlayarrStyle.muted)
             }
         }
@@ -117,13 +160,14 @@ struct SettingsView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Label(title, systemImage: icon)
-                .font(.headline)
+                .font(.custom("Avenir Next", fixedSize: 14).weight(.semibold))
                 .foregroundStyle(PlayarrStyle.ink)
             content()
         }
-        .padding(20)
+        .padding(22)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(PlayarrStyle.surface.opacity(0.78), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .background(PlayarrStyle.surfaceStrong.opacity(0.68))
+        .overlay { Rectangle().stroke(PlayarrStyle.line.opacity(0.72), lineWidth: 1) }
     }
 
     private func settingRow(_ label: String, value: String) -> some View {
@@ -132,6 +176,18 @@ struct SettingsView: View {
             Spacer()
             Text(value).foregroundStyle(PlayarrStyle.muted)
         }
-        .font(.subheadline)
+        .font(.custom("Avenir Next", fixedSize: 12))
+        .padding(.vertical, 4)
+    }
+
+    private func saveServer() {
+        do {
+            let corrected = try LoginServerURL.normalise(serverURL)
+            serverURL = corrected.absoluteString
+            errorMessage = nil
+            environment.serverBaseURL = corrected
+        } catch {
+            errorMessage = "Enter a valid HTTP or HTTPS server URL."
+        }
     }
 }
