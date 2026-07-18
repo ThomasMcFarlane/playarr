@@ -115,6 +115,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Focus the inline music scrubber directly when pressing Down from Cover Flow.
 - Return Up from the first music track to the inline playback controls and keep the scrubber bar
   at a constant height when its focus thumb appears.
 - Debounce music seeks, preserve the playing control state, and keep inline controls mounted while

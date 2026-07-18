@@ -37,6 +37,7 @@ export interface PlayerControlsProps {
   visible: boolean;
   contextTitle?: string;
   defaultFocusId?: string;
+  seekFocusId?: string;
   onNavigateAbove?: () => void;
   onNavigateBelow?: () => void;
   isFullscreen: boolean;
@@ -94,6 +95,7 @@ export function PlayerControls({
   visible,
   contextTitle,
   defaultFocusId,
+  seekFocusId,
   onNavigateAbove,
   onNavigateBelow,
   isFullscreen,
@@ -637,6 +639,7 @@ export function PlayerControls({
       ) : null}
       <div
         ref={trackRef}
+        id={seekFocusId}
         className={`player-seek-track${scrubPositionSeconds !== null ? " is-scrubbing" : ""}`}
         onPointerDown={handleSeekPointerDown}
         onPointerMove={handleSeekPointerMove}

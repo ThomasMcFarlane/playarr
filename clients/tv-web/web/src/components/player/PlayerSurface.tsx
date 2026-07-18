@@ -1188,6 +1188,7 @@ export function PlayerSurface({
           visible={showControls}
           contextTitle={inlineMusic ? title : undefined}
           defaultFocusId={inlineMusic ? "inline-music-playback-control" : undefined}
+          seekFocusId={inlineMusic ? "inline-music-scrubber-control" : undefined}
           onNavigateAbove={
             inlineMusic
               ? () =>

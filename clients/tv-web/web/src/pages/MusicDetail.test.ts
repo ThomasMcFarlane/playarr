@@ -59,7 +59,7 @@ describe("MusicDetail track list", () => {
     );
 
     expect(detailSource).toContain(
-      'data-tv-edge-target-down="#inline-music-playback-control"'
+      'data-tv-edge-target-down="#inline-music-scrubber-control"'
     );
     expect(detailSource).toContain(
       'index === 0 ? "#inline-music-playback-control" : undefined'
@@ -68,6 +68,7 @@ describe("MusicDetail track list", () => {
       /event\.key === "ArrowUp"[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopPropagation\(\);/
     );
     expect(controlsSource).toContain("id={defaultFocusId}");
+    expect(controlsSource).toContain("id={seekFocusId}");
     expect(controlsSource).toContain("if (onNavigateAbove) onNavigateAbove()");
     expect(controlsSource).toContain("trackRef.current?.focus()");
     expect(controlsSource).toContain("onNavigateBelow?.()");
