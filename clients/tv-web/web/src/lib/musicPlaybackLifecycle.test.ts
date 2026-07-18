@@ -48,6 +48,17 @@ describe("advanceMusicPlaybackLifecycle", () => {
     ).toBe(false);
   });
 
+  it("keeps an inline music session mounted when playback pauses", () => {
+    const paused = advanceMusicPlaybackLifecycle(
+      { mediaFileId: "track-1", hasPlayed: true },
+      "track-1",
+      "paused",
+      false
+    );
+
+    expect(paused.shouldStop).toBe(false);
+  });
+
   it("resets playback history when the track changes", () => {
     const result = advanceMusicPlaybackLifecycle(
       { mediaFileId: "track-1", hasPlayed: true },

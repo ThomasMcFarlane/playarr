@@ -52,6 +52,14 @@ export function readActivePlayerSession(
   }
 }
 
+export function hydrateActivePlayerSession(
+  currentSession: ActivePlayerSession | null,
+  userId: string,
+  storage: Storage | undefined = browserSessionStorage()
+): ActivePlayerSession | null {
+  return currentSession ?? readActivePlayerSession(userId, storage);
+}
+
 export function writeActivePlayerSession(
   userId: string | undefined,
   session: ActivePlayerSession,

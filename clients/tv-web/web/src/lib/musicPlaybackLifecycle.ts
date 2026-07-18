@@ -7,7 +7,7 @@ export function advanceMusicPlaybackLifecycle(
   lifecycle: MusicPlaybackLifecycle,
   mediaFileId: string,
   playbackState: string,
-  isMusicPlayback: boolean
+  shouldStopOnPause: boolean
 ): {
   lifecycle: MusicPlaybackLifecycle;
   shouldStop: boolean;
@@ -24,7 +24,7 @@ export function advanceMusicPlaybackLifecycle(
   return {
     lifecycle: nextLifecycle,
     shouldStop:
-      isMusicPlayback &&
+      shouldStopOnPause &&
       nextLifecycle.hasPlayed &&
       playbackState === "paused",
   };

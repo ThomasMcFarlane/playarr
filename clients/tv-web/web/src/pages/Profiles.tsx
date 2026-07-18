@@ -140,8 +140,8 @@ export function ProfilesPage(
   const pinInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    clearActivePlayerSession();
-  }, []);
+    if (!loginFromOverride) clearActivePlayerSession();
+  }, [loginFromOverride]);
 
   const fallbackProfiles = useMemo<ViewerProfile[]>(() => {
     const profiles = savedProfiles.map((profile) => ({

@@ -13,6 +13,7 @@ import type { PlaybackEngineController } from "../../lib/usePlaybackEngine";
 import { CachedArtworkImage } from "../../lib/artwork";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../../lib/i18n/translations";
+import { shouldAutoHidePlayerControls } from "../../lib/playerControlVisibility";
 import { MediaThumbnailArtwork } from "../MediaThumbnailArtwork";
 import { useMediaContextMenu } from "../MediaContextMenu";
 import { PlayerControls } from "./PlayerControls";
@@ -361,7 +362,7 @@ function MusicPlayerVisual({
   );
 }
 
-function InlineMusicMiniPlayer({
+export function InlineMusicMiniPlayer({
   context,
   title,
   positionSeconds,
@@ -597,27 +598,49 @@ export function PlayerSurface({
 
   const handleActivity = useCallback(() => {
     setShowControls(true);
-    if (engineState.state === "playing" && !interactionPinned) scheduleHide();
-  }, [engineState.state, interactionPinned, scheduleHide]);
+    if (
+      shouldAutoHidePlayerControls({
+        inlineMusic,
+        minimised,
+        playbackState: engineState.state,
+        interactionPinned,
+      })
+    ) {
+      scheduleHide();
+    }
+  }, [engineState.state, inlineMusic, interactionPinned, minimised, scheduleHide]);
 
   // Auto-hide only while actively playing -- paused/buffering/error states
   // always keep the control bar visible, matching the standard pattern
   // (nothing to "hide from" when nothing is moving).
   useEffect(() => {
+    if (inlineMusic) {
+      window.clearTimeout(hideTimerRef.current);
+      setShowControls(true);
+      setPlaylistOpen(false);
+      return;
+    }
     if (minimised) {
       window.clearTimeout(hideTimerRef.current);
       setShowControls(false);
       setPlaylistOpen(false);
       return;
     }
-    if (engineState.state === "playing" && !interactionPinned) {
+    if (
+      shouldAutoHidePlayerControls({
+        inlineMusic,
+        minimised,
+        playbackState: engineState.state,
+        interactionPinned,
+      })
+    ) {
       scheduleHide();
     } else {
       window.clearTimeout(hideTimerRef.current);
       setShowControls(true);
     }
     return () => window.clearTimeout(hideTimerRef.current);
-  }, [engineState.state, interactionPinned, minimised, scheduleHide]);
+  }, [engineState.state, inlineMusic, interactionPinned, minimised, scheduleHide]);
 
   useEffect(() => {
     const handleChange = () => {
@@ -881,7 +904,7 @@ export function PlayerSurface({
                 event.stopPropagation();
                 const selector =
                   event.key === "ArrowUp"
-                    ? ".tv-music-album-card.is-selected"
+                    ? ".tv-music-album-card.is-playing, .tv-music-album-card.is-selected"
                     : ".tv-music-track-row.is-selected";
                 document
                   .querySelector<HTMLElement>(selector)
@@ -985,17 +1008,6 @@ export function PlayerSurface({
           </span>
         </>
       )}
-
-      {inlineMusic && musicContext && activePlaylistItem ? (
-        <InlineMusicMiniPlayer
-          context={musicContext}
-          title={title}
-          positionSeconds={positionSeconds}
-          durationSeconds={durationSeconds}
-          progressPercentage={progressPercentage}
-          onMaximise={onMaximise}
-        />
-      ) : null}
 
       {isBusy && !isFatalError && !minimised && (
         <div className="player-overlay player-overlay-loading">
@@ -1177,6 +1189,7 @@ export function PlayerSurface({
         <PlayerControls
           engineState={engineState}
           visible={showControls}
+          contextTitle={inlineMusic ? title : undefined}
           isFullscreen={isFullscreen}
           systemVolumeOnly={systemVolumeOnly}
           onTogglePlay={togglePlayback}

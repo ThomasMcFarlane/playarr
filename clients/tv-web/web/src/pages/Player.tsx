@@ -12,6 +12,7 @@ import {
 } from "../lib/navigationLayer";
 import { advanceMusicPlaybackLifecycle } from "../lib/musicPlaybackLifecycle";
 import {
+  InlineMusicMiniPlayer,
   PlayerBackButton,
   PlayerSurface,
   type PlayerMusicContext,
@@ -193,6 +194,7 @@ export function PlayerPage({
   const isMusicPlayback =
     Boolean(activePlaylistItem?.music) ||
     /^\/music\/[^/?]+$/.test(locationState?.backTo ?? "");
+  const shouldStopPlaybackOnPause = isMusicPlayback && !inlineMusic;
   useDocumentTitle(title ?? t("pages.player.nowPlaying"), !minimised);
   const player = usePlaybackEngine(
     mediaFileId,
@@ -200,6 +202,24 @@ export function PlayerPage({
     playbackSettings,
     locationState?.serverUrl
   );
+  const playerTitle = title ?? activePlaylistItem?.title ?? t("pages.player.nowPlaying");
+  const durationSeconds = player.engineState.durationSeconds;
+  const positionSeconds = player.engineState.currentTimeSeconds;
+  const progressPercentage =
+    durationSeconds > 0
+      ? Math.min(100, Math.max(0, (positionSeconds / durationSeconds) * 100))
+      : 0;
+  const inlineMiniPlayer =
+    inlineMusic && activePlaylistItem?.music ? (
+      <InlineMusicMiniPlayer
+        context={activePlaylistItem.music}
+        title={playerTitle}
+        positionSeconds={positionSeconds}
+        durationSeconds={durationSeconds}
+        progressPercentage={progressPercentage}
+        onMaximise={onMaximise}
+      />
+    ) : null;
   const musicPlaybackStateRef = useRef({
     mediaFileId,
     hasPlayed: false,
@@ -313,7 +333,7 @@ export function PlayerPage({
       musicPlaybackStateRef.current,
       mediaFileId,
       player.engineState.state,
-      isMusicPlayback
+      shouldStopPlaybackOnPause
     );
     musicPlaybackStateRef.current = nextPlaybackState.lifecycle;
     if (nextPlaybackState.shouldStop) {
@@ -339,6 +359,7 @@ export function PlayerPage({
     onClose,
     player.engineState.state,
     playlistItems,
+    shouldStopPlaybackOnPause,
   ]);
 
   useEffect(() => {
@@ -385,6 +406,7 @@ export function PlayerPage({
 
   if (negotiation.kind === "loading") {
     if (minimised) {
+      if (inlineMiniPlayer) return inlineMiniPlayer;
       return (
         <MinimisedPlayerStatus
           title={title ?? activePlaylistItem?.title ?? t("pages.player.nowPlaying")}
@@ -462,30 +484,33 @@ export function PlayerPage({
   }
 
   return (
-    <div
-      className={`player-page${minimised ? " is-minimised" : ""}${
-        inlineMusic ? " is-inline-music" : ""
-      }`}
-    >
-      <PlayerSurface
-        player={player}
-        title={title ?? activePlaylistItem?.title ?? t("pages.player.nowPlaying")}
-        minimised={minimised}
-        inlineMusic={inlineMusic}
-        stopPlaybackOnPause={isMusicPlayback}
-        onBack={handleBack}
-        onStop={onClose}
-        onMinimise={handleMinimise}
-        onMaximise={onMaximise}
-        playlistItems={playlistItems}
-        activePlaylistIndex={activePlaylistIndex}
-        onSelectPlaylistItem={handleSelectPlaylistItem}
-        onPrevious={activePlaylistIndex > 0 ? handlePrevious : undefined}
-        onNext={activePlaylistIndex < playlistItems.length - 1 ? handleNext : undefined}
-        detailRoute={backTo}
-        detailParentRoute={detailParentBackTo ?? "/"}
-      />
-    </div>
+    <>
+      <div
+        className={`player-page${minimised ? " is-minimised" : ""}${
+          inlineMusic ? " is-inline-music" : ""
+        }`}
+      >
+        <PlayerSurface
+          player={player}
+          title={playerTitle}
+          minimised={minimised}
+          inlineMusic={inlineMusic}
+          stopPlaybackOnPause={shouldStopPlaybackOnPause}
+          onBack={handleBack}
+          onStop={onClose}
+          onMinimise={handleMinimise}
+          onMaximise={onMaximise}
+          playlistItems={playlistItems}
+          activePlaylistIndex={activePlaylistIndex}
+          onSelectPlaylistItem={handleSelectPlaylistItem}
+          onPrevious={activePlaylistIndex > 0 ? handlePrevious : undefined}
+          onNext={activePlaylistIndex < playlistItems.length - 1 ? handleNext : undefined}
+          detailRoute={backTo}
+          detailParentRoute={detailParentBackTo ?? "/"}
+        />
+      </div>
+      {inlineMiniPlayer}
+    </>
   );
 }
 

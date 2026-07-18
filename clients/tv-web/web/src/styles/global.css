@@ -2987,6 +2987,8 @@ code {
 }
 
 .player-page.is-minimised.is-inline-music {
+  --inline-music-cover-flow-width: clamp(330px, 50vh, 540px);
+  --inline-music-cover-flow-inset: clamp(22px, 2.4vw, 46px);
   inset: 0 0 auto auto;
   z-index: 18;
   width: 62%;
@@ -3017,8 +3019,13 @@ code {
   top: calc(clamp(104px, 13vh, 142px) + clamp(330px, 50vh, 540px) - 92px);
   right: auto;
   bottom: auto;
-  left: 50%;
-  width: min(76%, 720px);
+  left: calc(
+    var(--inline-music-cover-flow-inset) +
+      (var(--inline-music-cover-flow-width) - var(--inline-music-cover-flow-inset)) / 2
+  );
+  width: calc(
+    var(--inline-music-cover-flow-width) - var(--inline-music-cover-flow-inset)
+  );
   gap: clamp(9px, 1.1vh, 14px);
   padding: 0;
   opacity: 1;
@@ -3030,6 +3037,19 @@ code {
 
 .player-shell-inline-music .player-controls-row {
   justify-content: center;
+}
+
+.player-shell-inline-music .player-controls-context-title {
+  overflow: hidden;
+  width: 100%;
+  color: #ffffff;
+  font-size: clamp(0.58rem, 0.68vw, 0.82rem);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .player-shell-inline-music .player-volume,
@@ -7253,6 +7273,15 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   left: 7%;
   height: 38%;
   padding: 4% 5%;
+  background: linear-gradient(
+    180deg,
+    rgba(8, 5, 7, 0.28),
+    rgba(8, 5, 7, 0.78)
+  );
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(12px) brightness(0.62);
+  -webkit-backdrop-filter: blur(12px) brightness(0.62);
+  mix-blend-mode: normal;
 }
 
 .tv-music-album-cover-flow .tv-music-album-card .tv-title-card-copy {
@@ -7328,6 +7357,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   align-items: center;
   gap: clamp(8px, 0.8vw, 14px);
   overflow: hidden;
+  margin-inline: 0.75%;
   padding: 0 clamp(14px, 1.25vw, 22px);
   border-radius: clamp(7px, 0.55vw, 11px);
   background: color-mix(in srgb, var(--surface-strong) 68%, transparent);
@@ -7338,8 +7368,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
 }
 
 .tv-music-track-row:hover,
-.tv-music-track-row:focus-visible,
-.tv-music-track-row.is-selected {
+.tv-music-track-row:focus-visible {
   outline: 0;
   background: color-mix(in srgb, #cf3157 22%, var(--surface-strong));
   transform: scale(1.012);
@@ -9792,6 +9821,8 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   }
 
   .player-page.is-minimised.is-inline-music {
+    --inline-music-cover-flow-width: 230px;
+    --inline-music-cover-flow-inset: 0px;
     top: 45%;
     right: 0;
     bottom: auto;
@@ -9802,7 +9833,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
 
   .player-shell-inline-music .player-controls {
     top: 190px;
-    width: calc(100% - 32px);
+    width: var(--inline-music-cover-flow-width);
   }
 }
 

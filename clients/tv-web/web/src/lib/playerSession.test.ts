@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   clearActivePlayerSession,
+  hydrateActivePlayerSession,
   readActivePlayerSession,
   writeActivePlayerSession,
   type ActivePlayerSession,
@@ -38,6 +39,14 @@ describe("active player session storage", () => {
     writeActivePlayerSession("user-1", session, storage);
 
     expect(readActivePlayerSession("user-1", storage)).toEqual(session);
+  });
+
+  it("hydrates a user-scoped session after authentication resolves", () => {
+    const storage = createMemoryStorage();
+    writeActivePlayerSession("user-1", session, storage);
+
+    expect(readActivePlayerSession(undefined, storage)).toBeNull();
+    expect(hydrateActivePlayerSession(null, "user-1", storage)).toEqual(session);
   });
 
   it("does not restore another user's playing item", () => {

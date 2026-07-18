@@ -33,6 +33,7 @@ export interface PlayerTrackOption {
 export interface PlayerControlsProps {
   engineState: PlaybackEngineState;
   visible: boolean;
+  contextTitle?: string;
   isFullscreen: boolean;
   systemVolumeOnly?: boolean;
   onTogglePlay: () => void;
@@ -86,6 +87,7 @@ function formatTime(totalSeconds: number): string {
 export function PlayerControls({
   engineState,
   visible,
+  contextTitle,
   isFullscreen,
   systemVolumeOnly = false,
   onTogglePlay,
@@ -575,6 +577,9 @@ export function PlayerControls({
       onPointerMove={onActivity}
       onFocusCapture={onActivity}
     >
+      {contextTitle ? (
+        <strong className="player-controls-context-title">{contextTitle}</strong>
+      ) : null}
       <div
         ref={trackRef}
         className={`player-seek-track${scrubPositionSeconds !== null ? " is-scrubbing" : ""}`}

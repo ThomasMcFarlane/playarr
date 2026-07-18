@@ -57,6 +57,7 @@ import {
 } from "./lib/navigationLayer";
 import {
   clearActivePlayerSession,
+  hydrateActivePlayerSession,
   readActivePlayerSession,
   writeActivePlayerSession,
   type ActivePlayerSession,
@@ -300,8 +301,10 @@ function AppShell() {
       return;
     }
 
-    if (playerSession) {
-      writeActivePlayerSession(currentUserId, playerSession);
+    const hydratedSession = hydrateActivePlayerSession(playerSession, currentUserId);
+    if (hydratedSession) {
+      setPlayerSession(hydratedSession);
+      writeActivePlayerSession(currentUserId, hydratedSession);
     }
   }, [currentUserId, playerSession]);
 

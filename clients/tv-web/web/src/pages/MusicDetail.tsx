@@ -85,12 +85,14 @@ function AlbumCoverFlow({
   albums,
   artistId,
   selectedAlbumId,
+  playingAlbumId,
   onSelect,
   onPlay,
 }: {
   albums: AlbumDetail[];
   artistId: string;
   selectedAlbumId: string;
+  playingAlbumId: string | null;
   onSelect: (album: AlbumDetail) => void;
   onPlay: (album: AlbumDetail, track: TrackDetail) => void;
 }) {
@@ -121,6 +123,7 @@ function AlbumCoverFlow({
           const firstTrack = playableTracks(album)[0];
           if (!firstTrack?.media_file_id) return null;
           const isSelected = album.album.id === selectedAlbumId;
+          const isPlaying = album.album.id === playingAlbumId;
           const offset = circularOffset(index, selectedIndex, albums.length);
           const distance = Math.abs(offset);
           const flowStyle = {
@@ -139,7 +142,7 @@ function AlbumCoverFlow({
               type="button"
               className={`tv-title-card tv-music-album-card${
                 isSelected ? " is-selected" : ""
-              }${distance > 4 ? " is-distant" : ""}`}
+              }${isPlaying ? " is-playing" : ""}${distance > 4 ? " is-distant" : ""}`}
               style={flowStyle}
               data-tv-focus-default={isSelected ? true : undefined}
               data-navigation-focus-key={`music:${artistId}:album:${album.album.id}`}
@@ -173,7 +176,7 @@ function AlbumCoverFlow({
                     />
                   }
                 />
-                {isSelected ? (
+                {isPlaying ? (
                   <span
                     className="tv-music-cover-visualiser-host"
                     data-music-visualiser-host
@@ -393,6 +396,10 @@ export function MusicDetailPage() {
         ({ track }) => track.media_file_id === requestedSelectionMediaFileId
       ) ??
       null
+    : null;
+  const playingAlbumId = playingMediaFileId
+    ? allTracks.find(({ track }) => track.media_file_id === playingMediaFileId)?.album
+        .album.id ?? null
     : null;
   const selectedAlbum =
     albums.find((album) => album.album.id === selectedAlbumId) ??
@@ -739,6 +746,7 @@ export function MusicDetailPage() {
             albums={albums}
             artistId={work.id}
             selectedAlbumId={selectedAlbum?.album.id ?? albums[0]!.album.id}
+            playingAlbumId={playingAlbumId}
             onSelect={(album) => {
               const firstTrack = playableTracks(album)[0] ?? null;
               setSelectedAlbumId(album.album.id);

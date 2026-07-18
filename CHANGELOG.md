@@ -115,6 +115,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Connect the sign-in language selector to the first input with explicit Up and Down focus
   movement while leaving its open menu's keyboard controls intact.
+- Keep focused music tracks inside their scroll viewport and clear their highlight when focus
+  leaves the track list.
+- Keep the inline music player and Cover Flow controls mounted, and show the visualiser only on
+  the actively playing album with a darker, blurred backdrop while preserving playback across
+  page refreshes.
 - Enable Up and Down navigation from sign-in fields, and return Left from the server-address
   boundary to the active Settings option instead of a diagonally positioned item.
 - Let Left and Right leave Playarr text inputs at their matching caret boundaries while
