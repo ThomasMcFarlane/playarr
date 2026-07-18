@@ -25,144 +25,206 @@ struct HomeView: View {
 
     private var loadedContent: some View {
         GeometryReader { proxy in
-            ScrollView(.vertical) {
-                LazyVStack(alignment: .leading, spacing: 30) {
-                    if proxy.size.width >= 700, let featured = viewModel.recentlyAdded.first {
-                        featuredStage(featured)
-                    }
+            let phone = proxy.size.width <= 760
+            ZStack(alignment: .topLeading) {
+                stageBackdrop(phone: phone)
 
-                    if !viewModel.continueWatching.isEmpty {
-                        railHeader("Continue watching", count: viewModel.continueWatching.count)
-                        horizontalRail {
-                            ForEach(viewModel.continueWatching) { item in
-                                NavigationLink {
-                                    WorkDetailView(
-                                        viewModel: WorkDetailViewModel(apiClient: apiClient, workID: item.work.id),
-                                        apiClient: apiClient
-                                    )
-                                } label: {
-                                    PlayarrMediaCard(
-                                        work: item.work,
-                                        apiClient: apiClient,
-                                        progress: item.progress,
-                                        width: proxy.size.width >= 700 ? 230 : 178
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-
-                    mediaRail(
-                        title: "Recently added",
-                        works: viewModel.recentlyAdded,
-                        width: proxy.size.width >= 700 ? 230 : 178
-                    )
-
-                    ForEach(WorkKind.allCases, id: \.self) { kind in
-                        let works = viewModel.recentlyAdded.filter { $0.kind == kind }
-                        if !works.isEmpty {
-                            mediaRail(
-                                title: kind == .artist ? "Recently added music" : kind.displayName,
-                                works: works,
-                                width: proxy.size.width >= 700 ? 230 : 178
-                            )
-                        }
-                    }
+                if !phone, let featured = viewModel.recentlyAdded.first {
+                    featuredCopy(featured)
+                        .frame(width: proxy.size.width * 0.36, alignment: .leading)
+                        .padding(.leading, max(112, proxy.size.width * 0.085))
+                        .padding(.top, proxy.size.height * 0.24)
                 }
-                .padding(.top, proxy.size.width >= 700 ? 30 : 74)
-                .padding(.bottom, 112)
+
+                rails(phone: phone, width: proxy.size.width, height: proxy.size.height)
+                    .frame(
+                        width: phone ? proxy.size.width : proxy.size.width * 0.62,
+                        height: proxy.size.height
+                    )
+                    .offset(x: phone ? 0 : proxy.size.width * 0.38)
             }
-            .refreshable { await viewModel.load() }
-            .scrollIndicators(.hidden)
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
         }
-        .background(PlayarrStyle.background)
+        .background(PlayarrStyle.surface)
+        .ignoresSafeArea()
         .navigationBarHidden(true)
     }
 
-    private func featuredStage(_ work: Work) -> some View {
+    @ViewBuilder
+    private func stageBackdrop(phone: Bool) -> some View {
+        if let featured = viewModel.recentlyAdded.first {
+            PlayarrArtwork(work: featured, kind: .backdrop, apiClient: apiClient)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .opacity(phone ? 0.42 : 0.72)
+                .overlay {
+                    LinearGradient(
+                        colors: phone
+                            ? [.clear, PlayarrStyle.surface.opacity(0.38), PlayarrStyle.surface]
+                            : [PlayarrStyle.surface.opacity(0.12), PlayarrStyle.surface.opacity(0.36)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
+                .overlay {
+                    LinearGradient(
+                        colors: [PlayarrStyle.surface.opacity(phone ? 0.28 : 0.5), .clear],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                }
+        } else {
+            PlayarrStyle.surface
+        }
+    }
+
+    private func featuredCopy(_ work: Work) -> some View {
         NavigationLink {
             WorkDetailView(
                 viewModel: WorkDetailViewModel(apiClient: apiClient, workID: work.id),
                 apiClient: apiClient
             )
         } label: {
-            ZStack(alignment: .bottomLeading) {
-                PlayarrArtwork(work: work, kind: .backdrop, apiClient: apiClient)
-                    .frame(height: 390)
-                    .overlay {
-                        LinearGradient(
-                            colors: [.clear, PlayarrStyle.ink.opacity(0.82)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    }
+            VStack(alignment: .leading, spacing: 13) {
+                Text(work.kind.displayName.uppercased())
+                    .font(.custom("Avenir Next", fixedSize: 10).weight(.heavy))
+                    .tracking(1.3)
+                    .foregroundStyle(PlayarrStyle.pink)
 
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(work.kind.displayName.uppercased())
-                        .font(.caption2.weight(.black))
-                        .tracking(1.2)
-                        .foregroundStyle(PlayarrStyle.pink)
-                    Text(work.title)
-                        .font(.system(size: 48, weight: .medium, design: .rounded))
-                        .tracking(-2)
-                        .foregroundStyle(.white)
-                    if let overview = work.overview {
-                        Text(overview)
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.78))
-                            .lineLimit(2)
-                            .frame(maxWidth: 560, alignment: .leading)
-                    }
+                Text(work.title)
+                    .font(.custom("Avenir Next", fixedSize: 52).weight(.medium))
+                    .tracking(-3.7)
+                    .lineSpacing(-5)
+                    .foregroundStyle(PlayarrStyle.ink)
+                    .lineLimit(3)
+
+                if let overview = work.overview {
+                    Text(overview)
+                        .font(.custom("Avenir Next", fixedSize: 13))
+                        .foregroundStyle(PlayarrStyle.inkSoft)
+                        .lineSpacing(5)
+                        .lineLimit(4)
+                        .frame(maxWidth: 420, alignment: .leading)
                 }
-                .padding(34)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-            .padding(.horizontal, 28)
         }
         .buttonStyle(.plain)
     }
 
-    private func mediaRail(title: String, works: [Work], width: CGFloat) -> some View {
-        Group {
-            railHeader(title, count: works.count)
-            horizontalRail {
-                ForEach(works) { work in
-                    NavigationLink {
-                        WorkDetailView(
-                            viewModel: WorkDetailViewModel(apiClient: apiClient, workID: work.id),
-                            apiClient: apiClient
-                        )
-                    } label: {
-                        PlayarrMediaCard(work: work, apiClient: apiClient, width: width)
+    private func rails(phone: Bool, width: CGFloat, height: CGFloat) -> some View {
+        ScrollView(.vertical) {
+            LazyVStack(alignment: .leading, spacing: phone ? 24 : 48) {
+                if !viewModel.continueWatching.isEmpty {
+                    railSection(
+                        title: "Continue watching",
+                        count: viewModel.continueWatching.count,
+                        phone: phone
+                    ) {
+                        ForEach(viewModel.continueWatching) { item in
+                            workLink(item.work) {
+                                PlayarrMediaCard(
+                                    work: item.work,
+                                    apiClient: apiClient,
+                                    progress: item.progress,
+                                    width: cardWidth(phone: phone, viewport: width)
+                                )
+                            }
+                        }
                     }
-                    .buttonStyle(.plain)
+                }
+
+                mediaRail(title: "Recently added", works: viewModel.recentlyAdded, phone: phone, width: width)
+
+                ForEach(WorkKind.allCases, id: \.self) { kind in
+                    let works = viewModel.recentlyAdded.filter { $0.kind == kind }
+                    if !works.isEmpty {
+                        mediaRail(
+                            title: kind == .artist ? "Recently added music" : kind.displayName,
+                            works: works,
+                            phone: phone,
+                            width: width
+                        )
+                    }
+                }
+            }
+            .padding(.top, phone ? 74 : height * 0.5)
+            .padding(.bottom, phone ? 112 : height * 0.5)
+        }
+        .refreshable { await viewModel.load() }
+        .scrollIndicators(.hidden)
+        .background {
+            if phone {
+                LinearGradient(
+                    colors: [.clear, PlayarrStyle.surface.opacity(0.94), PlayarrStyle.surface],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            } else {
+                LinearGradient(
+                    colors: [.clear, PlayarrStyle.surface.opacity(0.9), PlayarrStyle.surface],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            }
+        }
+    }
+
+    private func mediaRail(title: String, works: [Work], phone: Bool, width: CGFloat) -> some View {
+        railSection(title: title, count: works.count, phone: phone) {
+            ForEach(works) { work in
+                workLink(work) {
+                    PlayarrMediaCard(
+                        work: work,
+                        apiClient: apiClient,
+                        width: cardWidth(phone: phone, viewport: width)
+                    )
                 }
             }
         }
     }
 
-    private func railHeader(_ title: String, count: Int) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .font(.title3.weight(.bold))
-                .foregroundStyle(PlayarrStyle.ink)
-            Spacer()
-            Text("\(count) titles")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(PlayarrStyle.muted)
+    private func railSection<Content: View>(
+        title: String,
+        count: Int,
+        phone: Bool,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: phone ? 8 : 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.custom("Avenir Next", fixedSize: phone ? 16 : 14).weight(.semibold))
+                    .tracking(-0.4)
+                    .foregroundStyle(PlayarrStyle.ink)
+                Text("\(count) titles")
+                    .font(.custom("Avenir Next", fixedSize: phone ? 10.5 : 8.5).weight(.semibold))
+                    .foregroundStyle(PlayarrStyle.muted)
+            }
+            .padding(.horizontal, phone ? 16 : 24)
+
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .top, spacing: phone ? 12 : 18, content: content)
+                    .padding(.leading, phone ? 16 : 24)
+                    .padding(.trailing, phone ? 16 : 36)
+                    .padding(.vertical, 8)
+            }
+            .scrollIndicators(.hidden)
         }
-        .padding(.horizontal, 18)
-        .padding(.bottom, -20)
     }
 
-    private func horizontalRail<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        ScrollView(.horizontal) {
-            LazyHStack(alignment: .top, spacing: 12, content: content)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 8)
+    private func cardWidth(phone: Bool, viewport: CGFloat) -> CGFloat {
+        phone ? min(210, viewport * 0.46) : min(225, max(150, viewport * 0.114))
+    }
+
+    private func workLink<Content: View>(_ work: Work, @ViewBuilder content: () -> Content) -> some View {
+        NavigationLink {
+            WorkDetailView(
+                viewModel: WorkDetailViewModel(apiClient: apiClient, workID: work.id),
+                apiClient: apiClient
+            )
+        } label: {
+            content()
         }
-        .scrollIndicators(.hidden)
+        .buttonStyle(.plain)
     }
 }
 
