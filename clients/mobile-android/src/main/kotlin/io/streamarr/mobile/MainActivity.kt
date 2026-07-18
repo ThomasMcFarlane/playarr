@@ -12,7 +12,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import dagger.hilt.android.AndroidEntryPoint
 import io.streamarr.mobile.ui.web.AndroidWebAppScreen
-import io.streamarr.mobile.update.AppUpdateEffect
 import io.streamarr.shared.designsystem.theme.StreamarrTheme
 
 @AndroidEntryPoint
@@ -38,7 +37,6 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             StreamarrTheme {
-                if (!isTelevision) AppUpdateEffect()
                 AndroidWebAppScreen(isTelevision = isTelevision)
             }
         }

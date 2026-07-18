@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
-import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -35,11 +34,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -57,7 +54,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.streamarr.mobile.BuildConfig
@@ -65,11 +61,8 @@ import io.streamarr.mobile.update.AndroidSelfUpdater
 import io.streamarr.mobile.update.AndroidUpdateEvent
 import io.streamarr.shared.auth.TokenStore
 import io.streamarr.shared.auth.model.TokenResponse
-import io.streamarr.shared.data.config.ServerConfigStore
 import java.net.URI
 import javax.inject.Inject
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -89,13 +82,9 @@ fun AndroidWebAppScreen(
         "AndroidWebAppScreen must be hosted by an Activity."
     }
     val lifecycleOwner = LocalLifecycleOwner.current
-    val baseUrl by viewModel.baseUrl.collectAsStateWithLifecycle()
-    val appUrl = remember(baseUrl) { androidAppUrl(baseUrl, BuildConfig.VERSION_CODE) }
-    var addressDraft by remember(baseUrl) { mutableStateOf(baseUrl) }
-    var addressError by remember { mutableStateOf<String?>(null) }
+    val appUrl = remember { androidAppUrl(BuildConfig.VERSION_CODE) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
-    var showServerEditor by remember { mutableStateOf(false) }
     var reloadGeneration by remember { mutableIntStateOf(0) }
     var webView by remember { mutableStateOf<WebView?>(null) }
     var fullscreenView by remember { mutableStateOf<View?>(null) }
@@ -120,14 +109,6 @@ fun AndroidWebAppScreen(
         fileChooserCallback = null
     }
 
-    LaunchedEffect(baseUrl) {
-        addressDraft = baseUrl
-        addressError = null
-        loadError = null
-        loading = true
-        showServerEditor = false
-    }
-
     fun closeFullscreen(notifyWebView: Boolean) {
         val callback = fullscreenCallback
         fullscreenView?.let { view -> (view.parent as? ViewGroup)?.removeView(view) }
@@ -139,11 +120,6 @@ fun AndroidWebAppScreen(
     BackHandler {
         when {
             fullscreenView != null -> closeFullscreen(notifyWebView = true)
-            showServerEditor -> {
-                addressDraft = baseUrl
-                addressError = null
-                showServerEditor = false
-            }
             else -> {
                 val activeWebView = webView
                 if (activeWebView == null) {
@@ -177,15 +153,7 @@ fun AndroidWebAppScreen(
                     isTelevision = isTelevision,
                     onWebViewReady = { webView = it },
                     onLoadingChanged = { loading = it },
-                    onLoadError = { message ->
-                        loadError = message
-                        showServerEditor = true
-                    },
-                    onOpenServerEditor = {
-                        addressDraft = baseUrl
-                        addressError = null
-                        showServerEditor = true
-                    },
+                    onLoadError = { message -> loadError = message },
                     onSessionChanged = viewModel::syncWebSession,
                     onCheckForUpdates = { selfUpdater?.checkForUpdates() },
                     onChooseFile = { callback ->
@@ -210,7 +178,7 @@ fun AndroidWebAppScreen(
             },
         )
 
-        if (loading && !showServerEditor) {
+        if (loading && loadError == null) {
             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
         }
 
@@ -218,38 +186,13 @@ fun AndroidWebAppScreen(
             FullscreenWebVideo(view = customView, modifier = Modifier.fillMaxSize())
         }
 
-        if (showServerEditor) {
-            ServerAddressEditor(
-                address = addressDraft,
-                error = addressError ?: loadError,
-                onAddressChanged = {
-                    addressDraft = it
-                    addressError = null
-                },
-                onConnect = {
-                    runCatching { normaliseServerUrl(addressDraft) }
-                        .onSuccess { normalised ->
-                            loadError = null
-                            loading = true
-                            showServerEditor = false
-                            if (normalised == baseUrl) {
-                                reloadGeneration += 1
-                            } else {
-                                viewModel.saveBaseUrl(normalised)
-                            }
-                        }
-                        .onFailure {
-                            addressError = it.message ?: "Enter a valid server address."
-                        }
-                },
-                onCancel = if (loadError == null) {
-                    {
-                        addressDraft = baseUrl
-                        addressError = null
-                        showServerEditor = false
-                    }
-                } else {
-                    null
+        loadError?.let { message ->
+            WebLoadError(
+                message = message,
+                onRetry = {
+                    loadError = null
+                    loading = true
+                    reloadGeneration += 1
                 },
             )
         }
@@ -285,19 +228,8 @@ fun AndroidWebAppScreen(
 
 @HiltViewModel
 class MobileWebAppViewModel @Inject constructor(
-    private val serverConfigStore: ServerConfigStore,
     private val tokenStore: TokenStore,
 ) : ViewModel() {
-    val baseUrl = serverConfigStore.baseUrl.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = ServerConfigStore.DEFAULT_BASE_URL,
-    )
-
-    fun saveBaseUrl(url: String) {
-        viewModelScope.launch { serverConfigStore.setBaseUrl(url) }
-    }
-
     fun syncWebSession(serialisedSession: String) {
         viewModelScope.launch {
             if (serialisedSession.isBlank()) {
@@ -319,20 +251,8 @@ class MobileWebAppViewModel @Inject constructor(
     }
 }
 
-internal fun normaliseServerUrl(value: String): String {
-    val trimmed = value.trim()
-    require(trimmed.isNotEmpty()) { "Enter the address of your Streamarr server." }
-    val candidate = if ("://" in trimmed) trimmed else "http://$trimmed"
-    val parsed = URI(candidate)
-    require(parsed.scheme == "http" || parsed.scheme == "https") {
-        "The server address must start with http:// or https://."
-    }
-    require(!parsed.host.isNullOrBlank()) { "Enter a valid server address." }
-    return candidate.trimEnd('/')
-}
-
-internal fun androidAppUrl(baseUrl: String, versionCode: Int): String =
-    "${baseUrl.trimEnd('/')}/?androidBuild=$versionCode"
+internal fun androidAppUrl(versionCode: Int): String =
+    "$PLAYARR_APP_ORIGIN/?androidBuild=$versionCode"
 
 @SuppressLint("SetJavaScriptEnabled")
 private fun createPlayarrMobileWebView(
@@ -341,7 +261,6 @@ private fun createPlayarrMobileWebView(
     onWebViewReady: (WebView) -> Unit,
     onLoadingChanged: (Boolean) -> Unit,
     onLoadError: (String) -> Unit,
-    onOpenServerEditor: () -> Unit,
     onSessionChanged: (String) -> Unit,
     onCheckForUpdates: () -> Unit,
     onChooseFile: (ValueCallback<Array<Uri>>) -> Unit,
@@ -380,7 +299,6 @@ private fun createPlayarrMobileWebView(
     }
     addJavascriptInterface(
         PlayarrAndroidMobileBridge(
-            onOpenServerEditor = { playarrWebView.post(onOpenServerEditor) },
             onSessionChanged = onSessionChanged,
         ),
         "PlayarrAndroidMobile",
@@ -447,13 +365,6 @@ private fun createPlayarrMobileWebView(
     }
 
     if (isTelevision) {
-        setOnKeyListener { _, keyCode, event ->
-            if (keyCode != KeyEvent.KEYCODE_MENU) return@setOnKeyListener false
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                onOpenServerEditor()
-            }
-            true
-        }
         addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
             (view as WebView).syncTvViewport()
         }
@@ -487,12 +398,8 @@ private fun createPlayarrMobileWebView(
 
 @Keep
 private class PlayarrAndroidMobileBridge(
-    private val onOpenServerEditor: () -> Unit,
     private val onSessionChanged: (String) -> Unit,
 ) {
-    @android.webkit.JavascriptInterface
-    fun openServerEditor() = onOpenServerEditor()
-
     @android.webkit.JavascriptInterface
     fun syncSession(serialisedSession: String) = onSessionChanged(serialisedSession)
 }
@@ -636,6 +543,7 @@ private const val TV_LAYOUT_WIDTH_CSS_PX = 1920
 private const val TV_LAYOUT_HEIGHT_CSS_PX = 1080
 private const val TV_LAYOUT_SCALE = 0.5f
 private const val TV_INITIAL_SCALE_PERCENT = 50
+private const val PLAYARR_APP_ORIGIN = "https://playarr.app"
 private val PLAYARR_ANDROID_APK_PATH =
     Regex("^/downloads/android(?:/releases/[^/]+)?/playarr-android\\.apk$")
 
@@ -660,13 +568,7 @@ private fun FullscreenWebVideo(view: View, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ServerAddressEditor(
-    address: String,
-    error: String?,
-    onAddressChanged: (String) -> Unit,
-    onConnect: () -> Unit,
-    onCancel: (() -> Unit)?,
-) {
+private fun WebLoadError(message: String, onRetry: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -686,30 +588,16 @@ private fun ServerAddressEditor(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
-                text = "Connect to Playarr",
+                text = "Playarr could not load",
                 style = MaterialTheme.typography.headlineMedium,
             )
             Text(
-                text = "Enter the address that serves the Streamarr API and Playarr web app.",
+                text = message,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )
-            OutlinedTextField(
-                value = address,
-                onValueChange = onAddressChanged,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Server address") },
-                singleLine = true,
-                isError = error != null,
-                supportingText = error?.let { message -> { Text(message) } },
-            )
-            Button(onClick = onConnect, modifier = Modifier.fillMaxWidth()) {
-                Text("Connect")
-            }
-            onCancel?.let { cancel ->
-                Button(onClick = cancel, modifier = Modifier.fillMaxWidth()) {
-                    Text("Cancel")
-                }
+            Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
+                Text("Retry")
             }
         }
     }

@@ -183,6 +183,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Make the Android shell load only hosted Playarr, remove its native Streamarr-address editor and
+  startup server-version request, and leave each account's Streamarr URL to the web login flow.
+- Let Android browsers follow the Clients APK link as a normal direct navigation instead of
+  forcing the browser's broken download-attribute filename handling.
 - Hand public APK links from the Android WebView to Android's download-capable browser so the
   installer downloads without entering Playarr's profile or sign-in flow.
 - Link the public Android download to its immutable versioned route and force the `.apk` filename,

@@ -39,7 +39,7 @@ class TvSettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     val baseUrl = serverConfigStore.baseUrl
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ServerConfigStore.DEFAULT_BASE_URL)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
 
     /** Clears the stored session; the TV NavHost observes `TokenStore` and routes back to Pairing. */
     fun signOut() {
