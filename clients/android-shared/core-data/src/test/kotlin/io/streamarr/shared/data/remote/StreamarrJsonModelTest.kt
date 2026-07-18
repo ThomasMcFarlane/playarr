@@ -73,6 +73,23 @@ class StreamarrJsonModelTest {
     }
 
     @Test
+    fun `decodes site works and TPDB references used by the Playarr navigation`() {
+        val work = json.decodeFromString(
+            Work.serializer(),
+            """
+            {
+              "id": "site-1", "kind": "site", "external_refs": [{"provider": "tpdb", "external_id": "42"}],
+              "title": "Site title", "sort_title": "Site title", "images": [], "genres": [], "tags": [],
+              "added_at": "2026-01-01T00:00:00Z", "monitored": true, "availability": "available"
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals(WorkKind.Site, work.kind)
+        assertEquals(ExternalProvider.Tpdb, work.externalRefs.single().provider)
+    }
+
+    @Test
     fun `decodes CatalogPage`() {
         val page = json.decodeFromString(
             CatalogPage.serializer(),

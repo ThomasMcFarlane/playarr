@@ -7,14 +7,19 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
 private val StreamarrDarkColorScheme = darkColorScheme(
-    primary = StreamarrPalette.Violet80,
-    onPrimary = StreamarrPalette.Violet20,
-    secondary = StreamarrPalette.Teal80,
-    onSecondary = StreamarrPalette.Teal20,
-    tertiary = StreamarrPalette.Amber80,
+    primary = StreamarrPalette.PlayarrPink,
+    onPrimary = StreamarrPalette.PlayarrInk,
+    secondary = StreamarrPalette.PlayarrPinkLight,
+    onSecondary = StreamarrPalette.PlayarrBackground,
+    tertiary = StreamarrPalette.PlayarrInkSoft,
     error = StreamarrPalette.Error80,
-    background = StreamarrPalette.SurfaceDark,
-    surface = StreamarrPalette.SurfaceDark,
+    background = StreamarrPalette.PlayarrBackground,
+    onBackground = StreamarrPalette.PlayarrInk,
+    surface = StreamarrPalette.PlayarrSurface,
+    onSurface = StreamarrPalette.PlayarrInk,
+    surfaceVariant = StreamarrPalette.PlayarrSurfaceSoft,
+    onSurfaceVariant = StreamarrPalette.PlayarrInkSoft,
+    outline = StreamarrPalette.PlayarrInkMuted,
 )
 
 private val StreamarrLightColorScheme = lightColorScheme(

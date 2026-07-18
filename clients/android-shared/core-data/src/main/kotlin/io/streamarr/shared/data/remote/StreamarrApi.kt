@@ -5,6 +5,7 @@ import io.streamarr.shared.data.model.PlaybackInfoResponse
 import io.streamarr.shared.data.model.VersionEnvelope
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkDetail
+import io.streamarr.shared.data.model.WorkKind
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.Serializable
 import okhttp3.ResponseBody
@@ -77,12 +78,16 @@ interface StreamarrApi {
     @GET("api/v1/catalog")
     suspend fun browseCatalog(
         @Query("kind") kind: String? = null,
+        @Query("available_only") availableOnly: Boolean? = null,
         @Query("genre") genre: String? = null,
         @Query("tag") tag: String? = null,
         @Query("sort") sort: String? = null,
         @Query("limit") limit: Long? = null,
         @Query("offset") offset: Long? = null,
     ): CatalogPage
+
+    @GET("api/v1/catalog/kinds")
+    suspend fun listCatalogKinds(): List<WorkKind>
 
     @GET("api/v1/catalog/search")
     suspend fun searchCatalog(

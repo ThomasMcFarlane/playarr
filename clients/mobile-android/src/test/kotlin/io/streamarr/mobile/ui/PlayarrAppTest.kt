@@ -43,4 +43,20 @@ class PlayarrAppTest {
     fun `invalid server address is rejected`() {
         assertThrows(IllegalArgumentException::class.java) { normaliseServerUrl("not a server") }
     }
+
+    @Test
+    fun `relative artwork URL resolves against the selected account server`() {
+        assertEquals(
+            "https://streamarr.example.com/api/v1/artwork/work-1/backdrop",
+            resolveArtworkUrl("https://streamarr.example.com", "/api/v1/artwork/work-1/backdrop"),
+        )
+    }
+
+    @Test
+    fun `absolute artwork URL remains on its owning server`() {
+        assertEquals(
+            "https://media.example.com/backdrop.jpg",
+            resolveArtworkUrl("https://streamarr.example.com", "https://media.example.com/backdrop.jpg"),
+        )
+    }
 }

@@ -32,6 +32,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -55,6 +56,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -75,6 +77,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.streamarr.mobile.BuildConfig
+import io.streamarr.mobile.R
 import io.streamarr.shared.auth.TokenStore
 import io.streamarr.shared.auth.model.ClientPlatform
 import io.streamarr.shared.auth.model.LoginRequest
@@ -105,9 +108,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-private val PlayarrBackground = Color(0xFF070712)
-private val PlayarrPanel = Color(0xFF111124)
-private val PlayarrViolet = Color(0xFF9A7CFF)
+private val PlayarrBackground = Color(0xFF151315)
+private val PlayarrPanel = Color(0xFF211D21)
+private val PlayarrViolet = Color(0xFFCF3157)
 
 sealed interface RootState {
     data object Loading : RootState
@@ -256,7 +259,7 @@ fun PlayarrApp(
                 savedServerUrl = current.savedServerUrl,
                 isTelevision = isTelevision,
             )
-            is RootState.SignedIn -> SignedInApp(
+            is RootState.SignedIn -> PlayarrExperience(
                 serverUrl = current.serverUrl,
                 isTelevision = isTelevision,
             )
@@ -348,14 +351,14 @@ private fun LoginScreen(
 @Composable
 private fun PlayarrMark() {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier.size(46.dp).background(PlayarrViolet, RoundedCornerShape(14.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("P", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
-        }
+        Icon(
+            painter = painterResource(R.drawable.playarr_mark),
+            contentDescription = null,
+            tint = Color.Unspecified,
+            modifier = Modifier.size(48.dp),
+        )
         Spacer(Modifier.width(14.dp))
-        Text("Playarr", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Black)
+        Text("Playarr", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -524,9 +527,12 @@ private fun NavMark(text: String) {
 
 @Composable
 private fun PlayarrMarkCompact() {
-    Box(Modifier.size(42.dp).background(PlayarrViolet, RoundedCornerShape(13.dp)), contentAlignment = Alignment.Center) {
-        Text("P", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black)
-    }
+    Icon(
+        painter = painterResource(R.drawable.playarr_mark),
+        contentDescription = "Playarr",
+        tint = Color.Unspecified,
+        modifier = Modifier.size(42.dp),
+    )
 }
 
 @Composable
@@ -625,6 +631,7 @@ private fun HomeScreen(
 private fun WorkKind.sectionTitle(): String = when (this) {
     WorkKind.Movie -> "Movies"
     WorkKind.Series -> "TV"
+    WorkKind.Site -> "Sites"
     WorkKind.Artist -> "Music"
     WorkKind.Author -> "Books"
 }
