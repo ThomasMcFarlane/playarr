@@ -15,6 +15,7 @@ public struct PlayableItem: Identifiable, Equatable, Sendable {
     public let startPositionSeconds: Double
     public let preferredAudioLanguageCode: String?
     public let preferredSubtitleLanguageCode: String?
+    public let httpHeaders: [String: String]
 
     public init(
         id: UUID,
@@ -22,7 +23,8 @@ public struct PlayableItem: Identifiable, Equatable, Sendable {
         title: String,
         startPositionSeconds: Double = 0,
         preferredAudioLanguageCode: String? = nil,
-        preferredSubtitleLanguageCode: String? = nil
+        preferredSubtitleLanguageCode: String? = nil,
+        httpHeaders: [String: String] = [:]
     ) {
         self.id = id
         self.streamURL = streamURL
@@ -30,6 +32,7 @@ public struct PlayableItem: Identifiable, Equatable, Sendable {
         self.startPositionSeconds = startPositionSeconds
         self.preferredAudioLanguageCode = preferredAudioLanguageCode
         self.preferredSubtitleLanguageCode = preferredSubtitleLanguageCode
+        self.httpHeaders = httpHeaders
     }
 }
 
@@ -178,7 +181,12 @@ public final class AVPlayerEngine: NSObject, PlayerEngine {
     public func load(_ item: PlayableItem) async throws {
         updateState(.loading)
 
-        let asset = AVURLAsset(url: item.streamURL)
+        let asset = AVURLAsset(
+            url: item.streamURL,
+            options: item.httpHeaders.isEmpty
+                ? nil
+                : ["AVURLAssetHTTPHeaderFieldsKey": item.httpHeaders]
+        )
         let (_, assetDuration) = try await asset.load(.isPlayable, .duration)
 
         let playerItem = AVPlayerItem(asset: asset)

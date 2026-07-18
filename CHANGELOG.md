@@ -182,6 +182,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Give the native iOS client real username/password and managed-profile login, persist those
+  sessions per server, and carry bearer authentication into AVPlayer media and HLS requests.
 - Make the iOS Xcode target produce the `Playarr.app` bundle expected by its shared scheme and
   app-hosted unit tests.
 - Authenticate iOS catalogue and playback requests, rotate expired sessions through the server's

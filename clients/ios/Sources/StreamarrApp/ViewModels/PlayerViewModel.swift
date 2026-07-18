@@ -68,7 +68,13 @@ public final class PlayerViewModel {
                 throw APIError.invalidResponse
             }
 
-            let item = PlayableItem(id: mediaFileID, streamURL: streamURL, title: title)
+            let requestHeaders = try await apiClient.playbackRequestHeaders()
+            let item = PlayableItem(
+                id: mediaFileID,
+                streamURL: streamURL,
+                title: title,
+                httpHeaders: requestHeaders
+            )
             try await engine.load(item)
             duration = engine.duration
             engine.play()
