@@ -166,12 +166,12 @@ a {
 }
 
 .activity-link {
-  color: var(--color-accent);
+  color: inherit;
   font-weight: 500;
 }
 
 .activity-link:hover {
-  color: var(--color-accent-hover);
+  color: inherit;
   text-decoration: underline;
 }
 

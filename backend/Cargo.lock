@@ -4231,6 +4231,7 @@ dependencies = [
  "axum 0.8.9",
  "chrono",
  "dashmap",
+ "futures",
  "jsonwebtoken",
  "reqwest",
  "serde",

@@ -47,6 +47,7 @@ use axum::extract::{Path, Query, Request, State};
 use axum::response::Response;
 use axum::Json;
 use dashmap::DashMap;
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 use tokio::sync::Mutex;
@@ -1040,6 +1041,32 @@ async fn serve_file(path: &std::path::Path, request: Request) -> Result<Response
     Ok(response.map(axum::body::Body::new))
 }
 
+/// Counts only response-body chunks that Axum actually pulls from the file
+/// stream. This keeps a playback session's byte total aligned with the
+/// ranges delivered to the player instead of guessing from runtime or the
+/// source file's full size.
+fn track_streamed_bytes(
+    response: Response,
+    session_registry: Arc<dyn streamarr_telemetry::analytics::SessionRegistry>,
+    session_id: Uuid,
+) -> Response {
+    if !response.status().is_success() {
+        return response;
+    }
+
+    let (parts, body) = response.into_parts();
+    let stream = body.into_data_stream().map(move |result| {
+        if let Ok(chunk) = &result {
+            let chunk_len = chunk.len() as u64;
+            session_registry.update(session_id, &|session| {
+                session.bytes_streamed = session.bytes_streamed.saturating_add(chunk_len);
+            });
+        }
+        result
+    });
+    Response::from_parts(parts, axum::body::Body::from_stream(stream))
+}
+
 /// Cold on-demand transcodes can take several seconds before ffmpeg writes
 /// the first manifest/segment. Holding the already-authenticated request
 /// briefly is both cheaper and more reliable than forcing every TV client
@@ -1085,11 +1112,20 @@ pub async fn stream_media_handler(
         .await
         .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
 
-    if let Some(streaming) = streaming {
+    let candidate_session = query
+        .playback_session_id
+        .and_then(|session_id| state.session_registry.get(session_id));
+    let tracking_session_id = if let Some(streaming) = streaming {
         ensure_library_allowed(
             media_file.source_instance_id,
             streaming.allowed_libraries().as_deref(),
         )?;
+
+        candidate_session
+            .filter(|session| {
+                session.user_id == streaming.user_id && session.media_file_id == media_file_id
+            })
+            .map(|session| session.id)
     } else {
         let session_id = query.playback_session_id.ok_or_else(|| {
             ApiError::new(
@@ -1098,7 +1134,7 @@ pub async fn stream_media_handler(
                 "missing playback authorisation",
             )
         })?;
-        let session = state.session_registry.get(session_id).ok_or_else(|| {
+        let session = candidate_session.ok_or_else(|| {
             ApiError::new(
                 axum::http::StatusCode::UNAUTHORIZED,
                 "unauthorized",
@@ -1112,10 +1148,17 @@ pub async fn stream_media_handler(
                 "playback session does not authorise this media file",
             ));
         }
-    }
+        Some(session_id)
+    };
 
     let resolved_path = streamarr_model::resolve_media_path(&media_file.path);
-    serve_file(&resolved_path, request).await
+    let response = serve_file(&resolved_path, request).await?;
+    Ok(match tracking_session_id {
+        Some(session_id) => {
+            track_streamed_bytes(response, state.session_registry.clone(), session_id)
+        }
+        None => response,
+    })
 }
 
 #[utoipa::path(
@@ -2309,6 +2352,15 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(bytes.as_ref(), b"56789");
+        assert_eq!(
+            state
+                .app
+                .session_registry
+                .get(info.session_id)
+                .expect("negotiated session should remain active")
+                .bytes_streamed,
+            5
+        );
 
         let _ = std::fs::remove_file(&path);
     }

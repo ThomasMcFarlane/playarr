@@ -19,6 +19,7 @@ streamarr-arr-sync = { path = "../streamarr-arr-sync" }
 streamarr-arr-client = { path = "../streamarr-arr-client" }
 streamarr-tdarr-client = { path = "../streamarr-tdarr-client" }
 axum = { workspace = true }
+futures = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
 utoipa = { workspace = true, features = ["yaml"] }

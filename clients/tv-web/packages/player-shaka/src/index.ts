@@ -103,6 +103,7 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
   private unauthorizedRecoveryAttempts = 0;
   private readonly externalSubtitleTrackIds = new Map<string, number>();
   private nativeDirect = false;
+  private bytesReceived = 0;
 
   private subtitleTrackId(track: shaka.extern.TextTrack): string {
     return (
@@ -347,6 +348,15 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
         request.headers["Authorization"] = `Bearer ${token}`;
       }
     });
+    this.player.getNetworkingEngine()?.registerResponseFilter((type, response) => {
+      if (
+        !response.fromCache &&
+        (type === shaka.net.NetworkingEngine.RequestType.MANIFEST ||
+          type === shaka.net.NetworkingEngine.RequestType.SEGMENT)
+      ) {
+        this.bytesReceived += response.data.byteLength;
+      }
+    });
 
     const handleError = (event: Event) => {
       const shakaError = (event as unknown as { detail?: InstanceType<typeof shaka.util.Error> })
@@ -541,6 +551,16 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
 
   async play(): Promise<void> {
     await this.mediaElement?.play();
+  }
+
+  /** Successful manifest and media-response bytes received in the current analytics session. */
+  getBytesReceived(): number {
+    return this.bytesReceived;
+  }
+
+  /** Starts a fresh cumulative byte counter when playback negotiation creates a new session. */
+  resetBytesReceived(): void {
+    this.bytesReceived = 0;
   }
 
   async pause(): Promise<void> {

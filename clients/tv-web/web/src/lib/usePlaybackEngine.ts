@@ -375,6 +375,29 @@ export function usePlaybackEngine(
     [client]
   );
 
+  const recordHeartbeat = useCallback(
+    (sessionId: string): Promise<void> =>
+      client
+        .recordPlaybackEvent(sessionId, {
+          kind: "heartbeat",
+          position_ms: Math.max(0, latestPlaybackRef.current.positionMs),
+          bytes_streamed_total: engineRef.current?.getBytesReceived() ?? 0,
+        })
+        .catch(() => {
+          // Analytics must never interrupt playback. A later heartbeat or
+          // terminal flush retries with the latest cumulative counters.
+        }),
+    [client]
+  );
+
+  const closeSession = useCallback(
+    (sessionId: string, event: PlaybackEventKind): Promise<void> => {
+      if (closedSessionIdsRef.current.has(sessionId)) return Promise.resolve();
+      return recordHeartbeat(sessionId).then(() => recordTerminalEvent(sessionId, event));
+    },
+    [recordHeartbeat, recordTerminalEvent]
+  );
+
   const stopActiveSession = useCallback(
     (reason: "completed" | "user_stopped" | "error" = "user_stopped"): Promise<void> => {
       const sessionId = activeSessionIdRef.current;
@@ -382,19 +405,19 @@ export function usePlaybackEngine(
       activeSessionIdRef.current = null;
 
       if (reason === "error") {
-        return recordTerminalEvent(sessionId, {
+        return closeSession(sessionId, {
           kind: "error",
           message: "Player entered a terminal error state",
         });
       }
 
-      return recordTerminalEvent(sessionId, {
+      return closeSession(sessionId, {
         kind: "stop",
         reason,
         position_ms: Math.max(0, latestPlaybackRef.current.positionMs),
       });
     },
-    [recordTerminalEvent]
+    [closeSession]
   );
 
   useEffect(() => {
@@ -508,12 +531,13 @@ export function usePlaybackEngine(
           info.mode === "hls" && isOnDemandHlsUrl(info.url);
         sourceOffsetSecondsRef.current = Math.max(0, info.source_offset_ms / 1000);
         if (previousSessionId && previousSessionId !== info.session_id) {
-          void recordTerminalEvent(previousSessionId, {
+          void closeSession(previousSessionId, {
             kind: "stop",
             reason: "user_stopped",
             position_ms: Math.max(0, latestPlaybackRef.current.positionMs),
           });
         }
+        engineRef.current?.resetBytesReceived();
         setQualityOptions(info.quality_options);
         setActiveQualityId(info.selected_quality_id);
         applySourceTracks(info);
@@ -541,8 +565,8 @@ export function usePlaybackEngine(
   }, [
     applySourceTracks,
     client,
+    closeSession,
     mediaFileId,
-    recordTerminalEvent,
     retryCount,
     startPositionSeconds,
   ]);
@@ -796,6 +820,8 @@ export function usePlaybackEngine(
 
     if (shouldFlushTransition || shouldHeartbeat) {
       persistProgress(completed);
+      const sessionId = activeSessionIdRef.current;
+      if (sessionId) void recordHeartbeat(sessionId);
     }
 
     if (engineState.state === "ended") {
@@ -803,7 +829,13 @@ export function usePlaybackEngine(
     } else if (engineState.state === "error") {
       void stopActiveSession("error");
     }
-  }, [engineState, fixedDurationSeconds, persistProgress, stopActiveSession]);
+  }, [
+    engineState,
+    fixedDurationSeconds,
+    persistProgress,
+    recordHeartbeat,
+    stopActiveSession,
+  ]);
 
   // Route changes/unmounts are a playback stop even when the engine never
   // emitted a pause event. Flush the last known position before teardown.
@@ -888,6 +920,7 @@ export function usePlaybackEngine(
             return;
           }
           activeSessionIdRef.current = info.session_id;
+          engineRef.current?.resetBytesReceived();
           onDemandTranscodeRef.current =
             info.mode === "hls" && isOnDemandHlsUrl(info.url);
           sourceOffsetSecondsRef.current = Math.max(0, info.source_offset_ms / 1000);
@@ -986,6 +1019,7 @@ export function usePlaybackEngine(
             });
           }
           activeSessionIdRef.current = info.session_id;
+          engineRef.current?.resetBytesReceived();
           onDemandTranscodeRef.current =
             info.mode === "hls" && isOnDemandHlsUrl(info.url);
           sourceOffsetSecondsRef.current = Math.max(0, info.source_offset_ms / 1000);
@@ -1128,6 +1162,7 @@ export function usePlaybackEngine(
             return;
           }
           activeSessionIdRef.current = info.session_id;
+          engineRef.current?.resetBytesReceived();
           onDemandTranscodeRef.current =
             info.mode === "hls" && isOnDemandHlsUrl(info.url);
           sourceOffsetSecondsRef.current = Math.max(0, info.source_offset_ms / 1000);

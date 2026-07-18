@@ -119,6 +119,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Render Streamarr activity links in the surrounding text colour and report bytes actually
+  delivered during direct and adaptive playback instead of leaving session totals at zero.
 - Prevent the minimised player from hiding a video element that still retains browser focus.
 - Load authenticated, cached work and album artwork throughout Streamarr Admin, including music,
   with visible loading placeholders and graceful missing-artwork fallbacks.
