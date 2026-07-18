@@ -4,8 +4,14 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- A simple play-triangle glyph, centered in the adaptive-icon safe zone. -->
+    <!-- Compact Playarr orbit and play mark, matching playarr-icon.svg. -->
     <path
-        android:fillColor="#C9BFFF"
-        android:pathData="M40,32 L78,54 L40,76 Z" />
+        android:fillColor="@android:color/transparent"
+        android:pathData="M36,27A35,35 0,1 1,22 54"
+        android:strokeColor="#D83F6B"
+        android:strokeLineCap="round"
+        android:strokeWidth="7" />
+    <path
+        android:fillColor="#D83F6B"
+        android:pathData="M47,38c0,-4 4,-6 7,-4l25,16c3,2 3,6 0,8L54,74c-3,2 -7,0 -7,-4z" />
 </vector>

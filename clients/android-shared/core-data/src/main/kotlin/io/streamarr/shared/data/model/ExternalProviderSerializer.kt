@@ -35,6 +35,7 @@ object ExternalProviderSerializer : KSerializer<ExternalProvider> {
             ExternalProvider.Goodreads -> JsonPrimitive("goodreads")
             ExternalProvider.Isbn -> JsonPrimitive("isbn")
             ExternalProvider.Asin -> JsonPrimitive("asin")
+            ExternalProvider.Tpdb -> JsonPrimitive("tpdb")
             is ExternalProvider.Other -> JsonObject(mapOf("other" to JsonPrimitive(value.name)))
         }
         encoder.encodeJsonElement(element)
@@ -55,6 +56,7 @@ object ExternalProviderSerializer : KSerializer<ExternalProvider> {
             "goodreads" -> ExternalProvider.Goodreads
             "isbn" -> ExternalProvider.Isbn
             "asin" -> ExternalProvider.Asin
+            "tpdb" -> ExternalProvider.Tpdb
             else -> ExternalProvider.Other(name)
         }
     }

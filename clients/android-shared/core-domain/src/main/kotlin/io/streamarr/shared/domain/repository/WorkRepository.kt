@@ -22,12 +22,15 @@ interface WorkRepository {
     /** `GET /api/v1/catalog`. */
     suspend fun browseCatalog(
         kind: WorkKind? = null,
+        availableOnly: Boolean? = null,
         genre: String? = null,
         tag: String? = null,
         sort: String? = null,
         limit: Long? = null,
         offset: Long? = null,
     ): CatalogPage
+
+    suspend fun listCatalogKinds(): List<WorkKind>
 
     /** `GET /api/v1/catalog/search`. */
     suspend fun searchCatalog(query: String, limit: Long? = null): List<Work>
@@ -42,6 +45,7 @@ class DefaultWorkRepository @Inject constructor(
 
     override suspend fun browseCatalog(
         kind: WorkKind?,
+        availableOnly: Boolean?,
         genre: String?,
         tag: String?,
         sort: String?,
@@ -49,12 +53,15 @@ class DefaultWorkRepository @Inject constructor(
         offset: Long?,
     ): CatalogPage = api.browseCatalog(
         kind = kind?.wireName(),
+        availableOnly = availableOnly,
         genre = genre,
         tag = tag,
         sort = sort,
         limit = limit,
         offset = offset,
     )
+
+    override suspend fun listCatalogKinds(): List<WorkKind> = api.listCatalogKinds()
 
     override suspend fun searchCatalog(query: String, limit: Long?): List<Work> =
         api.searchCatalog(query = query, limit = limit)

@@ -16,6 +16,7 @@ import kotlinx.serialization.Serializable
 enum class WorkKind {
     @SerialName("movie") Movie,
     @SerialName("series") Series,
+    @SerialName("site") Site,
     @SerialName("artist") Artist,
     @SerialName("author") Author,
 }
@@ -62,6 +63,7 @@ sealed interface ExternalProvider {
     data object Goodreads : ExternalProvider
     data object Isbn : ExternalProvider
     data object Asin : ExternalProvider
+    data object Tpdb : ExternalProvider
     data class Other(val name: String) : ExternalProvider
 }
 
@@ -118,6 +120,7 @@ data class Work(
 fun WorkKind.wireName(): String = when (this) {
     WorkKind.Movie -> "movie"
     WorkKind.Series -> "series"
+    WorkKind.Site -> "site"
     WorkKind.Artist -> "artist"
     WorkKind.Author -> "author"
 }

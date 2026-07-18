@@ -77,7 +77,7 @@ describe("ClientsPage", () => {
     const markup = renderPage(<AndroidDownloadDetails />, "/clients");
 
     expect(markup).toContain(
-      'href="/downloads/android/releases/0.2.3/playarr-android.apk"'
+      'href="/downloads/android/releases/0.2.4/playarr-android.apk"'
     );
     expect(markup).toContain('target="_blank"');
     expect(markup).toContain('rel="noopener noreferrer"');

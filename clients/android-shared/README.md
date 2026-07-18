@@ -50,9 +50,11 @@ normally with push registration disabled.
 - The manifest exposes both normal and Leanback launcher categories.
 - Runtime UI-mode detection selects `android-mobile` or `android-tv` request
   headers without changing the package or APK.
-- Phone layouts use bottom navigation and touch-sized poster shelves.
-- Wide and television layouts use a navigation rail, larger content geometry,
-  immersive mode, and D-pad focus scaling.
+- Phone layouts use Playarr's floating navigation pill, touch-sized landscape
+  rails, edge-to-edge artwork, and compact detail surfaces.
+- Wide and television layouts use the same native components with Playarr's
+  editorial stage, right-hand content rails, immersive mode, and D-pad focus
+  scaling.
 - Sign-in owns the account's Streamarr URL. No server URL is compiled into the
   application.
 - All visible screens are native Compose and playback uses Media3. There is no

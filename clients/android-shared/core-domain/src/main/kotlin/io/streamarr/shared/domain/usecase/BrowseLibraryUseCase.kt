@@ -13,12 +13,21 @@ class BrowseLibraryUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(
         kind: WorkKind? = null,
+        availableOnly: Boolean? = null,
         genre: String? = null,
         tag: String? = null,
         sort: String? = null,
         limit: Long? = null,
         offset: Long? = null,
     ): StreamarrResult<List<Work>> = runCatchingStreamarr {
-        workRepository.browseCatalog(kind = kind, genre = genre, tag = tag, sort = sort, limit = limit, offset = offset).items
+        workRepository.browseCatalog(
+            kind = kind,
+            availableOnly = availableOnly,
+            genre = genre,
+            tag = tag,
+            sort = sort,
+            limit = limit,
+            offset = offset,
+        ).items
     }
 }
