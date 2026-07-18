@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Match Playarr Web's native iOS catalogue and playlist flows with available-only pagination,
+  search scopes, library view and sort controls, cast and recommendations, and editable nesting.
 - Expose available-only ordered library browsing, cast and recommendation data, friend invites,
   and invited-account sign-up to native iOS screens.
 - Give the native iOS client the same editable playlist, profile preference, per-title playback,

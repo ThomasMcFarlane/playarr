@@ -223,7 +223,7 @@ struct PlayarrPrimaryButtonStyle: ButtonStyle {
 extension WorkKind {
     var displayName: String {
         switch self {
-        case .movie: "Movie"
+        case .movie: "Movies"
         case .series: "Series"
         case .site: "Sites"
         case .artist: "Music"

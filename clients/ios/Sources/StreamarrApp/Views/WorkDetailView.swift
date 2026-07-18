@@ -5,6 +5,8 @@ struct WorkDetailView: View {
     let viewModel: WorkDetailViewModel
     let apiClient: StreamarrAPIClient
     @Environment(\.dismiss) private var dismiss
+    @State private var playlists: [Playlist] = []
+    @State private var playlistMessage: String?
 
     var body: some View {
         Group {
@@ -21,7 +23,12 @@ struct WorkDetailView: View {
         }
         .task {
             if case .idle = viewModel.loadState { await viewModel.load() }
+            playlists = (try? await apiClient.listPlaylists()) ?? []
         }
+        .alert("Playlists", isPresented: Binding(
+            get: { playlistMessage != nil },
+            set: { if !$0 { playlistMessage = nil } }
+        )) { Button("OK") { playlistMessage = nil } } message: { Text(playlistMessage ?? "") }
         .toolbarBackground(.hidden, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -70,6 +77,7 @@ struct WorkDetailView: View {
                 VStack(alignment: .leading, spacing: 28) {
                     detailCopy(detail, phone: true)
                     children(for: detail.children)
+                    discoveryContent
                 }
                 .padding(.horizontal, 16)
                 .offset(y: -max(150, proxy.size.height * 0.24))
@@ -97,9 +105,12 @@ struct WorkDetailView: View {
                 .padding(.leading, max(102, proxy.size.width * 0.08))
                 .padding(.top, proxy.size.height * 0.24)
 
-            if hasVisibleChildren(detail.children) {
+            if hasVisibleChildren(detail.children) || hasDiscoveryContent {
                 ScrollView(.vertical) {
-                    children(for: detail.children)
+                    VStack(alignment: .leading, spacing: 30) {
+                        children(for: detail.children)
+                        discoveryContent
+                    }
                         .padding(.horizontal, max(28, proxy.size.width * 0.024))
                         .padding(.top, proxy.size.height * 0.5)
                         .padding(.bottom, proxy.size.height * 0.5)
@@ -115,6 +126,67 @@ struct WorkDetailView: View {
                     )
                 }
             }
+        }
+    }
+
+    private var hasDiscoveryContent: Bool {
+        !viewModel.credits.cast.isEmpty || !viewModel.credits.crew.isEmpty || !viewModel.similarWorks.isEmpty
+    }
+
+    @ViewBuilder
+    private var discoveryContent: some View {
+        if !viewModel.credits.cast.isEmpty {
+            creditRail(title: "Cast", credits: Array(viewModel.credits.cast.prefix(16)))
+        }
+        if !viewModel.credits.crew.isEmpty {
+            creditRail(title: "Crew", credits: Array(viewModel.credits.crew.prefix(12)))
+        }
+        if !viewModel.similarWorks.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("More like this")
+                    .font(.custom("Avenir Next", fixedSize: 18).weight(.semibold))
+                    .foregroundStyle(PlayarrStyle.ink)
+                ScrollView(.horizontal) {
+                    LazyHStack(spacing: 12) {
+                        ForEach(viewModel.similarWorks) { work in
+                            NavigationLink {
+                                WorkDetailView(
+                                    viewModel: WorkDetailViewModel(apiClient: apiClient, workID: work.id),
+                                    apiClient: apiClient
+                                )
+                            } label: {
+                                PlayarrMediaCard(work: work, apiClient: apiClient, width: 126)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+            }
+        }
+    }
+
+    private func creditRail(title: String, credits: [Credit]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.custom("Avenir Next", fixedSize: 18).weight(.semibold))
+                .foregroundStyle(PlayarrStyle.ink)
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 10) {
+                    ForEach(credits) { credit in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(credit.person.name).font(.caption.weight(.semibold)).lineLimit(1)
+                            Text(credit.character ?? credit.job ?? credit.department ?? "")
+                                .font(.caption2).foregroundStyle(PlayarrStyle.muted).lineLimit(1)
+                        }
+                        .foregroundStyle(PlayarrStyle.ink)
+                        .padding(.horizontal, 13)
+                        .frame(width: 150, height: 58, alignment: .leading)
+                        .background(PlayarrStyle.surfaceStrong.opacity(0.68), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
         }
     }
 
@@ -163,18 +235,54 @@ struct WorkDetailView: View {
             }
 
             if let mediaFileID = detail.mediaFileID {
-                NavigationLink {
-                    PlayerView(
-                        viewModel: PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient),
-                        initialMediaFileID: mediaFileID.uuidString,
-                        initialTitle: detail.work.title
-                    )
-                } label: {
-                    Label("Play", systemImage: "play.fill")
-                        .frame(minWidth: 112)
+                HStack(spacing: 12) {
+                    NavigationLink {
+                        PlayerView(
+                            viewModel: PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient),
+                            initialMediaFileID: mediaFileID.uuidString,
+                            initialTitle: detail.work.title
+                        )
+                    } label: {
+                        Label("Play", systemImage: "play.fill").frame(minWidth: 112)
+                    }
+                    .buttonStyle(PlayarrPrimaryButtonStyle())
+
+                    if !writablePlaylists(for: detail.work).isEmpty {
+                        Menu {
+                            ForEach(writablePlaylists(for: detail.work)) { playlist in
+                                Button(playlist.name) { add(detail.work, to: playlist) }
+                            }
+                        } label: {
+                            Image(systemName: "plus")
+                                .frame(width: 46, height: 46)
+                                .foregroundStyle(PlayarrStyle.ink)
+                                .background(PlayarrStyle.surfaceStrong.opacity(0.82), in: Circle())
+                                .overlay { Circle().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
+                        }
+                    }
                 }
-                .buttonStyle(PlayarrPrimaryButtonStyle())
                 .padding(.top, phone ? 24 : 30)
+            }
+        }
+    }
+
+    private func writablePlaylists(for work: Work) -> [Playlist] {
+        let mediaType: PlaylistMediaType = work.kind == .artist ? .audio : .video
+        return playlists.filter { !$0.isSystem && $0.mediaType == mediaType }
+    }
+
+    private func add(_ work: Work, to playlist: Playlist) {
+        Task {
+            do {
+                _ = try await apiClient.addPlaylistItem(
+                    playlistID: playlist.id,
+                    body: AddPlaylistItemRequest(workID: work.id)
+                )
+                playlistMessage = "Added to \(playlist.name)."
+            } catch let error as APIError {
+                playlistMessage = error.displayMessage
+            } catch {
+                playlistMessage = error.localizedDescription
             }
         }
     }

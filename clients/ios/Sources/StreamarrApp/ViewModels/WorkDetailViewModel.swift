@@ -30,6 +30,8 @@ public final class WorkDetailViewModel {
 
     public private(set) var loadState: LoadState = .idle
     public private(set) var detail: WorkDetail?
+    public private(set) var credits = WorkCredits(cast: [], crew: [])
+    public private(set) var similarWorks: [Work] = []
 
     private let apiClient: StreamarrAPIClient
     public let workID: UUID
@@ -42,7 +44,12 @@ public final class WorkDetailViewModel {
     public func load() async {
         loadState = .loading
         do {
-            detail = try await apiClient.fetchWork(id: workID)
+            async let fetchedDetail = apiClient.fetchWork(id: workID)
+            async let fetchedCredits = apiClient.fetchWorkCredits(id: workID)
+            async let fetchedSimilar = apiClient.fetchSimilarWorks(id: workID, limit: 20)
+            detail = try await fetchedDetail
+            credits = (try? await fetchedCredits) ?? WorkCredits(cast: [], crew: [])
+            similarWorks = (try? await fetchedSimilar) ?? []
             loadState = .loaded
         } catch let error as APIError {
             loadState = .failed(error.displayMessage)

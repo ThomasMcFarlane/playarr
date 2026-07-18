@@ -5,10 +5,12 @@ struct LibraryView: View {
     @State private var viewModel: LibraryViewModel
     let apiClient: StreamarrAPIClient
     let title: String
+    @State private var showingFilters = false
 
     init(kind: WorkKind?, apiClient: StreamarrAPIClient, title: String? = nil) {
         let viewModel = LibraryViewModel(apiClient: apiClient)
         viewModel.selectedKind = kind
+        viewModel.isSearchMode = kind == nil
         _viewModel = State(initialValue: viewModel)
         self.apiClient = apiClient
         self.title = title ?? kind?.displayName ?? "Search"
@@ -39,6 +41,7 @@ struct LibraryView: View {
             if case .idle = viewModel.loadState { await viewModel.load() }
         }
         .navigationBarHidden(true)
+        .sheet(isPresented: $showingFilters) { filterSheet }
     }
 
     private func stage<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some View {
@@ -77,7 +80,7 @@ struct LibraryView: View {
         GeometryReader { proxy in
             let phone = proxy.size.width <= 760
             let panelWidth = phone ? proxy.size.width : proxy.size.width * 0.65
-            let columnCount = phone ? 2 : 3
+            let columnCount = viewModel.viewMode == .list ? 1 : (viewModel.viewMode == .cover ? (phone ? 3 : 5) : (phone ? 2 : 3))
             let gutter: CGFloat = phone ? 16 : max(28, proxy.size.width * 0.028)
             let trailing: CGFloat = phone ? 16 : max(80, proxy.size.width * 0.065)
             let gap: CGFloat = phone ? 12 : min(28, proxy.size.width * 0.0135)
@@ -89,6 +92,14 @@ struct LibraryView: View {
                     alignment: .leading,
                     spacing: phone ? 24 : min(36, proxy.size.height * 0.025)
                 ) {
+                    ForEach(viewModel.playlists) { playlist in
+                        NavigationLink {
+                            PlaylistDetailView(playlist: playlist, apiClient: apiClient)
+                        } label: {
+                            playlistSearchCard(playlist, width: cardWidth)
+                        }
+                        .buttonStyle(.plain)
+                    }
                     ForEach(viewModel.works) { work in
                         NavigationLink {
                             WorkDetailView(
@@ -96,10 +107,18 @@ struct LibraryView: View {
                                 apiClient: apiClient
                             )
                         } label: {
-                            PlayarrMediaCard(work: work, apiClient: apiClient, width: cardWidth)
+                            if viewModel.viewMode == .list {
+                                libraryListRow(work, width: cardWidth)
+                            } else {
+                                PlayarrMediaCard(work: work, apiClient: apiClient, width: cardWidth)
+                            }
                         }
                         .buttonStyle(.plain)
+                        .task {
+                            if work.id == viewModel.works.last?.id { await viewModel.loadMore() }
+                        }
                     }
+                    if viewModel.isLoadingMore { ProgressView().tint(PlayarrStyle.pink).frame(width: cardWidth, height: 80) }
                 }
                 .padding(.leading, gutter)
                 .padding(.trailing, trailing)
@@ -187,11 +206,125 @@ struct LibraryView: View {
                 .frame(width: phone ? 150 : 220, height: phone ? 42 : 44)
                 .background(PlayarrStyle.surfaceStrong.opacity(0.72))
                 .overlay { Rectangle().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
+                Menu {
+                    ForEach(LibraryViewModel.SearchScope.allCases, id: \.self) { scope in
+                        Button {
+                            viewModel.searchScope = scope
+                            Task { await viewModel.load() }
+                        } label: {
+                            if scope == viewModel.searchScope { Label(searchScopeLabel(scope), systemImage: "checkmark") }
+                            else { Text(searchScopeLabel(scope)) }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                        .frame(width: 42, height: 42)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(PlayarrStyle.inkSoft)
+            } else {
+                Button { showingFilters = true } label: {
+                    Label(phone ? "" : "Filters", systemImage: "slider.horizontal.3")
+                        .font(.custom("Avenir Next", fixedSize: 11).weight(.bold))
+                        .frame(minWidth: 42, minHeight: 42)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(PlayarrStyle.ink)
+                .background(PlayarrStyle.surfaceStrong.opacity(0.8), in: Capsule())
+                .overlay { Capsule().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
             }
         }
         .padding(.leading, phone ? 16 : max(102, proxy.size.width * 0.08))
         .padding(.trailing, phone ? 66 : max(22, proxy.size.width * 0.024))
         .padding(.top, phone ? max(56, proxy.safeAreaInsets.top + 6) : min(66, max(34, proxy.size.height * 0.052)))
+    }
+
+    private func playlistSearchCard(_ playlist: Playlist, width: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(LinearGradient(colors: [PlayarrStyle.pink.opacity(0.3), PlayarrStyle.surfaceStrong], startPoint: .topLeading, endPoint: .bottomTrailing))
+                Image(systemName: playlist.mediaType == .audio ? "music.note.list" : "play.rectangle")
+                    .font(.system(size: min(44, width * 0.2), weight: .light)).foregroundStyle(PlayarrStyle.pink)
+            }
+            .frame(width: width, height: viewModel.viewMode == .list ? 96 : width * 1.42)
+            Text(playlist.name).font(.subheadline.weight(.semibold)).foregroundStyle(PlayarrStyle.ink).lineLimit(1)
+            Text("Playlist").font(.caption2.weight(.semibold)).foregroundStyle(PlayarrStyle.muted)
+        }
+    }
+
+    private func searchScopeLabel(_ scope: LibraryViewModel.SearchScope) -> String {
+        switch scope {
+        case .all: "Everything"
+        case .movie: "Movies"
+        case .series: "Series"
+        case .site: "Sites"
+        case .artist: "Music"
+        case .playlist: "Playlists"
+        }
+    }
+
+    private func libraryListRow(_ work: Work, width: CGFloat) -> some View {
+        HStack(spacing: 14) {
+            PlayarrArtwork(work: work, kind: .poster, apiClient: apiClient)
+                .frame(width: 62, height: 86)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 5) {
+                Text(work.title).font(.subheadline.weight(.semibold)).lineLimit(2)
+                Text(work.genres.prefix(2).joined(separator: " · "))
+                    .font(.caption2).foregroundStyle(PlayarrStyle.muted).lineLimit(1)
+                Text(work.addedAt.formatted(date: .abbreviated, time: .omitted))
+                    .font(.caption2).foregroundStyle(PlayarrStyle.muted)
+            }
+            Spacer()
+            Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(PlayarrStyle.muted)
+        }
+        .foregroundStyle(PlayarrStyle.ink)
+        .frame(width: width)
+        .frame(minHeight: 96)
+        .padding(.horizontal, 12)
+        .background(PlayarrStyle.surfaceStrong.opacity(0.62))
+        .overlay { Rectangle().stroke(PlayarrStyle.line, lineWidth: 1) }
+    }
+
+    private var filterSheet: some View {
+        NavigationStack {
+            Form {
+                Section("View") {
+                    Picker("View", selection: $viewModel.viewMode) {
+                        Label("List", systemImage: "list.bullet").tag(LibraryViewModel.ViewMode.list)
+                        Label("Screen", systemImage: "rectangle.grid.2x2").tag(LibraryViewModel.ViewMode.screen)
+                        Label("Covers", systemImage: "square.grid.3x3").tag(LibraryViewModel.ViewMode.cover)
+                    }
+                    .pickerStyle(.segmented)
+                }
+                Section("Sort") {
+                    Picker("Sort by", selection: $viewModel.sort) {
+                        Text("Title").tag("title")
+                        Text("Date added").tag("date_added")
+                    }
+                    Picker("Order", selection: $viewModel.order) {
+                        Text(viewModel.sort == "title" ? "A–Z" : "Oldest first").tag("asc")
+                        Text(viewModel.sort == "title" ? "Z–A" : "Newest first").tag("desc")
+                    }
+                    .pickerStyle(.segmented)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(PlayarrStyle.background)
+            .navigationTitle("Library filters")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        showingFilters = false
+                        Task { await viewModel.load() }
+                    }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .presentationDetents([.medium])
     }
 
     private var emptyState: some View {

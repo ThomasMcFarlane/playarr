@@ -24,10 +24,38 @@ private final class PlaylistsViewModel {
             state = .failed(error.localizedDescription)
         }
     }
+
+    func create(name: String, mediaType: PlaylistMediaType, parentID: UUID?) async throws {
+        let playlist = try await apiClient.createPlaylist(
+            CreatePlaylistRequest(name: name, mediaType: mediaType, parentPlaylistID: parentID)
+        )
+        playlists.insert(playlist, at: 0)
+    }
+
+    func rename(_ playlist: Playlist, to name: String) async throws {
+        let updated = try await apiClient.updatePlaylist(
+            id: playlist.id,
+            body: UpdatePlaylistRequest(name: name, parentPlaylistID: playlist.parentPlaylistID)
+        )
+        if let index = playlists.firstIndex(where: { $0.id == playlist.id }) { playlists[index] = updated }
+    }
+
+    func delete(_ playlist: Playlist) async throws {
+        try await apiClient.deletePlaylist(id: playlist.id)
+        playlists.removeAll { $0.id == playlist.id || $0.parentPlaylistID == playlist.id }
+    }
 }
 
 struct PlaylistsView: View {
     @State private var viewModel: PlaylistsViewModel
+    @State private var showingCreate = false
+    @State private var playlistName = ""
+    @State private var playlistType: PlaylistMediaType = .video
+    @State private var parentID: UUID?
+    @State private var editingPlaylist: Playlist?
+    @State private var deletingPlaylist: Playlist?
+    @State private var mutationError: String?
+    @State private var submitting = false
 
     init(apiClient: StreamarrAPIClient) {
         _viewModel = State(initialValue: PlaylistsViewModel(apiClient: apiClient))
@@ -50,6 +78,32 @@ struct PlaylistsView: View {
             if case .idle = viewModel.state { await viewModel.load() }
         }
         .navigationBarHidden(true)
+        .sheet(isPresented: $showingCreate) { playlistEditor }
+        .alert("Rename playlist", isPresented: Binding(
+            get: { editingPlaylist != nil },
+            set: { if !$0 { editingPlaylist = nil } }
+        )) {
+            TextField("Playlist name", text: $playlistName)
+            Button("Cancel", role: .cancel) { editingPlaylist = nil }
+            Button("Save") { renamePlaylist() }.disabled(playlistName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .confirmationDialog(
+            "Delete \(deletingPlaylist?.name ?? "playlist")?",
+            isPresented: Binding(
+                get: { deletingPlaylist != nil },
+                set: { if !$0 { deletingPlaylist = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete playlist and nested playlists", role: .destructive) { deletePlaylist() }
+            Button("Cancel", role: .cancel) { deletingPlaylist = nil }
+        } message: {
+            Text("This cannot be undone.")
+        }
+        .alert("Couldn’t update playlist", isPresented: Binding(
+            get: { mutationError != nil },
+            set: { if !$0 { mutationError = nil } }
+        )) { Button("OK") { mutationError = nil } } message: { Text(mutationError ?? "") }
     }
 
     private var playlistList: some View {
@@ -100,6 +154,17 @@ struct PlaylistsView: View {
                                     playlistCard(playlist, width: cardWidth)
                                 }
                                 .buttonStyle(.plain)
+                                .contextMenu {
+                                    if !playlist.isSystem {
+                                        Button("Rename", systemImage: "pencil") {
+                                            playlistName = playlist.name
+                                            editingPlaylist = playlist
+                                        }
+                                        Button("Delete", systemImage: "trash", role: .destructive) {
+                                            deletingPlaylist = playlist
+                                        }
+                                    }
+                                }
                             }
                         }
                         .padding(.leading, leading)
@@ -122,16 +187,105 @@ struct PlaylistsView: View {
                     }
                 }
 
-                Text("Playlists")
-                    .font(.custom("Avenir Next", fixedSize: phone ? 22 : min(34, proxy.size.width * 0.0175)).weight(.medium))
-                    .tracking(phone ? -1 : -1.5)
+                HStack(spacing: 12) {
+                    Text("Playlists")
+                        .font(.custom("Avenir Next", fixedSize: phone ? 22 : min(34, proxy.size.width * 0.0175)).weight(.medium))
+                        .tracking(phone ? -1 : -1.5)
+                    Spacer()
+                    Button {
+                        playlistName = ""
+                        playlistType = .video
+                        parentID = nil
+                        showingCreate = true
+                    } label: {
+                        Label(phone ? "" : "Create", systemImage: "plus")
+                            .font(.custom("Avenir Next", fixedSize: 12).weight(.bold))
+                            .frame(minWidth: 42, minHeight: 42)
+                    }
+                    .buttonStyle(.plain)
                     .foregroundStyle(PlayarrStyle.ink)
-                    .padding(.leading, phone ? 16 : max(102, proxy.size.width * 0.08))
-                    .padding(.top, phone ? max(56, proxy.safeAreaInsets.top + 6) : min(66, max(34, proxy.size.height * 0.052)))
+                    .background(PlayarrStyle.surfaceStrong.opacity(0.82), in: Capsule())
+                    .overlay { Capsule().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
+                }
+                .foregroundStyle(PlayarrStyle.ink)
+                .padding(.leading, phone ? 16 : max(102, proxy.size.width * 0.08))
+                .padding(.trailing, phone ? 66 : max(22, proxy.size.width * 0.024))
+                .padding(.top, phone ? max(56, proxy.safeAreaInsets.top + 6) : min(66, max(34, proxy.size.height * 0.052)))
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .ignoresSafeArea()
+    }
+
+    private var playlistEditor: some View {
+        NavigationStack {
+            Form {
+                Section("Playlist") {
+                    TextField("Name", text: $playlistName)
+                    Picker("Media", selection: $playlistType) {
+                        Label("Video", systemImage: "play.rectangle").tag(PlaylistMediaType.video)
+                        Label("Music", systemImage: "music.note").tag(PlaylistMediaType.audio)
+                    }
+                    .pickerStyle(.segmented)
+                }
+                Section("Parent playlist") {
+                    Picker("Parent", selection: $parentID) {
+                        Text("None · top level").tag(Optional<UUID>.none)
+                        ForEach(viewModel.playlists.filter { !$0.isSystem && $0.mediaType == playlistType }) { playlist in
+                            Text(playlist.name).tag(Optional(playlist.id))
+                        }
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(PlayarrStyle.background)
+            .navigationTitle("Create playlist")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { showingCreate = false } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(submitting ? "Creating…" : "Create") { createPlaylist() }
+                        .disabled(submitting || playlistName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .presentationDetents([.medium, .large])
+    }
+
+    private func createPlaylist() {
+        let name = playlistName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        submitting = true
+        Task {
+            do {
+                try await viewModel.create(name: name, mediaType: playlistType, parentID: parentID)
+                showingCreate = false
+            } catch let error as APIError { mutationError = error.displayMessage }
+            catch { mutationError = error.localizedDescription }
+            submitting = false
+        }
+    }
+
+    private func renamePlaylist() {
+        guard let playlist = editingPlaylist else { return }
+        let name = playlistName.trimmingCharacters(in: .whitespacesAndNewlines)
+        editingPlaylist = nil
+        Task {
+            do { try await viewModel.rename(playlist, to: name) }
+            catch let error as APIError { mutationError = error.displayMessage }
+            catch { mutationError = error.localizedDescription }
+        }
+    }
+
+    private func deletePlaylist() {
+        guard let playlist = deletingPlaylist else { return }
+        deletingPlaylist = nil
+        Task {
+            do { try await viewModel.delete(playlist) }
+            catch let error as APIError { mutationError = error.displayMessage }
+            catch { mutationError = error.localizedDescription }
+        }
     }
 
     private func playlistCard(_ playlist: Playlist, width: CGFloat) -> some View {
@@ -173,10 +327,11 @@ struct PlaylistsView: View {
     }
 }
 
-private struct PlaylistDetailView: View {
+struct PlaylistDetailView: View {
     let playlist: Playlist
     let apiClient: StreamarrAPIClient
-    @State private var works: [Work] = []
+    @State private var items: [PlaylistItem] = []
+    @State private var worksByID: [UUID: Work] = [:]
     @State private var errorMessage: String?
     @State private var loading = true
 
@@ -187,9 +342,17 @@ private struct PlaylistDetailView: View {
             } else if let errorMessage {
                 PlayarrFailureView(title: "Couldn’t load playlist", message: errorMessage) { load() }
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(works) { work in
+                List {
+                    if items.isEmpty {
+                        ContentUnavailableView(
+                            "Playlist is empty",
+                            systemImage: "music.note.list",
+                            description: Text("Add a title from its detail page.")
+                        )
+                        .listRowBackground(Color.clear)
+                    }
+                    ForEach(items) { item in
+                        if let work = worksByID[item.workID] {
                             NavigationLink {
                                 WorkDetailView(
                                     viewModel: WorkDetailViewModel(apiClient: apiClient, workID: work.id),
@@ -209,17 +372,22 @@ private struct PlaylistDetailView: View {
                                     Spacer()
                                 }
                                 .foregroundStyle(PlayarrStyle.ink)
+                                .padding(.vertical, 5)
                             }
                             .buttonStyle(.plain)
                         }
                     }
-                    .padding(18)
+                    .onDelete { offsets in remove(at: offsets) }
+                    .onMove { source, destination in move(from: source, to: destination) }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
                 .background(PlayarrStyle.background)
             }
         }
         .navigationTitle(playlist.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar { if !playlist.isSystem { EditButton() } }
         .task { await loadItems() }
     }
 
@@ -229,20 +397,41 @@ private struct PlaylistDetailView: View {
         loading = true
         errorMessage = nil
         do {
-            let items = try await apiClient.listPlaylistItems(playlistID: playlist.id)
+            items = try await apiClient.listPlaylistItems(playlistID: playlist.id)
                 .sorted { $0.position < $1.position }
-            var resolved: [Work] = []
+            var resolved: [UUID: Work] = [:]
             for item in items {
                 if let detail = try? await apiClient.fetchWork(id: item.workID) {
-                    resolved.append(detail.work)
+                    resolved[item.workID] = detail.work
                 }
             }
-            works = resolved
+            worksByID = resolved
         } catch let error as APIError {
             errorMessage = error.displayMessage
         } catch {
             errorMessage = error.localizedDescription
         }
         loading = false
+    }
+
+    private func remove(at offsets: IndexSet) {
+        let removed = offsets.map { items[$0] }
+        items.remove(atOffsets: offsets)
+        Task {
+            do {
+                for item in removed { try await apiClient.removePlaylistItem(playlistID: playlist.id, itemID: item.id) }
+            } catch {
+                await loadItems()
+            }
+        }
+    }
+
+    private func move(from source: IndexSet, to destination: Int) {
+        items.move(fromOffsets: source, toOffset: destination)
+        let order = items.map(\.id)
+        Task {
+            do { items = try await apiClient.reorderPlaylistItems(playlistID: playlist.id, body: ReorderPlaylistItemsRequest(itemIDs: order)) }
+            catch { await loadItems() }
+        }
     }
 }
