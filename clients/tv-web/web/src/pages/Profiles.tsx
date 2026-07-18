@@ -10,6 +10,7 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { describeApiError } from "@streamarr-tv/api-client";
 import { useApiClient, useAuth } from "../lib/ApiClientProvider";
+import { selectDeviceProfiles } from "../lib/deviceProfiles";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import {
   navigationOriginFromState,
@@ -190,7 +191,7 @@ export function ProfilesPage() {
       .then((available) => {
         if (cancelled) return;
         setServerProfiles(
-          available.map((profile) => ({
+          selectDeviceProfiles(available, isProfileSaved, currentUserId).map((profile) => ({
             id: profile.id,
             username: profile.username,
             name: profile.display_name || profile.username,
