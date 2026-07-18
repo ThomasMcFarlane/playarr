@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ProfileAuthLayout } from "./ProfileAuthLayout";
@@ -10,18 +11,28 @@ describe("ProfileAuthLayout", () => {
       </ProfileAuthLayout>
     );
 
-    expect(markup).not.toContain("profile-page-back");
+    expect(markup).not.toContain("tv-stage-chrome-back");
   });
 
-  it("aligns optional back navigation with the shared profile-page logo", () => {
+  it("places optional back navigation in the shared stage chrome", () => {
     const markup = renderToStaticMarkup(
       <ProfileAuthLayout backLabel="Back" onBack={() => undefined}>
         <form>Sign-in fields</form>
       </ProfileAuthLayout>
     );
 
-    expect(markup).toContain('class="profile-page-logo"');
-    expect(markup).toContain('class="tv-back profile-page-back"');
+    expect(markup).toContain('class="tv-stage-chrome-logo"');
+    expect(markup).toContain(
+      'class="tv-page-back tv-stage-chrome-back"'
+    );
+
+    const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    const chromeRule = css.match(
+      /\.tv-stage-chrome\s*\{(?<declarations>[^}]*)\}/
+    )?.groups?.declarations;
+
+    expect(chromeRule).toContain("display: flex");
+    expect(chromeRule).toContain("align-items: center");
   });
 
   it("marks overflowing auth fields as a native vertical scroll viewport", () => {

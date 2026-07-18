@@ -19,7 +19,7 @@ import {
   navigationOriginFromState,
   useNavigationLayer,
 } from "../lib/navigationLayer";
-import { ProfilePageHeader } from "../components/ProfileAuthLayout";
+import { TvStageChrome } from "../components/tv/TvStage";
 import { clearActivePlayerSession } from "../lib/playerSession";
 import { useTvNavigation } from "../lib/useTvNavigation";
 
@@ -398,7 +398,7 @@ export function ProfilesPage() {
 
   return (
     <div className="profiles-page">
-      <ProfilePageHeader
+      <TvStageChrome
         backLabel={showBack ? t("pages.profiles.backAriaLabel") : undefined}
         onBack={showBack ? returnFromProfiles : undefined}
       />

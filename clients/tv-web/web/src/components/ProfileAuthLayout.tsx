@@ -1,33 +1,11 @@
 import type { ReactNode } from "react";
+import { TvStageChrome } from "./tv/TvStage";
 
-interface ProfilePageHeaderProps {
+interface ProfileAuthLayoutProps {
   backLabel?: string;
-  onBack?: () => void;
-}
-
-export function ProfilePageHeader({ backLabel, onBack }: ProfilePageHeaderProps) {
-  return (
-    <header className="profile-page-header">
-      <span className="profile-page-logo" aria-hidden="true">
-        <img className="app-logo-icon" src="/playarr-icon.svg" alt="" />
-      </span>
-      {backLabel && onBack ? (
-        <button
-          type="button"
-          className="tv-back profile-page-back"
-          aria-label={backLabel}
-          onClick={onBack}
-        >
-          ←
-        </button>
-      ) : null}
-    </header>
-  );
-}
-
-interface ProfileAuthLayoutProps extends ProfilePageHeaderProps {
   children: ReactNode;
   className?: string;
+  onBack?: () => void;
   transitionFromProfiles?: boolean;
 }
 
@@ -44,7 +22,7 @@ export function ProfileAuthLayout({
         transitionFromProfiles ? " is-profile-transition" : ""
       }${className ? ` ${className}` : ""}`}
     >
-      <ProfilePageHeader backLabel={backLabel} onBack={onBack} />
+      <TvStageChrome backLabel={backLabel} onBack={onBack} />
       <main
         className="profile-auth-scroll"
         data-tv-scroll-container

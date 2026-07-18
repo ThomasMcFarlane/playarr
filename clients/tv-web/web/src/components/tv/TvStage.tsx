@@ -7,6 +7,32 @@ import {
 } from "react";
 import { useScrollEdges } from "../../lib/useScrollEdges";
 
+export function TvStageChrome({
+  backLabel,
+  onBack,
+}: {
+  backLabel?: string;
+  onBack?: () => void;
+}) {
+  return (
+    <header className="tv-stage-chrome">
+      <span className="tv-stage-chrome-logo" aria-hidden="true">
+        <img className="app-logo-icon" src="/playarr-icon.svg" alt="" />
+      </span>
+      {backLabel && onBack ? (
+        <button
+          type="button"
+          className="tv-page-back tv-stage-chrome-back"
+          aria-label={backLabel}
+          onClick={onBack}
+        >
+          <span aria-hidden="true">←</span>
+        </button>
+      ) : null}
+    </header>
+  );
+}
+
 export function TvStageShell({
   className,
   ariaLabel,
