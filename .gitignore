@@ -38,6 +38,7 @@ pnpm-debug.log*
 .env.local
 .env.*.local
 coverage/
+/clients/tv-web/web/public/vidaa-store/
 
 # ------------------------------------------------------------------------
 # Gradle / Android / Kotlin (clients/mobile-android/, clients/tv-android/, clients/android-shared/)

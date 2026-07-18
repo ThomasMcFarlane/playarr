@@ -202,11 +202,43 @@ function focusExplicitEdgeTarget(
 ): boolean {
   const attribute = `data-tv-edge-target-${direction}`;
   const selector = current.getAttribute(attribute);
-  if (!selector) return false;
+  if (!selector) {
+    return current.hasAttribute(`data-tv-edge-stop-${direction}`);
+  }
   const target = document.querySelector<HTMLElement>(selector);
   if (!target) return false;
   target.focus({ preventScroll: true });
+  const horizontalContainer = target.closest<HTMLElement>(
+    '[data-tv-scroll-axis="horizontal"]'
+  );
+  if (horizontalContainer) {
+    revealFullyWithinHorizontalContainer(horizontalContainer, target);
+  } else if (target.closest<HTMLElement>('[data-tv-scroll-axis="vertical"]')) {
+    target.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  }
   return true;
+}
+
+export function horizontalRevealDelta({
+  containerLeft,
+  containerRight,
+  elementLeft,
+  elementRight,
+  scrollPaddingLeft = 0,
+  scrollPaddingRight = 0,
+}: {
+  containerLeft: number;
+  containerRight: number;
+  elementLeft: number;
+  elementRight: number;
+  scrollPaddingLeft?: number;
+  scrollPaddingRight?: number;
+}): number {
+  const visibleLeft = containerLeft + Math.max(0, scrollPaddingLeft);
+  const visibleRight = containerRight - Math.max(0, scrollPaddingRight);
+  if (elementLeft < visibleLeft) return elementLeft - visibleLeft;
+  if (elementRight > visibleRight) return elementRight - visibleRight;
+  return 0;
 }
 
 function revealFullyWithinHorizontalContainer(
@@ -218,14 +250,14 @@ function revealFullyWithinHorizontalContainer(
   const style = window.getComputedStyle(container);
   const startInset = parsePixelValue(style.scrollPaddingLeft);
   const endInset = parsePixelValue(style.scrollPaddingRight);
-  const visibleLeft = containerRect.left + startInset;
-  const visibleRight = containerRect.right - endInset;
-  const delta =
-    elementRect.left < visibleLeft
-      ? elementRect.left - visibleLeft
-      : elementRect.right > visibleRight
-        ? elementRect.right - visibleRight
-        : 0;
+  const delta = horizontalRevealDelta({
+    containerLeft: containerRect.left,
+    containerRight: containerRect.right,
+    elementLeft: elementRect.left,
+    elementRight: elementRect.right,
+    scrollPaddingLeft: startInset,
+    scrollPaddingRight: endInset,
+  });
 
   if (Math.abs(delta) < 0.5) return;
 

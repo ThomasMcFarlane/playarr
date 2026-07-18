@@ -5,8 +5,8 @@
   "description": "Streamarr standalone web app: Vite + React + TypeScript. Home/Library/Player/Settings routes, Admin's real request-management UI, and a versioned service-worker-driven OTA self-update flow (see src/lib/appUpdate.ts).",
   "type": "module",
   "scripts": {
-    "dev": "node scripts/generate-build-manifest.mjs && vite",
-    "build": "node scripts/generate-build-manifest.mjs && tsc -p tsconfig.json --noEmit && vite build",
+    "dev": "node scripts/sync-vidaa-store.mjs && node scripts/generate-build-manifest.mjs && vite",
+    "build": "node scripts/sync-vidaa-store.mjs && node scripts/generate-build-manifest.mjs && tsc -p tsconfig.json --noEmit && vite build",
     "deploy:cloudflare": "pnpm --filter @streamarr-tv/web... run build && pnpm dlx wrangler@4 deploy",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",

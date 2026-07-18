@@ -1,4 +1,9 @@
-# Playarr VIDAA gateway
+# Playarr VIDAA gateway reference
+
+Playarr does not operate this DNS gateway as a public service. It remains an optional,
+self-hosted reference for operators who choose to run their own resolver and intercepted
+portal. The fixed Playarr-only store assets are published separately at
+`https://playarr.app/vidaa-store/`.
 
 This fixed-purpose gateway temporarily allows one household public IP to use its DNS resolver. An
 active client receives the gateway IPv4 address for the exact hostname `vidaahub.com`; every other

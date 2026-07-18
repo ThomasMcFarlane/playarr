@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   directionalVerticalScrollTop,
+  horizontalRevealDelta,
   parentRoute,
   shouldAutoFocusViewDefault,
 } from "./useTvNavigation";
@@ -71,5 +72,27 @@ describe("directional page fallback", () => {
   it("returns VIDAA clients to the clients hub on remote Back", () => {
     expect(parentRoute("/clients/vidaa")).toBe("/clients");
     expect(parentRoute("/clients")).toBe("/");
+    expect(parentRoute("/clients", "/profiles")).toBe("/profiles");
+  });
+
+  it("reveals an offscreen item inside a hidden-scrollbar horizontal selector", () => {
+    expect(
+      horizontalRevealDelta({
+        containerLeft: 0,
+        containerRight: 1_000,
+        elementLeft: 940,
+        elementRight: 1_140,
+        scrollPaddingRight: 80,
+      })
+    ).toBe(220);
+    expect(
+      horizontalRevealDelta({
+        containerLeft: 0,
+        containerRight: 1_000,
+        elementLeft: -60,
+        elementRight: 140,
+        scrollPaddingLeft: 80,
+      })
+    ).toBe(-140);
   });
 });

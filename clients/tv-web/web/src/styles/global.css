@@ -8636,6 +8636,38 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   color: var(--danger);
 }
 
+.profile-clients-link {
+  position: absolute;
+  z-index: 5;
+  right: clamp(22px, 3vw, 48px);
+  bottom: clamp(22px, 3vh, 42px);
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--line-strong) 70%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  color: var(--ink-soft);
+  box-shadow: 0 14px 38px rgba(31, 14, 20, 0.09);
+  backdrop-filter: blur(18px);
+  font-size: clamp(0.48rem, 0.56vw, 0.7rem);
+  font-weight: 720;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.profile-clients-link:hover,
+.profile-clients-link:focus-visible {
+  outline: 0;
+  background: color-mix(in srgb, var(--ink) 88%, transparent);
+  color: var(--bg);
+  transform: scale(1.07);
+}
+
 .profile-pin-backdrop {
   position: fixed;
   z-index: 1250;

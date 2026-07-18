@@ -7,7 +7,7 @@ import {
   type CSSProperties,
   type FormEvent,
 } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { describeApiError } from "@streamarr-tv/api-client";
 import { useApiBaseUrl, useApiClient, useAuth } from "../lib/ApiClientProvider";
 import { selectDeviceProfiles } from "../lib/deviceProfiles";
@@ -497,6 +497,7 @@ export function ProfilesPage(
               data-tv-edge-target-left={
                 lastProfile ? `#profile-${lastProfile.id}` : undefined
               }
+              data-tv-edge-target-down="#profiles-clients"
               onFocus={() => setSelectedId(ADD_PROFILE_ID)}
               onClick={() => continueToLogin(null, loginFrom)}
             >
@@ -509,6 +510,17 @@ export function ProfilesPage(
           </div>
         </div>
       </div>
+
+      <Link
+        id="profiles-clients"
+        className="profile-clients-link"
+        to="/clients"
+        data-navigation-focus-key="profiles:clients"
+        data-tv-edge-target-up="#profile-add"
+      >
+        {t("pages.clients.navClients")}
+        <span aria-hidden="true">→</span>
+      </Link>
 
       {loadState.status === "loading" ? (
         <div className="profiles-status" role="status">

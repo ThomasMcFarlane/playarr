@@ -750,7 +750,13 @@ export const en = {
   "pages.clients.vidaa.name": "Hisense VIDAA",
   "pages.clients.vidaa.platform": "Hisense smart TVs",
   "pages.clients.vidaa.description":
-    "The hosted TV app is available now. An experimental DNS installer can add a launcher tile on compatible TVs.",
+    "The hosted custom store can add a Playarr launcher tile when used with a compatible DNS or interception setup.",
+  "pages.clients.android.name": "Android",
+  "pages.clients.android.platform": "Phones, tablets and TVs",
+  "pages.clients.fireTv.name": "Fire TV",
+  "pages.clients.fireTv.platform": "Amazon Fire TV",
+  "pages.clients.roku.name": "Roku TV",
+  "pages.clients.roku.platform": "Roku televisions",
   "pages.clients.androidMobile.name": "Android Mobile",
   "pages.clients.androidMobile.platform": "Android phones and tablets",
   "pages.clients.androidMobile.description":
@@ -763,6 +769,8 @@ export const en = {
   "pages.clients.ios.platform": "iPhone and iPad",
   "pages.clients.ios.description":
     "The native Apple client is coming soon; a distributable signed release is not available yet.",
+  "pages.clients.appleTv.name": "Apple TV",
+  "pages.clients.appleTv.platform": "Apple TV",
   "pages.clients.webos.name": "LG webOS",
   "pages.clients.webos.platform": "LG smart TVs",
   "pages.clients.webos.description":
@@ -771,39 +779,39 @@ export const en = {
   "pages.clients.tizen.platform": "Samsung smart TVs",
   "pages.clients.tizen.description":
     "The TV shell exists, but a signed production package is not published yet.",
-  "pages.clients.vidaaSetup": "VIDAA setup guide",
+  "pages.clients.vidaaSetup": "Install",
+  "pages.clients.downloadApk": "Download APK",
   "pages.clients.notYetPublished": "Signed download not yet published",
   "pages.clients.footer": "One library. Every screen. Your server stays yours.",
+  "pages.clients.androidPage.kicker": "Android",
+  "pages.clients.androidPage.title": "Choose your Android build.",
+  "pages.clients.androidPage.description":
+    "Android mobile and Android TV share one place in the catalogue, but use separate APKs tailored to touchscreens and television remotes.",
+  "pages.clients.androidPage.mobileDownload": "Mobile APK",
+  "pages.clients.androidPage.tvDownload": "TV APK",
   "pages.clients.vidaaPage.documentTitle": "Install on Hisense VIDAA",
   "pages.clients.vidaaPage.back": "All clients",
   "pages.clients.vidaaPage.kicker": "Hisense VIDAA",
   "pages.clients.vidaaPage.title": "Put Playarr on your home screen.",
   "pages.clients.vidaaPage.description":
-    "Compatible VIDAA TVs can install a Playarr launcher through a temporary DNS portal. The tile opens the hosted Playarr TV app, so updates arrive automatically.",
+    "Compatible VIDAA TVs can install a Playarr launcher through the Playarr custom store. You choose and operate the DNS or interception method; Playarr hosts only the store assets.",
   "pages.clients.vidaaPage.experimentalNote":
-    "Firmware support varies. Some TVs may reject the portal certificate or omit the installation API entirely.",
-  "pages.clients.vidaaPage.activationKicker": "Temporary access",
-  "pages.clients.vidaaPage.activationTitle": "Activate your network",
-  "pages.clients.vidaaPage.activationDescription":
-    "Activate from a phone or computer on the same home internet connection as your TV. Access expires automatically.",
-  "pages.clients.vidaaPage.activate": "Activate installer",
-  "pages.clients.vidaaPage.activating": "Activating…",
-  "pages.clients.vidaaPage.sameNetwork":
-    "Your TV and this device must share the same public internet connection.",
-  "pages.clients.vidaaPage.dnsLabel": "DNS server",
-  "pages.clients.vidaaPage.expiresLabel": "Active until",
-  "pages.clients.vidaaPage.portalLabel": "TV portal",
-  "pages.clients.vidaaPage.unavailableTitle": "The installer gateway is unavailable",
-  "pages.clients.vidaaPage.unavailableDescription":
-    "Your Playarr app still works in the VIDAA browser. Try the launcher installer again later.",
+    "Firmware support varies. Your chosen setup must present the store as vidaahub.com and handle any required certificate trust; some TVs omit the installation API entirely.",
+  "pages.clients.vidaaPage.storeKicker": "Custom app store",
+  "pages.clients.vidaaPage.storeTitle": "Use the Playarr store",
+  "pages.clients.vidaaPage.storeDescription":
+    "Playarr publishes the fixed, Playarr-only custom store at the address below. Configure your own compatible DNS, proxy or self-hosted interception setup to present it to the television.",
+  "pages.clients.vidaaPage.openStore": "Open custom store",
+  "pages.clients.vidaaPage.dnsChoice":
+    "Playarr does not operate a public DNS resolver. You remain in control of the DNS method and restore your normal settings after installation.",
   "pages.clients.vidaaPage.installKicker": "On your router and TV",
   "pages.clients.vidaaPage.installTitle": "Install Playarr",
   "pages.clients.vidaaPage.step1Title": "Set the temporary DNS",
   "pages.clients.vidaaPage.step1Description":
-    "Enter the DNS server shown above in your router or TV network settings. Keep every other network setting unchanged.",
+    "Choose a trusted DNS or interception setup that can present the custom store as vidaahub.com. Enter its resolver address in your router or TV and keep every other network setting unchanged.",
   "pages.clients.vidaaPage.step2Title": "Open the VIDAA portal",
   "pages.clients.vidaaPage.step2Description":
-    "On the TV, open the browser and visit the portal address shown above. Accept the certificate warning if your firmware allows it.",
+    "On the TV, open the VIDAA store or browser route used by your chosen setup. Accept a certificate warning only when you understand and trust that setup.",
   "pages.clients.vidaaPage.step3Title": "Choose Install Playarr",
   "pages.clients.vidaaPage.step3Description":
     "Confirm the Playarr-only installation on the TV. Do not switch off the television while the launcher tile is being written.",
@@ -813,7 +821,7 @@ export const en = {
   "pages.clients.vidaaPage.aftercareKicker": "Important",
   "pages.clients.vidaaPage.aftercareTitle": "Restore automatic DNS after installation.",
   "pages.clients.vidaaPage.aftercareDescription":
-    "The temporary resolver is only for installation. Restoring your normal DNS keeps everyday browsing private and reliable; the installed Playarr tile will continue to work.",
+    "Your chosen resolver is only needed for installation. Restoring your normal DNS keeps everyday browsing private and reliable; the installed Playarr tile will continue to work.",
 } as const;
 
 export type TranslationKey = keyof typeof en;

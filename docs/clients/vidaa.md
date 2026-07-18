@@ -2,7 +2,7 @@
 
 Playarr runs on VIDAA televisions as the hosted Web client. The built-in Browser
 route is the reliable default; compatible firmware may also install a dedicated
-launcher tile through Playarr's experimental temporary-DNS portal. There is no
+launcher tile through Playarr's experimental custom store. There is no
 Playarr APK or USB package for VIDAA.
 
 ## Before you start
@@ -31,23 +31,23 @@ normal in-app navigation does not need to keep the query string visible.
 
 ## About launcher installation
 
-The [Playarr Clients page](https://playarr.app/clients/vidaa) can temporarily
-allow the public IPv4 address used by your home network to reach a fixed-purpose
-DNS resolver. While active, that resolver redirects only `vidaahub.com` to the
-Playarr installer portal and forwards other queries. The portal can install only
-the fixed `https://playarr.app/?platform=tv-vidaa` launcher.
+The [Playarr Clients page](https://playarr.app/clients/vidaa) links to the hosted,
+fixed-purpose custom-store assets at `https://playarr.app/vidaa-store/`. The store
+can install only the fixed `https://playarr.app/?platform=tv-vidaa` launcher.
+Playarr does not operate a public DNS resolver.
 
-1. On a phone or computer using the same home internet connection as the TV,
-   open the Clients page and choose **Activate installer**.
-2. Temporarily set the displayed IPv4 DNS server on the TV or router. Keep every
+1. Choose a DNS, proxy, or self-hosted interception method you understand and
+   trust. It must be capable of presenting the custom store as `vidaahub.com`;
+   a DNS record alone cannot solve HTTPS hostname and certificate validation.
+2. Temporarily set that solution's IPv4 resolver on the TV or router. Keep every
    other network setting unchanged.
-3. Open the TV Browser and visit `https://vidaahub.com`. Compatible firmware may
-   require you to accept a certificate warning.
+3. Open the VIDAA store or Browser route required by that solution. Accept a
+   certificate warning only when you understand and trust its certificate setup.
 4. Choose **Install Playarr**, restart the television, and confirm the tile opens.
 5. Restore automatic DNS immediately, even if installation did not succeed.
 
-Access expires automatically. Firmware support varies: some televisions reject
-the portal certificate or do not expose either supported installation API. The
+Firmware support varies: some televisions reject the portal certificate or do
+not expose either supported installation API. The
 installer must therefore remain labelled experimental and must not replace the
 Browser route or the official VIDAA partner distribution path. Do not use random
 service-menu codes, firmware downgrades, or third-party firmware.
@@ -104,4 +104,4 @@ reporting compatibility problems.
 - [VIDAA Partner Support and registration](https://www.vidaa.com/partner-support/)
 - [VIDAA Partner Portal terms](https://www.vidaa.com/terms-and-conditions/)
 - [VIDAA privacy notice](https://www.vidaa.com/privacy-policy-2026/)
-- [VIDAA gateway operations](../../infra/vidaa-gateway/README.md)
+- [Optional self-hosted VIDAA gateway reference](../../infra/vidaa-gateway/README.md)
