@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="MainScene" extends="Scene" initialFocus="libraryList">
+  <interface>
+    <field id="screenState" type="string" value="starting" />
+  </interface>
+  <children>
+    <Rectangle width="1920" height="1080" color="0x070B14FF" />
+    <Label translation="[90,60]" text="PLAYARR" color="0xFFFFFFFF">
+      <Font role="font" uri="font:MediumBoldSystemFont" size="38" />
+    </Label>
+    <Label id="profileLabel" translation="[1480,68]" width="350" height="42" horizAlign="right" color="0xA9B7C9FF">
+      <Font role="font" uri="font:MediumSystemFont" size="24" />
+    </Label>
+
+    <Group id="statusGroup" visible="true">
+      <BusySpinner id="spinner" translation="[920,440]" control="start" />
+      <Label id="statusTitle" translation="[310,560]" width="1300" height="55" horizAlign="center" color="0xFFFFFFFF">
+        <Font role="font" uri="font:MediumBoldSystemFont" size="34" />
+      </Label>
+      <Label id="statusMessage" translation="[360,625]" width="1200" height="130" horizAlign="center" vertAlign="top" wrap="true" color="0xA9B7C9FF">
+        <Font role="font" uri="font:MediumSystemFont" size="24" />
+      </Label>
+    </Group>
+
+    <Group id="pairingGroup" visible="false">
+      <Label translation="[250,250]" width="1420" height="55" text="Link this Roku" horizAlign="center" color="0xFFFFFFFF">
+        <Font role="font" uri="font:MediumBoldSystemFont" size="38" />
+      </Label>
+      <Label id="pairingInstruction" translation="[250,340]" width="1420" height="120" horizAlign="center" wrap="true" color="0xA9B7C9FF">
+        <Font role="font" uri="font:MediumSystemFont" size="27" />
+      </Label>
+      <Label id="pairingCode" translation="[250,500]" width="1420" height="100" horizAlign="center" color="0x36D1DCFF">
+        <Font role="font" uri="font:MediumBoldSystemFont" size="64" />
+      </Label>
+      <Label id="pairingStatus" translation="[250,650]" width="1420" height="70" horizAlign="center" color="0xFFFFFFFF">
+        <Font role="font" uri="font:MediumSystemFont" size="24" />
+      </Label>
+    </Group>
+
+    <Group id="profilesGroup" visible="false">
+      <Label translation="[110,175]" width="800" height="60" text="Who’s watching?" color="0xFFFFFFFF">
+        <Font role="font" uri="font:MediumBoldSystemFont" size="42" />
+      </Label>
+      <LabelList id="profilesList" translation="[110,275]" itemSize="[750,68]" numRows="8" focusBitmapBlendColor="0x36D1DCFF" />
+      <Label translation="[950,300]" width="700" height="180" text="Select the linked profile to continue. Choose another profile to link a new session for that viewer." wrap="true" color="0xA9B7C9FF">
+        <Font role="font" uri="font:MediumSystemFont" size="26" />
+      </Label>
+      <Label translation="[950,555]" width="700" height="55" text="Options" color="0xFFFFFFFF">
+        <Font role="font" uri="font:MediumBoldSystemFont" size="28" />
+      </Label>
+      <LabelList id="profileActions" translation="[950,625]" itemSize="[650,62]" numRows="3" focusBitmapBlendColor="0x36D1DCFF" />
+    </Group>
+
+    <Group id="libraryGroup" visible="false">
+      <Label id="libraryTitle" translation="[90,155]" width="1500" height="60" text="Library" color="0xFFFFFFFF">
+        <Font role="font" uri="font:MediumBoldSystemFont" size="42" />
+      </Label>
+      <RowList id="libraryList" translation="[84,245]" itemComponentName="PosterCard"
+        numRows="1" itemSize="[220,340]" rowItemSize="[[220,340]]"
+        rowItemSpacing="[[20,0]]" rowHeights="[360]" showRowLabel="false"
+        focusXOffset="[0]" rowFocusAnimationStyle="fixedFocusWrap" />
+      <Label id="libraryHint" translation="[90,920]" width="1700" height="50" text="OK details  •  Back profiles" color="0xA9B7C9FF">
+        <Font role="font" uri="font:MediumSystemFont" size="22" />
+      </Label>
+    </Group>
+
+    <Group id="detailGroup" visible="false">
+      <Poster id="detailPoster" translation="[100,215]" width="330" height="495" loadDisplayMode="scaleToFill" />
+      <Label id="detailTitle" translation="[500,205]" width="1220" height="70" color="0xFFFFFFFF">
+        <Font role="font" uri="font:MediumBoldSystemFont" size="44" />
+      </Label>
+      <Label id="detailMeta" translation="[500,290]" width="1220" height="45" color="0x36D1DCFF">
+        <Font role="font" uri="font:MediumSystemFont" size="24" />
+      </Label>
+      <Label id="detailOverview" translation="[500,355]" width="1150" height="260" wrap="true" maxLines="6" color="0xDCE5F0FF">
+        <Font role="font" uri="font:MediumSystemFont" size="26" />
+      </Label>
+      <LabelList id="detailActions" translation="[500,660]" itemSize="[600,68]" numRows="3" focusBitmapBlendColor="0x36D1DCFF" />
+      <Label translation="[100,915]" width="1600" height="50" text="Back library" color="0xA9B7C9FF">
+        <Font role="font" uri="font:MediumSystemFont" size="22" />
+      </Label>
+    </Group>
+
+    <Video id="video" visible="false" width="1920" height="1080" enableUI="true" />
+    <Timer id="pairingTimer" repeat="true" />
+    <Timer id="heartbeatTimer" duration="20" repeat="true" />
+  </children>
+  <script type="text/brightscript" uri="pkg:/source/Config.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Storage.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Api.brs" />
+  <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
+</component>
