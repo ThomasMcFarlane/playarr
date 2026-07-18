@@ -4401,7 +4401,8 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   animation: tv-copy-in 620ms 90ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.tv-provider {
+.tv-provider,
+.tv-detail-kicker {
   margin-bottom: clamp(18px, 2.4vh, 34px);
   color: #cf3157;
   font-size: clamp(0.58rem, 0.64vw, 0.78rem);
@@ -5502,15 +5503,21 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   transform: scale(1.1);
 }
 
-.tv-library-preview {
+.tv-home-feature,
+.tv-library-preview,
+.tv-detail-copy {
   position: absolute;
-  z-index: 7;
-  top: 27%;
+  top: 24%;
   left: clamp(102px, 8vw, 160px);
-  width: min(20.5vw, 390px);
+  width: min(24vw, 455px);
+}
+
+.tv-library-preview {
+  z-index: 7;
   animation: tv-preview-expand 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+.tv-home-feature h2,
 .tv-library-preview h2,
 .tv-detail > .tv-detail-copy h1 {
   max-width: 9ch;
@@ -5534,9 +5541,11 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   color: var(--ink-muted);
 }
 
-.tv-preview-overview {
+.tv-home-feature > p:not(.tv-provider),
+.tv-preview-overview,
+.tv-detail-synopsis {
   display: -webkit-box;
-  max-width: 36ch;
+  max-width: 42ch;
   margin-top: clamp(16px, 2vh, 28px);
   overflow: hidden;
   color: var(--ink-muted);
@@ -5544,6 +5553,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   line-height: 1.58;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 5;
+  animation: none;
 }
 
 .tv-library-grid-panel {
@@ -6062,33 +6072,8 @@ body[data-input-mode="remote"] .player-quality-option:focus {
 }
 
 .tv-home-feature {
-  position: absolute;
   z-index: 8;
-  top: 24%;
-  left: clamp(108px, 8.4vw, 170px);
-  width: min(24vw, 455px);
   animation: tv-copy-in 520ms 80ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.tv-home-feature h2 {
-  max-width: 10ch;
-  font-size: clamp(2.7rem, 4.5vw, 6.2rem);
-  font-weight: 555;
-  letter-spacing: -0.078em;
-  line-height: 0.88;
-  text-wrap: balance;
-}
-
-.tv-home-feature > p:not(.tv-provider) {
-  display: -webkit-box;
-  max-width: 42ch;
-  margin-top: clamp(20px, 2.8vh, 38px);
-  overflow: hidden;
-  color: var(--ink-muted);
-  font-size: clamp(0.58rem, 0.67vw, 0.84rem);
-  line-height: 1.58;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 5;
 }
 
 .tv-playlists {
@@ -6869,30 +6854,8 @@ body[data-input-mode="remote"] .player-quality-option:focus {
 }
 
 .tv-detail-copy {
-  position: absolute;
   z-index: 12;
-  top: 24%;
-  left: clamp(102px, 8vw, 160px);
-  width: min(27vw, 510px);
   animation: tv-copy-in 520ms 80ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.tv-detail-kicker {
-  margin-bottom: clamp(16px, 2.1vh, 28px);
-  color: #cf3157;
-  font-size: clamp(0.48rem, 0.55vw, 0.68rem);
-  font-weight: 820;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-}
-
-.tv-detail-copy h1 {
-  max-width: 10ch;
-  font-size: clamp(2.6rem, 4.5vw, 6rem);
-  font-weight: 560;
-  letter-spacing: -0.078em;
-  line-height: 0.88;
-  text-wrap: balance;
 }
 
 .tv-detail-copy h2 {
@@ -6918,19 +6881,6 @@ body[data-input-mode="remote"] .player-quality-option:focus {
 .tv-detail-meta span:first-child {
   color: var(--ink-soft);
   font-weight: 680;
-}
-
-.tv-detail-synopsis {
-  display: -webkit-box;
-  max-width: 46ch;
-  margin-top: clamp(18px, 2.2vh, 30px);
-  overflow: hidden;
-  color: var(--ink-muted);
-  font-size: clamp(0.58rem, 0.67vw, 0.84rem);
-  line-height: 1.6;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 6;
-  animation: none;
 }
 
 .tv-detail-play {
@@ -8831,13 +8781,8 @@ body[data-input-mode="remote"] .player-quality-option:focus {
 }
 
 @media (max-width: 1100px), (max-height: 700px) {
-  .tv-library-heading,
-  .tv-library-preview {
+  .tv-library-heading {
     left: 7.5vw;
-  }
-
-  .tv-library-preview {
-    width: 21vw;
   }
 
   .tv-library-grid-panel {
@@ -8861,9 +8806,13 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .tv-detail .tv-back,
-  .tv-detail-copy,
-  .tv-home-feature {
+  .tv-home-feature,
+  .tv-library-preview,
+  .tv-detail-copy {
+    left: 7.5vw;
+  }
+
+  .tv-detail .tv-back {
     left: 7.5vw;
   }
 
@@ -9037,10 +8986,6 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     top: 18%;
     left: 6%;
     width: 42%;
-  }
-
-  .tv-detail-copy h1 {
-    font-size: clamp(2rem, 7vw, 3.5rem);
   }
 
   .tv-series-browser {
@@ -9309,6 +9254,13 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   }
 
   .tv-home-feature,
+  .tv-detail-copy {
+    top: calc(var(--mobile-top-inset) + 58px);
+    left: var(--mobile-page-gutter);
+    width: calc(100% - 32px);
+    max-width: 520px;
+  }
+
   .tv-playlist-feature {
     top: calc(var(--mobile-top-inset) + 42px);
     left: var(--mobile-page-gutter);
@@ -9322,16 +9274,18 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     font-size: 0.66rem;
   }
 
-  .tv-home-feature h2 {
-    max-width: 11ch;
-    font-size: clamp(2.25rem, 12vw, 4.25rem);
-    line-height: 0.92;
+  .tv-home-feature h2,
+  .tv-detail > .tv-detail-copy h1 {
+    max-width: 12ch;
+    font-size: clamp(2rem, 10vw, 3.5rem);
+    line-height: 0.94;
   }
 
-  .tv-home-feature > p:not(.tv-provider) {
-    max-width: 44ch;
-    margin-top: 12px;
-    font-size: 0.76rem;
+  .tv-home-feature > p:not(.tv-provider),
+  .tv-detail-synopsis {
+    max-width: 52ch;
+    margin-top: 10px;
+    font-size: 0.72rem;
     line-height: 1.45;
     -webkit-line-clamp: 3;
   }
@@ -9525,19 +9479,6 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     left: var(--mobile-page-gutter);
   }
 
-  .tv-detail-copy {
-    top: calc(var(--mobile-top-inset) + 58px);
-    left: var(--mobile-page-gutter);
-    width: calc(100% - 32px);
-    max-width: 520px;
-  }
-
-  .tv-detail-copy h1 {
-    max-width: 12ch;
-    font-size: clamp(2rem, 10vw, 3.5rem);
-    line-height: 0.94;
-  }
-
   .tv-detail-copy h2 {
     max-width: 28ch;
     margin-top: 8px;
@@ -9548,14 +9489,6 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     gap: 4px 10px;
     margin-top: 12px;
     font-size: 0.64rem;
-  }
-
-  .tv-detail-synopsis {
-    max-width: 52ch;
-    margin-top: 10px;
-    font-size: 0.72rem;
-    line-height: 1.45;
-    -webkit-line-clamp: 3;
   }
 
   .tv-detail-actions {
@@ -9600,10 +9533,6 @@ body[data-input-mode="remote"] .player-quality-option:focus {
 
   .tv-playlists-heading {
     right: 176px;
-  }
-
-  .tv-music-detail .tv-detail-copy {
-    top: calc(var(--mobile-top-inset) + 62px);
   }
 
   .tv-music-browser.is-content {
@@ -10047,7 +9976,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   }
 
   .tv-home-feature h2,
-  .tv-detail-copy h1,
+  .tv-detail > .tv-detail-copy h1,
   .tv-search-copy > h1 {
     font-size: 2.25rem;
   }

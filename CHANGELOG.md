@@ -77,8 +77,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   used by the Series and Movies library pages.
 - Require an explicit click, keyboard focus, or remote action to select media cards and rows instead
   of changing the active navigation item when the pointer merely passes over it.
-- Lower the homepage title and synopsis to the same vertical position as movie and series detail
-  copy.
+- Use one consistent position, width, title scale, and synopsis treatment for homepage features,
+  directory previews, and media detail copy.
 - Match item names after the detail-page heading pipe to the compact metadata typography used by
   other page headers instead of repeating the main heading size.
 - Show `Music | Artist`, `Movies | Title`, or `Series | Title` in detail-page headers, and move

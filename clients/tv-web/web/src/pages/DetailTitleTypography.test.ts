@@ -5,7 +5,7 @@ describe("detail title typography", () => {
   it("matches every detail title to the established library-preview style", () => {
     const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
     const sharedTitleRule = css.match(
-      /\.tv-library-preview h2,\s*\.tv-detail > \.tv-detail-copy h1\s*\{(?<declarations>[^}]*)\}/
+      /\.tv-home-feature h2,\s*\.tv-library-preview h2,\s*\.tv-detail > \.tv-detail-copy h1\s*\{(?<declarations>[^}]*)\}/
     )?.groups?.declarations;
 
     expect(sharedTitleRule).toContain("max-width: 9ch");
