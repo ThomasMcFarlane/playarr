@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Make the webOS client package-ready with a validated manifest and application icon, and attach
+  its Shaka playback engine when the video surface mounts.
+
 - Add playful per-profile avatar choices in Playarr settings, with crop, reposition, zoom, and
   locally resized custom photo uploads on devices that provide an image picker.
 - Add held-playlist actions for renaming, choosing a new parent, or deleting personal playlists
