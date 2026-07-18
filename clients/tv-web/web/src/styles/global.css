@@ -527,11 +527,20 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 .app-main {
   min-width: 0;
   min-height: 0;
-  overflow-x: clip;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   padding: var(--screen-y) var(--screen-x);
   scrollbar-color: var(--line-strong) transparent;
+}
+
+/*
+ * Every authenticated route gets one native page scroll root. The data
+ * contract also lets spatial navigation reveal off-screen focus targets;
+ * nested rails can opt into their own native axis using the same attributes.
+ */
+.app-main[data-tv-scroll-container] {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .page {
@@ -4503,10 +4512,6 @@ body[data-input-mode="remote"] .player-quality-option:focus {
 /* -------------------------------------------------------------------------
  * Playarr TV library stage — grid rail + focus-driven editorial preview
  * ---------------------------------------------------------------------- */
-
-.app-main {
-  overflow: hidden;
-}
 
 .app-clock {
   position: absolute;

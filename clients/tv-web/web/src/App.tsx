@@ -37,6 +37,7 @@ import { PlaylistsPage } from "./pages/Playlists";
 import { ProfilesPage } from "./pages/Profiles";
 import { MusicDetailPage } from "./pages/MusicDetail";
 import { UpdateToast } from "./components/UpdateToast";
+import { PageScrollRoot } from "./components/PageScrollRoot";
 import {
   HomeIcon,
   MusicIcon,
@@ -327,7 +328,7 @@ function AppShell() {
         </header>
       )}
 
-      <main className="app-main">
+      <PageScrollRoot scrollKey={`page:${location.pathname}`}>
         <Outlet
           context={{
             availableWorkKinds,
@@ -335,7 +336,7 @@ function AppShell() {
             startPlayerSession,
           } satisfies AppShellOutletContext}
         />
-      </main>
+      </PageScrollRoot>
 
       {activePlayerSession && (
         <PlayerPage

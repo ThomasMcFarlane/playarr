@@ -92,6 +92,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Restore native mouse-wheel, trackpad, scrollbar, and touch scrolling on every authenticated
+  Playarr page while keeping ArrowUp and ArrowDown navigation available from text inputs.
 - Show only users signed in on the current device in Playarr's profile selector.
 - Accept bare `v4-A-B-C-D.relay.playarr.app` hostnames in Playarr server fields and normalise
   them to HTTPS on Streamarr's application port.

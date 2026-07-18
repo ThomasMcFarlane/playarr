@@ -1,6 +1,10 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import type { NavigationOrigin } from "./navigationLayer";
+import {
+  shouldNavigateFromFormControl,
+  type FormControlDescriptor,
+} from "./arrowNavigationPolicy";
 
 const FOCUSABLE_SELECTOR = [
   "a[href]",
@@ -13,19 +17,14 @@ const FOCUSABLE_SELECTOR = [
 
 type Direction = "up" | "down" | "left" | "right";
 
-// Types with no native meaning for Up/Down: a single-line field never moves
-// its caret vertically or changes value on those keys, so remote/TV focus
-// navigation can safely claim them. Left/Right stay native everywhere (caret
-// movement), and range/number/select/textarea keep every arrow key native
-// since those types (or a future multi-line field) do assign it real meaning.
-const VERTICALLY_ESCAPABLE_INPUT_TYPES = new Set([
-  "text",
-  "url",
-  "email",
-  "password",
-  "search",
-  "tel",
-]);
+function formControlDescriptor(target: EventTarget | null): FormControlDescriptor | null {
+  if (target instanceof HTMLInputElement) {
+    return { kind: "input", type: target.type };
+  }
+  if (target instanceof HTMLTextAreaElement) return { kind: "textarea" };
+  if (target instanceof HTMLSelectElement) return { kind: "select" };
+  return null;
+}
 
 function visibleFocusables(): HTMLElement[] {
   const modal = document.querySelector<HTMLElement>('[aria-modal="true"]');
@@ -387,19 +386,9 @@ export function useTvNavigation(
     if (disabled) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      const target = event.target;
-      const isFormControl =
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target instanceof HTMLSelectElement;
-      if (isFormControl) {
-        const isVerticalArrow = event.key === "ArrowUp" || event.key === "ArrowDown";
-        const canEscapeVertically =
-          target instanceof HTMLInputElement &&
-          VERTICALLY_ESCAPABLE_INPUT_TYPES.has(target.type);
-        if (!(isVerticalArrow && canEscapeVertically)) {
-          return;
-        }
+      const formControl = formControlDescriptor(event.target);
+      if (formControl && !shouldNavigateFromFormControl(event.key, formControl)) {
+        return;
       }
 
       const direction: Direction | undefined =

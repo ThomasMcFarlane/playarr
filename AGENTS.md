@@ -43,3 +43,18 @@ These instructions apply to the entire repository.
 - Do not claim a test passed unless its command completed successfully in the current worktree.
 - Preserve unrelated user changes and never use destructive Git cleanup commands to make a commit
   easier.
+
+## Scrolling and directional navigation
+
+- Use a real browser scroll container (`overflow: auto` or an axis-specific equivalent) for every
+  viewport that can overflow. Do not make content reachable only through focus-driven or
+  arrow-driven JavaScript scrolling; mouse wheels, scrollbars, touch dragging, and trackpads must
+  work without focus.
+- Mark shared and nested scroll viewports with `data-tv-scroll-container`, their
+  `data-tv-scroll-axis`, and a stable `data-navigation-scroll-key` when their position must be
+  restored. Fullscreen surfaces may lock the page root only when every overflowing panel owns a
+  native scroll viewport.
+- In spatial navigation, single-line text inputs must release ArrowUp and ArrowDown so focus can
+  leave the field after an on-screen keyboard closes. Preserve Left and Right for caret movement,
+  and preserve native arrow behaviour for textareas, selects, number inputs, and range inputs.
+- Add regression coverage whenever the shared scroll-root or form-control arrow policy changes.
