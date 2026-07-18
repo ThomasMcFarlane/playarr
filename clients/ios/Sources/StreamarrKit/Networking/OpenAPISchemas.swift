@@ -762,6 +762,47 @@ public struct LoginResponse: Codable, Sendable {
     }
 }
 
+/// Request body for `POST /api/v1/auth/refresh`.
+public struct RefreshRequest: Codable, Sendable {
+    public var deviceID: UUID
+    public var refreshToken: String
+
+    enum CodingKeys: String, CodingKey {
+        case deviceID = "device_id"
+        case refreshToken = "refresh_token"
+    }
+
+    public init(deviceID: UUID, refreshToken: String) {
+        self.deviceID = deviceID
+        self.refreshToken = refreshToken
+    }
+}
+
+/// Rotated access/refresh pair returned by `POST /api/v1/auth/refresh`.
+public struct RefreshResponse: Codable, Sendable {
+    public var accessToken: String
+    public var refreshToken: String
+    public var tokenType: String
+    public var expiresIn: Int64
+    public var userID: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case accessToken = "access_token"
+        case refreshToken = "refresh_token"
+        case tokenType = "token_type"
+        case expiresIn = "expires_in"
+        case userID = "user_id"
+    }
+
+    public init(accessToken: String, refreshToken: String, tokenType: String, expiresIn: Int64, userID: UUID) {
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+        self.tokenType = tokenType
+        self.expiresIn = expiresIn
+        self.userID = userID
+    }
+}
+
 // MARK: - OAuth device authorization grant (RFC 8628)
 
 /// Request body for `POST /api/v1/oauth/device/code`.

@@ -195,10 +195,11 @@ someone runs them for real.
 - **iOS.** **Built.** `clients/ios/Streamarr.xcodeproj` produces a native
   `Playarr.app`, links the reusable `StreamarrKit` package, includes App Store
   bundle/privacy/icon resources, and defines application and kit XCTest
-  targets. **Deferred: runtime and device validation** — this Xcode install
-  has the iOS SDK but no iOS Simulator runtime, signing identity, or physical
-  device, so XCTest/UI execution, a signed archive, and store submission remain
-  external validation steps rather than unfinished application logic.
+  targets. The complete application build and all ten unit tests pass on an
+  iPhone 17 Pro simulator running iOS 26.5. **Deferred: distribution and device
+  validation** — a signing identity, physical device, signed archive and App
+  Store submission remain external release steps rather than unfinished
+  application logic.
 
 ## Wave 6 — TV Clients
 

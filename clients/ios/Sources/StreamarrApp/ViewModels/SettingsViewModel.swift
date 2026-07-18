@@ -45,7 +45,12 @@ public final class SettingsViewModel {
                     self?.deviceCode = pending
                 }
             }
-            await environment.setSession(accessToken: token.accessToken, refreshToken: token.refreshToken)
+            try await environment.setSession(
+                accessToken: token.accessToken,
+                refreshToken: token.refreshToken,
+                tokenType: token.tokenType,
+                expiresIn: token.expiresIn
+            )
             isSignedIn = true
         } catch let error as DeviceFlowError {
             errorMessage = Self.describe(error)
@@ -55,8 +60,12 @@ public final class SettingsViewModel {
     }
 
     public func signOut() async {
-        await environment.signOut()
-        isSignedIn = false
+        do {
+            try await environment.signOut()
+            isSignedIn = false
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     private static func describe(_ error: DeviceFlowError) -> String {

@@ -182,6 +182,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Make the iOS Xcode target produce the `Playarr.app` bundle expected by its shared scheme and
+  app-hosted unit tests.
+- Authenticate iOS catalogue and playback requests, rotate expired sessions through the server's
+  refresh endpoint, and persist each server's token pair in the iOS Keychain across relaunches.
+- Rebind every iOS screen to the newly selected Streamarr server as soon as its saved URL changes.
 - Replace the blank Android WebView shell with the single native responsive Compose application
   and defer notification permission until it is relevant to the signed-in user, without logging
   account credentials or access tokens from debug-signed distribution builds.

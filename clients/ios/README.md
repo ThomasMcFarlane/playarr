@@ -110,9 +110,10 @@ block its own UI, but it cannot install code outside Apple's reviewed release pr
 - Work details use resolved media-file identifiers for playable leaves.
 - Playback negotiates direct or HLS media and renders through AVPlayer/AVKit.
 - Settings persists the operator's server URL and supports OAuth device flow sign-in.
+- Protected catalogue and playback requests obtain or refresh a bearer session automatically,
+  with per-server access and refresh tokens persisted in the iOS Keychain.
 - Foreground update checks compare this installed bundle version with the server's iOS
   compatibility entry.
 
 The App Store ID and production signing team are intentionally unset because they are allocated
-outside the repository. Token persistence remains in-memory; relaunching the app signs the user
-out until Keychain-backed refresh-token storage is implemented.
+outside the repository.
