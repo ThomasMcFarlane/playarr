@@ -17,14 +17,18 @@ describe("MusicDetail track list", () => {
     expect(highlightedTrackRule?.declarations).toContain("transform: scale(1.012)");
   });
 
-  it("darkens and blurs artwork behind the active album visualiser", () => {
+  it("covers active artwork with a transparent visualiser gradient", () => {
     const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
     const visualiserRule = css.match(
       /\.tv-music-cover-visualiser-host \.player-music-visualiser\s*\{(?<declarations>[^}]*)\}/
     )?.groups?.declarations;
 
-    expect(visualiserRule).toContain("rgba(8, 5, 7, 0.78)");
-    expect(visualiserRule).toContain("backdrop-filter: blur(12px) brightness(0.62)");
+    expect(visualiserRule).toContain("inset: 0");
+    expect(visualiserRule).toContain("height: 100%");
+    expect(visualiserRule).toContain("transparent 0%");
+    expect(visualiserRule).toContain("rgba(8, 5, 7, 0.68) 100%");
+    expect(visualiserRule).toContain("box-shadow: none");
+    expect(visualiserRule).toContain("backdrop-filter: blur(3px) brightness(0.78)");
     expect(visualiserRule).toContain("mix-blend-mode: normal");
   });
 

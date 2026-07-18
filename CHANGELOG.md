@@ -115,6 +115,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Replace the active-cover visualiser's black panel with a full-artwork transparent gradient and
+  evenly applied blur.
 - Focus the inline music scrubber directly when pressing Down from Cover Flow.
 - Return Up from the first music track to the inline playback controls and keep the scrubber bar
   at a constant height when its focus thumb appears.
