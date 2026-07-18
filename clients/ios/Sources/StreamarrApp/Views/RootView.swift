@@ -1,5 +1,17 @@
 import StreamarrKit
 import SwiftUI
+import UIKit
+
+private struct PlayarrChromeHiddenKey: PreferenceKey {
+    static let defaultValue = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
+}
+
+extension View {
+    func playarrChromeHidden(_ hidden: Bool = true) -> some View {
+        preference(key: PlayarrChromeHiddenKey.self, value: hidden)
+    }
+}
 
 struct RootView: View {
     let environment: AppEnvironment
@@ -93,6 +105,7 @@ private struct AuthenticatedPlayarrShell: View {
     @State private var selected: Destination = .home
     @State private var availableKinds: Set<WorkKind> = []
     @State private var homeViewModel: HomeViewModel
+    @State private var chromeHidden = false
     #if DEBUG
     @State private var demoDetailViewModel: WorkDetailViewModel
     #endif
@@ -122,12 +135,13 @@ private struct AuthenticatedPlayarrShell: View {
     var body: some View {
         ZStack {
             selectedContent
-            chrome
+            if !chromeHidden { chrome }
         }
         .background(PlayarrStyle.background.ignoresSafeArea())
         .task {
             availableKinds = Set((try? await environment.apiClient.listCatalogKinds()) ?? [])
         }
+        .onPreferenceChange(PlayarrChromeHiddenKey.self) { chromeHidden = $0 }
     }
 
     @ViewBuilder
@@ -300,16 +314,7 @@ private struct AuthenticatedPlayarrShell: View {
     private func profileButton(size: CGFloat, avatarSize: CGFloat) -> some View {
         Button { selected = .profiles } label: {
             ZStack {
-                Circle().fill(
-                    LinearGradient(
-                        colors: [Color(red: 0.847, green: 0.31, blue: 0.439), Color(red: 0.659, green: 0.149, blue: 0.333)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                Text(String((environment.currentUserName ?? "P").prefix(1)).uppercased())
-                    .font(.custom("Avenir Next", fixedSize: avatarSize * 0.42).weight(.bold))
-                    .foregroundStyle(.white)
+                currentAvatar(size: avatarSize)
             }
             .frame(width: avatarSize, height: avatarSize)
             .frame(width: size, height: size)
@@ -318,6 +323,43 @@ private struct AuthenticatedPlayarrShell: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Open profile and settings")
+    }
+
+    @ViewBuilder
+    private func currentAvatar(size: CGFloat) -> some View {
+        if let avatar = environment.currentAvatar,
+           avatar.kind == .custom,
+           let comma = avatar.value.firstIndex(of: ","),
+           let data = Data(base64Encoded: String(avatar.value[avatar.value.index(after: comma)...])),
+           let image = UIImage(data: data) {
+            Image(uiImage: image).resizable().scaledToFill().frame(width: size, height: size).clipShape(Circle())
+        } else {
+            Circle().fill(
+                LinearGradient(
+                    colors: [Color(red: 0.847, green: 0.31, blue: 0.439), Color(red: 0.659, green: 0.149, blue: 0.333)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            if let preset = environment.currentAvatar?.value {
+                Image(systemName: presetAvatarSymbol(preset))
+                    .font(.system(size: size * 0.42, weight: .light)).foregroundStyle(.white)
+            } else {
+                Text(String((environment.currentUserName ?? "P").prefix(1)).uppercased())
+                    .font(.custom("Avenir Next", fixedSize: size * 0.42).weight(.bold)).foregroundStyle(.white)
+            }
+        }
+    }
+
+    private func presetAvatarSymbol(_ value: String) -> String {
+        switch value {
+        case "astronaut": "moon.stars"
+        case "cat": "cat"
+        case "dinosaur": "fossil.shell"
+        case "robot": "cpu"
+        case "pirate": "sailboat"
+        default: "sparkles"
+        }
     }
 
     private var stageNavigationHeight: CGFloat {
@@ -330,7 +372,7 @@ private struct AuthenticatedPlayarrShell: View {
 
     private var destinations: [Destination] {
         var result: [Destination] = [.search, .home]
-        for kind in [WorkKind.series, .movie, .site, .artist, .author] where availableKinds.contains(kind) {
+        for kind in [WorkKind.series, .movie, .site, .artist] where availableKinds.contains(kind) {
             result.append(.library(kind))
         }
         result.append(.playlists)

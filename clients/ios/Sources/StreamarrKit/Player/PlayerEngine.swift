@@ -37,11 +37,9 @@ public struct PlayableItem: Identifiable, Equatable, Sendable {
 }
 
 /// Client-side playback state machine — purely "what is the local
-/// `AVPlayer` doing right now". The current OpenAPI spec has no
-/// server-tracked playback-session/progress-reporting endpoints yet (only
-/// the direct-play/transcode negotiation in `GET
-/// /api/v1/playback/{media_file_id}`), so there is no separate
-/// server-side session type to stay distinct from here.
+/// `AVPlayer` doing right now". Server playback sessions, choices and
+/// watch progress are deliberately tracked by `PlayerViewModel`; this type
+/// stays limited to the local AVFoundation lifecycle.
 public enum PlayerPlaybackState: Equatable, Sendable {
     case idle
     case loading

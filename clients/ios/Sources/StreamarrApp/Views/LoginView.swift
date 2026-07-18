@@ -12,10 +12,17 @@ struct LoginView: View {
     @State private var isSubmitting = false
     @State private var errorMessage: String?
     @State private var languageMenuOpen = false
+    @State private var showingSignup = false
     @AppStorage("com.streamarr.ios.language") private var language = "system"
     @FocusState private var focusedField: Field?
 
     private enum Field { case server, username, password }
+
+    init(environment: AppEnvironment, onBack: @escaping () -> Void = {}) {
+        self.environment = environment
+        self.onBack = onBack
+        _serverURL = State(initialValue: environment.serverBaseURL.absoluteString)
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -49,6 +56,14 @@ struct LoginView: View {
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .tint(PlayarrStyle.accent)
+        .fullScreenCover(isPresented: $showingSignup) {
+            SignupView(
+                environment: environment,
+                serverURL: $serverURL,
+                username: $username,
+                isPresented: $showingSignup
+            )
+        }
     }
 
     private func authPanel(width: CGFloat, phone: Bool) -> some View {
@@ -116,6 +131,7 @@ struct LoginView: View {
                     fontSize: bodySize
                 )
                 .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
 
                 authLabel("Password")
                     .padding(.top, 19.2)
@@ -155,6 +171,13 @@ struct LoginView: View {
                 .disabled(isSubmitting)
                 .opacity(isSubmitting ? 0.45 : 1)
                 .padding(.top, 24)
+
+                Button("Have an invitation? Create account") { showingSignup = true }
+                    .font(.custom("Avenir Next", fixedSize: 11.5).weight(.semibold))
+                    .foregroundStyle(PlayarrStyle.inkSoft)
+                    .frame(maxWidth: .infinity, minHeight: 42)
+                    .buttonStyle(.plain)
+                    .padding(.top, 8)
             }
             .frame(maxWidth: .infinity)
             .multilineTextAlignment(.leading)
@@ -318,6 +341,145 @@ struct LoginView: View {
                 errorMessage = error.localizedDescription
             }
             isSubmitting = false
+        }
+    }
+}
+
+private struct SignupView: View {
+    let environment: AppEnvironment
+    @Binding var serverURL: String
+    @Binding var username: String
+    @Binding var isPresented: Bool
+    @State private var inviteToken = ""
+    @State private var displayName = ""
+    @State private var email = ""
+    @State private var newUsername = ""
+    @State private var password = ""
+    @State private var errorMessage: String?
+    @State private var submitting = false
+
+    var body: some View {
+        GeometryReader { proxy in
+            let phone = proxy.size.width <= 760
+            ZStack(alignment: .topLeading) {
+                PlayarrAuthBackground()
+
+                ScrollView {
+                    VStack(spacing: 0) {
+                        Text("YOU’RE INVITED")
+                            .font(.custom("Avenir Next", fixedSize: 9.5).weight(.heavy))
+                            .tracking(1.7)
+                            .foregroundStyle(PlayarrStyle.muted)
+                        Text("Create your Playarr account")
+                            .font(.custom("Avenir Next", fixedSize: phone ? 39 : 56).weight(.medium))
+                            .tracking(phone ? -2.8 : -4)
+                            .foregroundStyle(PlayarrStyle.ink)
+                            .multilineTextAlignment(.center)
+                            .padding(.top, 8)
+                        Text("Use the invitation and Streamarr server you received. Your credentials go directly to that server.")
+                            .font(.custom("Avenir Next", fixedSize: 13))
+                            .foregroundStyle(PlayarrStyle.muted)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: 500)
+                            .padding(.top, 14)
+                            .padding(.bottom, 28)
+
+                        VStack(alignment: .leading, spacing: 18) {
+                            signupField("Server URL") {
+                                TextField("Server address or URL", text: $serverURL)
+                                    .textContentType(.URL).keyboardType(.URL)
+                                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                            }
+                            signupField("Invitation token") {
+                                TextField("One-use invitation", text: $inviteToken)
+                                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                            }
+                            signupField("Display name") { TextField("How you’ll appear", text: $displayName).textContentType(.name) }
+                            signupField("Username") {
+                                TextField("Username", text: $newUsername)
+                                    .textContentType(.username).textInputAutocapitalization(.never).autocorrectionDisabled()
+                            }
+                            signupField("Email · optional") {
+                                TextField("you@example.com", text: $email)
+                                    .textContentType(.emailAddress).keyboardType(.emailAddress)
+                                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                            }
+                            signupField("Password") { SecureField("Create a password", text: $password).textContentType(.newPassword) }
+
+                            if let errorMessage {
+                                Text(errorMessage).font(.caption).foregroundStyle(PlayarrStyle.danger)
+                            }
+
+                            Button(submitting ? "Creating account…" : "Create account") { submit() }
+                                .buttonStyle(PlayarrPrimaryButtonStyle())
+                                .frame(maxWidth: .infinity)
+                                .disabled(submitting || inviteToken.isEmpty || displayName.isEmpty || newUsername.isEmpty || password.isEmpty)
+                        }
+                        .padding(phone ? 20 : 28)
+                        .frame(maxWidth: 590)
+                        .background(PlayarrStyle.surfaceStrong.opacity(0.76))
+                        .overlay { Rectangle().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, phone ? 18 : 28)
+                    .padding(.top, phone ? max(105, proxy.safeAreaInsets.top + 70) : 120)
+                    .padding(.bottom, max(36, proxy.safeAreaInsets.bottom + 24))
+                }
+                .scrollDismissesKeyboard(.interactively)
+
+                HStack {
+                    Image("PlayarrLogo").resizable().scaledToFit().frame(width: 30, height: 42)
+                    Spacer()
+                    Button("Back to sign in") { isPresented = false }
+                        .font(.custom("Avenir Next", fixedSize: 11.5).weight(.bold))
+                        .foregroundStyle(PlayarrStyle.ink)
+                        .padding(.horizontal, 16).frame(height: 42)
+                        .background(PlayarrStyle.surfaceStrong.opacity(0.76), in: Capsule())
+                        .overlay { Capsule().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
+                }
+                .padding(.horizontal, phone ? 20 : 42)
+                .padding(.top, max(18, proxy.safeAreaInsets.top))
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private func signupField<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(label.uppercased())
+                .font(.custom("Avenir Next", fixedSize: 10.5).weight(.heavy))
+                .tracking(0.8).foregroundStyle(PlayarrStyle.muted)
+            content()
+                .font(.custom("Avenir Next", fixedSize: 15))
+                .padding(.horizontal, 14).frame(height: 50)
+                .background(PlayarrStyle.background.opacity(0.66))
+                .overlay { Rectangle().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
+        }
+        .foregroundStyle(PlayarrStyle.ink)
+    }
+
+    private func submit() {
+        submitting = true
+        errorMessage = nil
+        Task {
+            do {
+                let url = try LoginServerURL.normalise(serverURL)
+                if url != environment.serverBaseURL { environment.prepareServerForSignIn(url) }
+                _ = try await environment.apiClient.signup(
+                    SignupRequest(
+                        displayName: displayName.trimmingCharacters(in: .whitespacesAndNewlines),
+                        email: email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : email,
+                        inviteToken: inviteToken.trimmingCharacters(in: .whitespacesAndNewlines),
+                        password: password,
+                        username: newUsername.trimmingCharacters(in: .whitespacesAndNewlines)
+                    )
+                )
+                serverURL = url.absoluteString
+                username = newUsername
+                isPresented = false
+            } catch let error as APIError { errorMessage = error.displayMessage }
+            catch { errorMessage = error.localizedDescription }
+            submitting = false
         }
     }
 }

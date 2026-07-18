@@ -444,6 +444,70 @@ public struct AvailableProfile: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+public struct SignupRequest: Codable, Sendable {
+    public var displayName: String
+    public var email: String?
+    public var inviteToken: String
+    public var password: String
+    public var username: String
+    enum CodingKeys: String, CodingKey {
+        case displayName = "display_name"
+        case email
+        case inviteToken = "invite_token"
+        case password, username
+    }
+    public init(displayName: String, email: String? = nil, inviteToken: String, password: String, username: String) {
+        self.displayName = displayName; self.email = email; self.inviteToken = inviteToken; self.password = password; self.username = username
+    }
+}
+
+public struct UserAccount: Codable, Identifiable, Sendable {
+    public let id: UUID
+    public var username: String
+    public var displayName: String
+    public var email: String?
+    public var disabled: Bool
+    public var isAdmin: Bool
+    public var canStream: Bool
+    public var libraryAllow: [UUID]
+    public var preferredAudioLanguage: String
+    public var createdAt: Date
+    enum CodingKeys: String, CodingKey {
+        case id, username, email, disabled
+        case displayName = "display_name"
+        case isAdmin = "is_admin"
+        case canStream = "can_stream"
+        case libraryAllow = "library_allow"
+        case preferredAudioLanguage = "preferred_audio_language"
+        case createdAt = "created_at"
+    }
+}
+
+public struct Person: Codable, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public var name: String
+    public var headshotURL: String?
+    enum CodingKeys: String, CodingKey { case id, name; case headshotURL = "headshot_url" }
+    public init(id: UUID, name: String, headshotURL: String? = nil) { self.id = id; self.name = name; self.headshotURL = headshotURL }
+}
+
+public struct Credit: Codable, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public var person: Person
+    public var character: String?
+    public var department: String?
+    public var job: String?
+    public init(id: UUID, person: Person, character: String? = nil, department: String? = nil, job: String? = nil) {
+        self.id = id; self.person = person; self.character = character; self.department = department; self.job = job
+    }
+}
+
+public struct WorkCredits: Codable, Hashable, Sendable {
+    public var cast: [Credit]
+    public var crew: [Credit]
+    public init(cast: [Credit], crew: [Credit]) { self.cast = cast; self.crew = crew }
+}
+
 public struct Season: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
     public var seriesWorkID: UUID
@@ -1070,10 +1134,297 @@ public struct OAuthErrorBody: Codable, Sendable {
 public struct PlaybackInfoResponse: Codable, Sendable {
     public var mode: PlaybackMode
     public var url: String
+    public var audioTracks: [PlaybackAudioTrackOption]
+    public var durationMS: Int64
+    public var mimeType: String
+    public var qualityOptions: [PlaybackQualityOption]
+    public var selectedAudioTrackID: String?
+    public var selectedQualityID: String
+    public var selectedSubtitleTrackID: String?
+    public var sessionID: UUID?
+    public var sourceOffsetMS: Int64
+    public var subtitleTracks: [PlaybackSubtitleTrackOption]
 
-    public init(mode: PlaybackMode, url: String) {
+    enum CodingKeys: String, CodingKey {
+        case mode, url
+        case audioTracks = "audio_tracks"
+        case durationMS = "duration_ms"
+        case mimeType = "mime_type"
+        case qualityOptions = "quality_options"
+        case selectedAudioTrackID = "selected_audio_track_id"
+        case selectedQualityID = "selected_quality_id"
+        case selectedSubtitleTrackID = "selected_subtitle_track_id"
+        case sessionID = "session_id"
+        case sourceOffsetMS = "source_offset_ms"
+        case subtitleTracks = "subtitle_tracks"
+    }
+
+    public init(
+        mode: PlaybackMode,
+        url: String,
+        audioTracks: [PlaybackAudioTrackOption] = [],
+        durationMS: Int64 = 0,
+        mimeType: String = "",
+        qualityOptions: [PlaybackQualityOption] = [],
+        selectedAudioTrackID: String? = nil,
+        selectedQualityID: String = "original",
+        selectedSubtitleTrackID: String? = nil,
+        sessionID: UUID? = nil,
+        sourceOffsetMS: Int64 = 0,
+        subtitleTracks: [PlaybackSubtitleTrackOption] = []
+    ) {
         self.mode = mode
         self.url = url
+        self.audioTracks = audioTracks
+        self.durationMS = durationMS
+        self.mimeType = mimeType
+        self.qualityOptions = qualityOptions
+        self.selectedAudioTrackID = selectedAudioTrackID
+        self.selectedQualityID = selectedQualityID
+        self.selectedSubtitleTrackID = selectedSubtitleTrackID
+        self.sessionID = sessionID
+        self.sourceOffsetMS = sourceOffsetMS
+        self.subtitleTracks = subtitleTracks
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        mode = try values.decode(PlaybackMode.self, forKey: .mode)
+        url = try values.decode(String.self, forKey: .url)
+        audioTracks = try values.decodeIfPresent([PlaybackAudioTrackOption].self, forKey: .audioTracks) ?? []
+        durationMS = try values.decodeIfPresent(Int64.self, forKey: .durationMS) ?? 0
+        mimeType = try values.decodeIfPresent(String.self, forKey: .mimeType) ?? ""
+        qualityOptions = try values.decodeIfPresent([PlaybackQualityOption].self, forKey: .qualityOptions) ?? []
+        selectedAudioTrackID = try values.decodeIfPresent(String.self, forKey: .selectedAudioTrackID)
+        selectedQualityID = try values.decodeIfPresent(String.self, forKey: .selectedQualityID) ?? "original"
+        selectedSubtitleTrackID = try values.decodeIfPresent(String.self, forKey: .selectedSubtitleTrackID)
+        sessionID = try values.decodeIfPresent(UUID.self, forKey: .sessionID)
+        sourceOffsetMS = try values.decodeIfPresent(Int64.self, forKey: .sourceOffsetMS) ?? 0
+        subtitleTracks = try values.decodeIfPresent([PlaybackSubtitleTrackOption].self, forKey: .subtitleTracks) ?? []
+    }
+}
+
+public struct PlaybackAudioTrackOption: Codable, Hashable, Sendable, Identifiable {
+    public var id: String
+    public var streamIndex: Int32
+    public var label: String
+    public var language: String?
+    public var codec: String?
+    public var channels: Int32?
+    public var isDefault: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id, label, language, codec, channels
+        case streamIndex = "stream_index"
+        case isDefault = "is_default"
+    }
+}
+
+public struct PlaybackSubtitleTrackOption: Codable, Hashable, Sendable, Identifiable {
+    public var id: String
+    public var streamIndex: Int32
+    public var label: String
+    public var language: String?
+    public var codec: String
+    public var forced: Bool
+    public var isDefault: Bool
+    public var url: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, label, language, codec, forced, url
+        case streamIndex = "stream_index"
+        case isDefault = "is_default"
+    }
+}
+
+public struct PlaybackQualityOption: Codable, Hashable, Sendable, Identifiable {
+    public var id: String
+    public var label: String
+    public var profile: String?
+    public var height: Int32?
+    public var videoBitrateBPS: Int64?
+
+    enum CodingKeys: String, CodingKey {
+        case id, label, profile, height
+        case videoBitrateBPS = "video_bitrate_bps"
+    }
+}
+
+public struct MediaChapter: Codable, Hashable, Sendable, Identifiable {
+    public var index: Int32
+    public var startMS: Int64
+    public var endMS: Int64?
+    public var title: String?
+    public var id: Int32 { index }
+
+    enum CodingKeys: String, CodingKey {
+        case index, title
+        case startMS = "start_ms"
+        case endMS = "end_ms"
+    }
+}
+
+public struct MediaPlaybackPreference: Codable, Hashable, Sendable {
+    public var qualityID: String
+    public var audioTrackID: String?
+    public var subtitleTrackID: String?
+
+    enum CodingKeys: String, CodingKey {
+        case qualityID = "quality_id"
+        case audioTrackID = "audio_track_id"
+        case subtitleTrackID = "subtitle_track_id"
+    }
+
+    public init(qualityID: String, audioTrackID: String? = nil, subtitleTrackID: String? = nil) {
+        self.qualityID = qualityID
+        self.audioTrackID = audioTrackID
+        self.subtitleTrackID = subtitleTrackID
+    }
+}
+
+public struct MediaPlaybackOptions: Codable, Hashable, Sendable {
+    public var audioTracks: [PlaybackAudioTrackOption]
+    public var preferences: MediaPlaybackPreference
+    public var qualityOptions: [PlaybackQualityOption]
+    public var subtitleTracks: [PlaybackSubtitleTrackOption]
+
+    enum CodingKeys: String, CodingKey {
+        case audioTracks = "audio_tracks"
+        case preferences
+        case qualityOptions = "quality_options"
+        case subtitleTracks = "subtitle_tracks"
+    }
+}
+
+public struct PlayerPreferences: Codable, Hashable, Sendable {
+    public var preferredAudioLanguage: String
+    enum CodingKeys: String, CodingKey { case preferredAudioLanguage = "preferred_audio_language" }
+    public init(preferredAudioLanguage: String) { self.preferredAudioLanguage = preferredAudioLanguage }
+}
+
+public struct CreatePlaylistRequest: Codable, Sendable {
+    public var name: String
+    public var isSystem: Bool?
+    public var mediaType: PlaylistMediaType?
+    public var parentPlaylistID: UUID?
+    enum CodingKeys: String, CodingKey {
+        case name
+        case isSystem = "is_system"
+        case mediaType = "media_type"
+        case parentPlaylistID = "parent_playlist_id"
+    }
+    public init(name: String, isSystem: Bool? = nil, mediaType: PlaylistMediaType? = nil, parentPlaylistID: UUID? = nil) {
+        self.name = name; self.isSystem = isSystem; self.mediaType = mediaType; self.parentPlaylistID = parentPlaylistID
+    }
+}
+
+public struct UpdatePlaylistRequest: Codable, Sendable {
+    public var name: String
+    public var parentPlaylistID: UUID?
+    enum CodingKeys: String, CodingKey { case name; case parentPlaylistID = "parent_playlist_id" }
+    public init(name: String, parentPlaylistID: UUID? = nil) { self.name = name; self.parentPlaylistID = parentPlaylistID }
+}
+
+public struct AddPlaylistItemRequest: Codable, Sendable {
+    public var workID: UUID
+    public var trackID: UUID?
+    enum CodingKeys: String, CodingKey { case workID = "work_id"; case trackID = "track_id" }
+    public init(workID: UUID, trackID: UUID? = nil) { self.workID = workID; self.trackID = trackID }
+}
+
+public struct ReorderPlaylistItemsRequest: Codable, Sendable {
+    public var itemIDs: [UUID]
+    enum CodingKeys: String, CodingKey { case itemIDs = "item_ids" }
+    public init(itemIDs: [UUID]) { self.itemIDs = itemIDs }
+}
+
+public enum ProfileAvatarKind: String, Codable, Sendable { case preset, custom }
+public struct ProfileAvatarPreference: Codable, Hashable, Sendable {
+    public var kind: ProfileAvatarKind
+    public var value: String
+    public init(kind: ProfileAvatarKind, value: String) { self.kind = kind; self.value = value }
+}
+public struct ProfileAvatarSetting: Codable, Hashable, Sendable {
+    public var preference: ProfileAvatarPreference?
+    public init(preference: ProfileAvatarPreference?) { self.preference = preference }
+}
+public struct UpdateProfileAvatarRequest: Codable, Sendable {
+    public var preference: ProfileAvatarPreference
+    public init(preference: ProfileAvatarPreference) { self.preference = preference }
+}
+public struct ProfilePinSetting: Codable, Hashable, Sendable {
+    public var pinLocked: Bool
+    enum CodingKeys: String, CodingKey { case pinLocked = "pin_locked" }
+}
+public struct UpdateProfilePinRequest: Codable, Sendable {
+    public var pin: String?
+    public init(pin: String?) { self.pin = pin }
+}
+public struct VerifyProfilePinRequest: Codable, Sendable {
+    public var pin: String
+    public init(pin: String) { self.pin = pin }
+}
+public struct VerifyProfilePinResponse: Codable, Sendable { public var verified: Bool }
+
+public enum UserInviteRequestStatus: String, Codable, Sendable { case pending, approved, denied, generated }
+public struct UserInviteRequest: Codable, Identifiable, Sendable {
+    public var id: UUID
+    public var userID: UUID
+    public var username: String
+    public var displayName: String
+    public var message: String?
+    public var status: UserInviteRequestStatus
+    public var canStream: Bool
+    public var libraryAllow: [UUID]
+    public var requestedAt: Date
+    public var reviewedAt: Date?
+    public var generatedAt: Date?
+    enum CodingKeys: String, CodingKey {
+        case id, username, message, status
+        case userID = "user_id"
+        case displayName = "display_name"
+        case canStream = "can_stream"
+        case libraryAllow = "library_allow"
+        case requestedAt = "requested_at"
+        case reviewedAt = "reviewed_at"
+        case generatedAt = "generated_at"
+    }
+}
+public struct CreateUserInviteRequest: Codable, Sendable {
+    public var message: String?
+    public init(message: String? = nil) { self.message = message }
+}
+public struct UserInvite: Codable, Sendable {
+    public var inviteToken: String
+    public var expiresAt: Date
+    enum CodingKeys: String, CodingKey { case inviteToken = "invite_token"; case expiresAt = "expires_at" }
+}
+
+public struct PlaybackEventRequest: Codable, Sendable {
+    public var kind: String
+    public var positionMS: Int64?
+    public var fromMS: Int64?
+    public var toMS: Int64?
+    public var reason: String?
+    public var message: String?
+    enum CodingKeys: String, CodingKey {
+        case kind, reason, message
+        case positionMS = "position_ms"
+        case fromMS = "from_ms"
+        case toMS = "to_ms"
+    }
+    public init(kind: String, positionMS: Int64? = nil, fromMS: Int64? = nil, toMS: Int64? = nil, reason: String? = nil, message: String? = nil) {
+        self.kind = kind; self.positionMS = positionMS; self.fromMS = fromMS; self.toMS = toMS; self.reason = reason; self.message = message
+    }
+}
+
+public struct UpdateWatchProgressRequest: Codable, Sendable {
+    public var positionMS: Int64
+    public var durationMS: Int64
+    public var completed: Bool?
+    enum CodingKeys: String, CodingKey { case positionMS = "position_ms"; case durationMS = "duration_ms"; case completed }
+    public init(positionMS: Int64, durationMS: Int64, completed: Bool? = nil) {
+        self.positionMS = positionMS; self.durationMS = durationMS; self.completed = completed
     }
 }
 

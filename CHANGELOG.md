@@ -9,6 +9,18 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add the missing Playarr cover-flow experiences to native iOS libraries and Music, including
+  authenticated album artwork, album selection, track lists, and first-track playback.
+- Bring native iOS playback to Playarr parity with resume, per-title quality, audio and subtitle
+  choices, chapter seeking, watch-progress updates, and complete playback-session telemetry.
+- Complete the native iOS profile journey with Playarr-styled invited sign-up, synced preset and
+  photo avatars, appearance and language choices, player defaults, PIN locking, and friend invites.
+- Match Playarr Web's native iOS catalogue and playlist flows with available-only pagination,
+  search scopes, library view and sort controls, cast and recommendations, and editable nesting.
+- Expose available-only ordered library browsing, cast and recommendation data, friend invites,
+  and invited-account sign-up to native iOS screens.
+- Give the native iOS client the same editable playlist, profile preference, per-title playback,
+  chapter, watch-progress, and playback-session API capabilities used by Playarr Web.
 - Replace the skeletal native iOS tabs and lists with a SwiftUI Playarr experience matching the
   responsive web app: floating access-gated navigation, home rails, search and media grids,
   playlists, profile switching, rich details, native playback, and structured settings.
@@ -189,6 +201,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Keep native iOS title and player actions fully visible by using immersive detail and playback
+  surfaces instead of allowing the responsive app navigation to cover their controls.
 - Start every native iOS Home carousel at its leading content gutter instead of restoring a
   clipped partial-card offset on launch.
 - Replace the native iOS profile screen's static playback labels with working quality, subtitle,

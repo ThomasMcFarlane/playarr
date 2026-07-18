@@ -59,6 +59,7 @@ struct PlayerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .playarrChromeHidden()
         .task {
             if case .idle = viewModel.loadState { startPlayback() }
         }
@@ -108,12 +109,86 @@ struct PlayerView: View {
                 }
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.white.opacity(0.58))
+
+                ScrollView(.horizontal) {
+                    HStack(spacing: 10) {
+                        if !viewModel.qualityOptions.isEmpty {
+                            Menu {
+                                ForEach(viewModel.qualityOptions) { option in
+                                    Button {
+                                        Task { await viewModel.selectQuality(option.id) }
+                                    } label: {
+                                        if option.id == viewModel.selectedQualityID {
+                                            Label(option.label, systemImage: "checkmark")
+                                        } else { Text(option.label) }
+                                    }
+                                }
+                            } label: { controlChip("Quality", icon: "slider.horizontal.3") }
+                        }
+
+                        if !viewModel.audioTracks.isEmpty {
+                            Menu {
+                                ForEach(viewModel.audioTracks) { track in
+                                    Button {
+                                        Task { await viewModel.selectAudioTrack(track.id) }
+                                    } label: {
+                                        if track.id == viewModel.selectedAudioTrackID {
+                                            Label(track.label, systemImage: "checkmark")
+                                        } else { Text(track.label) }
+                                    }
+                                }
+                            } label: { controlChip("Audio", icon: "speaker.wave.2") }
+                        }
+
+                        Menu {
+                            Button {
+                                Task { await viewModel.selectSubtitleTrack(nil) }
+                            } label: {
+                                if viewModel.selectedSubtitleTrackID == nil {
+                                    Label("Off", systemImage: "checkmark")
+                                } else { Text("Off") }
+                            }
+                            ForEach(viewModel.subtitleTracks) { track in
+                                Button {
+                                    Task { await viewModel.selectSubtitleTrack(track.id) }
+                                } label: {
+                                    if track.id == viewModel.selectedSubtitleTrackID {
+                                        Label(track.label, systemImage: "checkmark")
+                                    } else { Text(track.label) }
+                                }
+                            }
+                        } label: { controlChip("Subtitles", icon: "captions.bubble") }
+
+                        if !viewModel.chapters.isEmpty {
+                            Menu {
+                                ForEach(viewModel.chapters) { chapter in
+                                    Button {
+                                        Task { await viewModel.seek(to: Double(chapter.startMS) / 1_000) }
+                                    } label: {
+                                        Text(chapter.title ?? Self.formatted(Double(chapter.startMS) / 1_000))
+                                    }
+                                }
+                            } label: { controlChip("Chapters", icon: "list.bullet") }
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
             }
             .padding(20)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
             .padding()
         }
         .foregroundStyle(.white)
+    }
+
+    private func controlChip(_ label: String, icon: String) -> some View {
+        Label(label, systemImage: icon)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .background(.white.opacity(0.12), in: Capsule())
+            .overlay { Capsule().stroke(.white.opacity(0.18), lineWidth: 1) }
     }
 
     private func startPlayback() {

@@ -40,6 +40,7 @@ public final class AppEnvironment {
     public private(set) var sessionState: SessionState = .restoring
     public private(set) var currentUserName: String?
     public private(set) var currentUserID: UUID?
+    public private(set) var currentAvatar: ProfileAvatarPreference?
 
     public var serverBaseURL: URL {
         didSet {
@@ -140,6 +141,7 @@ public final class AppEnvironment {
         currentUserName = resolvedName
         currentUserID = response.userID
         userDefaults.set(resolvedName, forKey: Self.userNameDefaultsKey(for: serverBaseURL))
+        await refreshCurrentAvatar()
     }
 
     func prepareServerForSignIn(_ url: URL) {
@@ -169,6 +171,7 @@ public final class AppEnvironment {
         currentUserName = profile.displayName
         currentUserID = response.userID
         userDefaults.set(profile.displayName, forKey: Self.userNameDefaultsKey(for: serverBaseURL))
+        await refreshCurrentAvatar()
     }
 
     public func setSession(
@@ -198,13 +201,19 @@ public final class AppEnvironment {
         isSignedIn = await tokenStore.currentSession() != nil
         currentUserName = userDefaults.string(forKey: Self.userNameDefaultsKey(for: serverBaseURL))
         sessionState = isSignedIn ? .signedIn : .signedOut
+        if isSignedIn { await refreshCurrentAvatar() }
     }
 
     public func signOut() async throws {
         try await tokenStore.clearSession()
         isSignedIn = false
         currentUserID = nil
+        currentAvatar = nil
         sessionState = .signedOut
+    }
+
+    public func refreshCurrentAvatar() async {
+        currentAvatar = (try? await apiClient.getProfileAvatar())?.preference
     }
 
     private func rebuildClients() {
@@ -228,6 +237,7 @@ public final class AppEnvironment {
         )
         isSignedIn = false
         currentUserID = nil
+        currentAvatar = nil
         currentUserName = userDefaults.string(forKey: Self.userNameDefaultsKey(for: serverBaseURL))
         if suppressAutomaticSessionRestore {
             sessionState = .signedOut
