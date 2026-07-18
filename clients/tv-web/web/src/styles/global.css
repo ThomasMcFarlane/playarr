@@ -5436,7 +5436,8 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   animation: tv-preview-expand 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.tv-library-preview h2 {
+.tv-library-preview h2,
+.tv-detail > .tv-detail-copy h1 {
   max-width: 9ch;
   font-size: clamp(2.2rem, 3.6vw, 5rem);
   font-weight: 560;
