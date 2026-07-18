@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Give the native iOS client the same editable playlist, profile preference, per-title playback,
+  chapter, watch-progress, and playback-session API capabilities used by Playarr Web.
 - Replace the skeletal native iOS tabs and lists with a SwiftUI Playarr experience matching the
   responsive web app: floating access-gated navigation, home rails, search and media grids,
   playlists, profile switching, rich details, native playback, and structured settings.

@@ -179,6 +179,19 @@ public protocol StreamarrAPIClient: Sendable {
     func listPlaylistItems(playlistID: UUID) async throws -> [PlaylistItem]
     func listProfiles() async throws -> [AvailableProfile]
     func playbackRequestHeaders() async throws -> [String: String]
+    func createPlaylist(_ body: CreatePlaylistRequest) async throws -> Playlist
+    func updatePlaylist(id: UUID, body: UpdatePlaylistRequest) async throws -> Playlist
+    func deletePlaylist(id: UUID) async throws
+    func addPlaylistItem(playlistID: UUID, body: AddPlaylistItemRequest) async throws -> PlaylistItem
+    func removePlaylistItem(playlistID: UUID, itemID: UUID) async throws
+    func reorderPlaylistItems(playlistID: UUID, body: ReorderPlaylistItemsRequest) async throws -> [PlaylistItem]
+    func getPlayerPreferences() async throws -> PlayerPreferences
+    func updatePlayerPreferences(_ body: PlayerPreferences) async throws -> PlayerPreferences
+    func getProfileAvatar() async throws -> ProfileAvatarSetting
+    func updateProfileAvatar(_ body: UpdateProfileAvatarRequest) async throws -> ProfileAvatarSetting
+    func getProfilePinSetting() async throws -> ProfilePinSetting
+    func updateProfilePinSetting(_ body: UpdateProfilePinRequest) async throws -> ProfilePinSetting
+    func verifyProfilePin(profileID: UUID, body: VerifyProfilePinRequest) async throws -> VerifyProfilePinResponse
 
     // Playback
     func playbackInfo(
@@ -189,6 +202,12 @@ public protocol StreamarrAPIClient: Sendable {
         maxBitrateBps: Int64?,
         profile: String?
     ) async throws -> PlaybackInfoResponse
+    func recordPlaybackEvent(sessionID: UUID, event: PlaybackEventRequest) async throws
+    func mediaChapters(mediaFileID: UUID) async throws -> [MediaChapter]
+    func mediaPlaybackOptions(mediaFileID: UUID) async throws -> MediaPlaybackOptions
+    func updateMediaPlaybackOptions(mediaFileID: UUID, body: MediaPlaybackPreference) async throws -> MediaPlaybackOptions
+    func getWatchProgress(mediaFileID: UUID) async throws -> WatchProgress
+    func updateWatchProgress(mediaFileID: UUID, body: UpdateWatchProgressRequest) async throws -> WatchProgress
 
     // Webhooks — primarily for admin/debug tooling; a normal client screen
     // has no reason to POST here (this is the *arr apps' job), but it's
@@ -210,6 +229,25 @@ public extension StreamarrAPIClient {
     func listPlaylistItems(playlistID: UUID) async throws -> [PlaylistItem] { [] }
     func listProfiles() async throws -> [AvailableProfile] { [] }
     func playbackRequestHeaders() async throws -> [String: String] { [:] }
+    func createPlaylist(_ body: CreatePlaylistRequest) async throws -> Playlist { throw APIError.http(status: 501, body: nil, rawBody: nil) }
+    func updatePlaylist(id: UUID, body: UpdatePlaylistRequest) async throws -> Playlist { throw APIError.http(status: 501, body: nil, rawBody: nil) }
+    func deletePlaylist(id: UUID) async throws { throw APIError.http(status: 501, body: nil, rawBody: nil) }
+    func addPlaylistItem(playlistID: UUID, body: AddPlaylistItemRequest) async throws -> PlaylistItem { throw APIError.http(status: 501, body: nil, rawBody: nil) }
+    func removePlaylistItem(playlistID: UUID, itemID: UUID) async throws { throw APIError.http(status: 501, body: nil, rawBody: nil) }
+    func reorderPlaylistItems(playlistID: UUID, body: ReorderPlaylistItemsRequest) async throws -> [PlaylistItem] { throw APIError.http(status: 501, body: nil, rawBody: nil) }
+    func getPlayerPreferences() async throws -> PlayerPreferences { PlayerPreferences(preferredAudioLanguage: "en") }
+    func updatePlayerPreferences(_ body: PlayerPreferences) async throws -> PlayerPreferences { body }
+    func getProfileAvatar() async throws -> ProfileAvatarSetting { ProfileAvatarSetting(preference: nil) }
+    func updateProfileAvatar(_ body: UpdateProfileAvatarRequest) async throws -> ProfileAvatarSetting { ProfileAvatarSetting(preference: body.preference) }
+    func getProfilePinSetting() async throws -> ProfilePinSetting { ProfilePinSetting(pinLocked: false) }
+    func updateProfilePinSetting(_ body: UpdateProfilePinRequest) async throws -> ProfilePinSetting { ProfilePinSetting(pinLocked: body.pin != nil) }
+    func verifyProfilePin(profileID: UUID, body: VerifyProfilePinRequest) async throws -> VerifyProfilePinResponse { VerifyProfilePinResponse(verified: true) }
+    func recordPlaybackEvent(sessionID: UUID, event: PlaybackEventRequest) async throws {}
+    func mediaChapters(mediaFileID: UUID) async throws -> [MediaChapter] { [] }
+    func mediaPlaybackOptions(mediaFileID: UUID) async throws -> MediaPlaybackOptions { throw APIError.http(status: 501, body: nil, rawBody: nil) }
+    func updateMediaPlaybackOptions(mediaFileID: UUID, body: MediaPlaybackPreference) async throws -> MediaPlaybackOptions { throw APIError.http(status: 501, body: nil, rawBody: nil) }
+    func getWatchProgress(mediaFileID: UUID) async throws -> WatchProgress { throw APIError.notFound(nil) }
+    func updateWatchProgress(mediaFileID: UUID, body: UpdateWatchProgressRequest) async throws -> WatchProgress { throw APIError.http(status: 501, body: nil, rawBody: nil) }
 }
 
 /// Real, working `URLSession`-backed implementation of `StreamarrAPIClient`.
@@ -321,6 +359,61 @@ public final class APIClient: StreamarrAPIClient {
         try await get("/api/v1/users/profiles")
     }
 
+    public func createPlaylist(_ body: CreatePlaylistRequest) async throws -> Playlist {
+        try await authenticatedRequest("/api/v1/playlists", method: "POST", body: body)
+    }
+
+    public func updatePlaylist(id: UUID, body: UpdatePlaylistRequest) async throws -> Playlist {
+        try await authenticatedRequest("/api/v1/playlists/\(id.uuidString)", method: "PUT", body: body)
+    }
+
+    public func deletePlaylist(id: UUID) async throws {
+        try await authenticatedRequestWithoutResponse("/api/v1/playlists/\(id.uuidString)", method: "DELETE")
+    }
+
+    public func addPlaylistItem(playlistID: UUID, body: AddPlaylistItemRequest) async throws -> PlaylistItem {
+        try await authenticatedRequest("/api/v1/playlists/\(playlistID.uuidString)/items", method: "POST", body: body)
+    }
+
+    public func removePlaylistItem(playlistID: UUID, itemID: UUID) async throws {
+        try await authenticatedRequestWithoutResponse(
+            "/api/v1/playlists/\(playlistID.uuidString)/items/\(itemID.uuidString)",
+            method: "DELETE"
+        )
+    }
+
+    public func reorderPlaylistItems(playlistID: UUID, body: ReorderPlaylistItemsRequest) async throws -> [PlaylistItem] {
+        try await authenticatedRequest("/api/v1/playlists/\(playlistID.uuidString)/items/order", method: "PUT", body: body)
+    }
+
+    public func getPlayerPreferences() async throws -> PlayerPreferences {
+        try await get("/api/v1/users/me/player-preferences")
+    }
+
+    public func updatePlayerPreferences(_ body: PlayerPreferences) async throws -> PlayerPreferences {
+        try await authenticatedRequest("/api/v1/users/me/player-preferences", method: "PATCH", body: body)
+    }
+
+    public func getProfileAvatar() async throws -> ProfileAvatarSetting {
+        try await get("/api/v1/users/me/profile-avatar")
+    }
+
+    public func updateProfileAvatar(_ body: UpdateProfileAvatarRequest) async throws -> ProfileAvatarSetting {
+        try await authenticatedRequest("/api/v1/users/me/profile-avatar", method: "PUT", body: body)
+    }
+
+    public func getProfilePinSetting() async throws -> ProfilePinSetting {
+        try await get("/api/v1/users/me/profile-pin")
+    }
+
+    public func updateProfilePinSetting(_ body: UpdateProfilePinRequest) async throws -> ProfilePinSetting {
+        try await authenticatedRequest("/api/v1/users/me/profile-pin", method: "PATCH", body: body)
+    }
+
+    public func verifyProfilePin(profileID: UUID, body: VerifyProfilePinRequest) async throws -> VerifyProfilePinResponse {
+        try await authenticatedRequest("/api/v1/users/profiles/\(profileID.uuidString)/verify-pin", method: "POST", body: body)
+    }
+
     public func playbackRequestHeaders() async throws -> [String: String] {
         guard let accessTokenCoordinator else { return [:] }
         let token = try await accessTokenCoordinator.accessToken(forceRefresh: false)
@@ -344,6 +437,42 @@ public final class APIClient: StreamarrAPIClient {
         if let maxBitrateBps { query.append(URLQueryItem(name: "max_bitrate_bps", value: String(maxBitrateBps))) }
         if let profile { query.append(URLQueryItem(name: "profile", value: profile)) }
         return try await get("/api/v1/playback/\(mediaFileID.uuidString)", query: query)
+    }
+
+    public func recordPlaybackEvent(sessionID: UUID, event: PlaybackEventRequest) async throws {
+        try await authenticatedRequestWithoutResponse(
+            "/api/v1/playback/sessions/\(sessionID.uuidString)/events",
+            method: "POST",
+            body: event
+        )
+    }
+
+    public func mediaChapters(mediaFileID: UUID) async throws -> [MediaChapter] {
+        try await get("/api/v1/media/\(mediaFileID.uuidString)/chapters")
+    }
+
+    public func mediaPlaybackOptions(mediaFileID: UUID) async throws -> MediaPlaybackOptions {
+        try await get("/api/v1/media/\(mediaFileID.uuidString)/playback-options")
+    }
+
+    public func updateMediaPlaybackOptions(mediaFileID: UUID, body: MediaPlaybackPreference) async throws -> MediaPlaybackOptions {
+        try await authenticatedRequest(
+            "/api/v1/media/\(mediaFileID.uuidString)/playback-options",
+            method: "PATCH",
+            body: body
+        )
+    }
+
+    public func getWatchProgress(mediaFileID: UUID) async throws -> WatchProgress {
+        try await get("/api/v1/playback/\(mediaFileID.uuidString)/progress")
+    }
+
+    public func updateWatchProgress(mediaFileID: UUID, body: UpdateWatchProgressRequest) async throws -> WatchProgress {
+        try await authenticatedRequest(
+            "/api/v1/playback/\(mediaFileID.uuidString)/progress",
+            method: "PUT",
+            body: body
+        )
     }
 
     // MARK: Webhooks
@@ -391,6 +520,55 @@ public final class APIClient: StreamarrAPIClient {
         } catch APIError.unauthorized where accessTokenCoordinator != nil {
             try await attachAuthorization(to: &request, forceRefresh: true)
             return try await sendRaw(request, expectedStatuses: [200])
+        }
+    }
+
+    private func authenticatedRequest<Body: Encodable, Response: Decodable>(
+        _ path: String,
+        method: String,
+        body: Body,
+        expectedStatuses: Set<Int> = Set(200..<300)
+    ) async throws -> Response {
+        var request = try makeRequest(path: path, method: method, query: [])
+        try attachBody(body, to: &request)
+        try await attachAuthorization(to: &request)
+        do {
+            return try await send(request, expectedStatuses: expectedStatuses)
+        } catch APIError.unauthorized where accessTokenCoordinator != nil {
+            try await attachAuthorization(to: &request, forceRefresh: true)
+            return try await send(request, expectedStatuses: expectedStatuses)
+        }
+    }
+
+    private func authenticatedRequestWithoutResponse<Body: Encodable>(
+        _ path: String,
+        method: String,
+        body: Body,
+        expectedStatuses: Set<Int> = Set(200..<300)
+    ) async throws {
+        var request = try makeRequest(path: path, method: method, query: [])
+        try attachBody(body, to: &request)
+        try await attachAuthorization(to: &request)
+        do {
+            _ = try await sendRaw(request, expectedStatuses: expectedStatuses)
+        } catch APIError.unauthorized where accessTokenCoordinator != nil {
+            try await attachAuthorization(to: &request, forceRefresh: true)
+            _ = try await sendRaw(request, expectedStatuses: expectedStatuses)
+        }
+    }
+
+    private func authenticatedRequestWithoutResponse(
+        _ path: String,
+        method: String,
+        expectedStatuses: Set<Int> = Set(200..<300)
+    ) async throws {
+        var request = try makeRequest(path: path, method: method, query: [])
+        try await attachAuthorization(to: &request)
+        do {
+            _ = try await sendRaw(request, expectedStatuses: expectedStatuses)
+        } catch APIError.unauthorized where accessTokenCoordinator != nil {
+            try await attachAuthorization(to: &request, forceRefresh: true)
+            _ = try await sendRaw(request, expectedStatuses: expectedStatuses)
         }
     }
 

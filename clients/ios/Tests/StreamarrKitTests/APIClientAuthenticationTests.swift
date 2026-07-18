@@ -94,6 +94,61 @@ final class APIClientAuthenticationTests: XCTestCase {
         XCTAssertEqual(storedSession?.refreshToken.exposeSecret(), "refresh-new")
     }
 
+    func testAuthenticatedPlaylistMutationUsesWebContract() async throws {
+        let store = TestTokenStore(
+            session: StoredAuthSession(
+                accessToken: "access",
+                refreshToken: "refresh",
+                tokenType: "Bearer",
+                expiresAt: .distantFuture
+            )
+        )
+        URLProtocolStub.handler = { request in
+            XCTAssertEqual(request.url?.path, "/api/v1/playlists")
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access")
+            let body = String(decoding: Self.bodyData(for: request), as: UTF8.self)
+            XCTAssertTrue(body.contains(#""name":"Road trip""#))
+            XCTAssertTrue(body.contains(#""media_type":"audio""#))
+            return Self.response(
+                request,
+                json: #"{"id":"00000000-0000-0000-0000-000000000010","name":"Road trip","owner_user_id":"00000000-0000-0000-0000-000000000001","parent_playlist_id":null,"is_system":false,"media_type":"audio","created_at":"2026-07-19T00:00:00Z","updated_at":"2026-07-19T00:00:00Z"}"#
+            )
+        }
+
+        let playlist = try await makeClient(store: store).createPlaylist(
+            CreatePlaylistRequest(name: "Road trip", mediaType: .audio)
+        )
+        XCTAssertEqual(playlist.name, "Road trip")
+        XCTAssertEqual(playlist.mediaType, .audio)
+    }
+
+    func testPlaybackInfoDecodesAllInteractiveOptions() async throws {
+        let store = TestTokenStore(
+            session: StoredAuthSession(
+                accessToken: "access",
+                refreshToken: "refresh",
+                tokenType: "Bearer",
+                expiresAt: .distantFuture
+            )
+        )
+        URLProtocolStub.handler = { request in
+            XCTAssertEqual(request.url?.path, "/api/v1/playback/00000000-0000-0000-0000-000000000020")
+            return Self.response(
+                request,
+                json: #"{"mode":"hls","url":"/stream.m3u8","audio_tracks":[{"id":"audio-1","stream_index":1,"label":"English","language":"en","codec":"aac","channels":2,"is_default":true}],"duration_ms":7200000,"mime_type":"application/vnd.apple.mpegurl","quality_options":[{"id":"original","label":"Original","profile":null,"height":null,"video_bitrate_bps":null}],"selected_audio_track_id":"audio-1","selected_quality_id":"original","selected_subtitle_track_id":null,"session_id":"00000000-0000-0000-0000-000000000021","source_offset_ms":0,"subtitle_tracks":[]}"#
+            )
+        }
+
+        let info = try await makeClient(store: store).playbackInfo(
+            mediaFileID: UUID(uuidString: "00000000-0000-0000-0000-000000000020")!
+        )
+        XCTAssertEqual(info.durationMS, 7_200_000)
+        XCTAssertEqual(info.sessionID, UUID(uuidString: "00000000-0000-0000-0000-000000000021"))
+        XCTAssertEqual(info.audioTracks.first?.language, "en")
+        XCTAssertEqual(info.selectedQualityID, "original")
+    }
+
     private func makeClient(store: TestTokenStore) -> APIClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [URLProtocolStub.self]
