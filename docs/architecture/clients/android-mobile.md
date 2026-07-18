@@ -1,97 +1,59 @@
-# Client Architecture: Android
+# Client architecture: universal Android app
 
-Playarr ships one Android APK for phones, tablets, Android TV, and Google TV.
-It hosts the shared responsive web application and selects the touch or D-pad
-profile from Android's runtime UI mode. There is no second Android catalogue,
-player UI, package, or download to keep synchronised.
+Playarr ships one native APK for phones, tablets, Android TV, and Google TV.
+There is one package (`io.streamarr.mobile`), one Compose navigation graph, one
+Media3 player, and one public download.
 
 ## Platform baseline
 
-- **Minimum SDK:** 26 (Android 8.0 Oreo).
-- **Compile/target SDK:** 37.
-- **Build:** AGP 9.3.0, Gradle 9.5.1, Kotlin 2.3.10.
-- **Native shell:** Jetpack Compose, Hilt, DataStore, Google Play In-App
-  Updates, and Firebase Cloud Messaging.
-- **Presentation:** a hardware-accelerated Android WebView loading the
-  server-co-hosted `clients/tv-web/web` bundle.
+- Minimum SDK 26 (Android 8.0 Oreo).
+- Compile and target SDK 37.
+- AGP 9.3.0, Gradle 9.5.1, and Kotlin 2.3.10.
+- Jetpack Compose, Hilt, DataStore, Media3, Google Play In-App Updates, and
+  Firebase Cloud Messaging.
 
-## Shared presentation
+## Native responsive presentation
 
-`MainActivity` mounts `AndroidWebAppScreen`, which loads the configured
-Streamarr origin. The server serves both the API and built Playarr assets in
-the normal deployment, so the app receives the same bundle that a browser
-or a browser opens. The WebView appends `PlayarrAndroidMobile/<version>` on
-touch devices or `PlayarrAndroidTV/<version>` on televisions. The same binary
-therefore selects phone safe areas and image picking or the fixed 1920 by 1080
-TV viewport, D-pad navigation, and signed sideload updater as appropriate.
+`MainActivity` detects television UI mode and mounts `PlayarrApp`. All visible
+routes are native Compose:
 
-The responsive web layer owns:
+- account and server sign-in;
+- responsive home shelves and library grid;
+- work details and playable child rows;
+- Media3 direct/HLS playback; and
+- connected-server settings and sign-out.
 
-- profile selection and full-account sign-in;
-- home rails, library directories, search, playlists, and settings;
-- touch navigation and safe-area-aware bottom navigation;
-- detail pages, direct/HLS playback, quality controls, and the minimised
-  player; and
-- custom profile-avatar cropping after Android supplies an image URI.
+Phones use bottom navigation and compact touch geometry. Wide screens and
+televisions use a navigation rail, larger poster geometry, immersive mode, and
+D-pad focus scaling. Short landscape windows use a compact sign-in form so all
+fields and the submit action remain visible.
 
-Android owns only the platform boundary:
+## Authentication and server ownership
 
-- WebView lifecycle, cookies, DOM storage, Android Back, external links,
-  fullscreen video, and file selection;
-- a native server-address recovery sheet for first run or connection
-  failure, also reachable from the shared Server settings page;
-- Play Store update flows; and
-- Firebase invite notifications.
+The server URL is never compiled into the app. Each sign-in supplies its
+Streamarr URL with the username and password. `ServerConfigStore` persists the
+normalised URL for that account on the device, while `TokenStore` persists the
+issued session. Signing out clears the session and returns to the sign-in form,
+where a different account or server can be selected.
 
-The device-specific boundary is selected inside the same native wrapper:
-televisions fix a 1920 by 1080 CSS viewport and translate remote input, while
-touch devices use the physical viewport, system safe area, image picker, and
-Google Play update channel.
-
-## Authentication and native session bridge
-
-The web bundle performs the same trusted-network or full-account login used
-in a browser and persists the active session in origin-scoped local storage.
-An optional `PlayarrAndroidMobile` JavaScript bridge mirrors that token pair
-into the native DataStore-backed `TokenStore`. This lets the existing native
-Firebase service register its installation against the same signed-in
-profile without creating an independent login flow.
-
-The configured server is trusted to supply the app document. Main-frame
-links to a different origin are opened by Android rather than loaded into
-the bridged WebView, and file/content access is disabled on the WebView.
-
-## Server bootstrap
-
-`ServerConfigStore` persists the origin that serves Playarr. The default
-`http://10.0.2.2:8484` targets a backend running on the Android emulator's
-host. A physical device uses the operator's LAN or HTTPS address. Missing
-schemes default to LAN HTTP; only absolute HTTP(S) origins are accepted.
-
-If the initial document fails, the native connection sheet remains visible
-until a valid host loads. Once connected, the same sheet is available from
-Settings > Server connection > Change app host.
+A missing scheme is interpreted as HTTP for LAN self-hosting. Absolute HTTP
+and HTTPS addresses are accepted. The request client reads the stored address
+for every request and identifies as `android-mobile` or `android-tv` according
+to the current device mode.
 
 ## Playback and updates
 
-Playback is implemented once in the web player's direct/HLS pipeline. The
-native host enables inline media without an extra user gesture and presents
-WebChrome fullscreen custom views for video. Android Back is offered to the
-shared player first so active or minimised sessions close cleanly before
-WebView history changes.
+The native player calls Streamarr's playback negotiation endpoint, maps direct
+and HLS responses onto the shared `StreamarrPlayer`, and renders Media3's
+`PlayerView`. The same implementation runs on touch and television devices.
 
-Touch installs use Google Play In-App Updates. `AppUpdateEffect` evaluates
-the server's `android-mobile` compatibility row and starts Flexible or
-Immediate Play flows as documented in
-[`../../versioning-policy.md`](../../versioning-policy.md). The hosted web
-bundle can update independently with the server, so visual fixes do not
-require duplicating or republishing native screen code. Television sideloads
-use the signed `playarr.app` manifest and checksum-verified APK installer.
+Google Play and signed sideload update mechanisms remain native. Both update
+channels replace the same package and use the same version code.
 
 ## Distribution
 
 The release artefact is one Android App Bundle for Google Play and one signed
-APK for direct installation across every supported Android device. The listing
-must state that the app connects to a self-hosted Streamarr server. Cleartext
-HTTP remains permitted for private LAN deployments; HTTPS is recommended for
-remote access.
+APK for direct installation across every supported Android form factor. The
+manifest exposes both standard and Leanback launcher categories. Cleartext HTTP
+remains permitted for private LAN deployments; HTTPS is recommended for remote
+access.

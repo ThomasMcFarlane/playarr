@@ -24,11 +24,8 @@ import io.streamarr.shared.designsystem.R
 
 /**
  * A 2:3 poster tile with a title caption -- the base unit of every
- * browse/library grid on mobile. `tv-android` does not reuse this
- * directly (it needs `androidx.tv.material3.Card`'s built-in d-pad focus
- * scaling/glow, which this Material 3 `Surface`-based version doesn't
- * provide) but mirrors its layout proportions so the same content reads
- * consistently across both apps.
+ * browse/library grid in the universal app. The application adds responsive
+ * sizing and D-pad focus scaling around this shared surface.
  *
  * @param imageUrl poster art URL, typically one of [io.streamarr.shared.data.model.Work.images]
  *   filtered to [io.streamarr.shared.data.model.ImageKind.Poster]; `null` falls back to a placeholder tile.

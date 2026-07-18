@@ -101,6 +101,7 @@ dependencies {
     implementation(project(":core-domain"))
     implementation(project(":core-designsystem"))
     implementation(project(":core-auth"))
+    implementation(project(":core-player"))
     implementation(project(":core-update"))
 
     implementation(libs.androidx.core.ktx)
@@ -109,10 +110,12 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.bundles.compose)
+    implementation(libs.androidx.media3.ui)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 

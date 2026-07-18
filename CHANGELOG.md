@@ -9,8 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Publish one responsive Android APK for phones, tablets, Android TV, and Google TV, with runtime
-  touch/D-pad selection and a single playarr.app download and update manifest. Existing
+- Publish one native responsive Compose Android APK for phones, tablets, Android TV, and Google
+  TV, with per-account server sign-in, adaptive touch/D-pad navigation, native Media3 playback,
+  and a single playarr.app download and update manifest. Existing
   `io.streamarr.tv` preview installs require one manual reinstall to move to `io.streamarr.mobile`.
 - Publish the installable Roku developer-mode app package and link it from the public Clients
   catalogue with its installation requirement stated explicitly.
@@ -74,8 +75,6 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pages for video, episodic, music, and site content.
 - Add reusable web, Shaka, and Samsung AVPlay playback surfaces with quality, audio, subtitle,
   chapter, progress, retry, minimised-player, and remote-control support.
-- Add an Android TV shell that hosts Playarr Web with saved server configuration, D-pad and Menu
-  handling, fullscreen playback, and recoverable connection errors.
 - Let Android TV viewers check for updates from the profile page, securely download the latest
   signed APK from `playarr.app`, and open Android's installer when a newer build is available.
 - Include Whisparr sites in Playarr home rails, return navigation, playlists, context actions, and
@@ -101,8 +100,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Match the Clients catalogue to the profile selector with an offscreen horizontal platform row,
   hidden scrollbars, recognisable icons, directional action navigation, inline installation
   details, consolidated Android downloads, Apple TV, Roku TV, and a Profiles-page link.
-- Publish signed Android mobile and TV releases automatically to same-origin Playarr download
-  URLs, and host the VIDAA custom store assets without operating a public DNS resolver.
+- Publish the signed universal Android release to a same-origin Playarr download URL, and host the
+  VIDAA custom store assets without operating a public DNS resolver.
 - Use the same left-aligned background artwork sizing, crop, tint, and positioning across all media
   surfaces, with a right-edge fade that scales with the artwork.
 - Use the standard library-heading divider and spacing between the media section and selected item
@@ -183,6 +182,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Replace the blank Android WebView shell with the single native responsive Compose application
+  and defer notification permission until it is relevant to the signed-in user, without logging
+  account credentials or access tokens from debug-signed distribution builds.
 - Make the Android shell load only hosted Playarr, remove its native Streamarr-address editor and
   startup server-version request, and leave each account's Streamarr URL to the web login flow.
 - Let Android browsers follow the Clients APK link as a normal direct navigation instead of

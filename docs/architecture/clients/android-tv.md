@@ -1,108 +1,55 @@
-# Client Architecture: Android TV
+# Client architecture: universal Android app on TV
 
-The Android TV client is Playarr's installable Android TV / Google TV
-surface. It targets Android TV 9+ (`minSdk 28`) and is distributed as a
-normal Leanback-enabled APK.
+Android TV and Google TV run the same native Playarr package and APK as phones
+and tablets: `clients/mobile-android/`, package `io.streamarr.mobile`.
 
-## Presentation architecture
+## Native presentation
 
-Android TV hosts the co-deployed Playarr web app in a fullscreen,
-hardware-accelerated WebView.
+The app is Jetpack Compose throughout. It does not host Playarr Web in a
+WebView. Runtime UI-mode and window-width checks adapt the shared screens:
 
-This architecture is the parity mechanism: Android TV runs the same
-React components, CSS, routing, authentication, profiles, home rails,
-search, Movies, Series, Music, playlists, detail pages, artwork loading,
-watch-state UI, and player controls as `clients/tv-web/web`. A separate
-Compose recreation would be a second implementation and would stop being
-exact as soon as either client changed.
+- television and wide displays use an always-visible navigation rail;
+- poster dimensions and spacing grow for ten-foot viewing;
+- focusable content scales when reached with a D-pad;
+- the Activity enters immersive fullscreen mode on televisions; and
+- the same catalogue, title-detail, settings, and Media3 player routes remain
+  available on touch devices.
 
-The native layer owns only platform responsibilities:
+The manifest declares `LEANBACK_LAUNCHER` and marks touch and Leanback hardware
+features optional, allowing the same artefact to install across all supported
+Android form factors.
 
-- TV launcher and Google Play metadata
-- app lifecycle and immersive mode
-- Play in-app updates and direct signed-APK updates from `playarr.app`
-- persisted server bootstrap
-- Menu and Back-key behaviour
-- WebView cookies and DOM storage
-- autoplay and HTML5 fullscreen video
-- main-frame connection failure recovery
+## Server and authentication
 
-The configured origin must serve both the Playarr app at `/` and the
-Streamarr API at `/api`, matching the backend's co-hosted deployment.
+There is no build-time or default Streamarr URL. The native sign-in screen asks
+for the server URL with the account credentials, normalises a missing scheme to
+LAN-friendly HTTP, and stores the selected URL in `ServerConfigStore` for that
+session. Signing out returns to the same screen so another account or server can
+be selected.
 
-## Remote input
+Requests identify as `android-tv` on television UI mode and `android-mobile`
+elsewhere. Both identities come from the same installed package.
 
-The web app already implements geometric D-pad focus, OK/Enter
-activation, long-press context menus, Escape/back navigation, and
-player-specific remote shortcuts.
+## Input and playback
 
-Android WebView forwards D-pad and Enter events to that implementation.
-The native shell additionally:
-
-- maps Android Back to WebView history, fullscreen exit, editor close, or
-  Activity exit as appropriate
-- reserves the remote Menu key for the native server-address editor
-
-Text fields use Android TV's system keyboard.
-
-## Server configuration
-
-`ServerConfigStore` persists the origin in DataStore. The default
-emulator address is `http://10.0.2.2:8484`; physical devices normally
-use the server's LAN address.
-
-The address editor appears automatically if the main document cannot be
-loaded or returns an HTTP error. It can also be opened at any time with
-the Menu key. Missing schemes are interpreted as `http://`; only absolute
-HTTP and HTTPS addresses are accepted.
-
-Cleartext HTTP is intentionally permitted for private home networks.
-Internet-exposed deployments should use HTTPS.
-
-## Authentication
-
-Authentication is exactly the web client's authentication:
-
-- trusted-network transparent login where enabled
-- username/password login for full-account mode
-- managed profile selection and PIN verification
-- refresh-token rotation and browser-local session persistence
-
-Cookies, Local Storage, and DOM Storage are retained by the app's private
-WebView data directory.
-
-## Playback
-
-Playback is the web client's normal Shaka/HTML5 media pipeline, including
-direct play, HLS, progress reporting, audio/subtitle preferences, player
-overlays, and fullscreen requests. The native shell enables media
-autoplay and provides the Android custom-view container required by HTML5
-fullscreen video.
-
-## Updates
-
-The profile page exposes a native **Check for updates** action for sideloaded
-installations. The native shell fetches the latest Android TV release manifest
-from `playarr.app`, compares its monotonic `version_code`, downloads the
-versioned APK over HTTPS, verifies its SHA-256 checksum, and opens Android's
-package installer. Android still requires the viewer to trust Playarr as an
-installation source and to confirm the signed package replacement.
-
-The remaining update layers stay independent:
-
-- Google Play updates the Android APK, driven by
-  `AppUpdateEffect` and the Android-TV compatibility row.
-- The co-hosted web bundle updates with the Streamarr deployment, so the
-  Android TV layout and features change at the same time as Playarr Web.
+Standard Compose focus and click semantics accept touch, keyboard, and D-pad
+input. Text entry uses Android's system keyboard. Media playback is native
+Media3/ExoPlayer after Streamarr's playback endpoint selects direct or HLS
+delivery.
 
 ## Build and verification
 
 ```bash
 export JAVA_HOME=/opt/homebrew/opt/openjdk@21
 cd clients/android-shared
-./gradlew :tv-android:testDebugUnitTest :tv-android:assembleDebug
-./gradlew :tv-android:lintDebug
+./gradlew :mobile-android:testDebugUnitTest \
+  :mobile-android:assembleDebug \
+  :mobile-android:lintDebug
 ```
 
-The debug APK is written to
-`clients/tv-android/build/outputs/apk/debug/tv-android-debug.apk`.
+Install that one APK on both phone and television targets:
+
+```bash
+adb -s <phone> install -r ../mobile-android/build/outputs/apk/debug/mobile-android-debug.apk
+adb -s <tv> install -r ../mobile-android/build/outputs/apk/debug/mobile-android-debug.apk
+```

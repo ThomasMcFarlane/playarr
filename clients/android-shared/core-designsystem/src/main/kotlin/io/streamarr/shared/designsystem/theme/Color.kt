@@ -3,10 +3,8 @@ package io.streamarr.shared.designsystem.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Streamarr / Playarr brand palette. A single seed set shared by both
- * [StreamarrColorScheme] (Material 3, mobile) and `tv-android`'s own
- * `androidx.tv.material3.ColorScheme`, so the two apps read as the same
- * product on different screens rather than two differently-branded apps.
+ * Streamarr / Playarr brand palette used by the universal Android
+ * application's Material 3 colour scheme on every screen size.
  */
 object StreamarrPalette {
     val Violet40 = Color(0xFF6750E4)

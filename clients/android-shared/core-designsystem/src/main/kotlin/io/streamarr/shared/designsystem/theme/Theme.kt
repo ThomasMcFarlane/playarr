@@ -29,13 +29,8 @@ private val StreamarrLightColorScheme = lightColorScheme(
 )
 
 /**
- * Material 3 theme wrapper for `mobile-android`. `tv-android` intentionally
- * does **not** use this composable -- `androidx.tv.material3` ships its own
- * `MaterialTheme`/`ColorScheme` tuned for 10-foot viewing and focus states,
- * and mixing the two `MaterialTheme` implementations in one composition
- * causes ambiguous-resolution issues. TV builds its own theme from
- * [StreamarrPalette] directly (see `tv-android`'s `ui/theme/TvTheme.kt`)
- * so both apps still share one source of truth for brand color.
+ * Material 3 theme wrapper shared by the universal phone, tablet, and TV
+ * application. Device-specific spacing and focus live in the responsive UI.
  */
 @Composable
 fun StreamarrTheme(

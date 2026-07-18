@@ -91,13 +91,11 @@ see [`docs/roadmap.md`](docs/roadmap.md).
 │                        binary; see docs/architecture/overview.md for the
 │                        role-gating model.
 ├── clients/             Playarr: the native and web clients.
-│   ├── mobile-android/     Android phone/tablet host for responsive Playarr Web.
-│   ├── tv-android/          Android TV host for the same Playarr Web app.
+│   ├── mobile-android/     Native responsive Android phone/tablet/TV app.
 │   ├── android-shared/       Gradle root: shared core-* library modules
 │   │                          (data, domain, design system, player, auth),
 │   │                          plus the settings.gradle.kts that pulls in
-│   │                          mobile-android/ and tv-android/ as sibling
-│   │                          app modules of the same build.
+│   │                          mobile-android/ in the shared Gradle build.
 │   ├── ios/                    Swift package (SwiftUI app target +
 │   │                            UIKit-free StreamarrKit library target).
 │   │                            Source-only for now: no Xcode project yet,

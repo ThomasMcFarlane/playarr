@@ -16,7 +16,7 @@ import retrofit2.Retrofit
  * Builds the shared [Retrofit]/[OkHttpClient] pair every Playarr Android
  * client points at its Streamarr server with. Deliberately a plain factory
  * (not a Hilt `@Module`) so `core-data` stays framework-light -- the app
- * modules' own DI graphs (see `mobile-android`/`tv-android`'s `di/`) call
+ * the universal app's DI graph (see `mobile-android`'s `di/`) calls
  * into this and bind the result into their Hilt components.
  */
 @OptIn(ExperimentalSerializationApi::class)

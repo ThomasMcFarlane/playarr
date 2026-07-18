@@ -22,7 +22,7 @@ import kotlinx.serialization.json.Json
  * `backend/openapi/streamarr.yaml`. [requestDeviceCode] and [pollOnce] are
  * the two calls; [pollUntilResolved] is a convenience wrapper around
  * [pollOnce] implementing the required backoff behaviour (RFC 8628 §3.5)
- * so `tv-android`'s pairing screen doesn't reimplement it.
+ * so television pairing UI does not reimplement it.
  */
 class DeviceAuthClient @Inject constructor(
     private val api: DeviceAuthApi,

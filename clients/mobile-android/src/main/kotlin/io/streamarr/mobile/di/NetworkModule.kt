@@ -1,8 +1,12 @@
 package io.streamarr.mobile.di
 
+import android.app.UiModeManager
+import android.content.Context
+import android.content.res.Configuration
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.streamarr.mobile.BuildConfig
 import io.streamarr.shared.auth.TokenStore
@@ -25,14 +29,22 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideStreamarrApi(serverConfigStore: ServerConfigStore, tokenStore: TokenStore): StreamarrApi = StreamarrHttpClient.create(
+    fun provideStreamarrApi(
+        @ApplicationContext context: Context,
+        serverConfigStore: ServerConfigStore,
+        tokenStore: TokenStore,
+    ): StreamarrApi = StreamarrHttpClient.create(
         // Re-invoked on every request (see StreamarrHttpClient.create's
         // KDoc), so a base URL saved from the Settings screen takes effect
         // immediately -- no need to rebuild this Retrofit instance.
         baseUrlProvider = { runBlocking { serverConfigStore.baseUrl.first() } },
-        clientPlatform = ClientPlatform.AndroidMobile,
+        clientPlatform = if (
+            context.getSystemService(UiModeManager::class.java).currentModeType ==
+            Configuration.UI_MODE_TYPE_TELEVISION
+        ) ClientPlatform.AndroidTv else ClientPlatform.AndroidMobile,
         clientVersion = BuildConfig.VERSION_NAME,
         accessTokenProvider = { runBlocking { tokenStore.accessToken.first() } },
-        enableHttpLogging = BuildConfig.DEBUG,
+        // Access tokens and private catalogue responses must not reach logcat.
+        enableHttpLogging = false,
     )
 }
