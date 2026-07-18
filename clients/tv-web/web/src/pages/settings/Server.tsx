@@ -4,6 +4,7 @@ import { DEFAULT_API_BASE_URL } from "@streamarr-tv/domain";
 import { useApiBaseUrl, usePrimaryApiClient, useAuth } from "../../lib/ApiClientProvider";
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useToast } from "../../lib/toast";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
 
 type ConnectionTestState =
@@ -17,7 +18,8 @@ type AddServerState =
   | { status: "error"; message: string };
 
 export function SettingsServerPage() {
-  useDocumentTitle("Server connection — Settings");
+  const { t } = useLanguage();
+  useDocumentTitle(t("settings.server.pageTitle"));
   const [apiBaseUrl] = useApiBaseUrl();
   const client = usePrimaryApiClient();
   const { connectedServers, connectServer, disconnectServer, currentUserName } = useAuth();
@@ -41,7 +43,7 @@ export function SettingsServerPage() {
       setServerUrl("");
       setServerPassword("");
       setAddServerState({ status: "success" });
-      showToast("Server connected.");
+      showToast(t("settings.server.serverConnectedToast"));
     } catch (error) {
       setAddServerState({
         status: "error",
@@ -63,12 +65,12 @@ export function SettingsServerPage() {
 
   return (
     <SettingsSectionLayout
-      kicker="Make it yours"
-      title="Server connection"
-      description="Combine libraries from multiple servers in one Playarr interface."
+      kicker={t("settings.server.kicker")}
+      title={t("settings.server.title")}
+      description={t("settings.server.description")}
     >
       <section className="card settings-card settings-card-wide">
-        <div className="connected-server-list" aria-label="Connected servers">
+        <div className="connected-server-list" aria-label={t("settings.server.connectedServersLabel")}>
           {connectedServers.map((server) => (
             <div className="connected-server" key={server.url}>
               <div>
@@ -77,17 +79,17 @@ export function SettingsServerPage() {
                 <small>{server.url}</small>
               </div>
               {server.primary ? (
-                <span className="connected-server-badge">Primary</span>
+                <span className="connected-server-badge">{t("settings.server.primaryBadge")}</span>
               ) : (
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
                   onClick={() => {
                     disconnectServer(server.url);
-                    showToast("Server disconnected.");
+                    showToast(t("settings.server.serverDisconnectedToast"));
                   }}
                 >
-                  Disconnect
+                  {t("settings.server.disconnect")}
                 </button>
               )}
             </div>
@@ -96,7 +98,7 @@ export function SettingsServerPage() {
 
         <form onSubmit={(event) => void handleAddServer(event)} className="connection-form">
           <label className="form-label" htmlFor="additional-server-url">
-            Add another server
+            {t("settings.server.addAnotherServer")}
           </label>
           <div className="connection-server-fields">
             <input
@@ -109,7 +111,7 @@ export function SettingsServerPage() {
               spellCheck={false}
               value={serverUrl}
               onChange={(event) => setServerUrl(event.target.value)}
-              placeholder="Server address or URL"
+              placeholder={t("settings.server.serverAddressPlaceholder")}
               required
             />
             <input
@@ -118,8 +120,8 @@ export function SettingsServerPage() {
               value={serverUsername}
               onChange={(event) => setServerUsername(event.target.value)}
               autoComplete="username"
-              placeholder="Username"
-              aria-label="Username for additional server"
+              placeholder={t("settings.server.usernamePlaceholder")}
+              aria-label={t("settings.server.usernameAriaLabel")}
             />
             <input
               type="password"
@@ -127,23 +129,25 @@ export function SettingsServerPage() {
               value={serverPassword}
               onChange={(event) => setServerPassword(event.target.value)}
               autoComplete="current-password"
-              placeholder="Password"
-              aria-label="Password for additional server"
+              placeholder={t("settings.server.passwordPlaceholder")}
+              aria-label={t("settings.server.passwordAriaLabel")}
             />
             <button
               type="submit"
               className="btn btn-primary"
               disabled={addServerState.status === "adding"}
             >
-              {addServerState.status === "adding" ? "Connecting…" : "Connect"}
+              {addServerState.status === "adding"
+                ? t("settings.server.connecting")
+                : t("settings.server.connect")}
             </button>
           </div>
           <p className={addServerState.status === "error" ? "error-text" : "hint"} aria-live="polite">
             {addServerState.status === "error"
               ? addServerState.message
               : addServerState.status === "success"
-                ? "Server connected. Its library is now joined with this profile."
-                : "Credentials and requests go directly from this browser to that server."}
+                ? t("settings.server.serverConnectedHint")
+                : t("settings.server.credentialsHint")}
           </p>
         </form>
 
@@ -154,29 +158,32 @@ export function SettingsServerPage() {
             onClick={() => void handleTestConnection()}
             disabled={testState.status === "testing"}
           >
-            {testState.status === "testing" ? "Testing…" : "Test connection"}
+            {testState.status === "testing" ? t("settings.server.testing") : t("settings.server.testConnection")}
           </button>
 
           {testState.status === "success" && (
             <p className="success-text">
-              Connected — server {testState.version.server_version} (API {testState.version.api_version}).
+              {t("settings.server.connectedSuccess", {
+                serverVersion: testState.version.server_version,
+                apiVersion: testState.version.api_version,
+              })}
             </p>
           )}
           {testState.status === "error" && (
-            <p className="error-text">Could not connect ({testState.message}).</p>
+            <p className="error-text">
+              {t("settings.server.connectError", { message: testState.message })}
+            </p>
           )}
         </div>
 
-        <p className="hint">
-          {apiBaseUrl} remains the primary server for profile and player preferences.
-        </p>
+        <p className="hint">{t("settings.server.primaryServerHint", { apiBaseUrl })}</p>
 
         <details className="settings-details">
-          <summary>TV app connection details</summary>
+          <summary>{t("settings.server.tvDetailsSummary")}</summary>
           <p className="hint">
-            TV apps resolve their server from an <code>?apiBaseUrl=...</code> launch query or an
-            operator-editable <code>streamarr-config.json</code>, falling back to{" "}
-            <code>{DEFAULT_API_BASE_URL}</code>.
+            {t("settings.server.tvDetailsIntro")} <code>?apiBaseUrl=...</code>{" "}
+            {t("settings.server.tvDetailsMiddle")} <code>streamarr-config.json</code>
+            {t("settings.server.tvDetailsFallback")} <code>{DEFAULT_API_BASE_URL}</code>.
           </p>
         </details>
       </section>

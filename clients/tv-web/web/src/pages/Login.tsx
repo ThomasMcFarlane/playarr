@@ -5,6 +5,8 @@ import { useApiBaseUrl, useAuth } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { DeviceLogin } from "../components/DeviceLogin";
 import { IS_TV } from "../lib/clientPlatform";
+import { useLanguage } from "../lib/i18n/LanguageProvider";
+import type { TranslationKey } from "../lib/i18n/translations";
 import { initialLoginServerUrl, publicIpv4RelayUrl } from "../lib/loginServerUrl";
 import { isPublicHttpUrl } from "../lib/localNetworkFetch";
 
@@ -30,7 +32,8 @@ interface LocationState {
  * is nothing authenticated to navigate to yet.
  */
 export function LoginPage() {
-  useDocumentTitle("Sign in");
+  const { t } = useLanguage();
+  useDocumentTitle(t("pages.login.title"));
   const { login, loginWithDeviceToken } = useAuth();
   const [apiBaseUrl] = useApiBaseUrl();
   const navigate = useNavigate();
@@ -64,7 +67,7 @@ export function LoginPage() {
       await login({ serverUrl, username, password });
       finishLogin();
     } catch (err) {
-      setError(loginErrorMessage(err, needsInsecureContentPermission));
+      setError(loginErrorMessage(err, needsInsecureContentPermission, t));
       setSubmitting(false);
     }
   }
@@ -94,15 +97,15 @@ export function LoginPage() {
             <span><span className="app-logo-accent">Play</span>arr</span>
           </span>
         </div>
-        <p className="page-kicker">Welcome home</p>
-        <h1 className="auth-title">Sign in to Playarr</h1>
+        <p className="page-kicker">{t("pages.login.kicker")}</p>
+        <h1 className="auth-title">{t("pages.login.heading")}</h1>
         <p className="muted auth-description">
-          Choose your Streamarr server, then save this profile on the current browser.
+          {t("pages.login.description")}
         </p>
 
         <form onSubmit={(event) => void handleSubmit(event)}>
           <label className="auth-label" htmlFor="login-server-url">
-            Server URL
+            {t("pages.login.serverUrlLabel")}
           </label>
           <input
             id="login-server-url"
@@ -117,16 +120,16 @@ export function LoginPage() {
             required
             value={serverUrl}
             onChange={(event) => setServerUrl(event.target.value)}
-            placeholder="Server address or URL"
+            placeholder={t("pages.login.serverUrlPlaceholder")}
           />
           <p className="hint auth-server-hint">
             {needsInsecureContentPermission
-              ? "Direct public HTTP connection. Your browser may block this as mixed content."
-              : "Your browser connects directly to this server. Playarr does not proxy your login."}
+              ? t("pages.login.insecureHint")
+              : t("pages.login.directConnectionHint")}
           </p>
 
           <label className="auth-label" htmlFor="login-username">
-            Username
+            {t("pages.login.usernameLabel")}
           </label>
           <input
             id="login-username"
@@ -140,7 +143,7 @@ export function LoginPage() {
           />
 
           <label className="auth-label" htmlFor="login-password">
-            Password
+            {t("pages.login.passwordLabel")}
           </label>
           <input
             id="login-password"
@@ -164,7 +167,7 @@ export function LoginPage() {
             className="btn btn-primary auth-submit"
             disabled={submitting}
           >
-            {submitting ? "Signing in…" : "Sign in"}
+            {submitting ? t("pages.login.submitting") : t("pages.login.submit")}
           </button>
         </form>
       </div>
@@ -182,22 +185,26 @@ export function LoginPage() {
  * required" 401 text, which reads wrong on the page whose entire purpose
  * is signing in.
  */
-function loginErrorMessage(err: unknown, needsInsecureContentPermission: boolean): string {
+function loginErrorMessage(
+  err: unknown,
+  needsInsecureContentPermission: boolean,
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string
+): string {
   if (err instanceof ApiError) {
     const body = err.body as { message?: unknown } | undefined;
     if (typeof body?.message === "string" && body.message.length > 0) {
       return body.message;
     }
     if (err.status === 400) {
-      return "This server requires a username and password to sign in.";
+      return t("pages.login.errorMissingCredentials");
     }
-    return "Sign-in failed. Check your username and password and try again.";
+    return t("pages.login.errorGeneric");
   }
   if (err instanceof TypeError) {
     if (needsInsecureContentPermission) {
-      return "The browser blocked this direct HTTP connection. Open the site settings for playarr.app, set Insecure content to Allow, reload Playarr, then try again.";
+      return t("pages.login.errorInsecureContentBlocked");
     }
-    return "Could not reach this LAN server. Check the URL and allow Local Network Access when your browser asks.";
+    return t("pages.login.errorLanUnreachable");
   }
   return err instanceof Error ? err.message : String(err);
 }

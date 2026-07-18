@@ -5,6 +5,7 @@ import {
   type PlaybackLaunchSettings,
 } from "../lib/usePlaybackEngine";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { useLanguage } from "../lib/i18n/LanguageProvider";
 import {
   navigationOriginFromState,
   type NavigationOrigin,
@@ -153,6 +154,7 @@ export function PlayerPage({
   ) => void;
 }) {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const navigationOrigin = navigationOriginFromState(locationState);
   const title = locationState?.title;
   const backTo = isDetailRoute(locationState?.backTo) ? locationState.backTo : "/";
@@ -177,7 +179,7 @@ export function PlayerPage({
       ? [
           {
             mediaFileId,
-            title: title ?? "Now playing",
+            title: title ?? t("pages.player.nowPlaying"),
             episodeId: locationState?.episodeId,
           },
         ]
@@ -191,7 +193,7 @@ export function PlayerPage({
   const isMusicPlayback =
     Boolean(activePlaylistItem?.music) ||
     /^\/music\/[^/?]+$/.test(locationState?.backTo ?? "");
-  useDocumentTitle(title ?? "Now playing", !minimised);
+  useDocumentTitle(title ?? t("pages.player.nowPlaying"), !minimised);
   const player = usePlaybackEngine(
     mediaFileId,
     startPositionSeconds,
@@ -385,8 +387,8 @@ export function PlayerPage({
     if (minimised) {
       return (
         <MinimisedPlayerStatus
-          title={title ?? activePlaylistItem?.title ?? "Now playing"}
-          status="Preparing playback"
+          title={title ?? activePlaylistItem?.title ?? t("pages.player.nowPlaying")}
+          status={t("pages.player.preparingPlayback")}
           onMaximise={onMaximise}
         />
       );
@@ -398,10 +400,10 @@ export function PlayerPage({
           <div className="player-overlay player-overlay-status">
             <div className="player-status-card" role="status">
               <SpinnerIcon className="player-spinner" />
-              <p className="player-status-kicker">One moment</p>
-              <p className="player-error-title">Preparing playback</p>
+              <p className="player-status-kicker">{t("pages.player.oneMoment")}</p>
+              <p className="player-error-title">{t("pages.player.preparingPlayback")}</p>
               <p className="player-error-message">
-                Large files can take a few seconds while a stream is prepared.
+                {t("pages.player.preparingMessage")}
               </p>
             </div>
           </div>
@@ -414,8 +416,8 @@ export function PlayerPage({
     if (minimised) {
       return (
         <MinimisedPlayerStatus
-          title={title ?? activePlaylistItem?.title ?? "Now playing"}
-          status="Playback unavailable"
+          title={title ?? activePlaylistItem?.title ?? t("pages.player.nowPlaying")}
+          status={t("pages.player.playbackUnavailable")}
           onMaximise={onMaximise}
         />
       );
@@ -432,20 +434,24 @@ export function PlayerPage({
                 <ErrorIcon className="player-error-icon" />
               )}
               <p className="player-status-kicker">
-                {negotiation.forbidden ? "Access restricted" : "Playback unavailable"}
+                {negotiation.forbidden
+                  ? t("pages.player.accessRestricted")
+                  : t("pages.player.playbackUnavailable")}
               </p>
               <p className="player-error-title">
-                {negotiation.forbidden ? "No streaming access" : "Couldn’t start this title"}
+                {negotiation.forbidden
+                  ? t("pages.player.noStreamingAccess")
+                  : t("pages.player.couldNotStart")}
               </p>
               <p className="player-error-message">{negotiation.message}</p>
               <div className="player-error-actions">
                 {!negotiation.forbidden && (
                   <button type="button" className="btn btn-primary" onClick={retryNegotiation}>
-                    Try again
+                    {t("pages.player.tryAgain")}
                   </button>
                 )}
                 <button type="button" className="btn btn-player-secondary" onClick={handleBack}>
-                  Back to details
+                  {t("pages.player.backToDetails")}
                 </button>
               </div>
             </div>
@@ -463,7 +469,7 @@ export function PlayerPage({
     >
       <PlayerSurface
         player={player}
-        title={title ?? activePlaylistItem?.title ?? "Now playing"}
+        title={title ?? activePlaylistItem?.title ?? t("pages.player.nowPlaying")}
         minimised={minimised}
         inlineMusic={inlineMusic}
         stopPlaybackOnPause={isMusicPlayback}
@@ -492,6 +498,7 @@ function MinimisedPlayerStatus({
   status: string;
   onMaximise: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="player-page is-minimised">
       <div className="player-shell player-shell-placeholder player-shell-minimised">
@@ -500,7 +507,7 @@ function MinimisedPlayerStatus({
           className="mini-player-hit-target"
           data-navigation-focus-key="shell:mini-player"
           onClick={onMaximise}
-          aria-label={`Maximise ${title}`}
+          aria-label={t("pages.player.maximiseTitle", { title })}
         />
         <div className="mini-player-details" aria-hidden="true">
           <span className="mini-player-title">{title}</span>

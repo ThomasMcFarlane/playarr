@@ -11,6 +11,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { describeApiError } from "@streamarr-tv/api-client";
 import { useApiClient, useAuth } from "../lib/ApiClientProvider";
 import { selectDeviceProfiles } from "../lib/deviceProfiles";
+import { SettingsIcon } from "../components/NavIcons";
+import { useLanguage } from "../lib/i18n/LanguageProvider";
+import type { TranslationKey } from "../lib/i18n/translations";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import {
   navigationOriginFromState,
@@ -41,12 +44,12 @@ type ProfileAction = "select" | "settings";
 const ADD_PROFILE_ID = "__add_profile__";
 
 const PROFILE_COLOURS = [
-  ["#ee718f", "#9b1e4e"],
-  ["#f4a261", "#a8442e"],
-  ["#70c1b3", "#176b68"],
-  ["#7e8ce0", "#3f3d8f"],
-  ["#c78ee8", "#713f8d"],
-  ["#d8b35d", "#7b5a18"],
+  "#d84f70",
+  "#d97853",
+  "#3d9389",
+  "#6876c7",
+  "#a96bc7",
+  "#b28d39",
 ] as const;
 
 function safeBackTo(value: unknown): string {
@@ -55,13 +58,13 @@ function safeBackTo(value: unknown): string {
     : "/";
 }
 
-function initials(name: string): string {
+function initials(name: string, t: (key: TranslationKey) => string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return (
     parts
       .slice(0, 2)
       .map((part) => part[0]?.toUpperCase())
-      .join("") || "P"
+      .join("") || t("pages.profiles.initialsFallback")
   );
 }
 
@@ -73,17 +76,26 @@ function colourIndex(id: string): number {
   return hash % PROFILE_COLOURS.length;
 }
 
-function profileStyle(profile: ViewerProfile): CSSProperties {
-  const [start, end] =
-    PROFILE_COLOURS[colourIndex(profile.id)] ?? ["#ee718f", "#9b1e4e"];
+function profileStyle(profile: ViewerProfile, index = 0): CSSProperties {
+  const colour = PROFILE_COLOURS[colourIndex(profile.id)] ?? "#d84f70";
   return {
-    "--profile-colour-start": start,
-    "--profile-colour-end": end,
+    "--profile-colour-start": colour,
+    "--profile-index": index,
   } as CSSProperties;
 }
 
+function SignOutIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M10 5H5v14h5" />
+      <path d="M13 8l4 4-4 4M8 12h9" />
+    </svg>
+  );
+}
+
 export function ProfilesPage() {
-  useDocumentTitle("Profiles");
+  const { t } = useLanguage();
+  useDocumentTitle(t("pages.profiles.title"));
   const client = useApiClient();
   const {
     currentUserId,
@@ -91,6 +103,7 @@ export function ProfilesPage() {
     savedProfiles,
     isProfileSaved,
     switchProfile,
+    logoutProfile,
   } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -125,15 +138,15 @@ export function ProfilesPage() {
     if (currentUserId && !profiles.some((profile) => profile.id === currentUserId)) {
       profiles.unshift({
         id: currentUserId,
-        username: currentUserName ?? "Viewer",
-        name: currentUserName ?? "Viewer",
+        username: currentUserName ?? t("pages.profiles.viewerFallbackName"),
+        name: currentUserName ?? t("pages.profiles.viewerFallbackName"),
         isCurrent: true,
         isSaved: true,
         pinLocked: false,
       });
     }
     return profiles;
-  }, [currentUserId, currentUserName, savedProfiles]);
+  }, [currentUserId, currentUserName, savedProfiles, t]);
 
   const profiles = serverProfiles ?? fallbackProfiles;
   const selectedIndex = selectedId !== ADD_PROFILE_ID
@@ -319,7 +332,7 @@ export function ProfilesPage() {
     try {
       const result = await client.verifyProfilePin(pinProfile.id, { pin });
       if (!result.verified) {
-        setPinError("That PIN was not accepted.");
+        setPinError(t("pages.profiles.pinNotAccepted"));
         setPinSubmitting(false);
         return;
       }
@@ -349,20 +362,31 @@ export function ProfilesPage() {
     });
   }
 
+  function handleProfileLogout(profile: ViewerProfile) {
+    logoutProfile(profile.id);
+    setServerProfiles((existing) =>
+      existing?.map((candidate) =>
+        candidate.id === profile.id
+          ? { ...candidate, isCurrent: false, isSaved: false }
+          : candidate
+      ) ?? null
+    );
+  }
+
   return (
     <div className="profiles-page">
       <button
         type="button"
         className="tv-back profiles-back"
-        aria-label="Back"
+        aria-label={t("pages.profiles.backAriaLabel")}
         onClick={returnFromProfiles}
       >
         ←
       </button>
 
       <header className="profiles-heading">
-        <p>Profiles</p>
-        <h1>Who’s watching?</h1>
+        <p>{t("pages.profiles.title")}</p>
+        <h1>{t("pages.profiles.heading")}</h1>
       </header>
 
       <div
@@ -371,120 +395,131 @@ export function ProfilesPage() {
         data-tv-scroll-axis="horizontal"
         data-navigation-scroll-key="profiles:row"
       >
-        {profiles.map((profile, index) => {
-          const selected = profile.id === selectedProfile?.id;
-          const previous = profiles[index - 1];
-          const next = profiles[index + 1];
-          return (
-            <div
-              key={profile.id}
-              className={`profile-choice${selected ? " is-selected" : ""}`}
-              style={profileStyle(profile)}
-            >
-              <button
-                id={`profile-${profile.id}`}
-                type="button"
-                className="profile-avatar-button"
-                data-tv-focus-default={
-                  profile.isCurrent || (!hasCurrentProfile && index === 0)
-                    ? true
-                    : undefined
-                }
-                data-navigation-focus-key={`profiles:${profile.id}`}
-                data-tv-edge-target-left={
-                  previous ? `#profile-${previous.id}` : undefined
-                }
-                data-tv-edge-target-right={
-                  next ? `#profile-${next.id}` : "#profile-add"
-                }
-                data-tv-edge-target-down="#profile-settings"
-                aria-label={`${profile.name}${profile.isCurrent ? ", current profile" : ""}`}
-                aria-pressed={selected}
-                disabled={switchingId !== null}
-                onFocus={() => setSelectedId(profile.id)}
-                onClick={() => requestProfileAction(profile, "select")}
+        <div className="profiles-track">
+          {profiles.map((profile, index) => {
+            const selected = profile.id === selectedProfile?.id;
+            const previous = profiles[index - 1];
+            const next = profiles[index + 1];
+            return (
+              <div
+                key={profile.id}
+                className={`profile-choice${selected ? " is-selected" : ""}`}
+                style={profileStyle(profile, index)}
               >
-                <span className="profile-avatar" aria-hidden="true">
-                  <span>{initials(profile.name)}</span>
-                </span>
-                <strong>{profile.name}</strong>
-                <small>
-                  {switchingId === profile.id
-                    ? "Switching…"
-                    : profile.isCurrent
-                      ? "Watching now"
-                      : profile.pinLocked
-                        ? "PIN required"
-                        : profile.isSaved
-                          ? "Ready"
-                          : "Sign in required"}
-                </small>
-              </button>
-              {selected ? (
                 <button
-                  id="profile-settings"
+                  id={`profile-${profile.id}`}
                   type="button"
-                  className="profiles-settings-link"
-                  data-navigation-focus-key={`profiles:${profile.id}:settings`}
-                  data-tv-edge-target-up={`#profile-${profile.id}`}
-                  onClick={() => requestProfileAction(profile, "settings")}
+                  className="profile-avatar-button"
+                  data-tv-focus-default={
+                    profile.isCurrent || (!hasCurrentProfile && index === 0)
+                      ? true
+                      : undefined
+                  }
+                  data-navigation-focus-key={`profiles:${profile.id}`}
+                  data-tv-edge-target-left={
+                    previous ? `#profile-${previous.id}` : undefined
+                  }
+                  data-tv-edge-target-right={
+                    next ? `#profile-${next.id}` : "#profile-add"
+                  }
+                  data-tv-edge-target-down="#profile-settings"
+                  aria-label={
+                    profile.isCurrent
+                      ? t("pages.profiles.avatarLabelCurrent", { name: profile.name })
+                      : t("pages.profiles.avatarLabel", { name: profile.name })
+                  }
+                  aria-pressed={selected}
+                  disabled={switchingId !== null}
+                  onFocus={() => setSelectedId(profile.id)}
+                  onClick={() => requestProfileAction(profile, "select")}
                 >
-                  <span aria-hidden="true">⚙</span>
-                  <strong>{profile.name} settings</strong>
+                  <span className="profile-avatar" aria-hidden="true">
+                    <span>{initials(profile.name, t)}</span>
+                  </span>
+                  <strong>{profile.name}</strong>
+                  <small>
+                    {switchingId === profile.id
+                      ? t("pages.profiles.statusSwitching")
+                      : profile.isCurrent
+                        ? t("pages.profiles.statusCurrent")
+                        : profile.pinLocked
+                          ? t("pages.profiles.statusPinRequired")
+                          : profile.isSaved
+                            ? t("pages.profiles.statusReady")
+                            : t("pages.profiles.statusSignInRequired")}
+                  </small>
                 </button>
-              ) : null}
-            </div>
-          );
-        })}
+                {selected ? (
+                  <div className="profile-actions">
+                    <button
+                      id="profile-settings"
+                      type="button"
+                      className="profile-action-button profile-settings-button"
+                      aria-label={t("pages.profiles.settingsFor", { name: profile.name })}
+                      data-navigation-focus-key={`profiles:${profile.id}:settings`}
+                      data-tv-edge-target-up={`#profile-${profile.id}`}
+                      data-tv-edge-target-right="#profile-sign-out"
+                      onClick={() => requestProfileAction(profile, "settings")}
+                    >
+                      <SettingsIcon />
+                    </button>
+                    {profile.isSaved || profile.isCurrent ? (
+                      <button
+                        id="profile-sign-out"
+                        type="button"
+                        className="profile-action-button profile-sign-out-button"
+                        aria-label={`${t("settings.account.signOut")} ${profile.name}`}
+                        data-navigation-focus-key={`profiles:${profile.id}:sign-out`}
+                        data-tv-edge-target-up={`#profile-${profile.id}`}
+                        data-tv-edge-target-left="#profile-settings"
+                        onClick={() => handleProfileLogout(profile)}
+                      >
+                        <SignOutIcon />
+                        <strong>{t("settings.account.signOut")}</strong>
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
 
-        <div
-          className={`profile-choice profile-add${
-            !selectedProfile ? " is-selected" : ""
-          }`}
-        >
-          <button
-            id="profile-add"
-            type="button"
-            className="profile-avatar-button"
-            data-tv-focus-default={profiles.length === 0 ? true : undefined}
-            data-navigation-focus-key="profiles:add"
-            data-tv-edge-target-left={
-              lastProfile ? `#profile-${lastProfile.id}` : undefined
-            }
-            data-tv-edge-target-down="#profile-settings"
-            onFocus={() => setSelectedId(ADD_PROFILE_ID)}
-            onClick={() => continueToLogin(null, backTo)}
+          <div
+            className={`profile-choice profile-add${
+              !selectedProfile ? " is-selected" : ""
+            }`}
+            style={{ "--profile-index": profiles.length } as CSSProperties}
           >
-            <span className="profile-avatar" aria-hidden="true">
-              <span>+</span>
-            </span>
-            <strong>Sign in</strong>
-            <small>Add another profile</small>
-          </button>
-          {!selectedProfile ? (
             <button
-              id="profile-settings"
+              id="profile-add"
               type="button"
-              className="profiles-settings-link"
-              data-navigation-focus-key="profiles:add:settings"
-              data-tv-edge-target-up="#profile-add"
-              onClick={openSettings}
+              className="profile-avatar-button"
+              data-tv-focus-default={profiles.length === 0 ? true : undefined}
+              data-navigation-focus-key="profiles:add"
+              data-tv-edge-target-left={
+                lastProfile ? `#profile-${lastProfile.id}` : undefined
+              }
+              onFocus={() => setSelectedId(ADD_PROFILE_ID)}
+              onClick={() => continueToLogin(null, backTo)}
             >
-              <span aria-hidden="true">⚙</span>
-              <strong>Settings</strong>
+              <span className="profile-avatar" aria-hidden="true">
+                <span>+</span>
+              </span>
+              <strong>{t("pages.profiles.signIn")}</strong>
+              <small>{t("pages.profiles.addAnotherProfile")}</small>
             </button>
-          ) : null}
+          </div>
         </div>
       </div>
 
       {loadState.status === "loading" ? (
         <div className="profiles-status" role="status">
           <span className="tv-mini-loader" aria-hidden="true" />
-          <span>Loading profiles…</span>
+          <span>{t("pages.profiles.loading")}</span>
         </div>
       ) : loadState.status === "error" ? (
         <p className="profiles-status is-error" role="alert">
-          Showing saved profiles. {loadState.message}
+          {t("pages.profiles.errorShowingSaved", { message: loadState.message })}
         </p>
       ) : null}
 
@@ -499,18 +534,18 @@ export function ProfilesPage() {
             <button
               type="button"
               className="profile-pin-close"
-              aria-label="Close PIN prompt"
+              aria-label={t("pages.profiles.closePinPrompt")}
               onClick={closePinPrompt}
             >
               ×
             </button>
             <div className="profile-pin-avatar" style={profileStyle(pinProfile)}>
-              {initials(pinProfile.name)}
+              {initials(pinProfile.name, t)}
             </div>
-            <p>Switch profile</p>
+            <p>{t("pages.profiles.switchProfile")}</p>
             <h2 id="profile-pin-title">{pinProfile.name}</h2>
             <form onSubmit={(event) => void submitPin(event)}>
-              <label htmlFor="profile-pin">Enter four-digit PIN</label>
+              <label htmlFor="profile-pin">{t("pages.profiles.enterPin")}</label>
               <input
                 ref={pinInputRef}
                 id="profile-pin"
@@ -525,7 +560,7 @@ export function ProfilesPage() {
               />
               {pinError ? <p className="profile-pin-error">{pinError}</p> : null}
               <button type="submit" disabled={pin.length !== 4 || pinSubmitting}>
-                {pinSubmitting ? "Checking…" : "Continue"}
+                {pinSubmitting ? t("pages.profiles.checking") : t("pages.profiles.continue")}
               </button>
             </form>
             <button
@@ -550,7 +585,7 @@ export function ProfilesPage() {
                 );
               }}
             >
-              Use account sign-in
+              {t("pages.profiles.useAccountSignIn")}
             </button>
           </section>
         </div>

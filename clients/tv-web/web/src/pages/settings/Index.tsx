@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useNavigationLayer } from "../../lib/navigationLayer";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
 
 interface SettingsSection {
   to: string;
@@ -10,45 +11,55 @@ interface SettingsSection {
   wide?: boolean;
 }
 
-const SETTINGS_SECTIONS: readonly SettingsSection[] = [
-  {
-    to: "/settings/appearance",
-    number: "01",
-    title: "Appearance",
-    description: "Follow this device or keep a theme fixed.",
-  },
-  {
-    to: "/settings/player",
-    number: "02",
-    title: "Player",
-    description: "Choose the audio language Playarr should prioritise.",
-  },
-  {
-    to: "/settings/server",
-    number: "03",
-    title: "Server connection",
-    description: "Combine libraries from multiple servers in one Playarr interface.",
-    wide: true,
-  },
-  {
-    to: "/settings/profile-lock",
-    number: "04",
-    title: "Profile lock",
-    description: "Require a four-digit PIN before switching profiles.",
-  },
-  {
-    to: "/settings/invite",
-    number: "05",
-    title: "Invite a friend",
-    description: "Ask your Streamarr admin for one friend-invite QR code.",
-  },
-  {
-    to: "/settings/account",
-    number: "06",
-    title: "Account",
-    description: "End this browser session and return to sign in.",
-  },
-] as const;
+type TFunction = ReturnType<typeof useLanguage>["t"];
+
+function buildSettingsSections(t: TFunction): readonly SettingsSection[] {
+  return [
+    {
+      to: "/settings/appearance",
+      number: "01",
+      title: t("settings.index.appearance.title"),
+      description: t("settings.index.appearance.description"),
+    },
+    {
+      to: "/settings/language",
+      number: "02",
+      title: t("settings.index.language.title"),
+      description: t("settings.index.language.description"),
+    },
+    {
+      to: "/settings/player",
+      number: "03",
+      title: t("settings.index.player.title"),
+      description: t("settings.index.player.description"),
+    },
+    {
+      to: "/settings/server",
+      number: "04",
+      title: t("settings.index.server.title"),
+      description: t("settings.index.server.description"),
+      wide: true,
+    },
+    {
+      to: "/settings/profile-lock",
+      number: "05",
+      title: t("settings.index.profileLock.title"),
+      description: t("settings.index.profileLock.description"),
+    },
+    {
+      to: "/settings/invite",
+      number: "06",
+      title: t("settings.index.invite.title"),
+      description: t("settings.index.invite.description"),
+    },
+    {
+      to: "/settings/account",
+      number: "07",
+      title: t("settings.index.account.title"),
+      description: t("settings.index.account.description"),
+    },
+  ] as const;
+}
 
 /**
  * Settings hub -- a menu of the sections that used to be stacked as one long
@@ -59,19 +70,21 @@ const SETTINGS_SECTIONS: readonly SettingsSection[] = [
  * `Profiles.tsx`'s gear icon already reached `/settings` before this split.
  */
 export function SettingsIndexPage() {
-  useDocumentTitle("Settings");
+  const { t } = useLanguage();
+  useDocumentTitle(t("settings.index.documentTitle"));
   const navigationLayer = useNavigationLayer("settings:index");
+  const settingsSections = buildSettingsSections(t);
 
   return (
     <div className="page settings-page">
       <div className="page-intro">
-        <p className="page-kicker">Make it yours</p>
-        <h1 className="page-title">Preferences</h1>
-        <p className="page-description">Choose how Playarr looks and where it connects.</p>
+        <p className="page-kicker">{t("settings.index.kicker")}</p>
+        <h1 className="page-title">{t("settings.index.title")}</h1>
+        <p className="page-description">{t("settings.index.description")}</p>
       </div>
 
-      <nav className="settings-grid" aria-label="Settings sections">
-        {SETTINGS_SECTIONS.map((section) => (
+      <nav className="settings-grid" aria-label={t("settings.index.sectionsAriaLabel")}>
+        {settingsSections.map((section) => (
           <Link
             key={section.to}
             to={section.to}

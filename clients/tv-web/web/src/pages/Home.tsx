@@ -16,6 +16,7 @@ import type {
 } from "@streamarr-tv/api-client";
 import { useCatalogBrowse } from "@streamarr-tv/api-client/react";
 import { useApiClient } from "../lib/ApiClientProvider";
+import { useLanguage } from "../lib/i18n/LanguageProvider";
 import {
   indexWatchProgressByWork,
   WatchStateOverlay,
@@ -49,14 +50,14 @@ function isEpisodic(work: Work): boolean {
   return work.kind === "series" || work.kind === "site";
 }
 
-function workKindLabel(work: Work): string {
+function workKindLabel(work: Work, t: ReturnType<typeof useLanguage>["t"]): string {
   return work.kind === "site"
-    ? "Site"
+    ? t("pages.home.workKind.site")
     : work.kind === "series"
-      ? "Series"
+      ? t("pages.home.workKind.series")
       : work.kind === "artist"
-        ? "Artist"
-      : "Movie";
+        ? t("pages.home.workKind.artist")
+      : t("pages.home.workKind.movie");
 }
 
 function mergeRecent(...groups: Work[][]): Work[] {
@@ -128,7 +129,8 @@ function centreHomeRail(
 
 /** TV-first landing page: a mixed library spotlight plus on-deck and recent rails. */
 export function HomePage() {
-  useDocumentTitle("Home");
+  const { t } = useLanguage();
+  useDocumentTitle(t("pages.home.title"));
   const client = useApiClient();
   const seriesState = useCatalogBrowse(client, {
     kind: "series",
@@ -268,42 +270,42 @@ export function HomePage() {
     const definitions: HomeRailDefinition[] = [
       {
         id: "primary",
-        title: onDeckItems.length > 0 ? "On deck" : "Start watching",
+        title: onDeckItems.length > 0 ? t("pages.home.rail.onDeck") : t("pages.home.rail.startWatching"),
         items: primaryItems,
       },
       {
         id: "new-movies",
-        title: "New movies",
+        title: t("pages.home.rail.newMovies"),
         items: takeUnused(movieItems, 12),
       },
       {
         id: "new-series",
-        title: "New series",
+        title: t("pages.home.rail.newSeries"),
         items: takeUnused(seriesItems, 12),
       },
       {
         id: "new-sites",
-        title: "New sites",
+        title: t("pages.home.rail.newSites"),
         items: takeUnused(siteItems, 12),
       },
       {
         id: "more-movies",
-        title: "More movies",
+        title: t("pages.home.rail.moreMovies"),
         items: takeUnused(movieItems, 12),
       },
       {
         id: "more-series",
-        title: "More series",
+        title: t("pages.home.rail.moreSeries"),
         items: takeUnused(seriesItems, 12),
       },
       {
         id: "more-sites",
-        title: "More sites",
+        title: t("pages.home.rail.moreSites"),
         items: takeUnused(siteItems, 12),
       },
     ];
     return definitions.filter((rail) => rail.items.length > 0);
-  }, [items, movieItems, onDeckItems, seriesItems, siteItems]);
+  }, [items, movieItems, onDeckItems, seriesItems, siteItems, t]);
   const progressByWork = useMemo(
     () => indexWatchProgressByWork(watchProgress ?? []),
     [watchProgress]
@@ -367,7 +369,7 @@ export function HomePage() {
           graphic="home"
           tone="error"
           variant="page"
-          title="Home could not be loaded"
+          title={t("pages.home.error.title")}
           description={error}
         />
       </div>
@@ -380,8 +382,8 @@ export function HomePage() {
         <TvEmptyState
           graphic="home"
           variant="page"
-          title="Your home screen is waiting for its first title"
-          description="Available films, series and sites will appear here after the next sync."
+          title={t("pages.home.empty.title")}
+          description={t("pages.home.empty.description")}
         />
       </div>
     );
@@ -391,12 +393,12 @@ export function HomePage() {
   const featureTitle =
     selectedEpisode?.detail.episode.title ??
     (selectedEpisode
-      ? `Episode ${selectedEpisode.detail.episode.episode_number}`
+      ? t("pages.home.episodeLabel", { number: selectedEpisode.detail.episode.episode_number })
       : selected.title);
   const featureOverview =
     selectedEpisode?.detail.episode.overview ??
     selected.overview ??
-    "No synopsis is available.";
+    t("pages.home.noSynopsis");
 
   function selectFromRail(rail: HomeRailId, id: string) {
     setActiveRail(rail);
@@ -422,7 +424,7 @@ export function HomePage() {
   return (
     <TvStageShell
       className="tv-home"
-      ariaLabel="Home"
+      ariaLabel={t("pages.home.title")}
       artworkKey={selected.id}
       artwork={
         <CachedArtworkImage
@@ -437,13 +439,15 @@ export function HomePage() {
       <aside className="tv-home-feature" key={`home-feature-${selected.id}`}>
         <p className="tv-provider">
           {selectedEpisode
-            ? `${selected.title} · S${String(selectedEpisode.seasonNumber).padStart(
-                2,
-                "0"
-              )} E${String(selectedEpisode.detail.episode.episode_number).padStart(2, "0")}`
-            : `${workKindLabel(selected)} · ${
-                selected.genres[0] ?? "Your library"
-              }`}
+            ? t("pages.home.episodeProvider", {
+                title: selected.title,
+                season: String(selectedEpisode.seasonNumber).padStart(2, "0"),
+                episode: String(selectedEpisode.detail.episode.episode_number).padStart(2, "0"),
+              })
+            : t("pages.home.kindGenre", {
+                kind: workKindLabel(selected, t),
+                genre: selected.genres[0] ?? t("pages.home.defaultGenre"),
+              })}
         </p>
         <h2>{featureTitle}</h2>
         <p>{featureOverview}</p>
@@ -454,7 +458,7 @@ export function HomePage() {
         ref={railsRef}
         mode="vertical-tracks"
         scrollKey="home:rails"
-        ariaLabel="Home media tracks"
+        ariaLabel={t("pages.home.mediaTracksAriaLabel")}
       >
         {rails.map((rail) => (
           <HomeRail
@@ -553,6 +557,7 @@ function HomeRail({
   onNavigate: ReturnType<typeof useNavigationLayer>["captureLink"];
 }) {
   const mediaContext = useMediaContextMenu({ onProgressChanged });
+  const { t } = useLanguage();
 
   return (
     <TvMediaTrack
@@ -576,14 +581,15 @@ function HomeRail({
             const title =
               episode?.detail.episode.title ??
               (episode
-                ? `Episode ${episode.detail.episode.episode_number}`
+                ? t("pages.home.episodeLabel", { number: episode.detail.episode.episode_number })
                 : work.title);
             const subtitle = episode
-              ? `${work.title} · S${String(episode.seasonNumber).padStart(
-                  2,
-                  "0"
-                )} E${String(episode.detail.episode.episode_number).padStart(2, "0")}`
-              : workKindLabel(work);
+              ? t("pages.home.episodeProvider", {
+                  title: work.title,
+                  season: String(episode.seasonNumber).padStart(2, "0"),
+                  episode: String(episode.detail.episode.episode_number).padStart(2, "0"),
+                })
+              : workKindLabel(work, t);
             return (
               <Link
                 key={work.id}
@@ -635,14 +641,19 @@ function HomeRail({
 }
 
 function HomeLoader() {
+  const { t } = useLanguage();
   return (
-    <div className="tv-home tv-compact-loading" aria-label="Loading Home" role="status">
+    <div
+      className="tv-home tv-compact-loading"
+      aria-label={t("pages.home.loadingAriaLabel")}
+      role="status"
+    >
       <div className="tv-orbit-loader" aria-hidden="true">
         <i />
         <i />
         <i />
       </div>
-      <p>Preparing home</p>
+      <p>{t("pages.home.preparingHome")}</p>
     </div>
   );
 }

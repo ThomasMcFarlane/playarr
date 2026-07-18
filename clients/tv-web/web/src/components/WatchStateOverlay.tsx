@@ -1,4 +1,5 @@
 import type { WatchProgress } from "@streamarr-tv/api-client";
+import { useLanguage } from "../lib/i18n/LanguageProvider";
 
 export function indexWatchProgressByWork(
   rows: WatchProgress[]
@@ -22,6 +23,8 @@ export function WatchStateOverlay({
   progress?: WatchProgress;
   showUnwatched?: boolean;
 }) {
+  const { t } = useLanguage();
+
   if (progress?.state === "part_watched") {
     const progressPercent =
       progress.duration_ms > 0
@@ -31,7 +34,9 @@ export function WatchStateOverlay({
     return (
       <span
         className="tv-watch-progress"
-        aria-label={`${Math.round(progressPercent)}% watched`}
+        aria-label={t("components.watchStateOverlay.percentWatched", {
+          percent: Math.round(progressPercent),
+        })}
       >
         <i style={{ width: `${progressPercent}%` }} />
       </span>
@@ -39,7 +44,12 @@ export function WatchStateOverlay({
   }
 
   if (progress?.state === "unseen" || (!progress && showUnwatched)) {
-    return <span className="tv-watch-unseen" aria-label="Unwatched" />;
+    return (
+      <span
+        className="tv-watch-unseen"
+        aria-label={t("components.watchStateOverlay.unwatched")}
+      />
+    );
   }
 
   return null;

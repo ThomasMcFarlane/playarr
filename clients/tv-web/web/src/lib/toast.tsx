@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useLanguage } from "./i18n/LanguageProvider";
 
 const TOAST_DURATION_MS = 4_000;
 
@@ -23,6 +24,7 @@ interface ToastContextValue {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { t } = useLanguage();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextIdRef = useRef(0);
   const timersRef = useRef(new Map<number, number>());
@@ -77,7 +79,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               type="button"
               className="toast-dismiss"
               onClick={() => dismissToast(toast.id)}
-              aria-label={`Dismiss ${toast.message}`}
+              aria-label={t("lib.toast.dismiss", { message: toast.message })}
             >
               &times;
             </button>

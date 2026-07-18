@@ -1,10 +1,12 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../lib/ApiClientProvider";
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
 
 export function SettingsAccountPage() {
-  useDocumentTitle("Account — Settings");
+  const { t } = useLanguage();
+  useDocumentTitle(t("settings.account.documentTitle"));
   const { logout } = useAuth();
   const navigate = useNavigate();
 
@@ -15,13 +17,13 @@ export function SettingsAccountPage() {
 
   return (
     <SettingsSectionLayout
-      kicker="Make it yours"
-      title="Account"
-      description="End this browser session and return to sign in."
+      kicker={t("settings.account.kicker")}
+      title={t("settings.account.title")}
+      description={t("settings.account.description")}
     >
       <section className="card settings-card settings-card-wide">
         <button type="button" className="btn btn-danger" onClick={handleSignOut}>
-          Sign out
+          {t("settings.account.signOut")}
         </button>
       </section>
     </SettingsSectionLayout>

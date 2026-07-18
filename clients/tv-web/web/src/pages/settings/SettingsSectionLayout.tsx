@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { navigationOriginFromState } from "../../lib/navigationLayer";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
 
 interface SettingsSectionLocationState {
   backTo?: unknown;
@@ -29,6 +30,7 @@ export function SettingsSectionLayout({
   description: string;
   children: ReactNode;
 }) {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as SettingsSectionLocationState | null;
@@ -42,7 +44,7 @@ export function SettingsSectionLayout({
         className="back-link"
         onClick={() => (navigationOrigin ? navigate(-1) : navigate(backTo))}
       >
-        <span aria-hidden="true">←</span> Settings
+        <span aria-hidden="true">←</span> {t("settings.sectionLayout.backLink")}
       </button>
 
       <div className="page-intro">

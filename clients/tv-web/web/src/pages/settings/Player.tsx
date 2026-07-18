@@ -3,6 +3,7 @@ import { ApiError } from "@streamarr-tv/api-client";
 import { usePrimaryApiClient } from "../../lib/ApiClientProvider";
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useToast } from "../../lib/toast";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
 
 const AUDIO_LANGUAGE_OPTIONS = [
@@ -34,7 +35,8 @@ function isAudioLanguage(value: string): value is AudioLanguage {
 }
 
 export function SettingsPlayerPage() {
-  useDocumentTitle("Player — Settings");
+  const { t } = useLanguage();
+  useDocumentTitle(t("settings.playerPreferences.documentTitle"));
   const client = usePrimaryApiClient();
   const { showToast } = useToast();
   const [audioLanguage, setAudioLanguage] = useState<AudioLanguage>("en");
@@ -90,7 +92,7 @@ export function SettingsPlayerPage() {
       const savedLanguage = preferences.preferred_audio_language;
       setAudioLanguage(isAudioLanguage(savedLanguage) ? savedLanguage : nextLanguage);
       setPlayerPreferenceState({ status: "saved" });
-      showToast("Player preference saved.");
+      showToast(t("settings.playerPreferences.toastSaved"));
     } catch (error) {
       if (playerPreferenceRequestRef.current !== requestId) return;
       setAudioLanguage(previousLanguage);
@@ -104,15 +106,15 @@ export function SettingsPlayerPage() {
 
   return (
     <SettingsSectionLayout
-      kicker="Make it yours"
-      title="Player"
-      description="Choose the audio language Playarr should prioritise."
+      kicker={t("settings.playerPreferences.kicker")}
+      title={t("settings.playerPreferences.title")}
+      description={t("settings.playerPreferences.description")}
     >
       <section className="card settings-card settings-card-wide">
         <div
           className="player-language-choice"
           role="radiogroup"
-          aria-label="Preferred audio language"
+          aria-label={t("settings.playerPreferences.audioLanguageAriaLabel")}
           aria-busy={
             playerPreferenceState.status === "loading" ||
             playerPreferenceState.status === "saving"
@@ -142,12 +144,14 @@ export function SettingsPlayerPage() {
           aria-live="polite"
         >
           {playerPreferenceState.status === "loading"
-            ? "Loading your player preference…"
+            ? t("settings.playerPreferences.statusLoading")
             : playerPreferenceState.status === "saving"
-              ? `Saving ${selectedAudioLanguage}…`
+              ? t("settings.playerPreferences.statusSaving", { language: selectedAudioLanguage })
               : playerPreferenceState.status === "error"
-                ? `Could not update the player preference (${playerPreferenceState.message}).`
-                : `${selectedAudioLanguage} will be selected when it is available.`}
+                ? t("settings.playerPreferences.statusError", {
+                    message: playerPreferenceState.message,
+                  })
+                : t("settings.playerPreferences.statusReady", { language: selectedAudioLanguage })}
         </p>
       </section>
     </SettingsSectionLayout>

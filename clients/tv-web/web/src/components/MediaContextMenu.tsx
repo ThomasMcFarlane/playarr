@@ -16,6 +16,8 @@ import {
   type WorkDetail,
 } from "@streamarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
+import { useLanguage } from "../lib/i18n/LanguageProvider";
+import type { TranslationKey } from "../lib/i18n/translations";
 import { captureNavigationLayer } from "../lib/navigationLayer";
 import { useToast } from "../lib/toast";
 import { TvEmptyState } from "./tv/TvEmptyState";
@@ -122,7 +124,10 @@ interface MediaContextMenuOptions {
   ) => void;
 }
 
-function playableLeaves(detail: WorkDetail): PlayableLeaf[] {
+function playableLeaves(
+  detail: WorkDetail,
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string
+): PlayableLeaf[] {
   if (detail.media_file_id) {
     return [
       {
@@ -155,7 +160,9 @@ function playableLeaves(detail: WorkDetail): PlayableLeaf[] {
                     episodeId: episode.episode.id,
                     title:
                       episode.episode.title ??
-                      `Episode ${episode.episode.episode_number}`,
+                      t("components.mediaContextMenu.episodeFallbackTitle", {
+                        number: episode.episode.episode_number,
+                      }),
                     seriesTitle: detail.work.title,
                     seasonNumber: season.season.season_number,
                     episodeNumber: episode.episode.episode_number,
@@ -197,6 +204,7 @@ export function useMediaContextMenu({
   const client = useApiClient();
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const { showToast } = useToast();
   const [activeItem, setActiveItem] = useState<MediaContextItem | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -351,13 +359,13 @@ export function useMediaContextMenu({
       const workId = activeItem.work?.id ?? activeItem.workId;
       const leaves =
         activeItem.leaves ??
-        (workId ? playableLeaves(await getDetail(workId)) : []);
+        (workId ? playableLeaves(await getDetail(workId), t) : []);
       const preferredMediaFileId =
         activeItem.preferredMediaFileId ?? activeItem.progress?.media_file_id;
       const leaf =
         leaves.find((candidate) => candidate.mediaFileId === preferredMediaFileId) ??
         leaves[0];
-      if (!leaf) throw new Error("No playable media is available for this title.");
+      if (!leaf) throw new Error(t("components.mediaContextMenu.noPlayableMedia"));
 
       navigate(`/player/${leaf.mediaFileId}`, {
         state: {
@@ -387,7 +395,7 @@ export function useMediaContextMenu({
       setBusyAction(null);
       setError(caught instanceof Error ? caught.message : String(caught));
     }
-  }, [activeItem, busyAction, close, getDetail, location.key, location.pathname, navigate]);
+  }, [activeItem, busyAction, close, getDetail, location.key, location.pathname, navigate, t]);
 
   const setWatched = useCallback(
     async (watched: boolean) => {
@@ -400,13 +408,13 @@ export function useMediaContextMenu({
           activeItem.leaves
             ? Promise.resolve(activeItem.leaves)
             : workId
-              ? getDetail(workId).then(playableLeaves)
+              ? getDetail(workId).then((detail) => playableLeaves(detail, t))
               : Promise.resolve([]),
           client.listWatchProgress(),
         ]);
         const leaves = resolvedLeaves;
         if (leaves.length === 0) {
-          throw new Error("No playable media is available for this title.");
+          throw new Error(t("components.mediaContextMenu.noPlayableMedia"));
         }
         const progressByFile = new Map(
           currentProgress.map((progress) => [progress.media_file_id, progress])
@@ -428,13 +436,17 @@ export function useMediaContextMenu({
         }
         onProgressChanged?.(workId ?? "", updated);
         close();
-        showToast(watched ? "Marked as watched." : "Marked as unwatched.");
+        showToast(
+          watched
+            ? t("components.mediaContextMenu.markedWatched")
+            : t("components.mediaContextMenu.markedUnwatched")
+        );
       } catch (caught) {
         setBusyAction(null);
         setError(caught instanceof Error ? caught.message : String(caught));
       }
     },
-    [activeItem, busyAction, client, close, getDetail, onProgressChanged, showToast]
+    [activeItem, busyAction, client, close, getDetail, onProgressChanged, showToast, t]
   );
 
   const returnToActions = useCallback(() => {
@@ -514,11 +526,21 @@ export function useMediaContextMenu({
       try {
         const existingItems = await client.listPlaylistItems(playlist.id);
         if (existingItems.some((item) => item.work_id === work.id)) {
-          throw new Error(`${work.title} is already in ${playlist.name}.`);
+          throw new Error(
+            t("components.mediaContextMenu.alreadyInPlaylist", {
+              title: work.title,
+              playlist: playlist.name,
+            })
+          );
         }
         await client.addPlaylistItem(playlist.id, { work_id: work.id });
         close();
-        showToast(`${work.title} added to ${playlist.name}.`);
+        showToast(
+          t("components.mediaContextMenu.addedToPlaylist", {
+            title: work.title,
+            playlist: playlist.name,
+          })
+        );
       } catch (caught) {
         playlistActionInFlightRef.current = false;
         setBusyAction(null);
@@ -527,7 +549,7 @@ export function useMediaContextMenu({
         );
       }
     },
-    [activeItem, busyAction, client, close, showToast, suppressOriginRelease]
+    [activeItem, busyAction, client, close, showToast, suppressOriginRelease, t]
   );
 
   const choosePlaylist = useCallback(
@@ -567,7 +589,12 @@ export function useMediaContextMenu({
       try {
         const existingItems = await client.listPlaylistItems(playlist.id);
         if (existingItems.some((item) => item.work_id === work.id)) {
-          throw new Error(`${work.title} is already in ${playlist.name}.`);
+          throw new Error(
+            t("components.mediaContextMenu.alreadyInPlaylist", {
+              title: work.title,
+              playlist: playlist.name,
+            })
+          );
         }
         const destinationItem = await client.addPlaylistItem(playlist.id, {
           work_id: work.id,
@@ -591,7 +618,12 @@ export function useMediaContextMenu({
           destinationItemId: destinationItem.id,
         });
         close();
-        showToast(`${work.title} moved to ${playlist.name}.`);
+        showToast(
+          t("components.mediaContextMenu.movedToPlaylist", {
+            title: work.title,
+            playlist: playlist.name,
+          })
+        );
       } catch (caught) {
         playlistActionInFlightRef.current = false;
         setBusyAction(null);
@@ -600,7 +632,7 @@ export function useMediaContextMenu({
         );
       }
     },
-    [activeItem, busyAction, client, close, showToast, suppressOriginRelease]
+    [activeItem, busyAction, client, close, showToast, suppressOriginRelease, t]
   );
 
   const removeFromPlaylist = useCallback(
@@ -618,7 +650,10 @@ export function useMediaContextMenu({
       setBusyAction("playlist:remove");
       setError(null);
       try {
-        const title = activeItem.work?.title ?? activeItem.title ?? "Item";
+        const title =
+          activeItem.work?.title ??
+          activeItem.title ??
+          t("components.mediaContextMenu.genericItem");
         await client.removePlaylistItem(
           membership.playlistId,
           membership.itemId
@@ -629,7 +664,9 @@ export function useMediaContextMenu({
           itemId: membership.itemId,
         });
         close();
-        showToast(`${title} removed from playlist.`);
+        showToast(
+          t("components.mediaContextMenu.removedFromPlaylist", { title })
+        );
       } catch (caught) {
         playlistActionInFlightRef.current = false;
         setBusyAction(null);
@@ -638,7 +675,7 @@ export function useMediaContextMenu({
         );
       }
     },
-    [activeItem, busyAction, client, close, showToast, suppressOriginRelease]
+    [activeItem, busyAction, client, close, showToast, suppressOriginRelease, t]
   );
 
   const itemProps = useCallback(
@@ -712,9 +749,21 @@ export function useMediaContextMenu({
         className="media-context-drawer"
         role="dialog"
         aria-modal="true"
-        aria-label={`${
-          activeItem.work?.title ?? activeItem.title ?? "Media"
-        } ${contextView === "actions" ? "actions" : "playlist picker"}`}
+        aria-label={
+          contextView === "actions"
+            ? t("components.mediaContextMenu.dialogAriaLabelActions", {
+                title:
+                  activeItem.work?.title ??
+                  activeItem.title ??
+                  t("components.mediaContextMenu.genericTitle"),
+              })
+            : t("components.mediaContextMenu.dialogAriaLabelPlaylistPicker", {
+                title:
+                  activeItem.work?.title ??
+                  activeItem.title ??
+                  t("components.mediaContextMenu.genericTitle"),
+              })
+        }
         onClickCapture={(event) => {
           if (!suppressNextKeyboardClickRef.current || event.detail !== 0) return;
           event.preventDefault();
@@ -774,13 +823,21 @@ export function useMediaContextMenu({
         {contextView === "actions" ? (
           <>
             <header>
-              <p>Title actions</p>
-              <h2>{activeItem.work?.title ?? activeItem.title ?? "Media"}</h2>
+              <p>{t("components.mediaContextMenu.titleActionsHeading")}</p>
+              <h2>
+                {activeItem.work?.title ??
+                  activeItem.title ??
+                  t("components.mediaContextMenu.genericTitle")}
+              </h2>
             </header>
             <div className="media-context-actions">
               <button ref={firstActionRef} type="button" disabled={Boolean(busyAction)} onClick={play}>
                 <span aria-hidden="true">▶</span>
-                <strong>{busyAction === "play" ? "Opening…" : "Play"}</strong>
+                <strong>
+                  {busyAction === "play"
+                    ? t("components.mediaContextMenu.opening")
+                    : t("components.mediaContextMenu.play")}
+                </strong>
               </button>
               {isPlaylistItem ? (
                 <>
@@ -791,7 +848,7 @@ export function useMediaContextMenu({
                     onClick={() => void openPlaylistPicker()}
                   >
                     <span aria-hidden="true">↔</span>
-                    <strong>Move in playlist</strong>
+                    <strong>{t("components.mediaContextMenu.moveInPlaylist")}</strong>
                   </button>
                   <button
                     type="button"
@@ -803,8 +860,8 @@ export function useMediaContextMenu({
                     <span aria-hidden="true">−</span>
                     <strong>
                       {busyAction === "playlist:remove"
-                        ? "Removing…"
-                        : "Remove from playlist"}
+                        ? t("components.mediaContextMenu.removing")
+                        : t("components.mediaContextMenu.removeFromPlaylist")}
                     </strong>
                   </button>
                 </>
@@ -816,7 +873,7 @@ export function useMediaContextMenu({
                   onClick={() => void openPlaylistPicker()}
                 >
                   <span aria-hidden="true">＋</span>
-                  <strong>Add to Playlist</strong>
+                  <strong>{t("components.mediaContextMenu.addToPlaylist")}</strong>
                 </button>
               ) : null}
               <button
@@ -825,7 +882,11 @@ export function useMediaContextMenu({
                 onClick={() => void setWatched(true)}
               >
                 <span aria-hidden="true">✓</span>
-                <strong>{busyAction === "watched" ? "Updating…" : "Mark as Watched"}</strong>
+                <strong>
+                  {busyAction === "watched"
+                    ? t("components.mediaContextMenu.updating")
+                    : t("components.mediaContextMenu.markAsWatched")}
+                </strong>
               </button>
               <button
                 type="button"
@@ -833,7 +894,11 @@ export function useMediaContextMenu({
                 onClick={() => void setWatched(false)}
               >
                 <span aria-hidden="true">○</span>
-                <strong>{busyAction === "unwatched" ? "Updating…" : "Mark as Unwatched"}</strong>
+                <strong>
+                  {busyAction === "unwatched"
+                    ? t("components.mediaContextMenu.updating")
+                    : t("components.mediaContextMenu.markAsUnwatched")}
+                </strong>
               </button>
             </div>
           </>
@@ -847,30 +912,37 @@ export function useMediaContextMenu({
                 onClick={returnToActions}
               >
                 <span aria-hidden="true">←</span>
-                Back
+                {t("components.mediaContextMenu.back")}
               </button>
-              <p>{isPlaylistItem ? "Move in playlist" : "Add to playlist"}</p>
-              <h2>{activeItem.work?.title ?? "Media"}</h2>
+              <p>
+                {isPlaylistItem
+                  ? t("components.mediaContextMenu.moveInPlaylist")
+                  : t("components.mediaContextMenu.addToPlaylistHeading")}
+              </p>
+              <h2>
+                {activeItem.work?.title ??
+                  t("components.mediaContextMenu.genericTitle")}
+              </h2>
             </header>
             <div className="media-context-actions media-context-playlist-actions">
               {playlistPicker.status === "loading" ? (
                 <div className="media-context-state" role="status">
                   <span className="tv-mini-loader" aria-hidden="true" />
-                  <p>Loading playlists…</p>
+                  <p>{t("components.mediaContextMenu.loadingPlaylists")}</p>
                 </div>
               ) : playlistPicker.status === "error" ? (
                 <TvEmptyState
                   graphic="playlist"
                   tone="error"
                   variant="compact"
-                  title="Playlists could not be loaded"
+                  title={t("components.mediaContextMenu.playlistsLoadError")}
                   description={playlistPicker.message}
                 />
               ) : playlistPicker.status === "ready" &&
                 playlistPicker.playlists.length ? (
                 <>
                   <h3 className="media-context-group-heading">
-                    Personal playlists
+                    {t("components.mediaContextMenu.personalPlaylistsHeading")}
                   </h3>
                   {playlistPicker.playlists
                     .filter(
@@ -900,8 +972,10 @@ export function useMediaContextMenu({
                 <TvEmptyState
                   graphic="playlist"
                   variant="compact"
-                  title="No personal playlists yet"
-                  description="Create one from the Playlists page."
+                  title={t("components.mediaContextMenu.noPersonalPlaylistsTitle")}
+                  description={t(
+                    "components.mediaContextMenu.noPersonalPlaylistsDescription"
+                  )}
                 />
               )}
             </div>
@@ -918,23 +992,30 @@ export function useMediaContextMenu({
                 }
               >
                 <span aria-hidden="true">←</span>
-                Back
+                {t("components.mediaContextMenu.back")}
               </button>
-              <p>{isPlaylistItem ? "Move in playlist" : "Add to playlist"}</p>
-              <h2>{activeItem.work?.title ?? "Media"}</h2>
+              <p>
+                {isPlaylistItem
+                  ? t("components.mediaContextMenu.moveInPlaylist")
+                  : t("components.mediaContextMenu.addToPlaylistHeading")}
+              </p>
+              <h2>
+                {activeItem.work?.title ??
+                  t("components.mediaContextMenu.genericTitle")}
+              </h2>
             </header>
             <div className="media-context-actions media-context-playlist-actions">
               {playlistPicker.status === "loading" ? (
                 <div className="media-context-state" role="status">
                   <span className="tv-mini-loader" aria-hidden="true" />
-                  <p>Loading playlists…</p>
+                  <p>{t("components.mediaContextMenu.loadingPlaylists")}</p>
                 </div>
               ) : playlistPicker.status === "error" ? (
                 <TvEmptyState
                   graphic="playlist"
                   tone="error"
                   variant="compact"
-                  title="Playlists could not be loaded"
+                  title={t("components.mediaContextMenu.playlistsLoadError")}
                   description={playlistPicker.message}
                 />
               ) : selectedPlaylist && playlistPicker.status === "ready" ? (
@@ -945,7 +1026,7 @@ export function useMediaContextMenu({
                   {[
                     {
                       playlist: selectedPlaylist,
-                      parentPath: "Top level",
+                      parentPath: t("components.mediaContextMenu.topLevel"),
                     },
                     ...playlistDescendants(
                       selectedPlaylist,
@@ -989,7 +1070,7 @@ export function useMediaContextMenu({
                 <TvEmptyState
                   graphic="move"
                   variant="compact"
-                  title="No playlist destinations are available"
+                  title={t("components.mediaContextMenu.noPlaylistDestinations")}
                 />
               )}
             </div>

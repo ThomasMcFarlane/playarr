@@ -24,6 +24,7 @@ import {
 } from "./pages/Player";
 import { SettingsIndexPage } from "./pages/settings/Index";
 import { SettingsAppearancePage } from "./pages/settings/Appearance";
+import { SettingsLanguagePage } from "./pages/settings/Language";
 import { SettingsPlayerPage } from "./pages/settings/Player";
 import { SettingsServerPage } from "./pages/settings/Server";
 import { SettingsProfileLockPage } from "./pages/settings/ProfileLock";
@@ -62,10 +63,18 @@ import {
 } from "./lib/playerSession";
 import { useTvNavigation } from "./lib/useTvNavigation";
 import { PLAYARR_CLIENT_PLATFORM } from "./lib/clientPlatform";
+import { useLanguage } from "./lib/i18n/LanguageProvider";
+import type { TranslationKey } from "./lib/i18n/translations";
+
+const LOCALE_TAGS: Record<string, string> = {
+  en: "en-GB",
+  th: "th-TH",
+  ja: "ja-JP",
+};
 
 interface NavItem {
   to: string;
-  label: string;
+  labelKey: TranslationKey;
   end: boolean;
   Icon: ComponentType;
   workKind?: WorkKind;
@@ -85,36 +94,38 @@ export interface AppShellOutletContext {
 const NAV_GROUPS: ReadonlyArray<NavGroup> = [
   {
     id: "search",
-    items: [{ to: "/search", label: "Search", end: false, Icon: SearchIcon }],
+    items: [
+      { to: "/search", labelKey: "shell.nav.search", end: false, Icon: SearchIcon },
+    ],
   },
   {
     id: "library",
     items: [
-      { to: "/", label: "Home", end: true, Icon: HomeIcon },
+      { to: "/", labelKey: "shell.nav.home", end: true, Icon: HomeIcon },
       {
         to: "/series",
-        label: "Series",
+        labelKey: "shell.nav.series",
         end: false,
         Icon: SeriesIcon,
         workKind: "series",
       },
       {
         to: "/movies",
-        label: "Movies",
+        labelKey: "shell.nav.movies",
         end: false,
         Icon: MoviesIcon,
         workKind: "movie",
       },
       {
         to: "/sites",
-        label: "Sites",
+        labelKey: "shell.nav.sites",
         end: false,
         Icon: SitesIcon,
         workKind: "site",
       },
       {
         to: "/music",
-        label: "Music",
+        labelKey: "shell.nav.music",
         end: false,
         Icon: MusicIcon,
         workKind: "artist",
@@ -126,7 +137,7 @@ const NAV_GROUPS: ReadonlyArray<NavGroup> = [
     items: [
       {
         to: "/playlists",
-        label: "Playlists",
+        labelKey: "shell.nav.playlists",
         end: false,
         Icon: PlaylistsIcon,
       },
@@ -160,6 +171,8 @@ function isBackKey(event: KeyboardEvent): boolean {
  */
 function AppShell() {
   const client = useApiClient();
+  const { t, language } = useLanguage();
+  const localeTag = LOCALE_TAGS[language] ?? "en-GB";
   const { authFailed, currentUserId, currentUserName } = useAuth();
   const [availableWorkKindsState, setAvailableWorkKindsState] = useState<{
     userId: string | undefined;
@@ -311,9 +324,14 @@ function AppShell() {
 
       {!isPlayerRoute && (
         <header className="app-header">
-          <div className="app-clock" aria-label={`Local time ${formatTime(now)}`}>
-            <span className="app-clock-time">{formatTime(now)}</span>
-            <span className="app-clock-date">{formatDate(now)}</span>
+          <div
+            className="app-clock"
+            aria-label={t("shell.clock.ariaLabel", {
+              time: formatTime(now, localeTag),
+            })}
+          >
+            <span className="app-clock-time">{formatTime(now, localeTag)}</span>
+            <span className="app-clock-date">{formatDate(now, localeTag)}</span>
           </div>
 
           <div className="app-utility">
@@ -373,7 +391,7 @@ function AppShell() {
       )}
 
       {!isPlayerRoute && !isProfilesRoute && (
-        <nav className="app-nav" aria-label="Primary navigation">
+        <nav className="app-nav" aria-label={t("shell.nav.ariaLabel")}>
           {NAV_GROUPS.map((group) => (
             <div
               className={`app-nav-group app-nav-group-${group.id}`}
@@ -384,7 +402,7 @@ function AppShell() {
                   (item) =>
                     !item.workKind || availableWorkKinds?.has(item.workKind)
                 )
-                .map(({ to, label, end, Icon }) => (
+                .map(({ to, labelKey, end, Icon }) => (
                   <NavLink
                     key={to}
                     to={to}
@@ -396,7 +414,7 @@ function AppShell() {
                     <span className="app-nav-icon">
                       <Icon />
                     </span>
-                    <span className="app-nav-label">{label}</span>
+                    <span className="app-nav-label">{t(labelKey)}</span>
                   </NavLink>
                 ))}
             </div>
@@ -408,7 +426,9 @@ function AppShell() {
         <button
           type="button"
           className="app-user-identity"
-          aria-label={`Signed in as ${currentUserName ?? "Viewer"}. Open profiles.`}
+          aria-label={t("shell.user.ariaLabel", {
+            name: currentUserName ?? t("shell.user.viewerFallback"),
+          })}
           data-navigation-focus-key="shell:user"
           onClick={(event) => {
             const origin = captureNavigationLayer(
@@ -436,7 +456,9 @@ function AppShell() {
               />
             </svg>
           </span>
-          <span className="app-user-name">{currentUserName ?? "Viewer"}</span>
+          <span className="app-user-name">
+            {currentUserName ?? t("shell.user.viewerFallback")}
+          </span>
         </button>
       )}
     </div>
@@ -454,16 +476,16 @@ function useMinuteClock(): Date {
   return now;
 }
 
-function formatTime(date: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
+function formatTime(date: Date, locale?: string): string {
+  return new Intl.DateTimeFormat(locale, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   }).format(date);
 }
 
-function formatDate(date: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
+function formatDate(date: Date, locale?: string): string {
+  return new Intl.DateTimeFormat(locale, {
     weekday: "short",
     day: "numeric",
     month: "long",
@@ -515,6 +537,7 @@ export function App() {
         <Route path="/profiles" element={<ProfilesPage />} />
         <Route path="/settings" element={<SettingsIndexPage />} />
         <Route path="/settings/appearance" element={<SettingsAppearancePage />} />
+        <Route path="/settings/language" element={<SettingsLanguagePage />} />
         <Route path="/settings/player" element={<SettingsPlayerPage />} />
         <Route path="/settings/server" element={<SettingsServerPage />} />
         <Route path="/settings/profile-lock" element={<SettingsProfileLockPage />} />

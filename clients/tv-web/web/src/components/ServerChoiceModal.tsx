@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { JoinedWorkSource } from "../lib/joinedServers";
+import { useLanguage } from "../lib/i18n/LanguageProvider";
 
 export function ServerChoiceModal({
   sources,
@@ -12,6 +13,7 @@ export function ServerChoiceModal({
   onCancel: () => void;
   onSelect: (source: JoinedWorkSource) => Promise<void> | void;
 }) {
+  const { t } = useLanguage();
   const firstButtonRef = useRef<HTMLButtonElement>(null);
   const [selectingUrl, setSelectingUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,9 +54,13 @@ export function ServerChoiceModal({
         aria-labelledby="server-choice-title"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <p className="page-kicker">Available on {sources.length} servers</p>
-        <h2 id="server-choice-title">Where should Playarr play {title}?</h2>
-        <p className="muted">Choose the server to connect to for this playback session.</p>
+        <p className="page-kicker">
+          {t("components.serverChoiceModal.availableOnServers", { count: sources.length })}
+        </p>
+        <h2 id="server-choice-title">
+          {t("components.serverChoiceModal.wherePlay", { title })}
+        </h2>
+        <p className="muted">{t("components.serverChoiceModal.chooseServer")}</p>
         <div className="server-choice-options">
           {sources.map((source, index) => (
             <button
@@ -66,7 +72,11 @@ export function ServerChoiceModal({
               onClick={() => void handleSelect(source)}
             >
               <strong>{source.label}</strong>
-              <span>{selectingUrl === source.url ? "Connecting…" : source.url}</span>
+              <span>
+                {selectingUrl === source.url
+                  ? t("components.serverChoiceModal.connecting")
+                  : source.url}
+              </span>
             </button>
           ))}
         </div>
@@ -76,7 +86,7 @@ export function ServerChoiceModal({
           </p>
         ) : null}
         <button type="button" className="btn btn-secondary" onClick={onCancel}>
-          Cancel
+          {t("components.serverChoiceModal.cancel")}
         </button>
       </section>
     </div>

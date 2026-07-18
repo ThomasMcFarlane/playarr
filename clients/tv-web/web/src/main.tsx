@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "./App";
 import { ApiClientProvider } from "./lib/ApiClientProvider";
+import { LanguageProvider } from "./lib/i18n/LanguageProvider";
 import { ThemeProvider } from "./lib/theme";
 import { ToastProvider } from "./lib/toast";
 import "./styles/global.css";
@@ -19,13 +20,15 @@ if (navigator.userAgent.includes("PlayarrAndroidTV/")) {
 createRoot(container).render(
   <StrictMode>
     <BrowserRouter>
-      <ThemeProvider>
-        <ApiClientProvider>
-          <ToastProvider>
-            <App />
-          </ToastProvider>
-        </ApiClientProvider>
-      </ThemeProvider>
+      <LanguageProvider>
+        <ThemeProvider>
+          <ApiClientProvider>
+            <ToastProvider>
+              <App />
+            </ToastProvider>
+          </ApiClientProvider>
+        </ThemeProvider>
+      </LanguageProvider>
     </BrowserRouter>
   </StrictMode>
 );

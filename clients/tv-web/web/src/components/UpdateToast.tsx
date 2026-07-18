@@ -1,4 +1,5 @@
 import type { AppUpdateState } from "../lib/appUpdate";
+import { useLanguage } from "../lib/i18n/LanguageProvider";
 
 export interface UpdateToastProps {
   state: AppUpdateState;
@@ -13,19 +14,21 @@ export interface UpdateToastProps {
  * already on its way to a fresh reload.
  */
 export function UpdateToast({ state }: UpdateToastProps) {
+  const { t } = useLanguage();
+
   if (!state.updateAvailable) return null;
 
   return (
     <div role="status" className="update-toast">
-      <span>A new version of Playarr is available.</span>
+      <span>{t("components.updateToast.updateAvailable")}</span>
       <button type="button" className="btn btn-primary btn-sm" onClick={state.reloadNow}>
-        Reload
+        {t("components.updateToast.reload")}
       </button>
       <button
         type="button"
         className="update-toast-dismiss"
         onClick={state.dismiss}
-        aria-label="Dismiss"
+        aria-label={t("components.updateToast.dismiss")}
       >
         &times;
       </button>

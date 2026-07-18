@@ -11,6 +11,8 @@ import { createPortal } from "react-dom";
 import type { Work } from "@streamarr-tv/api-client";
 import type { PlaybackEngineController } from "../../lib/usePlaybackEngine";
 import { CachedArtworkImage } from "../../lib/artwork";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
+import type { TranslationKey } from "../../lib/i18n/translations";
 import { MediaThumbnailArtwork } from "../MediaThumbnailArtwork";
 import { useMediaContextMenu } from "../MediaContextMenu";
 import { PlayerControls } from "./PlayerControls";
@@ -80,6 +82,7 @@ export function PlayerBackButton({
   onFocus?: () => void;
   onBlur?: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <button
       type="button"
@@ -100,10 +103,10 @@ export function PlayerBackButton({
           onNavigateToControls();
         }
       }}
-      aria-label="Back to details"
+      aria-label={t("components.player.surface.backButtonAriaLabel")}
     >
       <BackIcon />
-      <span>Back</span>
+      <span>{t("components.player.surface.backButtonLabel")}</span>
     </button>
   );
 }
@@ -121,6 +124,7 @@ function PlayerMinimiseButton({
   onFocus: () => void;
   onBlur?: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <button
       type="button"
@@ -139,10 +143,10 @@ function PlayerMinimiseButton({
           onNavigateToControls();
         }
       }}
-      aria-label="Minimise player"
+      aria-label={t("components.player.surface.minimiseButtonAriaLabel")}
     >
       <MinimiseIcon />
-      <span>Minimise</span>
+      <span>{t("components.player.surface.minimiseButtonLabel")}</span>
     </button>
   );
 }
@@ -372,6 +376,7 @@ function InlineMusicMiniPlayer({
   progressPercentage: number;
   onMaximise: () => void;
 }) {
+  const { t } = useLanguage();
   return createPortal(
     <div className="player-page is-minimised player-inline-music-mini">
       <div className="player-shell player-shell-minimised player-shell-music">
@@ -385,7 +390,7 @@ function InlineMusicMiniPlayer({
           className="mini-player-hit-target"
           data-navigation-focus-key="shell:mini-player"
           onClick={onMaximise}
-          aria-label={`Open Cover Flow for ${title}`}
+          aria-label={t("components.player.surface.openCoverFlowAriaLabel", { title })}
         />
         <div className="mini-player-details" aria-hidden="true">
           <span className="mini-player-title">{title}</span>
@@ -458,6 +463,7 @@ export function PlayerSurface({
     subtitleSwitching,
     subtitleError,
   } = player;
+  const { t } = useLanguage();
   const systemVolumeOnly =
     typeof navigator !== "undefined" &&
     navigator.userAgent.includes("PlayarrAndroidTV/");
@@ -950,8 +956,8 @@ export function PlayerSurface({
           minimised
             ? undefined
             : musicContext
-              ? "Audio playback surface"
-              : "Video playback surface"
+              ? t("components.player.surface.audioSurfaceAriaLabel")
+              : t("components.player.surface.videoSurfaceAriaLabel")
         }
         onFocus={minimised ? undefined : handleActivity}
       />
@@ -963,7 +969,7 @@ export function PlayerSurface({
             className="mini-player-hit-target"
             data-navigation-focus-key="shell:mini-player"
             onClick={onMaximise}
-            aria-label={`Maximise ${title}`}
+            aria-label={t("components.player.surface.maximiseAriaLabel", { title })}
           />
           <div className="mini-player-details" aria-hidden="true">
             <span className="mini-player-title">{title}</span>
@@ -1001,14 +1007,16 @@ export function PlayerSurface({
         <div className="player-overlay player-overlay-status" role="alert" aria-live="assertive">
           <div className="player-status-card player-status-card-error">
             <ErrorIcon className="player-error-icon" />
-            <p className="player-status-kicker">Playback interrupted</p>
-            <p className="player-error-title">This title stopped playing</p>
-            <p className="player-error-message">{playbackErrorMessage(engineState.error?.message)}</p>
+            <p className="player-status-kicker">{t("components.player.surface.playbackInterruptedKicker")}</p>
+            <p className="player-error-title">{t("components.player.surface.playbackErrorTitle")}</p>
+            <p className="player-error-message">{playbackErrorMessage(engineState.error?.message, t)}</p>
             <p className="player-error-code">
-              {engineState.error?.code ? `Error ${engineState.error.code}` : "Player error"}
+              {engineState.error?.code
+                ? t("components.player.surface.errorCode", { code: engineState.error.code })
+                : t("components.player.surface.genericPlayerError")}
             </p>
             <button type="button" className="btn btn-primary player-retry-btn" onClick={retryNegotiation}>
-              Restart playback
+              {t("components.player.surface.restartPlaybackButton")}
             </button>
           </div>
         </div>
@@ -1023,7 +1031,7 @@ export function PlayerSurface({
       {!minimised && playlistOpen && (
         <aside
           className="player-playlist-panel"
-          aria-label="Playback playlist"
+          aria-label={t("components.player.surface.playlistAriaLabel")}
           onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => {
             const target = event.target;
@@ -1062,19 +1070,23 @@ export function PlayerSurface({
         >
           <header>
             <div>
-              <p>Up next</p>
+              <p>{t("components.player.surface.upNext")}</p>
               <span>
                 {playlistItems.length}{" "}
                 {musicContext
                   ? playlistItems.length === 1
-                    ? "track"
-                    : "tracks"
+                    ? t("components.player.surface.unitTrack")
+                    : t("components.player.surface.unitTracks")
                   : playlistItems.length === 1
-                    ? "item"
-                    : "episodes"}
+                    ? t("components.player.surface.unitItem")
+                    : t("components.player.surface.unitEpisodes")}
               </span>
             </div>
-            <button type="button" onClick={() => closePlaylist()} aria-label="Close playlist">
+            <button
+              type="button"
+              onClick={() => closePlaylist()}
+              aria-label={t("components.player.surface.closePlaylistAriaLabel")}
+            >
               ×
             </button>
           </header>
@@ -1089,7 +1101,9 @@ export function PlayerSurface({
                 <Fragment key={`${item.mediaFileId}-${item.episodeId ?? index}`}>
                   {beginsSeason ? (
                     <h2 className="player-playlist-season">
-                      Season {item.seasonNumber}
+                      {t("components.player.surface.seasonHeading", {
+                        number: item.seasonNumber ?? 0,
+                      })}
                     </h2>
                   ) : null}
                   <button
@@ -1134,19 +1148,22 @@ export function PlayerSurface({
                     <span className="player-playlist-copy">
                       <small>
                         {item.seasonNumber !== undefined && item.episodeNumber !== undefined
-                          ? `S${String(item.seasonNumber).padStart(2, "0")} · E${String(
-                              item.episodeNumber
-                            ).padStart(2, "0")}`
+                          ? t("components.player.surface.seasonEpisodeLabel", {
+                              season: String(item.seasonNumber).padStart(2, "0"),
+                              episode: String(item.episodeNumber).padStart(2, "0"),
+                            })
                           : active
-                            ? "Now playing"
+                            ? t("components.player.surface.nowPlaying")
                             : musicContext
-                              ? "Track"
-                              : "Movie"}
+                              ? t("components.player.surface.trackLabel")
+                              : t("components.player.surface.movieLabel")}
                       </small>
                       <strong>{item.title}</strong>
                       {item.subtitle ? <span>{item.subtitle}</span> : null}
                     </span>
-                    {active ? <i aria-label="Now playing" /> : null}
+                    {active ? (
+                      <i aria-label={t("components.player.surface.nowPlaying")} />
+                    ) : null}
                   </button>
                 </Fragment>
               );
@@ -1214,14 +1231,17 @@ function formatPlayerTime(totalSeconds: number): string {
     : `${paddedMinutes}:${paddedSeconds}`;
 }
 
-function playbackErrorMessage(message: string | undefined): string {
-  if (!message) return "The player stopped unexpectedly. Check your connection and try again.";
+function playbackErrorMessage(
+  message: string | undefined,
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string
+): string {
+  if (!message) return t("components.player.surface.errorGeneric");
   const normalised = message.toLowerCase();
   if (normalised.includes("network") || normalised.includes("http") || normalised.includes("timeout")) {
-    return "The connection to the stream was lost. Check your network and restart playback.";
+    return t("components.player.surface.errorNetwork");
   }
   if (normalised.includes("codec") || normalised.includes("media") || normalised.includes("support")) {
-    return "This browser could not decode the stream it received. Restart playback to request a fresh stream.";
+    return t("components.player.surface.errorCodec");
   }
   return message;
 }

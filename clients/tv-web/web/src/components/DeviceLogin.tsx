@@ -7,6 +7,7 @@ import {
 } from "@streamarr-tv/device-auth";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { PLAYARR_CLIENT_PLATFORM } from "../lib/clientPlatform";
+import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { QrCode } from "./QrCode";
 
 export function DeviceLogin({
@@ -14,6 +15,7 @@ export function DeviceLogin({
 }: {
   onAuthenticated: (token: DeviceTokenSuccess) => void;
 }) {
+  const { t } = useLanguage();
   const client = useApiClient();
   const callbackRef = useRef(onAuthenticated);
   const [deviceCode, setDeviceCode] = useState<DeviceCodeResponse | null>(null);
@@ -59,22 +61,25 @@ export function DeviceLogin({
             <span><span className="app-logo-accent">Play</span>arr</span>
           </span>
         </div>
-        <p className="page-kicker">Sign in on another device</p>
-        <h1 className="auth-title">Link this TV</h1>
+        <p className="page-kicker">{t("components.deviceLogin.kicker")}</p>
+        <h1 className="auth-title">{t("components.deviceLogin.title")}</h1>
 
-        {!deviceCode && !error && <p className="muted auth-description">Creating a secure sign-in code…</p>}
+        {!deviceCode && !error && <p className="muted auth-description">{t("components.deviceLogin.creatingCode")}</p>}
 
         {deviceCode && !error && (
           <div className="device-login-options">
             <QrCode value={deviceCode.verificationUriComplete} />
             <div className="device-login-instructions">
-              <p className="muted">Scan the QR code, or visit</p>
+              <p className="muted">{t("components.deviceLogin.scanQr")}</p>
               <p className="device-login-url">{deviceCode.verificationUri}</p>
-              <p className="muted">and enter this code</p>
-              <p className="device-login-code" aria-label={`Pairing code ${deviceCode.userCode}`}>
+              <p className="muted">{t("components.deviceLogin.enterCode")}</p>
+              <p
+                className="device-login-code"
+                aria-label={t("components.deviceLogin.pairingCode", { code: deviceCode.userCode })}
+              >
                 {deviceCode.userCode}
               </p>
-              <p className="hint">Waiting for approval…</p>
+              <p className="hint">{t("components.deviceLogin.waitingApproval")}</p>
             </div>
           </div>
         )}
@@ -83,7 +88,7 @@ export function DeviceLogin({
           <div className="device-login-error">
             <p className="error-text">{error}</p>
             <button type="button" className="btn btn-primary" onClick={() => setAttempt((value) => value + 1)}>
-              Try again
+              {t("components.deviceLogin.tryAgain")}
             </button>
           </div>
         )}

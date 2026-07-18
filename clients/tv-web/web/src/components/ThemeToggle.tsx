@@ -1,7 +1,9 @@
 import { useTheme } from "../lib/theme";
+import { useLanguage } from "../lib/i18n/LanguageProvider";
 
 export function ThemeToggle() {
   const { resolvedTheme, toggleTheme } = useTheme();
+  const { t } = useLanguage();
   const nextTheme = resolvedTheme === "dark" ? "light" : "dark";
 
   return (
@@ -9,8 +11,8 @@ export function ThemeToggle() {
       type="button"
       className="theme-toggle"
       onClick={toggleTheme}
-      aria-label={`Use ${nextTheme} theme`}
-      title={`Use ${nextTheme} theme`}
+      aria-label={t("components.themeToggle.useTheme", { theme: nextTheme })}
+      title={t("components.themeToggle.useTheme", { theme: nextTheme })}
     >
       {resolvedTheme === "dark" ? <SunIcon /> : <MoonIcon />}
     </button>

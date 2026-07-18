@@ -4,9 +4,12 @@ import { ApiError } from "@streamarr-tv/api-client";
 import { useApiClient, useAuth } from "../lib/ApiClientProvider";
 import { isCompleteDeviceCode, normaliseDeviceCode } from "../lib/deviceCode";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { useLanguage } from "../lib/i18n/LanguageProvider";
+import type { TranslationKey } from "../lib/i18n/translations";
 
 export function DeviceLinkPage() {
-  useDocumentTitle("Link a TV");
+  const { t } = useLanguage();
+  useDocumentTitle(t("pages.deviceLink.title"));
   const client = useApiClient();
   const { currentUserId } = useAuth();
   const location = useLocation();
@@ -21,7 +24,7 @@ export function DeviceLinkPage() {
     event.preventDefault();
     const code = normaliseDeviceCode(userCode);
     if (!isCompleteDeviceCode(code)) {
-      setError("Enter the eight-character code shown on your TV.");
+      setError(t("pages.deviceLink.errorIncompleteCode"));
       return;
     }
 
@@ -38,7 +41,7 @@ export function DeviceLinkPage() {
         });
         return;
       }
-      setError(deviceLinkErrorMessage(reason));
+      setError(deviceLinkErrorMessage(reason, t));
       setSubmitting(false);
     }
   }
@@ -57,21 +60,21 @@ export function DeviceLinkPage() {
             <span><span className="app-logo-accent">Play</span>arr</span>
           </span>
         </div>
-        <p className="page-kicker">TV sign-in</p>
-        <h1 className="auth-title">Link a TV</h1>
+        <p className="page-kicker">{t("pages.deviceLink.kicker")}</p>
+        <h1 className="auth-title">{t("pages.deviceLink.title")}</h1>
 
         {linked ? (
           <div className="device-link-success" role="status">
             <p className="device-link-success-mark" aria-hidden="true">✓</p>
-            <h2>TV linked</h2>
-            <p className="muted">Return to your TV. Playarr will finish signing in automatically.</p>
+            <h2>{t("pages.deviceLink.linkedHeading")}</h2>
+            <p className="muted">{t("pages.deviceLink.linkedBody")}</p>
           </div>
         ) : (
           <form onSubmit={(event) => void handleSubmit(event)}>
             <p className="muted auth-description">
-              Enter the code shown on your TV. You will sign in before the TV is approved.
+              {t("pages.deviceLink.description")}
             </p>
-            <label className="auth-label" htmlFor="device-user-code">TV code</label>
+            <label className="auth-label" htmlFor="device-user-code">{t("pages.deviceLink.codeLabel")}</label>
             <input
               id="device-user-code"
               className={`input auth-input device-link-input${error ? " is-error" : ""}`}
@@ -85,7 +88,7 @@ export function DeviceLinkPage() {
               required
               value={userCode}
               onChange={(event) => setUserCode(normaliseDeviceCode(event.target.value))}
-              placeholder="ABCD-2345"
+              placeholder={t("pages.deviceLink.codePlaceholder")}
             />
             {error && <p className="error-text auth-error">{error}</p>}
             <button
@@ -93,7 +96,7 @@ export function DeviceLinkPage() {
               className="btn btn-primary auth-submit"
               disabled={submitting || !isCompleteDeviceCode(userCode)}
             >
-              {submitting ? "Linking…" : "Link TV"}
+              {submitting ? t("pages.deviceLink.linking") : t("pages.deviceLink.linkButton")}
             </button>
           </form>
         )}
@@ -102,9 +105,9 @@ export function DeviceLinkPage() {
   );
 }
 
-function deviceLinkErrorMessage(reason: unknown): string {
+function deviceLinkErrorMessage(reason: unknown, t: (key: TranslationKey) => string): string {
   if (reason instanceof ApiError && reason.status === 404) {
-    return "This code is invalid or has expired. Request a new code on the TV.";
+    return t("pages.deviceLink.errorInvalidCode");
   }
   return reason instanceof Error ? reason.message : String(reason);
 }

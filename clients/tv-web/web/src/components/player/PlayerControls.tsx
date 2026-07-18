@@ -9,6 +9,7 @@ import {
 } from "react";
 import type { PlaybackQualityOption } from "@streamarr-tv/api-client";
 import type { PlaybackEngineState } from "@streamarr-tv/player-core";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import {
   AudioTrackIcon,
   FullscreenEnterIcon,
@@ -116,6 +117,7 @@ export function PlayerControls({
   onQualityMenuOpenChange,
   onActivity,
 }: PlayerControlsProps) {
+  const { t } = useLanguage();
   const trackRef = useRef<HTMLDivElement>(null);
   const previousButtonRef = useRef<HTMLButtonElement>(null);
   const playButtonRef = useRef<HTMLButtonElement>(null);
@@ -582,11 +584,14 @@ export function PlayerControls({
         onPointerCancel={handleSeekPointerCancel}
         role="slider"
         tabIndex={0}
-        aria-label="Seek"
+        aria-label={t("components.player.controls.seek")}
         aria-valuemin={0}
         aria-valuemax={Math.max(duration, 0)}
         aria-valuenow={displayedPosition}
-        aria-valuetext={`${formatTime(displayedPosition)} of ${formatTime(duration)}`}
+        aria-valuetext={t("components.player.controls.seekValueText", {
+          position: formatTime(displayedPosition),
+          duration: formatTime(duration),
+        })}
       >
         {bufferedRanges.map(([start, end]) => (
           <div
@@ -609,7 +614,7 @@ export function PlayerControls({
           className="player-btn"
           onClick={onPrevious}
           disabled={!canPrevious || !onPrevious}
-          aria-label="Previous episode"
+          aria-label={t("components.player.controls.previousEpisode")}
         >
           <PreviousIcon />
         </button>
@@ -620,7 +625,11 @@ export function PlayerControls({
           className="player-btn player-btn-primary"
           data-player-default-focus
           onClick={onTogglePlay}
-          aria-label={isPlaying ? "Pause" : "Play"}
+          aria-label={
+            isPlaying
+              ? t("components.player.controls.pause")
+              : t("components.player.controls.play")
+          }
         >
           {isPlaying ? <PauseIcon /> : <PlayIcon />}
         </button>
@@ -631,7 +640,7 @@ export function PlayerControls({
           className="player-btn"
           onClick={onNext}
           disabled={!canNext || !onNext}
-          aria-label="Next episode"
+          aria-label={t("components.player.controls.nextEpisode")}
         >
           <NextIcon />
         </button>
@@ -649,7 +658,11 @@ export function PlayerControls({
               type="button"
               className="player-btn"
               onClick={() => onSetMuted(!engineState.muted)}
-              aria-label={engineState.muted ? "Unmute" : "Mute"}
+              aria-label={
+                engineState.muted
+                  ? t("components.player.controls.unmute")
+                  : t("components.player.controls.mute")
+              }
             >
               {engineState.muted || engineState.volume === 0 ? (
                 <VolumeMutedIcon />
@@ -670,7 +683,7 @@ export function PlayerControls({
                 if (engineState.muted && next > 0) onSetMuted(false);
                 onSetVolume(next);
               }}
-              aria-label="Volume"
+              aria-label={t("components.player.controls.volume")}
             />
           </div>
         )}
@@ -697,8 +710,14 @@ export function PlayerControls({
           }}
         >
           {audioMenuOpen && (
-            <div className="player-quality-menu" role="menu" aria-label="Audio track">
-              <p className="player-quality-heading">Audio</p>
+            <div
+              className="player-quality-menu"
+              role="menu"
+              aria-label={t("components.player.controls.audioTrackMenuLabel")}
+            >
+              <p className="player-quality-heading">
+                {t("components.player.controls.audioHeading")}
+              </p>
               {audioTracks.map((track, index) => {
                 const selected = track.id === (selectedAudioTrackId ?? activeAudio?.id);
                 return (
@@ -734,7 +753,9 @@ export function PlayerControls({
             ref={audioButtonRef}
             type="button"
             className="player-btn player-tool-button"
-            aria-label={`Audio: ${activeAudio?.label ?? "Unavailable"}`}
+            aria-label={t("components.player.controls.audioButtonLabel", {
+              label: activeAudio?.label ?? t("components.player.controls.unavailable"),
+            })}
             aria-haspopup="menu"
             aria-expanded={audioMenuOpen}
             disabled={audioTracks.length === 0}
@@ -769,11 +790,17 @@ export function PlayerControls({
           }}
         >
           {subtitleMenuOpen && (
-            <div className="player-quality-menu" role="menu" aria-label="Subtitle track">
-              <p className="player-quality-heading">Subtitles</p>
+            <div
+              className="player-quality-menu"
+              role="menu"
+              aria-label={t("components.player.controls.subtitleTrackMenuLabel")}
+            >
+              <p className="player-quality-heading">
+                {t("components.player.controls.subtitlesHeading")}
+              </p>
               {subtitleSwitching ? (
                 <p className="player-track-status" role="status">
-                  Preparing subtitles…
+                  {t("components.player.controls.preparingSubtitles")}
                 </p>
               ) : subtitleError ? (
                 <p className="player-track-status is-error" role="alert">
@@ -798,8 +825,8 @@ export function PlayerControls({
                 }}
               >
                 <span>
-                  <strong>Off</strong>
-                  <small>No subtitles</small>
+                  <strong>{t("components.player.controls.off")}</strong>
+                  <small>{t("components.player.controls.noSubtitles")}</small>
                 </span>
                 <span className="player-quality-check" aria-hidden="true">
                   {selectedSubtitleTrackId == null ? "✓" : ""}
@@ -844,10 +871,12 @@ export function PlayerControls({
             }`}
             aria-label={
               subtitleSwitching
-                ? "Subtitles: preparing selected track"
+                ? t("components.player.controls.subtitlesButtonPreparing")
                 : subtitleError
-                  ? `Subtitles error: ${subtitleError}`
-                  : `Subtitles: ${activeSubtitle?.label ?? "Off"}`
+                  ? t("components.player.controls.subtitlesError", { error: subtitleError })
+                  : t("components.player.controls.subtitlesButtonLabel", {
+                      label: activeSubtitle?.label ?? t("components.player.controls.off"),
+                    })
             }
             aria-haspopup="menu"
             aria-expanded={subtitleMenuOpen}
@@ -869,9 +898,11 @@ export function PlayerControls({
           type="button"
           className="player-btn player-tool-button"
           data-player-playlist-button
-          aria-label={`Playlist: ${playlistCount} ${
-            playlistCount === 1 ? "item" : "episodes"
-          }`}
+          aria-label={
+            playlistCount === 1
+              ? t("components.player.controls.playlistLabelSingular", { count: playlistCount })
+              : t("components.player.controls.playlistLabelPlural", { count: playlistCount })
+          }
           aria-haspopup="dialog"
           aria-expanded={playlistOpen}
           disabled={playlistCount === 0}
@@ -900,12 +931,18 @@ export function PlayerControls({
         >
           {qualityError && !qualityMenuOpen && (
             <p className="player-quality-error" role="status">
-              Couldn’t change quality
+              {t("components.player.controls.qualityChangeError")}
             </p>
           )}
           {qualityMenuOpen && (
-            <div className="player-quality-menu" role="menu" aria-label="Playback quality">
-              <p className="player-quality-heading">Quality</p>
+            <div
+              className="player-quality-menu"
+              role="menu"
+              aria-label={t("components.player.controls.qualityMenuLabel")}
+            >
+              <p className="player-quality-heading">
+                {t("components.player.controls.qualityHeading")}
+              </p>
               {qualityOptions.map((quality, index) => {
                 const selected = quality.id === activeQualityId;
                 return (
@@ -928,9 +965,13 @@ export function PlayerControls({
                     <span>
                       <strong>{quality.label}</strong>
                       {quality.video_bitrate_bps ? (
-                        <small>{Math.round(quality.video_bitrate_bps / 1_000_000)} Mbps</small>
+                        <small>
+                          {t("components.player.controls.bitrateMbps", {
+                            bitrate: Math.round(quality.video_bitrate_bps / 1_000_000),
+                          })}
+                        </small>
                       ) : (
-                        <small>Source quality</small>
+                        <small>{t("components.player.controls.sourceQuality")}</small>
                       )}
                     </span>
                     <span className="player-quality-check" aria-hidden="true">
@@ -945,7 +986,9 @@ export function PlayerControls({
             ref={qualityButtonRef}
             type="button"
             className="player-quality-button"
-            aria-label={`Quality: ${activeQuality?.label ?? "Original"}`}
+            aria-label={t("components.player.controls.qualityButtonLabel", {
+              label: activeQuality?.label ?? t("components.player.controls.original"),
+            })}
             aria-haspopup="menu"
             aria-expanded={qualityMenuOpen}
             disabled={qualitySwitching || qualityOptions.length === 0}
@@ -970,9 +1013,13 @@ export function PlayerControls({
             }}
           >
             <span className="player-quality-glyph" aria-hidden="true">
-              HD
+              {t("components.player.controls.hdBadge")}
             </span>
-            <span>{qualitySwitching ? "Changing…" : activeQuality?.label ?? "Original"}</span>
+            <span>
+              {qualitySwitching
+                ? t("components.player.controls.changingQuality")
+                : activeQuality?.label ?? t("components.player.controls.original")}
+            </span>
           </button>
         </div>
 
@@ -982,7 +1029,11 @@ export function PlayerControls({
             type="button"
             className="player-btn"
             onClick={onToggleFullscreen}
-            aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+            aria-label={
+              isFullscreen
+                ? t("components.player.controls.exitFullscreen")
+                : t("components.player.controls.enterFullscreen")
+            }
           >
             {isFullscreen ? <FullscreenExitIcon /> : <FullscreenEnterIcon />}
           </button>

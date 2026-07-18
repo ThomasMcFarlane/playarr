@@ -1,23 +1,25 @@
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useTheme, type ThemePreference } from "../../lib/theme";
 import { useToast } from "../../lib/toast";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
 
 const THEME_OPTIONS: ThemePreference[] = ["system", "light", "dark"];
 
 export function SettingsAppearancePage() {
-  useDocumentTitle("Appearance — Settings");
+  const { t } = useLanguage();
+  useDocumentTitle(t("settings.appearance.documentTitle"));
   const { preference, setPreference } = useTheme();
   const { showToast } = useToast();
 
   return (
     <SettingsSectionLayout
-      kicker="Make it yours"
-      title="Appearance"
-      description="Follow this device or keep a theme fixed."
+      kicker={t("settings.appearance.kicker")}
+      title={t("settings.appearance.title")}
+      description={t("settings.appearance.description")}
     >
       <section className="card settings-card settings-card-wide">
-        <div className="theme-choice" role="group" aria-label="Colour theme">
+        <div className="theme-choice" role="group" aria-label={t("settings.appearance.colourThemeLabel")}>
           {THEME_OPTIONS.map((option) => (
             <button
               key={option}
@@ -26,7 +28,7 @@ export function SettingsAppearancePage() {
               onClick={() => {
                 if (option === preference) return;
                 setPreference(option);
-                showToast("Theme preference saved.");
+                showToast(t("settings.appearance.themeSaved"));
               }}
               aria-pressed={preference === option}
             >

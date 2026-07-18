@@ -24,6 +24,7 @@ import {
   createJoinedApiClient,
   type ConnectedServerClient,
 } from "./joinedServers";
+import { useLanguage } from "./i18n/LanguageProvider";
 
 const browserFetch = createLocalNetworkFetch();
 
@@ -273,6 +274,8 @@ interface ApiClientContextValue {
   isProfileSaved: (userId: string) => boolean;
   /** Clears the stored session and `currentUserId`/`authFailed`. Callers still navigate to `/login` themselves. */
   logout: () => void;
+  /** Clears the saved session for one profile without requiring that profile's PIN. */
+  logoutProfile: (userId: string) => void;
 }
 
 const ApiClientContext = createContext<ApiClientContextValue | null>(null);
@@ -305,6 +308,7 @@ function resolveInitialApiBaseUrl(): string {
 }
 
 export function ApiClientProvider({ children }: { children: ReactNode }) {
+  const { t } = useLanguage();
   // Resolvable synchronously now that same-origin (rather than an awaited
   // config-file fetch) is the fallback -- see `resolveInitialApiBaseUrl` --
   // so this is a plain lazy initializer, not a `null`-until-resolved effect.
@@ -353,7 +357,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         profileKey: `legacy:${(readStoredCurrentUserName() ?? "Viewer").toLocaleLowerCase()}`,
         apiBaseUrl,
         userId: activeUserId,
-        name: readStoredCurrentUserName() ?? "Viewer",
+        name: readStoredCurrentUserName() ?? t("lib.apiClientProvider.defaultViewerName"),
         deviceId: getOrCreateDeviceId(),
         session: activeSession,
       },
@@ -387,7 +391,10 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
             initialStoredProfile?.profileKey ??
             `legacy:${(readStoredCurrentUserName() ?? "Viewer").toLocaleLowerCase()}`,
           userId: initialActiveUserId,
-          name: initialStoredProfile?.name ?? readStoredCurrentUserName() ?? "Viewer",
+          name:
+            initialStoredProfile?.name ??
+            readStoredCurrentUserName() ??
+            t("lib.apiClientProvider.defaultViewerName"),
           deviceId: initialStoredProfile?.deviceId ?? getOrCreateDeviceId(),
         }
       : undefined
@@ -614,7 +621,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
       setAuthFailed(false);
       setCurrentUserId(userId);
       if (userId) {
-        const name = displayName || "Viewer";
+        const name = displayName || t("lib.apiClientProvider.defaultViewerName");
         activeProfileRef.current = {
           profileKey,
           apiBaseUrl: targetApiBaseUrl,
@@ -641,11 +648,11 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     async ({ serverUrl, username, password }: LoginCredentials) => {
       const activeProfile = activeProfileRef.current;
       if (!activeProfile) {
-        throw new Error("Sign in before adding another server.");
+        throw new Error(t("lib.apiClientProvider.signInBeforeAddingServer"));
       }
       const targetApiBaseUrl = normaliseApiBaseUrl(publicIpv4RelayUrl(serverUrl));
       if (targetApiBaseUrl === apiBaseUrl) {
-        throw new Error("This is already your primary server.");
+        throw new Error(t("lib.apiClientProvider.alreadyPrimaryServer"));
       }
       const existing = storedProfileSessions.find(
         (profile) =>
@@ -673,12 +680,12 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         password,
       });
       const userId = decodeAccessTokenUserId(response.access_token);
-      if (!userId) throw new Error("The server returned an invalid login token.");
+      if (!userId) throw new Error(t("lib.apiClientProvider.invalidLoginToken"));
       persistProfileSession(
         targetApiBaseUrl,
         activeProfile.profileKey,
         userId,
-        username.trim() || "Viewer",
+        username.trim() || t("lib.apiClientProvider.defaultViewerName"),
         deviceId,
         toStoredSession(response)
       );
@@ -710,7 +717,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
       const resolved = serverUrl
         ? serverClients.find((server) => server.url === serverUrl)?.client
         : client;
-      if (!resolved) throw new Error("The API client is not ready.");
+      if (!resolved) throw new Error(t("lib.apiClientProvider.clientNotReady"));
       return resolved;
     },
     [client, serverClients]
@@ -729,7 +736,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
       const userId = decodeAccessTokenUserId(token.accessToken);
       const deviceId = decodeAccessTokenDeviceId(token.accessToken);
       if (!userId || !deviceId) {
-        throw new Error("The server returned an invalid device login token.");
+        throw new Error(t("lib.apiClientProvider.invalidDeviceLoginToken"));
       }
 
       const session = toStoredSession({
@@ -738,7 +745,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         token_type: token.tokenType,
         expires_in: token.expiresInSeconds,
       });
-      const name = "Viewer";
+      const name = t("lib.apiClientProvider.defaultViewerName");
       (tokenStoreRef.current as TokenStore).set(session);
       window.localStorage.removeItem(CURRENT_USER_NAME_STORAGE_KEY);
       const profileKey = createProfileDeviceId();
@@ -755,13 +762,13 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
   const switchProfile = useCallback(
     async (userId: string) => {
       if (!client) {
-        throw new Error("Cannot switch profiles before the API client is ready.");
+        throw new Error(t("lib.apiClientProvider.cannotSwitchProfilesNotReady"));
       }
       const target = storedProfileSessions.find(
         (profile) => profile.apiBaseUrl === apiBaseUrl && profile.userId === userId
       );
       if (!target) {
-        throw new Error("This profile has not been signed in on this browser yet.");
+        throw new Error(t("lib.apiClientProvider.profileNotSignedIn"));
       }
 
       const tokenStore = tokenStoreRef.current as TokenStore;
@@ -782,7 +789,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         });
         const resolvedUserId = decodeAccessTokenUserId(token);
         if (resolvedUserId !== userId) {
-          throw new Error("The saved profile session no longer matches this profile.");
+          throw new Error(t("lib.apiClientProvider.profileSessionMismatch"));
         }
         const refreshedSession = tokenStore.get();
         if (refreshedSession) {
@@ -841,6 +848,33 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     setCurrentUserName(undefined);
   }, []);
 
+  const logoutProfile = useCallback(
+    (userId: string) => {
+      const activeProfile = activeProfileRef.current;
+      const isActiveProfile =
+        activeProfile?.apiBaseUrl === apiBaseUrl && activeProfile.userId === userId;
+
+      if (isActiveProfile) {
+        tokenStoreRef.current?.clear();
+        window.localStorage.removeItem(CURRENT_USER_NAME_STORAGE_KEY);
+        activeProfileRef.current = undefined;
+        clearJoinedServerRegistry();
+        setAuthFailed(false);
+        setCurrentUserId(undefined);
+        setCurrentUserName(undefined);
+      }
+
+      setStoredProfileSessions((existing) => {
+        const next = existing.filter(
+          (profile) => profile.apiBaseUrl !== apiBaseUrl || profile.userId !== userId
+        );
+        writeStoredProfileSessions(next);
+        return next;
+      });
+    },
+    [apiBaseUrl]
+  );
+
   if (!apiBaseUrl || !client || !joinedClient) {
     // Briefly resolving the stored/query-param base URL; nothing to render yet.
     return null;
@@ -868,7 +902,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
           return {
             url: server.url,
             label: server.label,
-            username: profile?.name ?? currentUserName ?? "Viewer",
+            username: profile?.name ?? currentUserName ?? t("lib.apiClientProvider.defaultViewerName"),
             primary: server.url === apiBaseUrl,
           };
         }),
@@ -880,6 +914,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         switchProfile,
         isProfileSaved,
         logout,
+        logoutProfile,
       }}
     >
       {children}
@@ -942,6 +977,7 @@ export function useAuth(): {
   switchProfile: (userId: string) => Promise<void>;
   isProfileSaved: (userId: string) => boolean;
   logout: () => void;
+  logoutProfile: (userId: string) => void;
 } {
   const {
     authFailed,
@@ -956,6 +992,7 @@ export function useAuth(): {
     switchProfile,
     isProfileSaved,
     logout,
+    logoutProfile,
   } = useApiClientContext();
   return {
     authFailed,
@@ -970,5 +1007,6 @@ export function useAuth(): {
     switchProfile,
     isProfileSaved,
     logout,
+    logoutProfile,
   };
 }

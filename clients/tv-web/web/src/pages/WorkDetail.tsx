@@ -20,6 +20,8 @@ import { CachedArtworkImage, useCachedArtwork } from "../lib/artwork";
 import type { PlaybackLaunchSettings } from "../lib/usePlaybackEngine";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useToast } from "../lib/toast";
+import { useLanguage } from "../lib/i18n/LanguageProvider";
+import type { TranslationKey } from "../lib/i18n/translations";
 import {
   isNavigationLayerRestoring,
   navigationOriginFromState,
@@ -54,11 +56,13 @@ type MoviePlaybackOptionsState =
   | { status: "ready"; options: MediaPlaybackOptions }
   | { status: "error"; message: string };
 
+type TFunc = (key: TranslationKey, params?: Record<string, string | number>) => string;
+
 function isEpisodicKind(kind: Work["kind"]): boolean {
   return kind === "series" || kind === "site";
 }
 
-function playlistFromWorkDetail(detail: WorkDetail): PlayerPlaylistItem[] {
+function playlistFromWorkDetail(detail: WorkDetail, t: TFunc): PlayerPlaylistItem[] {
   if (detail.work.kind === "movie") {
     return detail.media_file_id
       ? [{ mediaFileId: detail.media_file_id, title: detail.work.title }]
@@ -70,7 +74,9 @@ function playlistFromWorkDetail(detail: WorkDetail): PlayerPlaylistItem[] {
     .flatMap((season) =>
       playableEpisodes(season).map((episode) => ({
         mediaFileId: episode.media_file_id!,
-        title: episode.episode.title ?? `Episode ${episode.episode.episode_number}`,
+        title:
+          episode.episode.title ??
+          t("pages.workDetail.episodeNumber", { number: episode.episode.episode_number }),
         subtitle: detail.work.title,
         episodeId: episode.episode.id,
         seasonNumber: season.season.season_number,
@@ -87,12 +93,12 @@ function detailRouteBase(work: Work): string {
       : "/movies";
 }
 
-function workKindLabel(work: Work): string {
+function workKindLabel(work: Work, t: TFunc): string {
   return work.kind === "site"
-    ? "Site"
+    ? t("pages.workDetail.kindSite")
     : work.kind === "series"
-      ? "Series"
-      : "Movie";
+      ? t("pages.workDetail.kindSeries")
+      : t("pages.workDetail.kindMovie");
 }
 
 function playbackDraft(
@@ -143,6 +149,7 @@ function MoviePlaybackSettingsDrawer({
   onSave: () => void;
   onClose: () => void;
 }) {
+  const { t } = useLanguage();
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -173,14 +180,19 @@ function MoviePlaybackSettingsDrawer({
       className="tv-filter-drawer tv-playback-settings-drawer"
       role="dialog"
       aria-modal="true"
-      aria-label={`Playback settings for ${title}`}
+      aria-label={t("pages.workDetail.playbackSettingsFor", { title })}
     >
       <header>
         <div>
-          <p>Movie</p>
-          <h2>Playback settings</h2>
+          <p>{t("pages.workDetail.kindMovie")}</p>
+          <h2>{t("pages.workDetail.playbackSettingsTitle")}</h2>
         </div>
-        <button ref={closeRef} type="button" onClick={onClose} aria-label="Close settings">
+        <button
+          ref={closeRef}
+          type="button"
+          onClick={onClose}
+          aria-label={t("pages.workDetail.closeSettings")}
+        >
           ×
         </button>
       </header>
@@ -188,20 +200,20 @@ function MoviePlaybackSettingsDrawer({
       {state.status === "loading" || state.status === "idle" ? (
         <div className="tv-playback-settings-status" role="status">
           <span className="tv-mini-loader" aria-hidden="true" />
-          <p>Loading options…</p>
+          <p>{t("pages.workDetail.loadingOptions")}</p>
         </div>
       ) : state.status === "error" ? (
         <TvEmptyState
           graphic="details"
           tone="error"
           variant="compact"
-          title="Playback options could not be loaded"
+          title={t("pages.workDetail.playbackOptionsLoadError")}
           description={state.message}
         />
       ) : options ? (
         <>
           <section>
-            <h3>Quality</h3>
+            <h3>{t("pages.workDetail.qualityHeading")}</h3>
             <div className="tv-filter-choice-grid tv-playback-settings-options">
               {options.quality_options.map((quality) => {
                 const selected = quality.id === draft.quality_id;
@@ -217,8 +229,10 @@ function MoviePlaybackSettingsDrawer({
                       <strong>{quality.label}</strong>
                       <small>
                         {quality.video_bitrate_bps
-                          ? `${Math.round(quality.video_bitrate_bps / 1_000_000)} Mbps`
-                          : "Source quality"}
+                          ? t("pages.workDetail.bitrateMbps", {
+                              value: Math.round(quality.video_bitrate_bps / 1_000_000),
+                            })
+                          : t("pages.workDetail.sourceQuality")}
                       </small>
                     </span>
                     <i aria-hidden="true">{selected ? "✓" : ""}</i>
@@ -229,7 +243,7 @@ function MoviePlaybackSettingsDrawer({
           </section>
 
           <section>
-            <h3>Audio</h3>
+            <h3>{t("pages.workDetail.audioHeading")}</h3>
             <div className="tv-filter-choice-grid tv-playback-settings-options">
               <button
                 type="button"
@@ -238,8 +252,8 @@ function MoviePlaybackSettingsDrawer({
                 onClick={() => onChange({ ...draft, audio_track_id: null })}
               >
                 <span>
-                  <strong>Automatic</strong>
-                  <small>Use your preferred language</small>
+                  <strong>{t("pages.workDetail.automatic")}</strong>
+                  <small>{t("pages.workDetail.useYourPreferredLanguage")}</small>
                 </span>
                 <i aria-hidden="true">
                   {draft.audio_track_id === null ? "✓" : ""}
@@ -257,7 +271,9 @@ function MoviePlaybackSettingsDrawer({
                   >
                     <span>
                       <strong>{track.label}</strong>
-                      <small>{track.language ?? track.codec ?? "Original audio"}</small>
+                      <small>
+                        {track.language ?? track.codec ?? t("pages.workDetail.originalAudio")}
+                      </small>
                     </span>
                     <i aria-hidden="true">{selected ? "✓" : ""}</i>
                   </button>
@@ -267,7 +283,7 @@ function MoviePlaybackSettingsDrawer({
           </section>
 
           <section>
-            <h3>Subtitles</h3>
+            <h3>{t("pages.workDetail.subtitlesHeading")}</h3>
             <div className="tv-filter-choice-grid tv-playback-settings-options">
               <button
                 type="button"
@@ -276,8 +292,8 @@ function MoviePlaybackSettingsDrawer({
                 onClick={() => onChange({ ...draft, subtitle_track_id: null })}
               >
                 <span>
-                  <strong>Off</strong>
-                  <small>No subtitles</small>
+                  <strong>{t("pages.workDetail.subtitlesOff")}</strong>
+                  <small>{t("pages.workDetail.noSubtitles")}</small>
                 </span>
                 <i aria-hidden="true">
                   {draft.subtitle_track_id === null ? "✓" : ""}
@@ -306,10 +322,10 @@ function MoviePlaybackSettingsDrawer({
 
           <div className="tv-playback-settings-actions">
             <button type="button" onClick={onClose}>
-              Cancel
+              {t("pages.workDetail.cancel")}
             </button>
             <button type="button" className="is-primary" disabled={saving} onClick={onSave}>
-              {saving ? "Saving…" : "Save"}
+              {saving ? t("pages.workDetail.saving") : t("pages.workDetail.save")}
             </button>
           </div>
         </>
@@ -339,11 +355,14 @@ function formatClock(positionMs: number): string {
     : `${totalMinutes}:${String(seconds).padStart(2, "0")}`;
 }
 
-function formatRuntime(durationMs: number): string {
+function formatRuntime(durationMs: number, t: TFunc): string {
   const totalMinutes = Math.max(1, Math.round(durationMs / 60_000));
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  return hours > 0 ? `${hours}h${minutes > 0 ? ` ${minutes}m` : ""}` : `${minutes} min`;
+  if (hours <= 0) return t("pages.workDetail.runtimeMinutes", { minutes });
+  return minutes > 0
+    ? t("pages.workDetail.runtimeHoursMinutes", { hours, minutes })
+    : t("pages.workDetail.runtimeHours", { hours });
 }
 
 function formatDetailDate(value: string): string | null {
@@ -387,7 +406,7 @@ function relatedWorkScore(target: Work, candidate: Work): number {
   return sharedGenres * 100 + sameKind * 10 + yearProximity;
 }
 
-function generatedMovieChapters(runtimeMs: number): MediaChapter[] {
+function generatedMovieChapters(runtimeMs: number, t: TFunc): MediaChapter[] {
   if (runtimeMs <= 0) return [];
 
   const targetIntervalMs = runtimeMs / 10;
@@ -401,7 +420,7 @@ function generatedMovieChapters(runtimeMs: number): MediaChapter[] {
     const startMs = index * intervalMs;
     return {
       index,
-      title: `Chapter ${index + 1}`,
+      title: t("pages.workDetail.chapterNumber", { number: index + 1 }),
       start_ms: startMs,
       end_ms: Math.min(runtimeMs, startMs + intervalMs),
     };
@@ -458,17 +477,20 @@ function MovieChapterTrack({
   workSources: JoinedWorkSource[];
   onChooseServer: (state: PlayerLocationState) => void;
 }) {
+  const { t } = useLanguage();
   const [selectedChapterIndex, setSelectedChapterIndex] = useState(
     chapters[0]?.index ?? 0
   );
   const mediaContext = useMediaContextMenu({ onProgressChanged });
   return (
     <TvMediaTrack
-      title="Chapters"
+      title={t("pages.workDetail.chaptersHeading")}
       meta={
-        generated ? `${chapters.length} scene markers` : `${chapters.length} chapters`
+        generated
+          ? t("pages.workDetail.sceneMarkersCount", { count: chapters.length })
+          : t("pages.workDetail.chaptersCount", { count: chapters.length })
       }
-      ariaLabel={`${movieTitle} chapters`}
+      ariaLabel={t("pages.workDetail.titleChapters", { title: movieTitle })}
       scrollKey={`detail:${workId}:chapters`}
       itemsKey={chapters
         .map((chapter) => `${chapter.index}:${chapter.start_ms}`)
@@ -520,9 +542,10 @@ function MovieChapterTrack({
               });
             }
           }}
-          aria-label={`Play ${movieTitle} from ${
-            chapter.title ?? formatClock(chapter.start_ms)
-          }`}
+          aria-label={t("pages.workDetail.playTitleFrom", {
+            title: movieTitle,
+            position: chapter.title ?? formatClock(chapter.start_ms),
+          })}
           {...mediaContext.itemProps({
             workId,
             title: movieTitle,
@@ -551,7 +574,9 @@ function MovieChapterTrack({
           </MediaThumbnailArtwork>
           <span className="tv-episode-copy">
             <small>{formatClock(chapter.start_ms)}</small>
-            <strong>{chapter.title ?? `Chapter ${chapter.index + 1}`}</strong>
+            <strong>
+              {chapter.title ?? t("pages.workDetail.chapterNumber", { number: chapter.index + 1 })}
+            </strong>
           </span>
         </Link>
       ))}
@@ -574,10 +599,10 @@ interface MoviePeopleGroup {
   credits: CreditResponse[];
 }
 
-function groupCrewCredits(credits: CreditResponse[]): MoviePeopleGroup[] {
+function groupCrewCredits(credits: CreditResponse[], t: TFunc): MoviePeopleGroup[] {
   const groups = new Map<string, MoviePeopleGroup>();
   for (const credit of credits) {
-    const title = credit.department?.trim() || "Crew";
+    const title = credit.department?.trim() || t("pages.workDetail.crewFallback");
     const key = title.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-") || "crew";
     const existing = groups.get(key);
     if (existing) {
@@ -600,13 +625,18 @@ function MoviePeopleTrack({
   workId: string;
   groupKey: string;
 }) {
+  const { t } = useLanguage();
   const [selectedCreditId, setSelectedCreditId] = useState(credits[0]?.id ?? null);
 
   return (
     <TvMediaTrack
       title={title}
-      meta={`${credits.length} ${credits.length === 1 ? "person" : "people"}`}
-      ariaLabel={`${title} for this title`}
+      meta={
+        credits.length === 1
+          ? t("pages.workDetail.peopleCountOne", { count: credits.length })
+          : t("pages.workDetail.peopleCountOther", { count: credits.length })
+      }
+      ariaLabel={t("pages.workDetail.groupForThisTitle", { title })}
       scrollKey={`detail:${workId}:people:${groupKey}`}
       itemsKey={credits.map((credit) => credit.id).join(":")}
       dataTrackId={`people:${groupKey}`}
@@ -672,14 +702,19 @@ function SimilarTitlesTrack({
   navigationOrigin: NavigationOrigin;
   onNavigate: ReturnType<typeof useNavigationLayer>["captureLink"];
 }) {
+  const { t } = useLanguage();
   const [selectedWorkId, setSelectedWorkId] = useState(works[0]?.id ?? null);
   const mediaContext = useMediaContextMenu();
 
   return (
     <TvMediaTrack
-      title="Similar Titles"
-      meta={`${works.length} ${works.length === 1 ? "title" : "titles"}`}
-      ariaLabel="Similar titles"
+      title={t("pages.workDetail.similarTitlesHeading")}
+      meta={
+        works.length === 1
+          ? t("pages.workDetail.titlesCountOne", { count: works.length })
+          : t("pages.workDetail.titlesCountOther", { count: works.length })
+      }
+      ariaLabel={t("pages.workDetail.similarTitlesAriaLabel")}
       scrollKey={`detail:${workId}:similar`}
       itemsKey={works.map((work) => work.id).join(":")}
       dataTrackId="similar"
@@ -705,7 +740,7 @@ function SimilarTitlesTrack({
             onFocus={() => setSelectedWorkId(similarWork.id)}
             onMouseEnter={() => setSelectedWorkId(similarWork.id)}
             onClick={onNavigate}
-            aria-label={`Open ${similarWork.title}`}
+            aria-label={t("pages.workDetail.openTitle", { title: similarWork.title })}
             {...mediaContext.itemProps({
               work: similarWork,
               detailRoute: similarDetailRoute,
@@ -722,7 +757,7 @@ function SimilarTitlesTrack({
               />
             </span>
             <span className="tv-episode-copy">
-              <small>{workKindLabel(similarWork)}</small>
+              <small>{workKindLabel(similarWork, t)}</small>
               <strong>{similarWork.title}</strong>
             </span>
           </Link>
@@ -767,9 +802,11 @@ function SeasonEpisodeTrack({
   workSources: JoinedWorkSource[];
   onChooseServer: (state: PlayerLocationState) => void;
 }) {
+  const { t } = useLanguage();
   const episodes = playableEpisodes(season);
   const seasonNumber = season.season.season_number;
-  const seasonLabel = season.season.title ?? `Season ${seasonNumber}`;
+  const seasonLabel =
+    season.season.title ?? t("pages.workDetail.seasonNumber", { number: seasonNumber });
   const mediaContext = useMediaContextMenu({ onProgressChanged });
 
   function revealSeasonTrack(card: HTMLElement) {
@@ -781,7 +818,7 @@ function SeasonEpisodeTrack({
   return (
     <TvMediaTrack
       title={seasonLabel}
-      meta={`${episodes.length} episodes`}
+      meta={t("pages.workDetail.episodesCount", { count: episodes.length })}
       ariaLabel={seasonLabel}
       scrollKey={`detail:${workId}:season:${seasonNumber}`}
       itemsKey={episodes.map((episode) => episode.episode.id).join(":")}
@@ -798,15 +835,19 @@ function SeasonEpisodeTrack({
             // loading the episode provider URL directly from the TV.
             const episodeArtwork = backdrop;
             const progress = progressByMedia.get(mediaFileId);
+            const episodeTitle =
+              episode.episode.title ??
+              t("pages.workDetail.episodeNumber", { number: episode.episode.episode_number });
             return (
               <Link
                 key={episode.episode.id}
                 to={`/player/${mediaFileId}`}
                 state={{
                   serverUrl: workSources[0]?.url,
-                  title: `${seriesTitle} · ${
-                    episode.episode.title ?? `Episode ${episode.episode.episode_number}`
-                  }`,
+                  title: t("pages.workDetail.seriesTitleSeparator", {
+                    series: seriesTitle,
+                    title: episodeTitle,
+                  }),
                   backTo: detailRoute,
                   detailParentBackTo,
                   episodeId: episode.episode.id,
@@ -827,9 +868,10 @@ function SeasonEpisodeTrack({
                   if (workSources.length > 1) {
                     event.preventDefault();
                     onChooseServer({
-                      title: `${seriesTitle} · ${
-                        episode.episode.title ?? `Episode ${episode.episode.episode_number}`
-                      }`,
+                      title: t("pages.workDetail.seriesTitleSeparator", {
+                        series: seriesTitle,
+                        title: episodeTitle,
+                      }),
                       backTo: detailRoute,
                       detailParentBackTo,
                       episodeId: episode.episode.id,
@@ -849,7 +891,10 @@ function SeasonEpisodeTrack({
                   workId,
                   title:
                     episode.episode.title ??
-                    `${seriesTitle} · Episode ${episode.episode.episode_number}`,
+                    t("pages.workDetail.seriesEpisodeFallback", {
+                      series: seriesTitle,
+                      number: episode.episode.episode_number,
+                    }),
                   detailRoute,
                   parentRoute: detailParentBackTo,
                   progress,
@@ -862,9 +907,7 @@ function SeasonEpisodeTrack({
                         episode.runtime_ms ??
                         (episode.episode.runtime_minutes ?? 0) * 60_000,
                       episodeId: episode.episode.id,
-                      title:
-                        episode.episode.title ??
-                        `Episode ${episode.episode.episode_number}`,
+                      title: episodeTitle,
                     },
                   ],
                   activateOrigin: true,
@@ -885,9 +928,7 @@ function SeasonEpisodeTrack({
                     {" · "}
                     E{String(episode.episode.episode_number).padStart(2, "0")}
                   </small>
-                  <strong>
-                    {episode.episode.title ?? `Episode ${episode.episode.episode_number}`}
-                  </strong>
+                  <strong>{episodeTitle}</strong>
                 </span>
               </Link>
             );
@@ -898,6 +939,7 @@ function SeasonEpisodeTrack({
 
 /** Immersive movie/series/site detail surface modelled on the supplied TV motion reference. */
 export function WorkDetailPage() {
+  const { t } = useLanguage();
   const { showToast } = useToast();
   const { workId } = useParams<{ workId: string }>();
   const location = useLocation();
@@ -992,7 +1034,7 @@ export function WorkDetailPage() {
     async (source: JoinedWorkSource) => {
       if (!pendingServerPlayback) return;
       const sourceDetail = await source.client.getWork(source.work.id);
-      const sourcePlaylist = playlistFromWorkDetail(sourceDetail);
+      const sourcePlaylist = playlistFromWorkDetail(sourceDetail, t);
       const requested = pendingServerPlayback.playlistItems?.find(
         (item) => item.mediaFileId === pendingServerPlayback.mediaFileId
       );
@@ -1005,7 +1047,7 @@ export function WorkDetailPage() {
                 item.episodeNumber === requested?.episodeNumber
             );
       if (!selected) {
-        throw new Error("The selected server does not have this playable item.");
+        throw new Error(t("pages.workDetail.serverMissingItem"));
       }
       setPendingServerPlayback(null);
       navigate(`/player/${selected.mediaFileId}`, {
@@ -1013,7 +1055,10 @@ export function WorkDetailPage() {
           ...pendingServerPlayback,
           serverUrl: source.url,
           title: selected.subtitle
-            ? `${selected.subtitle} · ${selected.title}`
+            ? t("pages.workDetail.seriesTitleSeparator", {
+                series: selected.subtitle,
+                title: selected.title,
+              })
             : selected.title,
           episodeId: selected.episodeId,
           mediaFileId: selected.mediaFileId,
@@ -1025,7 +1070,7 @@ export function WorkDetailPage() {
         } satisfies PlayerLocationState,
       });
     },
-    [navigate, pendingServerPlayback, workSources]
+    [navigate, pendingServerPlayback, t, workSources]
   );
 
   const runtimeTarget = useMemo(() => {
@@ -1248,7 +1293,7 @@ export function WorkDetailPage() {
         setMoviePlaybackOptions({ status: "ready", options });
         setMoviePlaybackDraft(playbackDraft(options.preferences));
         closeMoviePlaybackSettings();
-        showToast("Playback settings saved.");
+        showToast(t("pages.workDetail.playbackSettingsSaved"));
       })
       .catch((error: unknown) => {
         setMoviePlaybackOptions({
@@ -1267,6 +1312,7 @@ export function WorkDetailPage() {
     moviePlaybackOptions,
     moviePlaybackSettingsSaving,
     showToast,
+    t,
   ]);
 
   useEffect(() => {
@@ -1374,13 +1420,17 @@ export function WorkDetailPage() {
 
   if (state.status === "loading" || state.status === "idle") {
     return (
-      <div className="tv-detail tv-detail-loading" aria-label="Loading title details" role="status">
+      <div
+        className="tv-detail tv-detail-loading"
+        aria-label={t("pages.workDetail.loadingTitleDetailsAriaLabel")}
+        role="status"
+      >
         <span className="tv-detail-loader" aria-hidden="true">
           <i />
           <i />
           <i />
         </span>
-        <p>Loading details</p>
+        <p>{t("pages.workDetail.loadingDetails")}</p>
       </div>
     );
   }
@@ -1392,7 +1442,7 @@ export function WorkDetailPage() {
           graphic="details"
           tone="error"
           variant="page"
-          title="This title could not be loaded"
+          title={t("pages.workDetail.titleLoadError")}
           description={state.message}
         />
       </div>
@@ -1405,8 +1455,8 @@ export function WorkDetailPage() {
         <TvEmptyState
           variant="page"
           graphic="details"
-          title="Title details unavailable"
-          description="This title no longer has details in your available libraries."
+          title={t("pages.workDetail.titleDetailsUnavailable")}
+          description={t("pages.workDetail.titleDetailsUnavailableDescription")}
         />
       </div>
     );
@@ -1437,16 +1487,16 @@ export function WorkDetailPage() {
       : playlistBackTo ?? searchBackTo ?? routeBase;
   const backLabel =
     backTo === "/"
-      ? "Home"
+      ? t("pages.workDetail.backHome")
       : backTo === "/series"
-        ? "Series"
+        ? t("pages.workDetail.kindSeries")
         : backTo === "/sites"
-          ? "Sites"
+          ? t("pages.workDetail.backSites")
           : backTo.startsWith("/playlists")
-            ? "Playlists"
+            ? t("pages.workDetail.backPlaylists")
             : backTo.startsWith("/search")
-              ? "Search"
-              : "Movies";
+              ? t("pages.workDetail.backSearch")
+              : t("pages.workDetail.backMovies");
   const detailRoute =
     location.pathname.startsWith("/search/") ||
     location.pathname.startsWith("/playlists/")
@@ -1471,7 +1521,8 @@ export function WorkDetailPage() {
                 const seasonNumber = season.season.season_number;
                 const episodeNumber = episode.episode.episode_number;
                 const episodeTitle =
-                  episode.episode.title ?? `Episode ${episodeNumber}`;
+                  episode.episode.title ??
+                  t("pages.workDetail.episodeNumber", { number: episodeNumber });
                 return [
                   {
                     mediaFileId,
@@ -1497,10 +1548,12 @@ export function WorkDetailPage() {
       ? selectedEpisode?.episode.overview ?? selectedSeason?.season.overview ?? work.overview
       : work.overview;
   const selectedSeasonLabel = selectedSeason
-    ? selectedSeason.season.title ?? `Season ${selectedSeason.season.season_number}`
-    : workKindLabel(work);
+    ? selectedSeason.season.title ??
+      t("pages.workDetail.seasonNumber", { number: selectedSeason.season.season_number })
+    : workKindLabel(work, t);
   const selectedEpisodeLabel = selectedEpisode
-    ? selectedEpisode.episode.title ?? `Episode ${selectedEpisode.episode.episode_number}`
+    ? selectedEpisode.episode.title ??
+      t("pages.workDetail.episodeNumber", { number: selectedEpisode.episode.episode_number })
     : null;
   const detailDateValue =
     episodic
@@ -1510,12 +1563,12 @@ export function WorkDetailPage() {
   const detailYear = releaseYear(work.release_date);
   const detailDateLabel =
     episodic && selectedEpisode?.episode.air_date
-      ? "Aired"
+      ? t("pages.workDetail.dateAired")
       : work.release_date
         ? episodic
-          ? "Premiered"
-          : "Released"
-        : "Added";
+          ? t("pages.workDetail.datePremiered")
+          : t("pages.workDetail.dateReleased")
+        : t("pages.workDetail.dateAdded");
   const runtimeMs =
     (playMediaFileId ? runtimeByMedia.get(playMediaFileId) : undefined) ??
     (episodic
@@ -1527,22 +1580,22 @@ export function WorkDetailPage() {
       : state.data.runtime_ms ?? activeProgress?.duration_ms);
   const runtimeLabel =
     runtimeMs && runtimeMs > 0
-      ? formatRuntime(runtimeMs)
+      ? formatRuntime(runtimeMs, t)
       : playMediaFileId
-        ? "Loading runtime"
-        : "Runtime unavailable";
+        ? t("pages.workDetail.loadingRuntime")
+        : t("pages.workDetail.runtimeUnavailable");
   const movieActionLabel =
     activeProgress?.state === "part_watched"
-      ? `Resume from ${formatClock(activeProgress.position_ms)}`
-      : "Play";
+      ? t("pages.workDetail.resumeFrom", { position: formatClock(activeProgress.position_ms) })
+      : t("pages.workDetail.play");
   const displayedMovieChapters =
-    movieChapters.length > 0 ? movieChapters : generatedMovieChapters(runtimeMs ?? 0);
+    movieChapters.length > 0 ? movieChapters : generatedMovieChapters(runtimeMs ?? 0, t);
   const savedMoviePlaybackOptions =
     moviePlaybackOptions.status === "ready" ? moviePlaybackOptions.options : null;
   const moviePlaybackSettings = resolvePlaybackLaunchSettings(
     savedMoviePlaybackOptions
   );
-  const movieCrewGroups = groupCrewCredits(workCredits?.crew ?? []);
+  const movieCrewGroups = groupCrewCredits(workCredits?.crew ?? [], t);
   const hasMovieTracks =
     displayedMovieChapters.length > 0 ||
     (workCredits?.cast.length ?? 0) > 0 ||
@@ -1571,7 +1624,7 @@ export function WorkDetailPage() {
       <button
         type="button"
         className="tv-back"
-        aria-label={`Back to ${backLabel}`}
+        aria-label={t("pages.workDetail.backTo", { destination: backLabel })}
         onClick={() => {
           if (parentNavigationOrigin) {
             navigate(-1);
@@ -1592,7 +1645,7 @@ export function WorkDetailPage() {
               E{String(selectedEpisode.episode.episode_number).padStart(2, "0")}
             </>
           ) : (
-            work.genres[0] ?? workKindLabel(work)
+            work.genres[0] ?? workKindLabel(work, t)
           )}
         </p>
         <h1>{work.title}</h1>
@@ -1600,7 +1653,7 @@ export function WorkDetailPage() {
           <h2>{selectedEpisodeLabel}</h2>
         ) : null}
         <div className="tv-detail-meta">
-          <span>{episodic ? selectedSeasonLabel : "Movie"}</span>
+          <span>{episodic ? selectedSeasonLabel : t("pages.workDetail.kindMovie")}</span>
           {episodic && selectedEpisode ? (
             <span>
               S{String(selectedSeason?.season.season_number ?? 0).padStart(2, "0")}
@@ -1622,8 +1675,8 @@ export function WorkDetailPage() {
         <p className="tv-detail-synopsis">
           {activeOverview ??
             (episodic
-              ? "No episode synopsis is available."
-              : "No synopsis is available.")}
+              ? t("pages.workDetail.noEpisodeSynopsis")
+              : t("pages.workDetail.noSynopsis"))}
         </p>
         {work.kind === "movie" && playMediaFileId ? (
           <div className="tv-detail-actions">
@@ -1631,7 +1684,7 @@ export function WorkDetailPage() {
               ref={moviePlaybackSettingsButtonRef}
               type="button"
               className="tv-detail-playback-settings"
-              aria-label={`Playback settings for ${work.title}`}
+              aria-label={t("pages.workDetail.playbackSettingsFor", { title: work.title })}
               aria-haspopup="dialog"
               aria-expanded={moviePlaybackSettingsOpen}
               aria-controls="movie-playback-settings"
@@ -1648,7 +1701,7 @@ export function WorkDetailPage() {
               }}
             >
               <span aria-hidden="true">☷</span>
-              <strong>Playback</strong>
+              <strong>{t("pages.workDetail.playbackButtonLabel")}</strong>
             </button>
             <Link
               to={`/player/${playMediaFileId}`}
@@ -1685,8 +1738,11 @@ export function WorkDetailPage() {
               data-watch-state={activeProgress?.state}
               aria-label={
                 activeProgress?.state === "part_watched"
-                  ? `Resume ${work.title} from ${formatClock(activeProgress.position_ms)}`
-                  : `Play ${work.title}`
+                  ? t("pages.workDetail.resumeTitleFrom", {
+                      title: work.title,
+                      position: formatClock(activeProgress.position_ms),
+                    })
+                  : t("pages.workDetail.playTitle", { title: work.title })
               }
               {...detailMediaContext.itemProps({
                 work,
@@ -1709,8 +1765,11 @@ export function WorkDetailPage() {
             </Link>
           </div>
         ) : work.kind === "movie" ? (
-          <span className="tv-detail-play is-disabled" aria-label="No playable media">
-            Unavailable
+          <span
+            className="tv-detail-play is-disabled"
+            aria-label={t("pages.workDetail.noPlayableMedia")}
+          >
+            {t("pages.workDetail.unavailable")}
           </span>
         ) : null}
       </aside>
@@ -1721,7 +1780,7 @@ export function WorkDetailPage() {
           ref={seriesBrowserRef}
           mode="vertical-tracks"
           scrollKey={`detail:${work.id}:seasons`}
-          ariaLabel={`${work.title} seasons and episodes`}
+          ariaLabel={t("pages.workDetail.titleSeasonsAndEpisodes", { title: work.title })}
         >
           {seasons.map((season) => (
             <SeasonEpisodeTrack
@@ -1749,7 +1808,7 @@ export function WorkDetailPage() {
           ))}
           {workCredits?.cast.length ? (
             <MoviePeopleTrack
-              title="Cast"
+              title={t("pages.workDetail.cast")}
               credits={workCredits.cast}
               workId={work.id}
               groupKey="cast"
@@ -1772,7 +1831,7 @@ export function WorkDetailPage() {
           className="tv-movie-browser"
           mode="vertical-tracks"
           scrollKey={`detail:${work.id}:movie-tracks`}
-          ariaLabel={`${work.title} chapters and people`}
+          ariaLabel={t("pages.workDetail.titleChaptersAndPeople", { title: work.title })}
         >
           {movieMediaFileId && displayedMovieChapters.length > 0 ? (
             <MovieChapterTrack
@@ -1797,7 +1856,7 @@ export function WorkDetailPage() {
           ) : null}
           {workCredits?.cast.length ? (
             <MoviePeopleTrack
-              title="Cast"
+              title={t("pages.workDetail.cast")}
               credits={workCredits.cast}
               workId={work.id}
               groupKey="cast"
@@ -1848,9 +1907,9 @@ export function WorkDetailPage() {
       ) : null}
 
       <div className="tv-stage-footer" aria-hidden="true">
-        <span>{workKindLabel(work)}</span>
+        <span>{workKindLabel(work, t)}</span>
         <i />
-        <span>{work.genres.slice(0, 2).join(" · ") || "Your library"}</span>
+        <span>{work.genres.slice(0, 2).join(" · ") || t("pages.workDetail.yourLibrary")}</span>
       </div>
     </TvStageShell>
   );

@@ -19,6 +19,7 @@ import {
 } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useScrollEdges } from "../lib/useScrollEdges";
+import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 
@@ -94,22 +95,23 @@ function storedOrder(kind: LibraryKind): SortOrder {
  * activation opens its detail page. Playback never starts from this view.
  */
 export function LibraryPage({ kind }: { kind: LibraryKind }) {
+  const { t } = useLanguage();
   const singular =
     kind === "series"
-      ? "Series"
+      ? t("pages.library.singular.series")
       : kind === "site"
-        ? "Site"
+        ? t("pages.library.singular.site")
         : kind === "artist"
-          ? "Artist"
-          : "Movie";
+          ? t("pages.library.singular.artist")
+          : t("pages.library.singular.movie");
   const plural =
     kind === "series"
-      ? "Series"
+      ? t("pages.library.plural.series")
       : kind === "site"
-        ? "Sites"
+        ? t("pages.library.plural.sites")
         : kind === "artist"
-          ? "Music"
-          : "Movies";
+          ? t("pages.library.plural.music")
+          : t("pages.library.plural.movies");
   const routeBase =
     kind === "series"
       ? "/series"
@@ -120,7 +122,8 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
           : "/movies";
   const emptyGraphic =
     kind === "movie" ? "movies" : kind === "artist" ? "music" : "series";
-  const collectionNoun = kind === "artist" ? "artists" : "titles";
+  const collectionNoun =
+    kind === "artist" ? t("pages.library.collectionNoun.artists") : t("pages.library.collectionNoun.titles");
   useDocumentTitle(plural);
 
   const client = useApiClient();
@@ -472,7 +475,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
           graphic={emptyGraphic}
           tone="error"
           variant="page"
-          title={`The ${plural.toLowerCase()} library could not be loaded`}
+          title={t("pages.library.errorTitle", { plural: plural.toLowerCase() })}
           description={initialError}
         />
       </div>
@@ -485,8 +488,8 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         <TvEmptyState
           graphic={emptyGraphic}
           variant="page"
-          title={`No playable ${plural.toLowerCase()} yet`}
-          description={`Available ${collectionNoun} will appear here after your library is updated.`}
+          title={t("pages.library.emptyTitle", { plural: plural.toLowerCase() })}
+          description={t("pages.library.emptyDescription", { collectionNoun })}
         />
       </div>
     );
@@ -501,7 +504,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   return (
     <TvStageShell
       className={`tv-library tv-directory tv-directory-${view} tv-artwork-${artworkSize}`}
-      ariaLabel={`${plural} library`}
+      ariaLabel={t("pages.library.stageAriaLabel", { plural })}
       artworkKey={selected.id}
       artwork={
         <CachedArtworkImage
@@ -513,7 +516,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       }
     >
       <header className="tv-library-heading">
-        <Link to="/" className="tv-page-back" aria-label="Back to Home">
+        <Link to="/" className="tv-page-back" aria-label={t("pages.library.backToHome")}>
           <span aria-hidden="true">←</span>
         </Link>
         <h1>{plural}</h1>
@@ -530,7 +533,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
           <span>{selected.genres.slice(0, 2).join(" · ") || singular}</span>
         </p>
         <p className="tv-preview-overview">
-          {selected.overview ?? "No synopsis is available."}
+          {selected.overview ?? t("pages.library.noSynopsis")}
         </p>
       </aside>
 
@@ -549,10 +552,10 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
             : ""
         }`}
         mode="content"
-        ariaLabel={`${plural} ${collectionNoun}`}
+        ariaLabel={t("pages.library.railAriaLabel", { plural, collectionNoun })}
       >
         {refreshing ? (
-          <span className="tv-library-refreshing" role="status" aria-label="Updating library">
+          <span className="tv-library-refreshing" role="status" aria-label={t("pages.library.updatingLibrary")}>
             <span className="tv-mini-loader" aria-hidden="true" />
           </span>
         ) : null}
@@ -624,7 +627,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                   data-tv-focus-default={index === 0 ? true : undefined}
                   data-navigation-focus-key={`library:${kind}:${work.id}`}
                   onClick={navigationLayer.captureLink}
-                  aria-label={`Open ${work.title}`}
+                  aria-label={t("pages.library.openWork", { title: work.title })}
                   {...mediaContext.itemProps({
                     work,
                     detailRoute: `${routeBase}/${work.id}`,
@@ -659,7 +662,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
 
             <div ref={sentinelRef} className="tv-grid-sentinel" aria-live="polite">
               {loadingMore ? (
-                <span className="tv-mini-loader" aria-label="Loading more titles" />
+                <span className="tv-mini-loader" aria-label={t("pages.library.loadingMoreTitles")} />
               ) : null}
             </div>
           </div>
@@ -671,7 +674,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
             className="tv-inline-error"
             onClick={() => void appendNextPage().catch(() => undefined)}
           >
-            More titles could not be loaded. Press to retry.
+            {t("pages.library.retryLoadMore")}
           </button>
         )}
       </TvRailSurface>
@@ -689,27 +692,27 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
           <circle cx="15" cy="12" r="1.5" />
           <circle cx="12" cy="18" r="1.5" />
         </svg>
-        <span>Filters</span>
+        <span>{t("pages.library.filters")}</span>
       </button>
 
       {filtersOpen ? (
         <aside
           id={`${kind}-library-filters`}
           className="tv-filter-drawer"
-          aria-label={`${plural} display filters`}
+          aria-label={t("pages.library.filterDrawerAriaLabel", { plural })}
         >
           <header>
             <div>
-              <p>Library controls</p>
-              <h2>Filters</h2>
+              <p>{t("pages.library.libraryControls")}</p>
+              <h2>{t("pages.library.filters")}</h2>
             </div>
-            <button type="button" onClick={() => setFiltersOpen(false)} aria-label="Close filters">
+            <button type="button" onClick={() => setFiltersOpen(false)} aria-label={t("pages.library.closeFilters")}>
               ×
             </button>
           </header>
 
           <section>
-            <h3>View</h3>
+            <h3>{t("pages.library.view")}</h3>
             <div className="tv-filter-choice-grid tv-filter-view-options">
               {(["list", "screen", "cover", "cover-flow"] as LibraryView[]).map((option) => (
                 <button
@@ -724,14 +727,22 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                     <i />
                     <i />
                   </span>
-                  <strong>{option === "cover-flow" ? "Cover Flow" : option}</strong>
+                  <strong>
+                    {option === "cover-flow"
+                      ? t("pages.library.viewCoverFlow")
+                      : option === "list"
+                        ? t("pages.library.viewList")
+                        : option === "screen"
+                          ? t("pages.library.viewScreen")
+                          : t("pages.library.viewCover")}
+                  </strong>
                 </button>
               ))}
             </div>
           </section>
 
           <section>
-            <h3>Artwork size</h3>
+            <h3>{t("pages.library.artworkSize")}</h3>
             <div className="tv-filter-choice-grid">
               {(["small", "medium", "large"] as ArtworkSize[]).map((size) => (
                 <button
@@ -741,14 +752,18 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                   onClick={() => changeArtworkSize(size)}
                   aria-pressed={artworkSize === size}
                 >
-                  {size}
+                  {size === "small"
+                    ? t("pages.library.sizeSmall")
+                    : size === "large"
+                      ? t("pages.library.sizeLarge")
+                      : t("pages.library.sizeMedium")}
                 </button>
               ))}
             </div>
           </section>
 
           <section>
-            <h3>Sort by</h3>
+            <h3>{t("pages.library.sortBy")}</h3>
             <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
               <button
                 type="button"
@@ -756,7 +771,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                 onClick={() => changeSort("title")}
                 aria-pressed={sort === "title"}
               >
-                Title
+                {t("pages.library.sortTitle")}
               </button>
               <button
                 type="button"
@@ -764,13 +779,13 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                 onClick={() => changeSort("date_added")}
                 aria-pressed={sort === "date_added"}
               >
-                Date added
+                {t("pages.library.sortDateAdded")}
               </button>
             </div>
           </section>
 
           <section>
-            <h3>Order</h3>
+            <h3>{t("pages.library.order")}</h3>
             <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
               <button
                 type="button"
@@ -778,7 +793,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                 onClick={() => changeOrder("asc")}
                 aria-pressed={order === "asc"}
               >
-                {sort === "title" ? "A–Z" : "Oldest first"}
+                {sort === "title" ? t("pages.library.sortAscAlpha") : t("pages.library.sortAscDate")}
               </button>
               <button
                 type="button"
@@ -786,7 +801,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                 onClick={() => changeOrder("desc")}
                 aria-pressed={order === "desc"}
               >
-                {sort === "title" ? "Z–A" : "Newest first"}
+                {sort === "title" ? t("pages.library.sortDescAlpha") : t("pages.library.sortDescDate")}
               </button>
             </div>
           </section>
@@ -794,7 +809,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       ) : null}
 
       {sort === "title" ? (
-        <nav className="tv-alphabet" aria-label={`Jump through ${plural.toLowerCase()}`}>
+        <nav className="tv-alphabet" aria-label={t("pages.library.jumpThrough", { plural: plural.toLowerCase() })}>
           {alphabet.map((letter) => (
             <button
               key={letter}
@@ -802,7 +817,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
               className={activeLetter === letter ? "is-active" : ""}
               onClick={() => void jumpToLetter(letter)}
               aria-current={activeLetter === letter ? "true" : undefined}
-              aria-label={letter === "#" ? "Numbers and symbols" : letter}
+              aria-label={letter === "#" ? t("pages.library.numbersAndSymbols") : letter}
             >
               <span>{jumpingLetter === letter ? "·" : letter}</span>
             </button>
@@ -815,14 +830,19 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
 }
 
 function CompactLibraryLoader({ label }: { label: string }) {
+  const { t } = useLanguage();
   return (
-    <div className="tv-library tv-compact-loading" aria-label={`Loading ${label}`} role="status">
+    <div
+      className="tv-library tv-compact-loading"
+      aria-label={t("pages.library.loadingLabel", { label })}
+      role="status"
+    >
       <div className="tv-orbit-loader" aria-hidden="true">
         <i />
         <i />
         <i />
       </div>
-      <p>Preparing {label.toLowerCase()}</p>
+      <p>{t("pages.library.preparingLabel", { label: label.toLowerCase() })}</p>
     </div>
   );
 }

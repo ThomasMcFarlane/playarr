@@ -1,21 +1,22 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { ApiClient, ApiError } from "@streamarr-tv/api-client";
 import { useAuth } from "../lib/ApiClientProvider";
+import { useLanguage } from "../lib/i18n/LanguageProvider";
+import { LanguageDropdown } from "../components/LanguageDropdown";
 import { createLocalNetworkFetch } from "../lib/localNetworkFetch";
 import { parseSignupInvite } from "../lib/signupInvite";
 import { publicIpv4RelayUrl } from "../lib/loginServerUrl";
-import { useToast } from "../lib/toast";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 
 const invite = parseSignupInvite(window.location.search);
 const browserFetch = createLocalNetworkFetch();
 
 export function SignupPage() {
-  useDocumentTitle("Create account");
+  const { t } = useLanguage();
+  useDocumentTitle(t("pages.signup.documentTitle"));
   const navigate = useNavigate();
   const { login } = useAuth();
-  const { showToast } = useToast();
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -38,7 +39,7 @@ export function SignupPage() {
     event.preventDefault();
     if (!invite || !signupClient) return;
     if (password !== passwordConfirmation) {
-      setError("Passwords do not match.");
+      setError(t("pages.signup.passwordMismatch"));
       return;
     }
 
@@ -55,12 +56,7 @@ export function SignupPage() {
       await login({ serverUrl: invite.serverUrl, username, password });
       navigate("/", { replace: true });
     } catch (err) {
-      if (err instanceof ApiError && err.status === 410) {
-        showToast("This invite has already been used. Log in instead.");
-        navigate("/login", { replace: true, state: { initialUsername: username } });
-        return;
-      }
-      setError(signupErrorMessage(err));
+      setError(signupErrorMessage(err, t));
       setSubmitting(false);
     }
   }
@@ -69,6 +65,7 @@ export function SignupPage() {
     <div className="auth-page">
       <div className="auth-backdrop" aria-hidden="true" />
       <div className="auth-card">
+        <LanguageDropdown className="auth-language-switch" />
         <div className="auth-header">
           <span className="app-logo">
             <img
@@ -79,27 +76,19 @@ export function SignupPage() {
             <span><span className="app-logo-accent">Play</span>arr</span>
           </span>
         </div>
-        <p className="page-kicker">You&apos;re invited</p>
-        <h1 className="auth-title">Create your Playarr account</h1>
+        <p className="page-kicker">{t("pages.signup.kicker")}</p>
+        <h1 className="auth-title">{t("pages.signup.title")}</h1>
         <p className="muted auth-description">
-          Choose your account details for the Streamarr server that invited you.
-        </p>
-
-        <p className="auth-switch">
-          Already have an account?{" "}
-          <Link to="/login" className="auth-switch-link">
-            Log in
-          </Link>
+          {t("pages.signup.description")}
         </p>
 
         {!invite ? (
           <p className="error-text auth-error">
-            This invitation link is incomplete or invalid. Ask your Streamarr administrator for a
-            new QR code.
+            {t("pages.signup.inviteMissing")}
           </p>
         ) : (
           <form onSubmit={(event) => void handleSubmit(event)}>
-            <label className="auth-label" htmlFor="signup-server-url">Server URL</label>
+            <label className="auth-label" htmlFor="signup-server-url">{t("pages.signup.serverUrlLabel")}</label>
             <input
               id="signup-server-url"
               name="server-url"
@@ -111,10 +100,10 @@ export function SignupPage() {
               tabIndex={-1}
             />
             <p className="hint auth-server-hint">
-              This address is locked to the server that issued your invitation.
+              {t("pages.signup.serverUrlHint")}
             </p>
 
-            <label className="auth-label" htmlFor="signup-username">Username</label>
+            <label className="auth-label" htmlFor="signup-username">{t("pages.signup.usernameLabel")}</label>
             <input
               id="signup-username"
               name="username"
@@ -127,7 +116,7 @@ export function SignupPage() {
               onChange={(event) => setUsername(event.target.value)}
             />
 
-            <label className="auth-label" htmlFor="signup-display-name">Display name</label>
+            <label className="auth-label" htmlFor="signup-display-name">{t("pages.signup.displayNameLabel")}</label>
             <input
               id="signup-display-name"
               name="display-name"
@@ -139,7 +128,7 @@ export function SignupPage() {
               onChange={(event) => setDisplayName(event.target.value)}
             />
 
-            <label className="auth-label" htmlFor="signup-email">Email (optional)</label>
+            <label className="auth-label" htmlFor="signup-email">{t("pages.signup.emailLabel")}</label>
             <input
               id="signup-email"
               name="email"
@@ -150,7 +139,7 @@ export function SignupPage() {
               onChange={(event) => setEmail(event.target.value)}
             />
 
-            <label className="auth-label" htmlFor="signup-password">Password</label>
+            <label className="auth-label" htmlFor="signup-password">{t("pages.signup.passwordLabel")}</label>
             <input
               id="signup-password"
               name="password"
@@ -163,7 +152,7 @@ export function SignupPage() {
             />
 
             <label className="auth-label" htmlFor="signup-password-confirmation">
-              Confirm password
+              {t("pages.signup.confirmPasswordLabel")}
             </label>
             <input
               id="signup-password-confirmation"
@@ -179,7 +168,7 @@ export function SignupPage() {
             {error && <p className="error-text auth-error">{error}</p>}
 
             <button type="submit" className="btn btn-primary auth-submit" disabled={submitting}>
-              {submitting ? "Creating account…" : "Create account"}
+              {submitting ? t("pages.signup.submitting") : t("pages.signup.submit")}
             </button>
           </form>
         )}
@@ -188,15 +177,16 @@ export function SignupPage() {
   );
 }
 
-function signupErrorMessage(err: unknown): string {
+function signupErrorMessage(err: unknown, t: ReturnType<typeof useLanguage>["t"]): string {
   if (err instanceof ApiError) {
     const body = err.body as { message?: unknown } | undefined;
     if (typeof body?.message === "string" && body.message.length > 0) return body.message;
-    if (err.status === 409) return "That username is already taken.";
-    return "Could not create the account. Ask your administrator for a new invitation.";
+    if (err.status === 410) return t("pages.signup.error.expired");
+    if (err.status === 409) return t("pages.signup.error.usernameTaken");
+    return t("pages.signup.error.generic");
   }
   if (err instanceof TypeError) {
-    return "Could not reach this Streamarr server. Check that you are on the same network and allow Local Network Access when asked.";
+    return t("pages.signup.error.networkUnreachable");
   }
   return err instanceof Error ? err.message : String(err);
 }

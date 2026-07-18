@@ -25,6 +25,8 @@ import { TvEmptyState } from "../components/tv/TvEmptyState";
 import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { CachedArtworkImage } from "../lib/artwork";
+import { useLanguage } from "../lib/i18n/LanguageProvider";
+import type { TranslationKey } from "../lib/i18n/translations";
 import { useNavigationLayer } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useScrollEdges } from "../lib/useScrollEdges";
@@ -52,15 +54,15 @@ type SearchResult =
 
 const SEARCH_TYPES: ReadonlyArray<{
   value: SearchMediaType;
-  label: string;
+  labelKey: TranslationKey;
   workKind?: WorkKind;
 }> = [
-  { value: "all", label: "All" },
-  { value: "movie", label: "Movies", workKind: "movie" },
-  { value: "series", label: "Series", workKind: "series" },
-  { value: "site", label: "Sites", workKind: "site" },
-  { value: "artist", label: "Music", workKind: "artist" },
-  { value: "playlist", label: "Playlists" },
+  { value: "all", labelKey: "pages.search.all" },
+  { value: "movie", labelKey: "pages.search.filterTypeMovies", workKind: "movie" },
+  { value: "series", labelKey: "pages.search.filterTypeSeries", workKind: "series" },
+  { value: "site", labelKey: "pages.search.filterTypeSites", workKind: "site" },
+  { value: "artist", labelKey: "pages.search.filterTypeMusic", workKind: "artist" },
+  { value: "playlist", labelKey: "pages.search.filterTypePlaylists" },
 ];
 
 function isSupportedWork(work: Work): boolean {
@@ -142,18 +144,22 @@ function workMatchesType(work: Work, mediaType: SearchMediaType): boolean {
   );
 }
 
-function workTypeLabel(work: Work): string {
+function workTypeLabel(
+  work: Work,
+  t: ReturnType<typeof useLanguage>["t"]
+): string {
   return work.kind === "series"
-    ? "Series"
+    ? t("pages.search.kindSeries")
     : work.kind === "site"
-      ? "Site"
+      ? t("pages.search.kindSite")
       : work.kind === "artist"
-        ? "Artist"
-        : "Movie";
+        ? t("pages.search.kindArtist")
+        : t("pages.search.kindMovie");
 }
 
 export function SearchPage() {
-  useDocumentTitle("Search");
+  const { t } = useLanguage();
+  useDocumentTitle(t("pages.search.title"));
   const client = useApiClient();
   const { availableWorkKinds } =
     useOutletContext<AppShellOutletContext>();
@@ -619,7 +625,7 @@ export function SearchPage() {
   return (
     <TvStageShell
       className="tv-search"
-      ariaLabel="Search Playarr"
+      ariaLabel={t("pages.search.ariaSearchPlayarr")}
       artworkKey={selectedWork?.id}
       artwork={
         selectedWork ? (
@@ -637,21 +643,24 @@ export function SearchPage() {
           ref={backButtonRef}
           to="/"
           className="tv-page-back"
-          aria-label="Back to Home"
+          aria-label={t("pages.search.backToHome")}
           onKeyDown={handleBackKeyDown}
         >
           <span aria-hidden="true">←</span>
         </Link>
-        <h1>Search</h1>
+        <h1>{t("pages.search.title")}</h1>
         {requestedQuery ? (
           <span>
             {state.status === "ready"
-              ? `${results.length.toLocaleString()} ${
-                  results.length === 1 ? "result" : "results"
-                }`
+              ? t(
+                  results.length === 1
+                    ? "pages.search.resultCountOne"
+                    : "pages.search.resultCountOther",
+                  { count: results.length.toLocaleString() }
+                )
               : state.status === "loading"
-                ? "Searching"
-                : "0 results"}
+                ? t("pages.search.searching")
+                : t("pages.search.zeroResults")}
           </span>
         ) : null}
       </header>
@@ -674,9 +683,9 @@ export function SearchPage() {
             }}
             onKeyDown={handleInputKeyDown}
             onKeyUp={handleInputKeyUp}
-            placeholder="Search your libraries and playlists"
+            placeholder={t("pages.search.searchPlaceholder")}
             autoComplete="off"
-            aria-label="Search your libraries and playlists"
+            aria-label={t("pages.search.searchPlaceholder")}
             data-tv-focus-default={
               !navigationLayer.hasSnapshot && !requestedFocusId ? true : undefined
             }
@@ -688,7 +697,7 @@ export function SearchPage() {
               onClick={clearSearch}
               onKeyDown={handleClearKeyDown}
             >
-              Clear
+              {t("pages.search.clear")}
             </button>
           ) : null}
         </div>
@@ -706,12 +715,16 @@ export function SearchPage() {
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M7 14v6" />
             </svg>
-            <span>Filters</span>
+            <span>{t("pages.search.filters")}</span>
             <small>
-              {visibleSearchTypes.find(
-                (option) => option.value === requestedMediaType
-              )?.label ?? "All"}
-              {activeLibrary ? ` · ${activeLibrary.name}` : " · All libraries"}
+              {t(
+                visibleSearchTypes.find(
+                  (option) => option.value === requestedMediaType
+                )?.labelKey ?? "pages.search.all"
+              )}
+              {activeLibrary
+                ? t("pages.search.libraryFilterNamed", { name: activeLibrary.name })
+                : t("pages.search.libraryFilterAll")}
             </small>
           </button>
 
@@ -720,8 +733,11 @@ export function SearchPage() {
             className={`tv-search-filters${filtersOpen ? " is-open" : ""}`}
             aria-hidden={!filtersOpen}
           >
-            <div className="tv-search-filter-row" aria-label="Filter by type">
-              <p>Type</p>
+            <div
+              className="tv-search-filter-row"
+              aria-label={t("pages.search.filterByType")}
+            >
+              <p>{t("pages.search.typeLabel")}</p>
               <div>
                 {visibleSearchTypes.map((option) => (
                   <button
@@ -732,14 +748,17 @@ export function SearchPage() {
                     tabIndex={filtersOpen ? 0 : -1}
                     onClick={() => updateFilters({ mediaType: option.value })}
                   >
-                    {option.label}
+                    {t(option.labelKey)}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="tv-search-filter-row" aria-label="Filter by library">
-              <p>Library</p>
+            <div
+              className="tv-search-filter-row"
+              aria-label={t("pages.search.filterByLibrary")}
+            >
+              <p>{t("pages.search.libraryLabel")}</p>
               <div>
                 <button
                   type="button"
@@ -748,7 +767,7 @@ export function SearchPage() {
                   tabIndex={filtersOpen ? 0 : -1}
                   onClick={() => updateFilters({ libraryId: null })}
                 >
-                  All
+                  {t("pages.search.all")}
                 </button>
                 {views.map((view) => (
                   <button
@@ -769,38 +788,43 @@ export function SearchPage() {
 
         {selectedWork ? (
           <aside className="tv-search-preview" key={`search-preview-${selectedWork.id}`}>
-            <p>{workTypeLabel(selectedWork)}</p>
+            <p>{workTypeLabel(selectedWork, t)}</p>
             <h2>{selectedWork.title}</h2>
             <div>
               {selectedWork.release_date ? (
                 <span>{new Date(selectedWork.release_date).getFullYear()}</span>
               ) : null}
               <span>
-                {selectedWork.genres.slice(0, 2).join(" · ") || "Available to play"}
+                {selectedWork.genres.slice(0, 2).join(" · ") ||
+                  t("pages.search.availableToPlay")}
               </span>
             </div>
-            <p>{selectedWork.overview ?? "No synopsis is available."}</p>
+            <p>{selectedWork.overview ?? t("pages.search.noSynopsis")}</p>
           </aside>
         ) : selectedPlaylist ? (
           <aside
             className="tv-search-preview is-playlist"
             key={`search-preview-playlist-${selectedPlaylist.id}`}
           >
-            <p>{selectedPlaylist.is_system ? "System playlist" : "Playlist"}</p>
+            <p>
+              {selectedPlaylist.is_system
+                ? t("pages.search.systemPlaylist")
+                : t("pages.search.playlist")}
+            </p>
             <h2>{selectedPlaylist.name}</h2>
           </aside>
         ) : (
           <p className="tv-search-prompt">
             {requestedQuery
-              ? "Choose a different title or refine your search."
-              : "Find any available movie, series, artist or playlist."}
+              ? t("pages.search.choosePrompt")
+              : t("pages.search.emptyPrompt")}
           </p>
         )}
       </div>
 
       <TvRailSurface
         mode="content"
-        ariaLabel="Search results"
+        ariaLabel={t("pages.search.resultsAriaLabel")}
         className="tv-search-rail-surface"
       >
         <div
@@ -820,7 +844,7 @@ export function SearchPage() {
             {state.status === "loading" ? (
               <div className="tv-search-state" role="status">
                 <span className="tv-mini-loader" aria-hidden="true" />
-                <p>Searching…</p>
+                <p>{t("pages.search.loadingEllipsis")}</p>
               </div>
             ) : state.status === "error" ? (
               <TvEmptyState
@@ -828,22 +852,22 @@ export function SearchPage() {
                 graphic="search"
                 tone="error"
                 variant="rail"
-                title="Search could not be completed"
+                title={t("pages.search.errorTitle")}
                 description={state.message}
               />
             ) : state.status === "idle" ? (
               <TvEmptyState
                 announce={false}
                 graphic="search"
-                title="Start typing to search."
+                title={t("pages.search.idleTitle")}
                 variant="rail"
               />
             ) : results.length === 0 ? (
               <TvEmptyState
                 announce={false}
                 graphic="search"
-                title="No matching titles or playlists."
-                description="Try another title or adjust the filters."
+                title={t("pages.search.noResultsTitle")}
+                description={t("pages.search.noResultsDescription")}
                 variant="rail"
               />
             ) : (
@@ -891,7 +915,9 @@ export function SearchPage() {
                         <span className="tv-search-result-copy">
                           <strong>{playlist.name}</strong>
                           <small>
-                            {playlist.is_system ? "System playlist" : "Playlist"}
+                            {playlist.is_system
+                              ? t("pages.search.systemPlaylist")
+                              : t("pages.search.playlist")}
                           </small>
                         </span>
                       </Link>
@@ -960,7 +986,7 @@ export function SearchPage() {
                       </span>
                       <span className="tv-search-result-copy">
                         <strong>{work.title}</strong>
-                        <small>{workTypeLabel(work)}</small>
+                        <small>{workTypeLabel(work, t)}</small>
                       </span>
                     </Link>
                   );

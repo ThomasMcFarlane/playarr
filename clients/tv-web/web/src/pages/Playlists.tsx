@@ -24,6 +24,7 @@ import {
 } from "@streamarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { CachedArtworkImage } from "../lib/artwork";
+import { useLanguage } from "../lib/i18n/LanguageProvider";
 import {
   isNavigationLayerRestoring,
   navigationOriginFromState,
@@ -167,6 +168,7 @@ function descendantPlaylistTracks(
 
 /** Playlist directory plus an in-route playlist detail surface. */
 export function PlaylistsPage() {
+  const { t } = useLanguage();
   const { showToast } = useToast();
   const client = useApiClient();
   const location = useLocation();
@@ -316,8 +318,10 @@ export function PlaylistsPage() {
       : null;
   useDocumentTitle(
     selectedPlaylist
-      ? `${selectedPlaylist.playlist.name} · Playlists`
-      : "Playlists"
+      ? t("pages.playlists.titleWithName", {
+          name: selectedPlaylist.playlist.name,
+        })
+      : t("pages.playlists.title")
   );
 
   const rootTracks = useMemo(
@@ -705,7 +709,7 @@ export function PlaylistsPage() {
     if (!name) {
       setCreateState({
         status: "error",
-        message: "Enter a name for the playlist.",
+        message: t("pages.playlists.nameRequired"),
       });
       nameInputRef.current?.focus({ preventScroll: true });
       return;
@@ -751,7 +755,9 @@ export function PlaylistsPage() {
         });
       }
       closeDrawer("create");
-      showToast(`Playlist ${created.name} created.`);
+      showToast(
+        t("pages.playlists.playlistCreatedToast", { name: created.name })
+      );
     } catch (error: unknown) {
       setCreateState({
         status: "error",
@@ -774,7 +780,7 @@ export function PlaylistsPage() {
     return (
       <div
         className="tv-home tv-compact-loading"
-        aria-label="Loading playlists"
+        aria-label={t("pages.playlists.loadingLabel")}
         role="status"
       >
         <div className="tv-orbit-loader" aria-hidden="true">
@@ -782,7 +788,7 @@ export function PlaylistsPage() {
           <i />
           <i />
         </div>
-        <p>Preparing playlists</p>
+        <p>{t("pages.playlists.preparingLabel")}</p>
       </div>
     );
   }
@@ -794,7 +800,7 @@ export function PlaylistsPage() {
           graphic="playlist"
           tone="error"
           variant="page"
-          title="Playlists could not be loaded"
+          title={t("pages.playlists.loadErrorTitle")}
           description={pageState.message}
         />
       </div>
@@ -810,20 +816,23 @@ export function PlaylistsPage() {
   const featureTitle =
     selectedDetailItem?.work.title ??
     featureTrack?.playlist.name ??
-    (isDetail ? "Playlist unavailable" : "Playlists");
+    (isDetail ? t("pages.playlists.playlistUnavailable") : t("pages.playlists.title"));
   const featureOverview =
     selectedDetailItem?.work.overview ??
     (featureTrack
-      ? `${featureTrack.items.length} ${
-          featureTrack.items.length === 1 ? "title" : "titles"
-        }`
+      ? t(
+          featureTrack.items.length === 1
+            ? "pages.playlists.itemCountOne"
+            : "pages.playlists.itemCountOther",
+          { count: featureTrack.items.length }
+        )
       : isDetail
-        ? "This playlist is no longer available."
+        ? t("pages.playlists.playlistGone")
         : rootTracks.length
-          ? "Choose a playlist to open it."
+          ? t("pages.playlists.choosePlaylist")
           : tracks.length
-            ? "No top-level playlists match the current filters."
-            : "Create a playlist to organise films and series.");
+            ? t("pages.playlists.noMatchingPlaylists")
+            : t("pages.playlists.createPlaylistPrompt"));
   const activeContentFocusKey =
     isDetail && activeDetailTrack && selectedDetailItem
       ? `playlists:${activeDetailTrack.playlist.id}:${selectedDetailItem.id}`
@@ -841,7 +850,11 @@ export function PlaylistsPage() {
       className={`tv-home tv-playlists${
         isDetail ? " is-playlist-detail" : " is-playlist-directory"
       }`}
-      ariaLabel={isDetail ? selectedPlaylist?.playlist.name ?? "Playlist" : "Playlists"}
+      ariaLabel={
+        isDetail
+          ? selectedPlaylist?.playlist.name ?? t("pages.playlists.playlistFallback")
+          : t("pages.playlists.title")
+      }
       artworkKey={selectedWork?.id}
       artwork={
         selectedWork ? (
@@ -859,7 +872,7 @@ export function PlaylistsPage() {
           <button
             type="button"
             className="tv-page-back"
-            aria-label="Back to playlists"
+            aria-label={t("pages.playlists.backToPlaylists")}
             onClick={leavePlaylistDetail}
             data-tv-focus-default={!selectedPlaylist ? true : undefined}
             data-tv-edge-target-right={activeContentSelector}
@@ -867,19 +880,29 @@ export function PlaylistsPage() {
             <span aria-hidden="true">←</span>
           </button>
         ) : (
-          <Link to="/" className="tv-page-back" aria-label="Back to Home">
+          <Link
+            to="/"
+            className="tv-page-back"
+            aria-label={t("pages.playlists.backToHome")}
+          >
             <span aria-hidden="true">←</span>
           </Link>
         )}
-        <h1>{selectedPlaylist?.playlist.name ?? "Playlists"}</h1>
+        <h1>{selectedPlaylist?.playlist.name ?? t("pages.playlists.title")}</h1>
         <span>
           {isDetail
-            ? `${detailTracks.length} ${
-                detailTracks.length === 1 ? "track" : "tracks"
-              }`
-            : `${rootTracks.length.toLocaleString()} ${
-                rootTracks.length === 1 ? "playlist" : "playlists"
-              }`}
+            ? t(
+                detailTracks.length === 1
+                  ? "pages.playlists.trackCountOne"
+                  : "pages.playlists.trackCountOther",
+                { count: detailTracks.length }
+              )
+            : t(
+                rootTracks.length === 1
+                  ? "pages.playlists.playlistCountOne"
+                  : "pages.playlists.playlistCountOther",
+                { count: rootTracks.length.toLocaleString() }
+              )}
         </span>
       </header>
 
@@ -891,9 +914,9 @@ export function PlaylistsPage() {
         <p className="tv-provider">
           {featureTrack
             ? featureTrack.playlist.is_system
-              ? "Shared playlist"
-              : "Your playlist"
-            : "Your collection"}
+              ? t("pages.playlists.sharedPlaylist")
+              : t("pages.playlists.yourPlaylist")
+            : t("pages.playlists.yourCollection")}
         </p>
         <h2>{featureTitle}</h2>
         <p>{featureOverview}</p>
@@ -904,7 +927,9 @@ export function PlaylistsPage() {
           ref={tracksRef}
           mode="vertical-tracks"
           scrollKey={`playlists:detail:${selectedPlaylist?.playlist.id ?? requestedPlaylistId}`}
-          ariaLabel={`${selectedPlaylist?.playlist.name ?? "Playlist"} tracks`}
+          ariaLabel={t("pages.playlists.tracksAriaLabel", {
+            name: selectedPlaylist?.playlist.name ?? t("pages.playlists.playlistFallback"),
+          })}
         >
           {selectedPlaylist ? (
             detailTracks.map((track, index) => (
@@ -943,8 +968,8 @@ export function PlaylistsPage() {
               graphic="playlist"
               variant="rail"
               className="tv-playlist-empty-state"
-              title="Playlist unavailable"
-              description="Return to the playlist directory and choose another playlist."
+              title={t("pages.playlists.playlistUnavailable")}
+              description={t("pages.playlists.playlistUnavailableDescription")}
             />
           )}
         </TvRailSurface>
@@ -954,7 +979,7 @@ export function PlaylistsPage() {
             gridEdges.start ? " can-scroll-up" : ""
           }${gridEdges.end ? " can-scroll-down" : ""}`}
           mode="content"
-          ariaLabel="Playlist directory"
+          ariaLabel={t("pages.playlists.directoryAriaLabel")}
         >
           <div
             className="tv-title-grid tv-playlist-directory-grid"
@@ -994,13 +1019,13 @@ export function PlaylistsPage() {
                   className="tv-playlist-empty-state"
                   title={
                     tracks.length
-                      ? "No matching top-level playlists"
-                      : "No playlists yet"
+                      ? t("pages.playlists.noMatchingTitle")
+                      : t("pages.playlists.noPlaylistsYetTitle")
                   }
                   description={
                     tracks.length
-                      ? "Change the filters or open a nested playlist from Search."
-                      : "Create a playlist to begin building your collection."
+                      ? t("pages.playlists.changeFiltersDescription")
+                      : t("pages.playlists.createCollectionDescription")
                   }
                 />
               ) : null}
@@ -1032,7 +1057,7 @@ export function PlaylistsPage() {
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 5v14M5 12h14" />
             </svg>
-            <span>Create</span>
+            <span>{t("pages.playlists.create")}</span>
           </button>
         ) : null}
         {!isDetail ? (
@@ -1053,7 +1078,7 @@ export function PlaylistsPage() {
               <circle cx="15" cy="12" r="1.5" />
               <circle cx="12" cy="18" r="1.5" />
             </svg>
-            <span>Filters</span>
+            <span>{t("pages.playlists.filters")}</span>
           </button>
         ) : null}
       </div>
@@ -1071,23 +1096,27 @@ export function PlaylistsPage() {
             <div>
               <p>
                 {fixedParentPlaylist
-                  ? `Inside ${fixedParentPlaylist.playlist.name}`
-                  : "Personal playlist"}
+                  ? t("pages.playlists.insidePlaylist", {
+                      name: fixedParentPlaylist.playlist.name,
+                    })
+                  : t("pages.playlists.personalPlaylist")}
               </p>
               <h2 id="playlist-create-title">
-                {fixedParentPlaylist ? "Create sub-playlist" : "Create playlist"}
+                {fixedParentPlaylist
+                  ? t("pages.playlists.createSubPlaylist")
+                  : t("pages.playlists.createPlaylistTitle")}
               </h2>
             </div>
             <button
               type="button"
               onClick={() => closeDrawer("create")}
-              aria-label="Close create playlist"
+              aria-label={t("pages.playlists.closeCreateDrawer")}
             >
               ×
             </button>
           </header>
           <form className="tv-playlist-create-form" onSubmit={createPlaylist}>
-            <label htmlFor="playlist-name">Name</label>
+            <label htmlFor="playlist-name">{t("pages.playlists.nameLabel")}</label>
             <input
               ref={nameInputRef}
               id="playlist-name"
@@ -1099,19 +1128,21 @@ export function PlaylistsPage() {
                   setCreateState({ status: "idle" });
                 }
               }}
-              placeholder="Playlist name"
+              placeholder={t("pages.playlists.namePlaceholder")}
               autoComplete="off"
             />
             {!fixedParentPlaylist ? (
               <>
-                <label htmlFor="playlist-parent">Parent playlist</label>
+                <label htmlFor="playlist-parent">
+                  {t("pages.playlists.parentPlaylistLabel")}
+                </label>
                 <select
                   id="playlist-parent"
                   className="tv-playlist-parent-select"
                   value={parentPlaylistId}
                   onChange={(event) => setParentPlaylistId(event.target.value)}
                 >
-                  <option value="">None — top level</option>
+                  <option value="">{t("pages.playlists.noneTopLevel")}</option>
                   {personalParentOptions.map((track) => (
                     <option key={track.playlist.id} value={track.playlist.id}>
                       {parentOptionLabel(track, tracksById)}
@@ -1132,7 +1163,9 @@ export function PlaylistsPage() {
                 !playlistName.trim() || createState.status === "submitting"
               }
             >
-              {createState.status === "submitting" ? "Creating…" : "Create"}
+              {createState.status === "submitting"
+                ? t("pages.playlists.creating")
+                : t("pages.playlists.create")}
             </button>
           </form>
         </aside>
@@ -1150,19 +1183,19 @@ export function PlaylistsPage() {
         >
           <header>
             <div>
-              <p>Playlist controls</p>
-              <h2 id="playlist-filter-title">Filters</h2>
+              <p>{t("pages.playlists.playlistControls")}</p>
+              <h2 id="playlist-filter-title">{t("pages.playlists.filters")}</h2>
             </div>
             <button
               type="button"
               onClick={() => closeDrawer("filters")}
-              aria-label="Close playlist filters"
+              aria-label={t("pages.playlists.closeFiltersDrawer")}
             >
               ×
             </button>
           </header>
           <section>
-            <h3>Show</h3>
+            <h3>{t("pages.playlists.showLabel")}</h3>
             <div className="tv-filter-choice-grid">
               {(["all", "personal", "shared"] as PlaylistVisibility[]).map(
                 (option) => (
@@ -1173,14 +1206,18 @@ export function PlaylistsPage() {
                     aria-pressed={visibility === option}
                     onClick={() => updatePlaylistFilters(option, order)}
                   >
-                    {option === "personal" ? "Mine" : option}
+                    {option === "personal"
+                      ? t("pages.playlists.visibilityMine")
+                      : option === "shared"
+                        ? t("pages.playlists.visibilityShared")
+                        : t("pages.playlists.visibilityAll")}
                   </button>
                 )
               )}
             </div>
           </section>
           <section>
-            <h3>Order</h3>
+            <h3>{t("pages.playlists.orderLabel")}</h3>
             <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
               <button
                 type="button"
@@ -1188,7 +1225,7 @@ export function PlaylistsPage() {
                 aria-pressed={order === "asc"}
                 onClick={() => updatePlaylistFilters(visibility, "asc")}
               >
-                A–Z
+                {t("pages.playlists.orderAscending")}
               </button>
               <button
                 type="button"
@@ -1196,7 +1233,7 @@ export function PlaylistsPage() {
                 aria-pressed={order === "desc"}
                 onClick={() => updatePlaylistFilters(visibility, "desc")}
               >
-                Z–A
+                {t("pages.playlists.orderDescending")}
               </button>
             </div>
           </section>
@@ -1227,6 +1264,7 @@ function PlaylistDirectoryCard({
   onFocus: () => void;
   defaultFocus: boolean;
 }) {
+  const { t } = useLanguage();
   return (
     <Link
       to={to}
@@ -1239,7 +1277,9 @@ function PlaylistDirectoryCard({
       onMouseEnter={onFocus}
       data-tv-focus-default={defaultFocus ? true : undefined}
       data-navigation-focus-key={`playlists:directory:${track.playlist.id}`}
-      aria-label={`Open ${track.playlist.name}`}
+      aria-label={t("pages.playlists.openPlaylistAriaLabel", {
+        name: track.playlist.name,
+      })}
     >
       <PlaylistCoverStack
         name={track.playlist.name}
@@ -1248,11 +1288,23 @@ function PlaylistDirectoryCard({
       <span className="tv-title-card-copy tv-playlist-directory-card-copy">
         <strong>{track.playlist.name}</strong>
         <small>
-          {track.playlist.is_system ? "Shared" : "Personal"}
+          {track.playlist.is_system
+            ? t("pages.playlists.sharedLabel")
+            : t("pages.playlists.personalLabel")}
           {" · "}
-          {track.items.length} {track.items.length === 1 ? "title" : "titles"}
+          {t(
+            track.items.length === 1
+              ? "pages.playlists.itemCountOne"
+              : "pages.playlists.itemCountOther",
+            { count: track.items.length }
+          )}
           {childCount
-            ? ` · ${childCount} ${childCount === 1 ? "folder" : "folders"}`
+            ? ` · ${t(
+                childCount === 1
+                  ? "pages.playlists.folderCountOne"
+                  : "pages.playlists.folderCountOther",
+                { count: childCount }
+              )}`
             : ""}
         </small>
       </span>
@@ -1352,6 +1404,7 @@ function PlaylistMediaTrack({
   onNavigate: ReturnType<typeof useNavigationLayer>["captureLink"];
   parentRoute: string;
 }) {
+  const { t } = useLanguage();
   const mediaContext = useMediaContextMenu({ onProgressChanged });
 
   return (
@@ -1359,9 +1412,12 @@ function PlaylistMediaTrack({
       title={title}
       meta={
         track.items.length
-          ? `${isRootTrack ? "Direct items · " : ""}${track.items.length} ${
-              track.items.length === 1 ? "title" : "titles"
-            }`
+          ? `${isRootTrack ? t("pages.playlists.directItemsPrefix") : ""}${t(
+              track.items.length === 1
+                ? "pages.playlists.itemCountOne"
+                : "pages.playlists.itemCountOther",
+              { count: track.items.length }
+            )}`
           : undefined
       }
       active={isActive}
@@ -1377,8 +1433,8 @@ function PlaylistMediaTrack({
         <TvEmptyState
           graphic="playlist"
           variant="track"
-          title="Nothing here yet"
-          description="Move a movie or series into this track from its context menu."
+          title={t("pages.playlists.emptyTrackTitle")}
+          description={t("pages.playlists.emptyTrackDescription")}
         />
       ) : null}
       {track.items.map((item, index) => {
@@ -1436,10 +1492,10 @@ function PlaylistMediaTrack({
             <strong>{work.title}</strong>
             <small>
               {work.kind === "site"
-                ? "Site"
+                ? t("pages.playlists.workKind.site")
                 : work.kind === "series"
-                  ? "Series"
-                  : "Movie"}
+                  ? t("pages.playlists.workKind.series")
+                  : t("pages.playlists.workKind.movie")}
             </small>
           </Link>
         );

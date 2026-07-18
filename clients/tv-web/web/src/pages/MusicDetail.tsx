@@ -33,6 +33,8 @@ import {
 import { WatchStateOverlay } from "../components/WatchStateOverlay";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { CachedAlbumArtworkImage, CachedArtworkImage } from "../lib/artwork";
+import { useLanguage } from "../lib/i18n/LanguageProvider";
+import type { TranslationKey } from "../lib/i18n/translations";
 import {
   navigationOriginFromState,
   useNavigationLayer,
@@ -56,8 +58,11 @@ function playableTracks(album: AlbumDetail): TrackDetail[] {
   return album.tracks.filter((track) => track.media_file_id != null);
 }
 
-function formatDuration(seconds: number | null | undefined): string {
-  if (!seconds || seconds <= 0) return "Duration unavailable";
+function formatDuration(
+  seconds: number | null | undefined,
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string
+): string {
+  if (!seconds || seconds <= 0) return t("pages.musicDetail.durationUnavailable");
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
   return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
@@ -89,6 +94,7 @@ function AlbumCoverFlow({
   onSelect: (album: AlbumDetail) => void;
   onPlay: (album: AlbumDetail, track: TrackDetail) => void;
 }) {
+  const { t } = useLanguage();
   const selectedIndex = Math.max(
     0,
     albums.findIndex((album) => album.album.id === selectedAlbumId)
@@ -108,7 +114,7 @@ function AlbumCoverFlow({
   return (
     <section
       className="tv-music-album-flow"
-      aria-label="Albums"
+      aria-label={t("pages.musicDetail.albums")}
     >
       <div className="tv-music-album-cover-flow">
         {albums.map((album, index) => {
@@ -139,7 +145,7 @@ function AlbumCoverFlow({
               data-navigation-focus-key={`music:${artistId}:album:${album.album.id}`}
               data-tv-edge-target-down={`.player-page.is-inline-music [data-player-default-focus], #music-track-${firstTrack.track.id}`}
               aria-pressed={isSelected}
-              aria-label={`Play ${album.album.title}`}
+              aria-label={t("pages.musicDetail.play", { title: album.album.title })}
               onKeyDown={(event) => {
                 if (event.key === "ArrowLeft") moveSelection(event, -1);
                 else if (event.key === "ArrowRight") moveSelection(event, 1);
@@ -216,6 +222,7 @@ function AlbumTrackList({
   onNavigate: ReturnType<typeof useNavigationLayer>["captureLink"];
   onPlay: (album: AlbumDetail, track: TrackDetail) => void;
 }) {
+  const { t } = useLanguage();
   const tracks = playableTracks(album);
   const trackListRef = useRef<HTMLDivElement>(null);
   const scrollEdges = useScrollEdges(
@@ -228,13 +235,16 @@ function AlbumTrackList({
   return (
     <section
       className="tv-music-track-list"
-      aria-label={`${album.album.title} tracks`}
+      aria-label={t("pages.musicDetail.albumTracksAriaLabel", { title: album.album.title })}
     >
       <header className="tv-music-track-list-heading">
         <div>
           <h2>{album.album.title}</h2>
           <span>
-            {albumLabel(album)} · {tracks.length} {tracks.length === 1 ? "track" : "tracks"}
+            {albumLabel(album)} · {tracks.length}{" "}
+            {tracks.length === 1
+              ? t("pages.musicDetail.trackSingular")
+              : t("pages.musicDetail.trackPlural")}
           </span>
         </div>
       </header>
@@ -300,7 +310,7 @@ function AlbumTrackList({
                   onNavigate(event);
                   onPlay(album, track);
                 }}
-                aria-label={`Play ${track.track.title}`}
+                aria-label={t("pages.musicDetail.play", { title: track.track.title })}
                 {...contextProps}
                 onKeyDown={(event) => contextProps.onKeyDown(event)}
               >
@@ -309,7 +319,7 @@ function AlbumTrackList({
                 </span>
                 <strong>{track.track.title}</strong>
                 <span className="tv-music-track-row-duration">
-                  {formatDuration(track.track.duration_seconds)}
+                  {formatDuration(track.track.duration_seconds, t)}
                 </span>
                 <WatchStateOverlay progress={progress} showUnwatched />
               </Link>
@@ -328,6 +338,7 @@ export function MusicDetailPage() {
   const navigate = useNavigate();
   const { activePlayerSession, startPlayerSession } =
     useOutletContext<AppShellOutletContext>();
+  const { t } = useLanguage();
   const client = useApiClient();
   const state = useWorkDetail(client, workId);
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
@@ -492,7 +503,7 @@ export function MusicDetailPage() {
             pendingServerTrack.track.track.title.trim().toLocaleLowerCase()
       );
       if (!album || !track?.media_file_id) {
-        throw new Error("The selected server does not have this playable track.");
+        throw new Error(t("pages.musicDetail.serverMissingTrack"));
       }
       const sourcePlaylist = playableTracks(album).map((candidate) => ({
         mediaFileId: candidate.media_file_id!,
@@ -526,10 +537,13 @@ export function MusicDetailPage() {
       parentNavigationOrigin,
       pendingServerTrack,
       startPlayerSession,
+      t,
     ]
   );
 
-  useDocumentTitle(state.status === "ready" ? state.data.work.title : "Music");
+  useDocumentTitle(
+    state.status === "ready" ? state.data.work.title : t("pages.musicDetail.music")
+  );
 
   useEffect(() => {
     if (!selectedAlbum || !selectedTrack) {
@@ -597,13 +611,16 @@ export function MusicDetailPage() {
 
   if (state.status === "loading" || state.status === "idle") {
     return (
-      <div className="tv-detail tv-detail-loading" aria-label="Loading artist details">
+      <div
+        className="tv-detail tv-detail-loading"
+        aria-label={t("pages.musicDetail.loadingArtistDetails")}
+      >
         <span className="tv-detail-loader" aria-hidden="true">
           <i />
           <i />
           <i />
         </span>
-        <p>Loading music</p>
+        <p>{t("pages.musicDetail.loadingMusic")}</p>
       </div>
     );
   }
@@ -615,7 +632,7 @@ export function MusicDetailPage() {
           graphic="music"
           tone="error"
           variant="page"
-          title="This artist could not be loaded"
+          title={t("pages.musicDetail.loadErrorTitle")}
           description={state.message}
         />
       </div>
@@ -628,8 +645,8 @@ export function MusicDetailPage() {
         <TvEmptyState
           graphic="music"
           variant="page"
-          title="Music details unavailable"
-          description="This artist is no longer available in your music libraries."
+          title={t("pages.musicDetail.unavailableTitle")}
+          description={t("pages.musicDetail.unavailableDescription")}
         />
       </div>
     );
@@ -678,7 +695,7 @@ export function MusicDetailPage() {
         <button
           type="button"
           className="tv-page-back"
-          aria-label="Back to Music"
+          aria-label={t("pages.musicDetail.backToMusic")}
           onClick={() => {
             if (parentNavigationOrigin) navigate(-1);
             else navigate(backTo);
@@ -686,27 +703,29 @@ export function MusicDetailPage() {
         >
           <span aria-hidden="true">←</span>
         </button>
-        <h1>Albums</h1>
+        <h1>{t("pages.musicDetail.albums")}</h1>
       </header>
 
       <aside className="tv-detail-copy" key={`music-copy-${selectedTrack?.track.id ?? work.id}`}>
         <p className="tv-detail-kicker">
-          {selectedAlbum ? albumLabel(selectedAlbum) : work.genres[0] ?? "Artist"}
+          {selectedAlbum
+            ? albumLabel(selectedAlbum)
+            : work.genres[0] ?? t("pages.musicDetail.artist")}
         </p>
         <h1>{work.title}</h1>
         {selectedTrack ? <h2>{selectedTrack.track.title}</h2> : null}
         <div className="tv-detail-meta">
-          <span>Artist</span>
+          <span>{t("pages.musicDetail.artist")}</span>
           {selectedAlbum ? <span>{selectedAlbum.album.title}</span> : null}
           {selectedTrack ? (
-            <span>{formatDuration(selectedTrack.track.duration_seconds)}</span>
+            <span>{formatDuration(selectedTrack.track.duration_seconds, t)}</span>
           ) : null}
           {work.genres.slice(0, 3).map((genre) => (
             <span key={genre}>{genre}</span>
           ))}
         </div>
         <p className="tv-detail-synopsis">
-          {work.overview ?? "Choose an album and track to start listening."}
+          {work.overview ?? t("pages.musicDetail.overviewFallback")}
         </p>
       </aside>
 
@@ -714,7 +733,7 @@ export function MusicDetailPage() {
         <TvRailSurface
           className="tv-series-browser tv-music-browser"
           mode="content"
-          ariaLabel={`${work.title} albums and tracks`}
+          ariaLabel={t("pages.musicDetail.albumsAndTracksAriaLabel", { title: work.title })}
         >
           <AlbumCoverFlow
             albums={albums}
@@ -754,8 +773,8 @@ export function MusicDetailPage() {
           <TvEmptyState
             graphic="music"
             variant="rail"
-            title="No playable albums yet"
-            description="Available tracks will appear here after the music library is updated."
+            title={t("pages.musicDetail.noAlbumsTitle")}
+            description={t("pages.musicDetail.noAlbumsDescription")}
           />
         </div>
       )}
@@ -770,9 +789,11 @@ export function MusicDetailPage() {
       ) : null}
 
       <div className="tv-stage-footer" aria-hidden="true">
-        <span>Music</span>
+        <span>{t("pages.musicDetail.music")}</span>
         <i />
-        <span>{work.genres.slice(0, 2).join(" · ") || "Your library"}</span>
+        <span>
+          {work.genres.slice(0, 2).join(" · ") || t("pages.musicDetail.yourLibrary")}
+        </span>
       </div>
     </TvStageShell>
   );

@@ -58,6 +58,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Localise Playarr Web in English, Thai, and Japanese, with system-language detection and a
+  searchable language selector on sign-up and settings screens.
+- Centre Playarr profiles beneath the viewer heading, animate them into view, and add
+  flat initial avatars and PIN-independent profile sign-out controls beside icon-only settings
+  buttons, without showing settings beneath the sign-in card.
 - Normalise bare, HTTP, and HTTPS public IPv4 server inputs, with or without a port, to the
   deterministic direct relay hostname on port `8484`.
 - Standardise Streamarr's direct application port on `8484`.

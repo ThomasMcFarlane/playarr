@@ -8,6 +8,7 @@ import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useToast } from "../../lib/toast";
 import { QrCode } from "../../components/QrCode";
 import { enableApprovalPushNotifications } from "../../lib/pushNotifications";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
 
 type FriendInviteState =
@@ -19,7 +20,8 @@ type FriendInviteState =
 type PushState = "idle" | "enabling" | "enabled" | "error";
 
 export function SettingsInvitePage() {
-  useDocumentTitle("Invite a friend — Settings");
+  const { t } = useLanguage();
+  useDocumentTitle(t("settings.invite.documentTitle"));
   const [apiBaseUrl] = useApiBaseUrl();
   const client = usePrimaryApiClient();
   const { showToast } = useToast();
@@ -63,7 +65,7 @@ export function SettingsInvitePage() {
     try {
       const request = await client.createUserInviteRequest();
       setFriendInviteState({ status: "ready", request });
-      showToast("Invite request sent to your Streamarr admin.");
+      showToast(t("settings.invite.toastRequestSent"));
     } catch (error) {
       setFriendInviteState({
         status: "error",
@@ -86,7 +88,7 @@ export function SettingsInvitePage() {
       setFriendInviteCopied(false);
       const request = await client.getMyUserInviteRequest();
       setFriendInviteState({ status: "ready", request });
-      showToast("Friend invite generated. It is valid for 24 hours.");
+      showToast(t("settings.invite.toastGenerated"));
     } catch (error) {
       setFriendInviteState({
         status: "error",
@@ -101,12 +103,12 @@ export function SettingsInvitePage() {
     try {
       await navigator.clipboard.writeText(friendInviteLink);
       setFriendInviteCopied(true);
-      showToast("Invite link copied.");
+      showToast(t("settings.invite.toastCopied"));
     } catch {
       setFriendInviteState((current) => ({
         status: "error",
         request: current.status === "loading" ? null : current.request,
-        message: "Could not copy the link. Select and copy it manually.",
+        message: t("settings.invite.copyFailed"),
       }));
     }
   }
@@ -117,7 +119,7 @@ export function SettingsInvitePage() {
     try {
       await enableApprovalPushNotifications(client);
       setPushState("enabled");
-      showToast("Invite approval notifications enabled.");
+      showToast(t("settings.invite.toastPushEnabled"));
     } catch (error) {
       setPushState("error");
       setPushError(error instanceof Error ? error.message : String(error));
@@ -127,25 +129,25 @@ export function SettingsInvitePage() {
   return (
     <>
       <SettingsSectionLayout
-        kicker="Make it yours"
-        title="Invite a friend"
-        description="Ask your Streamarr admin for one friend-invite QR code."
+        kicker={t("settings.invite.kicker")}
+        title={t("settings.invite.title")}
+        description={t("settings.invite.description")}
       >
       <section className="card settings-card settings-card-wide">
         {friendInviteState.status === "loading" ? (
-          <p className="muted">Checking invite status…</p>
+          <p className="muted">{t("settings.invite.checkingStatus")}</p>
         ) : (
           <>
             <p className="muted" aria-live="polite">
               {!friendInviteState.request
-                ? "You have not requested an invite yet."
+                ? t("settings.invite.statusNone")
                 : friendInviteState.request.status === "pending"
-                  ? "Waiting for an admin to review your request."
+                  ? t("settings.invite.statusPending")
                   : friendInviteState.request.status === "approved"
-                    ? "Approved — generate your QR code when you are ready to share it."
+                    ? t("settings.invite.statusApproved")
                     : friendInviteState.request.status === "denied"
-                      ? "Your previous request was not approved. You can ask again."
-                      : "Your approved invite was generated. Request another when you need one."}
+                      ? t("settings.invite.statusDenied")
+                      : t("settings.invite.statusGenerated")}
             </p>
             {friendInviteState.status === "error" ? (
               <p className="error-text" role="alert">{friendInviteState.message}</p>
@@ -161,12 +163,12 @@ export function SettingsInvitePage() {
               }
             >
               {friendInviteState.status === "saving"
-                ? "Working…"
+                ? t("settings.invite.working")
                 : friendInviteState.request?.status === "approved"
-                  ? "Generate invite QR"
+                  ? t("settings.invite.generateQr")
                   : friendInviteState.request?.status === "pending"
-                    ? "Request pending"
-                    : "Request invite QR"}
+                    ? t("settings.invite.requestPending")
+                    : t("settings.invite.requestQr")}
             </button>
             <div>
               <button
@@ -176,10 +178,10 @@ export function SettingsInvitePage() {
                 onClick={() => void handleEnablePush()}
               >
                 {pushState === "enabled"
-                  ? "Approval notifications enabled"
+                  ? t("settings.invite.pushEnabled")
                   : pushState === "enabling"
-                    ? "Enabling…"
-                    : "Enable approval notifications"}
+                    ? t("settings.invite.pushEnabling")
+                    : t("settings.invite.enablePush")}
               </button>
               {pushError ? <p className="error-text" role="alert">{pushError}</p> : null}
             </div>
@@ -201,17 +203,17 @@ export function SettingsInvitePage() {
             aria-labelledby="friend-invite-title"
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <p className="page-kicker">Ready to share</p>
-            <h2 id="friend-invite-title">Invite a friend to Playarr</h2>
+            <p className="page-kicker">{t("settings.invite.modalKicker")}</p>
+            <h2 id="friend-invite-title">{t("settings.invite.modalTitle")}</h2>
             <p className="muted">
-              This one-use code opens Playarr with your Streamarr server already locked in.
+              {t("settings.invite.modalDescription")}
             </p>
             <QrCode
               value={friendInviteLink}
               size={260}
-              label="QR code for a Playarr friend invitation"
+              label={t("settings.invite.qrLabel")}
             />
-            <label className="form-label" htmlFor="friend-invite-link">Invite link</label>
+            <label className="form-label" htmlFor="friend-invite-link">{t("settings.invite.linkLabel")}</label>
             <input
               id="friend-invite-link"
               className="input"
@@ -221,15 +223,17 @@ export function SettingsInvitePage() {
             />
             {friendInviteExpiresAt ? (
               <p className="hint">
-                Expires {new Date(friendInviteExpiresAt).toLocaleString()}. The invite can be used once.
+                {t("settings.invite.expires", {
+                  expiresAt: new Date(friendInviteExpiresAt).toLocaleString(),
+                })}
               </p>
             ) : null}
             <div className="connection-actions">
               <button type="button" className="btn btn-secondary" onClick={() => setFriendInviteLink(null)}>
-                Close
+                {t("settings.invite.close")}
               </button>
               <button type="button" className="btn btn-primary" onClick={() => void handleCopyFriendInvite()}>
-                {friendInviteCopied ? "Copied" : "Copy link"}
+                {friendInviteCopied ? t("settings.invite.copied") : t("settings.invite.copyLink")}
               </button>
             </div>
           </section>

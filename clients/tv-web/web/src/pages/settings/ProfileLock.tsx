@@ -3,6 +3,7 @@ import { ApiError } from "@streamarr-tv/api-client";
 import { usePrimaryApiClient, useAuth } from "../../lib/ApiClientProvider";
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useToast } from "../../lib/toast";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
 
 type ProfilePinState =
@@ -13,7 +14,8 @@ type ProfilePinState =
   | { status: "error"; message: string };
 
 export function SettingsProfileLockPage() {
-  useDocumentTitle("Profile lock — Settings");
+  const { t } = useLanguage();
+  useDocumentTitle(t("settings.profileLock.documentTitle"));
   const client = usePrimaryApiClient();
   const { currentUserName } = useAuth();
   const { showToast } = useToast();
@@ -51,7 +53,7 @@ export function SettingsProfileLockPage() {
     event.preventDefault();
     if (profilePinState.status === "saving") return;
     if (!/^\d{4}$/.test(profilePin)) {
-      setProfilePinState({ status: "error", message: "Enter exactly four digits." });
+      setProfilePinState({ status: "error", message: t("settings.profileLock.errorFourDigits") });
       return;
     }
 
@@ -64,7 +66,9 @@ export function SettingsProfileLockPage() {
       setProfilePinLocked(setting.pin_locked);
       setProfilePin("");
       setProfilePinState({ status: "saved" });
-      showToast(replacingPin ? "Profile PIN replaced." : "Profile PIN set.");
+      showToast(
+        replacingPin ? t("settings.profileLock.toastReplaced") : t("settings.profileLock.toastSet"),
+      );
     } catch (error) {
       if (profilePinRequestRef.current !== requestId) return;
       const message = error instanceof ApiError ? error.message : String(error);
@@ -82,7 +86,7 @@ export function SettingsProfileLockPage() {
       setProfilePinLocked(setting.pin_locked);
       setProfilePin("");
       setProfilePinState({ status: "saved" });
-      showToast("Profile PIN removed.");
+      showToast(t("settings.profileLock.toastRemoved"));
     } catch (error) {
       if (profilePinRequestRef.current !== requestId) return;
       const message = error instanceof ApiError ? error.message : String(error);
@@ -92,14 +96,18 @@ export function SettingsProfileLockPage() {
 
   return (
     <SettingsSectionLayout
-      kicker="Make it yours"
-      title="Profile lock"
-      description={`Require a four-digit PIN before switching to ${currentUserName ?? "this profile"}.`}
+      kicker={t("settings.profileLock.kicker")}
+      title={t("settings.profileLock.title")}
+      description={t("settings.profileLock.description", {
+        name: currentUserName ?? t("settings.profileLock.thisProfile"),
+      })}
     >
       <section className="card settings-card settings-card-wide">
         <form className="profile-pin-settings" onSubmit={(event) => void handleProfilePinSave(event)}>
           <label className="form-label" htmlFor="profile-lock-pin">
-            {profilePinLocked ? "Replace PIN" : "New PIN"}
+            {profilePinLocked
+              ? t("settings.profileLock.replacePinLabel")
+              : t("settings.profileLock.newPinLabel")}
           </label>
           <div className="connection-form-row">
             <input
@@ -124,7 +132,11 @@ export function SettingsProfileLockPage() {
                 profilePinState.status === "saving"
               }
             >
-              {profilePinState.status === "saving" ? "Saving…" : profilePinLocked ? "Replace" : "Set PIN"}
+              {profilePinState.status === "saving"
+                ? t("settings.profileLock.saving")
+                : profilePinLocked
+                  ? t("settings.profileLock.replace")
+                  : t("settings.profileLock.setPin")}
             </button>
           </div>
         </form>
@@ -132,14 +144,14 @@ export function SettingsProfileLockPage() {
         <div className="profile-pin-settings-status" aria-live="polite">
           <p className={profilePinState.status === "error" ? "error-text" : "muted"}>
             {profilePinState.status === "loading"
-              ? "Loading profile lock…"
+              ? t("settings.profileLock.loading")
               : profilePinState.status === "saving"
-                ? "Updating profile lock…"
+                ? t("settings.profileLock.updating")
                 : profilePinState.status === "error"
                   ? profilePinState.message
                   : profilePinLocked
-                    ? "PIN lock is on."
-                    : "PIN lock is off."}
+                    ? t("settings.profileLock.lockOn")
+                    : t("settings.profileLock.lockOff")}
           </p>
           {profilePinLocked ? (
             <button
@@ -148,7 +160,7 @@ export function SettingsProfileLockPage() {
               disabled={profilePinState.status === "saving"}
               onClick={() => void handleProfilePinRemove()}
             >
-              Remove PIN
+              {t("settings.profileLock.removePin")}
             </button>
           ) : null}
         </div>
