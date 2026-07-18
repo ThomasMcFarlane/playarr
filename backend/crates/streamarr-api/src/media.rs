@@ -1242,7 +1242,7 @@ async fn media_playback_options(
             Vec::new()
         }),
     );
-    let quality_options = playback_quality_options();
+    let quality_options = playback_quality_options(media_file.bitrate);
     let stored = state
         .user_repo
         .get_media_playback_preferences(user_id, media_file_id)

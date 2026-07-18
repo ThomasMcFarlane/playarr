@@ -275,13 +275,15 @@ pub(crate) fn playback_subtitle_options(
         .collect()
 }
 
-pub(crate) fn playback_quality_options() -> Vec<PlaybackQualityOption> {
+pub(crate) fn playback_quality_options(
+    source_video_bitrate_bps: Option<u64>,
+) -> Vec<PlaybackQualityOption> {
     std::iter::once(PlaybackQualityOption {
         id: "original".to_string(),
         label: "Original".to_string(),
         profile: None,
         height: None,
-        video_bitrate_bps: None,
+        video_bitrate_bps: source_video_bitrate_bps,
     })
     .chain(
         streamarr_transcode::TranscodeTargetProfile::supported()
@@ -826,7 +828,7 @@ pub async fn playback_info_handler(
         .as_ref()
         .map(|preferences| preferences.quality_id.as_str())
         .filter(|id| {
-            playback_quality_options()
+            playback_quality_options(media_file.bitrate)
                 .iter()
                 .any(|option| option.id == *id)
         });
@@ -908,7 +910,7 @@ pub async fn playback_info_handler(
             selected_audio_track_id,
             subtitle_tracks: playback_subtitle_options(media_file_id, 0, &source_subtitle_tracks),
             selected_subtitle_track_id,
-            quality_options: playback_quality_options(),
+            quality_options: playback_quality_options(media_file.bitrate),
             selected_quality_id,
             session_id,
         }));
@@ -964,7 +966,7 @@ pub async fn playback_info_handler(
             selected_audio_track_id,
             subtitle_tracks: playback_subtitle_options(media_file_id, 0, &source_subtitle_tracks),
             selected_subtitle_track_id,
-            quality_options: playback_quality_options(),
+            quality_options: playback_quality_options(media_file.bitrate),
             selected_quality_id,
             session_id,
         }));
@@ -1026,7 +1028,7 @@ pub async fn playback_info_handler(
             &source_subtitle_tracks,
         ),
         selected_subtitle_track_id,
-        quality_options: playback_quality_options(),
+        quality_options: playback_quality_options(media_file.bitrate),
         selected_quality_id,
         session_id,
     }))
@@ -1220,6 +1222,7 @@ mod tests {
         assert_eq!(info.source_offset_ms, 0);
         assert_eq!(info.selected_quality_id, "original");
         assert_eq!(info.quality_options[0].label, "Original");
+        assert_eq!(info.quality_options[0].video_bitrate_bps, Some(15_000_000));
         assert_eq!(
             info.quality_options
                 .iter()

@@ -103,6 +103,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Show the source bitrate alongside Original in Playarr's player quality menu.
 - Keep profile-led authentication back controls on the same header row as the Playarr logo.
 - Restore native mouse-wheel, trackpad, scrollbar, and touch scrolling on every authenticated
   Playarr page while keeping ArrowUp and ArrowDown navigation available from text inputs.
