@@ -204,6 +204,7 @@ struct HomeView: View {
                 phone ? 16 : 24,
                 for: .scrollContent
             )
+            .defaultScrollAnchor(.leading)
             .frame(height: HomeLayout.carouselHeight(cardWidth: cardWidth, phone: phone))
             .scrollIndicators(.hidden)
         }
