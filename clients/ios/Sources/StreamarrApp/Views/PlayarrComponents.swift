@@ -80,7 +80,10 @@ struct PlayarrArtwork: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [PlayarrStyle.inkSoft.opacity(0.8), PlayarrStyle.ink.opacity(0.98)],
+                colors: [
+                    Color(red: 0.19, green: 0.13, blue: 0.17),
+                    Color(red: 0.075, green: 0.062, blue: 0.075),
+                ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -91,16 +94,8 @@ struct PlayarrArtwork: View {
                     .scaledToFill()
                     .transition(.opacity)
             } else {
-                VStack(spacing: 10) {
-                    Image(systemName: work.kind.symbolName)
-                        .font(.system(size: 28, weight: .light))
-                    Text(work.title)
-                        .font(.caption.weight(.semibold))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .padding(.horizontal, 10)
-                }
-                .foregroundStyle(.white.opacity(0.82))
+                PlayarrLogo(size: 46)
+                    .opacity(0.84)
             }
         }
         .clipped()

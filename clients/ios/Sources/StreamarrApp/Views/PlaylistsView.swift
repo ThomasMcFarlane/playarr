@@ -53,68 +53,123 @@ struct PlaylistsView: View {
     }
 
     private var playlistList: some View {
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                if viewModel.playlists.isEmpty {
-                    VStack(spacing: 14) {
-                        Image(systemName: "music.note.list")
-                            .font(.system(size: 40, weight: .light))
-                            .foregroundStyle(PlayarrStyle.pink)
-                        Text("No playlists yet").font(.title3.weight(.bold))
-                        Text("Playlists created in Playarr appear here automatically.")
-                            .font(.footnote)
-                            .foregroundStyle(PlayarrStyle.inkSoft)
-                    }
-                    .padding(.top, 90)
-                } else {
-                    ForEach(viewModel.playlists) { playlist in
-                        NavigationLink {
-                            PlaylistDetailView(playlist: playlist, apiClient: viewModel.apiClient)
-                        } label: {
-                            HStack(spacing: 16) {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                        .fill(PlayarrStyle.ink.gradient)
-                                    Image(systemName: playlist.mediaType == .audio ? "music.note" : "play.rectangle")
-                                        .font(.title2)
-                                        .foregroundStyle(.white)
-                                }
-                                .frame(width: 64, height: 64)
+        GeometryReader { proxy in
+            let phone = proxy.size.width <= 760
+            let columns = phone ? 2 : 3
+            let contentWidth = phone ? proxy.size.width : proxy.size.width * 0.65
+            let leading: CGFloat = phone ? 16 : max(28, proxy.size.width * 0.028)
+            let trailing: CGFloat = phone ? 16 : max(80, proxy.size.width * 0.065)
+            let gap: CGFloat = phone ? 12 : min(28, proxy.size.width * 0.0135)
+            let cardWidth = (contentWidth - leading - trailing - gap * CGFloat(columns - 1)) / CGFloat(columns)
 
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(playlist.name)
-                                        .font(.headline)
-                                        .foregroundStyle(PlayarrStyle.ink)
-                                    Text(playlist.isSystem ? "System playlist" : "Personal playlist")
-                                        .font(.caption)
-                                        .foregroundStyle(PlayarrStyle.muted)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(PlayarrStyle.muted)
-                            }
-                            .padding(14)
-                            .background(PlayarrStyle.surface.opacity(0.78), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            ZStack(alignment: .topLeading) {
+                PlayarrStyle.surface
+
+                RadialGradient(
+                    colors: [PlayarrStyle.pink.opacity(0.11), .clear],
+                    center: UnitPoint(x: 0.25, y: 0.48),
+                    startRadius: 0,
+                    endRadius: 360
+                )
+
+                ScrollView {
+                    if viewModel.playlists.isEmpty {
+                        VStack(spacing: 16) {
+                            Image(systemName: "music.note.list")
+                                .font(.system(size: 52, weight: .ultraLight))
+                                .foregroundStyle(PlayarrStyle.pink)
+                            Text("No playlists yet")
+                                .font(.custom("Avenir Next", fixedSize: 22).weight(.semibold))
+                            Text("Playlists created in Playarr appear here automatically.")
+                                .font(.custom("Avenir Next", fixedSize: 12))
+                                .foregroundStyle(PlayarrStyle.muted)
                         }
-                        .buttonStyle(.plain)
+                        .foregroundStyle(PlayarrStyle.ink)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, proxy.size.height * 0.34)
+                    } else {
+                        LazyVGrid(
+                            columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: gap, alignment: .top), count: columns),
+                            alignment: .leading,
+                            spacing: phone ? 26 : 36
+                        ) {
+                            ForEach(viewModel.playlists) { playlist in
+                                NavigationLink {
+                                    PlaylistDetailView(playlist: playlist, apiClient: viewModel.apiClient)
+                                } label: {
+                                    playlistCard(playlist, width: cardWidth)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.leading, leading)
+                        .padding(.trailing, trailing)
+                        .padding(.top, phone ? 92 : max(128, proxy.size.height * 0.15))
+                        .padding(.bottom, phone ? 118 : 70)
                     }
                 }
+                .frame(width: contentWidth, height: proxy.size.height)
+                .offset(x: phone ? 0 : proxy.size.width * 0.35)
+                .scrollIndicators(.hidden)
+                .refreshable { await viewModel.load() }
+                .background {
+                    if !phone {
+                        LinearGradient(
+                            colors: [.clear, PlayarrStyle.surface.opacity(0.92), PlayarrStyle.surface],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    }
+                }
+
+                Text("Playlists")
+                    .font(.custom("Avenir Next", fixedSize: phone ? 22 : min(34, proxy.size.width * 0.0175)).weight(.medium))
+                    .tracking(phone ? -1 : -1.5)
+                    .foregroundStyle(PlayarrStyle.ink)
+                    .padding(.leading, phone ? 16 : max(102, proxy.size.width * 0.08))
+                    .padding(.top, phone ? max(56, proxy.safeAreaInsets.top + 6) : min(66, max(34, proxy.size.height * 0.052)))
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 96)
-            .padding(.bottom, 112)
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
-        .refreshable { await viewModel.load() }
-        .background(PlayarrStyle.background)
-        .overlay(alignment: .topLeading) {
-            Text("Playlists")
-                .font(.system(size: 32, weight: .medium, design: .rounded))
-                .tracking(-1.2)
+        .ignoresSafeArea()
+    }
+
+    private func playlistCard(_ playlist: Playlist, width: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack {
+                ForEach(0..<3, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: min(13, max(8, width * 0.058)), style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    PlayarrStyle.pink.opacity(0.18 + Double(index) * 0.07),
+                                    PlayarrStyle.surfaceStrong,
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: min(13, max(8, width * 0.058)))
+                                .stroke(PlayarrStyle.lineStrong, lineWidth: 1)
+                        }
+                        .offset(x: CGFloat(index - 1) * width * 0.055, y: CGFloat(abs(index - 1)) * 5)
+                }
+                Image(systemName: playlist.mediaType == .audio ? "music.note" : "play.rectangle")
+                    .font(.system(size: width * 0.16, weight: .ultraLight))
+                    .foregroundStyle(PlayarrStyle.pink)
+            }
+            .frame(width: width, height: width * 0.625)
+
+            Text(playlist.name)
+                .font(.custom("Avenir Next", fixedSize: width <= 210 ? 12.5 : 11).weight(.semibold))
                 .foregroundStyle(PlayarrStyle.ink)
-                .padding(.top, 54)
-                .padding(.horizontal, 18)
+                .lineLimit(1)
+            Text(playlist.isSystem ? "System playlist" : "Personal playlist")
+                .font(.custom("Avenir Next", fixedSize: width <= 210 ? 10 : 8.5).weight(.semibold))
+                .foregroundStyle(PlayarrStyle.muted)
         }
+        .frame(width: width, alignment: .leading)
     }
 }
 
