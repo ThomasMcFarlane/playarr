@@ -20,9 +20,18 @@ talk to (via `@streamarr-tv/domain`'s `resolveApiBaseUrl`) in this order:
 
 ## Building
 
-`pnpm --filter @streamarr-tv/app-tizen run build` produces a static
-`dist/` bundle via Vite (relative asset paths, conservative `es2018` build
-target for Tizen's legacy WebKit runtime).
+`pnpm --filter @streamarr-tv/app-tizen run build` produces a package-ready
+`dist/` directory: the static Vite bundle, Tizen's required `config.xml`, the
+runtime server configuration, and the Playarr application icon. The build uses
+relative asset paths and a conservative `es2018` target for Tizen's legacy
+WebKit runtime.
+
+Once the active Tizen Studio certificate profile is configured, create the
+signed widget with:
+
+```sh
+pnpm --filter @streamarr-tv/app-tizen run package:wgt
+```
 
 ## Known gap: Tizen Studio CLI is not installed in this environment
 
@@ -36,14 +45,13 @@ matter of running, once the CLI is available:
 
 ```sh
 pnpm --filter @streamarr-tv/app-tizen run build
-cp tizen-manifest.xml dist/config.xml   # Tizen Studio expects config.xml at the package root
 tizen package -t wgt -s <profile-name> -- dist
 tizen install -n <package>.wgt -t <device-id>
 tizen run -p StrmarrTV1.Streamarr -t <device-id>
 ```
 
-Placeholder `icon.png` referenced by `tizen-manifest.xml` is not included in
-this scaffold and will need a real asset before packaging.
+The package preparation step validates that the manifest and icon are present
+in `dist/` before packaging can begin.
 
 ## Known gap: no real Tizen AVPlay runtime here
 

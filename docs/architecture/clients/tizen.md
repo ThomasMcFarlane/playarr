@@ -25,11 +25,11 @@ adapt the player/platform pieces" approach applies.
   manifest (W3C widget config + `tizen:` namespace extensions: application
   id/package, `tv` profile, required privileges, TV display settings), but
   `tizen build-web`/`tizen package` have not been invoked to produce or
-  test an actual `.wgt` here — see `clients/tv-web/apps/tv-tizen/README.md`
-  for the exact packaging commands (including renaming/copying
-  `tizen-manifest.xml` to the `config.xml` Tizen Studio expects at the
-  package root) once Tizen Studio is available. A placeholder `icon.png`
-  referenced by the manifest is also not included yet.
+  test an actual `.wgt` here. The production build copies
+  `tizen-manifest.xml` to the package-root `config.xml`, includes the Playarr
+  application icon, and validates both in its package-ready `dist/`
+  directory. See `clients/tv-web/apps/tv-tizen/README.md` for the exact
+  packaging commands to run once Tizen Studio is available.
 
 ## Tech stack
 

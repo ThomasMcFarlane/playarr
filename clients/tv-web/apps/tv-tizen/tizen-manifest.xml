@@ -3,9 +3,8 @@
   Tizen TV web-application manifest (W3C widget config + Tizen namespace
   extensions). Tizen Studio's packaging tools (`tizen build-web` /
   `tizen package`) conventionally read this from `config.xml` at the
-  project root; it is named `tizen-manifest.xml` here per this scaffold's
-  spec. Rename (or symlink) to `config.xml` when wiring up a real Tizen
-  Studio project -- see README.md for the packaging gap.
+  project root. The package preparation step copies this checked-in source to
+  `dist/config.xml` after every production build.
 -->
 <widget xmlns="http://www.w3.org/ns/widgets"
         xmlns:tizen="http://tizen.org/ns/widgets"

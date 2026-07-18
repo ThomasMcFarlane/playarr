@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Make the Tizen client package-ready by emitting and validating its widget manifest and
+  application icon alongside the production bundle.
 - Make the webOS client package-ready with a validated manifest and application icon, and attach
   its Shaka playback engine when the video surface mounts.
 - Let administrators choose Playarr and shared-library access when creating or approving an
@@ -80,6 +82,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Align the Tizen architecture guidance with the package-ready production build.
 - Align the webOS architecture guidance with the package-ready production build.
 
 - Match the Clients catalogue to the profile selector with an offscreen horizontal platform row,
