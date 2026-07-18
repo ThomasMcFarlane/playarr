@@ -183,6 +183,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Make the iOS Xcode target produce the `Playarr.app` bundle expected by its shared scheme and
+  app-hosted unit tests.
+- Authenticate iOS catalogue and playback requests, rotate expired sessions through the server's
+  refresh endpoint, and persist each server's token pair in the iOS Keychain across relaunches.
+- Rebind every iOS screen to the newly selected Streamarr server as soon as its saved URL changes.
+
 - Make the Android shell load only hosted Playarr, remove its native Streamarr-address editor and
   startup server-version request, and leave each account's Streamarr URL to the web login flow.
 - Let Android browsers follow the Clients APK link as a normal direct navigation instead of

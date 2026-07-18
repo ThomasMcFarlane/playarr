@@ -50,7 +50,7 @@ public final class AppEnvironment {
     public let deviceID: UUID
 
     @ObservationIgnored private let userDefaults: UserDefaults
-    @ObservationIgnored private let tokenStore: InMemoryTokenStore
+    @ObservationIgnored private var tokenStore: KeychainTokenStore
 
     public init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
@@ -68,7 +68,10 @@ public final class AppEnvironment {
             self.deviceID = generatedDeviceID
         }
 
-        let tokenStore = InMemoryTokenStore()
+        let tokenStore = KeychainTokenStore(
+            service: "com.streamarr.ios.session",
+            account: resolvedURL.absoluteString
+        )
         self.tokenStore = tokenStore
 
         self.apiClient = APIClient(
@@ -77,81 +80,59 @@ public final class AppEnvironment {
                 clientVersion: InstalledAppVersion.current,
                 deviceID: self.deviceID,
                 deviceName: Self.deviceName
-            )
+            ),
+            tokenProvider: tokenStore
         )
         self.deviceFlowClient = DeviceFlowClient(
             configuration: DeviceFlowConfiguration(baseURL: resolvedURL)
         )
     }
 
-    /// Called once `DeviceFlowClient.authorize` (or a future refresh-token
-    /// exchange) succeeds. `TODO`: persist to the Keychain instead of
-    /// holding it only in memory — see `InMemoryTokenStore` below.
-    public func setSession(accessToken: String, refreshToken: String?) async {
-        await tokenStore.update(accessToken: accessToken, refreshToken: refreshToken)
+    public func setSession(
+        accessToken: String,
+        refreshToken: String,
+        tokenType: String,
+        expiresIn: Int64
+    ) async throws {
+        try await tokenStore.storeSession(
+            StoredAuthSession(
+                accessToken: accessToken,
+                refreshToken: refreshToken,
+                tokenType: tokenType,
+                expiresAt: Date().addingTimeInterval(TimeInterval(expiresIn))
+            )
+        )
         isSignedIn = true
     }
 
-    public func signOut() async {
-        await tokenStore.clear()
+    public func restoreSessionState() async {
+        isSignedIn = await tokenStore.currentSession() != nil
+    }
+
+    public func signOut() async throws {
+        try await tokenStore.clearSession()
         isSignedIn = false
     }
 
     private func rebuildClients() {
+        let tokenStore = KeychainTokenStore(
+            service: "com.streamarr.ios.session",
+            account: serverBaseURL.absoluteString
+        )
+        self.tokenStore = tokenStore
         apiClient = APIClient(
             configuration: APIClientConfiguration(
                 baseURL: serverBaseURL,
                 clientVersion: InstalledAppVersion.current,
                 deviceID: deviceID,
                 deviceName: Self.deviceName
-            )
+            ),
+            tokenProvider: tokenStore
         )
         deviceFlowClient = DeviceFlowClient(
             configuration: DeviceFlowConfiguration(baseURL: serverBaseURL)
         )
-    }
-}
-
-/// Placeholder `AccessTokenProviding` used until the app wires up real
-/// Keychain-backed persistence (`TODO` above). An `actor` rather than a
-/// `@MainActor` class specifically so it satisfies `AccessTokenProviding:
-/// Sendable` without relying on global-actor-isolation-implies-Sendable
-/// inference. Deliberately stores `Sensitive<String>`, not plain `String`
-/// — see `StreamarrKit.Sensitive`.
-actor InMemoryTokenStore: AccessTokenProviding {
-    private var accessToken: Sensitive<String>?
-    private var refreshToken: Sensitive<String>?
-
-    func update(accessToken: String, refreshToken: String?) {
-        self.accessToken = Sensitive(accessToken)
-        self.refreshToken = refreshToken.map(Sensitive.init)
-    }
-
-    func clear() {
-        accessToken = nil
-        refreshToken = nil
-    }
-
-    func currentAccessToken() async -> Sensitive<String>? {
-        accessToken
-    }
-
-    func refreshAccessToken() async throws -> Sensitive<String> {
-        // TODO: exchange `refreshToken` via the OAuth refresh grant once
-        // the token endpoint contract is finalized server-side.
-        guard let accessToken else {
-            throw APIError.unauthorized(nil)
-        }
-        return accessToken
-    }
-
-    /// `AccessTokenProviding.storeSession` — how a conformer persists a
-    /// token pair obtained outside of `AppEnvironment.setSession`'s own
-    /// device-flow path (e.g. a future refresh-token exchange). Deliberately
-    /// doesn't touch `AppEnvironment.isSignedIn` itself; callers that need
-    /// that flag updated too go through `setSession`.
-    func storeSession(accessToken: Sensitive<String>, refreshToken: Sensitive<String>?) async {
-        self.accessToken = accessToken
-        self.refreshToken = refreshToken
+        isSignedIn = false
+        Task { await restoreSessionState() }
     }
 }

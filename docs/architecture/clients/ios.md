@@ -33,7 +33,7 @@ rather than a gap to close.
 | UI | SwiftUI |
 | Async | Swift Concurrency (`async`/`await`), Observation (`@Observable`) |
 | Networking | `URLSession` + a hand-written client (`Networking/APIClient.swift`, `OpenAPISchemas.swift`) checked field-by-field against `backend/openapi/streamarr.yaml` and the real backend Rust structs — not a generated client |
-| Local persistence | None yet — see "Token persistence is in-memory only" below; no SwiftData/Keychain wiring exists in the tree today |
+| Local persistence | Per-server access/refresh sessions in the iOS Keychain; server URL and stable device id in `UserDefaults` |
 | Playback | `AVFoundation`/`AVKit` (`AVPlayer`, `AVPlayerItem`, picture-in-picture) |
 | DRM | Not implemented — see "Playback / DRM approach" below |
 
@@ -74,7 +74,7 @@ happens.
 
 ## Auth/session flow
 
-Two real session paths exist, both landing in the same in-memory
+Two real session paths exist, both landing in the same Keychain-backed
 `AccessTokenProviding` store so a token obtained either way is visible to
 every subsequent call:
 
@@ -90,16 +90,12 @@ every subsequent call:
   bearer token is acquired transparently the moment one is needed, without
   requiring a device-flow sign-in first.
 
-No endpoint the iOS app actually calls requires the resulting
-`Authorization: Bearer` header today — catalog, playback, and system calls
-all stay unauthenticated by the server's own design. (The server does
-enforce Bearer-plus-admin-checked auth on the source-instance management
-endpoints, but the iOS app has no admin UI and never calls them.)
-**Token persistence is in-memory only** (`AppEnvironment`'s
-`InMemoryTokenStore`) — there is a documented `TODO` at the one call site
-that would need it (`refreshAccessToken()`) marking where Keychain-backed
-persistence and a real OAuth refresh-token exchange still need to go; a
-signed-in session does not currently survive an app relaunch.
+Catalog and playback requests attach `Authorization: Bearer`; public system,
+login, refresh, device-flow and webhook operations do not. `APIClient`
+renews access tokens two minutes before expiry through
+`POST /api/v1/auth/refresh`, persists the rotated token pair, and retries a
+protected request once after an unexpected `401`. Sessions are isolated by
+server URL in the iOS Keychain and survive app relaunches.
 
 ## Auto-update
 
@@ -142,18 +138,12 @@ metadata, entitlements, the privacy manifest, the accent colour, and a real
 1024 px application icon. The shared scheme also contains `StreamarrKitTests`
 and `StreamarrAppTests` XCTest targets.
 
-The available local validation compiled and linked the application and both
-test bundles against the iOS Simulator SDK, compiled a Release device target,
-and passed all six platform-independent `StreamarrKit` tests using a temporary
-host-only manifest adjustment that was reverted afterwards. The generated
-project's resources phase contains both the asset catalogue and privacy
-manifest.
-
-This Xcode installation has the iOS SDK but no installed iOS Simulator runtime.
-Consequently, XCTest and UI execution are not possible here, and Xcode's asset
-compiler cannot finish its runtime-specific thinning pass. A machine with an
-installed iOS runtime is still required for the final simulator build, app
-launch, XCTest execution, signing, archive, and physical-device validation.
+Local validation now compiles the complete application, including its asset
+catalogue and privacy manifest, against the iOS Simulator SDK. The shared
+scheme executes all ten `StreamarrKitTests` and `StreamarrAppTests` successfully
+on an iPhone 17 Pro simulator running iOS 26.5. Signing, archive validation,
+physical-device testing, TestFlight and App Store submission still require the
+appropriate Apple developer account and distribution configuration.
 
 ## Store submission process and constraints
 

@@ -43,6 +43,7 @@ targets:
         MARKETING_VERSION: 0.1.0
         PRODUCT_BUNDLE_IDENTIFIER: com.streamarr.ios
         PRODUCT_MODULE_NAME: StreamarrApp
+        PRODUCT_NAME: Playarr
         SUPPORTS_MACCATALYST: NO
         TARGETED_DEVICE_FAMILY: "1,2"
 

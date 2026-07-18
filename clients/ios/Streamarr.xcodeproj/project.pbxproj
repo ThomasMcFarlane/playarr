@@ -13,6 +13,7 @@
 		3E14032EE33E2BB498FC281B /* LibraryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79E923BC7B8EDFAE6617074E /* LibraryViewModel.swift */; };
 		407D1941BCB0AD337DF28C76 /* HomeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FC4446EA931B24FCD0DB0E9 /* HomeViewModel.swift */; };
 		47E4CD133BA99CDA9F46D275 /* StreamarrKit in Frameworks */ = {isa = PBXBuildFile; productRef = 5580E463E5E092B2CFE44524 /* StreamarrKit */; };
+		4D5B51C84C335C7AA2F963D1 /* APIClientAuthenticationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E9F5AD7BEE43A57468E1FF1 /* APIClientAuthenticationTests.swift */; };
 		529F02E697DC075CF33EDAD5 /* PreviewSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9343AADF6E982DB2A8A53515 /* PreviewSupport.swift */; };
 		657F93598CE6544E7B59B2F4 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CEF2A0A2AF58B5FEBE2B5B4 /* HomeView.swift */; };
 		6EE150958738262AC8FC109A /* WorkDetailViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038CD121C4EB96DB14C563E1 /* WorkDetailViewModelTests.swift */; };
@@ -27,6 +28,7 @@
 		BCBB4B4AA4EEB3CD63C291F5 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36C3F8082AE9F92CD9A7EE43 /* LibraryView.swift */; };
 		BEFB5AF3F0944B968C99E53C /* UpdateGateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5905B69C766B1157D73EDD12 /* UpdateGateView.swift */; };
 		C52A560C0A86D9A0D79C21BD /* InstalledAppVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19C0C6071B91E0F8D40D6B86 /* InstalledAppVersion.swift */; };
+		C5E38504D5673A40DC4FF774 /* KeychainTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 256FA958B3E9337D14D9356B /* KeychainTokenStore.swift */; };
 		CA4C4FB65BAB102B1789FF4E /* StreamarrKit in Frameworks */ = {isa = PBXBuildFile; productRef = 508755099FF1F485A8C85771 /* StreamarrKit */; };
 		CB69E35C9C56E7AA3C8363A0 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55C2EDD38D3EE78CF143BE1 /* PlayerView.swift */; };
 		E1389984B8C1516C94B36CE8 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D1A5D5A4D38A5841E26E836 /* SettingsView.swift */; };
@@ -49,6 +51,7 @@
 		14D3D68B86AD7CBFDC9B6CD0 /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
 		19C0C6071B91E0F8D40D6B86 /* InstalledAppVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstalledAppVersion.swift; sourceTree = "<group>"; };
 		22FB21E00BEA101D1E185EFF /* OpenAPISchemasTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAPISchemasTests.swift; sourceTree = "<group>"; };
+		256FA958B3E9337D14D9356B /* KeychainTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainTokenStore.swift; sourceTree = "<group>"; };
 		29A9D57FC10AED2B09ABD965 /* WorkDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkDetailView.swift; sourceTree = "<group>"; };
 		2B48D116EE8D11FAE6A0A000 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		350D67A8517F32D1F1E146CE /* AppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
@@ -61,6 +64,7 @@
 		612187628792F145153CB63F /* StreamarrAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StreamarrAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		79E923BC7B8EDFAE6617074E /* LibraryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryViewModel.swift; sourceTree = "<group>"; };
 		7D32DDD36FA49320C0031DD9 /* ios */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ios; path = .; sourceTree = SOURCE_ROOT; };
+		7E9F5AD7BEE43A57468E1FF1 /* APIClientAuthenticationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientAuthenticationTests.swift; sourceTree = "<group>"; };
 		9343AADF6E982DB2A8A53515 /* PreviewSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewSupport.swift; sourceTree = "<group>"; };
 		9CEF2A0A2AF58B5FEBE2B5B4 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		9DCFCC87BC1FD28C30FAB0DA /* Playarr.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Playarr.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -95,6 +99,7 @@
 		04C2B04F18B68F71731BAFB1 /* StreamarrKitTests */ = {
 			isa = PBXGroup;
 			children = (
+				7E9F5AD7BEE43A57468E1FF1 /* APIClientAuthenticationTests.swift */,
 				530064E9763897EB523F7328 /* AppUpdateEvaluatorTests.swift */,
 				22FB21E00BEA101D1E185EFF /* OpenAPISchemasTests.swift */,
 			);
@@ -117,6 +122,7 @@
 				E69E796E082CEDAAF64DE76A /* App.swift */,
 				350D67A8517F32D1F1E146CE /* AppEnvironment.swift */,
 				19C0C6071B91E0F8D40D6B86 /* InstalledAppVersion.swift */,
+				256FA958B3E9337D14D9356B /* KeychainTokenStore.swift */,
 				FA66C57D4FF6A01B89E42B00 /* ViewModels */,
 				B88B0E94A23425D8EDB5A6C8 /* Views */,
 			);
@@ -312,6 +318,7 @@
 				657F93598CE6544E7B59B2F4 /* HomeView.swift in Sources */,
 				407D1941BCB0AD337DF28C76 /* HomeViewModel.swift in Sources */,
 				C52A560C0A86D9A0D79C21BD /* InstalledAppVersion.swift in Sources */,
+				C5E38504D5673A40DC4FF774 /* KeychainTokenStore.swift in Sources */,
 				BCBB4B4AA4EEB3CD63C291F5 /* LibraryView.swift in Sources */,
 				3E14032EE33E2BB498FC281B /* LibraryViewModel.swift in Sources */,
 				CB69E35C9C56E7AA3C8363A0 /* PlayerView.swift in Sources */,
@@ -331,6 +338,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4D5B51C84C335C7AA2F963D1 /* APIClientAuthenticationTests.swift in Sources */,
 				FC280A968B55BD609D112F88 /* AppUpdateEvaluatorTests.swift in Sources */,
 				37478F9C0FAA2B8BA6F84F30 /* OpenAPISchemasTests.swift in Sources */,
 			);
@@ -374,6 +382,7 @@
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.streamarr.ios;
 				PRODUCT_MODULE_NAME = StreamarrApp;
+				PRODUCT_NAME = Playarr;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -487,6 +496,7 @@
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.streamarr.ios;
 				PRODUCT_MODULE_NAME = StreamarrApp;
+				PRODUCT_NAME = Playarr;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";

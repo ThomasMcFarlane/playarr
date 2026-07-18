@@ -56,11 +56,23 @@ struct RootView: View {
         }
         .updateGate(updateViewModel)
         .task {
+            await environment.restoreSessionState()
             await updateViewModel.checkForUpdate()
         }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
             Task { await updateViewModel.checkForUpdate() }
         }
+        .onChange(of: environment.serverBaseURL) { _, _ in
+            rebuildViewModels()
+        }
+    }
+
+    private func rebuildViewModels() {
+        homeViewModel = HomeViewModel(apiClient: environment.apiClient)
+        libraryViewModel = LibraryViewModel(apiClient: environment.apiClient)
+        playerViewModel = PlayerViewModel(engine: AVPlayerEngine(), apiClient: environment.apiClient)
+        settingsViewModel = SettingsViewModel(environment: environment)
+        updateViewModel = UpdateViewModel(apiClient: environment.apiClient)
     }
 }

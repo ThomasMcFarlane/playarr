@@ -14,7 +14,7 @@ import Foundation
 // for it. Together the two components cover all of the spec's paths and
 // operations:
 //   - system: GET /api/system/health, /ready, /version
-//   - auth: POST /api/v1/auth/login
+//   - auth: POST /api/v1/auth/login, /api/v1/auth/refresh
 //   - catalog: GET /api/v1/catalog, /api/v1/catalog/search,
 //     /api/v1/catalog/{id}
 //   - playback: GET /api/v1/playback/{media_file_id}
@@ -26,14 +26,10 @@ import Foundation
 // same directory — see that file's header for how they were produced and
 // checked against the spec/backend source.
 //
-// Every operation this client drives is unauthenticated by the backend's
-// own design (no 401 documented on any of them in the spec), so `post`
-// never attaches a bearer token — `login` itself only obtains one, never
-// consumes one. `AccessTokenProviding`/`AppEnvironment.InMemoryTokenStore`
-// in `StreamarrApp` still exist to back the RFC 8628 device-flow sign-in
-// this app drives from `SettingsView` (see `DeviceFlowClient.swift` and
-// `AppEnvironment.setSession`/`.signOut`) — this client itself just has no
-// remaining call that needs to read that token back out.
+// Catalog and playback operations require a bearer token. `APIClient`
+// obtains one from the shared session store, rotates an expiring session
+// through `/api/v1/auth/refresh`, or attempts credential-less trusted-network
+// login when no usable session remains.
 
 /// Configuration for talking to one Streamarr server instance. `baseURL` is
 /// the one thing that must be user-configurable per the architecture
@@ -72,24 +68,26 @@ public struct APIClientConfiguration: Sendable {
     }
 }
 
-/// Supplies (and refreshes) the bearer token obtained via user-driven
-/// sign-in. `DeviceFlowClient` (see `Auth/DeviceFlowClient.swift`) produces
-/// the token pair; a concrete conformer typically persists it in the
-/// Keychain and refreshes it before it expires. Every operation
-/// `APIClient` itself drives is unauthenticated by the backend's own
-/// design, so `APIClient` doesn't currently read this token back out — this
-/// protocol exists to back the app's real Sign In/Out UI (`SettingsView`
-/// via `AppEnvironment.setSession`/`.signOut`), independent of whether
-/// anything in this file consumes the token it holds.
-public protocol AccessTokenProviding: Sendable {
-    func currentAccessToken() async -> Sensitive<String>?
-    func refreshAccessToken() async throws -> Sensitive<String>
+public struct StoredAuthSession: Codable, Sendable, Equatable {
+    public var accessToken: Sensitive<String>
+    public var refreshToken: Sensitive<String>
+    public var tokenType: String
+    public var expiresAt: Date
 
-    /// Persists a token pair obtained outside of a conformer's own
-    /// `update`/equivalent entry point (e.g. a future refresh-token
-    /// exchange), through the same store already used for
-    /// `DeviceFlowClient`-obtained tokens — never a second, parallel store.
-    func storeSession(accessToken: Sensitive<String>, refreshToken: Sensitive<String>?) async
+    public init(accessToken: String, refreshToken: String, tokenType: String, expiresAt: Date) {
+        self.accessToken = Sensitive(accessToken)
+        self.refreshToken = Sensitive(refreshToken)
+        self.tokenType = tokenType
+        self.expiresAt = expiresAt
+    }
+}
+
+/// Shared persistence boundary for sessions obtained by transparent login,
+/// refresh-token rotation, or RFC 8628 device pairing.
+public protocol AccessTokenProviding: Sendable {
+    func currentSession() async -> StoredAuthSession?
+    func storeSession(_ session: StoredAuthSession) async throws
+    func clearSession() async throws
 }
 
 /// Errors this client can throw. Status-code-specific cases carry the
@@ -199,15 +197,25 @@ public final class APIClient: StreamarrAPIClient {
     private let session: URLSession
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
+    private let accessTokenCoordinator: AccessTokenCoordinator?
 
     public init(
         configuration: APIClientConfiguration,
+        tokenProvider: AccessTokenProviding? = nil,
         session: URLSession? = nil
     ) {
+        let resolvedSession = session ?? URLSession(configuration: configuration.urlSessionConfiguration)
         self.configuration = configuration
-        self.session = session ?? URLSession(configuration: configuration.urlSessionConfiguration)
+        self.session = resolvedSession
         self.decoder = StreamarrJSONCoding.makeDecoder()
         self.encoder = StreamarrJSONCoding.makeEncoder()
+        self.accessTokenCoordinator = tokenProvider.map {
+            AccessTokenCoordinator(
+                configuration: configuration,
+                tokenProvider: $0,
+                session: resolvedSession
+            )
+        }
     }
 
     public var baseURL: URL { configuration.baseURL }
@@ -223,13 +231,17 @@ public final class APIClient: StreamarrAPIClient {
     }
 
     public func fetchVersion() async throws -> VersionEnvelope {
-        try await get("/api/system/version")
+        try await get("/api/system/version", authenticated: false)
     }
 
     // MARK: Auth
 
     public func login(_ body: LoginRequest) async throws -> LoginResponse {
         try await post("/api/v1/auth/login", body: body)
+    }
+
+    public func refresh(_ body: RefreshRequest) async throws -> RefreshResponse {
+        try await post("/api/v1/auth/refresh", body: body)
     }
 
     // MARK: Catalog
@@ -298,14 +310,24 @@ public final class APIClient: StreamarrAPIClient {
 
     // MARK: - Request helpers
     //
-    // Neither `get`/`sendNoBody` nor `post` attach auth — every operation in
-    // the spec this client drives is unauthenticated by the backend's own
-    // design (`sendWebhook` also builds its request directly, not through
-    // `post`, for the same reason).
+    // Catalog/playback GETs attach auth. System, login/refresh and webhook
+    // requests stay public.
 
-    private func get<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
-        let request = try makeRequest(path: path, method: "GET", query: query)
-        return try await send(request)
+    private func get<T: Decodable>(
+        _ path: String,
+        query: [URLQueryItem] = [],
+        authenticated: Bool = true
+    ) async throws -> T {
+        var request = try makeRequest(path: path, method: "GET", query: query)
+        if authenticated {
+            try await attachAuthorization(to: &request)
+        }
+        do {
+            return try await send(request)
+        } catch APIError.unauthorized where authenticated && accessTokenCoordinator != nil {
+            try await attachAuthorization(to: &request, forceRefresh: true)
+            return try await send(request)
+        }
     }
 
     private func post<Body: Encodable, T: Decodable>(
@@ -399,6 +421,119 @@ public final class APIClient: StreamarrAPIClient {
             throw APIError.serviceUnavailable(errorBody)
         default:
             throw APIError.http(status: httpResponse.statusCode, body: errorBody, rawBody: data)
+        }
+    }
+
+    private func attachAuthorization(to request: inout URLRequest, forceRefresh: Bool = false) async throws {
+        guard let accessTokenCoordinator else { return }
+        let token = try await accessTokenCoordinator.accessToken(forceRefresh: forceRefresh)
+        request.setValue("Bearer \(token.exposeSecret())", forHTTPHeaderField: "Authorization")
+    }
+}
+
+private actor AccessTokenCoordinator {
+    private let configuration: APIClientConfiguration
+    private let tokenProvider: AccessTokenProviding
+    private let session: URLSession
+    private let decoder = StreamarrJSONCoding.makeDecoder()
+    private let encoder = StreamarrJSONCoding.makeEncoder()
+    private var inFlight: Task<Sensitive<String>, Error>?
+
+    init(configuration: APIClientConfiguration, tokenProvider: AccessTokenProviding, session: URLSession) {
+        self.configuration = configuration
+        self.tokenProvider = tokenProvider
+        self.session = session
+    }
+
+    func accessToken(forceRefresh: Bool) async throws -> Sensitive<String> {
+        if let inFlight { return try await inFlight.value }
+        let task = Task { try await self.acquireAccessToken(forceRefresh: forceRefresh) }
+        inFlight = task
+        defer { inFlight = nil }
+        return try await task.value
+    }
+
+    private func acquireAccessToken(forceRefresh: Bool) async throws -> Sensitive<String> {
+        let existing = await tokenProvider.currentSession()
+        if !forceRefresh,
+           let existing,
+           existing.expiresAt > Date().addingTimeInterval(120) {
+            return existing.accessToken
+        }
+
+        if let existing {
+            do {
+                let refreshed: RefreshResponse = try await post(
+                    path: "/api/v1/auth/refresh",
+                    body: RefreshRequest(
+                        deviceID: configuration.deviceID,
+                        refreshToken: existing.refreshToken.exposeSecret()
+                    )
+                )
+                let stored = StoredAuthSession(
+                    accessToken: refreshed.accessToken,
+                    refreshToken: refreshed.refreshToken,
+                    tokenType: refreshed.tokenType,
+                    expiresAt: Date().addingTimeInterval(TimeInterval(refreshed.expiresIn))
+                )
+                try await tokenProvider.storeSession(stored)
+                return stored.accessToken
+            } catch {
+                try? await tokenProvider.clearSession()
+            }
+        }
+
+        let loggedIn: LoginResponse = try await post(
+            path: "/api/v1/auth/login",
+            body: LoginRequest(
+                deviceID: configuration.deviceID,
+                deviceName: configuration.deviceName,
+                clientPlatform: configuration.clientPlatform,
+                clientVersion: configuration.clientVersion
+            )
+        )
+        let stored = StoredAuthSession(
+            accessToken: loggedIn.accessToken,
+            refreshToken: loggedIn.refreshToken,
+            tokenType: loggedIn.tokenType,
+            expiresAt: Date().addingTimeInterval(TimeInterval(loggedIn.expiresIn))
+        )
+        try await tokenProvider.storeSession(stored)
+        return stored.accessToken
+    }
+
+    private func post<Body: Encodable, Response: Decodable>(path: String, body: Body) async throws -> Response {
+        guard var components = URLComponents(url: configuration.baseURL, resolvingAgainstBaseURL: false) else {
+            throw APIError.invalidBaseURL
+        }
+        components.path += path
+        guard let url = components.url else { throw APIError.invalidBaseURL }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(configuration.clientPlatform.rawValue, forHTTPHeaderField: "X-Streamarr-Client-Platform")
+        request.setValue(configuration.clientVersion, forHTTPHeaderField: "X-Streamarr-Client-Version")
+        request.httpBody = try encoder.encode(body)
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw APIError.transport(error)
+        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
+        guard http.statusCode == 200 else {
+            let body = try? decoder.decode(APIErrorBody.self, from: data)
+            if http.statusCode == 401 { throw APIError.unauthorized(body) }
+            throw APIError.http(status: http.statusCode, body: body, rawBody: data)
+        }
+        do {
+            return try decoder.decode(Response.self, from: data)
+        } catch {
+            throw APIError.decoding(error)
         }
     }
 }
