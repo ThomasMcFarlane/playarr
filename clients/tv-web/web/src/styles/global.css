@@ -3349,7 +3349,6 @@ body[data-input-mode="remote"]
 .player-seek-track:focus-visible,
 body[data-input-mode="remote"] .player-seek-track:focus,
 .player-seek-track.is-scrubbing {
-  height: 9px;
   outline: 0;
 }
 

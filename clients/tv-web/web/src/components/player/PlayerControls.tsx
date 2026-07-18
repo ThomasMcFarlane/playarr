@@ -30,6 +30,8 @@ export interface PlayerTrackOption {
   language?: string;
 }
 
+const SEEK_COMMIT_DEBOUNCE_MS = 300;
+
 export interface PlayerControlsProps {
   engineState: PlaybackEngineState;
   visible: boolean;
@@ -143,13 +145,16 @@ export function PlayerControls({
     pointerId: number;
     positionSeconds: number;
   } | null>(null);
+  const seekCommitTimerRef = useRef<number | undefined>(undefined);
+  const seekSequenceActiveRef = useRef(false);
+  const seekWasPlayingRef = useRef(false);
   const [scrubPositionSeconds, setScrubPositionSeconds] = useState<number | null>(null);
   const [qualityMenuOpen, setQualityMenuOpen] = useState(false);
   const [audioMenuOpen, setAudioMenuOpen] = useState(false);
   const [subtitleMenuOpen, setSubtitleMenuOpen] = useState(false);
   const [pendingSeek, setPendingSeek] = useState<{
     positionSeconds: number;
-    requestedAt: number;
+    requestedAt: number | null;
   } | null>(null);
 
   useEffect(() => {
@@ -179,13 +184,21 @@ export function PlayerControls({
   );
 
   const duration = engineState.durationSeconds;
-  const isPlaying = engineState.state === "playing" || engineState.state === "buffering";
+  const isPlaying =
+    engineState.state === "playing" ||
+    engineState.state === "buffering" ||
+    (pendingSeek !== null && seekWasPlayingRef.current);
   const displayedPosition =
     scrubPositionSeconds ?? pendingSeek?.positionSeconds ?? engineState.currentTimeSeconds;
   const playedPct = duration > 0 ? Math.min(100, (displayedPosition / duration) * 100) : 0;
 
   useEffect(() => {
-    if (!pendingSeek || engineState.state === "buffering" || engineState.state === "loading") {
+    if (
+      !pendingSeek ||
+      pendingSeek.requestedAt === null ||
+      engineState.state === "buffering" ||
+      engineState.state === "loading"
+    ) {
       return;
     }
     if (Math.abs(engineState.currentTimeSeconds - pendingSeek.positionSeconds) > 1.5) return;
@@ -197,6 +210,44 @@ export function PlayerControls({
     );
     return () => window.clearTimeout(timer);
   }, [engineState.currentTimeSeconds, engineState.state, pendingSeek]);
+
+  useEffect(() => {
+    if (pendingSeek !== null) return;
+    seekSequenceActiveRef.current = false;
+    seekWasPlayingRef.current = false;
+  }, [pendingSeek]);
+
+  useEffect(
+    () => () => window.clearTimeout(seekCommitTimerRef.current),
+    []
+  );
+
+  const queueSeek = useCallback(
+    (positionSeconds: number) => {
+      const nextPosition = Math.min(duration, Math.max(0, positionSeconds));
+      if (!seekSequenceActiveRef.current) {
+        seekSequenceActiveRef.current = true;
+        seekWasPlayingRef.current =
+          engineState.state === "playing" || engineState.state === "buffering";
+      }
+      setPendingSeek({
+        positionSeconds: nextPosition,
+        requestedAt: null,
+      });
+      window.clearTimeout(seekCommitTimerRef.current);
+      seekCommitTimerRef.current = window.setTimeout(() => {
+        seekCommitTimerRef.current = undefined;
+        const requestedAt = performance.now();
+        setPendingSeek((current) =>
+          current?.positionSeconds === nextPosition
+            ? { ...current, requestedAt }
+            : current
+        );
+        onSeek(nextPosition);
+      }, SEEK_COMMIT_DEBOUNCE_MS);
+    },
+    [duration, engineState.state, onSeek]
+  );
 
   const positionFromPointer = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>): number => {
@@ -246,14 +297,10 @@ export function PlayerControls({
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
-      setPendingSeek({
-        positionSeconds: finalPosition,
-        requestedAt: performance.now(),
-      });
-      onSeek(finalPosition);
+      queueSeek(finalPosition);
       setScrubPositionSeconds(null);
     },
-    [positionFromPointer, onSeek]
+    [positionFromPointer, queueSeek]
   );
 
   const handleSeekPointerCancel = useCallback(
@@ -363,14 +410,9 @@ export function PlayerControls({
 
   const commitSeek = useCallback(
     (positionSeconds: number) => {
-      const nextPosition = Math.min(duration, Math.max(0, positionSeconds));
-      setPendingSeek({
-        positionSeconds: nextPosition,
-        requestedAt: performance.now(),
-      });
-      onSeek(nextPosition);
+      queueSeek(positionSeconds);
     },
-    [duration, onSeek]
+    [queueSeek]
   );
 
   const handleQualityMenuKeyDown = useCallback(

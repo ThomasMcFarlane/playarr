@@ -308,7 +308,7 @@ function AlbumTrackList({
                 }`}
                 data-navigation-focus-key={`music:${artistId}:track:${track.track.id}`}
                 data-tv-edge-target-up={
-                  index === 0 ? `#music-album-${album.album.id}` : undefined
+                  index === 0 ? "#inline-music-playback-control" : undefined
                 }
                 onFocus={() => onSelect(album.album.id, track.track.id)}
                 onMouseEnter={() => onSelect(album.album.id, track.track.id)}

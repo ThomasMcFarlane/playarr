@@ -225,6 +225,8 @@ export function PlayerPage({
     mediaFileId,
     hasPlayed: false,
   });
+  const keepInlinePlayerMounted =
+    inlineMusic && musicPlaybackStateRef.current.hasPlayed;
   const { negotiation, retryNegotiation } = player;
   const handleBack = useCallback(() => {
     onClose();
@@ -405,7 +407,7 @@ export function PlayerPage({
     return () => window.removeEventListener("keydown", handleBackKey);
   }, [handleBack, minimised]);
 
-  if (negotiation.kind === "loading") {
+  if (negotiation.kind === "loading" && !keepInlinePlayerMounted) {
     if (minimised) {
       if (inlineMiniPlayer) return inlineMiniPlayer;
       return (
@@ -496,6 +498,7 @@ export function PlayerPage({
           title={playerTitle}
           minimised={minimised}
           inlineMusic={inlineMusic}
+          playbackStarted={musicPlaybackStateRef.current.hasPlayed}
           stopPlaybackOnPause={shouldStopPlaybackOnPause}
           onBack={handleBack}
           onStop={onClose}

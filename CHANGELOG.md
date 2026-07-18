@@ -115,6 +115,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Return Up from the first music track to the inline playback controls and keep the scrubber bar
+  at a constant height when its focus thumb appears.
+- Debounce music seeks, preserve the playing control state, and keep inline controls mounted while
+  an on-demand track reloads at the requested position.
 - Keep the inline music mini-player inside the app layout, centre Cover Flow and its controls on
   one axis, and navigate between transport buttons, the scrubber, artwork, and tracks by remote.
 - Connect the sign-in language selector to the first input with explicit Up and Down focus

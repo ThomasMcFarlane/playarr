@@ -21,10 +21,12 @@ export function shouldRenderPlayerControls({
   inlineMusic,
   minimised,
   playbackBusy,
+  playbackStarted,
 }: {
   inlineMusic: boolean;
   minimised: boolean;
   playbackBusy: boolean;
+  playbackStarted: boolean;
 }): boolean {
-  return !minimised || (inlineMusic && !playbackBusy);
+  return !minimised || (inlineMusic && (!playbackBusy || playbackStarted));
 }

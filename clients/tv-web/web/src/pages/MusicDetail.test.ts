@@ -61,6 +61,9 @@ describe("MusicDetail track list", () => {
     expect(detailSource).toContain(
       'data-tv-edge-target-down="#inline-music-playback-control"'
     );
+    expect(detailSource).toContain(
+      'index === 0 ? "#inline-music-playback-control" : undefined'
+    );
     expect(detailSource).toMatch(
       /event\.key === "ArrowUp"[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopPropagation\(\);/
     );
@@ -70,6 +73,33 @@ describe("MusicDetail track list", () => {
     expect(controlsSource).toContain("onNavigateBelow?.()");
     expect(controlsSource).toContain("control.getClientRects().length > 0");
     expect(surfaceSource).not.toContain('target.closest(".player-controls")');
+  });
+
+  it("keeps the scrubber bar height fixed when its thumb appears", () => {
+    const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    const seekFocusRule = css.match(
+      /\.player-seek-track:hover,[^{]+\.player-seek-track\.is-scrubbing\s*\{(?<declarations>[^}]*)\}/
+    )?.groups?.declarations;
+
+    expect(seekFocusRule).not.toContain("height:");
+    expect(css).toMatch(
+      /\.player-seek-track:focus-visible \.player-seek-thumb,[^{]+\{[^}]*opacity: 1;/s
+    );
+  });
+
+  it("debounces seeks without unmounting controls during the reload", () => {
+    const controlsSource = readFileSync(
+      new URL("../components/player/PlayerControls.tsx", import.meta.url),
+      "utf8"
+    );
+    const playerSource = readFileSync(new URL("./Player.tsx", import.meta.url), "utf8");
+
+    expect(controlsSource).toContain("const SEEK_COMMIT_DEBOUNCE_MS = 300");
+    expect(controlsSource).toContain("window.clearTimeout(seekCommitTimerRef.current)");
+    expect(controlsSource).toContain("pendingSeek !== null && seekWasPlayingRef.current");
+    expect(playerSource).toContain(
+      'negotiation.kind === "loading" && !keepInlinePlayerMounted'
+    );
   });
 
   it("keeps the inline mini-player inside the app layout scope", () => {

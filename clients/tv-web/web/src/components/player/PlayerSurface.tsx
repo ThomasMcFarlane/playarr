@@ -425,6 +425,7 @@ export function PlayerSurface({
   title,
   minimised = false,
   inlineMusic = false,
+  playbackStarted = false,
   stopPlaybackOnPause = false,
   onBack,
   onStop,
@@ -442,6 +443,7 @@ export function PlayerSurface({
   title: string;
   minimised?: boolean;
   inlineMusic?: boolean;
+  playbackStarted?: boolean;
   stopPlaybackOnPause?: boolean;
   onBack: () => void;
   onStop: () => void;
@@ -1179,6 +1181,7 @@ export function PlayerSurface({
         inlineMusic,
         minimised,
         playbackBusy: isBusy,
+        playbackStarted,
       }) && (
         <PlayerControls
           engineState={engineState}

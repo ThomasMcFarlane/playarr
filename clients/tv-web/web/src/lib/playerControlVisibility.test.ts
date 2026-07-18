@@ -33,6 +33,7 @@ describe("shouldAutoHidePlayerControls", () => {
         inlineMusic: true,
         minimised: true,
         playbackBusy: true,
+        playbackStarted: false,
       })
     ).toBe(false);
     expect(
@@ -40,6 +41,18 @@ describe("shouldAutoHidePlayerControls", () => {
         inlineMusic: true,
         minimised: true,
         playbackBusy: false,
+        playbackStarted: false,
+      })
+    ).toBe(true);
+  });
+
+  it("keeps inline controls mounted while a playing track reloads after seeking", () => {
+    expect(
+      shouldRenderPlayerControls({
+        inlineMusic: true,
+        minimised: true,
+        playbackBusy: true,
+        playbackStarted: true,
       })
     ).toBe(true);
   });
