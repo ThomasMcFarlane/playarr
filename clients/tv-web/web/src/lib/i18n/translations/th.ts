@@ -771,6 +771,8 @@ export const th: Translations = {
   "pages.clients.ios.name": "iOS",
   "pages.clients.ios.platform": "iPhone และ iPad",
   "pages.clients.ios.description": "ไคลเอนต์เนทีฟสำหรับ Apple กำลังมา และยังไม่มีรุ่นที่ลงลายเซ็นสำหรับเผยแพร่",
+  "pages.clients.apple.name": "Apple",
+  "pages.clients.apple.platform": "iPhone, iPad และ Apple TV",
   "pages.clients.appleTv.name": "Apple TV",
   "pages.clients.appleTv.platform": "Apple TV",
   "pages.clients.webos.name": "LG webOS",
@@ -781,9 +783,9 @@ export const th: Translations = {
   "pages.clients.tizen.description": "มีโครงแอปทีวีแล้ว แต่ยังไม่มีแพ็กเกจใช้งานจริงที่ลงลายเซ็นเผยแพร่",
   "pages.clients.vidaaSetup": "ติดตั้ง",
   "pages.clients.downloadApk": "ดาวน์โหลด APK",
-  "pages.clients.downloadPreview": "ดาวน์โหลดรุ่นพรีวิว",
-  "pages.clients.previewNote":
-    "ไฟล์พรีวิวมีไว้สำหรับนักพัฒนาและการไซด์โหลด แพ็กเกจ Apple ต้องใช้ Xcode และการลงลายเซ็น บันเดิล webOS และ Tizen ต้องใช้ SDK ของผู้ผลิตและการลงลายเซ็น ส่วน Roku ต้องเปิดโหมดนักพัฒนา",
+  "pages.clients.downloadApp": "ดาวน์โหลดแอป",
+  "pages.clients.downloadNote":
+    "มีเฉพาะแพ็กเกจแอปที่ติดตั้งได้เท่านั้นสำหรับดาวน์โหลด แอป Roku ต้องเปิดโหมดนักพัฒนา ส่วนไคลเอนต์เนทีฟอื่นจะยังไม่พร้อมจนกว่าจะเผยแพร่แพ็กเกจที่ลงลายเซ็นแล้ว",
   "pages.clients.notYetPublished": "ยังไม่มีไฟล์ดาวน์โหลดที่ลงลายเซ็นเผยแพร่",
   "pages.clients.footer": "คลังเดียว ทุกหน้าจอ เซิร์ฟเวอร์ยังเป็นของคุณ",
   "pages.clients.androidPage.kicker": "Android",
