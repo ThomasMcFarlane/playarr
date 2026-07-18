@@ -59,6 +59,7 @@ struct PlayerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .playarrChromeHidden()
         .task {
             if case .idle = viewModel.loadState { startPlayback() }
         }

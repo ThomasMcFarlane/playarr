@@ -36,6 +36,7 @@ struct WorkDetailView: View {
         )) { Button("OK") { playlistMessage = nil } } message: { Text(playlistMessage ?? "") }
         .toolbarBackground(.hidden, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
+        .playarrChromeHidden()
     }
 
     private func detailContent(_ detail: WorkDetail) -> some View {

@@ -201,6 +201,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Keep native iOS title and player actions fully visible by using immersive detail and playback
+  surfaces instead of allowing the responsive app navigation to cover their controls.
 - Start every native iOS Home carousel at its leading content gutter instead of restoring a
   clipped partial-card offset on launch.
 - Replace the native iOS profile screen's static playback labels with working quality, subtitle,

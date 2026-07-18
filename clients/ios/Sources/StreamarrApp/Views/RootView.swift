@@ -2,6 +2,17 @@ import StreamarrKit
 import SwiftUI
 import UIKit
 
+private struct PlayarrChromeHiddenKey: PreferenceKey {
+    static let defaultValue = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
+}
+
+extension View {
+    func playarrChromeHidden(_ hidden: Bool = true) -> some View {
+        preference(key: PlayarrChromeHiddenKey.self, value: hidden)
+    }
+}
+
 struct RootView: View {
     let environment: AppEnvironment
     @State private var updateViewModel: UpdateViewModel
@@ -94,6 +105,7 @@ private struct AuthenticatedPlayarrShell: View {
     @State private var selected: Destination = .home
     @State private var availableKinds: Set<WorkKind> = []
     @State private var homeViewModel: HomeViewModel
+    @State private var chromeHidden = false
     #if DEBUG
     @State private var demoDetailViewModel: WorkDetailViewModel
     #endif
@@ -123,12 +135,13 @@ private struct AuthenticatedPlayarrShell: View {
     var body: some View {
         ZStack {
             selectedContent
-            chrome
+            if !chromeHidden { chrome }
         }
         .background(PlayarrStyle.background.ignoresSafeArea())
         .task {
             availableKinds = Set((try? await environment.apiClient.listCatalogKinds()) ?? [])
         }
+        .onPreferenceChange(PlayarrChromeHiddenKey.self) { chromeHidden = $0 }
     }
 
     @ViewBuilder
