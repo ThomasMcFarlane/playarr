@@ -55,7 +55,7 @@ describe("SettingsIndexPage", () => {
     expect(markup).toContain('class="settings-options-list"');
     expect(markup).toContain('class="tv-library-heading"');
     expect(markup).toContain(
-      'class="tv-library tv-directory settings-page settings-workspace-page"'
+      'class="tv-library tv-directory settings-page settings-workspace-page settings-index-route"'
     );
     expect(markup).toContain('class="tv-page-back"');
     expect(markup.match(/class="settings-option(?: is-active)?"/g)).toHaveLength(7);
@@ -99,28 +99,34 @@ describe("SettingsIndexPage", () => {
     expect(markup).toContain("Appearance controls");
   });
 
-  it("keeps every settings title visible in the mobile navigation rail", () => {
-    const markup = renderSettingsRoute("/settings/appearance");
+  it("separates the mobile settings menu from routed page content", () => {
+    const indexMarkup = renderSettingsRoute("/settings");
+    const detailMarkup = renderSettingsRoute("/settings/appearance");
     const css = readFileSync(
       new URL("../../styles/global.css", import.meta.url),
       "utf8"
     );
 
-    expect(markup).toContain("Appearance");
-    expect(markup).toContain("Profile avatar");
-    expect(markup).toContain("Language");
-    expect(markup).toContain("Player");
-    expect(markup).toContain("Server");
-    expect(markup).toContain("Profile lock");
-    expect(markup).toContain("Invite a friend");
+    expect(indexMarkup).toContain("settings-index-route");
+    expect(detailMarkup).toContain("settings-detail-route");
+    expect(indexMarkup).toContain("Appearance");
+    expect(indexMarkup).toContain("Profile avatar");
+    expect(indexMarkup).toContain("Language");
+    expect(indexMarkup).toContain("Player");
+    expect(indexMarkup).toContain("Server");
+    expect(indexMarkup).toContain("Profile lock");
+    expect(indexMarkup).toContain("Invite a friend");
     expect(css).toMatch(
-      /\.settings-workspace-track\s*\{[^}]*grid-template-columns:\s*minmax\(132px, 38%\) minmax\(0, 1fr\)/s
+      /\.settings-index-route \.settings-workspace-track,\s*\.settings-detail-route \.settings-workspace-track\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s
     );
     expect(css).toMatch(
-      /\.settings-detail-panel\s*\{[^}]*position:\s*relative[^}]*width:\s*auto/s
+      /\.settings-index-route \.settings-detail-panel,\s*\.settings-detail-route \.settings-options-panel\s*\{[^}]*display:\s*none/s
     );
     expect(css).toMatch(
-      /\.settings-option-copy\s*\{[^}]*display:\s*block/s
+      /\.settings-index-route \.tv-library-heading > \.settings-heading-detail,\s*\.settings-detail-route \.tv-library-heading h1\s*\{[^}]*display:\s*none/s
+    );
+    expect(css).toMatch(
+      /\.settings-index-route \.settings-option-copy small,\s*\.settings-index-route \.settings-option-arrow\s*\{[^}]*display:\s*block/s
     );
   });
 

@@ -135,6 +135,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   player layouts while preserving the existing desktop and television presentation.
 - Give mobile catalogue rails the full homepage and directory width, scroll item details and their
   metadata as one native page with parallax artwork, and show titles in the Settings navigation.
+- Separate the mobile Settings menu from each full-width settings page so routed content never
+  overlaps the titled navigation list.
 - Let Android TV builds configure their Playarr server at build time, use the television's
   system volume, and apply a stable 1920 by 1080 web viewport.
 - Require completed changes to be committed and pushed promptly as small, atomic Conventional
