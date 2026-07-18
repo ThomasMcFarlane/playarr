@@ -105,6 +105,45 @@ struct PlayarrArtwork: View {
     }
 }
 
+@MainActor
+@Observable
+private final class AlbumArtworkLoader {
+    var image: UIImage?
+
+    func load(artistWorkID: UUID, albumID: UUID, apiClient: StreamarrAPIClient) async {
+        guard let data = try? await apiClient.fetchAlbumArtwork(
+            artistWorkID: artistWorkID, albumID: albumID, kind: .poster
+        ) else { return }
+        image = UIImage(data: data)
+    }
+}
+
+struct PlayarrAlbumArtwork: View {
+    let artistWorkID: UUID
+    let albumID: UUID
+    let apiClient: StreamarrAPIClient
+    @State private var loader = AlbumArtworkLoader()
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(red: 0.24, green: 0.15, blue: 0.21), Color(red: 0.08, green: 0.065, blue: 0.08)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            if let image = loader.image {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else {
+                Image(systemName: "music.note").font(.system(size: 38, weight: .ultraLight)).foregroundStyle(PlayarrStyle.pink)
+            }
+        }
+        .clipped()
+        .task(id: "\(artistWorkID)-\(albumID)") {
+            await loader.load(artistWorkID: artistWorkID, albumID: albumID, apiClient: apiClient)
+        }
+    }
+}
+
 struct PlayarrMediaCard: View {
     let work: Work
     let apiClient: StreamarrAPIClient

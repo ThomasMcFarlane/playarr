@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add the missing Playarr cover-flow experiences to native iOS libraries and Music, including
+  authenticated album artwork, album selection, track lists, and first-track playback.
 - Bring native iOS playback to Playarr parity with resume, per-title quality, audio and subtitle
   choices, chapter seeking, watch-progress updates, and complete playback-session telemetry.
 - Complete the native iOS profile journey with Playarr-styled invited sign-up, synced preset and

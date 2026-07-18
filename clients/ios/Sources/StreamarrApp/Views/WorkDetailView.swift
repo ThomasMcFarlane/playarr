@@ -7,6 +7,7 @@ struct WorkDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var playlists: [Playlist] = []
     @State private var playlistMessage: String?
+    @State private var selectedAlbumID: UUID?
 
     var body: some View {
         Group {
@@ -24,6 +25,10 @@ struct WorkDetailView: View {
         .task {
             if case .idle = viewModel.loadState { await viewModel.load() }
             playlists = (try? await apiClient.listPlaylists()) ?? []
+            if selectedAlbumID == nil,
+               case .artist(let albums) = viewModel.detail?.children {
+                selectedAlbumID = albums.first?.album.id
+            }
         }
         .alert("Playlists", isPresented: Binding(
             get: { playlistMessage != nil },
@@ -310,22 +315,7 @@ struct WorkDetailView: View {
                 }
             }
         case .artist(let albums):
-            VStack(alignment: .leading, spacing: 28) {
-                ForEach(albums, id: \.album.id) { album in
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(album.album.title)
-                            .font(.custom("Avenir Next", fixedSize: 18).weight(.semibold))
-                            .foregroundStyle(PlayarrStyle.ink)
-                        ForEach(album.tracks) { track in
-                            playableRow(
-                                title: track.track.title,
-                                subtitle: "Track \(track.track.trackNumber)",
-                                mediaFileID: track.mediaFileID
-                            )
-                        }
-                    }
-                }
-            }
+            albumCoverFlow(albums)
         case .author(let books):
             VStack(alignment: .leading, spacing: 12) {
                 Text("Books")
@@ -333,6 +323,85 @@ struct WorkDetailView: View {
                     .foregroundStyle(PlayarrStyle.ink)
                 ForEach(books) { book in
                     playableRow(title: book.book.title, subtitle: "Book", mediaFileID: book.mediaFileID)
+                }
+            }
+        }
+    }
+
+    private func albumCoverFlow(_ albums: [AlbumDetail]) -> some View {
+        let selected = albums.first(where: { $0.album.id == selectedAlbumID }) ?? albums.first
+        return VStack(alignment: .leading, spacing: 22) {
+            Text("Albums")
+                .font(.custom("Avenir Next", fixedSize: 18).weight(.semibold))
+                .foregroundStyle(PlayarrStyle.ink)
+
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: -20) {
+                    ForEach(Array(albums.enumerated()), id: \.element.album.id) { index, album in
+                        Button { selectedAlbumID = album.album.id } label: {
+                            VStack(alignment: .leading, spacing: 8) {
+                                PlayarrAlbumArtwork(
+                                    artistWorkID: album.album.artistWorkID,
+                                    albumID: album.album.id,
+                                    apiClient: apiClient
+                                )
+                                .frame(width: 164, height: 164)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(selectedAlbumID == album.album.id ? PlayarrStyle.pink : PlayarrStyle.lineStrong, lineWidth: selectedAlbumID == album.album.id ? 3 : 1)
+                                }
+                                Text(album.album.title).font(.caption.weight(.semibold)).lineLimit(1)
+                                Text(album.album.releaseDate?.prefix(4) ?? Substring(album.album.albumType.rawValue.replacingOccurrences(of: "_", with: " ")))
+                                    .font(.caption2).foregroundStyle(PlayarrStyle.muted)
+                            }
+                            .frame(width: 174, alignment: .leading)
+                            .foregroundStyle(PlayarrStyle.ink)
+                            .scaleEffect(selectedAlbumID == album.album.id ? 1.06 : 0.88)
+                            .rotation3DEffect(
+                                .degrees(selectedAlbumID == album.album.id ? 0 : (album.album.id == albums.first?.album.id ? 10 : -10)),
+                                axis: (x: 0, y: 1, z: 0)
+                            )
+                            .zIndex(selectedAlbumID == album.album.id ? Double(albums.count + 1) : Double(albums.count - index))
+                            .animation(.snappy, value: selectedAlbumID)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.viewAligned)
+            .scrollIndicators(.hidden)
+
+            if let selected {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(selected.album.title).font(.title3.weight(.semibold))
+                        Text("\(selected.tracks.filter { $0.mediaFileID != nil }.count) playable tracks")
+                            .font(.caption).foregroundStyle(PlayarrStyle.muted)
+                    }
+                    Spacer()
+                    if let first = selected.tracks.first(where: { $0.mediaFileID != nil }), let mediaFileID = first.mediaFileID {
+                        NavigationLink {
+                            PlayerView(
+                                viewModel: PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient),
+                                initialMediaFileID: mediaFileID.uuidString,
+                                initialTitle: first.track.title
+                            )
+                        } label: { Label("Play", systemImage: "play.fill") }
+                            .buttonStyle(PlayarrPrimaryButtonStyle())
+                    }
+                }
+                .foregroundStyle(PlayarrStyle.ink)
+
+                ForEach(selected.tracks) { track in
+                    playableRow(
+                        title: track.track.title,
+                        subtitle: "Track \(track.track.trackNumber)",
+                        mediaFileID: track.mediaFileID
+                    )
                 }
             }
         }

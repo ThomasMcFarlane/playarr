@@ -180,6 +180,32 @@ final class APIClientAuthenticationTests: XCTestCase {
         )
     }
 
+    func testAlbumArtworkUsesAuthenticatedWebRoute() async throws {
+        let store = TestTokenStore(
+            session: StoredAuthSession(
+                accessToken: "access",
+                refreshToken: "refresh",
+                tokenType: "Bearer",
+                expiresAt: .distantFuture
+            )
+        )
+        URLProtocolStub.handler = { request in
+            XCTAssertEqual(
+                request.url?.path,
+                "/api/v1/artwork/album/00000000-0000-0000-0000-000000000030/00000000-0000-0000-0000-000000000031/poster"
+            )
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access")
+            return Self.response(request, json: "album-art")
+        }
+
+        let data = try await makeClient(store: store).fetchAlbumArtwork(
+            artistWorkID: UUID(uuidString: "00000000-0000-0000-0000-000000000030")!,
+            albumID: UUID(uuidString: "00000000-0000-0000-0000-000000000031")!,
+            kind: .poster
+        )
+        XCTAssertEqual(String(decoding: data, as: UTF8.self), "album-art")
+    }
+
     private func makeClient(store: TestTokenStore) -> APIClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [URLProtocolStub.self]

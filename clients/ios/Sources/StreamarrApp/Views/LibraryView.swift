@@ -86,12 +86,47 @@ struct LibraryView: View {
             let gap: CGFloat = phone ? 12 : min(28, proxy.size.width * 0.0135)
             let cardWidth = (panelWidth - gutter - trailing - gap * CGFloat(columnCount - 1)) / CGFloat(columnCount)
 
-            ScrollView(.vertical) {
-                LazyVGrid(
+            Group {
+                if viewModel.viewMode == .coverFlow {
+                    ScrollView(.horizontal) {
+                        LazyHStack(spacing: -34) {
+                            ForEach(Array(viewModel.works.enumerated()), id: \.element.id) { index, work in
+                                NavigationLink {
+                                    WorkDetailView(
+                                        viewModel: WorkDetailViewModel(apiClient: apiClient, workID: work.id),
+                                        apiClient: apiClient
+                                    )
+                                } label: {
+                                    PlayarrArtwork(work: work, kind: .poster, apiClient: apiClient)
+                                        .frame(width: phone ? 176 : 220, height: phone ? 264 : 330)
+                                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                        .overlay(alignment: .bottomLeading) {
+                                            Text(work.title)
+                                                .font(.caption.weight(.bold)).foregroundStyle(.white)
+                                                .lineLimit(2).padding(12)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .background(.black.opacity(0.48))
+                                        }
+                                        .rotation3DEffect(.degrees(index.isMultiple(of: 2) ? 7 : -7), axis: (x: 0, y: 1, z: 0))
+                                        .shadow(color: .black.opacity(0.34), radius: 18, y: 10)
+                                }
+                                .buttonStyle(.plain)
+                                .task { if work.id == viewModel.works.last?.id { await viewModel.loadMore() } }
+                            }
+                        }
+                        .scrollTargetLayout()
+                        .padding(.horizontal, gutter + 24)
+                    }
+                    .contentMargins(.top, phone ? 112 : max(150, proxy.size.height * 0.19), for: .scrollContent)
+                    .contentMargins(.bottom, phone ? 130 : 70, for: .scrollContent)
+                    .scrollTargetBehavior(.viewAligned)
+                } else {
+                    ScrollView(.vertical) {
+                        LazyVGrid(
                     columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: gap, alignment: .top), count: columnCount),
                     alignment: .leading,
                     spacing: phone ? 24 : min(36, proxy.size.height * 0.025)
-                ) {
+                        ) {
                     ForEach(viewModel.playlists) { playlist in
                         NavigationLink {
                             PlaylistDetailView(playlist: playlist, apiClient: apiClient)
@@ -119,11 +154,13 @@ struct LibraryView: View {
                         }
                     }
                     if viewModel.isLoadingMore { ProgressView().tint(PlayarrStyle.pink).frame(width: cardWidth, height: 80) }
+                        }
+                        .padding(.leading, gutter)
+                        .padding(.trailing, trailing)
+                        .padding(.top, phone ? 92 : max(128, proxy.size.height * 0.15))
+                        .padding(.bottom, phone ? 118 : max(48, proxy.size.height * 0.06))
+                    }
                 }
-                .padding(.leading, gutter)
-                .padding(.trailing, trailing)
-                .padding(.top, phone ? 92 : max(128, proxy.size.height * 0.15))
-                .padding(.bottom, phone ? 118 : max(48, proxy.size.height * 0.06))
             }
             .frame(width: panelWidth, height: proxy.size.height)
             .offset(x: phone ? 0 : proxy.size.width * 0.35)
@@ -295,6 +332,7 @@ struct LibraryView: View {
                         Label("List", systemImage: "list.bullet").tag(LibraryViewModel.ViewMode.list)
                         Label("Screen", systemImage: "rectangle.grid.2x2").tag(LibraryViewModel.ViewMode.screen)
                         Label("Covers", systemImage: "square.grid.3x3").tag(LibraryViewModel.ViewMode.cover)
+                        Label("Flow", systemImage: "rectangle.on.rectangle.angled").tag(LibraryViewModel.ViewMode.coverFlow)
                     }
                     .pickerStyle(.segmented)
                 }

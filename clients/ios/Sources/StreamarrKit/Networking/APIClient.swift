@@ -183,6 +183,7 @@ public protocol StreamarrAPIClient: Sendable {
     func fetchSimilarWorks(id: UUID, limit: Int) async throws -> [Work]
     func listCatalogKinds() async throws -> [WorkKind]
     func fetchArtwork(workID: UUID, kind: ImageKind) async throws -> Data
+    func fetchAlbumArtwork(artistWorkID: UUID, albumID: UUID, kind: ImageKind) async throws -> Data
 
     // Viewer state
     func listWatchProgress() async throws -> [WatchProgress]
@@ -242,6 +243,9 @@ public extension StreamarrAPIClient {
     func fetchWorkCredits(id: UUID) async throws -> WorkCredits { WorkCredits(cast: [], crew: []) }
     func fetchSimilarWorks(id: UUID, limit: Int) async throws -> [Work] { [] }
     func fetchArtwork(workID: UUID, kind: ImageKind) async throws -> Data {
+        throw APIError.notFound(nil)
+    }
+    func fetchAlbumArtwork(artistWorkID: UUID, albumID: UUID, kind: ImageKind) async throws -> Data {
         throw APIError.notFound(nil)
     }
     func listWatchProgress() async throws -> [WatchProgress] { [] }
@@ -395,6 +399,12 @@ public final class APIClient: StreamarrAPIClient {
 
     public func fetchArtwork(workID: UUID, kind: ImageKind) async throws -> Data {
         try await authenticatedData(path: "/api/v1/artwork/work/\(workID.uuidString)/\(kind.rawValue)")
+    }
+
+    public func fetchAlbumArtwork(artistWorkID: UUID, albumID: UUID, kind: ImageKind) async throws -> Data {
+        try await authenticatedData(
+            path: "/api/v1/artwork/album/\(artistWorkID.uuidString)/\(albumID.uuidString)/\(kind.rawValue)"
+        )
     }
 
     // MARK: Viewer state
