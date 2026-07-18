@@ -66,6 +66,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Show `Music | Artist`, `Movies | Title`, or `Series | Title` in detail-page headers, and move
+  selected-album metadata from above the music track list into the left-hand detail panel while
+  keeping inline playback controls clear of the first track, Cover Flow changes on Left/Right,
+  and directional navigation moving past absent playback controls.
 - Present Playarr Web settings as a sliding option list and right-hand detail panel, with
   remote-friendly Right-to-open and Left-to-close navigation.
 - Align the Settings back control and page title with the shared television stage used by

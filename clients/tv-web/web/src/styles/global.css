@@ -5130,6 +5130,40 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   letter-spacing: -0.045em;
 }
 
+.tv-detail-heading {
+  right: clamp(102px, 8vw, 160px);
+  min-width: 0;
+}
+
+.tv-detail-heading-title {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.42em;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.tv-detail-heading-title > span,
+.tv-detail-heading-title > i {
+  flex: 0 0 auto;
+}
+
+.tv-detail-heading-title > i {
+  color: var(--ink-muted);
+  font-style: normal;
+  font-weight: 360;
+}
+
+.tv-detail-heading-title > strong {
+  min-width: 0;
+  overflow: hidden;
+  font: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-overflow: ellipsis;
+}
+
 .tv-library-heading > span {
   padding-left: clamp(14px, 1.2vw, 24px);
   border-left: 1px solid var(--line-strong);
@@ -7374,28 +7408,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  padding-left: clamp(22px, 2.4vw, 46px);
-}
-
-.tv-music-track-list-heading {
-  flex: 0 0 auto;
-  padding: 0 clamp(22px, 2.4vw, 46px) clamp(10px, 1.4vh, 16px) 0;
-}
-
-.tv-music-track-list-heading h2 {
-  overflow: hidden;
-  font-size: clamp(0.78rem, 0.96vw, 1.22rem);
-  font-weight: 620;
-  letter-spacing: -0.03em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tv-music-track-list-heading span {
-  display: block;
-  margin-top: 0.2rem;
-  color: var(--ink-muted);
-  font-size: clamp(0.44rem, 0.5vw, 0.62rem);
+  padding: clamp(58px, 6vh, 76px) 0 0 clamp(22px, 2.4vw, 46px);
 }
 
 .tv-music-track-list-window {

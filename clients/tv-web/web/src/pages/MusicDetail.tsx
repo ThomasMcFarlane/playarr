@@ -30,6 +30,7 @@ import {
 } from "../components/player/PlayerSurface";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 import {
+  TvDetailHeading,
   TvRailSurface,
   TvStageShell,
 } from "../components/tv/TvStage";
@@ -186,7 +187,17 @@ function AlbumCoverFlow({
                 if (event.defaultPrevented) return;
                 if (event.key === "ArrowLeft") moveSelection(event, -1);
                 else if (event.key === "ArrowRight") moveSelection(event, 1);
-                else if (event.key === "ArrowUp") {
+                else if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const nextTarget =
+                    document.getElementById("inline-music-scrubber-control") ??
+                    document.querySelector<HTMLElement>(
+                      ".tv-music-track-row.is-selected"
+                    ) ??
+                    document.querySelector<HTMLElement>(".tv-music-track-row");
+                  nextTarget?.focus({ preventScroll: true });
+                } else if (event.key === "ArrowUp") {
                   event.preventDefault();
                   event.stopPropagation();
                 }
@@ -281,17 +292,6 @@ function AlbumTrackList({
       className="tv-music-track-list"
       aria-label={t("pages.musicDetail.albumTracksAriaLabel", { title: album.album.title })}
     >
-      <header className="tv-music-track-list-heading">
-        <div>
-          <h2>{album.album.title}</h2>
-          <span>
-            {albumLabel(album)} · {tracks.length}{" "}
-            {tracks.length === 1
-              ? t("pages.musicDetail.trackSingular")
-              : t("pages.musicDetail.trackPlural")}
-          </span>
-        </div>
-      </header>
       <div
         className={`tv-scroll-edge-window tv-music-track-list-window${
           scrollEdges.start ? " can-scroll-up" : ""
@@ -357,7 +357,20 @@ function AlbumTrackList({
                 }}
                 aria-label={t("pages.musicDetail.play", { title: track.track.title })}
                 {...contextProps}
-                onKeyDown={(event) => contextProps.onKeyDown(event)}
+                onKeyDown={(event) => {
+                  contextProps.onKeyDown(event);
+                  if (event.defaultPrevented || event.key !== "ArrowUp" || index !== 0) {
+                    return;
+                  }
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const previousTarget =
+                    document.getElementById("inline-music-playback-control") ??
+                    document.querySelector<HTMLElement>(
+                      ".tv-music-album-card.is-selected"
+                    );
+                  previousTarget?.focus({ preventScroll: true });
+                }}
               >
                 <span className="tv-music-track-row-number" aria-hidden="true">
                   {String(track.track.track_number).padStart(2, "0")}
@@ -740,39 +753,45 @@ export function MusicDetailPage() {
         />
       }
     >
-      <header className="tv-library-heading tv-music-heading">
-        <button
-          type="button"
-          className="tv-page-back"
-          aria-label={t("pages.musicDetail.backToMusic")}
-          onClick={() => {
-            if (parentNavigationOrigin) navigate(-1);
-            else navigate(backTo);
-          }}
-        >
-          <span aria-hidden="true">←</span>
-        </button>
-        <h1>{t("pages.musicDetail.albums")}</h1>
-      </header>
+      <TvDetailHeading
+        backLabel={t("pages.musicDetail.backToMusic")}
+        className="tv-music-heading"
+        sectionTitle={t("shell.nav.music")}
+        itemTitle={work.title}
+        onBack={() => {
+          if (parentNavigationOrigin) navigate(-1);
+          else navigate(backTo);
+        }}
+      />
 
       <aside className="tv-detail-copy" key={`music-copy-${selectedTrack?.track.id ?? work.id}`}>
         <p className="tv-detail-kicker">
           {selectedAlbum
-            ? albumLabel(selectedAlbum)
+            ? selectedAlbum.album.album_type.replaceAll("_", " ")
             : work.genres[0] ?? t("pages.musicDetail.artist")}
         </p>
-        <h1>{work.title}</h1>
-        {selectedTrack ? <h2>{selectedTrack.track.title}</h2> : null}
+        <h1>{selectedAlbum?.album.title ?? work.title}</h1>
         <div className="tv-detail-meta">
-          <span>{t("pages.musicDetail.artist")}</span>
-          {selectedAlbum ? <span>{selectedAlbum.album.title}</span> : null}
-          {selectedTrack ? (
-            <span>{formatDuration(selectedTrack.track.duration_seconds, t)}</span>
+          <span>{work.title}</span>
+          {selectedAlbum ? <span>{albumLabel(selectedAlbum)}</span> : null}
+          {selectedAlbum ? (
+            <span>
+              {selectedAlbumTracks.length}{" "}
+              {selectedAlbumTracks.length === 1
+                ? t("pages.musicDetail.trackSingular")
+                : t("pages.musicDetail.trackPlural")}
+            </span>
           ) : null}
           {work.genres.slice(0, 3).map((genre) => (
             <span key={genre}>{genre}</span>
           ))}
         </div>
+        {selectedTrack ? (
+          <h2>
+            {selectedTrack.track.title} ·{" "}
+            {formatDuration(selectedTrack.track.duration_seconds, t)}
+          </h2>
+        ) : null}
         <p className="tv-detail-synopsis">
           {work.overview ?? t("pages.musicDetail.overviewFallback")}
         </p>

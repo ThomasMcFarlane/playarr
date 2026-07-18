@@ -37,6 +37,40 @@ export function TvStageChrome({
   );
 }
 
+export function TvDetailHeading({
+  backLabel,
+  className = "",
+  itemTitle,
+  onBack,
+  sectionTitle,
+}: {
+  backLabel: string;
+  className?: string;
+  itemTitle: string;
+  onBack: () => void;
+  sectionTitle: string;
+}) {
+  return (
+    <header
+      className={`tv-library-heading tv-detail-heading${className ? ` ${className}` : ""}`}
+    >
+      <button
+        type="button"
+        className="tv-page-back"
+        aria-label={backLabel}
+        onClick={onBack}
+      >
+        <span aria-hidden="true">←</span>
+      </button>
+      <h1 className="tv-detail-heading-title">
+        <span>{sectionTitle}</span>
+        <i aria-hidden="true">|</i>
+        <strong>{itemTitle}</strong>
+      </h1>
+    </header>
+  );
+}
+
 export function TvStageShell({
   className,
   ariaLabel,

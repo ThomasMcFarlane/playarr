@@ -44,6 +44,7 @@ import {
 } from "../lib/joinedServers";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 import {
+  TvDetailHeading,
   TvMediaTrack,
   TvRailSurface,
   TvStageShell,
@@ -1616,6 +1617,12 @@ export function WorkDetailPage() {
     seasons.length > 0 ||
     (workCredits?.cast.length ?? 0) > 0 ||
     similarWorks.length > 0;
+  const detailCollectionLabel =
+    work.kind === "series"
+      ? t("shell.nav.series")
+      : work.kind === "movie"
+        ? t("shell.nav.movies")
+        : workKindLabel(work, t);
 
   return (
     <TvStageShell
@@ -1632,20 +1639,18 @@ export function WorkDetailPage() {
       }
     >
 
-      <button
-        type="button"
-        className="tv-back"
-        aria-label={t("pages.workDetail.backTo", { destination: backLabel })}
-        onClick={() => {
+      <TvDetailHeading
+        backLabel={t("pages.workDetail.backTo", { destination: backLabel })}
+        sectionTitle={detailCollectionLabel}
+        itemTitle={work.title}
+        onBack={() => {
           if (parentNavigationOrigin) {
             navigate(-1);
           } else {
             navigate(backTo);
           }
         }}
-      >
-        <span aria-hidden="true">←</span>
-      </button>
+      />
 
       <aside className="tv-detail-copy" key={`copy-${work.id}`}>
         <p className="tv-detail-kicker">

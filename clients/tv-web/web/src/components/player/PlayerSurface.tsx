@@ -1174,10 +1174,14 @@ export function PlayerSurface({
           }
           onNavigateBelow={
             inlineMusic
-              ? () =>
-                  document
-                    .querySelector<HTMLElement>(".tv-music-track-row.is-selected")
-                    ?.focus({ preventScroll: true })
+              ? () => {
+                  const track =
+                    document.querySelector<HTMLElement>(
+                      ".tv-music-track-row.is-selected"
+                    ) ??
+                    document.querySelector<HTMLElement>(".tv-music-track-row");
+                  track?.focus({ preventScroll: true });
+                }
               : undefined
           }
           isFullscreen={isFullscreen}

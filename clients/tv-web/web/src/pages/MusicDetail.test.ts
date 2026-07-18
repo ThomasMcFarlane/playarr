@@ -62,16 +62,35 @@ describe("MusicDetail track list", () => {
     const trackWindowRule = css.match(
       /\.tv-music-track-list-window\s*\{(?<declarations>[^}]*)\}/
     )?.groups?.declarations;
+    const trackListRule = css.match(
+      /\.tv-music-track-list\s*\{(?<declarations>[^}]*)\}/
+    )?.groups?.declarations;
     const trackScrollRule = css.match(
       /\.tv-music-track-list-scroll\s*\{(?<declarations>[^}]*)\}/
     )?.groups?.declarations;
 
     expect(musicBrowserRule).toContain("padding: clamp(104px, 13vh, 142px) 0 0");
+    expect(trackListRule).toContain("padding: clamp(58px, 6vh, 76px) 0 0");
     expect(trackWindowRule).toContain("min-height: 0");
     expect(trackWindowRule).toContain("overflow: hidden");
     expect(trackScrollRule).toContain("clamp(34px, 5vh, 58px)");
     expect(trackScrollRule).toContain("overflow-y: auto");
     expect(trackScrollRule).toContain("scroll-behavior: auto");
+  });
+
+  it("moves album metadata left and uses contextual detail headings", () => {
+    const musicSource = readFileSync(new URL("./MusicDetail.tsx", import.meta.url), "utf8");
+    const workSource = readFileSync(new URL("./WorkDetail.tsx", import.meta.url), "utf8");
+
+    expect(musicSource).not.toContain("tv-music-track-list-heading");
+    expect(musicSource).toContain("<h1>{selectedAlbum?.album.title ?? work.title}</h1>");
+    expect(musicSource).toContain("<span>{work.title}</span>");
+    expect(musicSource).toContain('sectionTitle={t("shell.nav.music")}');
+    expect(musicSource).toContain("itemTitle={work.title}");
+    expect(workSource).toContain('t("shell.nav.movies")');
+    expect(workSource).toContain('t("shell.nav.series")');
+    expect(workSource).toContain("sectionTitle={detailCollectionLabel}");
+    expect(workSource).toContain("itemTitle={work.title}");
   });
 
   it("centres persistent inline controls beneath Cover Flow", () => {
@@ -116,6 +135,12 @@ describe("MusicDetail track list", () => {
     expect(detailSource).toMatch(
       /event\.key === "ArrowUp"[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopPropagation\(\);/
     );
+    expect(detailSource).toMatch(
+      /event\.key === "ArrowDown"[\s\S]*?getElementById\("inline-music-scrubber-control"\)[\s\S]*?\.tv-music-track-row/
+    );
+    expect(detailSource).toMatch(
+      /event\.key !== "ArrowUp" \|\| index !== 0[\s\S]*?getElementById\("inline-music-playback-control"\)[\s\S]*?\.tv-music-album-card\.is-selected/
+    );
     expect(controlsSource).toContain("id={defaultFocusId}");
     expect(controlsSource).toContain("id={seekFocusId}");
     expect(controlsSource).toContain("if (onNavigateAbove) onNavigateAbove()");
@@ -124,6 +149,9 @@ describe("MusicDetail track list", () => {
     expect(controlsSource).toContain("onNavigateBelow?.()");
     expect(controlsSource).toContain("control.getClientRects().length > 0");
     expect(surfaceSource).not.toContain('target.closest(".player-controls")');
+    expect(surfaceSource).toContain(
+      'document.querySelector<HTMLElement>(".tv-music-track-row")'
+    );
   });
 
   it("keeps the scrubber bar height fixed when its thumb appears", () => {
