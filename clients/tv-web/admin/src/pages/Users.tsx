@@ -29,6 +29,10 @@ type TypePermission = {
   sourceKinds: readonly SourceKind[];
 };
 
+type InviteSetup = {
+  request: UserInviteRequestResponse | null;
+};
+
 /**
  * The source applications that can actually contribute playable works to
  * each top-level catalog Type. Bazarr/Prowlarr are intentionally absent:
@@ -282,6 +286,10 @@ export function UsersPage() {
   const [inviteCopied, setInviteCopied] = useState(false);
   const [inviteRequests, setInviteRequests] = useState<UserInviteRequestResponse[] | null>(null);
   const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(null);
+  const [inviteSetup, setInviteSetup] = useState<InviteSetup | null>(null);
+  const [inviteCanStream, setInviteCanStream] = useState(true);
+  const [inviteLibrarySelection, setInviteLibrarySelection] = useState<Set<string>>(new Set());
+  const [inviteSetupError, setInviteSetupError] = useState<string | null>(null);
 
   // Source instances back the type-first permission picker below -- fetched
   // once on mount, same call `SourceInstancesPage`/`LibraryToolbarMenus`
@@ -322,7 +330,11 @@ export function UsersPage() {
     setReviewingRequestId(id);
     setError(null);
     try {
-      const reviewed = await client.reviewUserInviteRequest(id, { approved });
+      const reviewed = await client.reviewUserInviteRequest(id, {
+        approved,
+        can_stream: approved,
+        library_allow: [],
+      });
       setInviteRequests((current) =>
         current?.map((request) => (request.id === reviewed.id ? reviewed : request)) ?? current
       );
@@ -333,19 +345,54 @@ export function UsersPage() {
     }
   }
 
-  async function handleCreateInvite() {
+  function openInviteSetup(request: UserInviteRequestResponse | null) {
+    setInviteCanStream(true);
+    setInviteLibrarySelection(new Set(request?.library_allow ?? []));
+    setInviteSetupError(null);
+    setInviteSetup({ request });
+  }
+
+  async function handleSubmitInviteAccess() {
+    if (!inviteSetup) return;
+    const libraryAllow = Array.from(inviteLibrarySelection);
+    if (inviteSetup.request) {
+      const request = inviteSetup.request;
+      setReviewingRequestId(request.id);
+      setInviteSetupError(null);
+      try {
+        const reviewed = await client.reviewUserInviteRequest(request.id, {
+          approved: true,
+          can_stream: inviteCanStream,
+          library_allow: libraryAllow,
+        });
+        setInviteRequests((current) =>
+          current?.map((item) => (item.id === reviewed.id ? reviewed : item)) ?? current
+        );
+        setInviteSetup(null);
+      } catch (err) {
+        setInviteSetupError(describeApiError(err));
+      } finally {
+        setReviewingRequestId(null);
+      }
+      return;
+    }
+
     setCreatingInvite(true);
-    setInviteError(null);
+    setInviteSetupError(null);
     setInviteCopied(false);
     try {
-      const invite = await client.createUserInvite();
+      const invite = await client.createUserInvite({
+        can_stream: inviteCanStream,
+        library_allow: libraryAllow,
+      });
       const url = new URL("/signup", "https://playarr.app");
       url.searchParams.set("server", apiBaseUrl);
       url.searchParams.set("invite", invite.invite_token);
       setInviteLink(url.toString());
       setInviteExpiresAt(invite.expires_at);
+      setInviteSetup(null);
     } catch (err) {
-      setInviteError(describeApiError(err));
+      setInviteSetupError(describeApiError(err));
     } finally {
       setCreatingInvite(false);
     }
@@ -383,6 +430,33 @@ export function UsersPage() {
 
   function toggleTypeSelection(libraries: readonly SourceInstanceResponse[]) {
     setLibrarySelection((current) => {
+      const next = new Set(current);
+      const everyLibrarySelected = libraries.every((library) => current.has(library.id));
+      for (const library of libraries) {
+        if (everyLibrarySelected) {
+          next.delete(library.id);
+        } else {
+          next.add(library.id);
+        }
+      }
+      return next;
+    });
+  }
+
+  function toggleInviteLibrarySelection(instanceId: string) {
+    setInviteLibrarySelection((current) => {
+      const next = new Set(current);
+      if (next.has(instanceId)) {
+        next.delete(instanceId);
+      } else {
+        next.add(instanceId);
+      }
+      return next;
+    });
+  }
+
+  function toggleInviteTypeSelection(libraries: readonly SourceInstanceResponse[]) {
+    setInviteLibrarySelection((current) => {
       const next = new Set(current);
       const everyLibrarySelected = libraries.every((library) => current.has(library.id));
       for (const library of libraries) {
@@ -514,7 +588,7 @@ export function UsersPage() {
         <button
           type="button"
           className="btn btn-primary"
-          onClick={() => void handleCreateInvite()}
+          onClick={() => openInviteSetup(null)}
           disabled={creatingInvite}
         >
           {creatingInvite ? "Creating invite..." : "Invite user"}
@@ -558,6 +632,11 @@ export function UsersPage() {
                     <p className="muted" style={{ margin: 0 }}>
                       @{request.username} · requested {new Date(request.requested_at).toLocaleString()}
                     </p>
+                    {request.message ? (
+                      <p style={{ margin: "0.35rem 0 0", maxWidth: 640, whiteSpace: "pre-wrap" }}>
+                        {request.message}
+                      </p>
+                    ) : null}
                   </div>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
                     <button
@@ -572,7 +651,7 @@ export function UsersPage() {
                       type="button"
                       className="btn btn-primary btn-sm"
                       disabled={reviewingRequestId !== null}
-                      onClick={() => void handleReviewInviteRequest(request.id, true)}
+                      onClick={() => openInviteSetup(request)}
                     >
                       {reviewingRequestId === request.id ? "Reviewing..." : "Approve"}
                     </button>
@@ -759,6 +838,79 @@ export function UsersPage() {
           </button>
         </form>
       </div>
+
+      {inviteSetup && (
+        <Modal
+          title={inviteSetup.request ? `Approve invite -- ${inviteSetup.request.username}` : "Invite a Playarr user"}
+          onClose={() => setInviteSetup(null)}
+          footer={
+            <>
+              <div className="modal-footer-left" />
+              <div className="modal-footer-right">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setInviteSetup(null)}
+                  disabled={creatingInvite || reviewingRequestId !== null}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => void handleSubmitInviteAccess()}
+                  disabled={creatingInvite || reviewingRequestId !== null}
+                >
+                  {creatingInvite || reviewingRequestId !== null
+                    ? "Saving..."
+                    : inviteSetup.request
+                      ? "Approve and share"
+                      : "Create invite"}
+                </button>
+              </div>
+            </>
+          }
+        >
+          <p className="muted" style={{ margin: 0 }}>
+            Choose the access the new account receives as soon as this invite is redeemed.
+          </p>
+          {inviteSetup.request?.message ? (
+            <div className="modal-field">
+              <span className="muted">Request message</span>
+              <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{inviteSetup.request.message}</p>
+            </div>
+          ) : null}
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={inviteCanStream}
+              onChange={(event) => setInviteCanStream(event.target.checked)}
+            />
+            Playarr access
+          </label>
+          {inviteSetupError ? (
+            <p className="error-text hint" style={{ margin: 0 }}>{inviteSetupError}</p>
+          ) : null}
+          {instances === null && <p className="muted">Loading source instances...</p>}
+          {instances !== null && instances.length === 0 && (
+            <p className="muted">No source instances registered yet -- nothing to share.</p>
+          )}
+          {instances !== null && instances.length > 0 && (
+            <div className="permission-types">
+              {TYPE_PERMISSIONS.map((permission) => (
+                <TypePermissionSection
+                  key={permission.kind}
+                  permission={permission}
+                  libraries={librariesForType(instances, permission)}
+                  selection={inviteLibrarySelection}
+                  onToggleType={toggleInviteTypeSelection}
+                  onToggleLibrary={toggleInviteLibrarySelection}
+                />
+              ))}
+            </div>
+          )}
+        </Modal>
+      )}
 
       {libraryModalUser && (
         <Modal

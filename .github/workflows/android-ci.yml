@@ -99,6 +99,13 @@ jobs:
           cp "$mobile_apk" release/playarr-android-mobile.apk
           cp "$tv_apk" release/playarr-android-tv.apk
           sha256sum release/*.apk > release/SHA256SUMS
+          tv_sha256="$(sha256sum release/playarr-android-tv.apk | cut -d ' ' -f 1)"
+          printf '{"version_name":"%s","version_code":%s,"apk_url":"https://playarr.app/downloads/android/releases/%s/playarr-android-tv.apk","sha256":"%s"}\n' \
+            "${{ steps.version.outputs.name }}" \
+            "${{ steps.version.outputs.code }}" \
+            "${{ steps.version.outputs.name }}" \
+            "$tv_sha256" \
+            > release/playarr-android-tv.json
 
       - name: Upload workflow artefact
         uses: actions/upload-artifact@v4
@@ -120,6 +127,7 @@ jobs:
             npx --yes wrangler@4 r2 object put "playarr-client-downloads/android/playarr-android-${platform}.apk" --file "$file" --content-type application/vnd.android.package-archive --remote
           done
           npx --yes wrangler@4 r2 object put "playarr-client-downloads/android/releases/${VERSION}/SHA256SUMS" --file release/SHA256SUMS --content-type text/plain --remote
+          npx --yes wrangler@4 r2 object put "playarr-client-downloads/android/playarr-android-tv.json" --file release/playarr-android-tv.json --content-type application/json --remote
 
       - name: Publish GitHub release assets
         uses: softprops/action-gh-release@v2
@@ -127,5 +135,6 @@ jobs:
           files: |
             clients/android-shared/release/playarr-android-mobile.apk
             clients/android-shared/release/playarr-android-tv.apk
+            clients/android-shared/release/playarr-android-tv.json
             clients/android-shared/release/SHA256SUMS
           generate_release_notes: true
