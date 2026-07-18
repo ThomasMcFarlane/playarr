@@ -46,6 +46,10 @@ pub struct UserInvite {
     pub created_by: Uuid,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+    /// Whether the account created from this invite may use Playarr.
+    pub can_stream: bool,
+    /// Source-instance ids the new account may browse and stream.
+    pub library_allow: Vec<Uuid>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -65,11 +69,16 @@ pub enum UserInviteRequestStatus {
 pub struct UserInviteRequest {
     pub id: Uuid,
     pub user_id: Uuid,
+    /// Requester-supplied context for the administrator reviewing the invite.
+    pub message: Option<String>,
     pub status: UserInviteRequestStatus,
     pub requested_at: DateTime<Utc>,
     pub reviewed_by: Option<Uuid>,
     pub reviewed_at: Option<DateTime<Utc>>,
     pub generated_at: Option<DateTime<Utc>>,
+    /// Grants chosen by the administrator when approving the request.
+    pub can_stream: bool,
+    pub library_allow: Vec<Uuid>,
 }
 
 /// One Firebase Cloud Messaging registration belonging to a signed-in

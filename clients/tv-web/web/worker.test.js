@@ -46,6 +46,50 @@ describe("Android APK downloads", () => {
     await expect(response.text()).resolves.toContain("not been published");
   });
 
+  it("serves the latest TV manifest and its immutable versioned APK", async () => {
+    const object = {
+      body: new Uint8Array([1]),
+      httpEtag: '"release-etag"',
+      size: 1,
+      writeHttpMetadata() {},
+    };
+    const env = environment(object);
+
+    const manifest = await worker.fetch(
+      new Request("https://playarr.app/downloads/android/playarr-android-tv.json"),
+      env
+    );
+    expect(manifest.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
+    expect(env.CLIENT_DOWNLOADS.get).toHaveBeenLastCalledWith(
+      "android/playarr-android-tv.json"
+    );
+
+    const apk = await worker.fetch(
+      new Request(
+        "https://playarr.app/downloads/android/releases/1.2.3/playarr-android-tv.apk"
+      ),
+      env
+    );
+    expect(apk.headers.get("Content-Type")).toBe(
+      "application/vnd.android.package-archive"
+    );
+    expect(apk.headers.get("Cache-Control")).toContain("immutable");
+    expect(env.CLIENT_DOWNLOADS.get).toHaveBeenLastCalledWith(
+      "android/releases/1.2.3/playarr-android-tv.apk"
+    );
+  });
+
+  it("does not expose arbitrary R2 object paths", async () => {
+    const env = environment(null);
+    await worker.fetch(
+      new Request("https://playarr.app/downloads/android/releases/latest/private-key"),
+      env
+    );
+
+    expect(env.CLIENT_DOWNLOADS.get).not.toHaveBeenCalled();
+    expect(env.ASSETS.fetch).toHaveBeenCalledOnce();
+  });
+
   it("delegates ordinary application routes to static assets", async () => {
     const env = environment(null);
     const response = await worker.fetch(new Request("https://playarr.app/clients"), env);

@@ -24,6 +24,12 @@ import { TvStageChrome } from "../components/tv/TvStage";
 import { clearActivePlayerSession } from "../lib/playerSession";
 import { useTvNavigation } from "../lib/useTvNavigation";
 import { shouldRevalidateCurrentProfile } from "../lib/profileNavigation";
+import {
+  requestAndroidTvUpdate,
+  subscribeToAndroidTvUpdates,
+  type AndroidTvUpdateState,
+} from "../lib/androidTvUpdate";
+import { PLAYARR_CLIENT_PLATFORM } from "../lib/clientPlatform";
 
 interface ProfileLocationState {
   backTo?: unknown;
@@ -110,11 +116,20 @@ export function ProfilesPage(
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinSubmitting, setPinSubmitting] = useState(false);
+  const [updateState, setUpdateState] = useState<AndroidTvUpdateState>({
+    status: "idle",
+  });
   const pinInputRef = useRef<HTMLInputElement>(null);
+  const isAndroidTv = PLAYARR_CLIENT_PLATFORM === "android-tv";
 
   useEffect(() => {
     if (!loginFromOverride) clearActivePlayerSession();
   }, [loginFromOverride]);
+
+  useEffect(() => {
+    if (!isAndroidTv) return;
+    return subscribeToAndroidTvUpdates(setUpdateState);
+  }, [isAndroidTv]);
 
   const fallbackProfiles = useMemo<ViewerProfile[]>(() => {
     const profiles = savedProfiles.map((profile) => ({
@@ -374,6 +389,43 @@ export function ProfilesPage(
     );
   }
 
+  function checkForUpdates() {
+    setUpdateState({ status: "checking" });
+    if (!requestAndroidTvUpdate()) {
+      setUpdateState({
+        status: "error",
+        message: t("pages.profiles.updateUnavailable"),
+      });
+    }
+  }
+
+  const updateLabel = (() => {
+    switch (updateState.status) {
+      case "checking":
+        return t("pages.profiles.updateChecking");
+      case "up_to_date":
+        return t("pages.profiles.updateCurrent");
+      case "downloading":
+        return updateState.progress === undefined
+          ? t("pages.profiles.updateDownloading")
+          : t("pages.profiles.updateDownloadingProgress", {
+              progress: updateState.progress,
+            });
+      case "permission_required":
+        return t("pages.profiles.updateAllowInstall");
+      case "installing":
+        return t("pages.profiles.updateInstalling");
+      case "error":
+        return t("pages.profiles.updateRetry");
+      default:
+        return t("pages.profiles.checkForUpdates");
+    }
+  })();
+  const updateBusy =
+    updateState.status === "checking" ||
+    updateState.status === "downloading" ||
+    updateState.status === "installing";
+
   return (
     <div className="profiles-page">
       <TvStageChrome />
@@ -497,7 +549,9 @@ export function ProfilesPage(
               data-tv-edge-target-left={
                 lastProfile ? `#profile-${lastProfile.id}` : undefined
               }
-              data-tv-edge-target-down="#profiles-clients"
+              data-tv-edge-target-down={
+                isAndroidTv ? "#profiles-check-updates" : "#profiles-clients"
+              }
               onFocus={() => setSelectedId(ADD_PROFILE_ID)}
               onClick={() => continueToLogin(null, loginFrom)}
             >
@@ -511,12 +565,33 @@ export function ProfilesPage(
         </div>
       </div>
 
+      {isAndroidTv ? (
+        <div className="profile-update-control">
+          <button
+            id="profiles-check-updates"
+            type="button"
+            className="profile-update-button"
+            data-navigation-focus-key="profiles:check-updates"
+            data-tv-edge-target-up="#profile-add"
+            data-tv-edge-target-right="#profiles-clients"
+            disabled={updateBusy}
+            onClick={checkForUpdates}
+          >
+            {updateLabel}
+          </button>
+          {updateState.status === "error" ? (
+            <span role="alert">{updateState.message}</span>
+          ) : null}
+        </div>
+      ) : null}
+
       <Link
         id="profiles-clients"
         className="profile-clients-link"
         to="/clients"
         data-navigation-focus-key="profiles:clients"
         data-tv-edge-target-up="#profile-add"
+        data-tv-edge-target-left={isAndroidTv ? "#profiles-check-updates" : undefined}
       >
         {t("pages.clients.navClients")}
         <span aria-hidden="true">→</span>

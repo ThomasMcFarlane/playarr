@@ -484,9 +484,13 @@ describe("ApiClient", () => {
 
   it("attaches administrator authentication when issuing a user invite", async () => {
     const getAccessToken = vi.fn(() => "admin-token");
-    const fetchImpl = mockFetch((request) => {
+    const fetchImpl = mockFetch(async (request) => {
       expect(new URL(request.url).pathname).toBe("/api/v1/admin/user-invites");
       expect(request.headers.get("Authorization")).toBe("Bearer admin-token");
+      await expect(request.json()).resolves.toEqual({
+        can_stream: true,
+        library_allow: ["11111111-1111-4111-8111-111111111111"],
+      });
       return jsonResponse(200, {
         invite_token: "one-use-token",
         expires_at: "2026-07-18T00:00:00Z",
@@ -494,10 +498,59 @@ describe("ApiClient", () => {
     });
     const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken });
 
-    const invite = await client.createUserInvite();
+    const invite = await client.createUserInvite({
+      can_stream: true,
+      library_allow: ["11111111-1111-4111-8111-111111111111"],
+    });
 
     expect(invite.invite_token).toBe("one-use-token");
     expect(getAccessToken).toHaveBeenCalledOnce();
+  });
+
+  it("sends requester context and administrator-selected invite access", async () => {
+    const libraryId = "22222222-2222-4222-8222-222222222222";
+    const fetchImpl = mockFetch(async (request) => {
+      const url = new URL(request.url);
+      expect(request.headers.get("Authorization")).toBe("Bearer access-token");
+      if (url.pathname === "/api/v1/users/me/user-invite-request") {
+        await expect(request.json()).resolves.toEqual({ message: "For Sam — films, please." });
+      } else {
+        expect(url.pathname).toBe("/api/v1/admin/user-invite-requests/request-1");
+        await expect(request.json()).resolves.toEqual({
+          approved: true,
+          can_stream: true,
+          library_allow: [libraryId],
+        });
+      }
+      return jsonResponse(200, {
+        id: "request-1",
+        user_id: "user-1",
+        username: "requester",
+        display_name: "Requester",
+        message: "For Sam — films, please.",
+        status: url.pathname.includes("admin") ? "approved" : "pending",
+        requested_at: "2026-07-18T00:00:00Z",
+        can_stream: true,
+        library_allow: url.pathname.includes("admin") ? [libraryId] : [],
+      });
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "access-token",
+    });
+
+    const requested = await client.createUserInviteRequest({
+      message: "For Sam — films, please.",
+    });
+    expect(requested.message).toBe("For Sam — films, please.");
+
+    const approved = await client.reviewUserInviteRequest("request-1", {
+      approved: true,
+      can_stream: true,
+      library_allow: [libraryId],
+    });
+    expect(approved.library_allow).toEqual([libraryId]);
   });
 
   it("registers a web push installation with viewer authentication", async () => {
