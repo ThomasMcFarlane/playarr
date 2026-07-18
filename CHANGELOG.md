@@ -189,6 +189,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Start every native iOS Home carousel at its leading content gutter instead of restoring a
+  clipped partial-card offset on launch.
 - Replace the native iOS profile screen's static playback labels with working quality, subtitle,
   subtitle-language, and audio-language defaults that drive negotiation and AVPlayer tracks.
 - Restore visible native iOS Home rails in dark mode, match Playarr Web's on-deck and recent
