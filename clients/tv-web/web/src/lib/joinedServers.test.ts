@@ -30,7 +30,7 @@ function server(url: string): ConnectedServerClient {
     url,
     label: new URL(url).host,
     client: {} as ApiClient,
-    getAccessToken: () => undefined,
+    getAccessToken: async () => undefined,
   };
 }
 

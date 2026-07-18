@@ -51,6 +51,10 @@ function getBufferedEndSeconds(mediaElement: HTMLMediaElement): number {
   return buffered.length > 0 ? buffered.end(buffered.length - 1) : 0;
 }
 
+interface AuthTokenRequest {
+  forceRefresh?: boolean;
+}
+
 function trackLanguageLabel(language: string): string {
   const normalized = language.trim();
   if (!normalized || normalized === "und") return "";
@@ -91,7 +95,12 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
   private player: shaka.Player | null = null;
   private mediaElement: HTMLMediaElement | null = null;
   private detachListeners: (() => void) | null = null;
-  private authHeaderProvider: (() => string | undefined) | null = null;
+  private authHeaderProvider:
+    | ((request?: AuthTokenRequest) => string | undefined | Promise<string | undefined>)
+    | null = null;
+  private lastSource: PlaybackSource | null = null;
+  private authRecoveryPromise: Promise<void> | null = null;
+  private unauthorizedRecoveryAttempts = 0;
   private readonly externalSubtitleTrackIds = new Map<string, number>();
   private nativeDirect = false;
 
@@ -185,7 +194,7 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
   }
 
   /**
-   * Registers a callback consulted on every request Shaka's own
+   * Registers a callback awaited before every request Shaka's own
    * `NetworkingEngine` makes (manifest, segment, license, ...) -- whatever
    * it returns is attached as an `Authorization: Bearer <token>` header.
    * Streamarr's playback-adjacent routes (HLS manifest/segment serving in
@@ -197,11 +206,88 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
    * (registered once, in `attach()`) reads `authHeaderProvider` fresh on
    * every request rather than closing over a snapshot, so calling this
    * again later (e.g. after a token refresh) takes effect on the very next
-   * request with no reload needed. Never calling this at all is also fine
-   * -- callers with no auth requirement simply skip it.
+   * request with no reload needed. Awaiting the shared session manager here
+   * also lets playback keep using its existing buffer while an expiring token
+   * is refreshed. Never calling this at all is also fine -- callers with no
+   * auth requirement simply skip it.
    */
-  setAuthHeaderProvider(provider: () => string | undefined): void {
+  setAuthHeaderProvider(
+    provider: (
+      request?: AuthTokenRequest
+    ) => string | undefined | Promise<string | undefined>
+  ): void {
     this.authHeaderProvider = provider;
+  }
+
+  private setShakaError(shakaError?: InstanceType<typeof shaka.util.Error>): void {
+    const isBadHttpStatus = shakaError?.code === shaka.util.Error.Code.BAD_HTTP_STATUS;
+    const httpStatus =
+      isBadHttpStatus && typeof shakaError.data?.[1] === "number"
+        ? shakaError.data[1]
+        : undefined;
+    const requestUri =
+      isBadHttpStatus && typeof (shakaError.data?.[5] ?? shakaError.data?.[0]) === "string"
+        ? (shakaError.data[5] ?? shakaError.data[0])
+        : undefined;
+    this.setState({
+      state: "error",
+      error: {
+        code: shakaError ? String(shakaError.code) : "UNKNOWN",
+        message: shakaError?.message ?? "Unknown Shaka Player error",
+        fatal: shakaError?.severity === shaka.util.Error.Severity.CRITICAL,
+        httpStatus,
+        requestUri,
+      },
+    });
+  }
+
+  private recoverFromUnauthorized(
+    shakaError: InstanceType<typeof shaka.util.Error>
+  ): void {
+    if (this.authRecoveryPromise || !this.authHeaderProvider) return;
+
+    const source = this.lastSource;
+    const resumePositionSeconds = this.mediaElement?.currentTime ?? this.state.currentTimeSeconds;
+    const shouldResume =
+      !this.mediaElement?.paused ||
+      this.state.state === "playing" ||
+      this.state.state === "buffering";
+    this.setState({ state: "buffering", error: undefined });
+
+    const recovery = (async () => {
+      while (this.unauthorizedRecoveryAttempts < 5) {
+        const attempt = ++this.unauthorizedRecoveryAttempts;
+        if (attempt > 1) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1_000 * 2 ** (attempt - 2))
+          );
+        }
+
+        try {
+          await this.authHeaderProvider?.({ forceRefresh: true });
+          if (!this.player) return;
+
+          // An already-loaded MSE stream can resume without discarding its
+          // buffer. Initial manifests and progressive sources need a fresh
+          // load at the current playhead instead.
+          if (this.player.retryStreaming(0)) return;
+          if (!source) throw new Error("No playback source is available to retry.");
+          await this.load({ ...source, startPositionSeconds: resumePositionSeconds });
+          if (shouldResume) await this.play();
+          return;
+        } catch {
+          // Keep the surface in buffering state and retry with exponential
+          // backoff. A repeated 401 raised by the nested load is consumed by
+          // this in-flight recovery rather than spawning a second loop.
+        }
+      }
+
+      this.setShakaError(shakaError);
+    })();
+
+    this.authRecoveryPromise = recovery.finally(() => {
+      this.authRecoveryPromise = null;
+    });
   }
 
   /** Attaches to a `<video>` element. Must be called once before `load()`. */
@@ -255,8 +341,8 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
     // See `setAuthHeaderProvider` above -- reads `this.authHeaderProvider`
     // fresh on every request rather than a value captured at registration
     // time.
-    this.player.getNetworkingEngine()?.registerRequestFilter((_type, request) => {
-      const token = this.authHeaderProvider?.();
+    this.player.getNetworkingEngine()?.registerRequestFilter(async (_type, request) => {
+      const token = await this.authHeaderProvider?.();
       if (token) {
         request.headers["Authorization"] = `Bearer ${token}`;
       }
@@ -265,30 +351,21 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
     const handleError = (event: Event) => {
       const shakaError = (event as unknown as { detail?: InstanceType<typeof shaka.util.Error> })
         .detail;
-      const isBadHttpStatus =
-        shakaError?.code === shaka.util.Error.Code.BAD_HTTP_STATUS;
       const httpStatus =
-        isBadHttpStatus && typeof shakaError.data?.[1] === "number"
+        shakaError?.code === shaka.util.Error.Code.BAD_HTTP_STATUS &&
+        typeof shakaError.data?.[1] === "number"
           ? shakaError.data[1]
           : undefined;
-      const requestUri =
-        isBadHttpStatus && typeof (shakaError.data?.[5] ?? shakaError.data?.[0]) === "string"
-          ? (shakaError.data[5] ?? shakaError.data[0])
-          : undefined;
-      this.setState({
-        state: "error",
-        error: {
-          code: shakaError ? String(shakaError.code) : "UNKNOWN",
-          message: shakaError?.message ?? "Unknown Shaka Player error",
-          fatal: shakaError?.severity === shaka.util.Error.Severity.CRITICAL,
-          httpStatus,
-          requestUri,
-        },
-      });
+      if (shakaError && httpStatus === 401) {
+        this.recoverFromUnauthorized(shakaError);
+        return;
+      }
+      this.setShakaError(shakaError);
     };
 
     const handleBuffering = (event: Event) => {
       const buffering = (event as unknown as { buffering?: boolean }).buffering ?? true;
+      if (!buffering) this.unauthorizedRecoveryAttempts = 0;
       this.setState({
         state: buffering ? "buffering" : this.mediaElement?.paused ? "paused" : "playing",
       });
@@ -296,7 +373,10 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
 
     const handleTimelineChange = () => this.syncTimelineState();
     const handleTracksChange = () => this.syncTrackState();
-    const handlePlay = () => this.setState({ state: "playing" });
+    const handlePlay = () => {
+      this.unauthorizedRecoveryAttempts = 0;
+      this.setState({ state: "playing" });
+    };
     const handlePause = () =>
       this.setState({ state: this.state.state === "ended" ? "ended" : "paused" });
     const handleEnded = () => this.setState({ state: "ended" });
@@ -375,6 +455,7 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
       throw new Error("ShakaPlaybackEngine.attach(videoElement) must be called before load().");
     }
 
+    this.lastSource = source;
     this.externalSubtitleTrackIds.clear();
     this.setState({
       state: "loading",
@@ -455,6 +536,7 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
       state: "ready",
       durationSeconds: this.getDurationSeconds(),
     });
+    this.unauthorizedRecoveryAttempts = 0;
   }
 
   async play(): Promise<void> {
@@ -548,6 +630,9 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
     this.player = null;
     this.mediaElement = null;
     this.nativeDirect = false;
+    this.lastSource = null;
+    this.authRecoveryPromise = null;
+    this.unauthorizedRecoveryAttempts = 0;
     this.externalSubtitleTrackIds.clear();
     this.setState({ state: "idle" });
   }

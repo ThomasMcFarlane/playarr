@@ -32,6 +32,11 @@ export interface EnsureAccessTokenIdentity {
   deviceId?: string;
 }
 
+export interface EnsureAccessTokenOptions {
+  /** Refresh even when the stored access token has not reached its renewal window. */
+  forceRefresh?: boolean;
+}
+
 /**
  * Converts a raw `POST /api/v1/auth/login` (or refresh) response body into
  * the shape `TokenStore` persists. Exported so every caller that stores a
@@ -60,6 +65,12 @@ export function toStoredSession(response: {
 // same in-flight `POST /api/v1/auth/login` call instead of firing several.
 const inFlightLogins = new WeakMap<TokenStore, Promise<string>>();
 
+// Leave enough life on every returned JWT for a media request to wait through
+// the player's retry window without crossing the server-side expiry boundary.
+// Streamarr currently issues 15-minute access tokens, so renewing two minutes
+// early keeps refresh traffic modest while avoiding edge-of-expiry 401s.
+const ACCESS_TOKEN_MINIMUM_VALIDITY_MS = 2 * 60 * 1000;
+
 /**
  * Returns a currently-valid access token. Three cases, in order:
  *
@@ -82,15 +93,20 @@ const inFlightLogins = new WeakMap<TokenStore, Promise<string>>();
 export async function ensureAccessToken(
   client: ApiClient,
   store: TokenStore,
-  identity: EnsureAccessTokenIdentity
+  identity: EnsureAccessTokenIdentity,
+  options: EnsureAccessTokenOptions = {}
 ): Promise<string> {
-  const existing = store.get();
-  if (existing && store.hasValidAccessToken()) {
-    return existing.accessToken;
-  }
-
   const pending = inFlightLogins.get(store);
   if (pending) return pending;
+
+  const existing = store.get();
+  if (
+    !options.forceRefresh &&
+    existing &&
+    existing.expiresAt > Date.now() + ACCESS_TOKEN_MINIMUM_VALIDITY_MS
+  ) {
+    return existing.accessToken;
+  }
 
   const acquirePromise = (async () => {
     try {

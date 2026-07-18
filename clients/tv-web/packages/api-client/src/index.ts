@@ -205,6 +205,11 @@ export interface SessionHistoryParams {
   offset?: number;
 }
 
+export interface AccessTokenRequest {
+  /** Bypass the normal expiry check after the server rejects the current token. */
+  forceRefresh?: boolean;
+}
+
 export interface ApiClientConfig {
   /** API origin, e.g. "http://localhost:8484" (no trailing slash required). */
   baseUrl: string;
@@ -215,7 +220,9 @@ export interface ApiClientConfig {
    * unauthenticated. Return undefined to send the request without a token
    * anyway (the server will 401 it).
    */
-  getAccessToken?: () => string | undefined | Promise<string | undefined>;
+  getAccessToken?: (
+    request?: AccessTokenRequest
+  ) => string | undefined | Promise<string | undefined>;
   /** Injectable for tests / non-browser runtimes (webOS/Tizen legacy engines). Defaults to global fetch. */
   fetchImpl?: (input: Request) => Promise<Response>;
   defaultHeaders?: Record<string, string>;
@@ -369,9 +376,11 @@ export class ApiClient {
   /** The underlying `openapi-fetch` client, for operations without a convenience method above. */
   readonly raw: Client<paths>;
   private readonly baseUrl: string;
+  private readonly accessTokenProvider: ApiClientConfig["getAccessToken"];
 
   constructor(config: ApiClientConfig) {
     this.baseUrl = config.baseUrl;
+    this.accessTokenProvider = config.getAccessToken;
     this.raw = createFetchClient<paths>({
       baseUrl: config.baseUrl,
       fetch: config.fetchImpl,
@@ -381,7 +390,7 @@ export class ApiClient {
     const authMiddleware: Middleware = {
       onRequest: async ({ request, schemaPath }) => {
         if (!isProtectedOperation(schemaPath, request.method)) return request;
-        const token = await config.getAccessToken?.();
+        const token = await this.getAccessToken();
         if (token) {
           request.headers.set("Authorization", `Bearer ${token}`);
         }
@@ -389,6 +398,15 @@ export class ApiClient {
       },
     };
     this.raw.use(authMiddleware);
+  }
+
+  /**
+   * Resolves a valid access token through this client's configured session
+   * manager. Playback engines use this same path before media requests so
+   * API and streaming traffic cannot drift onto different token lifecycles.
+   */
+  async getAccessToken(request?: AccessTokenRequest): Promise<string | undefined> {
+    return this.accessTokenProvider?.(request);
   }
 
   /** Resolves a (possibly origin-relative) URL the server returned against this client's baseUrl. */

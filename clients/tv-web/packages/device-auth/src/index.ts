@@ -26,7 +26,12 @@ export type { ClientPlatform };
 
 export { getOrCreateDeviceId } from "./deviceId";
 export { TokenStore, type StoredSession } from "./tokenStore";
-export { ensureAccessToken, toStoredSession, type EnsureAccessTokenIdentity } from "./session";
+export {
+  ensureAccessToken,
+  toStoredSession,
+  type EnsureAccessTokenIdentity,
+  type EnsureAccessTokenOptions,
+} from "./session";
 export { decodeAccessTokenDeviceId, decodeAccessTokenUserId } from "./jwt";
 
 /** Generates an offline SVG QR code without sending the pairing URL to a third party. */

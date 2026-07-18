@@ -382,6 +382,16 @@ describe("ApiClient", () => {
     expect(getAccessToken).not.toHaveBeenCalled();
   });
 
+  it("exposes the same asynchronous access-token provider used by protected requests", async () => {
+    const getAccessToken = vi.fn(async () => "centrally-refreshed-token");
+    const client = new ApiClient({ baseUrl: BASE_URL, getAccessToken });
+
+    await expect(client.getAccessToken({ forceRefresh: true })).resolves.toBe(
+      "centrally-refreshed-token"
+    );
+    expect(getAccessToken).toHaveBeenCalledWith({ forceRefresh: true });
+  });
+
   it("reads and updates authenticated Streamarr system settings", async () => {
     const fetchImpl = mockFetch(async (request) => {
       expect(new URL(request.url).pathname).toBe("/api/v1/admin/system-settings");

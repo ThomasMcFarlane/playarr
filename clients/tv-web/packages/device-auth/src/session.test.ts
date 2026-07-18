@@ -73,12 +73,102 @@ describe("ensureAccessToken", () => {
       }),
     });
     const store = new TokenStore();
-    store.set({ accessToken: "already-here", refreshToken: "rt-0", tokenType: "Bearer", expiresAt: Date.now() + 60_000 });
+    store.set({ accessToken: "already-here", refreshToken: "rt-0", tokenType: "Bearer", expiresAt: Date.now() + 5 * 60_000 });
 
     const token = await ensureAccessToken(client, store, IDENTITY);
 
     expect(token).toBe("already-here");
     expect(loginCalls).toBe(0);
+  });
+
+  it("refreshes before the access token can expire during a buffered media retry window", async () => {
+    let refreshCalls = 0;
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch(async (request) => {
+        refreshCalls += 1;
+        expect(new URL(request.url).pathname).toBe("/api/v1/auth/refresh");
+        return jsonResponse(200, {
+          access_token: "playback-safe-token",
+          refresh_token: "playback-safe-refresh",
+          token_type: "Bearer",
+          expires_in: 900,
+          user_id: "00000000-0000-0000-0000-000000000009",
+        });
+      }),
+    });
+    const store = new TokenStore();
+    store.set({
+      accessToken: "nearly-expired",
+      refreshToken: "refresh-before-playback",
+      tokenType: "Bearer",
+      expiresAt: Date.now() + 60_000,
+    });
+
+    await expect(ensureAccessToken(client, store, IDENTITY)).resolves.toBe(
+      "playback-safe-token"
+    );
+    expect(refreshCalls).toBe(1);
+  });
+
+  it("forces a refresh after the server rejects an otherwise unexpired access token", async () => {
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch(() =>
+        jsonResponse(200, {
+          access_token: "recovered-token",
+          refresh_token: "rotated-refresh-token",
+          token_type: "Bearer",
+          expires_in: 900,
+          user_id: "00000000-0000-0000-0000-000000000009",
+        })
+      ),
+    });
+    const store = new TokenStore();
+    store.set({
+      accessToken: "server-rejected-token",
+      refreshToken: "usable-refresh-token",
+      tokenType: "Bearer",
+      expiresAt: Date.now() + 10 * 60_000,
+    });
+
+    await expect(
+      ensureAccessToken(client, store, IDENTITY, { forceRefresh: true })
+    ).resolves.toBe("recovered-token");
+  });
+
+  it("makes concurrent media requests wait for a forced refresh instead of reusing the rejected token", async () => {
+    let refreshCalls = 0;
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch(async () => {
+        refreshCalls += 1;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return jsonResponse(200, {
+          access_token: "shared-recovered-token",
+          refresh_token: "shared-rotated-refresh",
+          token_type: "Bearer",
+          expires_in: 900,
+          user_id: "00000000-0000-0000-0000-000000000009",
+        });
+      }),
+    });
+    const store = new TokenStore();
+    store.set({
+      accessToken: "rejected-but-unexpired",
+      refreshToken: "shared-refresh",
+      tokenType: "Bearer",
+      expiresAt: Date.now() + 10 * 60_000,
+    });
+
+    const forced = ensureAccessToken(client, store, IDENTITY, { forceRefresh: true });
+    const concurrent = ensureAccessToken(client, store, IDENTITY);
+
+    await expect(Promise.all([forced, concurrent])).resolves.toEqual([
+      "shared-recovered-token",
+      "shared-recovered-token",
+    ]);
+    expect(refreshCalls).toBe(1);
   });
 
   it("redeems the refresh token once a previously-stored access token has expired, without calling login", async () => {

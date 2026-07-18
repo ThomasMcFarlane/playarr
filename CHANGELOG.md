@@ -115,6 +115,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Refresh access tokens centrally before authenticated media requests and keep playback buffered
+  through the existing stream retry window instead of failing when a short-lived token expires.
 - Inset visualiser bars over the full-cover gradient in Cover Flow and the mini-player, and keep
   the final music track clear of the viewport edge.
 - Replace the active-cover visualiser's black panel with a full-artwork transparent gradient and

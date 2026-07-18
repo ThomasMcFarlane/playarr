@@ -8,7 +8,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { ApiClient, type LoginRequest } from "@streamarr-tv/api-client";
+import {
+  ApiClient,
+  type AccessTokenRequest,
+  type LoginRequest,
+} from "@streamarr-tv/api-client";
 import {
   decodeAccessTokenDeviceId,
   decodeAccessTokenUserId,
@@ -274,7 +278,10 @@ interface ApiClientContextValue {
   connectServer: (credentials: LoginCredentials) => Promise<void>;
   disconnectServer: (serverUrl: string) => void;
   getServerClient: (serverUrl?: string) => ApiClient;
-  getServerAccessToken: (serverUrl?: string) => string | undefined;
+  getServerAccessToken: (
+    serverUrl?: string,
+    request?: AccessTokenRequest
+  ) => Promise<string | undefined>;
   /** Stores the token pair returned by the TV device-code flow. */
   loginWithDeviceToken: (token: DeviceTokenSuccess) => void;
   /** Activates a profile session already saved in this browser and validates/refreshes it. */
@@ -485,13 +492,18 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
               "X-Streamarr-Client-Version": PLAYARR_LOGIN_IDENTITY.clientVersion,
             }
           : undefined,
-      getAccessToken: async () => {
+      getAccessToken: async (request) => {
         try {
           const activeProfile = activeProfileRef.current;
-          const token = await ensureAccessToken(instance, tokenStore, {
-            ...PLAYARR_LOGIN_IDENTITY,
-            deviceId: activeProfile?.deviceId,
-          });
+          const token = await ensureAccessToken(
+            instance,
+            tokenStore,
+            {
+              ...PLAYARR_LOGIN_IDENTITY,
+              deviceId: activeProfile?.deviceId,
+            },
+            request
+          );
           const userId = decodeAccessTokenUserId(token);
           const activeSession = tokenStore.get();
           if (
@@ -536,7 +548,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
       url: apiBaseUrl,
       label: serverLabel(apiBaseUrl),
       client,
-      getAccessToken: () => tokenStoreRef.current?.get()?.accessToken,
+      getAccessToken: (request) => client.getAccessToken(request),
     };
     const secondary = activeSessions
       .filter((profile) => profile.apiBaseUrl !== apiBaseUrl)
@@ -563,17 +575,17 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
                   "X-Streamarr-Client-Version": PLAYARR_LOGIN_IDENTITY.clientVersion,
                 }
               : undefined,
-          getAccessToken: async () =>
+          getAccessToken: async (request) =>
             ensureAccessToken(instance, store, {
               ...PLAYARR_LOGIN_IDENTITY,
               deviceId: profile.deviceId,
-            }),
+            }, request),
         });
         return {
           url: profile.apiBaseUrl,
           label: serverLabel(profile.apiBaseUrl),
           client: instance,
-          getAccessToken: () => store.get()?.accessToken,
+          getAccessToken: (request) => instance.getAccessToken(request),
         };
       });
     return [primary, ...secondary];
@@ -753,11 +765,13 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
   );
 
   const getServerAccessToken = useCallback(
-    (serverUrl?: string) => {
-      if (!serverUrl) return tokenStoreRef.current?.get()?.accessToken;
-      return serverClients.find((server) => server.url === serverUrl)?.getAccessToken();
+    async (serverUrl?: string, request?: AccessTokenRequest) => {
+      if (!serverUrl) return client?.getAccessToken(request);
+      return serverClients
+        .find((server) => server.url === serverUrl)
+        ?.getAccessToken(request);
     },
-    [serverClients]
+    [client, serverClients]
   );
 
   const loginWithDeviceToken = useCallback(
@@ -972,9 +986,14 @@ export function useServerClient(serverUrl?: string): ApiClient {
   return getServerClient(serverUrl);
 }
 
-export function useServerAccessToken(serverUrl?: string): () => string | undefined {
+export function useServerAccessToken(
+  serverUrl?: string
+): (request?: AccessTokenRequest) => Promise<string | undefined> {
   const { getServerAccessToken } = useApiClientContext();
-  return useCallback(() => getServerAccessToken(serverUrl), [getServerAccessToken, serverUrl]);
+  return useCallback(
+    (request?: AccessTokenRequest) => getServerAccessToken(serverUrl, request),
+    [getServerAccessToken, serverUrl]
+  );
 }
 
 export function useApiBaseUrl(): [string, (value: string) => void] {

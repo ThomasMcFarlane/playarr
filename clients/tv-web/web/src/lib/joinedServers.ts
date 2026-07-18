@@ -1,4 +1,5 @@
 import type {
+  AccessTokenRequest,
   ApiClient,
   BrowseCatalogParams,
   CatalogPage,
@@ -10,7 +11,7 @@ export interface ConnectedServerClient {
   url: string;
   label: string;
   client: ApiClient;
-  getAccessToken: () => string | undefined;
+  getAccessToken: (request?: AccessTokenRequest) => Promise<string | undefined>;
 }
 
 export interface JoinedWorkSource extends ConnectedServerClient {
