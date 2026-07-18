@@ -77,6 +77,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Align the Tizen architecture guidance with the package-ready production build.
+
 - Match the Clients catalogue to the profile selector with an offscreen horizontal platform row,
   hidden scrollbars, recognisable icons, directional action navigation, inline installation
   details, consolidated Android downloads, Fire TV, Apple TV, Roku TV, and a Profiles-page link.
