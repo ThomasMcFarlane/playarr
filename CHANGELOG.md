@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add a native Playarr Apple TV app with focus-friendly catalogue browsing, search, device-code
+  pairing, server configuration, and AVKit playback backed by the shared Swift client kit.
 - Add playful per-profile avatar choices in Playarr settings, with crop, reposition, zoom, and
   locally resized custom photo uploads on devices that provide an image picker.
 - Add held-playlist actions for renaming, choosing a new parent, or deleting personal playlists

@@ -34,17 +34,11 @@ yet" below.
 
 ## Platform target
 
-`platforms: [.iOS(.v17)]` — iOS 17 minimum, per the plan. tvOS is
-deliberately **not** listed yet: `StreamarrKit` has zero UIKit import
-anywhere (Networking/Player/Auth all stick to
-Foundation/Combine/Observation/AVFoundation/AVKit, which are available on
-iOS, tvOS, and macOS alike). When the tvOS client is scoped, the expected
-change is additive: add `.tvOS(.v17)` to `platforms` and a new
-`StreamarrTVApp` executable target depending on the same `StreamarrKit`
-product — no source changes to `StreamarrKit` should be required. The one
-place tvOS will need real new code is the app-target UI layer (focus
-engine navigation, remote-control handling), which lives in
-`StreamarrApp`/a future `StreamarrTVApp`, not in the kit.
+`platforms: [.iOS(.v17), .tvOS(.v17)]`. The iOS client and the native
+Apple TV Xcode project at `clients/apple-tv` both consume the same
+`StreamarrKit` product. Networking, domain, authentication, and
+AVFoundation playback stay shared; the Apple TV target owns its separate
+focus-engine and remote-control UI.
 
 ## `Networking/OpenAPISchemas.swift` + `APIClient.swift` — the real client
 

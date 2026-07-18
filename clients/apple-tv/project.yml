@@ -1,0 +1,59 @@
+name: PlayarrTV
+options:
+  bundleIdPrefix: com.streamarr
+  deploymentTarget:
+    tvOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  Streamarr:
+    path: ../ios
+targets:
+  PlayarrTV:
+    type: application
+    platform: tvOS
+    sources:
+      - path: Sources
+    info:
+      path: Supporting/Info.plist
+      properties:
+        CFBundleDisplayName: Playarr
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSApplicationCategoryType: public.app-category.entertainment
+        NSLocalNetworkUsageDescription: Playarr connects to the Streamarr server on your network.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    dependencies:
+      - package: Streamarr
+        product: StreamarrKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.streamarr.playarr.tvos
+        PRODUCT_MODULE_NAME: PlayarrTV
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: 5.0
+        SWIFT_STRICT_CONCURRENCY: complete
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+  PlayarrTVTests:
+    type: bundle.unit-test
+    platform: tvOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: PlayarrTV
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.streamarr.playarr.tvos.tests
+        SWIFT_VERSION: 5.0
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  PlayarrTV:
+    build:
+      targets:
+        PlayarrTV: all
+        PlayarrTVTests: [test]
+    test:
+      targets:
+        - PlayarrTVTests
