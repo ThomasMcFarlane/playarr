@@ -189,6 +189,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Let mobile viewers swipe Cover Flow without blocking vertical page gestures, keep album artwork
+  uncropped, place inline music controls directly beneath it, and scroll from touches on tracks.
 - Give the native iOS client real username/password and managed-profile login, persist those
   sessions per server, and carry bearer authentication into AVPlayer media and HLS requests.
 - Canonicalise Android public-IPv4 Streamarr addresses to their secure direct relay hostname before
