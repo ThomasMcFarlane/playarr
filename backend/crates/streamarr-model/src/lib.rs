@@ -25,6 +25,7 @@ pub mod publishing;
 pub mod sensitive;
 pub mod series;
 pub mod source;
+pub mod system_settings;
 pub mod tdarr;
 pub mod user;
 pub mod work;
@@ -46,6 +47,7 @@ pub use publishing::{Author, Book};
 pub use sensitive::Sensitive;
 pub use series::{Episode, Season, Series};
 pub use source::{SourceInstance, SourceKind};
+pub use system_settings::{SystemSettings, DEFAULT_INSTANCE_NAME};
 pub use tdarr::TdarrConnection;
 pub use user::{
     Device, MediaPlaybackPreferences, PushRegistration, RefreshTokenRecord, Session, User,

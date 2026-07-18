@@ -95,6 +95,11 @@ STREAMARR_WEB_ASSETS_DIR=/var/lib/streamarr/web
 The Admin build is served at `/`. Playarr is hosted separately at
 `playarr.app`; the systemd deployment never installs or serves it.
 
+The instance's display name is not an environment variable. It is a
+persisted system setting managed in Streamarr Admin under **System >
+Settings**. Playarr reads that setting when labelling a connected server and
+when presenting the server attached to an invitation link.
+
 One thing worth knowing before copying that file verbatim:
 
 - **`streamarr.env.example` documents a Postgres `DATABASE_URL`, not a

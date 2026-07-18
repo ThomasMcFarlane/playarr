@@ -31,7 +31,6 @@ services:
     container_name: streamarr-standalone
     environment:
       STREAMARR_ROLE: all
-      STREAMARR_INSTANCE_NAME: ${STREAMARR_INSTANCE_NAME:-Streamarr}
       # SQLite, not Postgres -- this is a single-node stack with no
       # multi-replica coordination to exercise, so Postgres would only add
       # a second container for no benefit here. Persisted via the named

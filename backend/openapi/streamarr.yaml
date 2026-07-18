@@ -295,6 +295,45 @@ paths:
           description: No source instance registered with this id
         '503':
           description: No reconciliation poller is currently running for this instance yet
+  /api/v1/admin/system-settings:
+    get:
+      tags:
+      - admin
+      operationId: get_system_settings_handler
+      responses:
+        '200':
+          description: Current instance-wide settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemSettings'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+    put:
+      tags:
+      - admin
+      operationId: update_system_settings_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSystemSettingsRequest'
+        required: true
+      responses:
+        '200':
+          description: Updated instance-wide settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemSettings'
+        '400':
+          description: Instance name is empty or longer than 100 characters
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
   /api/v1/admin/tdarr:
     get:
       tags:
@@ -4017,6 +4056,14 @@ components:
         properties:
           other:
             type: string
+    SystemSettings:
+      type: object
+      description: Singleton system configuration stored in the database.
+      required:
+      - instance_name
+      properties:
+        instance_name:
+          type: string
     TdarrConnectionRequest:
       type: object
       description: |-
@@ -4241,6 +4288,13 @@ components:
           - string
           - 'null'
           description: Exactly four ASCII decimal digits. `null` removes the profile lock.
+    UpdateSystemSettingsRequest:
+      type: object
+      required:
+      - instance_name
+      properties:
+        instance_name:
+          type: string
     UpdateUserRequest:
       type: object
       description: |-

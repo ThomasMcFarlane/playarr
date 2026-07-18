@@ -21,14 +21,15 @@ use streamarr_db::analytics::{AnalyticsStore, SqlxAnalyticsStore};
 use streamarr_db::repo::{
     seed_default_views, PlaylistRepo, SqlxCreditRepo, SqlxDeviceRepo, SqlxLibraryViewRepo,
     SqlxMediaFileRepo, SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo,
-    SqlxPushRegistrationRepo, SqlxRenditionRepo, SqlxSourceInstanceRepo, SqlxTdarrConnectionRepo,
-    SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxUserRepo, SqlxWatchProgressRepo,
-    SqlxWorkRepo,
+    SqlxPushRegistrationRepo, SqlxRenditionRepo, SqlxSourceInstanceRepo, SqlxSystemSettingsRepo,
+    SqlxTdarrConnectionRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxUserRepo,
+    SqlxWatchProgressRepo, SqlxWorkRepo,
 };
 use streamarr_db::{
     CreditRepo, DbPool, DeviceRepo, LibraryViewRepo, MediaFileRepo, PolicyRepo, ProfilePinRepo,
-    PushRegistrationRepo, RenditionRepo, SourceInstanceRepo, TdarrConnectionRepo, UserInviteRepo,
-    UserInviteRequestRepo, UserRepo, WatchProgressRepo, WorkRepo,
+    PushRegistrationRepo, RenditionRepo, SourceInstanceRepo, SystemSettingsRepo,
+    TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo, WatchProgressRepo,
+    WorkRepo,
 };
 use streamarr_model::{Availability, Policy, Sensitive, User, Work, WorkKind};
 use streamarr_telemetry::analytics::{
@@ -347,6 +348,8 @@ pub async fn test_state() -> (Router, TestState) {
     let credit_repo: Arc<dyn CreditRepo> = Arc::new(SqlxCreditRepo::new(pool.clone()));
     let tdarr_connection_repo: Arc<dyn TdarrConnectionRepo> =
         Arc::new(SqlxTdarrConnectionRepo::new(pool.clone()));
+    let system_settings_repo: Arc<dyn SystemSettingsRepo> =
+        Arc::new(SqlxSystemSettingsRepo::new(pool.clone()));
     // Real boot parity -- production's `boot_api` seeds the two default
     // views right after migrations run, and test callers that assert on
     // `GET /api/v1/views` (e.g. confirming "Newly Added"/"Newly Released"
@@ -484,7 +487,7 @@ pub async fn test_state() -> (Router, TestState) {
         readiness: ReadinessState::new(),
         version: VersionState {
             envelope: streamarr_model::VersionEnvelope {
-                instance_name: "Test Streamarr".to_string(),
+                instance_name: streamarr_model::DEFAULT_INSTANCE_NAME.to_string(),
                 server_version: "0.1.0".to_string(),
                 api_version: "1".to_string(),
                 build_sha: None,
@@ -502,6 +505,7 @@ pub async fn test_state() -> (Router, TestState) {
         work_repo: work_repo.clone(),
         credit_repo,
         tdarr_connection_repo,
+        system_settings_repo,
         media_files: media_files.clone() as Arc<dyn MediaFileLookup>,
         watch_progress,
         jwt,

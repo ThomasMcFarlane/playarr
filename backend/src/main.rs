@@ -827,22 +827,22 @@ async fn boot_api(
     use streamarr_db::repo::{
         seed_default_views, SqlxCreditRepo, SqlxDeviceRepo, SqlxLibraryViewRepo, SqlxMediaFileRepo,
         SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo, SqlxPushRegistrationRepo,
-        SqlxRefreshTokenRepo, SqlxRenditionRepo, SqlxSourceInstanceRepo, SqlxTdarrConnectionRepo,
-        SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxUserRepo, SqlxWatchProgressRepo,
-        SqlxWorkRepo,
+        SqlxRefreshTokenRepo, SqlxRenditionRepo, SqlxSourceInstanceRepo, SqlxSystemSettingsRepo,
+        SqlxTdarrConnectionRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxUserRepo,
+        SqlxWatchProgressRepo, SqlxWorkRepo,
     };
     use streamarr_db::{
         CreditRepo, DeviceRepo, LibraryViewRepo, MediaFileRepo, PlaylistRepo, PolicyRepo,
         ProfilePinRepo, PushRegistrationRepo, RenditionRepo, SourceInstanceRepo,
-        TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo, WatchProgressRepo,
-        WorkRepo,
+        SystemSettingsRepo, TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo,
+        WatchProgressRepo, WorkRepo,
     };
-    use streamarr_model::VersionEnvelope;
+    use streamarr_model::{VersionEnvelope, DEFAULT_INSTANCE_NAME};
 
     let compatibility_table = ClientCompatibilityTable::from_toml_str(CLIENT_COMPATIBILITY_TOML)?;
 
     let version_envelope = VersionEnvelope {
-        instance_name: config.instance_name.clone(),
+        instance_name: DEFAULT_INSTANCE_NAME.to_string(),
         server_version: compatibility_table.server.version.clone(),
         api_version: compatibility_table.server.api_version.clone(),
         build_sha: option_env!("STREAMARR_BUILD_SHA").map(str::to_string),
@@ -904,6 +904,8 @@ async fn boot_api(
     let credit_repo: Arc<dyn CreditRepo> = Arc::new(SqlxCreditRepo::new(pool.clone()));
     let tdarr_connection_repo: Arc<dyn TdarrConnectionRepo> =
         Arc::new(SqlxTdarrConnectionRepo::new(pool.clone()));
+    let system_settings_repo: Arc<dyn SystemSettingsRepo> =
+        Arc::new(SqlxSystemSettingsRepo::new(pool.clone()));
     // Durable, not `InMemoryRefreshTokenStore` -- see
     // `streamarr_db::repo::refresh_token`'s doc comment: without this, a
     // process restart silently invalidated every refresh token, forcing a
@@ -1049,6 +1051,7 @@ async fn boot_api(
         work_repo,
         credit_repo,
         tdarr_connection_repo,
+        system_settings_repo,
         media_files,
         watch_progress,
         jwt,

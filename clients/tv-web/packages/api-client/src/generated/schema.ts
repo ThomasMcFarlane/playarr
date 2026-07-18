@@ -231,6 +231,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/system-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_system_settings_handler"];
+        put: operations["update_system_settings_handler"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/tdarr": {
         parameters: {
             query?: never;
@@ -2088,6 +2104,10 @@ export interface components {
         StopReason: "completed" | "user_stopped" | "error" | "device_disconnected" | "session_revoked" | "concurrent_limit_exceeded" | "idle_timeout" | {
             other: string;
         };
+        /** @description Singleton system configuration stored in the database. */
+        SystemSettings: {
+            instance_name: string;
+        };
         /**
          * @description Request body for registering (or re-registering, to update in place --
          *     e.g. to rotate the API key) the Tdarr connection. `api_key` is
@@ -2185,6 +2205,9 @@ export interface components {
         UpdateProfilePinRequest: {
             /** @description Exactly four ASCII decimal digits. `null` removes the profile lock. */
             pin: string | null;
+        };
+        UpdateSystemSettingsRequest: {
+            instance_name: string;
         };
         /**
          * @description All-optional patch body -- only fields set to `Some` are applied.
@@ -2837,6 +2860,85 @@ export interface operations {
             };
             /** @description No reconciliation poller is currently running for this instance yet */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_system_settings_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current instance-wide settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemSettings"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_system_settings_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSystemSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated instance-wide settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemSettings"];
+                };
+            };
+            /** @description Instance name is empty or longer than 100 characters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -39,6 +39,7 @@ pub mod playlists;
 pub mod readiness;
 pub mod refresh;
 pub mod source_registry;
+pub mod system_settings;
 pub mod tdarr;
 pub mod user_directory;
 pub mod users;
@@ -99,6 +100,10 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(health::health_handler))
         .routes(routes!(readiness::readiness_handler))
         .routes(routes!(version::version_handler))
+        .routes(routes!(
+            system_settings::get_system_settings_handler,
+            system_settings::update_system_settings_handler
+        ))
         .routes(routes!(oauth::device_code_handler))
         .routes(routes!(oauth::authorize_device_handler))
         .routes(routes!(oauth::device_token_handler))
@@ -276,6 +281,10 @@ pub struct AppState {
     /// registration endpoints. See that type's doc comment for why this
     /// is a singleton, unlike `source_instance_repo`.
     pub tdarr_connection_repo: Arc<dyn streamarr_db::TdarrConnectionRepo>,
+    /// Singleton, administrator-editable settings for this Streamarr
+    /// installation. The public version endpoint reads this repository too,
+    /// so clients see a changed instance name immediately.
+    pub system_settings_repo: Arc<dyn streamarr_db::SystemSettingsRepo>,
     pub media_files: Arc<dyn MediaFileLookup>,
     /// Per-user durable resume positions and watched state.
     pub watch_progress: Arc<dyn streamarr_db::WatchProgressRepo>,
@@ -364,12 +373,6 @@ pub struct AppState {
 impl FromRef<AppState> for ReadinessState {
     fn from_ref(state: &AppState) -> Self {
         state.readiness.clone()
-    }
-}
-
-impl FromRef<AppState> for VersionState {
-    fn from_ref(state: &AppState) -> Self {
-        state.version.clone()
     }
 }
 
@@ -557,7 +560,7 @@ mod tests {
             .await
             .unwrap();
         let envelope: VersionEnvelope = serde_json::from_slice(&body).unwrap();
-        assert_eq!(envelope.instance_name, "Test Streamarr");
+        assert_eq!(envelope.instance_name, "Streamarr");
         assert_eq!(envelope.server_version, "0.1.0");
     }
 
@@ -579,6 +582,7 @@ mod tests {
         assert!(json.contains("/api/v1/artwork/album/{artist_work_id}/{album_id}/{kind}"));
         assert!(json.contains("/api/v1/playback/{media_file_id}"));
         assert!(json.contains("/api/v1/admin/source-instances"));
+        assert!(json.contains("/api/v1/admin/system-settings"));
         assert!(json.contains("/api/v1/admin/views"));
         assert!(json.contains("/api/v1/views"));
         assert!(json.contains("/api/v1/views/{id}/resolve"));

@@ -86,8 +86,7 @@ there is no separate worker image to build, version, or keep in sync.
 `streamarr-config::Config::from_env` (`backend/crates/streamarr-config`)
 reads exactly these variables: `DATABASE_URL` (required), `REDIS_URL`
 (optional), `STREAMARR_ROLE` (`all`/`api`/`worker`, default `all`),
-`STREAMARR_LOG` (default `info`), `STREAMARR_INSTANCE_NAME` (default
-`Streamarr`), `STREAMARR_HTTP_BIND_ADDR` (default
+`STREAMARR_LOG` (default `info`), `STREAMARR_HTTP_BIND_ADDR` (default
 `0.0.0.0:8484`), `STREAMARR_METRICS_BIND_ADDR` (default `0.0.0.0:9090`),
 and `STREAMARR_OTLP_ENDPOINT` (optional). Every compose file in this
 directory now sets these real names consistently — an earlier pass had

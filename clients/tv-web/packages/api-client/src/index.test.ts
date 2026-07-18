@@ -382,6 +382,28 @@ describe("ApiClient", () => {
     expect(getAccessToken).not.toHaveBeenCalled();
   });
 
+  it("reads and updates authenticated Streamarr system settings", async () => {
+    const fetchImpl = mockFetch(async (request) => {
+      expect(new URL(request.url).pathname).toBe("/api/v1/admin/system-settings");
+      expect(request.headers.get("Authorization")).toBe("Bearer admin-token");
+      if (request.method === "PUT") {
+        expect(await request.json()).toEqual({ instance_name: "REGION-A" });
+        return jsonResponse(200, { instance_name: "REGION-A" });
+      }
+      return jsonResponse(200, { instance_name: "Streamarr" });
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "admin-token",
+    });
+
+    await expect(client.getSystemSettings()).resolves.toEqual({ instance_name: "Streamarr" });
+    await expect(client.updateSystemSettings({ instance_name: "REGION-A" })).resolves.toEqual({
+      instance_name: "REGION-A",
+    });
+  });
+
   it("logs in with the real LoginRequest shape and parses a real LoginResponse", async () => {
     const fetchImpl = mockFetch(async (request) => {
       expect(new URL(request.url).pathname).toBe("/api/v1/auth/login");

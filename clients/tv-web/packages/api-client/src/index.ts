@@ -100,6 +100,9 @@ export type OAuthErrorBody = components["schemas"]["OAuthErrorBody"];
 
 export type VersionEnvelope = components["schemas"]["VersionEnvelope"];
 export type CompatibilityEntry = components["schemas"]["CompatibilityEntry"];
+export type SystemSettings = components["schemas"]["SystemSettings"];
+export type UpdateSystemSettingsRequest =
+  components["schemas"]["UpdateSystemSettingsRequest"];
 
 export type SourceKind = components["schemas"]["SourceKind"];
 export type SourceInstanceRequest = components["schemas"]["SourceInstanceRequest"];
@@ -251,6 +254,8 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/admin/source-instances/{id}", method: "DELETE" },
   { schemaPath: "/api/v1/admin/source-instances/{id}/sync", method: "POST" },
   { schemaPath: "/api/v1/admin/source-instances/sync-status", method: "GET" },
+  { schemaPath: "/api/v1/admin/system-settings", method: "GET" },
+  { schemaPath: "/api/v1/admin/system-settings", method: "PUT" },
   { schemaPath: "/api/v1/admin/tdarr", method: "POST" },
   { schemaPath: "/api/v1/admin/tdarr", method: "GET" },
   { schemaPath: "/api/v1/admin/tdarr", method: "DELETE" },
@@ -414,6 +419,14 @@ export class ApiClient {
 
   async getVersion(): Promise<VersionEnvelope> {
     return this.unwrap(await this.raw.GET("/api/system/version"));
+  }
+
+  async getSystemSettings(): Promise<SystemSettings> {
+    return this.unwrap(await this.raw.GET("/api/v1/admin/system-settings"));
+  }
+
+  async updateSystemSettings(body: UpdateSystemSettingsRequest): Promise<SystemSettings> {
+    return this.unwrap(await this.raw.PUT("/api/v1/admin/system-settings", { body }));
   }
 
   // ---------------------------------------------------------------------

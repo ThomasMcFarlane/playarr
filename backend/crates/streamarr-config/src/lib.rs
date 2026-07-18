@@ -100,9 +100,6 @@ impl DeploymentTier {
 /// pool — both of those take a `&Config`.
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// `STREAMARR_INSTANCE_NAME` — the operator-facing name clients use to
-    /// distinguish this Streamarr deployment. Defaults to `Streamarr`.
-    pub instance_name: String,
     /// `DATABASE_URL` — required. `sqlite:...` for [`DeploymentTier::SingleNode`],
     /// `postgres://...`/`postgresql://...` otherwise.
     pub database_url: String,
@@ -206,18 +203,6 @@ impl Config {
     pub fn from_env_source(lookup: &EnvLookup<'_>) -> Result<Self, ConfigError> {
         let database_url = required(lookup, "DATABASE_URL")?;
         let redis_url = optional(lookup, "REDIS_URL");
-        let instance_name = match optional(lookup, "STREAMARR_INSTANCE_NAME") {
-            Some(raw) if raw.trim().is_empty() => {
-                return Err(ConfigError::InvalidValue {
-                    var: "STREAMARR_INSTANCE_NAME".to_string(),
-                    value: raw,
-                    reason: "must contain at least one non-whitespace character".to_string(),
-                });
-            }
-            Some(raw) => raw.trim().to_string(),
-            None => "Streamarr".to_string(),
-        };
-
         let role = match optional(lookup, "STREAMARR_ROLE") {
             Some(raw) => Role::parse(&raw)?,
             None => Role::All,
@@ -347,7 +332,6 @@ impl Config {
         let deployment_tier = DeploymentTier::resolve(&database_url, redis_url.as_deref());
 
         Ok(Config {
-            instance_name,
             database_url,
             redis_url,
             role,
@@ -457,35 +441,12 @@ mod tests {
         let lookup = lookup_from(HashMap::from([("DATABASE_URL", "sqlite://streamarr.db")]));
         let config = Config::from_env_source(&lookup).unwrap();
         assert_eq!(config.deployment_tier, DeploymentTier::SingleNode);
-        assert_eq!(config.instance_name, "Streamarr");
         assert_eq!(config.role, Role::All);
         assert_eq!(config.log_filter, "info");
         assert_eq!(config.http_bind_addr, "0.0.0.0:8484".parse().unwrap());
         assert_eq!(config.tls, None);
         assert_eq!(config.acme, None);
         assert_eq!(config.relay_dns_bind_addr, None);
-    }
-
-    #[test]
-    fn instance_name_can_be_configured() {
-        let lookup = lookup_from(HashMap::from([
-            ("DATABASE_URL", "sqlite://streamarr.db"),
-            ("STREAMARR_INSTANCE_NAME", "  Living Room  "),
-        ]));
-        let config = Config::from_env_source(&lookup).unwrap();
-        assert_eq!(config.instance_name, "Living Room");
-    }
-
-    #[test]
-    fn whitespace_only_instance_name_errors() {
-        let lookup = lookup_from(HashMap::from([
-            ("DATABASE_URL", "sqlite://streamarr.db"),
-            ("STREAMARR_INSTANCE_NAME", "   "),
-        ]));
-        let err = Config::from_env_source(&lookup).unwrap_err();
-        assert!(
-            matches!(err, ConfigError::InvalidValue { var, .. } if var == "STREAMARR_INSTANCE_NAME")
-        );
     }
 
     #[test]

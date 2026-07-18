@@ -19,7 +19,7 @@ pub use repo::{
     MediaFileRepo, PlaylistRepo, PolicyRepo, ProfilePinRepo, PushRegistrationRepo,
     RefreshTokenRepo, RenditionRepo, SourceInstanceRepo, SqlxCreditRepo, SqlxEmbeddingRepo,
     SqlxLibraryViewRepo, SqlxPlaylistRepo, SqlxProfilePinRepo, SqlxPushRegistrationRepo,
-    SqlxRefreshTokenRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo,
-    SqlxWatchProgressRepo, TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo,
-    WatchProgressRepo, WorkRepo,
+    SqlxRefreshTokenRepo, SqlxSystemSettingsRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo,
+    SqlxUserInviteRequestRepo, SqlxWatchProgressRepo, SystemSettingsRepo, TdarrConnectionRepo,
+    UserInviteRepo, UserInviteRequestRepo, UserRepo, WatchProgressRepo, WorkRepo,
 };

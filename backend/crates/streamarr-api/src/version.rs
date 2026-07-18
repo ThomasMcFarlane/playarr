@@ -7,6 +7,8 @@ use axum::extract::State;
 use axum::Json;
 use streamarr_model::VersionEnvelope;
 
+use crate::{ApiError, AppState};
+
 #[derive(Clone)]
 pub struct VersionState {
     pub envelope: VersionEnvelope,
@@ -20,6 +22,15 @@ pub struct VersionState {
         (status = 200, description = "Server version and client compatibility table", body = VersionEnvelope)
     )
 )]
-pub async fn version_handler(State(state): State<VersionState>) -> Json<VersionEnvelope> {
-    Json(state.envelope.clone())
+pub async fn version_handler(
+    State(state): State<AppState>,
+) -> Result<Json<VersionEnvelope>, ApiError> {
+    let settings = state
+        .system_settings_repo
+        .get()
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to load system settings: {err}")))?;
+    let mut envelope = state.version.envelope.clone();
+    envelope.instance_name = settings.instance_name;
+    Ok(Json(envelope))
 }

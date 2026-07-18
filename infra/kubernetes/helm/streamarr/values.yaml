@@ -76,7 +76,6 @@ preStopSleepSeconds: 15
 # below if either changes; nothing derives one from the other.
 config:
   STREAMARR_LOG: "info"
-  STREAMARR_INSTANCE_NAME: "Streamarr"
   STREAMARR_HTTP_BIND_ADDR: "0.0.0.0:8484"
   STREAMARR_METRICS_BIND_ADDR: "0.0.0.0:9090"
 
