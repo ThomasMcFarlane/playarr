@@ -2520,7 +2520,7 @@ code {
 
 .player-page.is-minimised {
   inset: auto auto clamp(22px, 3.2vh, 46px)
-    calc(var(--tv-nav-edge) + clamp(230px, 14vw, 280px));
+    calc(var(--tv-nav-edge, clamp(18px, 2.2vw, 44px)) + clamp(230px, 14vw, 280px));
   z-index: 94;
   width: clamp(340px, 27vw, 500px);
   height: clamp(92px, 8vw, 118px);
@@ -7191,7 +7191,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   position: relative;
   flex: 0 0 clamp(330px, 50vh, 540px);
   min-height: 0;
-  padding-left: clamp(22px, 2.4vw, 46px);
+  padding-left: 0;
 }
 
 .tv-music-browser.is-content {

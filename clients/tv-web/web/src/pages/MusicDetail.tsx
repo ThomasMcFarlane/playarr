@@ -152,6 +152,10 @@ function AlbumCoverFlow({
               onKeyDown={(event) => {
                 if (event.key === "ArrowLeft") moveSelection(event, -1);
                 else if (event.key === "ArrowRight") moveSelection(event, 1);
+                else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }
               }}
               onFocus={() => onSelect(album)}
               onMouseEnter={() => onSelect(album)}

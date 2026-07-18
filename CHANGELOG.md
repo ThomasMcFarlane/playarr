@@ -115,6 +115,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Keep the inline music mini-player inside the app layout, centre Cover Flow and its controls on
+  one axis, and navigate between transport buttons, the scrubber, artwork, and tracks by remote.
 - Connect the sign-in language selector to the first input with explicit Up and Down focus
   movement while leaving its open menu's keyboard controls intact.
 - Keep focused music tracks inside their scroll viewport and clear their highlight when focus

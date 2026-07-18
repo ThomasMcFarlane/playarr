@@ -35,6 +35,8 @@ export interface PlayerControlsProps {
   visible: boolean;
   contextTitle?: string;
   defaultFocusId?: string;
+  onNavigateAbove?: () => void;
+  onNavigateBelow?: () => void;
   isFullscreen: boolean;
   systemVolumeOnly?: boolean;
   onTogglePlay: () => void;
@@ -90,6 +92,8 @@ export function PlayerControls({
   visible,
   contextTitle,
   defaultFocusId,
+  onNavigateAbove,
+  onNavigateBelow,
   isFullscreen,
   systemVolumeOnly = false,
   onTogglePlay,
@@ -350,7 +354,10 @@ export function PlayerControls({
         playlistButtonRef.current,
         qualityButtonRef.current,
         fullscreenButtonRef.current,
-      ].filter((control): control is HTMLButtonElement => control !== null && !control.disabled),
+      ].filter(
+        (control): control is HTMLButtonElement =>
+          control !== null && !control.disabled && control.getClientRects().length > 0
+      ),
     []
   );
 
@@ -510,7 +517,8 @@ export function PlayerControls({
           case "ArrowUp":
             event.preventDefault();
             event.stopPropagation();
-            document.querySelector<HTMLButtonElement>(".player-back")?.focus();
+            if (onNavigateAbove) onNavigateAbove();
+            else document.querySelector<HTMLButtonElement>(".player-back")?.focus();
             return;
           case "ArrowDown":
             event.preventDefault();
@@ -555,6 +563,7 @@ export function PlayerControls({
         case "ArrowDown":
           event.preventDefault();
           event.stopPropagation();
+          onNavigateBelow?.();
           return;
         default:
           return;
@@ -564,6 +573,8 @@ export function PlayerControls({
       commitSeek,
       displayedPosition,
       duration,
+      onNavigateAbove,
+      onNavigateBelow,
       onTogglePlaylist,
       openAudioMenu,
       openQualityMenu,

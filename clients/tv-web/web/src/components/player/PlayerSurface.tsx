@@ -381,7 +381,7 @@ export function InlineMusicMiniPlayer({
   onMaximise: () => void;
 }) {
   const { t } = useLanguage();
-  return createPortal(
+  return (
     <div className="player-page is-minimised player-inline-music-mini">
       <div className="player-shell player-shell-minimised player-shell-music">
         {context ? (
@@ -416,8 +416,7 @@ export function InlineMusicMiniPlayer({
           <MaximiseIcon />
         </span>
       </div>
-    </div>,
-    document.body
+    </div>
   );
 }
 
@@ -902,24 +901,6 @@ export function PlayerSurface({
           ? undefined
           : (event) => {
               handleActivity();
-              const target = event.target;
-              if (
-                inlineMusic &&
-                target instanceof HTMLElement &&
-                target.closest(".player-controls") &&
-                (event.key === "ArrowUp" || event.key === "ArrowDown")
-              ) {
-                event.preventDefault();
-                event.stopPropagation();
-                const selector =
-                  event.key === "ArrowUp"
-                    ? ".tv-music-album-card.is-selected"
-                    : ".tv-music-track-row.is-selected";
-                document
-                  .querySelector<HTMLElement>(selector)
-                  ?.focus({ preventScroll: true });
-                return;
-              }
               if (
                 event.key === "Enter" ||
                 event.key === " " ||
@@ -1204,6 +1185,22 @@ export function PlayerSurface({
           visible={showControls}
           contextTitle={inlineMusic ? title : undefined}
           defaultFocusId={inlineMusic ? "inline-music-playback-control" : undefined}
+          onNavigateAbove={
+            inlineMusic
+              ? () =>
+                  document
+                    .querySelector<HTMLElement>(".tv-music-album-card.is-selected")
+                    ?.focus({ preventScroll: true })
+              : undefined
+          }
+          onNavigateBelow={
+            inlineMusic
+              ? () =>
+                  document
+                    .querySelector<HTMLElement>(".tv-music-track-row.is-selected")
+                    ?.focus({ preventScroll: true })
+              : undefined
+          }
           isFullscreen={isFullscreen}
           systemVolumeOnly={systemVolumeOnly}
           onTogglePlay={togglePlayback}

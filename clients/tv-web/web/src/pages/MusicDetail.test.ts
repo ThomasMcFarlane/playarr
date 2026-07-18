@@ -30,10 +30,14 @@ describe("MusicDetail track list", () => {
 
   it("centres persistent inline controls beneath Cover Flow", () => {
     const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    const albumFlowRule = css.match(
+      /\.tv-music-album-flow\s*\{(?<declarations>[^}]*)\}/
+    )?.groups?.declarations;
     const inlineControlsRule = css.match(
       /\.player-shell-inline-music \.player-controls\s*\{(?<declarations>[^}]*)\}/
     )?.groups?.declarations;
 
+    expect(albumFlowRule).toContain("padding-left: 0");
     expect(inlineControlsRule).toContain("left: 50%");
     expect(inlineControlsRule).toContain("width: min(76%, 720px)");
     expect(inlineControlsRule).toContain("transform: translateX(-50%)");
@@ -49,10 +53,36 @@ describe("MusicDetail track list", () => {
       new URL("../components/player/PlayerControls.tsx", import.meta.url),
       "utf8"
     );
+    const surfaceSource = readFileSync(
+      new URL("../components/player/PlayerSurface.tsx", import.meta.url),
+      "utf8"
+    );
 
     expect(detailSource).toContain(
       'data-tv-edge-target-down="#inline-music-playback-control"'
     );
+    expect(detailSource).toMatch(
+      /event\.key === "ArrowUp"[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopPropagation\(\);/
+    );
     expect(controlsSource).toContain("id={defaultFocusId}");
+    expect(controlsSource).toContain("if (onNavigateAbove) onNavigateAbove()");
+    expect(controlsSource).toContain("trackRef.current?.focus()");
+    expect(controlsSource).toContain("onNavigateBelow?.()");
+    expect(controlsSource).toContain("control.getClientRects().length > 0");
+    expect(surfaceSource).not.toContain('target.closest(".player-controls")');
+  });
+
+  it("keeps the inline mini-player inside the app layout scope", () => {
+    const surfaceSource = readFileSync(
+      new URL("../components/player/PlayerSurface.tsx", import.meta.url),
+      "utf8"
+    );
+    const miniPlayerSource = surfaceSource.slice(
+      surfaceSource.indexOf("export function InlineMusicMiniPlayer"),
+      surfaceSource.indexOf("export function PlayerSurface")
+    );
+
+    expect(miniPlayerSource).toContain("player-inline-music-mini");
+    expect(miniPlayerSource).not.toContain("createPortal(");
   });
 });
