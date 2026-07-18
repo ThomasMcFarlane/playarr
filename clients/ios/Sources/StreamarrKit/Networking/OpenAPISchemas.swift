@@ -444,6 +444,70 @@ public struct AvailableProfile: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+public struct SignupRequest: Codable, Sendable {
+    public var displayName: String
+    public var email: String?
+    public var inviteToken: String
+    public var password: String
+    public var username: String
+    enum CodingKeys: String, CodingKey {
+        case displayName = "display_name"
+        case email
+        case inviteToken = "invite_token"
+        case password, username
+    }
+    public init(displayName: String, email: String? = nil, inviteToken: String, password: String, username: String) {
+        self.displayName = displayName; self.email = email; self.inviteToken = inviteToken; self.password = password; self.username = username
+    }
+}
+
+public struct UserAccount: Codable, Identifiable, Sendable {
+    public let id: UUID
+    public var username: String
+    public var displayName: String
+    public var email: String?
+    public var disabled: Bool
+    public var isAdmin: Bool
+    public var canStream: Bool
+    public var libraryAllow: [UUID]
+    public var preferredAudioLanguage: String
+    public var createdAt: Date
+    enum CodingKeys: String, CodingKey {
+        case id, username, email, disabled
+        case displayName = "display_name"
+        case isAdmin = "is_admin"
+        case canStream = "can_stream"
+        case libraryAllow = "library_allow"
+        case preferredAudioLanguage = "preferred_audio_language"
+        case createdAt = "created_at"
+    }
+}
+
+public struct Person: Codable, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public var name: String
+    public var headshotURL: String?
+    enum CodingKeys: String, CodingKey { case id, name; case headshotURL = "headshot_url" }
+    public init(id: UUID, name: String, headshotURL: String? = nil) { self.id = id; self.name = name; self.headshotURL = headshotURL }
+}
+
+public struct Credit: Codable, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public var person: Person
+    public var character: String?
+    public var department: String?
+    public var job: String?
+    public init(id: UUID, person: Person, character: String? = nil, department: String? = nil, job: String? = nil) {
+        self.id = id; self.person = person; self.character = character; self.department = department; self.job = job
+    }
+}
+
+public struct WorkCredits: Codable, Hashable, Sendable {
+    public var cast: [Credit]
+    public var crew: [Credit]
+    public init(cast: [Credit], crew: [Credit]) { self.cast = cast; self.crew = crew }
+}
+
 public struct Season: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
     public var seriesWorkID: UUID
@@ -1301,6 +1365,40 @@ public struct VerifyProfilePinRequest: Codable, Sendable {
     public init(pin: String) { self.pin = pin }
 }
 public struct VerifyProfilePinResponse: Codable, Sendable { public var verified: Bool }
+
+public enum UserInviteRequestStatus: String, Codable, Sendable { case pending, approved, denied, generated }
+public struct UserInviteRequest: Codable, Identifiable, Sendable {
+    public var id: UUID
+    public var userID: UUID
+    public var username: String
+    public var displayName: String
+    public var message: String?
+    public var status: UserInviteRequestStatus
+    public var canStream: Bool
+    public var libraryAllow: [UUID]
+    public var requestedAt: Date
+    public var reviewedAt: Date?
+    public var generatedAt: Date?
+    enum CodingKeys: String, CodingKey {
+        case id, username, message, status
+        case userID = "user_id"
+        case displayName = "display_name"
+        case canStream = "can_stream"
+        case libraryAllow = "library_allow"
+        case requestedAt = "requested_at"
+        case reviewedAt = "reviewed_at"
+        case generatedAt = "generated_at"
+    }
+}
+public struct CreateUserInviteRequest: Codable, Sendable {
+    public var message: String?
+    public init(message: String? = nil) { self.message = message }
+}
+public struct UserInvite: Codable, Sendable {
+    public var inviteToken: String
+    public var expiresAt: Date
+    enum CodingKeys: String, CodingKey { case inviteToken = "invite_token"; case expiresAt = "expires_at" }
+}
 
 public struct PlaybackEventRequest: Codable, Sendable {
     public var kind: String

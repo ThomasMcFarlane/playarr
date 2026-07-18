@@ -149,6 +149,37 @@ final class APIClientAuthenticationTests: XCTestCase {
         XCTAssertEqual(info.selectedQualityID, "original")
     }
 
+    func testLibraryBrowseMatchesWebAvailabilityAndOrderingQuery() async throws {
+        let store = TestTokenStore(
+            session: StoredAuthSession(
+                accessToken: "access",
+                refreshToken: "refresh",
+                tokenType: "Bearer",
+                expiresAt: .distantFuture
+            )
+        )
+        URLProtocolStub.handler = { request in
+            let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
+            let query = Dictionary(uniqueKeysWithValues: (components?.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+            XCTAssertEqual(query["kind"], "movie")
+            XCTAssertEqual(query["available_only"], "true")
+            XCTAssertEqual(query["sort"], "date_added")
+            XCTAssertEqual(query["order"], "desc")
+            XCTAssertEqual(query["limit"], "200")
+            XCTAssertEqual(query["offset"], "400")
+            return Self.response(request, json: #"{"items":[],"total":400}"#)
+        }
+
+        _ = try await makeClient(store: store).browseLibrary(
+            kind: .movie,
+            sort: "date_added",
+            order: "desc",
+            availableOnly: true,
+            limit: 200,
+            offset: 400
+        )
+    }
+
     private func makeClient(store: TestTokenStore) -> APIClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [URLProtocolStub.self]

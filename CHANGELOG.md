@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Expose available-only ordered library browsing, cast and recommendation data, friend invites,
+  and invited-account sign-up to native iOS screens.
 - Give the native iOS client the same editable playlist, profile preference, per-title playback,
   chapter, watch-progress, and playback-session API capabilities used by Playarr Web.
 - Replace the skeletal native iOS tabs and lists with a SwiftUI Playarr experience matching the

@@ -157,6 +157,7 @@ public protocol StreamarrAPIClient: Sendable {
     /// non-trusted-network login screen); no operation this client drives
     /// calls it on the caller's behalf.
     func login(_ body: LoginRequest) async throws -> LoginResponse
+    func signup(_ body: SignupRequest) async throws -> UserAccount
 
     // Catalog
     func browseCatalog(
@@ -167,9 +168,19 @@ public protocol StreamarrAPIClient: Sendable {
         limit: Int?,
         offset: Int?
     ) async throws -> CatalogPage
+    func browseLibrary(
+        kind: WorkKind,
+        sort: String,
+        order: String,
+        availableOnly: Bool,
+        limit: Int,
+        offset: Int
+    ) async throws -> CatalogPage
 
     func searchCatalog(query: String, limit: Int?) async throws -> [Work]
     func fetchWork(id: UUID) async throws -> WorkDetail
+    func fetchWorkCredits(id: UUID) async throws -> WorkCredits
+    func fetchSimilarWorks(id: UUID, limit: Int) async throws -> [Work]
     func listCatalogKinds() async throws -> [WorkKind]
     func fetchArtwork(workID: UUID, kind: ImageKind) async throws -> Data
 
@@ -192,6 +203,9 @@ public protocol StreamarrAPIClient: Sendable {
     func getProfilePinSetting() async throws -> ProfilePinSetting
     func updateProfilePinSetting(_ body: UpdateProfilePinRequest) async throws -> ProfilePinSetting
     func verifyProfilePin(profileID: UUID, body: VerifyProfilePinRequest) async throws -> VerifyProfilePinResponse
+    func getMyUserInviteRequest() async throws -> UserInviteRequest?
+    func createUserInviteRequest(_ body: CreateUserInviteRequest) async throws -> UserInviteRequest
+    func generateApprovedUserInvite() async throws -> UserInvite
 
     // Playback
     func playbackInfo(
@@ -220,7 +234,13 @@ public protocol StreamarrAPIClient: Sendable {
 }
 
 public extension StreamarrAPIClient {
+    func signup(_ body: SignupRequest) async throws -> UserAccount { throw APIError.http(status: 501, body: nil, rawBody: nil) }
+    func browseLibrary(kind: WorkKind, sort: String, order: String, availableOnly: Bool, limit: Int, offset: Int) async throws -> CatalogPage {
+        try await browseCatalog(kind: kind, genre: nil, tag: nil, sort: sort, limit: limit, offset: offset)
+    }
     func listCatalogKinds() async throws -> [WorkKind] { [] }
+    func fetchWorkCredits(id: UUID) async throws -> WorkCredits { WorkCredits(cast: [], crew: []) }
+    func fetchSimilarWorks(id: UUID, limit: Int) async throws -> [Work] { [] }
     func fetchArtwork(workID: UUID, kind: ImageKind) async throws -> Data {
         throw APIError.notFound(nil)
     }
@@ -242,6 +262,9 @@ public extension StreamarrAPIClient {
     func getProfilePinSetting() async throws -> ProfilePinSetting { ProfilePinSetting(pinLocked: false) }
     func updateProfilePinSetting(_ body: UpdateProfilePinRequest) async throws -> ProfilePinSetting { ProfilePinSetting(pinLocked: body.pin != nil) }
     func verifyProfilePin(profileID: UUID, body: VerifyProfilePinRequest) async throws -> VerifyProfilePinResponse { VerifyProfilePinResponse(verified: true) }
+    func getMyUserInviteRequest() async throws -> UserInviteRequest? { nil }
+    func createUserInviteRequest(_ body: CreateUserInviteRequest) async throws -> UserInviteRequest { throw APIError.http(status: 501, body: nil, rawBody: nil) }
+    func generateApprovedUserInvite() async throws -> UserInvite { throw APIError.http(status: 501, body: nil, rawBody: nil) }
     func recordPlaybackEvent(sessionID: UUID, event: PlaybackEventRequest) async throws {}
     func mediaChapters(mediaFileID: UUID) async throws -> [MediaChapter] { [] }
     func mediaPlaybackOptions(mediaFileID: UUID) async throws -> MediaPlaybackOptions { throw APIError.http(status: 501, body: nil, rawBody: nil) }
@@ -299,6 +322,10 @@ public final class APIClient: StreamarrAPIClient {
         try await post("/api/v1/auth/login", body: body)
     }
 
+    public func signup(_ body: SignupRequest) async throws -> UserAccount {
+        try await post("/api/v1/auth/signup", body: body)
+    }
+
     public func refresh(_ body: RefreshRequest) async throws -> RefreshResponse {
         try await post("/api/v1/auth/refresh", body: body)
     }
@@ -323,6 +350,24 @@ public final class APIClient: StreamarrAPIClient {
         return try await get("/api/v1/catalog", query: query)
     }
 
+    public func browseLibrary(
+        kind: WorkKind,
+        sort: String,
+        order: String,
+        availableOnly: Bool,
+        limit: Int,
+        offset: Int
+    ) async throws -> CatalogPage {
+        try await get("/api/v1/catalog", query: [
+            URLQueryItem(name: "kind", value: kind.rawValue),
+            URLQueryItem(name: "sort", value: sort),
+            URLQueryItem(name: "order", value: order),
+            URLQueryItem(name: "available_only", value: String(availableOnly)),
+            URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "offset", value: String(offset)),
+        ])
+    }
+
     public func searchCatalog(query searchQuery: String, limit: Int? = nil) async throws -> [Work] {
         var query = [URLQueryItem(name: "q", value: searchQuery)]
         if let limit { query.append(URLQueryItem(name: "limit", value: String(limit))) }
@@ -331,6 +376,17 @@ public final class APIClient: StreamarrAPIClient {
 
     public func fetchWork(id: UUID) async throws -> WorkDetail {
         try await get("/api/v1/catalog/\(id.uuidString)")
+    }
+
+    public func fetchWorkCredits(id: UUID) async throws -> WorkCredits {
+        try await get("/api/v1/catalog/\(id.uuidString)/credits")
+    }
+
+    public func fetchSimilarWorks(id: UUID, limit: Int = 20) async throws -> [Work] {
+        try await get(
+            "/api/v1/catalog/\(id.uuidString)/similar",
+            query: [URLQueryItem(name: "limit", value: String(limit))]
+        )
     }
 
     public func listCatalogKinds() async throws -> [WorkKind] {
@@ -412,6 +468,22 @@ public final class APIClient: StreamarrAPIClient {
 
     public func verifyProfilePin(profileID: UUID, body: VerifyProfilePinRequest) async throws -> VerifyProfilePinResponse {
         try await authenticatedRequest("/api/v1/users/profiles/\(profileID.uuidString)/verify-pin", method: "POST", body: body)
+    }
+
+    public func getMyUserInviteRequest() async throws -> UserInviteRequest? {
+        try await get("/api/v1/users/me/user-invite-request")
+    }
+
+    public func createUserInviteRequest(_ body: CreateUserInviteRequest) async throws -> UserInviteRequest {
+        try await authenticatedRequest("/api/v1/users/me/user-invite-request", method: "POST", body: body)
+    }
+
+    public func generateApprovedUserInvite() async throws -> UserInvite {
+        try await authenticatedRequest(
+            "/api/v1/users/me/user-invite-request/generate",
+            method: "POST",
+            body: EmptyRequestBody()
+        )
     }
 
     public func playbackRequestHeaders() async throws -> [String: String] {
@@ -672,6 +744,8 @@ public final class APIClient: StreamarrAPIClient {
         request.setValue("Bearer \(token.exposeSecret())", forHTTPHeaderField: "Authorization")
     }
 }
+
+private struct EmptyRequestBody: Encodable {}
 
 private actor AccessTokenCoordinator {
     private let configuration: APIClientConfiguration
