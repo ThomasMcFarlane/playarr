@@ -117,6 +117,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Prevent the minimised player from hiding a video element that still retains browser focus.
 - Load authenticated, cached work and album artwork throughout Streamarr Admin, including music,
   with visible loading placeholders and graceful missing-artwork fallbacks.
 - Refresh access tokens centrally before authenticated media requests and keep playback buffered

@@ -47,6 +47,20 @@ interface WebKitFullscreenVideo extends HTMLVideoElement {
   webkitDisplayingFullscreen?: boolean;
 }
 
+export function playerVideoAccessibilityProps(
+  minimised: boolean,
+  label: string
+): {
+  inert?: "";
+  tabIndex: number;
+  "aria-label"?: string;
+} {
+  if (minimised) {
+    return { inert: "", tabIndex: -1 };
+  }
+  return { tabIndex: 0, "aria-label": label };
+}
+
 function isTypingTarget(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLInputElement ||
@@ -968,15 +982,12 @@ export function PlayerSurface({
         className="player-video"
         crossOrigin="anonymous"
         playsInline
-        tabIndex={minimised ? -1 : 0}
-        aria-hidden={minimised}
-        aria-label={
-          minimised
-            ? undefined
-            : musicContext
-              ? t("components.player.surface.audioSurfaceAriaLabel")
-              : t("components.player.surface.videoSurfaceAriaLabel")
-        }
+        {...playerVideoAccessibilityProps(
+          minimised,
+          musicContext
+            ? t("components.player.surface.audioSurfaceAriaLabel")
+            : t("components.player.surface.videoSurfaceAriaLabel")
+        )}
         onFocus={minimised ? undefined : handleActivity}
       />
 
