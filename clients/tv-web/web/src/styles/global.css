@@ -9932,8 +9932,9 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     inset: 0;
   }
 
-  .settings-workspace-track {
-    grid-template-columns: minmax(132px, 38%) minmax(0, 1fr);
+  .settings-index-route .settings-workspace-track,
+  .settings-detail-route .settings-workspace-track {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .settings-detail-panel {
@@ -9942,6 +9943,30 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     right: auto;
     width: auto;
     height: 100%;
+  }
+
+  .settings-index-route .settings-detail-panel,
+  .settings-detail-route .settings-options-panel {
+    display: none;
+  }
+
+  .settings-index-route .settings-options-panel,
+  .settings-detail-route .settings-detail-panel {
+    width: 100%;
+    min-width: 0;
+    grid-column: 1;
+  }
+
+  .settings-index-route .tv-library-heading > .settings-heading-detail,
+  .settings-detail-route .tv-library-heading h1 {
+    display: none;
+  }
+
+  .settings-detail-route .tv-library-heading > .settings-heading-detail {
+    max-width: calc(100vw - 150px);
+    display: grid;
+    padding-left: 0;
+    border-left: 0;
   }
 
   .settings-options-list {
@@ -9978,6 +10003,31 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   .settings-option-copy small,
   .settings-option-arrow {
     display: none;
+  }
+
+  .settings-index-route .settings-options-list {
+    padding-right: var(--mobile-page-gutter);
+    padding-left: var(--mobile-page-gutter);
+  }
+
+  .settings-index-route .settings-option {
+    grid-template-columns: 2rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .settings-index-route .settings-option-copy {
+    display: grid;
+    gap: 4px;
+  }
+
+  .settings-index-route .settings-option-copy strong {
+    font-size: 1rem;
+  }
+
+  .settings-index-route .settings-option-copy small,
+  .settings-index-route .settings-option-arrow {
+    display: block;
   }
 
   .settings-section {

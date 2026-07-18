@@ -141,6 +141,7 @@ export function SettingsIndexPage() {
   const navigate = useNavigate();
   const navigationLayer = useNavigationLayer("settings:index");
   const settingsSections = buildSettingsSections(t);
+  const isSettingsIndex = location.pathname === "/settings";
   const activeSection =
     settingsSections.find((section) => section.to === location.pathname) ??
     settingsSections[0]!;
@@ -151,6 +152,19 @@ export function SettingsIndexPage() {
   useDocumentTitle(t("settings.index.documentTitle"), false);
 
   function leaveSettings() {
+    if (
+      !isSettingsIndex &&
+      typeof window !== "undefined" &&
+      window.matchMedia(
+        "(max-width: 760px), (max-width: 920px) and (max-height: 500px) and (pointer: coarse)"
+      ).matches
+    ) {
+      navigate("/settings", {
+        replace: true,
+        state: { backTo: pageBackTo },
+      });
+      return;
+    }
     if (detailOrigin && detailOrigin.route !== "/settings") {
       navigate(-1);
     } else {
@@ -207,7 +221,7 @@ export function SettingsIndexPage() {
     if (event.key !== "ArrowRight") return;
     event.preventDefault();
     event.stopPropagation();
-    if (section.to === activeSection.to) focusDetail();
+    if (!isSettingsIndex && section.to === activeSection.to) focusDetail();
     else openSection(section, event.currentTarget, true);
   }
 
@@ -217,7 +231,7 @@ export function SettingsIndexPage() {
   ) {
     event.preventDefault();
     if (!detailOrigin) navigationLayer.capture(event.currentTarget);
-    if (section.to === activeSection.to) focusDetail();
+    if (!isSettingsIndex && section.to === activeSection.to) focusDetail();
     else openSection(section, event.currentTarget, true);
   }
 
@@ -245,7 +259,9 @@ export function SettingsIndexPage() {
 
   return (
     <TvStageShell
-      className="tv-library tv-directory settings-page settings-workspace-page"
+      className={`tv-library tv-directory settings-page settings-workspace-page ${
+        isSettingsIndex ? "settings-index-route" : "settings-detail-route"
+      }`}
       ariaLabel={t("settings.index.sectionsAriaLabel")}
     >
       <header className="tv-library-heading">
