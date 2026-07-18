@@ -9782,10 +9782,11 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     min-height: 0;
     margin-top: 28px;
     padding: 24px 0 32px;
-    overflow-x: hidden;
-    overflow-y: visible;
+    overflow: visible;
     background: linear-gradient(180deg, transparent, var(--surface) 72px);
+    overscroll-behavior: auto;
     scroll-padding-block: 0;
+    touch-action: pan-y;
   }
 
   .tv-music-heading {
@@ -9815,8 +9816,28 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     touch-action: pan-y;
   }
 
+  .tv-music-album-cover-flow.is-dragging .tv-music-album-card {
+    transition: none;
+  }
+
   .tv-music-album-cover-flow .tv-music-album-card {
     width: min(42vw, 180px);
+    -webkit-user-drag: none;
+    transform:
+      translateX(calc(-50% + var(--music-flow-x) + var(--music-flow-drag-x, 0px)))
+      translateY(-50%)
+      rotateY(var(--music-flow-rotate))
+      scale(var(--music-flow-scale));
+  }
+
+  .tv-music-album-cover-flow .tv-music-album-card.is-selected,
+  .tv-music-album-cover-flow .tv-music-album-card.is-selected:hover,
+  .tv-music-album-cover-flow .tv-music-album-card.is-selected:focus-visible {
+    transform:
+      translateX(calc(-50% + var(--music-flow-drag-x, 0px)))
+      translateY(-50%)
+      rotateY(0)
+      scale(1.12);
   }
 
   .tv-inline-music-player-host:empty {
@@ -9826,26 +9847,26 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   .tv-inline-music-player-host:not(:empty) {
     position: relative;
     width: 100%;
-    height: 142px;
-    flex: 0 0 142px;
+    height: 88px;
+    flex: 0 0 88px;
   }
 
   .tv-inline-music-player-host .player-page.is-minimised.is-inline-music {
     position: relative;
     inset: auto;
     width: 100%;
-    height: 142px;
+    height: 88px;
   }
 
   .tv-inline-music-player-host .player-shell-inline-music .player-controls {
-    top: 8px;
+    top: 0;
     width: calc(100% - 32px);
   }
 
   .tv-music-track-list {
     min-height: 0;
     flex: 0 0 auto;
-    padding-left: var(--mobile-page-gutter);
+    padding: 8px 0 0 var(--mobile-page-gutter);
   }
 
   .tv-music-track-list-window {

@@ -189,8 +189,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Let mobile viewers swipe Cover Flow without blocking vertical page gestures, keep album artwork
-  uncropped, place inline music controls directly beneath it, and scroll from touches on tracks.
+- Let mobile viewers drag Cover Flow with live touch feedback without blocking vertical page
+  gestures, keep album artwork uncropped, place inline music controls directly beneath it, and
+  start page scrolling from touches on music, episode, movie, and playlist rows.
 - Match the native iPhone and iPad app to Playarr Web's responsive dark interface across login,
   home rails, navigation, media cards, and profile switching, and apply the same public-IP relay
   correction and strict server URL validation during login.
