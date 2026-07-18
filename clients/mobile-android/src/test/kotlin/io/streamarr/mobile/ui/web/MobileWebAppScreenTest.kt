@@ -34,4 +34,23 @@ class MobileWebAppScreenTest {
             androidAppUrl("https://media.example.test/playarr/", 42),
         )
     }
+
+    @Test
+    fun `recognises stable and versioned public Android APK downloads`() {
+        assertTrue(
+            isPlayarrAndroidApkUrl(
+                "https://playarr.app/downloads/android/playarr-android.apk",
+            ),
+        )
+        assertTrue(
+            isPlayarrAndroidApkUrl(
+                "https://playarr.app/downloads/android/releases/0.1.5/playarr-android.apk",
+            ),
+        )
+    }
+
+    @Test
+    fun `does not intercept ordinary Playarr navigation`() {
+        assertTrue(!isPlayarrAndroidApkUrl("https://playarr.app/clients"))
+    }
 }

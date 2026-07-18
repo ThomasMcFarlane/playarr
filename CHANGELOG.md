@@ -183,6 +183,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Hand public APK links from the Android WebView to Android's download-capable browser so the
+  installer downloads without entering Playarr's profile or sign-in flow.
 - Link the public Android download to its immutable versioned route and force the `.apk` filename,
   avoiding stale browser or edge fallbacks from the previously missing stable path.
 - Remove source archives and loose web bundles from the Clients catalogue so download actions are

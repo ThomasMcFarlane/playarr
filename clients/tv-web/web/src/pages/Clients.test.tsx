@@ -77,7 +77,7 @@ describe("ClientsPage", () => {
     const markup = renderPage(<AndroidDownloadDetails />, "/clients");
 
     expect(markup).toContain(
-      'href="/downloads/android/releases/0.1.4/playarr-android.apk"'
+      'href="/downloads/android/releases/0.1.5/playarr-android.apk"'
     );
     expect(markup).toContain('download="playarr-android.apk"');
     expect(markup).toContain('type="application/vnd.android.package-archive"');

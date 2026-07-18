@@ -406,12 +406,14 @@ private fun createPlayarrMobileWebView(
             request: WebResourceRequest,
         ): Boolean {
             if (!request.isForMainFrame) return false
+            if (isPlayarrAndroidApkUrl(request.url.toString())) {
+                openExternalUrl(context, request.url)
+                return true
+            }
             val configuredUrl = (view.tag as? MobileWebLoadRequest)?.appUrl ?: return false
             if (sameOrigin(request.url, configuredUrl.toUri())) return false
 
-            runCatching {
-                context.startActivity(Intent(Intent.ACTION_VIEW, request.url))
-            }
+            openExternalUrl(context, request.url)
             return true
         }
 
@@ -438,6 +440,10 @@ private fun createPlayarrMobileWebView(
                 )
             }
         }
+    }
+
+    setDownloadListener { url, _, _, _, _ ->
+        url?.let { downloadUrl -> openExternalUrl(context, downloadUrl.toUri()) }
     }
 
     if (isTelevision) {
@@ -603,6 +609,18 @@ private fun sameOrigin(left: Uri, right: Uri): Boolean =
         left.host.equals(right.host, ignoreCase = true) &&
         effectivePort(left) == effectivePort(right)
 
+internal fun isPlayarrAndroidApkUrl(url: String): Boolean = runCatching {
+    URI(url).path.matches(PLAYARR_ANDROID_APK_PATH)
+}.getOrDefault(false)
+
+private fun openExternalUrl(context: android.content.Context, url: Uri) {
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, url).addCategory(Intent.CATEGORY_BROWSABLE),
+        )
+    }
+}
+
 private fun effectivePort(uri: Uri): Int = when {
     uri.port != -1 -> uri.port
     uri.scheme.equals("https", ignoreCase = true) -> 443
@@ -618,6 +636,8 @@ private const val TV_LAYOUT_WIDTH_CSS_PX = 1920
 private const val TV_LAYOUT_HEIGHT_CSS_PX = 1080
 private const val TV_LAYOUT_SCALE = 0.5f
 private const val TV_INITIAL_SCALE_PERCENT = 50
+private val PLAYARR_ANDROID_APK_PATH =
+    Regex("^/downloads/android(?:/releases/[^/]+)?/playarr-android\\.apk$")
 
 @Composable
 private fun FullscreenWebVideo(view: View, modifier: Modifier = Modifier) {
