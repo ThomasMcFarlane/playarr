@@ -5989,7 +5989,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
 .tv-home-feature {
   position: absolute;
   z-index: 8;
-  top: clamp(118px, 16vh, 184px);
+  top: 24%;
   left: clamp(108px, 8.4vw, 170px);
   width: min(24vw, 455px);
   animation: tv-copy-in 520ms 80ms cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -6770,10 +6770,6 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   left: clamp(102px, 8vw, 160px);
   width: min(27vw, 510px);
   animation: tv-copy-in 520ms 80ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.tv-music-detail > .tv-detail-copy {
-  top: 28%;
 }
 
 .tv-detail-kicker {

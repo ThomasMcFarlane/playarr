@@ -79,15 +79,10 @@ describe("MusicDetail track list", () => {
   });
 
   it("moves album metadata left and uses contextual detail headings", () => {
-    const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
     const musicSource = readFileSync(new URL("./MusicDetail.tsx", import.meta.url), "utf8");
     const workSource = readFileSync(new URL("./WorkDetail.tsx", import.meta.url), "utf8");
-    const musicCopyRule = css.match(
-      /\.tv-music-detail > \.tv-detail-copy\s*\{(?<declarations>[^}]*)\}/
-    )?.groups?.declarations;
 
     expect(musicSource).not.toContain("tv-music-track-list-heading");
-    expect(musicCopyRule).toContain("top: 28%");
     expect(musicSource).toContain("<h1>{selectedAlbum?.album.title ?? work.title}</h1>");
     expect(musicSource).toContain("<span>{work.title}</span>");
     expect(musicSource).toContain('sectionTitle={t("shell.nav.music")}');
