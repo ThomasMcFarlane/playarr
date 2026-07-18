@@ -10,7 +10,10 @@ vi.mock("./tv/TvStage", () => ({
   TvStageChrome: () => <header>Stage chrome</header>,
 }));
 
-import { ProfileAuthLayout } from "./ProfileAuthLayout";
+import {
+  authFocusBridgeDestination,
+  ProfileAuthLayout,
+} from "./ProfileAuthLayout";
 
 describe("ProfileAuthLayout directional navigation", () => {
   beforeEach(() => useTvDirectionalNavigation.mockClear());
@@ -23,5 +26,26 @@ describe("ProfileAuthLayout directional navigation", () => {
     );
 
     expect(useTvDirectionalNavigation).toHaveBeenCalledOnce();
+  });
+
+  it("bridges between the first field and the closed language selector", () => {
+    expect(
+      authFocusBridgeDestination("ArrowUp", "first-field", false)
+    ).toBe("language");
+    expect(
+      authFocusBridgeDestination("ArrowDown", "language", false)
+    ).toBe("first-field");
+  });
+
+  it("leaves the open selector and unrelated fields to their native handlers", () => {
+    expect(
+      authFocusBridgeDestination("ArrowDown", "language", true)
+    ).toBeNull();
+    expect(
+      authFocusBridgeDestination("ArrowUp", "other", false)
+    ).toBeNull();
+    expect(
+      authFocusBridgeDestination("ArrowLeft", "first-field", false)
+    ).toBeNull();
   });
 });

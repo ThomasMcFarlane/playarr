@@ -113,6 +113,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Connect the sign-in language selector to the first input with explicit Up and Down focus
+  movement while leaving its open menu's keyboard controls intact.
 - Enable Up and Down navigation from sign-in fields, and return Left from the server-address
   boundary to the active Settings option instead of a diagonally positioned item.
 - Let Left and Right leave Playarr text inputs at their matching caret boundaries while
