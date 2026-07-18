@@ -111,6 +111,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Match Settings to the Series and Movies 35/65 stage: keep its rail-styled detail panel full
+  height, preserve native inner scrolling, and align the clock against the left panel edge.
 - Select each Playarr view's first relevant control when its asynchronous content finishes loading.
 - Cache each Playarr profile's available navigation sections and wait for them before showing the
   left navigation, preventing its items from jumping during sign-in.

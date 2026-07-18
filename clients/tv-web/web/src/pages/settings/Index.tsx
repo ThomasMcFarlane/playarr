@@ -303,7 +303,7 @@ export function SettingsIndexPage() {
 
           <section
             ref={detailPanelRef}
-            className="settings-detail-panel"
+            className="tv-rail-panel tv-library-grid-panel settings-detail-panel"
             aria-label={activeSection?.title}
             onKeyDownCapture={handleDetailKeyDown}
           >

@@ -1481,14 +1481,15 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .settings-workspace {
+  --library-rail-top: clamp(128px, 15vh, 174px);
+  --library-rail-bottom: clamp(48px, 6vh, 78px);
+  --library-rail-right: clamp(28px, 3vw, 56px);
+  --library-rail-left: clamp(28px, 2.8vw, 54px);
   position: absolute;
   z-index: 2;
-  top: clamp(116px, 14vh, 164px);
-  right: clamp(28px, 3vw, 56px);
-  bottom: clamp(118px, 14vh, 156px);
-  left: clamp(102px, 8vw, 160px);
+  inset: 0;
   min-height: 0;
-  width: auto;
+  width: 100%;
   overflow: hidden;
   background: transparent;
   border: 0;
@@ -1498,7 +1499,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   width: 100%;
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 26fr) minmax(0, 74fr);
+  grid-template-columns: minmax(0, 35fr) minmax(0, 65fr);
 }
 
 .settings-options-panel,
@@ -1513,9 +1514,14 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .settings-options-list {
+  box-sizing: border-box;
   min-height: 100%;
   margin: 0;
-  padding: 0;
+  padding:
+    var(--library-rail-top)
+    clamp(18px, 2vw, 38px)
+    clamp(118px, 14vh, 156px)
+    clamp(102px, 8vw, 160px);
   list-style: none;
   background: transparent;
 }
@@ -1608,8 +1614,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   position: relative;
   display: block;
   overflow: hidden;
-  background: var(--bg);
-  border-left: 1px solid var(--line);
+  border: 0;
 }
 
 .settings-detail-scroll {
@@ -1619,11 +1624,17 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 }
 
 .settings-section {
-  padding: clamp(32px, 4vw, 64px) clamp(24px, 4vw, 64px) clamp(48px, 5vw, 80px);
+  box-sizing: border-box;
+  min-height: 100%;
+  padding:
+    var(--library-rail-top)
+    var(--library-rail-right)
+    var(--library-rail-bottom)
+    var(--library-rail-left);
 }
 
 .settings-section-content {
-  border: 1px solid var(--line);
+  border: 0;
 }
 
 .settings-card {
@@ -1632,7 +1643,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   flex-direction: column;
   gap: clamp(20px, 2.8vh, 38px);
   padding: clamp(26px, 3vw, 48px);
-  background: var(--bg);
+  background: transparent;
 }
 
 .settings-card-wide {
@@ -3842,7 +3853,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   }
 
   .settings-workspace-track {
-    grid-template-columns: minmax(0, 30fr) minmax(0, 70fr);
+    grid-template-columns: minmax(0, 34fr) minmax(0, 66fr);
   }
 }
 
@@ -8609,6 +8620,25 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     display: grid;
   }
 
+  .settings-workspace-track {
+    grid-template-columns: minmax(0, 6fr) minmax(0, 94fr);
+  }
+
+  .settings-options-list {
+    padding: var(--library-rail-top) 0 clamp(118px, 14vh, 156px);
+  }
+
+  .settings-option {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    padding-inline: 10px;
+  }
+
+  .settings-option-copy,
+  .settings-option-arrow {
+    display: none;
+  }
+
   .tv-filter-launcher {
     right: 1.5%;
   }
@@ -9365,14 +9395,19 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   }
 
   .settings-workspace {
-    top: calc(var(--mobile-top-inset) + 58px);
-    right: var(--mobile-page-gutter);
-    bottom: calc(var(--mobile-nav-height) + 14px);
-    left: var(--mobile-page-gutter);
+    inset: 0;
   }
 
   .settings-workspace-track {
     grid-template-columns: minmax(0, 72px) minmax(0, 1fr);
+  }
+
+  .settings-detail-panel {
+    width: calc(100% - 72px);
+  }
+
+  .settings-options-list {
+    padding: 84px 0 calc(var(--mobile-nav-height) + 24px);
   }
 
   .settings-option {
@@ -9393,7 +9428,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   }
 
   .settings-section {
-    padding: 28px 18px 48px;
+    padding: 84px 18px calc(var(--mobile-nav-height) + 24px);
   }
 
   .settings-card,

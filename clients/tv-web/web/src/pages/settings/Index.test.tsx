@@ -81,6 +81,7 @@ describe("SettingsIndexPage", () => {
   });
 
   it("moves the intact list left and gives both panels independent scrolling", () => {
+    const markup = renderSettingsRoute("/settings/appearance");
     const css = readFileSync(
       new URL("../../styles/global.css", import.meta.url),
       "utf8"
@@ -90,8 +91,14 @@ describe("SettingsIndexPage", () => {
       /\.tv-library,\s*\.tv-detail\s*\{[^}]*height:\s*var\(--viewport-height\)/s
     );
     expect(css).toMatch(
-      /\.settings-workspace-track\s*\{[^}]*grid-template-columns:\s*minmax\(0, 26fr\) minmax\(0, 74fr\)/s
+      /\.settings-workspace-track\s*\{[^}]*grid-template-columns:\s*minmax\(0, 35fr\) minmax\(0, 65fr\)/s
     );
+    expect(css).toMatch(/\.settings-workspace\s*\{[^}]*inset:\s*0/s);
+    expect(markup).toContain(
+      'class="tv-rail-panel tv-library-grid-panel settings-detail-panel"'
+    );
+    expect(css).toMatch(/\.tv-library-grid-panel\s*\{[^}]*width:\s*65%[^}]*height:\s*100%/s);
+    expect(css).toMatch(/\.app-clock\s*\{[^}]*right:\s*calc\(65%\s*\+/s);
     expect(css).toMatch(
       /\.settings-options-panel,\s*\.settings-detail-scroll\s*\{[^}]*overflow-y:\s*auto/s
     );
