@@ -112,13 +112,7 @@ public final class AppEnvironment {
     }
 
     public func signIn(serverURL: String, username: String, password: String) async throws {
-        let trimmedURL = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = URL(string: trimmedURL),
-              let scheme = url.scheme?.lowercased(),
-              scheme == "http" || scheme == "https",
-              url.host != nil else {
-            throw APIError.invalidBaseURL
-        }
+        let url = try LoginServerURL.normalise(serverURL)
 
         if url != serverBaseURL {
             serverBaseURL = url

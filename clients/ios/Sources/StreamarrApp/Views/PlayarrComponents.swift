@@ -6,10 +6,16 @@ import UIKit
 enum PlayarrStyle {
     static let background = adaptive(light: (0.961, 0.953, 0.949), dark: (0.082, 0.074, 0.082))
     static let surface = adaptive(light: (0.985, 0.980, 0.976), dark: (0.106, 0.094, 0.106))
+    static let surfaceStrong = adaptive(light: (1, 1, 1), dark: (0.129, 0.114, 0.129))
     static let ink = adaptive(light: (0.220, 0.149, 0.129), dark: (0.957, 0.941, 0.945))
     static let inkSoft = adaptive(light: (0.404, 0.349, 0.380), dark: (0.773, 0.722, 0.741))
     static let muted = adaptive(light: (0.647, 0.588, 0.620), dark: (0.533, 0.478, 0.510))
     static let pink = Color(red: 0.812, green: 0.192, blue: 0.341)
+    static let accent = adaptive(light: (0.404, 0.349, 0.380), dark: (0.875, 0.863, 0.867))
+    static let onAccent = adaptive(light: (1, 1, 1), dark: (0.129, 0.114, 0.129))
+    static let line = adaptive(light: (0.220, 0.149, 0.129), dark: (0.875, 0.863, 0.867)).opacity(0.14)
+    static let lineStrong = adaptive(light: (0.220, 0.149, 0.129), dark: (0.875, 0.863, 0.867)).opacity(0.28)
+    static let danger = adaptive(light: (0.659, 0.275, 0.298), dark: (0.933, 0.573, 0.592))
     static let navBackground = adaptive(light: (1, 1, 1), dark: (0.129, 0.114, 0.129)).opacity(0.88)
     static let cornerRadius: CGFloat = 22
 
@@ -28,15 +34,9 @@ struct PlayarrLogo: View {
     var size: CGFloat = 42
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(PlayarrStyle.pink.gradient)
-                .shadow(color: PlayarrStyle.pink.opacity(0.3), radius: 16, y: 8)
-            Image(systemName: "play.fill")
-                .font(.system(size: size * 0.38, weight: .black))
-                .foregroundStyle(.white)
-                .offset(x: size * 0.035)
-        }
+        Image("PlayarrLogo")
+            .resizable()
+            .scaledToFit()
         .frame(width: size, height: size)
         .accessibilityLabel("Playarr")
     }
@@ -119,9 +119,10 @@ struct PlayarrMediaCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             PlayarrArtwork(work: work, kind: .backdrop, apiClient: apiClient)
-                .aspectRatio(16 / 10, contentMode: .fit)
+                .aspectRatio(16 / 9, contentMode: .fit)
                 .frame(width: width)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: min(13, max(8, width * 0.058)), style: .continuous))
+                .shadow(color: PlayarrStyle.ink.opacity(0.1), radius: 17, y: 6)
                 .overlay(alignment: .bottom) {
                     if let progress, progress.durationMS > 0 {
                         GeometryReader { proxy in
@@ -139,14 +140,12 @@ struct PlayarrMediaCard: View {
                 }
 
             Text(work.title)
-                .font(.subheadline.weight(.semibold))
+                .font(.custom("Avenir Next", fixedSize: width <= 210 ? 12.5 : 11).weight(.semibold))
                 .foregroundStyle(PlayarrStyle.ink)
                 .lineLimit(1)
             Text(work.kind.displayName)
-                .font(.caption2.weight(.semibold))
+                .font(.custom("Avenir Next", fixedSize: width <= 210 ? 10 : 8.5).weight(.semibold))
                 .foregroundStyle(PlayarrStyle.muted)
-                .textCase(.uppercase)
-                .tracking(0.6)
         }
         .frame(width: width, alignment: .leading)
     }
@@ -218,10 +217,10 @@ struct PlayarrPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.subheadline.weight(.bold))
-            .foregroundStyle(.white)
+            .foregroundStyle(PlayarrStyle.onAccent)
             .padding(.horizontal, 24)
             .frame(minHeight: 48)
-            .background(PlayarrStyle.pink.opacity(configuration.isPressed ? 0.78 : 1), in: Capsule())
+            .background(PlayarrStyle.accent.opacity(configuration.isPressed ? 0.78 : 1), in: Capsule())
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
     }
 }

@@ -185,6 +185,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Match the native iPhone and iPad app to Playarr Web's responsive dark interface across login,
+  home rails, navigation, media cards, and profile switching, and apply the same public-IP relay
+  correction and strict server URL validation during login.
 - Give the native iOS client real username/password and managed-profile login, persist those
   sessions per server, and carry bearer authentication into AVPlayer media and HLS requests.
 - Canonicalise Android public-IPv4 Streamarr addresses to their secure direct relay hostname before
