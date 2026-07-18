@@ -73,6 +73,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   on music, movie, and series detail pages instead of a hand-drawn pipe.
 - Show each playlist's audio or video type while browsing and when open, and replace parent
   playlist selects with searchable pickers in create and edit flows.
+- Place separate playlist edit and delete actions beneath the open playlist description instead
+  of hiding both actions behind a title-bar menu.
 - Match music, movie, and series detail-title typography to the established selected-title style
   used by the Series and Movies library pages.
 - Require an explicit click, keyboard focus, or remote action to select media cards and rows instead

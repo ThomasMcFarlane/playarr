@@ -6532,21 +6532,39 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   color: var(--bg);
 }
 
-.tv-playlist-heading-menu {
-  min-width: 42px;
-  min-height: 36px;
-  display: grid;
-  place-items: center;
-  padding: 0 0.65rem;
+.tv-playlist-feature-actions {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 0.8vw, 14px);
+  margin-top: clamp(18px, 2.4vh, 32px);
+}
+
+.tv-playlist-feature-actions button {
+  min-height: clamp(40px, 3vw, 50px);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0 clamp(14px, 1.2vw, 20px);
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   background: color-mix(in srgb, var(--surface-soft) 68%, transparent);
-  color: var(--ink-muted);
+  color: var(--ink);
+  font: inherit;
+  font-size: clamp(0.5rem, 0.58vw, 0.72rem);
   cursor: pointer;
 }
 
-.tv-playlist-heading-menu:hover,
-.tv-playlist-heading-menu:focus-visible {
+.tv-playlist-feature-actions button span {
+  color: #cf3157;
+  font-size: 1rem;
+}
+
+.tv-playlist-feature-actions button.is-delete span {
+  color: #ff668a;
+}
+
+.tv-playlist-feature-actions button:hover,
+.tv-playlist-feature-actions button:focus-visible {
   outline: 0;
   background: var(--ink);
   color: var(--bg);

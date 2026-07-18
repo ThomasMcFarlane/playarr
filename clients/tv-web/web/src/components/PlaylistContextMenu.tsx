@@ -90,26 +90,52 @@ export function usePlaylistContextMenu({
     longPressTimerRef.current = undefined;
   }, []);
 
-  const open = useCallback(
+  const openView = useCallback(
     (
       playlist: PlaylistResponse,
       origin: HTMLElement,
+      initialView: PlaylistContextView,
       focusFirstAction = true
     ) => {
       if (playlist.is_system) return;
       clearLongPress();
       originRef.current = origin;
       setActivePlaylist(playlist);
-      setView("actions");
+      setView(initialView);
       setName(playlist.name);
       setParentPlaylistId(playlist.parent_playlist_id ?? "");
       setBusy(false);
       setError(null);
       if (focusFirstAction) {
-        window.requestAnimationFrame(() => firstActionRef.current?.focus());
+        window.requestAnimationFrame(() =>
+          initialView === "edit"
+            ? nameInputRef.current?.focus()
+            : firstActionRef.current?.focus()
+        );
       }
     },
     [clearLongPress]
+  );
+
+  const open = useCallback(
+    (
+      playlist: PlaylistResponse,
+      origin: HTMLElement,
+      focusFirstAction = true
+    ) => openView(playlist, origin, "actions", focusFirstAction),
+    [openView]
+  );
+
+  const openEdit = useCallback(
+    (playlist: PlaylistResponse, origin: HTMLElement) =>
+      openView(playlist, origin, "edit"),
+    [openView]
+  );
+
+  const openDelete = useCallback(
+    (playlist: PlaylistResponse, origin: HTMLElement) =>
+      openView(playlist, origin, "delete"),
+    [openView]
   );
 
   const close = useCallback(() => {
@@ -430,5 +456,5 @@ export function usePlaylistContextMenu({
       )
     : null;
 
-  return { close, contextMenu, itemProps, open };
+  return { close, contextMenu, itemProps, open, openDelete, openEdit };
 }

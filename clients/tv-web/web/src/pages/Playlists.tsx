@@ -1111,20 +1111,6 @@ export function PlaylistsPage() {
                 { count: rootTracks.length.toLocaleString() }
               )}
         </span>
-        {editablePlaylist && !editablePlaylist.is_system ? (
-          <button
-            type="button"
-            className="tv-playlist-heading-menu"
-            aria-label={t("components.playlistContextMenu.open", {
-              name: editablePlaylist.name,
-            })}
-            onClick={(event) =>
-              playlistContext.open(editablePlaylist, event.currentTarget)
-            }
-          >
-            ···
-          </button>
-        ) : null}
       </header>
 
       <aside
@@ -1145,6 +1131,32 @@ export function PlaylistsPage() {
         </p>
         <h2>{featureTitle}</h2>
         <p>{featureOverview}</p>
+        {editablePlaylist && !editablePlaylist.is_system ? (
+          <div className="tv-playlist-feature-actions">
+            <button
+              type="button"
+              onClick={(event) =>
+                playlistContext.openEdit(editablePlaylist, event.currentTarget)
+              }
+            >
+              <span aria-hidden="true">✎</span>
+              <strong>{t("components.playlistContextMenu.edit")}</strong>
+            </button>
+            <button
+              type="button"
+              className="is-delete"
+              onClick={(event) =>
+                playlistContext.openDelete(
+                  editablePlaylist,
+                  event.currentTarget
+                )
+              }
+            >
+              <span aria-hidden="true">−</span>
+              <strong>{t("components.playlistContextMenu.delete")}</strong>
+            </button>
+          </div>
+        ) : null}
       </aside>
 
       {isDetail ? (
