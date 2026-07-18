@@ -214,13 +214,14 @@ commonly plain HTTP on a home LAN.
 - No app icon/banner artwork beyond simple placeholder vector drawables.
 - Release builds remain unsigned locally unless all four `ANDROID_KEYSTORE_*`
   environment variables are present. The `android-v*` release workflow supplies
-  the permanent signing identity, builds both app modules, verifies the APKs and
-  publishes them through `playarr.app`.
+  the permanent signing identity, builds the universal app module, verifies the APK and
+  publishes it through `playarr.app`.
 
-## Publishing Android APKs
+## Publishing the Android APK
 
-The mobile and television clients are presented as one Android family, but remain
-separate packages and APKs because their launcher, input and interface contracts differ.
+`mobile-android` is the published universal package. Its manifest supports both normal and
+Leanback launchers, while runtime UI-mode detection selects touch or television behaviour.
+`tv-android` remains as historical migration code and is not a published release artefact.
 Create one durable release keystore, back it up offline, and configure these secrets in
 the `release-android` GitHub environment:
 
@@ -231,11 +232,10 @@ the `release-android` GitHub environment:
 - `CLOUDFLARE_R2_API_TOKEN`
 
 The repository-level `CLOUDFLARE_ACCOUNT_ID` secret is shared with the web deployment.
-Pushing `android-v1.2.3` derives a monotonic version code, tests and signs both APKs,
-uploads an auditable GitHub release, and replaces the stable objects served at:
+Pushing `android-v1.2.3` derives a monotonic version code, tests and signs the APK,
+uploads an auditable GitHub release, and replaces the stable object served at:
 
-- `https://playarr.app/downloads/android/playarr-android-mobile.apk`
-- `https://playarr.app/downloads/android/playarr-android-tv.apk`
+- `https://playarr.app/downloads/android/playarr-android.apk`
 
 The first published signing certificate is permanent: later APKs signed with another
 certificate cannot update existing installations.

@@ -1,10 +1,9 @@
-# Client Architecture: Android Mobile
+# Client Architecture: Android
 
-Android Mobile is the installable phone/tablet host for Playarr's shared,
-responsive web application. It presents the same React routes and design
-system as Web and Android TV, with CSS selecting a touch-first layout for a
-phone-sized viewport. There is no second mobile catalogue or player UI to
-keep visually synchronised.
+Playarr ships one Android APK for phones, tablets, Android TV, and Google TV.
+It hosts the shared responsive web application and selects the touch or D-pad
+profile from Android's runtime UI mode. There is no second Android catalogue,
+player UI, package, or download to keep synchronised.
 
 ## Platform baseline
 
@@ -18,13 +17,13 @@ keep visually synchronised.
 
 ## Shared presentation
 
-`MainActivity` mounts `MobileWebAppScreen`, which loads the configured
+`MainActivity` mounts `AndroidWebAppScreen`, which loads the configured
 Streamarr origin. The server serves both the API and built Playarr assets in
 the normal deployment, so the app receives the same bundle that a browser
-or Android TV opens. The WebView appends
-`PlayarrAndroidMobile/<version>` to its user agent; the bundle consequently
-reports `android-mobile` for login and compatibility checks without enabling
-the TV-only D-pad profile.
+or a browser opens. The WebView appends `PlayarrAndroidMobile/<version>` on
+touch devices or `PlayarrAndroidTV/<version>` on televisions. The same binary
+therefore selects phone safe areas and image picking or the fixed 1920 by 1080
+TV viewport, D-pad navigation, and signed sideload updater as appropriate.
 
 The responsive web layer owns:
 
@@ -44,10 +43,10 @@ Android owns only the platform boundary:
 - Play Store update flows; and
 - Firebase invite notifications.
 
-This is the same split used by Android TV. The native wrappers differ where
-the device class genuinely differs: Android TV fixes a 1920 by 1080 CSS
-viewport and translates remote input, while Android Mobile uses the physical
-touch viewport, system safe area, image picker, and mobile update channel.
+The device-specific boundary is selected inside the same native wrapper:
+televisions fix a 1920 by 1080 CSS viewport and translate remote input, while
+touch devices use the physical viewport, system safe area, image picker, and
+Google Play update channel.
 
 ## Authentication and native session bridge
 
@@ -81,16 +80,18 @@ WebChrome fullscreen custom views for video. Android Back is offered to the
 shared player first so active or minimised sessions close cleanly before
 WebView history changes.
 
-The APK still uses Google Play In-App Updates. `AppUpdateEffect` evaluates
+Touch installs use Google Play In-App Updates. `AppUpdateEffect` evaluates
 the server's `android-mobile` compatibility row and starts Flexible or
 Immediate Play flows as documented in
 [`../../versioning-policy.md`](../../versioning-policy.md). The hosted web
 bundle can update independently with the server, so visual fixes do not
-require duplicating or republishing native screen code.
+require duplicating or republishing native screen code. Television sideloads
+use the signed `playarr.app` manifest and checksum-verified APK installer.
 
 ## Distribution
 
-The release artefact is an Android App Bundle for Google Play (or a signed
-APK for direct testing). The listing must state that the app connects to a
-self-hosted Streamarr server. Cleartext HTTP remains permitted for private
-LAN deployments; HTTPS is recommended for remote access.
+The release artefact is one Android App Bundle for Google Play and one signed
+APK for direct installation across every supported Android device. The listing
+must state that the app connects to a self-hosted Streamarr server. Cleartext
+HTTP remains permitted for private LAN deployments; HTTPS is recommended for
+remote access.

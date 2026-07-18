@@ -73,11 +73,12 @@ describe("ClientsPage", () => {
     expect(markup).not.toContain("clients-header");
   });
 
-  it("renders separate mobile and TV downloads beneath the consolidated Android client", () => {
+  it("renders one responsive APK for mobile and TV", () => {
     const markup = renderPage(<AndroidDownloadDetails />, "/clients");
 
-    expect(markup).toContain('href="/downloads/android/playarr-android-mobile.apk"');
-    expect(markup).toContain('href="/downloads/android/playarr-android-tv.apk"');
+    expect(markup).toContain('href="/downloads/android/playarr-android.apk"');
+    expect(markup).not.toContain("playarr-android-mobile.apk");
+    expect(markup).not.toContain("playarr-android-tv.apk");
     expect(markup).toContain('data-tv-edge-target-up="#client-android-action"');
   });
 

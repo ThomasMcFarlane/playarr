@@ -1,20 +1,10 @@
 const DOWNLOADS = new Map([
-  [
-    "/downloads/android/playarr-android-mobile.apk",
-    "android/playarr-android-mobile.apk",
-  ],
-  [
-    "/downloads/android/playarr-android-tv.apk",
-    "android/playarr-android-tv.apk",
-  ],
-  [
-    "/downloads/android/playarr-android-tv.json",
-    "android/playarr-android-tv.json",
-  ],
+  ["/downloads/android/playarr-android.apk", "android/playarr-android.apk"],
+  ["/downloads/android/playarr-android.json", "android/playarr-android.json"],
 ]);
 
 const VERSIONED_ANDROID_DOWNLOAD =
-  /^\/downloads\/android\/releases\/(\d+\.\d+\.\d+)\/(playarr-android-(?:mobile|tv)\.apk|SHA256SUMS)$/;
+  /^\/downloads\/android\/releases\/(\d+\.\d+\.\d+)\/(playarr-android\.apk|SHA256SUMS)$/;
 
 function downloadKey(pathname) {
   const stableKey = DOWNLOADS.get(pathname);

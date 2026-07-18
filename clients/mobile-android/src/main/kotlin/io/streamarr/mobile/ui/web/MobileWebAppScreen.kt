@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -43,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +61,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.streamarr.mobile.BuildConfig
+import io.streamarr.mobile.update.AndroidSelfUpdater
+import io.streamarr.mobile.update.AndroidUpdateEvent
 import io.streamarr.shared.auth.TokenStore
 import io.streamarr.shared.auth.model.TokenResponse
 import io.streamarr.shared.data.config.ServerConfigStore
@@ -76,16 +80,17 @@ import org.json.JSONObject
  * surface so phone and television layouts cannot drift into separate apps.
  */
 @Composable
-fun MobileWebAppScreen(
+fun AndroidWebAppScreen(
+    isTelevision: Boolean,
     modifier: Modifier = Modifier,
     viewModel: MobileWebAppViewModel = hiltViewModel(),
 ) {
     val activity = checkNotNull(LocalActivity.current) {
-        "MobileWebAppScreen must be hosted by an Activity."
+        "AndroidWebAppScreen must be hosted by an Activity."
     }
     val lifecycleOwner = LocalLifecycleOwner.current
     val baseUrl by viewModel.baseUrl.collectAsStateWithLifecycle()
-    val appUrl = remember(baseUrl) { mobileAppUrl(baseUrl, BuildConfig.VERSION_CODE) }
+    val appUrl = remember(baseUrl) { androidAppUrl(baseUrl, BuildConfig.VERSION_CODE) }
     var addressDraft by remember(baseUrl) { mutableStateOf(baseUrl) }
     var addressError by remember { mutableStateOf<String?>(null) }
     var loadError by remember { mutableStateOf<String?>(null) }
@@ -98,6 +103,18 @@ fun MobileWebAppScreen(
         mutableStateOf<WebChromeClient.CustomViewCallback?>(null)
     }
     var fileChooserCallback by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
+    val updateScope = rememberCoroutineScope()
+    val selfUpdater = remember(activity, isTelevision, updateScope) {
+        if (isTelevision) {
+            AndroidSelfUpdater(
+                activity = activity,
+                scope = updateScope,
+                onEvent = { event -> webView?.dispatchAndroidUpdateEvent(event) },
+            )
+        } else {
+            null
+        }
+    }
     val fileChooserLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         fileChooserCallback?.onReceiveValue(uri?.let { selected -> arrayOf(selected) })
         fileChooserCallback = null
@@ -149,10 +166,15 @@ fun MobileWebAppScreen(
             .background(Color(0xFF151315)),
     ) {
         AndroidView(
-            modifier = Modifier.fillMaxSize().safeDrawingPadding(),
+            modifier = if (isTelevision) {
+                Modifier.fillMaxSize()
+            } else {
+                Modifier.fillMaxSize().safeDrawingPadding()
+            },
             factory = { context ->
                 createPlayarrMobileWebView(
                     context = context,
+                    isTelevision = isTelevision,
                     onWebViewReady = { webView = it },
                     onLoadingChanged = { loading = it },
                     onLoadError = { message ->
@@ -165,6 +187,7 @@ fun MobileWebAppScreen(
                         showServerEditor = true
                     },
                     onSessionChanged = viewModel::syncWebSession,
+                    onCheckForUpdates = { selfUpdater?.checkForUpdates() },
                     onChooseFile = { callback ->
                         fileChooserCallback?.onReceiveValue(null)
                         fileChooserCallback = callback
@@ -249,6 +272,7 @@ fun MobileWebAppScreen(
                 }
                 else -> Unit
             }
+            if (event == Lifecycle.Event.ON_RESUME) selfUpdater?.resumePendingInstall()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
@@ -307,17 +331,19 @@ internal fun normaliseServerUrl(value: String): String {
     return candidate.trimEnd('/')
 }
 
-internal fun mobileAppUrl(baseUrl: String, versionCode: Int): String =
+internal fun androidAppUrl(baseUrl: String, versionCode: Int): String =
     "${baseUrl.trimEnd('/')}/?androidBuild=$versionCode"
 
 @SuppressLint("SetJavaScriptEnabled")
 private fun createPlayarrMobileWebView(
     context: android.content.Context,
+    isTelevision: Boolean,
     onWebViewReady: (WebView) -> Unit,
     onLoadingChanged: (Boolean) -> Unit,
     onLoadError: (String) -> Unit,
     onOpenServerEditor: () -> Unit,
     onSessionChanged: (String) -> Unit,
+    onCheckForUpdates: () -> Unit,
     onChooseFile: (ValueCallback<Array<Uri>>) -> Unit,
     onShowFullscreen: (View, WebChromeClient.CustomViewCallback) -> Unit,
     onHideFullscreen: () -> Unit,
@@ -326,6 +352,7 @@ private fun createPlayarrMobileWebView(
     setBackgroundColor(android.graphics.Color.rgb(21, 19, 21))
     isFocusable = true
     isFocusableInTouchMode = true
+    keepScreenOn = isTelevision
 
     settings.apply {
         javaScriptEnabled = true
@@ -333,7 +360,7 @@ private fun createPlayarrMobileWebView(
         mediaPlaybackRequiresUserGesture = false
         mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         useWideViewPort = true
-        loadWithOverviewMode = false
+        loadWithOverviewMode = isTelevision
         setSupportZoom(false)
         builtInZoomControls = false
         displayZoomControls = false
@@ -341,8 +368,10 @@ private fun createPlayarrMobileWebView(
         allowFileAccess = false
         allowContentAccess = false
         safeBrowsingEnabled = true
-        userAgentString = "$userAgentString PlayarrAndroidMobile/${BuildConfig.VERSION_NAME}"
+        val platformAgent = if (isTelevision) "PlayarrAndroidTV" else "PlayarrAndroidMobile"
+        userAgentString = "$userAgentString $platformAgent/${BuildConfig.VERSION_NAME}"
     }
+    if (isTelevision) setInitialScale(TV_INITIAL_SCALE_PERCENT)
 
     val playarrWebView = this
     CookieManager.getInstance().apply {
@@ -356,6 +385,9 @@ private fun createPlayarrMobileWebView(
         ),
         "PlayarrAndroidMobile",
     )
+    if (isTelevision) {
+        addJavascriptInterface(PlayarrAndroidBridge(onCheckForUpdates), "PlayarrAndroid")
+    }
 
     webViewClient = object : WebViewClient() {
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
@@ -365,6 +397,7 @@ private fun createPlayarrMobileWebView(
         override fun onPageFinished(view: WebView, url: String?) {
             onLoadingChanged(false)
             view.syncStoredWebSession()
+            if (isTelevision) view.syncTvViewport()
             CookieManager.getInstance().flush()
         }
 
@@ -407,6 +440,19 @@ private fun createPlayarrMobileWebView(
         }
     }
 
+    if (isTelevision) {
+        setOnKeyListener { _, keyCode, event ->
+            if (keyCode != KeyEvent.KEYCODE_MENU) return@setOnKeyListener false
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                onOpenServerEditor()
+            }
+            true
+        }
+        addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
+            (view as WebView).syncTvViewport()
+        }
+    }
+
     webChromeClient = object : WebChromeClient() {
         override fun onProgressChanged(view: WebView?, newProgress: Int) {
             onLoadingChanged(newProgress < 100)
@@ -443,6 +489,73 @@ private class PlayarrAndroidMobileBridge(
 
     @android.webkit.JavascriptInterface
     fun syncSession(serialisedSession: String) = onSessionChanged(serialisedSession)
+}
+
+@Keep
+private class PlayarrAndroidBridge(
+    private val onCheckForUpdates: () -> Unit,
+) {
+    @android.webkit.JavascriptInterface
+    fun checkForUpdates() = onCheckForUpdates()
+}
+
+private fun WebView.dispatchAndroidUpdateEvent(event: AndroidUpdateEvent) {
+    val detail = JSONObject().apply {
+        when (event) {
+            AndroidUpdateEvent.Checking -> put("status", "checking")
+            is AndroidUpdateEvent.UpToDate -> {
+                put("status", "up_to_date")
+                put("versionName", event.versionName)
+            }
+            is AndroidUpdateEvent.Downloading -> {
+                put("status", "downloading")
+                put("versionName", event.versionName)
+                event.progress?.let { put("progress", it) }
+            }
+            is AndroidUpdateEvent.PermissionRequired -> {
+                put("status", "permission_required")
+                put("versionName", event.versionName)
+            }
+            is AndroidUpdateEvent.Installing -> {
+                put("status", "installing")
+                put("versionName", event.versionName)
+            }
+            is AndroidUpdateEvent.Error -> {
+                put("status", "error")
+                put("message", event.message)
+            }
+        }
+    }
+    post {
+        evaluateJavascript(
+            "window.dispatchEvent(new CustomEvent('playarr:android-update', { detail: $detail }));",
+            null,
+        )
+    }
+}
+
+private fun WebView.syncTvViewport() {
+    if (width <= 0 || height <= 0) return
+    evaluateJavascript(
+        """
+        (() => {
+          let viewport = document.querySelector('meta[name="viewport"]');
+          if (!viewport) {
+            viewport = document.createElement("meta");
+            viewport.name = "viewport";
+            document.head.appendChild(viewport);
+          }
+          viewport.content =
+            "width=$TV_LAYOUT_WIDTH_CSS_PX, height=$TV_LAYOUT_HEIGHT_CSS_PX, " +
+            "initial-scale=$TV_LAYOUT_SCALE, minimum-scale=$TV_LAYOUT_SCALE, " +
+            "maximum-scale=$TV_LAYOUT_SCALE, user-scalable=no";
+          document.documentElement.style.setProperty("--viewport-unit", "${TV_LAYOUT_HEIGHT_CSS_PX / 100f}px");
+          document.documentElement.style.setProperty("--viewport-height", "${TV_LAYOUT_HEIGHT_CSS_PX}px");
+          document.documentElement.style.setProperty("--viewport-half-height", "${TV_LAYOUT_HEIGHT_CSS_PX / 2}px");
+        })();
+        """.trimIndent(),
+        null,
+    )
 }
 
 private fun WebView.syncStoredWebSession() {
@@ -500,6 +613,11 @@ private data class MobileWebLoadRequest(
     val appUrl: String,
     val generation: Int,
 )
+
+private const val TV_LAYOUT_WIDTH_CSS_PX = 1920
+private const val TV_LAYOUT_HEIGHT_CSS_PX = 1080
+private const val TV_LAYOUT_SCALE = 0.5f
+private const val TV_INITIAL_SCALE_PERCENT = 50
 
 @Composable
 private fun FullscreenWebVideo(view: View, modifier: Modifier = Modifier) {

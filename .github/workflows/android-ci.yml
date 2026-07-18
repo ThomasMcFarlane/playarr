@@ -1,4 +1,4 @@
-name: Publish Android APKs
+name: Publish Android APK
 
 on:
   push:
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build-and-publish:
-    name: Build, sign and publish Android APKs
+    name: Build, sign and publish Android APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: release-android
@@ -71,41 +71,36 @@ jobs:
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
           chmod 600 "$ANDROID_KEYSTORE_PATH"
 
-      - name: Test and build signed APKs
+      - name: Test and build signed APK
         env:
           PLAYARR_VERSION_NAME: ${{ steps.version.outputs.name }}
           PLAYARR_VERSION_CODE: ${{ steps.version.outputs.code }}
         run: >-
           ./gradlew
           :mobile-android:testDebugUnitTest
-          :tv-android:testDebugUnitTest
           :mobile-android:assembleRelease
-          :tv-android:assembleRelease
 
-      - name: Verify and package APKs
+      - name: Verify and package APK
         id: package
         shell: bash
         run: |
           mobile_apk="$(find ../mobile-android/build/outputs/apk/release -name '*.apk' -type f -print -quit)"
-          tv_apk="$(find ../tv-android/build/outputs/apk/release -name '*.apk' -type f -print -quit)"
-          if [[ -z "$mobile_apk" || -z "$tv_apk" ]]; then
+          if [[ -z "$mobile_apk" ]]; then
             echo "Signed release APK output is missing" >&2
             exit 1
           fi
           apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
           "$apksigner" verify --verbose --print-certs "$mobile_apk"
-          "$apksigner" verify --verbose --print-certs "$tv_apk"
           mkdir -p release
-          cp "$mobile_apk" release/playarr-android-mobile.apk
-          cp "$tv_apk" release/playarr-android-tv.apk
+          cp "$mobile_apk" release/playarr-android.apk
           sha256sum release/*.apk > release/SHA256SUMS
-          tv_sha256="$(sha256sum release/playarr-android-tv.apk | cut -d ' ' -f 1)"
-          printf '{"version_name":"%s","version_code":%s,"apk_url":"https://playarr.app/downloads/android/releases/%s/playarr-android-tv.apk","sha256":"%s"}\n' \
+          apk_sha256="$(sha256sum release/playarr-android.apk | cut -d ' ' -f 1)"
+          printf '{"version_name":"%s","version_code":%s,"apk_url":"https://playarr.app/downloads/android/releases/%s/playarr-android.apk","sha256":"%s"}\n' \
             "${{ steps.version.outputs.name }}" \
             "${{ steps.version.outputs.code }}" \
             "${{ steps.version.outputs.name }}" \
-            "$tv_sha256" \
-            > release/playarr-android-tv.json
+            "$apk_sha256" \
+            > release/playarr-android.json
 
       - name: Upload workflow artefact
         uses: actions/upload-artifact@v4
@@ -114,27 +109,23 @@ jobs:
           path: clients/android-shared/release/
           if-no-files-found: error
 
-      - name: Upload versioned and latest APKs to Cloudflare R2
+      - name: Upload versioned and latest APK to Cloudflare R2
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_R2_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           VERSION: ${{ steps.version.outputs.name }}
         run: |
-          for platform in mobile tv; do
-            file="release/playarr-android-${platform}.apk"
-            npx --yes wrangler@4 r2 object put "playarr-client-downloads/android/releases/${VERSION}/playarr-android-${platform}.apk" --file "$file" --content-type application/vnd.android.package-archive --remote
-            npx --yes wrangler@4 r2 object put "playarr-client-downloads/android/playarr-android-${platform}.apk" --file "$file" --content-type application/vnd.android.package-archive --remote
-          done
+          npx --yes wrangler@4 r2 object put "playarr-client-downloads/android/releases/${VERSION}/playarr-android.apk" --file release/playarr-android.apk --content-type application/vnd.android.package-archive --remote
+          npx --yes wrangler@4 r2 object put "playarr-client-downloads/android/playarr-android.apk" --file release/playarr-android.apk --content-type application/vnd.android.package-archive --remote
           npx --yes wrangler@4 r2 object put "playarr-client-downloads/android/releases/${VERSION}/SHA256SUMS" --file release/SHA256SUMS --content-type text/plain --remote
-          npx --yes wrangler@4 r2 object put "playarr-client-downloads/android/playarr-android-tv.json" --file release/playarr-android-tv.json --content-type application/json --remote
+          npx --yes wrangler@4 r2 object put "playarr-client-downloads/android/playarr-android.json" --file release/playarr-android.json --content-type application/json --remote
 
       - name: Publish GitHub release assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            clients/android-shared/release/playarr-android-mobile.apk
-            clients/android-shared/release/playarr-android-tv.apk
-            clients/android-shared/release/playarr-android-tv.json
+            clients/android-shared/release/playarr-android.apk
+            clients/android-shared/release/playarr-android.json
             clients/android-shared/release/SHA256SUMS
           generate_release_notes: true

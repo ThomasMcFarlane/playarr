@@ -136,7 +136,7 @@ them (`@streamarr-tv/api-client`'s `defaultHeaders`) but no call site
 currently populates them. Since the gate is a stub regardless, this has no
 behavioural effect yet — it's noted here for accuracy, not as a bug report.
 
-### Android Mobile / Android TV — `clients/android-shared/core-update/`
+### Android — `clients/mobile-android/` and `clients/android-shared/core-update/`
 
 - **`VersionComparator`** — a small, deliberately-not-full-SemVer numeric
   comparator: splits on `.`, compares components as integers, ignores build
@@ -156,6 +156,9 @@ behavioural effect yet — it's noted here for accuracy, not as a bug report.
   the server's severity *and* Play's own `updateAvailability` signal agree an
   update exists: `Required` maps to `AppUpdateType.IMMEDIATE` (blocking),
   `Recommended` maps to `AppUpdateType.FLEXIBLE` (background).
+- **Universal APK** — the same package selects the mobile compatibility row
+  and Google Play update flow on touch devices, while television sideloads use
+  the signed playarr.app manifest and checksum-verified installer.
 
 ### iOS — `clients/ios/Sources/StreamarrKit/Update/`
 

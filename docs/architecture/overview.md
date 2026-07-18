@@ -221,8 +221,8 @@ home-theatre and mobile media experience:
 
 | Client | Platform | Doc |
 |---|---|---|
-| Android Mobile | Phones/tablets, Android 8.0+ | [`clients/android-mobile.md`](clients/android-mobile.md) |
-| Android TV | Android TV / Google TV, Android TV 9+ | [`clients/android-tv.md`](clients/android-tv.md) |
+| Android Mobile | Phones/tablets, Android 8.0+ (universal APK) | [`clients/android-mobile.md`](clients/android-mobile.md) |
+| Android TV | Android TV / Google TV, Android 8.0+ (same universal APK) | [`clients/android-mobile.md`](clients/android-mobile.md) |
 | iOS | iPhone/iPad, iOS 15+ | [`clients/ios.md`](clients/ios.md) |
 | webOS | LG smart TVs | [`clients/webos.md`](clients/webos.md) |
 | Tizen | Samsung smart TVs | [`clients/tizen.md`](clients/tizen.md) |
@@ -232,10 +232,9 @@ home-theatre and mobile media experience:
 Code sharing follows the grain of the platforms rather than forcing every
 client through one runtime:
 
-- Android Mobile and Android TV share both one Kotlin/Gradle native foundation
-  and the responsive React/TypeScript Playarr presentation. Their thin native
-  hosts retain device-specific lifecycle, input, update, notification, and
-  fullscreen responsibilities.
+- Android Mobile and Android TV use one APK and responsive React/TypeScript
+  presentation. Runtime UI-mode detection selects touch or D-pad lifecycle,
+  input, update, notification, and fullscreen behaviour.
 - webOS, Tizen, VIDAA, Android Mobile, and Android TV consume the same Playarr
   Web routes and responsive design, selecting their input and playback profile
   at runtime.

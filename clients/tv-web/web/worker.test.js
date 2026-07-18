@@ -20,25 +20,25 @@ describe("Android APK downloads", () => {
     });
 
     const response = await worker.fetch(
-      new Request("https://playarr.app/downloads/android/playarr-android-tv.apk"),
+      new Request("https://playarr.app/downloads/android/playarr-android.apk"),
       env
     );
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Disposition")).toContain(
-      "playarr-android-tv.apk"
+      "playarr-android.apk"
     );
     expect(response.headers.get("Content-Type")).toBe(
       "application/vnd.android.package-archive"
     );
     expect(env.CLIENT_DOWNLOADS.get).toHaveBeenCalledWith(
-      "android/playarr-android-tv.apk"
+      "android/playarr-android.apk"
     );
   });
 
   it("returns a clear 404 until the signed release is published", async () => {
     const response = await worker.fetch(
-      new Request("https://playarr.app/downloads/android/playarr-android-mobile.apk"),
+      new Request("https://playarr.app/downloads/android/playarr-android.apk"),
       environment(null)
     );
 
@@ -46,7 +46,7 @@ describe("Android APK downloads", () => {
     await expect(response.text()).resolves.toContain("not been published");
   });
 
-  it("serves the latest TV manifest and its immutable versioned APK", async () => {
+  it("serves the latest Android manifest and its immutable versioned APK", async () => {
     const object = {
       body: new Uint8Array([1]),
       httpEtag: '"release-etag"',
@@ -56,17 +56,17 @@ describe("Android APK downloads", () => {
     const env = environment(object);
 
     const manifest = await worker.fetch(
-      new Request("https://playarr.app/downloads/android/playarr-android-tv.json"),
+      new Request("https://playarr.app/downloads/android/playarr-android.json"),
       env
     );
     expect(manifest.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
     expect(env.CLIENT_DOWNLOADS.get).toHaveBeenLastCalledWith(
-      "android/playarr-android-tv.json"
+      "android/playarr-android.json"
     );
 
     const apk = await worker.fetch(
       new Request(
-        "https://playarr.app/downloads/android/releases/1.2.3/playarr-android-tv.apk"
+        "https://playarr.app/downloads/android/releases/1.2.3/playarr-android.apk"
       ),
       env
     );
@@ -75,7 +75,7 @@ describe("Android APK downloads", () => {
     );
     expect(apk.headers.get("Cache-Control")).toContain("immutable");
     expect(env.CLIENT_DOWNLOADS.get).toHaveBeenLastCalledWith(
-      "android/releases/1.2.3/playarr-android-tv.apk"
+      "android/releases/1.2.3/playarr-android.apk"
     );
   });
 

@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Publish one responsive Android APK for phones, tablets, Android TV, and Google TV, with runtime
+  touch/D-pad selection and a single playarr.app download and update manifest. Existing
+  `io.streamarr.tv` preview installs require one manual reinstall to move to `io.streamarr.mobile`.
 - Publish the installable Roku developer-mode app package and link it from the public Clients
   catalogue with its installation requirement stated explicitly.
 - Add a native Playarr Apple TV app with focus-friendly catalogue browsing, search, device-code

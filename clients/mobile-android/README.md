@@ -1,7 +1,8 @@
 # mobile-android
 
-The Playarr Android phone/tablet app is a thin native host for the same
-responsive React application used by Playarr Web and Android TV. This keeps
+The Playarr Android app is the single phone, tablet, Android TV, and Google TV
+APK. It is a thin native host for the same responsive React application used
+by Playarr Web. This keeps
 the visible library, profiles, settings, search, and player surfaces in one
 codebase while Android retains the platform responsibilities that belong in
 an APK.
@@ -16,10 +17,11 @@ WebView for presentation. Its native Compose layer owns:
 - a session bridge that keeps native push registration aligned with the
   authenticated web profile.
 
-The hosted bundle identifies this wrapper through the
-`PlayarrAndroidMobile/<version>` user-agent token. It selects the
-`android-mobile` API compatibility profile and the existing phone
-breakpoints rather than the Android TV D-pad profile.
+The app detects Android's current UI mode. Phones and tablets identify as
+`PlayarrAndroidMobile/<version>` and use touch breakpoints; televisions identify
+as `PlayarrAndroidTV/<version>`, expose a Leanback launcher, fix the web viewport
+at 1920 by 1080 CSS pixels, and enable D-pad navigation. Television sideloads
+retain the signed playarr.app self-update path.
 
 This module is included by the Gradle root at
 `../android-shared/settings.gradle.kts`.
@@ -42,7 +44,7 @@ src/main/kotlin/io/streamarr/mobile/
 ├── StreamarrMobileApp.kt      native application, FCM bootstrap
 ├── MainActivity.kt            Activity hosting the shared web surface
 ├── ui/web/                    WebView host and server recovery UI
-├── update/                    Google Play in-app update integration
+├── update/                    Google Play and signed sideload updates
 └── di/                        native data, auth, and update bindings
 ```
 

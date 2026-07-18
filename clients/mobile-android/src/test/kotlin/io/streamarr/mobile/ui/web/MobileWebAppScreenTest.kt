@@ -31,7 +31,7 @@ class MobileWebAppScreenTest {
     fun `builds a versioned app URL without changing its origin`() {
         assertEquals(
             "https://media.example.test/playarr/?androidBuild=42",
-            mobileAppUrl("https://media.example.test/playarr/", 42),
+            androidAppUrl("https://media.example.test/playarr/", 42),
         )
     }
 }

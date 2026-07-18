@@ -210,7 +210,7 @@ export function ClientsPage() {
                     client.action === "vidaa" && vidaaExpanded
                       ? "#vidaa-store-open"
                       : client.action === "android" && androidExpanded
-                        ? "#android-mobile-download"
+                        ? "#android-download"
                         : undefined
                   }
                   data-tv-edge-target-left={
@@ -328,26 +328,14 @@ export function AndroidDownloadDetails() {
       <p>{t("pages.clients.androidPage.description")}</p>
       <div className="android-download-actions">
         <a
-          id="android-mobile-download"
+          id="android-download"
           className="profile-action-button"
-          href="/downloads/android/playarr-android-mobile.apk"
-          data-navigation-focus-key="clients:android:mobile-download"
+          href="/downloads/android/playarr-android.apk"
+          data-navigation-focus-key="clients:android:download"
           data-tv-edge-target-up="#client-android-action"
-          data-tv-edge-target-right="#android-tv-download"
           download
         >
-          <strong>{t("pages.clients.androidPage.mobileDownload")}</strong>
-        </a>
-        <a
-          id="android-tv-download"
-          className="profile-action-button"
-          href="/downloads/android/playarr-android-tv.apk"
-          data-navigation-focus-key="clients:android:tv-download"
-          data-tv-edge-target-up="#client-android-action"
-          data-tv-edge-target-left="#android-mobile-download"
-          download
-        >
-          <strong>{t("pages.clients.androidPage.tvDownload")}</strong>
+          <strong>{t("pages.clients.androidPage.download")}</strong>
         </a>
       </div>
     </section>
