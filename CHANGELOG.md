@@ -160,6 +160,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Let mobile viewers swipe Cover Flow without blocking vertical page gestures, keep album artwork
+  uncropped, place inline music controls directly beneath it, and scroll from touches on tracks.
 - Keep directory preview animations from narrowing the shared media-copy width and wrapping titles
   differently from their detail pages.
 - Persist the focused audio or video choice when creating a playlist instead of allowing visual

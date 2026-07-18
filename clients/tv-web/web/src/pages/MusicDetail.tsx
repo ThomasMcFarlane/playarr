@@ -6,6 +6,7 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
   Link,
@@ -46,6 +47,7 @@ import {
 } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useScrollEdges } from "../lib/useScrollEdges";
+import { horizontalSwipeStep, type TouchPoint } from "../lib/touchGestures";
 import {
   getJoinedWorkSources,
   type JoinedWorkSource,
@@ -104,6 +106,8 @@ function AlbumCoverFlow({
 }) {
   const { t } = useLanguage();
   const mediaContext = useMediaContextMenu();
+  const swipeStartRef = useRef<(TouchPoint & { pointerId: number }) | null>(null);
+  const suppressClickRef = useRef(false);
   const selectedIndex = Math.max(
     0,
     albums.findIndex((album) => album.album.id === selectedAlbumId)
@@ -119,13 +123,53 @@ function AlbumCoverFlow({
       .getElementById(`music-album-${albums[nextIndex]!.album.id}`)
       ?.focus({ preventScroll: true });
   };
+  const startSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "touch") return;
+    swipeStartRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    };
+  };
+  const finishSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (!start || start.pointerId !== event.pointerId) return;
+
+    const step = horizontalSwipeStep(start, {
+      x: event.clientX,
+      y: event.clientY,
+    });
+    if (step === 0) return;
+
+    suppressClickRef.current = true;
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 0);
+    const nextIndex = (selectedIndex + step + albums.length) % albums.length;
+    const nextAlbum = albums[nextIndex];
+    if (!nextAlbum) return;
+    onSelect(nextAlbum);
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById(`music-album-${nextAlbum.album.id}`)
+        ?.focus({ preventScroll: true });
+    });
+  };
 
   return (
     <section
       className="tv-music-album-flow"
       aria-label={t("pages.musicDetail.albums")}
     >
-      <div className="tv-music-album-cover-flow">
+      <div
+        className="tv-music-album-cover-flow"
+        onPointerDown={startSwipe}
+        onPointerUp={finishSwipe}
+        onPointerCancel={() => {
+          swipeStartRef.current = null;
+        }}
+      >
         {albums.map((album, index) => {
           const firstTrack = playableTracks(album)[0];
           if (!firstTrack?.media_file_id) return null;
@@ -204,6 +248,10 @@ function AlbumCoverFlow({
               }}
               onFocus={() => onSelect(album)}
               onClick={() => {
+                if (suppressClickRef.current) {
+                  suppressClickRef.current = false;
+                  return;
+                }
                 onSelect(album);
                 onPlay(album, firstTrack);
               }}
@@ -813,6 +861,10 @@ export function MusicDetailPage() {
               setSelectedTrackId(firstTrack?.track.id ?? null);
             }}
             onPlay={playTrack}
+          />
+          <div
+            id="inline-music-player-host"
+            className="tv-inline-music-player-host"
           />
           {selectedAlbum ? (
             <AlbumTrackList

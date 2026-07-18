@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   usePlaybackEngine,
@@ -49,6 +57,9 @@ export interface PlayerLocationState {
   /** Movie-specific quality/track choices resolved before playback starts. */
   playbackSettings?: PlaybackLaunchSettings | null;
 }
+
+const MOBILE_MUSIC_LAYOUT_QUERY =
+  "(max-width: 760px), (max-width: 920px) and (max-height: 500px) and (pointer: coarse)";
 
 function isDetailRoute(value: unknown): value is string {
   return (
@@ -156,6 +167,25 @@ export function PlayerPage({
 }) {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const [inlineMusicHost, setInlineMusicHost] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (!inlineMusic) {
+      setInlineMusicHost(null);
+      return;
+    }
+
+    const media = window.matchMedia(MOBILE_MUSIC_LAYOUT_QUERY);
+    const updateHost = () => {
+      setInlineMusicHost(
+        media.matches
+          ? document.getElementById("inline-music-player-host")
+          : null
+      );
+    };
+    updateHost();
+    media.addEventListener("change", updateHost);
+    return () => media.removeEventListener("change", updateHost);
+  }, [inlineMusic]);
   const navigationOrigin = navigationOriginFromState(locationState);
   const title = locationState?.title;
   const backTo = isDetailRoute(locationState?.backTo) ? locationState.backTo : "/";
@@ -486,33 +516,37 @@ export function PlayerPage({
     );
   }
 
+  const playerSurface = (
+    <div
+      className={`player-page${minimised ? " is-minimised" : ""}${
+        inlineMusic ? " is-inline-music" : ""
+      }`}
+    >
+      <PlayerSurface
+        player={player}
+        title={playerTitle}
+        minimised={minimised}
+        inlineMusic={inlineMusic}
+        playbackStarted={musicPlaybackStateRef.current.hasPlayed}
+        stopPlaybackOnPause={shouldStopPlaybackOnPause}
+        onBack={handleBack}
+        onStop={onClose}
+        onMinimise={handleMinimise}
+        onMaximise={onMaximise}
+        playlistItems={playlistItems}
+        activePlaylistIndex={activePlaylistIndex}
+        onSelectPlaylistItem={handleSelectPlaylistItem}
+        onPrevious={activePlaylistIndex > 0 ? handlePrevious : undefined}
+        onNext={activePlaylistIndex < playlistItems.length - 1 ? handleNext : undefined}
+        detailRoute={backTo}
+        detailParentRoute={detailParentBackTo ?? "/"}
+      />
+    </div>
+  );
+
   return (
     <>
-      <div
-        className={`player-page${minimised ? " is-minimised" : ""}${
-          inlineMusic ? " is-inline-music" : ""
-        }`}
-      >
-        <PlayerSurface
-          player={player}
-          title={playerTitle}
-          minimised={minimised}
-          inlineMusic={inlineMusic}
-          playbackStarted={musicPlaybackStateRef.current.hasPlayed}
-          stopPlaybackOnPause={shouldStopPlaybackOnPause}
-          onBack={handleBack}
-          onStop={onClose}
-          onMinimise={handleMinimise}
-          onMaximise={onMaximise}
-          playlistItems={playlistItems}
-          activePlaylistIndex={activePlaylistIndex}
-          onSelectPlaylistItem={handleSelectPlaylistItem}
-          onPrevious={activePlaylistIndex > 0 ? handlePrevious : undefined}
-          onNext={activePlaylistIndex < playlistItems.length - 1 ? handleNext : undefined}
-          detailRoute={backTo}
-          detailParentRoute={detailParentBackTo ?? "/"}
-        />
-      </div>
+      {inlineMusicHost ? createPortal(playerSurface, inlineMusicHost) : playerSurface}
       {inlineMiniPlayer}
     </>
   );

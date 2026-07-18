@@ -9803,17 +9803,64 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   }
 
   .tv-music-album-flow {
-    flex-basis: 230px;
+    height: 290px;
+    min-height: 290px;
+    flex-basis: 290px;
     padding-left: 0;
+  }
+
+  .tv-music-album-cover-flow {
+    overflow: visible;
+    touch-action: pan-y;
   }
 
   .tv-music-album-cover-flow .tv-music-album-card {
     width: min(42vw, 180px);
   }
 
+  .tv-inline-music-player-host:empty {
+    display: none;
+  }
+
+  .tv-inline-music-player-host:not(:empty) {
+    position: relative;
+    width: 100%;
+    height: 142px;
+    flex: 0 0 142px;
+  }
+
+  .tv-inline-music-player-host .player-page.is-minimised.is-inline-music {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: 142px;
+  }
+
+  .tv-inline-music-player-host .player-shell-inline-music .player-controls {
+    top: 8px;
+    width: calc(100% - 32px);
+  }
+
   .tv-music-track-list {
-    min-height: 260px;
+    min-height: 0;
+    flex: 0 0 auto;
     padding-left: var(--mobile-page-gutter);
+  }
+
+  .tv-music-track-list-window {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  .tv-music-track-list-scroll {
+    height: auto;
+    overflow-y: visible;
+    overscroll-behavior: auto;
+    touch-action: pan-y;
+  }
+
+  .tv-music-track-row {
+    touch-action: pan-y;
   }
 
   .tv-search-copy {
