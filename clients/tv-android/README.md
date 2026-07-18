@@ -12,7 +12,7 @@ the two surfaces cannot visually or functionally drift.
 The native Kotlin shell remains responsible for:
 
 - Android TV and Google TV launcher integration
-- Google Play in-app updates
+- Google Play in-app updates and signed-APK updates from `playarr.app`
 - the saved Streamarr server address
 - D-pad, Menu, and Back-key integration
 - HTML5 fullscreen video
@@ -21,6 +21,11 @@ The native Kotlin shell remains responsible for:
 Press the remote **Menu** button to change the server address. If the
 configured server cannot serve the Playarr app, the address editor opens
 automatically.
+
+The profile page's **Check for updates** button compares the installed
+`versionCode` with the release manifest hosted at `playarr.app`. A newer APK is
+downloaded from its versioned HTTPS URL, checked against the published SHA-256
+digest, and handed to Android's installer for viewer confirmation.
 
 ## Build
 

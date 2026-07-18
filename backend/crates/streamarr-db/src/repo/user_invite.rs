@@ -1,8 +1,10 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use sqlx::any::AnyRow;
+use sqlx::Row;
 use streamarr_model::UserInvite;
 
-use crate::codec::format_datetime;
+use crate::codec::{format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
 use crate::pool::{Backend, DbPool};
 
@@ -11,7 +13,11 @@ use crate::pool::{Backend, DbPool};
 pub trait UserInviteRepo: Send + Sync {
     async fn create(&self, invite: &UserInvite) -> Result<(), DbError>;
 
-    async fn is_valid(&self, token_hash: &str, now: DateTime<Utc>) -> Result<bool, DbError>;
+    async fn find_valid(
+        &self,
+        token_hash: &str,
+        now: DateTime<Utc>,
+    ) -> Result<Option<UserInvite>, DbError>;
 
     /// Atomically removes an invitation only when it exists and has not
     /// expired. `true` means this caller consumed it; `false` covers unknown,
@@ -31,17 +37,37 @@ impl SqlxUserInviteRepo {
     }
 }
 
+fn from_row(row: &AnyRow) -> Result<UserInvite, DbError> {
+    let token_hash: String = row.try_get("token_hash")?;
+    let created_by: String = row.try_get("created_by")?;
+    let created_at: String = row.try_get("created_at")?;
+    let expires_at: String = row.try_get("expires_at")?;
+    let can_stream: i64 = row.try_get("can_stream")?;
+    let library_allow: String = row.try_get("library_allow")?;
+    Ok(UserInvite {
+        token_hash,
+        created_by: parse_uuid(&created_by)?,
+        created_at: parse_datetime(&created_at)?,
+        expires_at: parse_datetime(&expires_at)?,
+        can_stream: can_stream != 0,
+        library_allow: serde_json::from_str(&library_allow)?,
+    })
+}
+
+const COLUMNS: &str = "token_hash, created_by, created_at, expires_at, can_stream, library_allow";
+
 #[async_trait]
 impl UserInviteRepo for SqlxUserInviteRepo {
     async fn create(&self, invite: &UserInvite) -> Result<(), DbError> {
+        let library_allow = serde_json::to_string(&invite.library_allow)?;
         let sql = match self.backend {
             Backend::Sqlite => {
-                "INSERT INTO user_invites (token_hash, created_by, created_at, expires_at) \
-                 VALUES (?, ?, ?, ?)"
+                "INSERT INTO user_invites (token_hash, created_by, created_at, expires_at, can_stream, library_allow) \
+                 VALUES (?, ?, ?, ?, ?, ?)"
             }
             Backend::Postgres => {
-                "INSERT INTO user_invites (token_hash, created_by, created_at, expires_at) \
-                 VALUES ($1, $2, $3, $4)"
+                "INSERT INTO user_invites (token_hash, created_by, created_at, expires_at, can_stream, library_allow) \
+                 VALUES ($1, $2, $3, $4, $5, $6)"
             }
         };
         sqlx::query(sql)
@@ -49,26 +75,32 @@ impl UserInviteRepo for SqlxUserInviteRepo {
             .bind(invite.created_by.to_string())
             .bind(format_datetime(invite.created_at))
             .bind(format_datetime(invite.expires_at))
+            .bind(i64::from(invite.can_stream))
+            .bind(library_allow)
             .execute(&self.pool)
             .await?;
         Ok(())
     }
 
-    async fn is_valid(&self, token_hash: &str, now: DateTime<Utc>) -> Result<bool, DbError> {
+    async fn find_valid(
+        &self,
+        token_hash: &str,
+        now: DateTime<Utc>,
+    ) -> Result<Option<UserInvite>, DbError> {
         let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT 1 AS valid FROM user_invites WHERE token_hash = ? AND expires_at > ?"
-            }
-            Backend::Postgres => {
-                "SELECT 1 AS valid FROM user_invites WHERE token_hash = $1 AND expires_at > $2"
-            }
+            Backend::Sqlite => format!(
+                "SELECT {COLUMNS} FROM user_invites WHERE token_hash = ? AND expires_at > ?"
+            ),
+            Backend::Postgres => format!(
+                "SELECT {COLUMNS} FROM user_invites WHERE token_hash = $1 AND expires_at > $2"
+            ),
         };
-        let row = sqlx::query(sql)
+        let row = sqlx::query(&sql)
             .bind(token_hash)
             .bind(format_datetime(now))
             .fetch_optional(&self.pool)
             .await?;
-        Ok(row.is_some())
+        row.as_ref().map(from_row).transpose()
     }
 
     async fn consume(&self, token_hash: &str, now: DateTime<Utc>) -> Result<bool, DbError> {
@@ -145,13 +177,27 @@ mod tests {
             created_by,
             created_at: now,
             expires_at: now + Duration::hours(24),
+            can_stream: true,
+            library_allow: vec![Uuid::new_v4()],
         };
         let repo = SqlxUserInviteRepo::new(pool);
         repo.create(&invite).await.unwrap();
 
-        assert!(repo.is_valid(&invite.token_hash, now).await.unwrap());
+        let persisted = repo
+            .find_valid(&invite.token_hash, now)
+            .await
+            .unwrap()
+            .expect("invite should be valid");
+        assert_eq!(persisted.token_hash, invite.token_hash);
+        assert_eq!(persisted.created_by, invite.created_by);
+        assert_eq!(persisted.can_stream, invite.can_stream);
+        assert_eq!(persisted.library_allow, invite.library_allow);
         assert!(repo.consume(&invite.token_hash, now).await.unwrap());
-        assert!(!repo.is_valid(&invite.token_hash, now).await.unwrap());
+        assert!(repo
+            .find_valid(&invite.token_hash, now)
+            .await
+            .unwrap()
+            .is_none());
         assert!(!repo.consume(&invite.token_hash, now).await.unwrap());
     }
 
@@ -165,11 +211,17 @@ mod tests {
             created_by,
             created_at: now - Duration::hours(25),
             expires_at: now - Duration::hours(1),
+            can_stream: true,
+            library_allow: vec![],
         };
         let repo = SqlxUserInviteRepo::new(pool);
         repo.create(&invite).await.unwrap();
 
-        assert!(!repo.is_valid(&invite.token_hash, now).await.unwrap());
+        assert!(repo
+            .find_valid(&invite.token_hash, now)
+            .await
+            .unwrap()
+            .is_none());
         assert!(!repo.consume(&invite.token_hash, now).await.unwrap());
     }
 }

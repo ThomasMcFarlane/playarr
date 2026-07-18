@@ -7,3 +7,8 @@
 
 -keepattributes SourceFile, LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# Methods exposed to the co-hosted Playarr Web profile page.
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}

@@ -33,14 +33,18 @@ fn status_from_str(value: &str) -> Result<UserInviteRequestStatus, DbError> {
 fn from_row(row: &AnyRow) -> Result<UserInviteRequest, DbError> {
     let id: String = row.try_get("id")?;
     let user_id: String = row.try_get("user_id")?;
+    let message: Option<String> = row.try_get("message")?;
     let status: String = row.try_get("status")?;
     let requested_at: String = row.try_get("requested_at")?;
     let reviewed_by: Option<String> = row.try_get("reviewed_by")?;
     let reviewed_at: Option<String> = row.try_get("reviewed_at")?;
     let generated_at: Option<String> = row.try_get("generated_at")?;
+    let can_stream: i64 = row.try_get("can_stream")?;
+    let library_allow: String = row.try_get("library_allow")?;
     Ok(UserInviteRequest {
         id: parse_uuid(&id)?,
         user_id: parse_uuid(&user_id)?,
+        message,
         status: status_from_str(&status)?,
         requested_at: parse_datetime(&requested_at)?,
         reviewed_by: reviewed_by.map(|value| parse_uuid(&value)).transpose()?,
@@ -50,10 +54,12 @@ fn from_row(row: &AnyRow) -> Result<UserInviteRequest, DbError> {
         generated_at: generated_at
             .map(|value| parse_datetime(&value))
             .transpose()?,
+        can_stream: can_stream != 0,
+        library_allow: serde_json::from_str(&library_allow)?,
     })
 }
 
-const COLUMNS: &str = "id, user_id, status, requested_at, reviewed_by, reviewed_at, generated_at";
+const COLUMNS: &str = "id, user_id, message, status, requested_at, reviewed_by, reviewed_at, generated_at, can_stream, library_allow";
 
 #[async_trait]
 pub trait UserInviteRequestRepo: Send + Sync {
@@ -70,6 +76,8 @@ pub trait UserInviteRequestRepo: Send + Sync {
         reviewer_id: Uuid,
         status: UserInviteRequestStatus,
         reviewed_at: DateTime<Utc>,
+        can_stream: bool,
+        library_allow: &[Uuid],
     ) -> Result<bool, DbError>;
     /// Atomically consumes an approved request and persists its final bearer
     /// invitation, so concurrent Generate clicks cannot mint two QR codes.
@@ -97,22 +105,26 @@ impl SqlxUserInviteRequestRepo {
 #[async_trait]
 impl UserInviteRequestRepo for SqlxUserInviteRequestRepo {
     async fn create(&self, request: &UserInviteRequest) -> Result<(), DbError> {
+        let library_allow = serde_json::to_string(&request.library_allow)?;
         let sql = match self.backend {
             Backend::Sqlite => {
-                format!("INSERT INTO user_invite_requests ({COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?)")
+                format!("INSERT INTO user_invite_requests ({COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             }
             Backend::Postgres => format!(
-                "INSERT INTO user_invite_requests ({COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6, $7)"
+                "INSERT INTO user_invite_requests ({COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
             ),
         };
         sqlx::query(&sql)
             .bind(request.id.to_string())
             .bind(request.user_id.to_string())
+            .bind(&request.message)
             .bind(status_to_str(request.status))
             .bind(format_datetime(request.requested_at))
             .bind(request.reviewed_by.map(|id| id.to_string()))
             .bind(request.reviewed_at.map(format_datetime))
             .bind(request.generated_at.map(format_datetime))
+            .bind(i64::from(request.can_stream))
+            .bind(library_allow)
             .execute(&self.pool)
             .await?;
         Ok(())
@@ -163,23 +175,28 @@ impl UserInviteRequestRepo for SqlxUserInviteRequestRepo {
         reviewer_id: Uuid,
         status: UserInviteRequestStatus,
         reviewed_at: DateTime<Utc>,
+        can_stream: bool,
+        library_allow: &[Uuid],
     ) -> Result<bool, DbError> {
         debug_assert!(matches!(
             status,
             UserInviteRequestStatus::Approved | UserInviteRequestStatus::Denied
         ));
+        let library_allow = serde_json::to_string(library_allow)?;
         let sql = match self.backend {
             Backend::Sqlite => {
-                "UPDATE user_invite_requests SET status = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ? AND status = 'pending'"
+                "UPDATE user_invite_requests SET status = ?, reviewed_by = ?, reviewed_at = ?, can_stream = ?, library_allow = ? WHERE id = ? AND status = 'pending'"
             }
             Backend::Postgres => {
-                "UPDATE user_invite_requests SET status = $1, reviewed_by = $2, reviewed_at = $3 WHERE id = $4 AND status = 'pending'"
+                "UPDATE user_invite_requests SET status = $1, reviewed_by = $2, reviewed_at = $3, can_stream = $4, library_allow = $5 WHERE id = $6 AND status = 'pending'"
             }
         };
         let result = sqlx::query(sql)
             .bind(status_to_str(status))
             .bind(reviewer_id.to_string())
             .bind(format_datetime(reviewed_at))
+            .bind(i64::from(can_stream))
+            .bind(library_allow)
             .bind(id.to_string())
             .execute(&self.pool)
             .await?;
@@ -193,6 +210,7 @@ impl UserInviteRequestRepo for SqlxUserInviteRequestRepo {
         generated_at: DateTime<Utc>,
         invite: &UserInvite,
     ) -> Result<bool, DbError> {
+        let library_allow = serde_json::to_string(&invite.library_allow)?;
         let mut transaction = self.pool.begin().await?;
         let update_sql = match self.backend {
             Backend::Sqlite => {
@@ -215,10 +233,10 @@ impl UserInviteRequestRepo for SqlxUserInviteRequestRepo {
 
         let insert_sql = match self.backend {
             Backend::Sqlite => {
-                "INSERT INTO user_invites (token_hash, created_by, created_at, expires_at) VALUES (?, ?, ?, ?)"
+                "INSERT INTO user_invites (token_hash, created_by, created_at, expires_at, can_stream, library_allow) VALUES (?, ?, ?, ?, ?, ?)"
             }
             Backend::Postgres => {
-                "INSERT INTO user_invites (token_hash, created_by, created_at, expires_at) VALUES ($1, $2, $3, $4)"
+                "INSERT INTO user_invites (token_hash, created_by, created_at, expires_at, can_stream, library_allow) VALUES ($1, $2, $3, $4, $5, $6)"
             }
         };
         sqlx::query(insert_sql)
@@ -226,6 +244,8 @@ impl UserInviteRequestRepo for SqlxUserInviteRequestRepo {
             .bind(invite.created_by.to_string())
             .bind(format_datetime(invite.created_at))
             .bind(format_datetime(invite.expires_at))
+            .bind(i64::from(invite.can_stream))
+            .bind(library_allow)
             .execute(&mut *transaction)
             .await?;
         transaction.commit().await?;
