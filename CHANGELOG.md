@@ -114,7 +114,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Cache each Playarr profile's available navigation sections and wait for them before showing the
   left navigation, preventing its items from jumping during sign-in.
 - Show the source bitrate alongside Original in Playarr's player quality menu.
-- Anchor profile-led authentication back controls to the exact Series-view header position.
+- Anchor the sign-in back control to the exact Series-view header position while keeping the
+  profile selector free of back navigation.
 - Restore native mouse-wheel, trackpad, scrollbar, and touch scrolling on every authenticated
   Playarr page while keeping ArrowUp and ArrowDown navigation available from text inputs.
 - Show only users signed in on the current device in Playarr's profile selector.

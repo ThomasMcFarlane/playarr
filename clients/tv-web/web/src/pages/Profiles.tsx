@@ -121,7 +121,6 @@ export function ProfilesPage() {
   const backTo = safeBackTo(locationState?.backTo);
   const loginFrom = safeLoginFrom(locationState?.loginFrom, backTo);
   const navigationOrigin = navigationOriginFromState(locationState);
-  const showBack = Boolean(navigationOrigin || locationState?.backTo);
   const navigationLayer = useNavigationLayer("profiles");
   useTvNavigation(location.pathname, false, backTo, navigationOrigin);
   const [serverProfiles, setServerProfiles] = useState<ViewerProfile[] | null>(null);
@@ -398,10 +397,7 @@ export function ProfilesPage() {
 
   return (
     <div className="profiles-page">
-      <TvStageChrome
-        backLabel={showBack ? t("pages.profiles.backAriaLabel") : undefined}
-        onBack={showBack ? returnFromProfiles : undefined}
-      />
+      <TvStageChrome />
 
       <header className="profiles-heading">
         <p>{t("pages.profiles.title")}</p>
