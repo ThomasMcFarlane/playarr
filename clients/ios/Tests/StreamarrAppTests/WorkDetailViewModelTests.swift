@@ -48,6 +48,48 @@ final class WorkDetailViewModelTests: XCTestCase {
     }
 }
 
+@MainActor
+final class HomeParityTests: XCTestCase {
+    func testHomeRailsMatchWebOrderingAndDoNotRepeatTitles() {
+        let movieA = makeWork(title: "Movie A", kind: .movie, addedAt: 6)
+        let movieB = makeWork(title: "Movie B", kind: .movie, addedAt: 3)
+        let seriesA = makeWork(title: "Series A", kind: .series, addedAt: 5)
+        let seriesB = makeWork(title: "Series B", kind: .series, addedAt: 2)
+        let siteA = makeWork(title: "Site A", kind: .site, addedAt: 4)
+        let siteB = makeWork(title: "Site B", kind: .site, addedAt: 1)
+
+        let rails = HomeViewModel.makeRails(
+            movies: [movieA, movieB],
+            series: [seriesA, seriesB],
+            sites: [siteA, siteB],
+            onDeck: [seriesA]
+        )
+
+        XCTAssertEqual(rails.map(\.title), ["On deck", "New movies", "New series", "New sites"])
+        XCTAssertEqual(rails.first?.works, [seriesA])
+        let displayedIDs = rails.flatMap(\.works).map(\.id)
+        XCTAssertEqual(Set(displayedIDs).count, displayedIDs.count)
+    }
+
+    func testPhoneHomeUsesBoundedWebCarouselAndArtworkGeometry() {
+        XCTAssertEqual(HomeLayout.backdropHeight(viewportHeight: 800, phone: true), 440, accuracy: 0.001)
+        XCTAssertEqual(HomeLayout.carouselHeight(cardWidth: 184, phone: true), 155.5, accuracy: 0.001)
+        XCTAssertEqual(HomeLayout.backdropHeight(viewportHeight: 800, phone: false), 800, accuracy: 0.001)
+    }
+
+    private func makeWork(title: String, kind: WorkKind, addedAt: TimeInterval) -> Work {
+        Work(
+            id: UUID(),
+            kind: kind,
+            title: title,
+            sortTitle: title,
+            addedAt: Date(timeIntervalSince1970: addedAt),
+            monitored: true,
+            availability: .available
+        )
+    }
+}
+
 private struct WorkDetailAPIClient: StreamarrAPIClient {
     let result: Result<WorkDetail, Error>
     let baseURL = URL(string: "https://streamarr.example")!

@@ -1,6 +1,16 @@
 import StreamarrKit
 import SwiftUI
 
+enum HomeLayout {
+    static func backdropHeight(viewportHeight: CGFloat, phone: Bool) -> CGFloat {
+        phone ? viewportHeight * 0.55 : viewportHeight
+    }
+
+    static func carouselHeight(cardWidth: CGFloat, phone: Bool) -> CGFloat {
+        cardWidth * 9 / 16 + (phone ? 52 : 46)
+    }
+}
+
 struct HomeView: View {
     let viewModel: HomeViewModel
     let apiClient: StreamarrAPIClient
@@ -27,16 +37,21 @@ struct HomeView: View {
         GeometryReader { proxy in
             let phone = proxy.size.width <= 760
             ZStack(alignment: .topLeading) {
-                stageBackdrop(phone: phone)
+                stageBackdrop(phone: phone, height: proxy.size.height)
 
-                if !phone, let featured = viewModel.recentlyAdded.first {
+                if !phone, let featured = viewModel.featuredWork {
                     featuredCopy(featured)
                         .frame(width: proxy.size.width * 0.36, alignment: .leading)
                         .padding(.leading, max(112, proxy.size.width * 0.085))
                         .padding(.top, proxy.size.height * 0.24)
                 }
 
-                rails(phone: phone, width: proxy.size.width, height: proxy.size.height)
+                rails(
+                    phone: phone,
+                    width: proxy.size.width,
+                    height: proxy.size.height,
+                    safeTop: proxy.safeAreaInsets.top
+                )
                     .frame(
                         width: phone ? proxy.size.width : proxy.size.width * 0.62,
                         height: proxy.size.height
@@ -52,29 +67,34 @@ struct HomeView: View {
     }
 
     @ViewBuilder
-    private func stageBackdrop(phone: Bool) -> some View {
-        if let featured = viewModel.recentlyAdded.first {
-            PlayarrArtwork(work: featured, kind: .backdrop, apiClient: apiClient)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .opacity(phone ? 0.42 : 0.72)
-                .overlay {
-                    LinearGradient(
-                        colors: phone
-                            ? [.clear, PlayarrStyle.surface.opacity(0.38), PlayarrStyle.surface]
-                            : [PlayarrStyle.surface.opacity(0.12), PlayarrStyle.surface.opacity(0.36)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                }
-                .overlay {
-                    LinearGradient(
-                        colors: [PlayarrStyle.surface.opacity(phone ? 0.28 : 0.5), .clear],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                }
-        } else {
+    private func stageBackdrop(phone: Bool, height: CGFloat) -> some View {
+        ZStack(alignment: .top) {
             PlayarrStyle.surface
+            if let featured = viewModel.featuredWork {
+                PlayarrArtwork(work: featured, kind: .backdrop, apiClient: apiClient)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: HomeLayout.backdropHeight(viewportHeight: height, phone: phone))
+                    .opacity(phone ? 0.42 : 0.72)
+            }
+            LinearGradient(
+                stops: phone
+                    ? [
+                        .init(color: .clear, location: 0.12),
+                        .init(color: PlayarrStyle.surface.opacity(0.34), location: 0.33),
+                        .init(color: PlayarrStyle.surface, location: 0.52),
+                    ]
+                    : [
+                        .init(color: PlayarrStyle.surface.opacity(0.12), location: 0),
+                        .init(color: PlayarrStyle.surface.opacity(0.36), location: 1),
+                    ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            LinearGradient(
+                colors: [PlayarrStyle.surface.opacity(phone ? 0.28 : 0.5), .clear],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
         }
     }
 
@@ -111,43 +131,14 @@ struct HomeView: View {
         .buttonStyle(.plain)
     }
 
-    private func rails(phone: Bool, width: CGFloat, height: CGFloat) -> some View {
+    private func rails(phone: Bool, width: CGFloat, height: CGFloat, safeTop: CGFloat) -> some View {
         ScrollView(.vertical) {
             LazyVStack(alignment: .leading, spacing: phone ? 24 : 48) {
-                if !viewModel.continueWatching.isEmpty {
-                    railSection(
-                        title: "Continue watching",
-                        count: viewModel.continueWatching.count,
-                        phone: phone
-                    ) {
-                        ForEach(viewModel.continueWatching) { item in
-                            workLink(item.work) {
-                                PlayarrMediaCard(
-                                    work: item.work,
-                                    apiClient: apiClient,
-                                    progress: item.progress,
-                                    width: cardWidth(phone: phone, viewport: width)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                mediaRail(title: "Recently added", works: viewModel.recentlyAdded, phone: phone, width: width)
-
-                ForEach(WorkKind.allCases, id: \.self) { kind in
-                    let works = viewModel.recentlyAdded.filter { $0.kind == kind }
-                    if !works.isEmpty {
-                        mediaRail(
-                            title: kind == .artist ? "Recently added music" : kind.displayName,
-                            works: works,
-                            phone: phone,
-                            width: width
-                        )
-                    }
+                ForEach(viewModel.rails) { rail in
+                    mediaRail(title: rail.title, works: rail.works, phone: phone, width: width)
                 }
             }
-            .padding(.top, phone ? 74 : height * 0.5)
+            .padding(.top, phone ? max(76, safeTop + 58) : height * 0.5)
             .padding(.bottom, phone ? 112 : height * 0.5)
         }
         .refreshable { await viewModel.load() }
@@ -170,13 +161,15 @@ struct HomeView: View {
     }
 
     private func mediaRail(title: String, works: [Work], phone: Bool, width: CGFloat) -> some View {
-        railSection(title: title, count: works.count, phone: phone) {
+        let mediaCardWidth = cardWidth(phone: phone, viewport: width)
+        return railSection(title: title, count: works.count, phone: phone, cardWidth: mediaCardWidth) {
             ForEach(works) { work in
                 workLink(work) {
                     PlayarrMediaCard(
                         work: work,
                         apiClient: apiClient,
-                        width: cardWidth(phone: phone, viewport: width)
+                        progress: viewModel.progressByWorkID[work.id],
+                        width: mediaCardWidth
                     )
                 }
             }
@@ -187,6 +180,7 @@ struct HomeView: View {
         title: String,
         count: Int,
         phone: Bool,
+        cardWidth: CGFloat,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: phone ? 8 : 12) {
@@ -203,10 +197,14 @@ struct HomeView: View {
 
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: phone ? 12 : 18, content: content)
-                    .padding(.leading, phone ? 16 : 24)
-                    .padding(.trailing, phone ? 16 : 36)
                     .padding(.vertical, 8)
             }
+            .contentMargins(
+                .horizontal,
+                phone ? 16 : 24,
+                for: .scrollContent
+            )
+            .frame(height: HomeLayout.carouselHeight(cardWidth: cardWidth, phone: phone))
             .scrollIndicators(.hidden)
         }
     }
