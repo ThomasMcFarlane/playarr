@@ -111,6 +111,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Let Left and Right leave Playarr text inputs at their matching caret boundaries while
+  preserving native caret movement within the value.
 - Match Settings to the Series and Movies 35/65 stage: keep its rail-styled detail panel full
   height, preserve native inner scrolling, and align the clock against the left panel edge.
 - Keep requested Playarr URLs in place while showing profile selection, retry saved sessions before

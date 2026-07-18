@@ -20,7 +20,13 @@ type Direction = "up" | "down" | "left" | "right";
 
 function formControlDescriptor(target: EventTarget | null): FormControlDescriptor | null {
   if (target instanceof HTMLInputElement) {
-    return { kind: "input", type: target.type };
+    return {
+      kind: "input",
+      type: target.type,
+      selectionStart: target.selectionStart,
+      selectionEnd: target.selectionEnd,
+      valueLength: target.value.length,
+    };
   }
   if (target instanceof HTMLTextAreaElement) return { kind: "textarea" };
   if (target instanceof HTMLSelectElement) return { kind: "select" };
