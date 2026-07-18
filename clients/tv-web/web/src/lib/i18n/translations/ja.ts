@@ -622,6 +622,8 @@ export const ja: Translations = {
     "この1回限りのコードは、お使いのStreamarrサーバーが設定された状態でPlayarrを開きます。",
   "settings.invite.qrLabel": "Playarr友達招待のQRコード",
   "settings.invite.linkLabel": "招待リンク",
+  "settings.invite.messageLabel": "誰のための招待で、何へのアクセスが必要ですか？（任意）",
+  "settings.invite.messagePlaceholder": "例：Sam向けに、映画とテレビシリーズへのアクセスをお願いします。",
   "settings.invite.expires": "{{expiresAt}}に期限切れになります。この招待は一度だけ使用できます。",
   "settings.invite.close": "閉じる",
   "settings.invite.copied": "コピーしました",

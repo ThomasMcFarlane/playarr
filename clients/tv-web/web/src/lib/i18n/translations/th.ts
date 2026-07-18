@@ -625,6 +625,8 @@ export const th: Translations = {
     "รหัสใช้ครั้งเดียวนี้จะเปิด Playarr โดยล็อกเซิร์ฟเวอร์ Streamarr ของคุณไว้ให้แล้ว",
   "settings.invite.qrLabel": "คิวอาร์โค้ดสำหรับคำเชิญเพื่อนของ Playarr",
   "settings.invite.linkLabel": "ลิงก์คำเชิญ",
+  "settings.invite.messageLabel": "คำเชิญนี้สำหรับใคร และควรเข้าถึงอะไรได้บ้าง (ไม่บังคับ)",
+  "settings.invite.messagePlaceholder": "ตัวอย่าง: สำหรับ Sam โปรดให้สิทธิ์เข้าถึงภาพยนตร์และซีรีส์",
   "settings.invite.expires": "หมดอายุ {{expiresAt}} คำเชิญนี้ใช้ได้เพียงครั้งเดียว",
   "settings.invite.close": "ปิด",
   "settings.invite.copied": "คัดลอกแล้ว",

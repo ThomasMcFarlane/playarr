@@ -31,6 +31,7 @@ export function SettingsInvitePage() {
   const [friendInviteLink, setFriendInviteLink] = useState<string | null>(null);
   const [friendInviteExpiresAt, setFriendInviteExpiresAt] = useState<string | null>(null);
   const [friendInviteCopied, setFriendInviteCopied] = useState(false);
+  const [requestMessage, setRequestMessage] = useState("");
   const [pushState, setPushState] = useState<PushState>("idle");
   const [pushError, setPushError] = useState<string | null>(null);
 
@@ -63,8 +64,11 @@ export function SettingsInvitePage() {
     const current = friendInviteState.status === "loading" ? null : friendInviteState.request;
     setFriendInviteState({ status: "saving", request: current });
     try {
-      const request = await client.createUserInviteRequest();
+      const request = await client.createUserInviteRequest({
+        message: requestMessage.trim() || undefined,
+      });
       setFriendInviteState({ status: "ready", request });
+      setRequestMessage("");
       showToast(t("settings.invite.toastRequestSent"));
     } catch (error) {
       setFriendInviteState({
@@ -151,6 +155,22 @@ export function SettingsInvitePage() {
             </p>
             {friendInviteState.status === "error" ? (
               <p className="error-text" role="alert">{friendInviteState.message}</p>
+            ) : null}
+            {!friendInviteState.request ||
+            friendInviteState.request.status === "denied" ||
+            friendInviteState.request.status === "generated" ? (
+              <label className="form-label" htmlFor="friend-invite-message">
+                {t("settings.invite.messageLabel")}
+                <textarea
+                  id="friend-invite-message"
+                  className="input"
+                  rows={4}
+                  maxLength={500}
+                  value={requestMessage}
+                  placeholder={t("settings.invite.messagePlaceholder")}
+                  onChange={(event) => setRequestMessage(event.target.value)}
+                />
+              </label>
             ) : null}
             <button
               type="button"

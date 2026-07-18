@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Let administrators choose Playarr and shared-library access when creating or approving an
+  invitation, and let requesters include an admin-visible message about who the invite is for.
 - Add playful per-profile avatar choices in Playarr settings, with crop, reposition, zoom, and
   locally resized custom photo uploads on devices that provide an image picker.
 - Add held-playlist actions for renaming, choosing a new parent, or deleting personal playlists

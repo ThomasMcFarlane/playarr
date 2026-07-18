@@ -617,6 +617,8 @@ export const en = {
   "settings.invite.generateQr": "Generate invite QR",
   "settings.invite.kicker": "Make it yours",
   "settings.invite.linkLabel": "Invite link",
+  "settings.invite.messageLabel": "Who is this for, and what should they have access to? (optional)",
+  "settings.invite.messagePlaceholder": "For example: For Sam — films and television series, please.",
   "settings.invite.modalDescription":
     "This one-use code opens Playarr with your Streamarr server already locked in.",
   "settings.invite.modalKicker": "Ready to share",

@@ -1430,6 +1430,15 @@ export interface components {
              */
             parent_playlist_id?: string | null;
         };
+        /** @description Access attached to a direct administrator-issued invitation. */
+        CreateUserInvite: {
+            can_stream?: boolean;
+            library_allow?: string[];
+        };
+        /** @description Optional context supplied by the Playarr user requesting an invitation. */
+        CreateUserInviteRequest: {
+            message?: string | null;
+        };
         /**
          * @description Request body for provisioning a new account. `password` is write-only
          *     -- it is hashed via `streamarr_auth::login::hash_password` immediately
@@ -2021,6 +2030,8 @@ export interface components {
         ReviewUserInviteRequest: {
             /** @description `true` grants exactly one generation; `false` denies this request. */
             approved: boolean;
+            can_stream?: boolean;
+            library_allow?: string[];
         };
         Season: {
             availability: components["schemas"]["Availability"];
@@ -2085,8 +2096,8 @@ export interface components {
         };
         /**
          * @description Public account-creation body. The bearer invitation is write-only and
-         *     grants exactly one ordinary Playarr account: never administrator access,
-         *     and no libraries until an administrator shares them after sign-up.
+         *     grants exactly one ordinary Playarr account with the access chosen by the
+         *     administrator who issued or approved it.
          */
         SignupRequest: {
             display_name: string;
@@ -2311,11 +2322,14 @@ export interface components {
          *     making a second request per row.
          */
         UserInviteRequestResponse: {
+            can_stream: boolean;
             display_name: string;
             /** Format: date-time */
             generated_at?: string | null;
             /** Format: uuid */
             id: string;
+            library_allow: string[];
+            message?: string | null;
             /** Format: date-time */
             requested_at: string;
             /** Format: date-time */
@@ -3226,7 +3240,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateUserInvite"];
+            };
+        };
         responses: {
             /** @description Account invitation issued */
             200: {
@@ -5691,7 +5709,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateUserInviteRequest"];
+            };
+        };
         responses: {
             /** @description Current invitation request */
             200: {

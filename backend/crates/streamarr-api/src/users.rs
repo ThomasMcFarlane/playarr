@@ -58,8 +58,8 @@ pub struct CreateUserRequest {
 }
 
 /// Public account-creation body. The bearer invitation is write-only and
-/// grants exactly one ordinary Playarr account: never administrator access,
-/// and no libraries until an administrator shares them after sign-up.
+/// grants exactly one ordinary Playarr account with the access chosen by the
+/// administrator who issued or approved it.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SignupRequest {
     pub invite_token: String,
@@ -79,6 +79,26 @@ pub struct UserInviteResponse {
     pub expires_at: DateTime<Utc>,
 }
 
+fn default_invite_can_stream() -> bool {
+    true
+}
+
+/// Access attached to a direct administrator-issued invitation.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateUserInvite {
+    #[serde(default = "default_invite_can_stream")]
+    pub can_stream: bool,
+    #[serde(default)]
+    pub library_allow: Vec<Uuid>,
+}
+
+/// Optional context supplied by the Playarr user requesting an invitation.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateUserInviteRequest {
+    #[serde(default)]
+    pub message: Option<String>,
+}
+
 /// One Playarr user's request for permission to invite a friend. User
 /// identity is included so the admin console can review the queue without
 /// making a second request per row.
@@ -88,16 +108,23 @@ pub struct UserInviteRequestResponse {
     pub user_id: Uuid,
     pub username: String,
     pub display_name: String,
+    pub message: Option<String>,
     pub status: UserInviteRequestStatus,
     pub requested_at: DateTime<Utc>,
     pub reviewed_at: Option<DateTime<Utc>>,
     pub generated_at: Option<DateTime<Utc>>,
+    pub can_stream: bool,
+    pub library_allow: Vec<Uuid>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ReviewUserInviteRequest {
     /// `true` grants exactly one generation; `false` denies this request.
     pub approved: bool,
+    #[serde(default = "default_invite_can_stream")]
+    pub can_stream: bool,
+    #[serde(default)]
+    pub library_allow: Vec<Uuid>,
 }
 
 const USER_INVITE_TTL: Duration = Duration::hours(24);
@@ -117,11 +144,30 @@ async fn invite_request_response(
         user_id: request.user_id,
         username: user.username,
         display_name: user.display_name,
+        message: request.message,
         status: request.status,
         requested_at: request.requested_at,
         reviewed_at: request.reviewed_at,
         generated_at: request.generated_at,
+        can_stream: request.can_stream,
+        library_allow: request.library_allow,
     })
+}
+
+fn normalise_invite_message(message: Option<String>) -> Result<Option<String>, ApiError> {
+    let Some(message) = message else {
+        return Ok(None);
+    };
+    let message = message.trim();
+    if message.is_empty() {
+        return Ok(None);
+    }
+    if message.chars().count() > 500 {
+        return Err(ApiError::bad_request(
+            "invite request message must be 500 characters or fewer",
+        ));
+    }
+    Ok(Some(message.to_string()))
 }
 
 /// All-optional patch body -- only fields set to `Some` are applied.
@@ -434,6 +480,7 @@ pub async fn create_user_handler(
     post,
     path = "/api/v1/admin/user-invites",
     tag = "users",
+    request_body = CreateUserInvite,
     responses(
         (status = 200, description = "Account invitation issued", body = UserInviteResponse),
         (status = 401, description = "Missing or invalid access token"),
@@ -443,6 +490,7 @@ pub async fn create_user_handler(
 pub async fn create_user_invite_handler(
     State(state): State<AppState>,
     admin: AdminUser,
+    Json(body): Json<CreateUserInvite>,
 ) -> Result<Json<UserInviteResponse>, ApiError> {
     let invite_token = streamarr_auth::secret::opaque_token();
     let now = Utc::now();
@@ -454,6 +502,8 @@ pub async fn create_user_invite_handler(
             created_by: admin.user_id,
             created_at: now,
             expires_at,
+            can_stream: body.can_stream,
+            library_allow: body.library_allow,
         })
         .await
         .map_err(|err| ApiError::internal(format!("failed to persist user invitation: {err}")))?;
@@ -472,6 +522,7 @@ pub async fn create_user_invite_handler(
     post,
     path = "/api/v1/users/me/user-invite-request",
     tag = "users",
+    request_body = CreateUserInviteRequest,
     responses(
         (status = 200, description = "Current invitation request", body = UserInviteRequestResponse),
         (status = 401, description = "Missing or invalid access token"),
@@ -481,6 +532,7 @@ pub async fn create_user_invite_handler(
 pub async fn create_user_invite_request_handler(
     State(state): State<AppState>,
     streaming: StreamingUser,
+    Json(body): Json<CreateUserInviteRequest>,
 ) -> Result<Json<UserInviteRequestResponse>, ApiError> {
     if let Some(existing) = state
         .user_invite_request_repo
@@ -499,11 +551,14 @@ pub async fn create_user_invite_request_handler(
     let request = UserInviteRequest {
         id: Uuid::new_v4(),
         user_id: streaming.user_id,
+        message: normalise_invite_message(body.message)?,
         status: UserInviteRequestStatus::Pending,
         requested_at: Utc::now(),
         reviewed_by: None,
         reviewed_at: None,
         generated_at: None,
+        can_stream: true,
+        library_allow: Vec::new(),
     };
     state
         .user_invite_request_repo
@@ -581,6 +636,8 @@ pub async fn generate_user_invite_handler(
                 created_by: streaming.user_id,
                 created_at: now,
                 expires_at,
+                can_stream: request.can_stream,
+                library_allow: request.library_allow.clone(),
             },
         )
         .await
@@ -665,7 +722,18 @@ pub async fn review_user_invite_request_handler(
     };
     let reviewed = state
         .user_invite_request_repo
-        .review(id, admin.user_id, status, Utc::now())
+        .review(
+            id,
+            admin.user_id,
+            status,
+            Utc::now(),
+            body.approved && body.can_stream,
+            if body.approved {
+                &body.library_allow
+            } else {
+                &[]
+            },
+        )
         .await
         .map_err(|err| ApiError::internal(format!("failed to review invitation request: {err}")))?;
     if !reviewed {
@@ -706,14 +774,12 @@ pub async fn signup_handler(
 ) -> Result<Json<UserResponse>, ApiError> {
     let token_hash = streamarr_auth::secret::hash_token(&body.invite_token);
     let now = Utc::now();
-    let valid = state
+    let invite = state
         .user_invite_repo
-        .is_valid(&token_hash, now)
+        .find_valid(&token_hash, now)
         .await
         .map_err(|err| ApiError::internal(format!("failed to validate user invitation: {err}")))?;
-    if !valid {
-        return Err(invalid_invite());
-    }
+    let invite = invite.ok_or_else(invalid_invite)?;
 
     ensure_username_available(&state, &body.username).await?;
     let consumed = state
@@ -734,8 +800,8 @@ pub async fn signup_handler(
             email: body.email,
             password: body.password,
             is_admin: false,
-            can_stream: true,
-            library_allow: Vec::new(),
+            can_stream: invite.can_stream,
+            library_allow: invite.library_allow,
         },
     )
     .await?;
@@ -1290,14 +1356,19 @@ mod tests {
     };
 
     async fn issue_invite(router: &axum::Router, token: &str) -> String {
+        let body = serde_json::json!({
+            "can_stream": true,
+            "library_allow": ["11111111-1111-4111-8111-111111111111"],
+        });
         let response = router
             .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
                     .uri("/api/v1/admin/user-invites")
+                    .header("content-type", "application/json")
                     .header("Authorization", bearer_header(token))
-                    .body(Body::empty())
+                    .body(Body::from(body.to_string()))
                     .unwrap(),
             )
             .await
@@ -1346,7 +1417,10 @@ mod tests {
         assert_eq!(created["username"], "invited-alice");
         assert_eq!(created["is_admin"], false);
         assert_eq!(created["can_stream"], true);
-        assert_eq!(created["library_allow"], serde_json::json!([]));
+        assert_eq!(
+            created["library_allow"],
+            serde_json::json!(["11111111-1111-4111-8111-111111111111"])
+        );
 
         let second_body = serde_json::json!({
             "invite_token": signup_body["invite_token"],
@@ -2089,8 +2163,14 @@ mod tests {
                 Request::builder()
                     .method("POST")
                     .uri("/api/v1/users/me/user-invite-request")
+                    .header("content-type", "application/json")
                     .header("Authorization", bearer_header(&requester_token))
-                    .body(Body::empty())
+                    .body(Body::from(
+                        serde_json::json!({
+                            "message": "For Sam, who would like films and television."
+                        })
+                        .to_string(),
+                    ))
                     .unwrap(),
             )
             .await
@@ -2101,6 +2181,10 @@ mod tests {
             .unwrap();
         let request: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(request["status"], "pending");
+        assert_eq!(
+            request["message"],
+            "For Sam, who would like films and television."
+        );
         let request_id = request["id"].as_str().unwrap();
 
         let response = router
@@ -2137,7 +2221,14 @@ mod tests {
                     .uri(format!("/api/v1/admin/user-invite-requests/{request_id}"))
                     .header("content-type", "application/json")
                     .header("Authorization", bearer_header(&admin_token))
-                    .body(Body::from(r#"{"approved":true}"#))
+                    .body(Body::from(
+                        serde_json::json!({
+                            "approved": true,
+                            "can_stream": true,
+                            "library_allow": ["22222222-2222-4222-8222-222222222222"]
+                        })
+                        .to_string(),
+                    ))
                     .unwrap(),
             )
             .await
@@ -2148,6 +2239,10 @@ mod tests {
             .unwrap();
         let approved: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(approved["status"], "approved");
+        assert_eq!(
+            approved["library_allow"],
+            serde_json::json!(["22222222-2222-4222-8222-222222222222"])
+        );
         assert!(approved["reviewed_at"].is_string());
         let notifications = state.push_notifications.sent.lock().await;
         assert_eq!(notifications.len(), 1);
@@ -2180,6 +2275,35 @@ mod tests {
         let remaining = expires_at - generated_at;
         assert!(remaining >= Duration::hours(23));
         assert!(remaining <= Duration::hours(24) + Duration::seconds(2));
+
+        let signup_body = serde_json::json!({
+            "invite_token": invite["invite_token"],
+            "username": "requesters-friend",
+            "display_name": "Requester's Friend",
+            "password": "a secure password for the invited friend",
+        });
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/auth/signup")
+                    .header("content-type", "application/json")
+                    .body(Body::from(signup_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let invited_user: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(invited_user["can_stream"], true);
+        assert_eq!(
+            invited_user["library_allow"],
+            serde_json::json!(["22222222-2222-4222-8222-222222222222"])
+        );
 
         let response = router
             .clone()
