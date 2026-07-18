@@ -48,6 +48,8 @@ import {
 } from "../components/tv/TvStage";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 import { MoviesIcon, MusicIcon } from "../components/NavIcons";
+import { SearchablePlaylistSelect } from "../components/SearchablePlaylistSelect";
+import { usePlaylistContextMenu } from "../components/PlaylistContextMenu";
 
 interface ResolvedPlaylistItem {
   id: string;
@@ -163,6 +165,12 @@ function parentOptionLabel(
   return names.join(" › ");
 }
 
+function playlistMediaTypeKey(mediaType: PlaylistResponse["media_type"]) {
+  return mediaType === "audio"
+    ? ("pages.playlists.mediaTypeAudio" as const)
+    : ("pages.playlists.mediaTypeVideo" as const);
+}
+
 function rootPlaylistTrack(
   track: PlaylistTrack,
   tracksById: Map<string, PlaylistTrack>
@@ -229,6 +237,8 @@ export function PlaylistsPage() {
   const [playlistName, setPlaylistName] = useState("");
   const [playlistMediaType, setPlaylistMediaType] =
     useState<PlaylistResponse["media_type"]>("video");
+  const playlistMediaTypeRef =
+    useRef<PlaylistResponse["media_type"]>("video");
   const [parentPlaylistId, setParentPlaylistId] = useState("");
   const [createState, setCreateState] = useState<CreateState>({ status: "idle" });
   const gridRef = useRef<HTMLDivElement>(null);
@@ -238,7 +248,7 @@ export function PlaylistsPage() {
   const filterButtonRef = useRef<HTMLButtonElement>(null);
   const filterDrawerRef = useRef<HTMLElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const parentSelectRef = useRef<HTMLSelectElement>(null);
+  const parentSelectRef = useRef<HTMLButtonElement | null>(null);
   const createSubmitRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -620,6 +630,73 @@ export function PlaylistsPage() {
     []
   );
 
+  const handlePlaylistUpdated = useCallback((updated: PlaylistResponse) => {
+    setPageState((current) =>
+      current.status === "ready"
+        ? {
+            status: "ready",
+            tracks: current.tracks.map((track) =>
+              track.playlist.id === updated.id
+                ? { ...track, playlist: updated }
+                : track
+            ),
+          }
+        : current
+    );
+  }, []);
+
+  const handlePlaylistDeleted = useCallback(
+    (playlistId: string) => {
+      const deletedIds = new Set([
+        playlistId,
+        ...descendantPlaylistTracks(playlistId, childrenByParent).map(
+          (track) => track.playlist.id
+        ),
+      ]);
+      setPageState((current) =>
+        current.status === "ready"
+          ? {
+              status: "ready",
+              tracks: current.tracks.filter(
+                (track) => !deletedIds.has(track.playlist.id)
+              ),
+            }
+          : current
+      );
+      setSelectedDirectoryId((current) =>
+        current && deletedIds.has(current) ? null : current
+      );
+      setSelectedByTrack((current) =>
+        Object.fromEntries(
+          Object.entries(current).filter(([id]) => !deletedIds.has(id))
+        )
+      );
+      if (requestedPlaylistId && deletedIds.has(requestedPlaylistId)) {
+        const params = new URLSearchParams(searchParams);
+        params.delete("playlist");
+        params.delete("track");
+        setSearchParams(params, { replace: true });
+      } else if (requestedTrackId && deletedIds.has(requestedTrackId)) {
+        const params = new URLSearchParams(searchParams);
+        params.delete("track");
+        setSearchParams(params, { replace: true });
+      }
+    },
+    [
+      childrenByParent,
+      requestedPlaylistId,
+      requestedTrackId,
+      searchParams,
+      setSearchParams,
+    ]
+  );
+
+  const playlistContext = usePlaylistContextMenu({
+    playlists: tracks.map((track) => track.playlist),
+    onUpdated: handlePlaylistUpdated,
+    onDeleted: handlePlaylistDeleted,
+  });
+
   function selectFromTrack(trackId: string, itemId: string) {
     setActiveTrackId(trackId);
     setSelectedByTrack((current) =>
@@ -665,7 +742,10 @@ export function PlaylistsPage() {
     setDrawer(nextDrawer);
     setCreateState({ status: "idle" });
     if (nextDrawer === "create") {
-      setPlaylistMediaType(fixedParentPlaylist?.playlist.media_type ?? "video");
+      const nextMediaType =
+        fixedParentPlaylist?.playlist.media_type ?? "video";
+      playlistMediaTypeRef.current = nextMediaType;
+      setPlaylistMediaType(nextMediaType);
       setParentPlaylistId(
         fixedParentPlaylist ? fixedParentPlaylist.playlist.id : ""
       );
@@ -730,6 +810,23 @@ export function PlaylistsPage() {
       return;
     }
     if (event.target instanceof HTMLSelectElement) return;
+    if (
+      event.target === nameInputRef.current &&
+      event.key === "ArrowDown" &&
+      drawer === "create"
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      const selectedType =
+        fixedParentPlaylist?.playlist.media_type ??
+        playlistMediaTypeRef.current;
+      event.currentTarget
+        .querySelector<HTMLButtonElement>(
+          `[data-playlist-media-type="${selectedType}"]`
+        )
+        ?.focus({ preventScroll: true });
+      return;
+    }
     const controls = Array.from(
       event.currentTarget.querySelectorAll<HTMLElement>(
         'button:not(:disabled), input:not(:disabled), select:not(:disabled)'
@@ -747,6 +844,7 @@ export function PlaylistsPage() {
 
   function selectPlaylistMediaType(type: PlaylistResponse["media_type"]) {
     if (fixedParentPlaylist) return;
+    playlistMediaTypeRef.current = type;
     setPlaylistMediaType(type);
     setParentPlaylistId("");
   }
@@ -804,12 +902,18 @@ export function PlaylistsPage() {
     try {
       const createdParentId =
         fixedParentPlaylist?.playlist.id ?? (parentPlaylistId || null);
+      const selectedMediaType =
+        fixedParentPlaylist?.playlist.media_type ??
+        playlistMediaTypeRef.current;
       const created = await client.createPlaylist({
         name,
         parent_playlist_id: createdParentId,
-        media_type:
-          fixedParentPlaylist?.playlist.media_type ?? playlistMediaType,
+        media_type: selectedMediaType,
       });
+      if (created.media_type !== selectedMediaType) {
+        await client.deletePlaylist(created.id).catch(() => undefined);
+        throw new Error(t("pages.playlists.mediaTypeServerMismatch"));
+      }
       setPageState((current) =>
         current.status === "ready"
           ? {
@@ -940,6 +1044,9 @@ export function PlaylistsPage() {
     : isDetail
       ? ".tv-playlist-media-track .tv-home-card"
       : ".tv-playlist-directory-card";
+  const editablePlaylist = isDetail
+    ? activeDetailTrack?.playlist ?? selectedPlaylist?.playlist ?? null
+    : null;
 
   return (
     <TvStageShell
@@ -987,12 +1094,16 @@ export function PlaylistsPage() {
         <h1>{selectedPlaylist?.playlist.name ?? t("pages.playlists.title")}</h1>
         <span>
           {isDetail
-            ? t(
+            ? `${
+                selectedPlaylist
+                  ? t(playlistMediaTypeKey(selectedPlaylist.playlist.media_type))
+                  : ""
+              } · ${t(
                 detailTracks.length === 1
                   ? "pages.playlists.trackCountOne"
                   : "pages.playlists.trackCountOther",
                 { count: detailTracks.length }
-              )
+              )}`
             : t(
                 rootTracks.length === 1
                   ? "pages.playlists.playlistCountOne"
@@ -1000,6 +1111,20 @@ export function PlaylistsPage() {
                 { count: rootTracks.length.toLocaleString() }
               )}
         </span>
+        {editablePlaylist && !editablePlaylist.is_system ? (
+          <button
+            type="button"
+            className="tv-playlist-heading-menu"
+            aria-label={t("components.playlistContextMenu.open", {
+              name: editablePlaylist.name,
+            })}
+            onClick={(event) =>
+              playlistContext.open(editablePlaylist, event.currentTarget)
+            }
+          >
+            ···
+          </button>
+        ) : null}
       </header>
 
       <aside
@@ -1009,9 +1134,13 @@ export function PlaylistsPage() {
       >
         <p className="tv-provider">
           {featureTrack
-            ? featureTrack.playlist.is_system
-              ? t("pages.playlists.sharedPlaylist")
-              : t("pages.playlists.yourPlaylist")
+            ? `${t(
+                playlistMediaTypeKey(featureTrack.playlist.media_type)
+              )} · ${
+                featureTrack.playlist.is_system
+                  ? t("pages.playlists.sharedPlaylist")
+                  : t("pages.playlists.yourPlaylist")
+              }`
             : t("pages.playlists.yourCollection")}
         </p>
         <h2>{featureTitle}</h2>
@@ -1104,6 +1233,7 @@ export function PlaylistsPage() {
                     onNavigate={navigationLayer.captureLink}
                     onFocus={() => setSelectedDirectoryId(track.playlist.id)}
                     defaultFocus={index === 0}
+                    contextProps={playlistContext.itemProps(track.playlist)}
                   />
                 );
               })}
@@ -1255,6 +1385,7 @@ export function PlaylistsPage() {
                     data-playlist-media-type={type}
                     disabled={Boolean(fixedParentPlaylist)}
                     onClick={() => selectPlaylistMediaType(type)}
+                    onFocus={() => selectPlaylistMediaType(type)}
                     onKeyDown={(event) =>
                       handlePlaylistMediaTypeKeyDown(event, type)
                     }
@@ -1270,20 +1401,22 @@ export function PlaylistsPage() {
                 <label htmlFor="playlist-parent">
                   {t("pages.playlists.parentPlaylistLabel")}
                 </label>
-                <select
-                  ref={parentSelectRef}
+                <SearchablePlaylistSelect
+                  ariaLabel={t("pages.playlists.parentPlaylistLabel")}
+                  emptyLabel={t("pages.playlists.noneTopLevel")}
                   id="playlist-parent"
-                  className="tv-playlist-parent-select"
+                  noResultsLabel={t("pages.playlists.noParentResults")}
                   value={parentPlaylistId}
-                  onChange={(event) => setParentPlaylistId(event.target.value)}
-                >
-                  <option value="">{t("pages.playlists.noneTopLevel")}</option>
-                  {personalParentOptions.map((track) => (
-                    <option key={track.playlist.id} value={track.playlist.id}>
-                      {parentOptionLabel(track, tracksById)}
-                    </option>
-                  ))}
-                </select>
+                  onSelect={setParentPlaylistId}
+                  options={personalParentOptions.map((track) => ({
+                    value: track.playlist.id,
+                    label: parentOptionLabel(track, tracksById),
+                  }))}
+                  searchPlaceholder={t("pages.playlists.searchParents")}
+                  triggerRef={(element) => {
+                    parentSelectRef.current = element;
+                  }}
+                />
               </>
             ) : null}
             {createState.status === "error" ? (
@@ -1375,6 +1508,7 @@ export function PlaylistsPage() {
           </section>
         </aside>
       ) : null}
+      {playlistContext.contextMenu}
     </TvStageShell>
   );
 }
@@ -1389,6 +1523,7 @@ function PlaylistDirectoryCard({
   onNavigate,
   onFocus,
   defaultFocus,
+  contextProps,
 }: {
   track: PlaylistTrack;
   coverWorks: Work[];
@@ -1399,6 +1534,9 @@ function PlaylistDirectoryCard({
   onNavigate: ReturnType<typeof useNavigationLayer>["captureLink"];
   onFocus: () => void;
   defaultFocus: boolean;
+  contextProps: ReturnType<
+    ReturnType<typeof usePlaylistContextMenu>["itemProps"]
+  >;
 }) {
   const { t } = useLanguage();
   return (
@@ -1415,6 +1553,7 @@ function PlaylistDirectoryCard({
       aria-label={t("pages.playlists.openPlaylistAriaLabel", {
         name: track.playlist.name,
       })}
+      {...contextProps}
     >
       <PlaylistCoverStack
         name={track.playlist.name}
@@ -1423,6 +1562,8 @@ function PlaylistDirectoryCard({
       <span className="tv-title-card-copy tv-playlist-directory-card-copy">
         <strong>{track.playlist.name}</strong>
         <small>
+          {t(playlistMediaTypeKey(track.playlist.media_type))}
+          {" · "}
           {track.playlist.is_system
             ? t("pages.playlists.sharedLabel")
             : t("pages.playlists.personalLabel")}
@@ -1544,14 +1685,18 @@ function PlaylistMediaTrack({
     <TvMediaTrack
       title={title}
       meta={
-        track.items.length
-          ? `${isRootTrack ? t("pages.playlists.directItemsPrefix") : ""}${t(
-              track.items.length === 1
-                ? "pages.playlists.itemCountOne"
-                : "pages.playlists.itemCountOther",
-              { count: track.items.length }
-            )}`
-          : undefined
+        `${t(playlistMediaTypeKey(track.playlist.media_type))}${
+          track.items.length ? " · " : ""
+        }${
+          track.items.length
+            ? `${isRootTrack ? t("pages.playlists.directItemsPrefix") : ""}${t(
+                track.items.length === 1
+                  ? "pages.playlists.itemCountOne"
+                  : "pages.playlists.itemCountOther",
+                { count: track.items.length }
+              )}`
+            : ""
+        }`
       }
       active={isActive}
       ariaLabel={title}

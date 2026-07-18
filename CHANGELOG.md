@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add held-playlist actions for renaming, choosing a new parent, or deleting personal playlists
+  with explicit cascade confirmation.
 - Add audio-only playlists and a held-track context action for adding individual music tracks,
   albums, or complete artists while keeping existing and new video playlists free of audio items.
 - Link live and historical administrator playback activity to named users and catalogue items,
@@ -68,6 +70,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Use the standard library-heading divider and spacing between the media section and selected item
   on music, movie, and series detail pages instead of a hand-drawn pipe.
+- Show each playlist's audio or video type while browsing and when open, and replace parent
+  playlist selects with searchable pickers in create and edit flows.
 - Match music, movie, and series detail-title typography to the established selected-title style
   used by the Series and Movies library pages.
 - Require an explicit click, keyboard focus, or remote action to select media cards and rows instead
@@ -133,6 +137,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Persist the focused audio or video choice when creating a playlist instead of allowing visual
+  focus and the submitted playlist type to diverge, and roll back mismatched results from an
+  outdated server instead of silently leaving a video playlist behind.
 - Replace the playlist type dropdown with styled video and audio icon buttons that support
   directional remote and keyboard navigation.
 - Render Streamarr activity links in the surrounding text colour and report bytes actually

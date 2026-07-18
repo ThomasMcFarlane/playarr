@@ -24,4 +24,18 @@ describe("Playlists create form", () => {
       "parentSelectRef.current ?? createSubmitRef.current"
     );
   });
+
+  it("submits the synchronously focused media type", () => {
+    expect(source).toContain("playlistMediaTypeRef.current = type");
+    expect(source).toContain("media_type: selectedMediaType");
+    expect(source).toContain("onFocus={() => selectPlaylistMediaType(type)}");
+    expect(source).toContain("created.media_type !== selectedMediaType");
+    expect(source).toContain("client.deletePlaylist(created.id)");
+  });
+
+  it("shows playlist types and uses searchable parent selection", () => {
+    expect(source).toContain("playlistMediaTypeKey");
+    expect(source).toContain("<SearchablePlaylistSelect");
+    expect(source).toContain("playlistContext.itemProps(track.playlist)");
+  });
 });
