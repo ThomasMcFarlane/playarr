@@ -251,6 +251,11 @@ export const en = {
   "pages.musicDetail.artist": "Artist",
   "pages.musicDetail.backToMusic": "Back to Music",
   "pages.musicDetail.durationUnavailable": "Duration unavailable",
+  "pages.notFound.description":
+    "The address may be incorrect, or the page may have moved somewhere else.",
+  "pages.notFound.heading": "Page not found",
+  "pages.notFound.kicker": "Lost in the library",
+  "pages.notFound.title": "Page not found",
   "pages.musicDetail.loadErrorTitle": "This artist could not be loaded",
   "pages.musicDetail.loadingArtistDetails": "Loading artist details",
   "pages.musicDetail.loadingMusic": "Loading music",

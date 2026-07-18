@@ -288,6 +288,10 @@ export const th: Translations = {
   "pages.musicDetail.noAlbumsDescription": "แทร็กที่พร้อมใช้งานจะปรากฏที่นี่หลังไลบรารีเพลงอัปเดต",
   "pages.musicDetail.yourLibrary": "ไลบรารีของคุณ",
   "pages.musicDetail.durationUnavailable": "ไม่ทราบความยาว",
+  "pages.notFound.description": "ที่อยู่อาจไม่ถูกต้อง หรือหน้านี้อาจถูกย้ายไปที่อื่น",
+  "pages.notFound.heading": "ไม่พบหน้า",
+  "pages.notFound.kicker": "หลงทางในไลบรารี",
+  "pages.notFound.title": "ไม่พบหน้า",
   "pages.musicDetail.albumsAndTracksAriaLabel": "อัลบั้มและแทร็กของ {{title}}",
 
   "pages.player.nowPlaying": "กำลังเล่น",

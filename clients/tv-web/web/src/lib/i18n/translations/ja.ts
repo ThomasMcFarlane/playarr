@@ -285,6 +285,10 @@ export const ja: Translations = {
   "pages.musicDetail.noAlbumsDescription": "音楽ライブラリが更新されると、利用可能なトラックがここに表示されます。",
   "pages.musicDetail.yourLibrary": "あなたのライブラリ",
   "pages.musicDetail.durationUnavailable": "再生時間は利用できません",
+  "pages.notFound.description": "アドレスが正しくないか、ページが別の場所へ移動した可能性があります。",
+  "pages.notFound.heading": "ページが見つかりません",
+  "pages.notFound.kicker": "ライブラリで迷子になりました",
+  "pages.notFound.title": "ページが見つかりません",
   "pages.musicDetail.albumsAndTracksAriaLabel": "{{title}}のアルバムとトラック",
 
   "pages.player.nowPlaying": "再生中",

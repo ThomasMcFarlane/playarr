@@ -22,6 +22,7 @@ import {
 import { TvStageChrome } from "../components/tv/TvStage";
 import { clearActivePlayerSession } from "../lib/playerSession";
 import { useTvNavigation } from "../lib/useTvNavigation";
+import { shouldRevalidateCurrentProfile } from "../lib/profileNavigation";
 
 interface ProfileLocationState {
   backTo?: unknown;
@@ -103,7 +104,9 @@ function SignOutIcon() {
   );
 }
 
-export function ProfilesPage() {
+export function ProfilesPage(
+  { loginFrom: loginFromOverride }: { loginFrom?: string } = {}
+) {
   const { t } = useLanguage();
   useDocumentTitle(t("pages.profiles.title"));
   const client = useApiClient();
@@ -119,7 +122,7 @@ export function ProfilesPage() {
   const navigate = useNavigate();
   const locationState = location.state as ProfileLocationState | null;
   const backTo = safeBackTo(locationState?.backTo);
-  const loginFrom = safeLoginFrom(locationState?.loginFrom, backTo);
+  const loginFrom = safeLoginFrom(loginFromOverride ?? locationState?.loginFrom, backTo);
   const navigationOrigin = navigationOriginFromState(locationState);
   const navigationLayer = useNavigationLayer("profiles");
   useTvNavigation(location.pathname, false, backTo, navigationOrigin);
@@ -287,7 +290,10 @@ export function ProfilesPage() {
     profile: ViewerProfile,
     action: ProfileAction
   ) {
-    if (profile.isCurrent) {
+    if (
+      profile.isCurrent &&
+      !shouldRevalidateCurrentProfile(profile.isCurrent, action, loginFromOverride)
+    ) {
       if (action === "settings") openSettings();
       else returnFromProfiles();
       return;
@@ -302,7 +308,7 @@ export function ProfilesPage() {
           : undefined;
       continueToLogin(
         profile,
-        action === "settings" ? "/settings" : "/",
+        action === "settings" ? "/settings" : loginFrom,
         action === "settings"
           ? { backTo: "/profiles", navigationOrigin: settingsOrigin }
           : undefined

@@ -36,6 +36,7 @@ import { SearchPage } from "./pages/Search";
 import { PlaylistsPage } from "./pages/Playlists";
 import { ProfilesPage } from "./pages/Profiles";
 import { MusicDetailPage } from "./pages/MusicDetail";
+import { NotFoundPage } from "./pages/NotFound";
 import { UpdateToast } from "./components/UpdateToast";
 import { PageScrollRoot } from "./components/PageScrollRoot";
 import {
@@ -168,10 +169,9 @@ function isBackKey(event: KeyboardEvent): boolean {
  *
  * Also where "not authenticated, nothing worked" is detected and acted on:
  * `authFailed` (see `ApiClientProvider`) flips true the moment a protected
- * request's transparent login fails with no fallback left, and this
- * redirects to `/profiles` immediately instead of letting the shelled page
- * underneath render its own opaque, un-actionable "sign-in required"
- * error. The viewer then chooses a saved profile or opens the sign-in fields.
+ * request's transparent login fails with no fallback left. The profile
+ * selector is then rendered in place, without replacing the requested URL,
+ * so successful sign-in can reveal that exact route.
  */
 function AppShell() {
   const client = useApiClient();
@@ -306,16 +306,9 @@ function AppShell() {
   }, [currentUserId, playerSession]);
 
   if (authFailed) {
-    // The profile picker is the unauthenticated landing view. It carries
-    // the requested route forward so sign-in can still return the viewer
-    // to the page they originally opened.
     return (
-      <Navigate
-        to="/profiles"
-        replace
-        state={{
-          loginFrom: `${location.pathname}${location.search}${location.hash}`,
-        }}
+      <ProfilesPage
+        loginFrom={`${location.pathname}${location.search}${location.hash}`}
       />
     );
   }
@@ -563,6 +556,7 @@ export function App() {
           <Route path="profile-lock" element={<SettingsProfileLockPage />} />
           <Route path="invite" element={<SettingsInvitePage />} />
         </Route>
+        <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
   );
