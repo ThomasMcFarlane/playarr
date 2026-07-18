@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.map
  * Takes a [DataStore] rather than a [android.content.Context] so the app
  * modules control exactly which DataStore instance (and file name) this
  * writes to, consistent with this module staying DI-framework-agnostic --
- * see `mobile-android`/`tv-android`'s `di/AuthModule.kt` for where the
+ * see `mobile-android`'s `di/AuthModule.kt` for where the
  * instance is created.
  */
 class TokenStore @Inject constructor(

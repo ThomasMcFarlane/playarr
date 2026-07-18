@@ -3,8 +3,8 @@
 # =============================================================================
 #
 # Runs whenever any *client* release tag is pushed -- any tag except the
-# `backend-v*` tags handled by backend-release.yml (e.g. `mobile-android-v2.3.0`,
-# `tv-android-v2.3.0`, `ios-v1.0.4`, `tv-web-v0.9.1`, `web-v1.1.0`).
+# `backend-v*` tags handled by backend-release.yml (e.g. `android-v2.3.0`,
+# `ios-v1.0.4`, `tv-web-v0.9.1`, `web-v1.1.0`).
 #
 # It opens a pull request against backend/config/client-compatibility.toml
 # updating the `version_floor` for whichever client just released, so the
@@ -41,8 +41,8 @@ jobs:
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
-          # Expected tag shape: <client>-v<semver>, e.g. mobile-android-v2.3.0,
-          # tv-android-v2.3.0, ios-v1.0.4, tv-web-v0.9.1, web-v1.1.0.
+          # Expected tag shape: <client>-v<semver>, e.g. android-v2.3.0,
+          # ios-v1.0.4, tv-web-v0.9.1, web-v1.1.0.
           if [[ "$tag" != *-v* ]]; then
             echo "::error::Tag '$tag' doesn't match the expected <client>-v<version> shape; nothing to do."
             exit 1

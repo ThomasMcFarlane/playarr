@@ -234,8 +234,8 @@ to update.
 ## Automation: the client-compatibility bump bot
 
 [`.github/workflows/release-client-compat-bot.yml`](../.github/workflows/release-client-compat-bot.yml)
-triggers on any client release tag (`mobile-android-v*`, `tv-android-v*`,
-`ios-v*`, `tv-web-v*`, `web-v*` — anything except `backend-v*`) and opens a
+triggers on any client release tag (`android-v*`, `ios-v*`, `tv-web-v*`,
+`web-v*` — anything except `backend-v*`) and opens a
 PR proposing a version-floor bump in `client-compatibility.toml`; it never
 pushes to `main` directly. It is explicitly, self-documented, a placeholder
 today: its update step does a naive regex replace written against a

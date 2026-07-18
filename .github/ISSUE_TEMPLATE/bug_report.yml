@@ -34,7 +34,7 @@ body:
       description: >
         Server version (from the streamarr status endpoint or the Docker image
         tag) and/or client app version where you saw this.
-      placeholder: "backend-v1.4.2 / mobile-android-v2.3.0"
+      placeholder: "backend-v1.4.2 / android-v2.3.0"
     validations:
       required: true
 

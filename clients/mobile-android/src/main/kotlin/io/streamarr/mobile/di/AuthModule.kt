@@ -10,7 +10,6 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import io.streamarr.mobile.BuildConfig
 import io.streamarr.shared.auth.remote.AuthHttpClient
 import io.streamarr.shared.auth.remote.DeviceAuthApi
 import io.streamarr.shared.auth.remote.LoginApi
@@ -43,7 +42,9 @@ object AuthModule {
     @Singleton
     fun provideDeviceAuthApi(serverConfigStore: ServerConfigStore): DeviceAuthApi = AuthHttpClient.create(
         baseUrlProvider = { runBlocking { serverConfigStore.baseUrl.first() } },
-        enableHttpLogging = BuildConfig.DEBUG,
+        // Account credentials must never be written to logcat, including in
+        // locally distributed debug-signed APKs.
+        enableHttpLogging = false,
     )
 
     /** Backs [io.streamarr.shared.auth.SessionManager]'s transparent `POST /api/v1/auth/login` call. */
@@ -51,7 +52,7 @@ object AuthModule {
     @Singleton
     fun provideLoginApi(serverConfigStore: ServerConfigStore): LoginApi = AuthHttpClient.createLoginApi(
         baseUrlProvider = { runBlocking { serverConfigStore.baseUrl.first() } },
-        enableHttpLogging = BuildConfig.DEBUG,
+        enableHttpLogging = false,
     )
 
     // DeviceAuthClient, TokenStore, SessionManager, and ServerConfigStore

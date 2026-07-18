@@ -330,7 +330,7 @@ export function AndroidDownloadDetails() {
         <a
           id="android-download"
           className="profile-action-button"
-          href="/downloads/android/releases/0.1.7/playarr-android.apk"
+          href="/downloads/android/releases/0.2.1/playarr-android.apk"
           target="_blank"
           rel="noopener noreferrer"
           data-navigation-focus-key="clients:android:download"

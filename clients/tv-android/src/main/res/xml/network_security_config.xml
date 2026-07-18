@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- See mobile-android's identical file for the rationale: a self-hosted
-     Streamarr server is very commonly plain HTTP on a home LAN, which
-     Android 9+ blocks by default unless explicitly permitted here. -->
-<network-security-config>
-    <base-config cleartextTrafficPermitted="true" />
-</network-security-config>

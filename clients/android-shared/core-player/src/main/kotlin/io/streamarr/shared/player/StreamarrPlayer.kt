@@ -21,8 +21,8 @@ enum class StreamFormat {
 }
 
 /**
- * Thin wrapper interface around Media3/ExoPlayer that `mobile-android` and
- * `tv-android` both drive to play whatever
+ * Thin wrapper interface around Media3/ExoPlayer that the universal Android
+ * application drives to play whatever
  * `GET /api/v1/playback/{media_file_id}` resolved. Kept as an interface
  * (rather than exposing [androidx.media3.exoplayer.ExoPlayer] directly) so:
  *

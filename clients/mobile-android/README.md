@@ -1,27 +1,22 @@
 # mobile-android
 
-The Playarr Android app is the single phone, tablet, Android TV, and Google TV
-APK. It is a thin native host for the same responsive React application used
-by Playarr Web. This keeps
-the visible library, profiles, settings, search, and player surfaces in one
-codebase while Android retains the platform responsibilities that belong in
-an APK.
+The Playarr Android app is the single native phone, tablet, Android TV, and
+Google TV APK. One responsive Jetpack Compose application adapts its layout,
+navigation, focus treatment, and client identity to the current device.
 
-The app targets Android 8.0+ (`minSdk 26`) and uses a hardware-accelerated
-WebView for presentation. Its native Compose layer owns:
+The app targets Android 8.0+ (`minSdk 26`). Its native UI owns:
 
-- server-address bootstrap and connection recovery;
-- lifecycle, cookie, DOM-storage, Back, and fullscreen-video handling;
+- per-account Streamarr server sign-in and connection recovery;
+- responsive phone, tablet, and television catalogue navigation;
+- native title details and Media3 playback;
 - Google Play in-app updates and Firebase invite notifications;
-- Android image picking for custom profile avatars; and
-- a session bridge that keeps native push registration aligned with the
-  authenticated web profile.
+- Android lifecycle and fullscreen handling; and
+- native push registration aligned with the authenticated account.
 
 The app detects Android's current UI mode. Phones and tablets identify as
-`PlayarrAndroidMobile/<version>` and use touch breakpoints; televisions identify
-as `PlayarrAndroidTV/<version>`, expose a Leanback launcher, fix the web viewport
-at 1920 by 1080 CSS pixels, and enable D-pad navigation. Television sideloads
-retain the signed playarr.app self-update path.
+`android-mobile` and use touch layouts; televisions identify as `android-tv`,
+expose a Leanback launcher, use the wide navigation rail, and support D-pad
+focus. Both device types install and update the same package.
 
 This module is included by the Gradle root at
 `../android-shared/settings.gradle.kts`.
@@ -42,11 +37,11 @@ The APK is written beneath
 ```text
 src/main/kotlin/io/streamarr/mobile/
 ├── StreamarrMobileApp.kt      native application, FCM bootstrap
-├── MainActivity.kt            Activity hosting the shared web surface
-├── ui/web/                    WebView host and server recovery UI
+├── MainActivity.kt            responsive phone/TV activity
+├── ui/                        native sign-in, catalogue, details, and player
 ├── update/                    Google Play and signed sideload updates
 └── di/                        native data, auth, and update bindings
 ```
 
-All visible app routes come from `clients/tv-web/web`; the Android module no
-longer contains a parallel Compose catalogue, navigation graph, or player.
+`mobile-android` is the only application module included by the shared Android
+Gradle build. There is no WebView presentation layer or separate TV APK.

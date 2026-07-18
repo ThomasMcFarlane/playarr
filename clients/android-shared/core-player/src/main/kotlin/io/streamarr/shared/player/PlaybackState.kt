@@ -16,7 +16,7 @@ data class PlaybackState(
 /**
  * A playback failure, narrowed to what UI needs to decide what to show and
  * whether retrying makes sense -- deliberately not just "the ExoPlaybackException",
- * so `mobile-android`/`tv-android` screens don't need a Media3 import just
+ * so Android screens don't need a Media3 import just
  * to render an error state.
  */
 data class PlaybackError(

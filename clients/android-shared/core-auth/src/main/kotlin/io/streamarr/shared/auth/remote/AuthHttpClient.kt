@@ -15,7 +15,7 @@ import retrofit2.Retrofit
  * on purpose: device pairing and login both happen before any access token
  * exists, so this client carries no `Authorization` interceptor (there's
  * nothing to attach yet) and has no dependency on `core-data` at all --
- * `tv-android` can complete pairing, and any client can log in, with only
+ * a television can complete pairing, and any client can log in, with only
  * `core-auth` on its classpath.
  */
 object AuthHttpClient {

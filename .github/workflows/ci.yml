@@ -70,14 +70,7 @@ jobs:
             rust:
               - 'backend/**'
             android:
-              # NOTE: as of authoring time, CODEOWNERS and Justfile assume a
-              # single `clients/android/` root, but the Android client shell
-              # task's approved scope is three sibling directories directly
-              # under `clients/`. Following the latter here since it's the
-              # more specific/authoritative source for the actual layout;
-              # reconcile with CODEOWNERS/Justfile if that turns out stale.
               - 'clients/mobile-android/**'
-              - 'clients/tv-android/**'
               - 'clients/android-shared/**'
             ios:
               - 'clients/ios/**'
@@ -126,8 +119,7 @@ jobs:
         run: cargo deny check
 
   # ---------------------------------------------------------------------
-  # Android (Gradle multi-module project spanning clients/mobile-android,
-  # clients/tv-android, clients/android-shared)
+  # Android (one application plus shared core modules)
   # ---------------------------------------------------------------------
   android-check:
     name: Android build
