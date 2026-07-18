@@ -65,6 +65,11 @@ import { useTvNavigation } from "./lib/useTvNavigation";
 import { PLAYARR_CLIENT_PLATFORM } from "./lib/clientPlatform";
 import { useLanguage } from "./lib/i18n/LanguageProvider";
 import type { TranslationKey } from "./lib/i18n/translations";
+import {
+  createCatalogKindsCacheScope,
+  readCachedCatalogKinds,
+  writeCachedCatalogKinds,
+} from "./lib/catalogKindsCache";
 
 const LOCALE_TAGS: Record<string, string> = {
   en: "en-GB",
@@ -173,14 +178,20 @@ function AppShell() {
   const client = useApiClient();
   const { t, language } = useLanguage();
   const localeTag = LOCALE_TAGS[language] ?? "en-GB";
-  const { authFailed, currentUserId, currentUserName } = useAuth();
+  const { authFailed, connectedServers, currentUserId, currentUserName } = useAuth();
+  const catalogKindsCacheScope = createCatalogKindsCacheScope(
+    currentUserId,
+    connectedServers.map((server) => server.url)
+  );
   const [availableWorkKindsState, setAvailableWorkKindsState] = useState<{
-    userId: string | undefined;
-    kinds: ReadonlySet<WorkKind>;
-  } | null>(null);
+    scope: string | null;
+    kinds: ReadonlySet<WorkKind> | null;
+  }>(() => ({
+    scope: catalogKindsCacheScope,
+    kinds: readCachedCatalogKinds(catalogKindsCacheScope),
+  }));
   const availableWorkKinds =
-    availableWorkKindsState &&
-    availableWorkKindsState.userId === currentUserId
+    availableWorkKindsState.scope === catalogKindsCacheScope
       ? availableWorkKindsState.kinds
       : null;
   const appUpdate = useAppUpdate(client, PLAYARR_CLIENT_PLATFORM);
@@ -236,21 +247,30 @@ function AppShell() {
 
   useEffect(() => {
     let cancelled = false;
-    setAvailableWorkKindsState(null);
+    const cachedKinds = readCachedCatalogKinds(catalogKindsCacheScope);
+    setAvailableWorkKindsState({
+      scope: catalogKindsCacheScope,
+      kinds: cachedKinds,
+    });
     void client
       .listCatalogKinds()
       .then((kinds) => {
+        writeCachedCatalogKinds(catalogKindsCacheScope, kinds);
         if (!cancelled) {
-          setAvailableWorkKindsState({
-            userId: currentUserId,
-            kinds: new Set(kinds),
-          });
+          // A cached navigation stays fixed for this shell mount. The refreshed
+          // value is ready for the next sign-in without moving visible items.
+          if (!cachedKinds) {
+            setAvailableWorkKindsState({
+              scope: catalogKindsCacheScope,
+              kinds: new Set(kinds),
+            });
+          }
         }
       })
       .catch(() => {
-        if (!cancelled) {
+        if (!cancelled && !cachedKinds) {
           setAvailableWorkKindsState({
-            userId: currentUserId,
+            scope: catalogKindsCacheScope,
             kinds: new Set(),
           });
         }
@@ -258,7 +278,7 @@ function AppShell() {
     return () => {
       cancelled = true;
     };
-  }, [client, currentUserId]);
+  }, [catalogKindsCacheScope, client]);
 
   useEffect(() => {
     if (!routeMediaFileId) return;
@@ -390,7 +410,7 @@ function AppShell() {
         />
       )}
 
-      {!isPlayerRoute && (
+      {!isPlayerRoute && availableWorkKinds !== null && (
         <nav className="app-nav" aria-label={t("shell.nav.ariaLabel")}>
           {NAV_GROUPS.map((group) => (
             <div

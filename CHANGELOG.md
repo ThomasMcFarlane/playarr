@@ -103,6 +103,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Cache each Playarr profile's available navigation sections and wait for them before showing the
+  left navigation, preventing its items from jumping during sign-in.
 - Show the source bitrate alongside Original in Playarr's player quality menu.
 - Keep profile-led authentication back controls on the same header row as the Playarr logo.
 - Restore native mouse-wheel, trackpad, scrollbar, and touch scrolling on every authenticated
