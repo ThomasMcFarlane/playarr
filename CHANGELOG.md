@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Replace the skeletal native iOS tabs and lists with a SwiftUI Playarr experience matching the
+  responsive web app: floating access-gated navigation, home rails, search and media grids,
+  playlists, profile switching, rich details, native playback, and structured settings.
 - Publish one native responsive Compose Android APK for phones, tablets, Android TV, and Google
   TV, with per-account server sign-in, adaptive touch/D-pad navigation, native Media3 playback,
   and a single playarr.app download and update manifest. Existing

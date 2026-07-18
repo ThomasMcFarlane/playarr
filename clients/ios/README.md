@@ -18,7 +18,7 @@ authentication, update compatibility, and AVPlayer-backed playback.
 3. Choose an iPhone or iPad destination.
 4. For a physical device, select the `StreamarrApp` target and set your development team under
    Signing & Capabilities.
-5. Run the app, open Settings, enter the Streamarr server URL, and choose Save.
+5. Run the app and sign in with the Streamarr server URL, username, and password.
 
 The app defaults to `http://localhost:8484`, which is useful when the simulator and server run on
 the same Mac. A physical device needs a server address it can reach. Use HTTPS for remote hosts;
@@ -105,13 +105,17 @@ block its own UI, but it cannot install code outside Apple's reviewed release pr
 
 ## Current product behaviour
 
-- Home loads recently added catalogue items.
-- Library supports catalogue browsing, kind filters, and search.
-- Work details use resolved media-file identifiers for playable leaves.
-- Playback negotiates direct or HLS media and renders through AVPlayer/AVKit.
-- Settings persists the operator's server URL and supports OAuth device flow sign-in.
-- Protected catalogue and playback requests obtain or refresh a bearer session automatically,
-  with per-server access and refresh tokens persisted in the iOS Keychain.
+- The SwiftUI interface follows Playarr Web's stage palette, rounded artwork, responsive rails,
+  profile control, and floating access-gated navigation on both iPhone and iPad.
+- The signed-out app presents the real server/username/password login flow; household profiles can
+  be switched natively, including four-digit PIN verification.
+- Home shows recently added and continue-watching rails, while per-kind libraries, search,
+  playlists, and rich work details use the same Streamarr catalogue contract as Playarr Web.
+- Playback negotiates direct or HLS media, supplies bearer authentication to AVPlayer's media
+  requests, and renders native controls through AVPlayer/AVKit.
+- Settings persists the server URL and appearance choice without embedding a web surface.
+- Access and refresh tokens are persisted per server in the iOS Keychain and rotated before
+  expiry; no WebView is used anywhere in the app.
 - Foreground update checks compare this installed bundle version with the server's iOS
   compatibility entry.
 

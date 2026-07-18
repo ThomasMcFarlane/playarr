@@ -30,7 +30,7 @@ rather than a gap to close.
 | Concern | Choice |
 |---|---|
 | Language | Swift |
-| UI | SwiftUI |
+| UI | SwiftUI with a native Playarr design system matching the responsive web shell; no WebView |
 | Async | Swift Concurrency (`async`/`await`), Observation (`@Observable`) |
 | Networking | `URLSession` + a hand-written client (`Networking/APIClient.swift`, `OpenAPISchemas.swift`) checked field-by-field against `backend/openapi/streamarr.yaml` and the real backend Rust structs — not a generated client |
 | Local persistence | Per-server access/refresh sessions in the iOS Keychain; server URL and stable device id in `UserDefaults` |
@@ -59,6 +59,11 @@ for the direct-play-vs-transcode split this negotiates). `PlayerViewModel.play(m
 calls that negotiation endpoint first and only then hands the resolved
 item to `AVPlayerEngine`.
 
+The negotiated media URL is still authenticated. `PlayerViewModel` obtains the current bearer
+header through `StreamarrAPIClient`, and `AVPlayerEngine` supplies it when constructing the
+`AVURLAsset` so direct files, HLS manifests, and their child requests do not fall through to a
+server-side `401` after negotiation succeeds.
+
 **No DRM is implemented today.** There is no `AVContentKeySession` wiring,
 no FairPlay SPC/CKC exchange, and no `/api/drm/...` endpoint anywhere in
 the real API surface (`backend/openapi/streamarr.yaml` defines no DRM
@@ -74,15 +79,19 @@ happens.
 
 ## Auth/session flow
 
-Two real session paths exist, both landing in the same Keychain-backed
+Three real session paths exist, all landing in the same Keychain-backed
 `AccessTokenProviding` store so a token obtained either way is visible to
 every subsequent call:
 
-- **RFC 8628 device pairing** (`Auth/DeviceFlowClient.swift`), a real,
-  user-initiated sign-in flow against `POST /api/v1/oauth/device/code` /
-  `POST /api/v1/oauth/token`, including the real RFC 8628 §3.5 backoff and
-  every error code the spec defines. `SettingsView`'s "Sign In" affordance
-  drives this and flips `AppEnvironment.isSignedIn`.
+- **Full-account sign-in.** The signed-out root presents the same server URL,
+  username, and password fields as Playarr Web and calls `POST /api/v1/auth/login`.
+  Successful sessions enter the authenticated shell instead of exposing catalogue
+  errors behind an always-visible tab scaffold.
+- **Managed profiles.** The profile stage calls `GET /api/v1/users/profiles`
+  and switches profiles through the same login endpoint, supplying the profile id
+  and a four-digit PIN when the selected profile is locked.
+- **RFC 8628 device pairing** (`Auth/DeviceFlowClient.swift`) remains available
+  in `StreamarrKit` for device-oriented sibling clients and uses the same token store.
 - **Transparent trusted-network login.** `APIClient`'s `attachAuth` calls
   `POST /api/v1/auth/login` on demand — no user action, no credentials
   needed under the server's default `AuthMode::TrustedNetwork` — the first
@@ -140,8 +149,9 @@ and `StreamarrAppTests` XCTest targets.
 
 Local validation now compiles the complete application, including its asset
 catalogue and privacy manifest, against the iOS Simulator SDK. The shared
-scheme executes all ten `StreamarrKitTests` and `StreamarrAppTests` successfully
-on an iPhone 17 Pro simulator running iOS 26.5. Signing, archive validation,
+scheme executes all eleven `StreamarrKitTests` and `StreamarrAppTests` successfully
+on an iPhone 17 Pro simulator running iOS 26.5. The responsive shell is also
+render-checked on an iPad Air 11-inch simulator. Signing, archive validation,
 physical-device testing, TestFlight and App Store submission still require the
 appropriate Apple developer account and distribution configuration.
 

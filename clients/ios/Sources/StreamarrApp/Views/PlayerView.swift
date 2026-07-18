@@ -4,136 +4,126 @@ import SwiftUI
 
 struct PlayerView: View {
     let viewModel: PlayerViewModel
+    let mediaFileID: UUID?
+    let title: String
 
-    @State private var mediaFileIDText: String
-    @State private var titleText: String
+    @State private var controlsVisible = true
 
     init(viewModel: PlayerViewModel, initialMediaFileID: String = "", initialTitle: String = "") {
         self.viewModel = viewModel
-        _mediaFileIDText = State(initialValue: initialMediaFileID)
-        _titleText = State(initialValue: initialTitle)
+        self.mediaFileID = UUID(uuidString: initialMediaFileID)
+        self.title = initialTitle
     }
 
-    // Deliberately no `NavigationStack` of its own: this view is pushed via
-    // `NavigationLink` from `WorkDetailView` (already inside a
-    // `NavigationStack`) as well as hosted directly as a tab root in
-    // `RootView` (which wraps it in one there). Nesting a second
-    // `NavigationStack` inside an already-pushed one breaks the back
-    // button/nav-bar, so the wrapping is the call site's job, not this
-    // view's.
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
             switch viewModel.loadState {
-            case .idle, .failed:
-                playbackForm
-            case .loadingPlaybackInfo:
-                ProgressView("Negotiating playback…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .idle, .loadingPlaybackInfo:
+                VStack(spacing: 14) {
+                    ProgressView().tint(.white).controlSize(.large)
+                    Text("Preparing playback…")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+            case .failed(let message):
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.largeTitle)
+                        .foregroundStyle(PlayarrStyle.pink)
+                    Text("Playback failed").font(.title2.bold())
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.65))
+                        .multilineTextAlignment(.center)
+                    if mediaFileID != nil {
+                        Button("Try again") { startPlayback() }
+                            .buttonStyle(PlayarrPrimaryButtonStyle())
+                    }
+                }
+                .foregroundStyle(.white)
+                .padding(30)
             case .playing:
-                playbackPlayer
-            }
+                VideoPlayer(player: viewModel.avPlayer)
+                    .ignoresSafeArea()
+                    .onTapGesture { withAnimation { controlsVisible.toggle() } }
 
-            if case .failed(let message) = viewModel.loadState {
-                Text(message)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-                    .padding()
+                if controlsVisible {
+                    controls
+                        .transition(.opacity)
+                }
             }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .task {
+            if case .idle = viewModel.loadState { startPlayback() }
+        }
+        .onDisappear { viewModel.stop() }
+    }
 
+    private var controls: some View {
+        VStack {
             Spacer()
-        }
-        .navigationTitle("Now Playing")
-    }
+            VStack(spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(title.isEmpty ? "Now playing" : title)
+                            .font(.headline)
+                            .lineLimit(1)
+                        if let mode = viewModel.playbackMode {
+                            Text(mode == .direct ? "Direct play" : "Adaptive stream")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.58))
+                        }
+                    }
+                    Spacer()
+                    Button {
+                        viewModel.togglePlayPause()
+                    } label: {
+                        Image(systemName: viewModel.engineState == .playing ? "pause.fill" : "play.fill")
+                            .font(.title2)
+                            .frame(width: 48, height: 48)
+                            .background(.white, in: Circle())
+                            .foregroundStyle(.black)
+                    }
+                }
 
-    private var playbackForm: some View {
-        Form {
-            Section("Media file") {
-                TextField("Title", text: $titleText)
-                TextField("Media File ID (UUID)", text: $mediaFileIDText)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                Text(
-                    "Normally pre-filled from a title's real, resolved media_file_id when you navigate " +
-                    "here via a \"Play\" button in WorkDetailView. Empty here means no media file has " +
-                    "synced for that title yet — you can still enter one directly; this always calls " +
-                    "the real GET /api/v1/playback/{media_file_id} negotiation endpoint."
+                Slider(
+                    value: Binding(
+                        get: { viewModel.currentTime },
+                        set: { value in Task { await viewModel.seek(to: value) } }
+                    ),
+                    in: 0...max(viewModel.duration, 1)
                 )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
+                .tint(PlayarrStyle.pink)
 
-            Button("Play") {
-                guard let mediaFileID = UUID(uuidString: mediaFileIDText) else { return }
-                Task { await viewModel.play(mediaFileID: mediaFileID, title: titleText) }
+                HStack {
+                    Text(Self.formatted(viewModel.currentTime))
+                    Spacer()
+                    Text(Self.formatted(viewModel.duration))
+                }
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.white.opacity(0.58))
             }
-            .disabled(UUID(uuidString: mediaFileIDText) == nil)
+            .padding(20)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .padding()
         }
+        .foregroundStyle(.white)
     }
 
-    private var playbackPlayer: some View {
-        VStack(spacing: 0) {
-            VideoPlayer(player: viewModel.avPlayer)
-                .aspectRatio(16.0 / 9.0, contentMode: .fit)
-                .background(Color.black)
-
-            PlaybackControlsView(viewModel: viewModel)
-                .padding()
-
-            if let mode = viewModel.playbackMode {
-                Text("Playback mode: \(mode.rawValue)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Button("Stop", role: .destructive) {
-                viewModel.stop()
-            }
-            .padding(.bottom)
-        }
-    }
-}
-
-private struct PlaybackControlsView: View {
-    let viewModel: PlayerViewModel
-
-    var body: some View {
-        VStack(spacing: 12) {
-            Slider(
-                value: Binding(
-                    get: { viewModel.currentTime },
-                    set: { newValue in Task { await viewModel.seek(to: newValue) } }
-                ),
-                in: 0...max(viewModel.duration, 1)
-            )
-
-            HStack {
-                Text(Self.formatted(viewModel.currentTime))
-                Spacer()
-                Text(Self.formatted(viewModel.duration))
-            }
-            .font(.caption)
-            .monospacedDigit()
-            .foregroundStyle(.secondary)
-
-            Button {
-                viewModel.togglePlayPause()
-            } label: {
-                Image(systemName: viewModel.engineState == .playing ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.system(size: 44))
-            }
-            .buttonStyle(.plain)
-        }
+    private func startPlayback() {
+        guard let mediaFileID else { return }
+        Task { await viewModel.play(mediaFileID: mediaFileID, title: title) }
     }
 
     private static func formatted(_ seconds: Double) -> String {
         guard seconds.isFinite else { return "--:--" }
         let totalSeconds = Int(seconds)
         return String(format: "%02d:%02d", totalSeconds / 60, totalSeconds % 60)
-    }
-}
-
-#Preview {
-    NavigationStack {
-        PlayerView(viewModel: PlayerViewModel(engine: AVPlayerEngine(), apiClient: PreviewAPIClient()))
     }
 }

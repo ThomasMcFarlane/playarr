@@ -1,200 +1,201 @@
 import StreamarrKit
 import SwiftUI
 
-/// Catalog detail screen — `GET /api/v1/catalog/{id}` via
-/// `WorkDetailViewModel`. Renders the kind-specific tree (seasons/episodes,
-/// albums/tracks, or books) the real API returns, wires each playable
-/// leaf's real, resolved `media_file_id` straight into `PlayerView` when
-/// one has synced (`WorkDetail.mediaFileID` for a movie's own leaf;
-/// `EpisodeDetail`/`TrackDetail`/`BookDetail.mediaFileID` for a series'
-/// episodes / an artist's tracks / an author's books).
 struct WorkDetailView: View {
     let viewModel: WorkDetailViewModel
     let apiClient: StreamarrAPIClient
 
     var body: some View {
-        content
-            .navigationTitle(viewModel.detail?.work.title ?? "Detail")
-            .task {
-                if case .idle = viewModel.loadState {
-                    await viewModel.load()
+        Group {
+            switch viewModel.loadState {
+            case .idle, .loading:
+                PlayarrLoadingView(title: "Loading title…")
+            case .failed(let message):
+                PlayarrFailureView(title: "Couldn’t load this title", message: message) {
+                    Task { await viewModel.load() }
                 }
+            case .loaded:
+                if let detail = viewModel.detail { detailContent(detail) }
             }
+        }
+        .task {
+            if case .idle = viewModel.loadState { await viewModel.load() }
+        }
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
-    @ViewBuilder
-    private var content: some View {
-        switch viewModel.loadState {
-        case .idle, .loading:
-            ProgressView("Loading…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .failed(let message):
-            ContentUnavailableView(
-                "Couldn't load this title",
-                systemImage: "exclamationmark.triangle",
-                description: Text(message)
-            )
-        case .loaded:
-            if let detail = viewModel.detail {
-                List {
-                    Section {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(detail.work.title).font(.title2.bold())
-                            if let overview = detail.work.overview, !overview.isEmpty {
-                                Text(overview).font(.body)
-                            }
-                            Text("Availability: \(detail.work.availability.rawValue)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+    private func detailContent(_ detail: WorkDetail) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ZStack(alignment: .bottomLeading) {
+                    PlayarrArtwork(work: detail.work, kind: .backdrop, apiClient: apiClient)
+                        .frame(height: 390)
+                        .overlay {
+                            LinearGradient(
+                                colors: [.clear, PlayarrStyle.background.opacity(0.3), PlayarrStyle.background],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
                         }
 
-                        if detail.work.kind == .movie {
-                            moviePlayRow(detail: detail)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(detail.work.kind.displayName.uppercased())
+                            .font(.caption2.weight(.black))
+                            .tracking(1.3)
+                            .foregroundStyle(PlayarrStyle.pink)
+                        Text(detail.work.title)
+                            .font(.system(size: 42, weight: .medium, design: .rounded))
+                            .tracking(-1.8)
+                            .foregroundStyle(PlayarrStyle.ink)
+                            .lineLimit(3)
+                        if !detail.work.genres.isEmpty {
+                            Text(detail.work.genres.prefix(3).joined(separator: "  •  "))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(PlayarrStyle.inkSoft)
                         }
                     }
-
-                    childrenSection(for: detail.children)
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 10)
                 }
-            } else {
-                ContentUnavailableView("Not found", systemImage: "questionmark.folder")
+
+                VStack(alignment: .leading, spacing: 20) {
+                    if let overview = detail.work.overview, !overview.isEmpty {
+                        Text(overview)
+                            .font(.subheadline)
+                            .foregroundStyle(PlayarrStyle.inkSoft)
+                            .lineSpacing(4)
+                    }
+
+                    if let mediaFileID = detail.mediaFileID {
+                        NavigationLink {
+                            PlayerView(
+                                viewModel: PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient),
+                                initialMediaFileID: mediaFileID.uuidString,
+                                initialTitle: detail.work.title
+                            )
+                        } label: {
+                            Label("Play", systemImage: "play.fill")
+                                .frame(minWidth: 110)
+                        }
+                        .buttonStyle(PlayarrPrimaryButtonStyle())
+                    }
+
+                    children(for: detail.children)
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 12)
+                .padding(.bottom, 118)
             }
         }
+        .ignoresSafeArea(edges: .top)
+        .background(PlayarrStyle.background)
     }
 
-    // MARK: - Movie leaf ("Play" / real `media_file_id`)
-
     @ViewBuilder
-    private func moviePlayRow(detail: WorkDetail) -> some View {
-        if let mediaFileID = detail.mediaFileID {
-            NavigationLink {
-                PlayerView(
-                    viewModel: PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient),
-                    initialMediaFileID: mediaFileID.uuidString,
-                    initialTitle: detail.work.title
-                )
-            } label: {
-                Label("Play", systemImage: "play.circle")
-            }
-        } else {
-            Label("Not yet available to play", systemImage: "play.slash")
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    // MARK: - Children tree
-
-    @ViewBuilder
-    private func childrenSection(for children: WorkChildren) -> some View {
+    private func children(for children: WorkChildren) -> some View {
         switch children {
         case .movie:
             EmptyView()
         case .series(let seasons):
-            ForEach(seasons, id: \.season.id) { seasonDetail in
-                Section("Season \(seasonDetail.season.seasonNumber)") {
-                    ForEach(seasonDetail.episodes) { episodeDetail in
-                        episodeRow(episodeDetail)
+            VStack(alignment: .leading, spacing: 28) {
+                ForEach(seasons, id: \.season.id) { season in
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(season.season.title ?? "Season \(season.season.seasonNumber)")
+                            .font(.title3.weight(.bold))
+                            .foregroundStyle(PlayarrStyle.ink)
+                        ForEach(season.episodes) { episode in
+                            playableRow(
+                                title: episode.episode.title ?? "Episode \(episode.episode.episodeNumber)",
+                                subtitle: "Episode \(episode.episode.episodeNumber)",
+                                mediaFileID: episode.mediaFileID
+                            )
+                        }
                     }
                 }
             }
         case .artist(let albums):
-            ForEach(albums, id: \.album.id) { albumDetail in
-                Section(albumDetail.album.title) {
-                    ForEach(albumDetail.tracks) { trackDetail in
-                        trackRow(trackDetail)
+            VStack(alignment: .leading, spacing: 28) {
+                ForEach(albums, id: \.album.id) { album in
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(album.album.title)
+                            .font(.title3.weight(.bold))
+                            .foregroundStyle(PlayarrStyle.ink)
+                        ForEach(album.tracks) { track in
+                            playableRow(
+                                title: track.track.title,
+                                subtitle: "Track \(track.track.trackNumber)",
+                                mediaFileID: track.mediaFileID
+                            )
+                        }
                     }
                 }
             }
         case .author(let books):
-            Section("Books") {
-                ForEach(books) { bookDetail in
-                    bookRow(bookDetail)
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Books")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(PlayarrStyle.ink)
+                ForEach(books) { book in
+                    playableRow(title: book.book.title, subtitle: "Book", mediaFileID: book.mediaFileID)
                 }
             }
         }
     }
 
     @ViewBuilder
-    private func episodeRow(_ episodeDetail: EpisodeDetail) -> some View {
-        let episode = episodeDetail.episode
-        if let mediaFileID = episodeDetail.mediaFileID {
+    private func playableRow(title: String, subtitle: String, mediaFileID: UUID?) -> some View {
+        if let mediaFileID {
             NavigationLink {
                 PlayerView(
                     viewModel: PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient),
                     initialMediaFileID: mediaFileID.uuidString,
-                    initialTitle: episode.title ?? "Episode \(episode.episodeNumber)"
+                    initialTitle: title
                 )
             } label: {
-                episodeLabel(episode)
+                rowLabel(title: title, subtitle: subtitle, playable: true)
             }
+            .buttonStyle(.plain)
         } else {
-            episodeLabel(episode)
+            rowLabel(title: title, subtitle: subtitle, playable: false)
         }
     }
 
-    private func episodeLabel(_ episode: Episode) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(episode.title ?? "Episode \(episode.episodeNumber)")
-            Text(episode.availability.rawValue)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    @ViewBuilder
-    private func trackRow(_ trackDetail: TrackDetail) -> some View {
-        let track = trackDetail.track
-        if let mediaFileID = trackDetail.mediaFileID {
-            NavigationLink {
-                PlayerView(
-                    viewModel: PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient),
-                    initialMediaFileID: mediaFileID.uuidString,
-                    initialTitle: track.title
-                )
-            } label: {
-                Text(track.title)
+    private func rowLabel(title: String, subtitle: String, playable: Bool) -> some View {
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(playable ? PlayarrStyle.ink : PlayarrStyle.ink.opacity(0.22))
+                Image(systemName: playable ? "play.fill" : "clock")
+                    .foregroundStyle(.white)
             }
-        } else {
-            Text(track.title)
-                .foregroundStyle(.secondary)
-        }
-    }
+            .frame(width: 48, height: 48)
 
-    @ViewBuilder
-    private func bookRow(_ bookDetail: BookDetail) -> some View {
-        let book = bookDetail.book
-        if let mediaFileID = bookDetail.mediaFileID {
-            NavigationLink {
-                PlayerView(
-                    viewModel: PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient),
-                    initialMediaFileID: mediaFileID.uuidString,
-                    initialTitle: book.title
-                )
-            } label: {
-                bookLabel(book)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.subheadline.weight(.semibold)).lineLimit(2)
+                Text(playable ? subtitle : "Not available yet")
+                    .font(.caption)
+                    .foregroundStyle(PlayarrStyle.muted)
             }
-        } else {
-            bookLabel(book)
+            Spacer()
+            if playable {
+                Image(systemName: "chevron.right")
+                    .font(.caption.bold())
+                    .foregroundStyle(PlayarrStyle.muted)
+            }
         }
-    }
-
-    private func bookLabel(_ book: Book) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(book.title)
-            Text(book.availability.rawValue)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
+        .foregroundStyle(PlayarrStyle.ink)
+        .padding(12)
+        .background(PlayarrStyle.surface.opacity(0.78), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 
 #Preview {
     let apiClient = PreviewAPIClient()
-    let environment = AppEnvironment()
     NavigationStack {
         WorkDetailView(
             viewModel: WorkDetailViewModel(apiClient: apiClient, workID: UUID()),
             apiClient: apiClient
         )
     }
-    .environment(environment)
 }
