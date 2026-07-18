@@ -4,6 +4,29 @@ import Foundation
 import Observation
 import StreamarrKit
 
+struct NativePlayerDefaults: Equatable {
+    static let qualityKey = "com.streamarr.ios.player.quality"
+    static let subtitleModeKey = "com.streamarr.ios.player.subtitle-mode"
+    static let subtitleLanguageKey = "com.streamarr.ios.player.subtitle-language"
+    static let audioLanguageKey = "com.streamarr.ios.player.audio-language"
+
+    let qualityID: String
+    let subtitleMode: String
+    let subtitleLanguage: String
+    let audioLanguage: String
+
+    var profile: String? { qualityID == "original" ? nil : qualityID }
+
+    static func read(from defaults: UserDefaults = .standard) -> NativePlayerDefaults {
+        NativePlayerDefaults(
+            qualityID: defaults.string(forKey: qualityKey) ?? "original",
+            subtitleMode: defaults.string(forKey: subtitleModeKey) ?? "off",
+            subtitleLanguage: defaults.string(forKey: subtitleLanguageKey) ?? "en",
+            audioLanguage: defaults.string(forKey: audioLanguageKey) ?? "en"
+        )
+    }
+}
+
 /// View model for `PlayerView`. Binds a `PlayerEngine` (default:
 /// `AVPlayerEngine`, injectable for tests/previews) to the real playback
 /// pipeline: calls `GET /api/v1/playback/{media_file_id}` first to get the
@@ -54,13 +77,14 @@ public final class PlayerViewModel {
         loadState = .loadingPlaybackInfo
         errorMessage = nil
         do {
+            let defaults = NativePlayerDefaults.read()
             let info = try await apiClient.playbackInfo(
                 mediaFileID: mediaFileID,
                 containers: ["mp4", "mov", "m4v"],
                 videoCodecs: ["h264", "hevc"],
                 audioCodecs: ["aac", "ac3", "eac3"],
                 maxBitrateBps: nil,
-                profile: nil
+                profile: defaults.profile
             )
             playbackMode = info.mode
 
@@ -73,9 +97,12 @@ public final class PlayerViewModel {
                 id: mediaFileID,
                 streamURL: streamURL,
                 title: title,
+                preferredAudioLanguageCode: defaults.audioLanguage,
+                preferredSubtitleLanguageCode: defaults.subtitleMode == "off" ? nil : defaults.subtitleLanguage,
                 httpHeaders: requestHeaders
             )
             try await engine.load(item)
+            await applyTrackDefaults(defaults)
             duration = engine.duration
             engine.play()
             loadState = .playing
@@ -119,5 +146,26 @@ public final class PlayerViewModel {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] time in self?.currentTime = time }
             .store(in: &cancellables)
+    }
+
+    private func applyTrackDefaults(_ defaults: NativePlayerDefaults) async {
+        let audioTracks = await engine.availableAudioTracks()
+        let preferredAudio = audioTracks.first {
+            $0.languageCode?.lowercased().hasPrefix(defaults.audioLanguage.lowercased()) == true
+        }
+        engine.selectAudioTrack(id: preferredAudio?.id)
+
+        guard defaults.subtitleMode != "off" else {
+            engine.selectSubtitleTrack(id: nil)
+            return
+        }
+        let subtitleTracks = await engine.availableSubtitleTracks()
+        let eligibleSubtitles = defaults.subtitleMode == "forced"
+            ? subtitleTracks.filter(\.isForced)
+            : subtitleTracks
+        let preferredSubtitle = eligibleSubtitles.first {
+            $0.languageCode?.lowercased().hasPrefix(defaults.subtitleLanguage.lowercased()) == true
+        } ?? eligibleSubtitles.first(where: \.isDefault) ?? eligibleSubtitles.first
+        engine.selectSubtitleTrack(id: preferredSubtitle?.id)
     }
 }

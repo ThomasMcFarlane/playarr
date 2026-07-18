@@ -90,6 +90,35 @@ final class HomeParityTests: XCTestCase {
     }
 }
 
+final class NativePlayerDefaultsTests: XCTestCase {
+    func testReadsWebEquivalentPlaybackDefaults() {
+        let suiteName = "NativePlayerDefaultsTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertEqual(
+            NativePlayerDefaults.read(from: defaults),
+            NativePlayerDefaults(
+                qualityID: "original",
+                subtitleMode: "off",
+                subtitleLanguage: "en",
+                audioLanguage: "en"
+            )
+        )
+
+        defaults.set("h264-720p-4mbps", forKey: NativePlayerDefaults.qualityKey)
+        defaults.set("always", forKey: NativePlayerDefaults.subtitleModeKey)
+        defaults.set("ja", forKey: NativePlayerDefaults.subtitleLanguageKey)
+        defaults.set("th", forKey: NativePlayerDefaults.audioLanguageKey)
+
+        let configured = NativePlayerDefaults.read(from: defaults)
+        XCTAssertEqual(configured.profile, "h264-720p-4mbps")
+        XCTAssertEqual(configured.subtitleMode, "always")
+        XCTAssertEqual(configured.subtitleLanguage, "ja")
+        XCTAssertEqual(configured.audioLanguage, "th")
+    }
+}
+
 private struct WorkDetailAPIClient: StreamarrAPIClient {
     let result: Result<WorkDetail, Error>
     let baseURL = URL(string: "https://streamarr.example")!

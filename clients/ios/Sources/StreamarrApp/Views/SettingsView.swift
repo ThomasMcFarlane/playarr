@@ -4,6 +4,10 @@ struct SettingsView: View {
     let environment: AppEnvironment
 
     @AppStorage("com.streamarr.ios.appearance") private var appearance = "dark"
+    @AppStorage(NativePlayerDefaults.qualityKey) private var qualityID = "original"
+    @AppStorage(NativePlayerDefaults.subtitleModeKey) private var subtitleMode = "off"
+    @AppStorage(NativePlayerDefaults.subtitleLanguageKey) private var subtitleLanguage = "en"
+    @AppStorage(NativePlayerDefaults.audioLanguageKey) private var audioLanguage = "en"
     @State private var serverURL: String
     @State private var errorMessage: String?
     @State private var signingOut = false
@@ -69,9 +73,32 @@ struct SettingsView: View {
                         }
 
                         settingsCard(title: "Playback", icon: "play.rectangle") {
-                            settingRow("Quality", value: "Automatic")
-                            settingRow("Direct play", value: "Preferred")
-                            settingRow("Audio language", value: "Server default")
+                            settingPicker("Quality", selection: $qualityID) {
+                                Text("Original · Best available source").tag("original")
+                                Text("1080p · Up to 8 Mbps").tag("h264-1080p-8mbps")
+                                Text("720p · Up to 4 Mbps").tag("h264-720p-4mbps")
+                                Text("480p · Up to 2 Mbps").tag("h264-480p-2mbps")
+                            }
+
+                            settingPicker("Subtitles", selection: $subtitleMode) {
+                                Text("Off").tag("off")
+                                Text("Forced only").tag("forced")
+                                Text("Always").tag("always")
+                            }
+
+                            if subtitleMode != "off" {
+                                settingPicker("Subtitle language", selection: $subtitleLanguage) {
+                                    languageOptions
+                                }
+                            }
+
+                            settingPicker("Audio language", selection: $audioLanguage) {
+                                languageOptions
+                            }
+
+                            Text("These defaults are applied to the next title you play.")
+                                .font(.custom("Avenir Next", fixedSize: 10.5))
+                                .foregroundStyle(PlayarrStyle.muted)
                         }
 
                         if let errorMessage {
@@ -170,14 +197,38 @@ struct SettingsView: View {
         .overlay { Rectangle().stroke(PlayarrStyle.line.opacity(0.72), lineWidth: 1) }
     }
 
-    private func settingRow(_ label: String, value: String) -> some View {
-        HStack {
-            Text(label).foregroundStyle(PlayarrStyle.ink)
-            Spacer()
-            Text(value).foregroundStyle(PlayarrStyle.muted)
+    private func settingPicker<Content: View>(
+        _ label: String,
+        selection: Binding<String>,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        HStack(spacing: 12) {
+            Text(label)
+                .foregroundStyle(PlayarrStyle.ink)
+            Spacer(minLength: 18)
+            Picker(label, selection: selection, content: content)
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .tint(PlayarrStyle.inkSoft)
         }
         .font(.custom("Avenir Next", fixedSize: 12))
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
+    }
+
+    @ViewBuilder
+    private var languageOptions: some View {
+        Text("English").tag("en")
+        Text("Spanish").tag("es")
+        Text("French").tag("fr")
+        Text("German").tag("de")
+        Text("Italian").tag("it")
+        Text("Portuguese").tag("pt")
+        Text("Japanese").tag("ja")
+        Text("Korean").tag("ko")
+        Text("Chinese").tag("zh")
+        Text("Hindi").tag("hi")
+        Text("Arabic").tag("ar")
+        Text("Thai").tag("th")
     }
 
     private func saveServer() {

@@ -189,6 +189,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Replace the native iOS profile screen's static playback labels with working quality, subtitle,
+  subtitle-language, and audio-language defaults that drive negotiation and AVPlayer tracks.
 - Restore visible native iOS Home rails in dark mode, match Playarr Web's on-deck and recent
   catalogue grouping, and constrain mobile artwork and carousels to the web layout proportions.
 - Persist native iOS sessions in app-scoped simulator storage when running an unsigned build,
