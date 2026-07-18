@@ -68,6 +68,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Align media-detail background artwork to the same left edge as directory artwork.
 - Use the standard library-heading divider and spacing between the media section and selected item
   on music, movie, and series detail pages instead of a hand-drawn pipe.
 - Show each playlist's audio or video type while browsing and when open, and replace parent

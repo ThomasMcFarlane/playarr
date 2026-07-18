@@ -6846,7 +6846,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
 .tv-detail .tv-key-art img {
   width: 74%;
   height: 110%;
-  margin-left: 24%;
+  margin-left: 4%;
   object-position: center 28%;
   opacity: 0.52;
 }
