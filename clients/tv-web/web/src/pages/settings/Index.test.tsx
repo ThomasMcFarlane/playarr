@@ -58,7 +58,7 @@ describe("SettingsIndexPage", () => {
       'class="tv-library tv-directory settings-page settings-workspace-page"'
     );
     expect(markup).toContain('class="tv-page-back"');
-    expect(markup.match(/class="settings-option(?: is-active)?"/g)).toHaveLength(6);
+    expect(markup.match(/class="settings-option(?: is-active)?"/g)).toHaveLength(7);
     expect(markup).toContain('data-tv-scroll-container="true"');
     expect(markup).toContain('data-tv-scroll-axis="vertical"');
     expect(markup).toContain('data-navigation-scroll-key="settings:options"');
@@ -85,7 +85,7 @@ describe("SettingsIndexPage", () => {
     expect(adjacentSettingsIndex("ArrowDown", 0, 6)).toBe(1);
     expect(adjacentSettingsIndex("ArrowUp", 3, 6)).toBe(2);
     expect(adjacentSettingsIndex("ArrowUp", 0, 6)).toBeNull();
-    expect(adjacentSettingsIndex("ArrowDown", 5, 6)).toBeNull();
+    expect(adjacentSettingsIndex("ArrowDown", 6, 7)).toBeNull();
     expect(adjacentSettingsIndex("Enter", 2, 6)).toBeNull();
   });
 

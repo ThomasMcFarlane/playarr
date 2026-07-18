@@ -9,11 +9,12 @@ import {
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { describeApiError } from "@streamarr-tv/api-client";
-import { useApiClient, useAuth } from "../lib/ApiClientProvider";
+import { useApiBaseUrl, useApiClient, useAuth } from "../lib/ApiClientProvider";
 import { selectDeviceProfiles } from "../lib/deviceProfiles";
+import { ProfileAvatar } from "../components/ProfileAvatar";
+import { profileAvatarScope, readProfileAvatar } from "../lib/profileAvatar";
 import { SettingsIcon } from "../components/NavIcons";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
-import type { TranslationKey } from "../lib/i18n/translations";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import {
   navigationOriginFromState,
@@ -48,15 +49,6 @@ type ProfileAction = "select" | "settings";
 
 const ADD_PROFILE_ID = "__add_profile__";
 
-const PROFILE_COLOURS = [
-  "#d84f70",
-  "#d97853",
-  "#3d9389",
-  "#6876c7",
-  "#a96bc7",
-  "#b28d39",
-] as const;
-
 function safeBackTo(value: unknown): string {
   return typeof value === "string" && value.startsWith("/") && value !== "/profiles"
     ? value
@@ -69,28 +61,8 @@ function safeLoginFrom(value: unknown, fallback: string): string {
     : fallback;
 }
 
-function initials(name: string, t: (key: TranslationKey) => string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  return (
-    parts
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase())
-      .join("") || t("pages.profiles.initialsFallback")
-  );
-}
-
-function colourIndex(id: string): number {
-  let hash = 0;
-  for (const character of id) {
-    hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
-  }
-  return hash % PROFILE_COLOURS.length;
-}
-
-function profileStyle(profile: ViewerProfile, index = 0): CSSProperties {
-  const colour = PROFILE_COLOURS[colourIndex(profile.id)] ?? "#d84f70";
+function profileStyle(index = 0): CSSProperties {
   return {
-    "--profile-colour-start": colour,
     "--profile-index": index,
   } as CSSProperties;
 }
@@ -110,6 +82,7 @@ export function ProfilesPage(
   const { t } = useLanguage();
   useDocumentTitle(t("pages.profiles.title"));
   const client = useApiClient();
+  const [apiBaseUrl] = useApiBaseUrl();
   const {
     currentUserId,
     currentUserName,
@@ -425,7 +398,7 @@ export function ProfilesPage(
               <div
                 key={profile.id}
                 className={`profile-choice${selected ? " is-selected" : ""}`}
-                style={profileStyle(profile, index)}
+                style={profileStyle(index)}
               >
                 <button
                   id={`profile-${profile.id}`}
@@ -454,9 +427,13 @@ export function ProfilesPage(
                   onFocus={() => setSelectedId(profile.id)}
                   onClick={() => requestProfileAction(profile, "select")}
                 >
-                  <span className="profile-avatar" aria-hidden="true">
-                    <span>{initials(profile.name, t)}</span>
-                  </span>
+                  <ProfileAvatar
+                    className="profile-avatar"
+                    preference={readProfileAvatar(
+                      profileAvatarScope(apiBaseUrl, profile.id),
+                      profile.id
+                    )}
+                  />
                   <strong>{profile.name}</strong>
                   <small>
                     {switchingId === profile.id
@@ -560,9 +537,13 @@ export function ProfilesPage(
             >
               ×
             </button>
-            <div className="profile-pin-avatar" style={profileStyle(pinProfile)}>
-              {initials(pinProfile.name, t)}
-            </div>
+            <ProfileAvatar
+              className="profile-pin-avatar"
+              preference={readProfileAvatar(
+                profileAvatarScope(apiBaseUrl, pinProfile.id),
+                pinProfile.id
+              )}
+            />
             <p>{t("pages.profiles.switchProfile")}</p>
             <h2 id="profile-pin-title">{pinProfile.name}</h2>
             <form onSubmit={(event) => void submitPin(event)}>

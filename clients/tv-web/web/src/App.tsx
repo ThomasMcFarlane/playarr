@@ -29,6 +29,7 @@ import { SettingsPlayerPage } from "./pages/settings/Player";
 import { SettingsServerPage } from "./pages/settings/Server";
 import { SettingsProfileLockPage } from "./pages/settings/ProfileLock";
 import { SettingsInvitePage } from "./pages/settings/Invite";
+import { SettingsProfileAvatarPage } from "./pages/settings/ProfileAvatar";
 import { LoginPage } from "./pages/Login";
 import { SignupPage } from "./pages/Signup";
 import { DeviceLinkPage } from "./pages/DeviceLink";
@@ -40,6 +41,7 @@ import { NotFoundPage } from "./pages/NotFound";
 import { ClientsPage, VidaaClientsPage } from "./pages/Clients";
 import { UpdateToast } from "./components/UpdateToast";
 import { PageScrollRoot } from "./components/PageScrollRoot";
+import { ProfileAvatar, useStoredProfileAvatar } from "./components/ProfileAvatar";
 import {
   HomeIcon,
   MusicIcon,
@@ -51,7 +53,7 @@ import {
 } from "./components/NavIcons";
 import type { WorkKind } from "@streamarr-tv/api-client";
 import { useAppUpdate } from "./lib/appUpdate";
-import { useApiClient, useAuth } from "./lib/ApiClientProvider";
+import { useApiBaseUrl, useApiClient, useAuth } from "./lib/ApiClientProvider";
 import {
   captureNavigationLayer,
   navigationOriginFromState,
@@ -72,6 +74,7 @@ import {
   readCachedCatalogKinds,
   writeCachedCatalogKinds,
 } from "./lib/catalogKindsCache";
+import { profileAvatarScope } from "./lib/profileAvatar";
 
 const LOCALE_TAGS: Record<string, string> = {
   en: "en-GB",
@@ -177,9 +180,14 @@ function isBackKey(event: KeyboardEvent): boolean {
  */
 function AppShell() {
   const client = useApiClient();
+  const [apiBaseUrl] = useApiBaseUrl();
   const { t, language } = useLanguage();
   const localeTag = LOCALE_TAGS[language] ?? "en-GB";
   const { authFailed, connectedServers, currentUserId, currentUserName } = useAuth();
+  const currentAvatarScope = currentUserId
+    ? profileAvatarScope(apiBaseUrl, currentUserId)
+    : undefined;
+  const currentAvatar = useStoredProfileAvatar(currentAvatarScope, currentUserId);
   const catalogKindsCacheScope = createCatalogKindsCacheScope(
     currentUserId,
     connectedServers.map((server) => server.url)
@@ -460,18 +468,14 @@ function AppShell() {
             });
           }}
         >
-          <span className="app-user-avatar" aria-hidden="true">
-            <svg viewBox="0 0 24 24" focusable="false">
-              <path
-                d="M12 12.25a4.25 4.25 0 1 0 0-8.5 4.25 4.25 0 0 0 0 8.5Zm-7.25 8c.55-3.42 3.34-5.5 7.25-5.5s6.7 2.08 7.25 5.5"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1.75"
-              />
-            </svg>
-          </span>
+          {currentAvatar ? (
+            <ProfileAvatar
+              className="app-user-avatar"
+              preference={currentAvatar}
+            />
+          ) : (
+            <span className="app-user-avatar" aria-hidden="true" />
+          )}
           <span className="app-user-name">
             {currentUserName ?? t("shell.user.viewerFallback")}
           </span>
@@ -558,6 +562,7 @@ export function App() {
         <Route path="/settings" element={<SettingsIndexPage />}>
           <Route index element={<SettingsAppearancePage />} />
           <Route path="appearance" element={<SettingsAppearancePage />} />
+          <Route path="profile-avatar" element={<SettingsProfileAvatarPage />} />
           <Route path="language" element={<SettingsLanguagePage />} />
           <Route path="player" element={<SettingsPlayerPage />} />
           <Route path="server" element={<SettingsServerPage />} />

@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add playful per-profile avatar choices in Playarr settings, with crop, reposition, zoom, and
+  locally resized custom photo uploads on devices that provide an image picker.
 - Add held-playlist actions for renaming, choosing a new parent, or deleting personal playlists
   with explicit cascade confirmation.
 - Add a public, localised Playarr Clients hub with truthful platform availability and a guided,
