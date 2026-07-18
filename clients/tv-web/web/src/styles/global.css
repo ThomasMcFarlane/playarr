@@ -1756,6 +1756,18 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   box-shadow: var(--shadow-focus);
 }
 
+/*
+ * The trigger sits flush against the right edge of the screen here (see
+ * .tv-stage-chrome-language below), so the menu has to hang from the
+ * trigger's right edge instead of its left -- opening left:0 like the
+ * default would push it past the viewport's right edge and force
+ * horizontal scroll.
+ */
+.tv-stage-chrome-language .language-dropdown-menu {
+  left: auto;
+  right: 0;
+}
+
 .language-dropdown-search {
   display: flex;
   align-items: center;
@@ -8055,6 +8067,13 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   pointer-events: auto;
 }
 
+.tv-stage-chrome-language {
+  position: absolute;
+  top: clamp(30px, 4.6vh, 58px);
+  right: var(--tv-stage-chrome-nav-edge);
+  pointer-events: auto;
+}
+
 .profiles-page::before {
   position: absolute;
   inset: 0;
@@ -9567,6 +9586,26 @@ body[data-input-mode="remote"] .player-quality-option:focus {
 
   .language-dropdown-menu {
     max-width: none;
+  }
+
+  /*
+   * .tv-stage-chrome-language is a fixed-size corner control (see its base
+   * rule above), not a full-width block element like the other places this
+   * component is used -- undo the block-mode rules above for it specifically,
+   * since a position:absolute element with only `right` set and no `left`
+   * would otherwise stretch to width:100% of its containing block and push
+   * past the left edge of the screen.
+   */
+  .language-dropdown.tv-stage-chrome-language {
+    width: fit-content;
+  }
+
+  .tv-stage-chrome-language .language-dropdown-trigger {
+    width: auto;
+  }
+
+  .tv-stage-chrome-language .language-dropdown-menu {
+    max-width: min(320px, 84vw);
   }
 
   .player-language-choice,

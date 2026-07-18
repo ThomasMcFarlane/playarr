@@ -3,7 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiClient, ApiError } from "@streamarr-tv/api-client";
 import { useAuth } from "../lib/ApiClientProvider";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
-import { LanguageDropdown } from "../components/LanguageDropdown";
 import { createLocalNetworkFetch } from "../lib/localNetworkFetch";
 import { parseSignupInvite } from "../lib/signupInvite";
 import { publicIpv4RelayUrl } from "../lib/loginServerUrl";
@@ -88,7 +87,6 @@ export function SignupPage() {
 
   return (
     <ProfileAuthLayout className="signup-profile-page">
-        <LanguageDropdown className="auth-language-switch" />
         <p className="page-kicker">{t("pages.signup.kicker")}</p>
         <h1 className="auth-title">{t("pages.signup.title")}</h1>
         <p className="muted auth-description">

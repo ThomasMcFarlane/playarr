@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { useScrollEdges } from "../../lib/useScrollEdges";
+import { LanguageDropdown } from "../LanguageDropdown";
 
 export function TvStageChrome({
   backLabel,
@@ -31,6 +32,7 @@ export function TvStageChrome({
           </button>
         </div>
       ) : null}
+      <LanguageDropdown className="tv-stage-chrome-language" />
     </header>
   );
 }
