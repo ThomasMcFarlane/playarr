@@ -1449,19 +1449,12 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 /* Settings and login stay editorial rather than dashboard-like. */
 
 .settings-workspace-page {
-  position: relative;
-  height: var(--viewport-height);
-  min-height: 620px;
-  overflow: hidden;
-  background: var(--surface);
-}
-
-.settings-page-heading {
-  right: auto;
+  isolation: isolate;
 }
 
 .settings-workspace {
   position: absolute;
+  z-index: 2;
   top: clamp(116px, 14vh, 164px);
   right: clamp(28px, 3vw, 56px);
   bottom: clamp(48px, 6vh, 78px);
@@ -9252,10 +9245,6 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   .settings-page {
     min-height: 0;
     padding: 0;
-  }
-
-  .settings-page-heading {
-    right: 64px;
   }
 
   .settings-workspace {

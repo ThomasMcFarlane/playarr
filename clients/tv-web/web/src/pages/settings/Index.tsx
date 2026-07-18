@@ -11,6 +11,7 @@ import {
   useNavigationLayer,
 } from "../../lib/navigationLayer";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
+import { TvStageShell } from "../../components/tv/TvStage";
 
 interface SettingsSection {
   to: string;
@@ -216,12 +217,13 @@ export function SettingsIndexPage() {
   }, [activeSection?.to]);
 
   return (
-    <div
-      className={`page settings-page settings-workspace-page${
+    <TvStageShell
+      className={`tv-library tv-directory settings-page settings-workspace-page${
         activeSection ? " is-detail-open" : ""
       }`}
+      ariaLabel={t("settings.index.sectionsAriaLabel")}
     >
-      <header className="tv-library-heading settings-page-heading">
+      <header className="tv-library-heading">
         <button
           type="button"
           className="tv-page-back"
@@ -299,6 +301,6 @@ export function SettingsIndexPage() {
           </section>
         </div>
       </div>
-    </div>
+    </TvStageShell>
   );
 }

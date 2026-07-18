@@ -60,6 +60,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Present Playarr Web settings as a sliding option list and right-hand detail panel, with
   remote-friendly Right-to-open and Left-to-close navigation.
+- Align the Settings back control and page title with the shared television stage used by
+  library pages.
 - Use the profile switcher as Playarr's signed-out landing page, animate sign-in fields into its
   centred visual treatment, and give invitation sign-up the same design without back navigation.
 - Localise Playarr Web in English, Thai, and Japanese, with system-language detection and a

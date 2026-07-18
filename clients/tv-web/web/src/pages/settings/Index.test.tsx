@@ -39,7 +39,10 @@ describe("SettingsIndexPage", () => {
     const markup = renderSettingsRoute("/settings");
 
     expect(markup).toContain('class="settings-options-list"');
-    expect(markup).toContain('class="tv-library-heading settings-page-heading"');
+    expect(markup).toContain('class="tv-library-heading"');
+    expect(markup).toContain(
+      'class="tv-library tv-directory settings-page settings-workspace-page"'
+    );
     expect(markup).toContain('class="tv-page-back"');
     expect(markup.match(/class="settings-option"/g)).toHaveLength(7);
     expect(markup).toContain('data-tv-scroll-container="true"');
@@ -70,7 +73,9 @@ describe("SettingsIndexPage", () => {
       "utf8"
     );
 
-    expect(css).toMatch(/\.settings-workspace-page\s*\{[^}]*height:\s*var\(--viewport-height\)/s);
+    expect(css).toMatch(
+      /\.tv-library,\s*\.tv-detail\s*\{[^}]*height:\s*var\(--viewport-height\)/s
+    );
     expect(css).toMatch(
       /\.settings-workspace-page\.is-detail-open \.settings-workspace-track\s*\{[^}]*grid-template-columns:\s*minmax\(0, 36fr\) minmax\(0, 64fr\)/s
     );
