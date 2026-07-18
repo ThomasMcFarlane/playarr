@@ -3,26 +3,6 @@ export interface TouchPoint {
   y: number;
 }
 
-/** Returns a bounded horizontal drag once the gesture is clearly horizontal. */
-export function horizontalDragOffset(
-  start: TouchPoint,
-  current: TouchPoint,
-  activationDistance = 8,
-  maximumDistance = 96
-): number | null {
-  const deltaX = current.x - start.x;
-  const deltaY = current.y - start.y;
-
-  if (
-    Math.abs(deltaX) < activationDistance ||
-    Math.abs(deltaX) <= Math.abs(deltaY)
-  ) {
-    return null;
-  }
-
-  return Math.max(-maximumDistance, Math.min(maximumDistance, deltaX));
-}
-
 /** Returns the Cover Flow step represented by a deliberate horizontal swipe. */
 export function horizontalSwipeStep(
   start: TouchPoint,

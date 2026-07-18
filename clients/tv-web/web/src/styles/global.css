@@ -9551,6 +9551,16 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     scroll-snap-type: x proximity;
   }
 
+  .tv-media-track-scroll {
+    overscroll-behavior-x: contain;
+    overscroll-behavior-y: auto;
+    touch-action: pan-x pan-y;
+  }
+
+  .tv-media-track-scroll .tv-episode-card {
+    touch-action: pan-x pan-y;
+  }
+
   .tv-home-card,
   .tv-media-track-scroll .tv-episode-card {
     flex-basis: min(46vw, 210px);
@@ -9816,28 +9826,9 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     touch-action: pan-y;
   }
 
-  .tv-music-album-cover-flow.is-dragging .tv-music-album-card {
-    transition: none;
-  }
-
   .tv-music-album-cover-flow .tv-music-album-card {
     width: min(42vw, 180px);
     -webkit-user-drag: none;
-    transform:
-      translateX(calc(-50% + var(--music-flow-x) + var(--music-flow-drag-x, 0px)))
-      translateY(-50%)
-      rotateY(var(--music-flow-rotate))
-      scale(var(--music-flow-scale));
-  }
-
-  .tv-music-album-cover-flow .tv-music-album-card.is-selected,
-  .tv-music-album-cover-flow .tv-music-album-card.is-selected:hover,
-  .tv-music-album-cover-flow .tv-music-album-card.is-selected:focus-visible {
-    transform:
-      translateX(calc(-50% + var(--music-flow-drag-x, 0px)))
-      translateY(-50%)
-      rotateY(0)
-      scale(1.12);
   }
 
   .tv-inline-music-player-host:empty {

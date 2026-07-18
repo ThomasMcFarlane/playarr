@@ -15,6 +15,8 @@ describe("mobile music layout", () => {
     expect(css).toMatch(/\.tv-music-track-row\s*\{[^}]*touch-action: pan-y;/s);
     expect(detailSource).toContain("onPointerMove={moveSwipe}");
     expect(detailSource).toContain("setPointerCapture(event.pointerId)");
+    expect(detailSource).toContain("start.currentIndex + step + albums.length");
+    expect(detailSource).not.toContain("--music-flow-drag-x");
   });
 
   it("lets the page own vertical drags that begin on any mobile detail rail", () => {
@@ -22,6 +24,12 @@ describe("mobile music layout", () => {
 
     expect(css).toMatch(
       /\.tv-series-browser,\s*\.tv-movie-browser,\s*\.tv-detail > \.tv-rail-surface,\s*\.tv-playlists\.is-playlist-detail > \.tv-rail-surface\s*\{[^}]*overflow: visible;[^}]*overscroll-behavior: auto;[^}]*touch-action: pan-y;/s
+    );
+    expect(css).toMatch(
+      /\.tv-media-track-scroll\s*\{[^}]*overscroll-behavior-x: contain;[^}]*overscroll-behavior-y: auto;[^}]*touch-action: pan-x pan-y;/s
+    );
+    expect(css).toMatch(
+      /\.tv-media-track-scroll \.tv-episode-card\s*\{[^}]*touch-action: pan-x pan-y;/s
     );
   });
 

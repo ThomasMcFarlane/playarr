@@ -47,11 +47,7 @@ import {
 } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useScrollEdges } from "../lib/useScrollEdges";
-import {
-  horizontalDragOffset,
-  horizontalSwipeStep,
-  type TouchPoint,
-} from "../lib/touchGestures";
+import { horizontalSwipeStep, type TouchPoint } from "../lib/touchGestures";
 import {
   getJoinedWorkSources,
   type JoinedWorkSource,
@@ -111,11 +107,9 @@ function AlbumCoverFlow({
   const { t } = useLanguage();
   const mediaContext = useMediaContextMenu();
   const swipeStartRef = useRef<
-    (TouchPoint & { pointerId: number; dragging: boolean }) | null
+    (TouchPoint & { pointerId: number; currentIndex: number; moved: boolean }) | null
   >(null);
   const suppressClickRef = useRef(false);
-  const [dragOffset, setDragOffset] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
   const selectedIndex = Math.max(
     0,
     albums.findIndex((album) => album.album.id === selectedAlbumId)
@@ -137,7 +131,8 @@ function AlbumCoverFlow({
       pointerId: event.pointerId,
       x: event.clientX,
       y: event.clientY,
-      dragging: false,
+      currentIndex: selectedIndex,
+      moved: false,
     };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
@@ -145,49 +140,53 @@ function AlbumCoverFlow({
     const start = swipeStartRef.current;
     if (!start || start.pointerId !== event.pointerId) return;
 
-    let nextOffset: number | null;
-    if (start.dragging) {
-      nextOffset = Math.max(-96, Math.min(96, event.clientX - start.x));
-    } else {
-      nextOffset = horizontalDragOffset(start, {
-        x: event.clientX,
-        y: event.clientY,
-      });
-      if (nextOffset === null) return;
-      start.dragging = true;
-      setIsDragging(true);
-    }
+    const step = horizontalSwipeStep(
+      start,
+      { x: event.clientX, y: event.clientY },
+      28
+    );
+    if (step === 0) return;
 
     event.preventDefault();
-    setDragOffset(nextOffset);
+    start.moved = true;
+    start.x = event.clientX;
+    start.y = event.clientY;
+    start.currentIndex =
+      (start.currentIndex + step + albums.length) % albums.length;
+    const nextAlbum = albums[start.currentIndex];
+    if (nextAlbum) onSelect(nextAlbum);
   };
   const finishSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
     const start = swipeStartRef.current;
     swipeStartRef.current = null;
-    setDragOffset(0);
-    setIsDragging(false);
     if (!start || start.pointerId !== event.pointerId) return;
 
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
 
-    const step = horizontalSwipeStep(start, {
-      x: event.clientX,
-      y: event.clientY,
-    });
-    if (start.dragging) {
+    if (!start.moved) {
+      const step = horizontalSwipeStep(start, {
+        x: event.clientX,
+        y: event.clientY,
+      });
+      if (step !== 0) {
+        start.moved = true;
+        start.currentIndex =
+          (start.currentIndex + step + albums.length) % albums.length;
+        const nextAlbum = albums[start.currentIndex];
+        if (nextAlbum) onSelect(nextAlbum);
+      }
+    }
+
+    if (start.moved) {
       suppressClickRef.current = true;
       window.setTimeout(() => {
         suppressClickRef.current = false;
       }, 0);
     }
-    if (step === 0) return;
-
-    const nextIndex = (selectedIndex + step + albums.length) % albums.length;
-    const nextAlbum = albums[nextIndex];
+    const nextAlbum = albums[start.currentIndex];
     if (!nextAlbum) return;
-    onSelect(nextAlbum);
     window.requestAnimationFrame(() => {
       document
         .getElementById(`music-album-${nextAlbum.album.id}`)
@@ -201,15 +200,12 @@ function AlbumCoverFlow({
       aria-label={t("pages.musicDetail.albums")}
     >
       <div
-        className={`tv-music-album-cover-flow${isDragging ? " is-dragging" : ""}`}
-        style={{ "--music-flow-drag-x": `${dragOffset}px` } as CSSProperties}
+        className="tv-music-album-cover-flow"
         onPointerDown={startSwipe}
         onPointerMove={moveSwipe}
         onPointerUp={finishSwipe}
         onPointerCancel={() => {
           swipeStartRef.current = null;
-          setDragOffset(0);
-          setIsDragging(false);
         }}
       >
         {albums.map((album, index) => {

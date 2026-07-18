@@ -189,9 +189,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Let mobile viewers drag Cover Flow with live touch feedback without blocking vertical page
-  gestures, keep album artwork uncropped, place inline music controls directly beneath it, and
-  start page scrolling from touches on music, episode, movie, and playlist rows.
+- Advance the actual Cover Flow album selection during touch dragging instead of shifting the
+  entire carousel, keep album artwork uncropped and inline controls tightly positioned, and let
+  vertical page scrolling begin on music, episode, movie, and playlist rows.
 - Complete the native iOS Playarr parity pass across responsive library, search, title detail,
   playlist, and settings screens; use dark appearance for new installs, keep artwork fallbacks
   dark, and apply login-equivalent server URL correction when changing servers in settings.
