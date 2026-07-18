@@ -37,9 +37,9 @@ describe("ClientsPage", () => {
     expect(markup).not.toContain("Any modern browser");
     expect(markup).not.toContain("The complete Playarr experience, ready now");
     expect(markup).not.toContain("The hosted TV app is available now");
+    expect(markup).not.toContain("Fire TV");
     expect(markup.match(/Coming soon/g)).toHaveLength(5);
     expect(markup).toContain('data-client-icon="android"');
-    expect(markup).toContain('data-client-icon="fire-tv"');
     expect(markup).toContain('data-client-icon="apple"');
     expect(markup).toContain('data-client-icon="lg"');
     expect(markup).toContain('data-client-icon="samsung"');
@@ -49,14 +49,12 @@ describe("ClientsPage", () => {
     expect(markup.match(/data-tv-edge-stop-left="true"/g)).toHaveLength(2);
     expect(markup.match(/data-tv-edge-stop-right="true"/g)).toHaveLength(2);
     expect(markup).toContain("Apple TV");
-    expect(markup).toContain("Fire TV");
     expect(markup).toContain("Roku TV");
     expect(markup).toContain('aria-controls="vidaa-install-details"');
     expect(markup).toContain('aria-controls="android-install-details"');
     expect(markup).toContain('aria-expanded="false"');
     expect(markup).toContain('id="client-android-action"');
     expect(markup).toContain("Download APK");
-    expect(markup).toContain('href="/downloads/android/playarr-android-tv.apk"');
     expect(markup).toContain('aria-disabled="true"');
     expect(markup).not.toContain('href="/clients/vidaa"');
     expect(markup).not.toContain("app-shell");

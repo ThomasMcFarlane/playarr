@@ -221,8 +221,6 @@ commonly plain HTTP on a home LAN.
 
 The mobile and television clients are presented as one Android family, but remain
 separate packages and APKs because their launcher, input and interface contracts differ.
-Amazon Fire TV is presented separately in the catalogue but uses the television APK for
-sideloading because Fire OS is Android-derived.
 Create one durable release keystore, back it up offline, and configure these secrets in
 the `release-android` GitHub environment:
 

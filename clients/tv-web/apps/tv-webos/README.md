@@ -20,9 +20,16 @@ talk to (via `@streamarr-tv/domain`'s `resolveApiBaseUrl`) in this order:
 
 ## Building
 
-`pnpm --filter @streamarr-tv/app-webos run build` produces a static
-`dist/` bundle via Vite (relative asset paths, conservative `es2019` build
-target for older webOS Chromium versions).
+`pnpm --filter @streamarr-tv/app-webos run build` produces a package-ready
+`dist/` directory: the static Vite bundle, `appinfo.json`, the runtime server
+configuration, and the Playarr application icon. The build uses relative asset
+paths and a conservative `es2019` target for older webOS Chromium versions.
+
+When the webOS CLI is installed, build the installable package with:
+
+```sh
+pnpm --filter @streamarr-tv/app-webos run package:ipk
+```
 
 ## Known gap: webOS CLI is not installed in this environment
 
@@ -35,10 +42,10 @@ running, once the CLI is available:
 
 ```sh
 pnpm --filter @streamarr-tv/app-webos run build
-ares-package dist appinfo.json -o out/
+ares-package dist -o out/
 ares-install -d <device-name> out/com.streamarr.tv_0.1.0_all.ipk
 ares-launch -d <device-name> com.streamarr.tv
 ```
 
-Placeholder `icon.png` / `splash.png` referenced by `appinfo.json` are not
-included in this scaffold and will need real assets before packaging.
+The package preparation step validates that the manifest and icon are present
+in `dist/` before packaging can begin.

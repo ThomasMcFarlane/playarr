@@ -133,44 +133,33 @@ and a real `openapi-typescript`-generated client on the Web/TV-web side
 (see [`web.md`](web.md)), not (yet) a single generator producing every
 platform's client from one command.
 
-## No Xcode in this build environment — a real, current gap
+## Xcode project and local validation
 
-**This client has never actually been built or run as an installable
-`.app`.** The development environment this codebase was built in has no
-Xcode installed — only the Command Line Tools' `swift` compiler, and no iOS
-SDK at all. Concretely, that means:
+`clients/ios/Streamarr.xcodeproj` is a checked-in, installable application
+project generated from `project.yml`. It builds the SwiftUI sources as
+`Playarr.app`, links the local `StreamarrKit` package, and includes bundle
+metadata, entitlements, the privacy manifest, the accent colour, and a real
+1024 px application icon. The shared scheme also contains `StreamarrKitTests`
+and `StreamarrAppTests` XCTest targets.
 
-- Swift Package Manager has no first-class "produces an installable iOS
-  app bundle" product type outside Xcode (`.iOSApplication` lives in
-  `AppleProductTypes`, which only resolves inside Xcode/Swift Playgrounds),
-  so `StreamarrApp` is declared as a plain `.executableTarget` with a real
-  `@main struct StreamarrApp: App` — enough for Xcode, once available, to
-  open `Package.swift` directly and run it, but not itself a packaged
-  `.app`, `.ipa`, or Info.plist/entitlements/code-signing setup.
-- What *was* verified: `swift build` against this package with a
-  temporary, local-only `.macOS(.v14)` platform substitution (never
-  committed) caught genuine Swift syntax/type errors, since `StreamarrKit`
-  has no UIKit dependency. Result: `StreamarrKit` (Networking, Player,
-  Auth, Models) built with zero errors and zero warnings; `StreamarrApp`
-  had only macOS-vs-iOS platform-availability failures (`#Preview` macro
-  plugins, iOS-only `View` modifiers like `.keyboardType`/
-  `.fullScreenCover`) — a real, but partial, substitute for an actual iOS
-  build, not equivalent to one.
-- There is **no test target**: neither `XCTest` nor the `Testing` module
-  resolves in this environment at all (confirmed by direct experiment, not
-  assumed), so a written `StreamarrKitTests`/`StreamarrAppTests` pass was
-  reverted rather than left as asserted-but-never-compiled code.
-- This is a real, current environment limitation, not a permanent one:
-  once Xcode is available, the expected next step is opening
-  `Package.swift` directly, picking an iOS Simulator destination, and
-  fixing whatever the macOS-substitute check above didn't catch — not a
-  from-scratch rewrite.
+The available local validation compiled and linked the application and both
+test bundles against the iOS Simulator SDK, compiled a Release device target,
+and passed all six platform-independent `StreamarrKit` tests using a temporary
+host-only manifest adjustment that was reverted afterwards. The generated
+project's resources phase contains both the asset catalogue and privacy
+manifest.
+
+This Xcode installation has the iOS SDK but no installed iOS Simulator runtime.
+Consequently, XCTest and UI execution are not possible here, and Xcode's asset
+compiler cannot finish its runtime-specific thinning pass. A machine with an
+installed iOS runtime is still required for the final simulator build, app
+launch, XCTest execution, signing, archive, and physical-device validation.
 
 ## Store submission process and constraints
 
 - Distributed via the **App Store**, through App Store Connect, with
   **TestFlight** used for beta/internal distribution ahead of release —
-  both presuppose the real `.app`/Xcode project step above, which has not
+  both require signing and App Store Connect registration, which have not
   happened yet.
 - Full App Review applies to every release, including patch releases —
   there is no fast-track or self-service publish path, and review turnaround

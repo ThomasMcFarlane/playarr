@@ -28,11 +28,12 @@ Android do.
   as part of the workspace's full `pnpm -r run build`), and `appinfo.json`
   is a real, structurally-valid webOS app manifest, but turning that `dist/`
   into an installable `.ipk` and pushing it to a device or the webOS TV
-  Simulator has not been done here — see
-  `clients/tv-web/apps/tv-webos/README.md` for the exact `ares-package`/
-  `ares-install`/`ares-launch` commands to run once the CLI is available.
-  Placeholder `icon.png`/`splash.png` assets referenced by `appinfo.json`
-  are also not included yet.
+  Simulator has not been done here.
+  The production build copies the checked-in manifest and Playarr application
+  icon into its package-ready `dist/` directory and validates both before the
+  CLI can run. See `clients/tv-web/apps/tv-webos/README.md` for the exact
+  `ares-package`/`ares-install`/`ares-launch` commands to run once the CLI is
+  available.
 
 ## Tech stack
 

@@ -1,10 +1,9 @@
 import Foundation
 
 /// Where the auto-update module (`UpdateViewModel`) gets "what version am
-/// I" and "where's my App Store listing" from. Both are placeholders until
-/// this package gets a real Xcode project layer with a populated
-/// `Info.plist` and a real App Store Connect listing — see
-/// `clients/ios/README.md`'s "Why `StreamarrApp` isn't a real `.app` yet".
+/// I" and "where's my App Store listing" from. The installed version and
+/// bundle identifier come from the real app bundle; only the App Store id
+/// remains a placeholder until App Store Connect allocates one.
 // `public`/`public static` throughout (rather than the `internal` default):
 // `UpdateViewModel.init` (in `StreamarrApp`, same module) is `public` and
 // defaults its `installedVersion`/`bundleID`/`appStoreID` parameters from
@@ -25,16 +24,13 @@ public enum InstalledAppVersion {
     /// alongside real release tags once this client actually ships builds.
     public static let fallback = "0.1.0"
 
-    /// `CFBundleShortVersionString` once a real `Info.plist` exists (true
-    /// after this is wrapped in an Xcode project); falls back to
-    /// `fallback` today, since this pre-Xcode-project SPM executable has no
-    /// populated bundle info dictionary.
+    /// Reads `CFBundleShortVersionString` from the Xcode-built app bundle,
+    /// with a fallback for direct package tooling and previews.
     public static var current: String {
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? fallback
     }
 
-    /// `TODO`: replace with the app's real bundle identifier once one is
-    /// registered in App Store Connect.
+    /// Reads the configured product bundle identifier.
     public static var bundleIdentifier: String {
         Bundle.main.bundleIdentifier ?? "com.streamarr.ios"
     }

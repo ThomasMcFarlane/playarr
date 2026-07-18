@@ -764,8 +764,6 @@ export const en = {
     "The hosted custom store can add a Playarr launcher tile when used with a compatible DNS or interception setup.",
   "pages.clients.android.name": "Android",
   "pages.clients.android.platform": "Phones, tablets and TVs",
-  "pages.clients.fireTv.name": "Fire TV",
-  "pages.clients.fireTv.platform": "Amazon Fire TV",
   "pages.clients.roku.name": "Roku TV",
   "pages.clients.roku.platform": "Roku televisions",
   "pages.clients.androidMobile.name": "Android Mobile",
