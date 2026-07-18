@@ -111,6 +111,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Select each Playarr view's first relevant control when its asynchronous content finishes loading.
 - Cache each Playarr profile's available navigation sections and wait for them before showing the
   left navigation, preventing its items from jumping during sign-in.
 - Show the source bitrate alongside Original in Playarr's player quality menu.

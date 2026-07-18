@@ -27,9 +27,9 @@ function formControlDescriptor(target: EventTarget | null): FormControlDescripto
   return null;
 }
 
-function visibleFocusables(): HTMLElement[] {
+function visibleFocusables(requestedScope?: Document | HTMLElement): HTMLElement[] {
   const modal = document.querySelector<HTMLElement>('[aria-modal="true"]');
-  const scope: Document | HTMLElement = modal ?? document;
+  const scope: Document | HTMLElement = modal ?? requestedScope ?? document;
   return Array.from(scope.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter((element) => {
     const rect = element.getBoundingClientRect();
     const style = window.getComputedStyle(element);
@@ -41,6 +41,25 @@ function visibleFocusables(): HTMLElement[] {
       !element.closest('[aria-hidden="true"]')
     );
   });
+}
+
+export function shouldAutoFocusViewDefault({
+  activeElementAllowsViewFocus,
+  defaultTargetAvailable,
+  focusHandled,
+  userInteracted,
+}: {
+  activeElementAllowsViewFocus: boolean;
+  defaultTargetAvailable: boolean;
+  focusHandled: boolean;
+  userInteracted: boolean;
+}): boolean {
+  return (
+    activeElementAllowsViewFocus &&
+    defaultTargetAvailable &&
+    !focusHandled &&
+    !userInteracted
+  );
 }
 
 function visibleOnPerpendicularAxis(element: HTMLElement, direction: Direction): boolean {
@@ -431,7 +450,33 @@ export function useTvNavigation(
   useEffect(() => {
     if (disabled) return;
 
+    let focusHandled = false;
+    let userInteracted = false;
+    const view = document.querySelector<HTMLElement>(".app-main") ?? document;
+    const focusViewDefault = () => {
+      const activeElement = document.activeElement;
+      const defaultTarget = visibleFocusables(view).find((node) =>
+        node.hasAttribute("data-tv-focus-default")
+      );
+      if (
+        !shouldAutoFocusViewDefault({
+          activeElementAllowsViewFocus:
+            activeElement === document.body ||
+            (activeElement instanceof HTMLElement &&
+              activeElement.closest(".app-nav") !== null),
+          defaultTargetAvailable: defaultTarget !== undefined,
+          focusHandled,
+          userInteracted,
+        })
+      ) {
+        return;
+      }
+      focusHandled = true;
+      defaultTarget?.focus({ preventScroll: true });
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
+      userInteracted = true;
       const formControl = formControlDescriptor(event.target);
       if (formControl && !shouldNavigateFromFormControl(event.key, formControl)) {
         return;
@@ -472,22 +517,24 @@ export function useTvNavigation(
     };
 
     const handlePointer = () => {
+      userInteracted = true;
       document.body.dataset.inputMode = "pointer";
     };
 
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("pointerdown", handlePointer, { passive: true });
-    const initialFocus = window.setTimeout(() => {
-      if (document.activeElement === document.body) {
-        const nodes = visibleFocusables();
-        (nodes.find((node) => node.hasAttribute("data-tv-focus-default")) ?? nodes[0])?.focus({
-          preventScroll: true,
-        });
-      }
-    }, 80);
+    const defaultFocusObserver = new MutationObserver(focusViewDefault);
+    defaultFocusObserver.observe(view, {
+      attributes: true,
+      attributeFilter: ["data-tv-focus-default"],
+      childList: true,
+      subtree: true,
+    });
+    const initialFocus = window.setTimeout(focusViewDefault, 80);
 
     return () => {
       window.clearTimeout(initialFocus);
+      defaultFocusObserver.disconnect();
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("pointerdown", handlePointer);
     };

@@ -190,7 +190,6 @@ export function SearchPage() {
   const requestGenerationRef = useRef(0);
   const focusResultsAfterSearchRef = useRef(false);
   const enterReleasedRef = useRef(true);
-  const initialFocusHandledRef = useRef(false);
   const scrollEdges = useScrollEdges(
     resultsRef,
     "vertical",
@@ -477,24 +476,6 @@ export function SearchPage() {
     return () => window.cancelAnimationFrame(frame);
   }, [navigationLayer.hasSnapshot, requestedFocusId, state]);
 
-  useEffect(() => {
-    if (initialFocusHandledRef.current) return;
-    if (navigationLayer.hasSnapshot) return;
-
-    let secondFrame = 0;
-    const firstFrame = window.requestAnimationFrame(() => {
-      secondFrame = window.requestAnimationFrame(() => {
-        if (initialFocusHandledRef.current) return;
-        initialFocusHandledRef.current = true;
-        inputRef.current?.focus({ preventScroll: true });
-      });
-    });
-    return () => {
-      window.cancelAnimationFrame(firstFrame);
-      window.cancelAnimationFrame(secondFrame);
-    };
-  }, [navigationLayer.hasSnapshot]);
-
   const activeLibrary = useMemo(
     () => views.find((view) => view.id === requestedLibraryId) ?? null,
     [requestedLibraryId, views]
@@ -687,7 +668,12 @@ export function SearchPage() {
             autoComplete="off"
             aria-label={t("pages.search.searchPlaceholder")}
             data-tv-focus-default={
-              !navigationLayer.hasSnapshot && !requestedFocusId ? true : undefined
+              !navigationLayer.hasSnapshot &&
+              !requestedFocusId &&
+              state.status !== "loading" &&
+              results.length === 0
+                ? true
+                : undefined
             }
           />
           {query ? (
