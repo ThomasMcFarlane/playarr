@@ -9409,12 +9409,16 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     display: none;
   }
 
-  .tv-home-feature,
   .tv-detail-copy {
     top: calc(var(--mobile-top-inset) + 58px);
     left: var(--mobile-page-gutter);
     width: calc(100% - 32px);
     max-width: 520px;
+  }
+
+  .tv-home:not(.tv-playlists) > .tv-home-feature,
+  .tv-playlists.is-playlist-directory > .tv-playlist-feature {
+    display: none;
   }
 
   .tv-playlist-feature {
@@ -9430,14 +9434,12 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     font-size: 0.66rem;
   }
 
-  .tv-home-feature h2,
   .tv-detail > .tv-detail-copy h1 {
     max-width: 12ch;
     font-size: clamp(2rem, 10vw, 3.5rem);
     line-height: 0.94;
   }
 
-  .tv-home-feature > p:not(.tv-provider),
   .tv-detail-synopsis {
     max-width: 52ch;
     margin-top: 10px;
@@ -9460,6 +9462,14 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     overflow-y: auto;
     background: linear-gradient(180deg, transparent, var(--surface) 14%);
     scroll-padding-block: 22px calc(var(--mobile-nav-height) + 24px);
+  }
+
+  .tv-home:not(.tv-playlists) .tv-home-rails {
+    top: calc(var(--mobile-top-inset) + 58px);
+    height: calc(100% - var(--mobile-top-inset) - 58px);
+    padding-top: 20px;
+    background: linear-gradient(180deg, transparent, var(--surface) 8%);
+    scroll-padding-block: 20px calc(var(--mobile-nav-height) + 24px);
   }
 
   .tv-home-rail-section,
@@ -9635,6 +9645,49 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     left: var(--mobile-page-gutter);
   }
 
+  .tv-detail,
+  .tv-playlists.is-playlist-detail {
+    height: auto;
+    min-height: var(--viewport-height);
+    overflow: visible;
+    padding-bottom: var(--mobile-nav-height);
+  }
+
+  .tv-detail > .tv-key-art,
+  .tv-playlists.is-playlist-detail > .tv-key-art {
+    position: sticky;
+    top: 0;
+    width: 100%;
+    height: min(58vh, 520px);
+    margin-bottom: -24vh;
+  }
+
+  .tv-detail > .tv-stage-wash,
+  .tv-playlists.is-playlist-detail > .tv-stage-wash {
+    bottom: auto;
+    height: min(72vh, 640px);
+  }
+
+  .tv-detail-copy {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: auto;
+    max-width: 560px;
+    margin: 0 var(--mobile-page-gutter);
+    padding-top: calc(var(--mobile-top-inset) + 64px);
+  }
+
+  .tv-playlists.is-playlist-detail > .tv-playlist-feature {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: auto;
+    max-width: 560px;
+    margin: 0 var(--mobile-page-gutter);
+    padding-top: calc(var(--mobile-top-inset) + 64px);
+  }
+
   .tv-detail-copy h2 {
     max-width: 28ch;
     margin-top: 8px;
@@ -9670,17 +9723,21 @@ body[data-input-mode="remote"] .player-quality-option:focus {
 
   .tv-series-browser,
   .tv-movie-browser,
-  .tv-detail > .tv-rail-surface {
-    top: 48%;
-    right: 0;
-    bottom: 0;
+  .tv-detail > .tv-rail-surface,
+  .tv-playlists.is-playlist-detail > .tv-rail-surface {
+    position: relative;
+    top: auto;
+    right: auto;
+    bottom: auto;
     width: 100%;
-    height: 52%;
-    padding: 22px 0 calc(var(--mobile-nav-height) + 24px);
+    height: auto;
+    min-height: 0;
+    margin-top: 28px;
+    padding: 24px 0 32px;
     overflow-x: hidden;
-    overflow-y: auto;
-    background: linear-gradient(180deg, transparent, var(--surface) 12%);
-    scroll-padding-block: 22px calc(var(--mobile-nav-height) + 24px);
+    overflow-y: visible;
+    background: linear-gradient(180deg, transparent, var(--surface) 72px);
+    scroll-padding-block: 0;
   }
 
   .tv-music-heading {
@@ -9692,10 +9749,10 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   }
 
   .tv-music-browser.is-content {
-    top: 45%;
-    height: 55%;
-    padding: 14px 0 calc(var(--mobile-nav-height) + 18px);
-    overflow-y: auto;
+    top: auto;
+    height: auto;
+    padding: 18px 0 24px;
+    overflow-y: visible;
   }
 
   .tv-music-album-flow {
@@ -9829,11 +9886,15 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   }
 
   .settings-workspace-track {
-    grid-template-columns: minmax(0, 72px) minmax(0, 1fr);
+    grid-template-columns: minmax(132px, 38%) minmax(0, 1fr);
   }
 
   .settings-detail-panel {
-    width: calc(100% - 72px);
+    position: relative;
+    top: auto;
+    right: auto;
+    width: auto;
+    height: 100%;
   }
 
   .settings-options-list {
@@ -9841,18 +9902,33 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   }
 
   .settings-option {
-    min-height: 82px;
-    grid-template-columns: 2rem minmax(0, 1fr) auto;
-    padding: 18px;
-  }
-
-  .settings-option {
+    min-height: 88px;
     grid-template-columns: 1fr;
-    justify-items: center;
-    padding-inline: 10px;
+    justify-items: start;
+    gap: 5px;
+    padding: 16px 12px;
   }
 
-  .settings-option-copy,
+  .settings-option-number {
+    padding-top: 0;
+    font-size: 0.56rem;
+  }
+
+  .settings-option-copy {
+    width: 100%;
+    display: block;
+  }
+
+  .settings-option-copy strong {
+    display: block;
+    overflow: visible;
+    font-size: clamp(0.68rem, 3.2vw, 0.82rem);
+    line-height: 1.15;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .settings-option-copy small,
   .settings-option-arrow {
     display: none;
   }
