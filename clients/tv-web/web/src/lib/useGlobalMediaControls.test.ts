@@ -15,12 +15,12 @@ describe("globalMediaControlActionForKeystroke", () => {
     expect(
       globalMediaControlActionForKeystroke({
         key,
-        interactiveTarget: true,
+        typingTarget: true,
       })
     ).toBe(action);
   });
 
-  it("supports Space and K away from interactive controls", () => {
+  it("supports Space and K across every non-typing focus target", () => {
     expect(globalMediaControlActionForKeystroke({ key: " " })).toBe(
       "toggle-playback"
     );
@@ -29,11 +29,11 @@ describe("globalMediaControlActionForKeystroke", () => {
     );
   });
 
-  it("does not steal shortcuts from controls, modifiers, or held keys", () => {
+  it("does not steal shortcuts while typing, with modifiers, or when held", () => {
     expect(
       globalMediaControlActionForKeystroke({
         key: " ",
-        interactiveTarget: true,
+        typingTarget: true,
       })
     ).toBeNull();
     expect(

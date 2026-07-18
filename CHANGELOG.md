@@ -121,6 +121,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Render Streamarr activity links in the surrounding text colour and report bytes actually
   delivered during direct and adaptive playback instead of leaving session totals at zero.
+- Keep global Space/K playback shortcuts active across Playarr unless the viewer is typing in an
+  input, textarea, or editable field.
 - Prevent the minimised player from hiding a video element that still retains browser focus.
 - Load authenticated, cached work and album artwork throughout Streamarr Admin, including music,
   with visible loading placeholders and graceful missing-artwork fallbacks.

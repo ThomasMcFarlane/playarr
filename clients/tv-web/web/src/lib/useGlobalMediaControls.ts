@@ -14,7 +14,7 @@ interface MediaControlKeystroke {
   metaKey?: boolean;
   ctrlKey?: boolean;
   altKey?: boolean;
-  interactiveTarget?: boolean;
+  typingTarget?: boolean;
 }
 
 export function globalMediaControlActionForKeystroke({
@@ -24,7 +24,7 @@ export function globalMediaControlActionForKeystroke({
   metaKey = false,
   ctrlKey = false,
   altKey = false,
-  interactiveTarget = false,
+  typingTarget = false,
 }: MediaControlKeystroke): GlobalMediaControlAction | null {
   if (repeat || defaultPrevented) return null;
 
@@ -43,7 +43,7 @@ export function globalMediaControlActionForKeystroke({
       break;
   }
 
-  if (metaKey || ctrlKey || altKey || interactiveTarget) return null;
+  if (metaKey || ctrlKey || altKey || typingTarget) return null;
   return key === "k" || key === " " ? "toggle-playback" : null;
 }
 
@@ -99,13 +99,28 @@ export function installMediaSessionActionHandlers(
   };
 }
 
-function isInteractiveTarget(target: EventTarget | null): boolean {
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (target instanceof HTMLTextAreaElement) return true;
+  if (target instanceof HTMLInputElement) {
+    return [
+      "date",
+      "datetime-local",
+      "email",
+      "month",
+      "number",
+      "password",
+      "search",
+      "tel",
+      "text",
+      "time",
+      "url",
+      "week",
+    ].includes(target.type);
+  }
   return (
     target instanceof Element &&
     Boolean(
-      target.closest(
-        'input, textarea, select, button, a[href], [contenteditable="true"], [role="button"], [role="slider"]'
-      )
+      target.closest('[contenteditable]:not([contenteditable="false"])')
     )
   );
 }
@@ -168,7 +183,7 @@ export function useGlobalMediaControls({
         metaKey: event.metaKey,
         ctrlKey: event.ctrlKey,
         altKey: event.altKey,
-        interactiveTarget: isInteractiveTarget(event.target),
+        typingTarget: isTypingTarget(event.target),
       });
       if (!action || !runMediaControlAction(action, callbacksRef.current)) return;
 
