@@ -62,11 +62,11 @@ export function TvDetailHeading({
       >
         <span aria-hidden="true">←</span>
       </button>
-      <h1 className="tv-detail-heading-title">
-        <span>{sectionTitle}</span>
+      <h1>{sectionTitle}</h1>
+      <span className="tv-detail-heading-item">
         <i aria-hidden="true">|</i>
         <strong>{itemTitle}</strong>
-      </h1>
+      </span>
     </header>
   );
 }

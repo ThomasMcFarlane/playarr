@@ -5135,32 +5135,31 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   min-width: 0;
 }
 
-.tv-detail-heading-title {
+.tv-library-heading > .tv-detail-heading-item {
   min-width: 0;
   display: flex;
   align-items: baseline;
   gap: 0.42em;
   overflow: hidden;
+  padding-left: 0;
+  border-left: 0;
+  text-transform: none;
   white-space: nowrap;
 }
 
-.tv-detail-heading-title > span,
-.tv-detail-heading-title > i {
+.tv-detail-heading-item > i {
   flex: 0 0 auto;
-}
-
-.tv-detail-heading-title > i {
   color: var(--ink-muted);
   font-style: normal;
   font-weight: 360;
 }
 
-.tv-detail-heading-title > strong {
+.tv-detail-heading-item > strong {
   min-width: 0;
   overflow: hidden;
   font: inherit;
   font-weight: inherit;
-  letter-spacing: inherit;
+  letter-spacing: normal;
   text-overflow: ellipsis;
 }
 

@@ -66,6 +66,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Match item names after the detail-page heading pipe to the compact metadata typography used by
+  other page headers instead of repeating the main heading size.
 - Show `Music | Artist`, `Movies | Title`, or `Series | Title` in detail-page headers, and move
   selected-album metadata from above the music track list into the left-hand detail panel while
   keeping inline playback controls clear of the first track, Cover Flow changes on Left/Right,

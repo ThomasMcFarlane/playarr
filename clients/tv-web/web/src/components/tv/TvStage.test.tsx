@@ -13,8 +13,8 @@ describe("TvDetailHeading", () => {
       />
     );
 
-    expect(markup).toContain("tv-detail-heading-title");
-    expect(markup).toContain("<span>Music</span>");
+    expect(markup).toContain("<h1>Music</h1>");
+    expect(markup).toContain('class="tv-detail-heading-item"');
     expect(markup).toContain('<i aria-hidden="true">|</i>');
     expect(markup).toContain("<strong>Sample Band Two</strong>");
   });
