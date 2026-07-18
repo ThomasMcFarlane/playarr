@@ -189,6 +189,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Persist native iOS sessions in app-scoped simulator storage when running an unsigned build,
+  while keeping physical-device tokens exclusively in Keychain and surfacing useful Security
+  status details if device persistence fails.
 - Advance the actual Cover Flow album selection during touch dragging instead of shifting the
   entire carousel, keep album artwork uncropped and inline controls tightly positioned, and let
   vertical page scrolling begin on music, episode, movie, and playlist rows.

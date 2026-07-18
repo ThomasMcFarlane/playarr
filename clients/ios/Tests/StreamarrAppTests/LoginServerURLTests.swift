@@ -1,7 +1,48 @@
 @testable import StreamarrApp
+import StreamarrKit
 import XCTest
 
 final class LoginServerURLTests: XCTestCase {
+    func testSimulatorSessionStorePersistsWithoutCodeSigning() async throws {
+        #if targetEnvironment(simulator)
+        let suiteName = "KeychainTokenStoreTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let service = "com.streamarr.ios.session-tests"
+        let account = "https://media.example.test"
+        let expected = StoredAuthSession(
+            accessToken: "access-token",
+            refreshToken: "refresh-token",
+            tokenType: "Bearer",
+            expiresAt: Date().addingTimeInterval(3_600)
+        )
+
+        let store = KeychainTokenStore(
+            service: service,
+            account: account,
+            simulatorDefaults: defaults
+        )
+        try await store.storeSession(expected)
+
+        let reopenedStore = KeychainTokenStore(
+            service: service,
+            account: account,
+            simulatorDefaults: defaults
+        )
+        let restored = await reopenedStore.currentSession()
+        XCTAssertEqual(restored, expected)
+
+        try await reopenedStore.clearSession()
+        let clearedStore = KeychainTokenStore(
+            service: service,
+            account: account,
+            simulatorDefaults: defaults
+        )
+        let cleared = await clearedStore.currentSession()
+        XCTAssertNil(cleared)
+        #endif
+    }
+
     @MainActor
     func testInteractiveServerChangeKeepsTheLoginScreenActive() async {
         let suiteName = "LoginServerURLTests.\(UUID().uuidString)"

@@ -86,7 +86,8 @@ public final class AppEnvironment {
 
         let tokenStore = KeychainTokenStore(
             service: "com.streamarr.ios.session",
-            account: resolvedURL.absoluteString
+            account: resolvedURL.absoluteString,
+            simulatorDefaults: userDefaults
         )
         self.tokenStore = tokenStore
 
@@ -209,7 +210,8 @@ public final class AppEnvironment {
     private func rebuildClients() {
         let tokenStore = KeychainTokenStore(
             service: "com.streamarr.ios.session",
-            account: serverBaseURL.absoluteString
+            account: serverBaseURL.absoluteString,
+            simulatorDefaults: userDefaults
         )
         self.tokenStore = tokenStore
         apiClient = APIClient(
