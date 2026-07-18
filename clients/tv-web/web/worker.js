@@ -7,12 +7,26 @@ const DOWNLOADS = new Map([
     "/downloads/android/playarr-android-tv.apk",
     "android/playarr-android-tv.apk",
   ],
+  [
+    "/downloads/android/playarr-android-tv.json",
+    "android/playarr-android-tv.json",
+  ],
 ]);
+
+const VERSIONED_ANDROID_DOWNLOAD =
+  /^\/downloads\/android\/releases\/(\d+\.\d+\.\d+)\/(playarr-android-(?:mobile|tv)\.apk|SHA256SUMS)$/;
+
+function downloadKey(pathname) {
+  const stableKey = DOWNLOADS.get(pathname);
+  if (stableKey) return stableKey;
+  const versioned = pathname.match(VERSIONED_ANDROID_DOWNLOAD);
+  return versioned ? `android/releases/${versioned[1]}/${versioned[2]}` : undefined;
+}
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const key = DOWNLOADS.get(url.pathname);
+    const key = downloadKey(url.pathname);
     if (!key) return env.ASSETS.fetch(request);
 
     if (request.method !== "GET" && request.method !== "HEAD") {
@@ -31,12 +45,29 @@ export default {
     }
 
     const filename = url.pathname.slice(url.pathname.lastIndexOf("/") + 1);
+    const isApk = filename.endsWith(".apk");
+    const isJson = filename.endsWith(".json");
     const headers = new Headers();
     object.writeHttpMetadata(headers);
-    headers.set("Cache-Control", "public, max-age=300");
-    headers.set("Content-Disposition", `attachment; filename="${filename}"`);
+    headers.set(
+      "Cache-Control",
+      VERSIONED_ANDROID_DOWNLOAD.test(url.pathname)
+        ? "public, max-age=31536000, immutable"
+        : "public, max-age=300"
+    );
+    headers.set(
+      "Content-Disposition",
+      `${isApk ? "attachment" : "inline"}; filename="${filename}"`
+    );
     headers.set("Content-Length", String(object.size));
-    headers.set("Content-Type", "application/vnd.android.package-archive");
+    headers.set(
+      "Content-Type",
+      isApk
+        ? "application/vnd.android.package-archive"
+        : isJson
+          ? "application/json; charset=utf-8"
+          : "text/plain; charset=utf-8"
+    );
     headers.set("ETag", object.httpEtag);
 
     return new Response(request.method === "HEAD" ? null : object.body, { headers });
