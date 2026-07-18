@@ -30,18 +30,13 @@ describe("MusicDetail track list", () => {
 
   it("centres persistent inline controls beneath Cover Flow", () => {
     const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
-    const inlinePlayerRule = css.match(
-      /\.player-page\.is-minimised\.is-inline-music\s*\{(?<declarations>[^}]*)\}/
-    )?.groups?.declarations;
     const inlineControlsRule = css.match(
       /\.player-shell-inline-music \.player-controls\s*\{(?<declarations>[^}]*)\}/
     )?.groups?.declarations;
 
-    expect(inlinePlayerRule).toContain(
-      "--inline-music-cover-flow-width: clamp(330px, 50vh, 540px)"
-    );
-    expect(inlineControlsRule).toContain("var(--inline-music-cover-flow-width)");
-    expect(inlineControlsRule).toContain("var(--inline-music-cover-flow-inset)");
-    expect(inlineControlsRule).not.toContain("420px");
+    expect(inlineControlsRule).toContain("left: 50%");
+    expect(inlineControlsRule).toContain("width: min(76%, 720px)");
+    expect(inlineControlsRule).toContain("transform: translateX(-50%)");
+    expect(css).toContain(".player-shell-inline-music .player-controls-context-title");
   });
 });

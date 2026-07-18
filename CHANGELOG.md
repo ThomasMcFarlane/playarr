@@ -120,6 +120,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Keep the inline music player and Cover Flow controls mounted, and show the visualiser only on
   the actively playing album with a darker, blurred backdrop while preserving playback across
   page refreshes.
+- Centre inline music controls beneath Cover Flow and show the active track title above them.
 - Enable Up and Down navigation from sign-in fields, and return Left from the server-address
   boundary to the active Settings option instead of a diagonally positioned item.
 - Let Left and Right leave Playarr text inputs at their matching caret boundaries while
