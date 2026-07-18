@@ -1,46 +1,50 @@
 # mobile-android
 
-The Playarr Android Mobile app (phone/tablet): Jetpack Compose + Material 3,
-Hilt DI, Media3 playback, targeting Android 8.0+ (`minSdk 26`).
+The Playarr Android phone/tablet app is a thin native host for the same
+responsive React application used by Playarr Web and Android TV. This keeps
+the visible library, profiles, settings, search, and player surfaces in one
+codebase while Android retains the platform responsibilities that belong in
+an APK.
 
-This module is **not** a standalone Gradle project — it's included by the
-root build at `../android-shared/settings.gradle.kts`. See
-[`../android-shared/README.md`](../android-shared/README.md) for the full
-module graph, build instructions, and the (real, hit-and-fixed) build
-toolchain notes.
+The app targets Android 8.0+ (`minSdk 26`) and uses a hardware-accelerated
+WebView for presentation. Its native Compose layer owns:
 
-Quick build:
+- server-address bootstrap and connection recovery;
+- lifecycle, cookie, DOM-storage, Back, and fullscreen-video handling;
+- Google Play in-app updates and Firebase invite notifications;
+- Android image picking for custom profile avatars; and
+- a session bridge that keeps native push registration aligned with the
+  authenticated web profile.
+
+The hosted bundle identifies this wrapper through the
+`PlayarrAndroidMobile/<version>` user-agent token. It selects the
+`android-mobile` API compatibility profile and the existing phone
+breakpoints rather than the Android TV D-pad profile.
+
+This module is included by the Gradle root at
+`../android-shared/settings.gradle.kts`.
+
+## Build
 
 ```bash
-export JAVA_HOME=/opt/homebrew/opt/openjdk@21   # AGP needs 17/21; the environment default was too new
+export JAVA_HOME=/opt/homebrew/opt/openjdk@21
 cd ../android-shared
-./gradlew :mobile-android:assembleDebug
+./gradlew :mobile-android:testDebugUnitTest :mobile-android:assembleDebug
 ```
 
-This was run successfully in the environment this project was built in —
-it produces a real, packaged, installable `mobile-android-debug.apk`.
+The APK is written beneath
+`clients/mobile-android/build/outputs/apk/debug/`.
 
 ## Structure
 
-```
+```text
 src/main/kotlin/io/streamarr/mobile/
-├── StreamarrMobileApp.kt      — @HiltAndroidApp Application
-├── MainActivity.kt            — single Activity, hosts the Compose tree
-├── navigation/                — type-safe Navigation Compose routes + bottom-nav Scaffold
-├── ui/screens/                — Home, Library, Player, Settings (+ their ViewModels)
-└── di/                        — Hilt modules wiring core-data/core-player/core-auth factories
+├── StreamarrMobileApp.kt      native application, FCM bootstrap
+├── MainActivity.kt            Activity hosting the shared web surface
+├── ui/web/                    WebView host and server recovery UI
+├── update/                    Google Play in-app update integration
+└── di/                        native data, auth, and update bindings
 ```
 
-`core-data`, `core-domain`, `core-designsystem`, `core-player`, and
-`core-auth` (all in `../android-shared/`) stay framework-agnostic where
-Hilt is concerned — this module's `di/` package is where their factory
-functions (`StreamarrHttpClient.create(...)`, `ExoPlayerStreamarrPlayer.create(...)`,
-`AuthHttpClient.create(...)`) get bound into the Hilt graph.
-
-## No blockers
-
-Gradle sync, `compileDebugKotlin`, and `assembleDebug` all succeeded
-against the real Android SDK/toolchain in this environment (SDK Platform
-37 and Build-Tools 37 were auto-downloaded; licenses were already
-accepted). There is no missing-SDK-component or license blocker to report
-here.
+All visible app routes come from `clients/tv-web/web`; the Android module no
+longer contains a parallel Compose catalogue, navigation graph, or player.

@@ -35,8 +35,8 @@ streamarr-android (this root)
 ├── core-designsystem  — Compose Material 3 theme + shared components (mobile-facing)
 ├── core-player        — Media3/ExoPlayer wrapper (StreamarrPlayer)
 ├── core-auth          — RFC 8628 device-authorization-flow client
-├── mobile-android     — phone/tablet app (Jetpack Compose + Material 3 + Hilt)
-└── tv-android         — Android TV app (Compose + androidx.tv.material3 + Hilt)
+├── mobile-android     — phone/tablet host for the responsive Playarr Web bundle
+└── tv-android         — Android TV host for the same Playarr Web bundle
 ```
 
 `core-domain` depends "up" onto `core-data` rather than the reverse a

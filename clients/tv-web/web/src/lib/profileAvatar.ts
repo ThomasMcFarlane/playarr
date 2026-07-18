@@ -215,7 +215,7 @@ export function supportsCustomAvatarUpload(
   }
 ): boolean {
   return (
-    runtime.platform === "web" &&
+    (runtime.platform === "web" || runtime.platform === "android-mobile") &&
     runtime.hasFile &&
     runtime.hasFileReader &&
     runtime.hasCanvas &&

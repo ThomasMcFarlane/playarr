@@ -138,6 +138,7 @@ describe("profile avatar preferences", () => {
     };
 
     expect(supportsCustomAvatarUpload(capable)).toBe(true);
+    expect(supportsCustomAvatarUpload({ ...capable, platform: "android-mobile" })).toBe(true);
     expect(supportsCustomAvatarUpload({ ...capable, platform: "android-tv" })).toBe(false);
     expect(supportsCustomAvatarUpload({ ...capable, platform: "tv-vidaa" })).toBe(false);
     expect(supportsCustomAvatarUpload({ ...capable, hasCanvas: false })).toBe(false);

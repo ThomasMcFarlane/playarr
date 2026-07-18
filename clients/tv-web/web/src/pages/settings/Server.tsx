@@ -178,6 +178,19 @@ export function SettingsServerPage() {
 
         <p className="hint">{t("settings.server.primaryServerHint", { apiBaseUrl })}</p>
 
+        {window.PlayarrAndroidMobile && (
+          <div className="connection-actions">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => window.PlayarrAndroidMobile?.openServerEditor()}
+            >
+              {t("settings.server.changeAppHost")}
+            </button>
+            <p className="hint">{t("settings.server.changeAppHostHint")}</p>
+          </div>
+        )}
+
         <details className="settings-details">
           <summary>{t("settings.server.tvDetailsSummary")}</summary>
           <p className="hint">

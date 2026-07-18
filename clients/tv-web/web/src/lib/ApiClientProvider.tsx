@@ -55,6 +55,8 @@ const PLAYARR_LOGIN_IDENTITY = {
       ? "Playarr for VIDAA"
       : PLAYARR_CLIENT_PLATFORM === "android-tv"
         ? "Playarr for Android TV"
+        : PLAYARR_CLIENT_PLATFORM === "android-mobile"
+          ? "Playarr for Android"
         : "Playarr Web",
   clientPlatform: PLAYARR_CLIENT_PLATFORM,
   clientVersion: __APP_VERSION__,

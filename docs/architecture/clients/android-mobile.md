@@ -1,167 +1,96 @@
 # Client Architecture: Android Mobile
 
-The Android Mobile client is a phone/tablet-first Playarr app: library
-browsing, search, downloads, and playback against a Streamarr server on the
-LAN or over the internet (subject to the server's `Policy.allow_remote_access`
-— see [`../auth-modes.md`](../auth-modes.md)).
+Android Mobile is the installable phone/tablet host for Playarr's shared,
+responsive web application. It presents the same React routes and design
+system as Web and Android TV, with CSS selecting a touch-first layout for a
+phone-sized viewport. There is no second mobile catalogue or player UI to
+keep visually synchronised.
 
-## Target OS/SDK versions
+## Platform baseline
 
-- **Minimum SDK:** 26 (Android 8.0 Oreo) — chosen as the floor that still
-  covers the long tail of active Android devices without carrying
-  compatibility shims for pre-`ExoPlayer`-viable or pre-scoped-storage
-  Android versions.
-- **Target/compile SDK:** 37 at time of writing (several current AndroidX
-  releases the app depends on declare a minimum `compileSdk` of 37 in their
-  AAR metadata), bumped each year to track Google Play's target-API-level
-  requirement (Play requires apps to target an API level within one year of
-  the latest major release to remain installable/updatable for new users —
-  see [`../../versioning-policy.md`](../../versioning-policy.md) for how
-  this policy requirement interacts with Streamarr's own release cadence).
-- **Kotlin** 2.3.10, **Jetpack Compose** (Material 3) for all UI — no XML
-  layouts or Views-based screens in new code.
+- **Minimum SDK:** 26 (Android 8.0 Oreo).
+- **Compile/target SDK:** 37.
+- **Build:** AGP 9.3.0, Gradle 9.5.1, Kotlin 2.3.10.
+- **Native shell:** Jetpack Compose, Hilt, DataStore, Google Play In-App
+  Updates, and Firebase Cloud Messaging.
+- **Presentation:** a hardware-accelerated Android WebView loading the
+  server-co-hosted `clients/tv-web/web` bundle.
 
-## Tech stack
+## Shared presentation
 
-| Concern | Choice |
-|---|---|
-| Language | Kotlin 2.3.10 |
-| UI | Jetpack Compose (Material 3), Compose BOM `2026.06.01` |
-| DI | Hilt 2.60.1 (KSP annotation processing, not `kapt` — AGP 9's built-in-Kotlin compilation dropped `kapt` support) |
-| Networking | Retrofit 3.0.0 + OkHttp, hand-written client (`core-data`'s `StreamarrApi`) checked field-for-field against `backend/openapi/streamarr.yaml`, not a codegen-tool-generated client |
-| Serialization | kotlinx.serialization, with a global `JsonNamingStrategy.SnakeCase` mapping idiomatic-camelCase Kotlin properties to the spec's snake_case wire fields |
-| Async | Kotlin Coroutines + Flow |
-| Local persistence | Jetpack DataStore (Preferences) — server base URL, device id, and the access/refresh token pair; no Room/offline-downloads layer exists yet |
-| Playback | Media3 (`androidx.media3` 1.10.1, ExoPlayer's successor) |
-| Build | AGP 9.3.0 (built-in Kotlin compilation), Gradle 9.5.1, compileSdk/targetSdk 37 |
-| Image loading | Coil 3 (`coil3.compose.AsyncImage`), wired into `core-designsystem`'s shared `PosterCard` component |
+`MainActivity` mounts `MobileWebAppScreen`, which loads the configured
+Streamarr origin. The server serves both the API and built Playarr assets in
+the normal deployment, so the app receives the same bundle that a browser
+or Android TV opens. The WebView appends
+`PlayarrAndroidMobile/<version>` to its user agent; the bundle consequently
+reports `android-mobile` for login and compatibility checks without enabling
+the TV-only D-pad profile.
 
-## Auth/session flow
+The responsive web layer owns:
 
-Both apps' `core-auth` module implements the two real session paths
-documented in [`../auth-modes.md`](../auth-modes.md), both landing in the
-same DataStore-backed `TokenStore` so every downstream caller (`core-data`'s
-`StreamarrHttpClient`) sees one session regardless of which path produced it:
+- profile selection and full-account sign-in;
+- home rails, library directories, search, playlists, and settings;
+- touch navigation and safe-area-aware bottom navigation;
+- detail pages, direct/HLS playback, quality controls, and the minimised
+  player; and
+- custom profile-avatar cropping after Android supplies an image URI.
 
-- **Transparent trusted-network login (Android Mobile's path).**
-  `SessionManager.ensureAccessToken()` calls `POST /api/v1/auth/login` on
-  demand, the first time a call that needs a bearer token has none cached.
-  Under the server's default `AuthMode::TrustedNetwork`, a login from a
-  trusted source IP succeeds with no credentials at all — there is no
-  sign-in screen in the mobile app; a session is acquired silently the
-  first time it's needed.
-- **RFC 8628 device pairing** is implemented in the same `core-auth`
-  module (`DeviceAuthClient`) and is exercised by Android TV's pairing
-  screen (see [`android-tv.md`](android-tv.md)); Mobile links against the
-  same module but has no pairing UI of its own, since a phone/tablet has a
-  keyboard and benefits from the login path instead.
+Android owns only the platform boundary:
 
-No endpoint the mobile app actually calls requires the resulting
-`Authorization: Bearer` header today — catalog, playback, and system calls
-all stay unauthenticated by the server's own design. (The server does
-enforce Bearer-plus-admin-checked auth on the source-instance management
-endpoints under `/api/v1/admin/source-instances`, but the mobile app has
-no admin UI and never calls them.) `StreamarrHttpClient`'s auth interceptor
-still acquires and attaches a token up front, ready for whichever
-authenticated write path needs one first.
+- WebView lifecycle, cookies, DOM storage, Android Back, external links,
+  fullscreen video, and file selection;
+- a native server-address recovery sheet for first run or connection
+  failure, also reachable from the shared Server settings page;
+- Play Store update flows; and
+- Firebase invite notifications.
 
-## Playback / DRM approach
+This is the same split used by Android TV. The native wrappers differ where
+the device class genuinely differs: Android TV fixes a 1920 by 1080 CSS
+viewport and translates remote input, while Android Mobile uses the physical
+touch viewport, system safe area, image picker, and mobile update channel.
 
-Playback goes through Media3's `ExoPlayer`
-(`ExoPlayerStreamarrPlayer`), which plays back whatever
-`GET /api/v1/playback/{media_file_id}` returns — a `PlaybackInfoResponse`
-carrying just a `mode` (`direct` or `hls`) and a `url` — identically
-regardless of whether the server chose direct-play or an on-demand
-transcode session (see
-[`../overview.md`](../overview.md#the-tdarr-background-vs-on-demand-transcode-split)).
-When `mode` is `hls`, the client forces Media3's HLS extractor via an
-explicit MIME-type hint, since a freshly-spun-up transcode session's URL
-doesn't necessarily end in `.m3u8`.
+## Authentication and native session bridge
 
-**No DRM is implemented today.** There is no `DefaultDrmSessionManager`
-wiring, no Widevine license call, and no `/api/drm/...` endpoint anywhere
-in the real API surface (`backend/openapi/streamarr.yaml` has no DRM
-paths at all) — playback is unencrypted HLS/direct-play only. This is a
-real, current gap relative to earlier drafts of this document, which
-described a Widevine license-proxy endpoint that was never actually built.
-Revisit this section if/when server-side content protection is added; for
-now, there is no content-protection mechanism at all gating playback — the
-playback endpoint is unauthenticated, so anything reachable on the network
-can request a stream for an available title.
+The web bundle performs the same trusted-network or full-account login used
+in a browser and persists the active session in origin-scoped local storage.
+An optional `PlayarrAndroidMobile` JavaScript bridge mirrors that token pair
+into the native DataStore-backed `TokenStore`. This lets the existing native
+Firebase service register its installation against the same signed-in
+profile without creating an independent login flow.
 
-## Code-sharing story with sibling platforms
+The configured server is trusted to supply the app document. Main-frame
+links to a different origin are opened by Android rather than loaded into
+the bridged WebView, and file/content access is disabled on the WebView.
 
-Android Mobile and Android TV (see
-[`android-tv.md`](android-tv.md)) live in **one Gradle build rooted at
-`clients/android-shared/`**, which includes `clients/mobile-android/` and
-`clients/tv-android/` as sibling projects via an explicit `projectDir`
-override in `settings.gradle.kts` (not a nested `clients/android/` tree —
-that layout never materialized; the real module graph lives across three
-top-level `clients/` directories that together form one build):
+## Server bootstrap
 
-```
-clients/
-  android-shared/       # Gradle root: settings.gradle.kts, version catalog, 5 shared library modules
-    core-data/             # domain models + hand-written Retrofit API client
-    core-domain/           # repositories + use cases, built on core-data
-    core-designsystem/     # Compose Material 3 theme + shared components (mobile-facing)
-    core-player/           # Media3/ExoPlayer wrapper (StreamarrPlayer)
-    core-auth/              # RFC 8628 device-flow client + trusted-network login + TokenStore
-    core-update/            # Play In-App Updates coordinator + version-compatibility evaluator
-  mobile-android/        # phone/tablet app (Jetpack Compose + Material 3 + Hilt)
-  tv-android/            # Android TV app (Compose + androidx.tv.material3 + Hilt)
-```
+`ServerConfigStore` persists the origin that serves Playarr. The default
+`http://10.0.2.2:8484` targets a backend running on the Android emulator's
+host. A physical device uses the operator's LAN or HTTPS address. Missing
+schemes default to LAN HTTP; only absolute HTTP(S) origins are accepted.
 
-`core-data`, `core-domain`, `core-player`, `core-auth`, and `core-update`
-are shared unmodified between the two app modules — they hold everything
-that doesn't depend on the shape of the input device or screen: the API
-client, the auth/session state machine (mirroring
-[`../auth-modes.md`](../auth-modes.md)), Media3 setup, and the auto-update
-evaluator. `core-designsystem` is mobile-facing (wraps
-`androidx.compose.material3.MaterialTheme`); `tv-android` has its own
-`TvTheme.kt` wrapping `androidx.tv.material3.MaterialTheme` instead, built
-from the same color tokens so both apps share one source of truth for
-brand color despite using two different Material component libraries. Each
-app module's own `ui/screens/` and `di/` diverge where the platforms
-genuinely diverge: touch gestures and bottom-nav for mobile versus D-pad
-focus handling, a 10-foot-UI layout, and the pairing gate for TV.
+If the initial document fails, the native connection sheet remains visible
+until a valid host loads. Once connected, the same sheet is available from
+Settings > Server connection > Change app host.
 
-There is no code sharing with iOS beyond the OpenAPI contract itself
-(different language, different UI framework); see
-[`ios.md`](ios.md).
+## Playback and updates
 
-## Store submission process and constraints
+Playback is implemented once in the web player's direct/HLS pipeline. The
+native host enables inline media without an extra user gesture and presents
+WebChrome fullscreen custom views for video. Android Back is offered to the
+shared player first so active or minimised sessions close cleanly before
+WebView history changes.
 
-- Distributed via **Google Play** (Play Console), with the AAB (Android
-  App Bundle) format required for new submissions.
-- Standard Play review: content rating questionnaire, data-safety
-  disclosure (the app talks only to the user's own configured Streamarr
-  server — no third-party analytics/ad SDKs, which simplifies this
-  disclosure considerably), and target-API-level compliance as above.
-- Because this is a client for **self-hosted, user-owned servers** rather
-  than a service Streamarr itself operates, the listing is explicit that
-  the app requires the user to already run or have access to a Streamarr
-  server — avoiding any implication of hosted content Google would need to
-  review directly.
-- Updates use Google Play's **In-App Updates API**, wired through
-  `core-update`'s `AppUpdateCoordinator`/`UpdateAvailabilityEvaluator` and
-  each app's `AppUpdateEffect.kt`. The evaluator compares this build's own
-  version against `GET /api/system/version`'s per-platform
-  `CompatibilityEntry` (`latest_version`/`min_supported_version`, the real
-  wire shape — not an integer `apiVersion`/`apiVersionFloor` scheme):
-  **Flexible** mode (background download, user-initiated install prompt)
-  when only `latest_version` has moved ahead, escalating to **Immediate**
-  mode (blocking, forced-update flow) once the running build has fallen
-  below `min_supported_version` — see the per-platform update-mechanism
-  table in [`../../versioning-policy.md`](../../versioning-policy.md) for
-  the exact trigger condition shared with Android TV.
+The APK still uses Google Play In-App Updates. `AppUpdateEffect` evaluates
+the server's `android-mobile` compatibility row and starts Flexible or
+Immediate Play flows as documented in
+[`../../versioning-policy.md`](../../versioning-policy.md). The hosted web
+bundle can update independently with the server, so visual fixes do not
+require duplicating or republishing native screen code.
 
-## Work detail screen and playback resolution
+## Distribution
 
-`WorkDetailScreen`'s "Play" action uses the real, server-resolved
-`media_file_id` the catalog endpoint cross-links per leaf
-(`WorkDetailSchema.mediaFileId` for a movie; the sibling field on
-`EpisodeDetailSchema`/`TrackDetailSchema`/`BookDetailSchema` for a series'
-episodes / an artist's tracks / an author's books), falling back to a
-non-playable row when a given leaf's file hasn't been resolved yet
-(`media_file_id == null`).
+The release artefact is an Android App Bundle for Google Play (or a signed
+APK for direct testing). The listing must state that the app connects to a
+self-hosted Streamarr server. Cleartext HTTP remains permitted for private
+LAN deployments; HTTPS is recommended for remote access.

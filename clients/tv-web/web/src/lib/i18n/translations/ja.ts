@@ -689,6 +689,8 @@ export const ja: Translations = {
   "settings.server.serverDisconnectedToast": "サーバーを切断しました。",
   "settings.server.serverConnectedToast": "サーバーに接続しました。",
   "settings.server.addAnotherServer": "サーバーを追加",
+  "settings.server.changeAppHost": "アプリのホストを変更",
+  "settings.server.changeAppHostHint": "このAndroidアプリを別のサーバー上のPlayarr画面に再接続します。",
   "settings.server.serverAddressPlaceholder": "サーバーアドレスまたはURL",
   "settings.server.usernamePlaceholder": "ユーザー名",
   "settings.server.usernameAriaLabel": "追加するサーバーのユーザー名",

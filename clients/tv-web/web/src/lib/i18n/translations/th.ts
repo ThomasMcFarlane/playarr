@@ -692,6 +692,8 @@ export const th: Translations = {
   "settings.server.serverDisconnectedToast": "ตัดการเชื่อมต่อเซิร์ฟเวอร์แล้ว",
   "settings.server.serverConnectedToast": "เชื่อมต่อเซิร์ฟเวอร์แล้ว",
   "settings.server.addAnotherServer": "เพิ่มเซิร์ฟเวอร์อื่น",
+  "settings.server.changeAppHost": "เปลี่ยนโฮสต์ของแอป",
+  "settings.server.changeAppHostHint": "เชื่อมต่อแอป Android นี้กับอินเทอร์เฟซ Playarr บนเซิร์ฟเวอร์อื่น",
   "settings.server.serverAddressPlaceholder": "ที่อยู่หรือ URL ของเซิร์ฟเวอร์",
   "settings.server.usernamePlaceholder": "ชื่อผู้ใช้",
   "settings.server.usernameAriaLabel": "ชื่อผู้ใช้สำหรับเซิร์ฟเวอร์เพิ่มเติม",

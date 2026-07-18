@@ -698,6 +698,9 @@ export const en = {
   "settings.profileLock.updating": "Updating profile lock…",
   "settings.sectionLayout.backLink": "Settings",
   "settings.server.addAnotherServer": "Add another server",
+  "settings.server.changeAppHost": "Change app host",
+  "settings.server.changeAppHostHint":
+    "Reconnect this Android app to a different server-hosted Playarr interface.",
   "settings.server.connect": "Connect",
   "settings.server.connectError": "Could not connect ({{message}}).",
   "settings.server.connectedServersLabel": "Connected servers",

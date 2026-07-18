@@ -3,7 +3,10 @@ import type { ClientPlatform } from "@streamarr-tv/api-client";
 const PLATFORM_QUERY_PARAM = "platform";
 const PLATFORM_STORAGE_KEY = "playarr.clientPlatform";
 
-export type PlayarrWebPlatform = Extract<ClientPlatform, "web" | "tv-vidaa" | "android-tv">;
+export type PlayarrWebPlatform = Extract<
+  ClientPlatform,
+  "web" | "tv-vidaa" | "android-mobile" | "android-tv"
+>;
 
 interface PlatformRuntime {
   search: string;
@@ -51,6 +54,10 @@ export function resolveClientPlatform(
     return "tv-vidaa";
   }
 
+  if (/\bPlayarrAndroidMobile\//i.test(runtime.userAgent)) {
+    return "android-mobile";
+  }
+
   if (/\bPlayarrAndroidTV\//i.test(runtime.userAgent)) {
     return "android-tv";
   }
@@ -67,4 +74,5 @@ export function resolveClientPlatform(
 
 export const PLAYARR_CLIENT_PLATFORM = resolveClientPlatform();
 export const IS_VIDAA = PLAYARR_CLIENT_PLATFORM === "tv-vidaa";
-export const IS_TV = PLAYARR_CLIENT_PLATFORM !== "web";
+export const IS_TV =
+  PLAYARR_CLIENT_PLATFORM === "tv-vidaa" || PLAYARR_CLIENT_PLATFORM === "android-tv";

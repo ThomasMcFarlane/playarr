@@ -190,7 +190,8 @@ someone runs them for real.
   time via `scripts/gen-sdk.sh`.
 - **Android Mobile.** **Built.** `clients/android-shared/` (core-auth,
   core-data, core-domain, core-designsystem, core-player, core-update) plus
-  `clients/mobile-android/` for the app shell.
+  `clients/mobile-android/` for the native app shell, hosting the same
+  responsive React presentation as Android TV and Web.
 - **iOS.** **Built.** `clients/ios/Streamarr.xcodeproj` produces a native
   `Playarr.app`, links the reusable `StreamarrKit` package, includes App Store
   bundle/privacy/icon resources, and defines application and kit XCTest

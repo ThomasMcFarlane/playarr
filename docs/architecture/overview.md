@@ -229,19 +229,16 @@ home-theatre and mobile media experience:
 | VIDAA | Hisense/Toshiba smart TVs | [`clients/vidaa.md`](clients/vidaa.md) |
 | Web | Browsers, installable PWA | [`clients/web.md`](clients/web.md) |
 
-The strategy is deliberately *not* "one codebase, seven targets" — the
-platforms are too different for that to be honest (native AVFoundation/DRM
-on iOS has nothing in common with a webOS Enact app). Instead, code sharing
-follows the grain of the platforms themselves:
+Code sharing follows the grain of the platforms rather than forcing every
+client through one runtime:
 
-- Android Mobile and Android TV share a Kotlin multi-module Gradle project
-  (`:core`, `:playback`, `:api-client` modules) with separate `:mobile` and
-  `:tv` UI modules, because they share a language, a DRM stack (Widevine via
-  Media3), and a store.
-- webOS and Tizen share a React/TypeScript TV shell with platform player
-  adapters (LG's webOS `<video>`+EME and Samsung's `AVPlay`). VIDAA opens the
-  current Playarr Web client in its Browser and selects its television identity
-  and playback profile at runtime.
+- Android Mobile and Android TV share both one Kotlin/Gradle native foundation
+  and the responsive React/TypeScript Playarr presentation. Their thin native
+  hosts retain device-specific lifecycle, input, update, notification, and
+  fullscreen responsibilities.
+- webOS, Tizen, VIDAA, Android Mobile, and Android TV consume the same Playarr
+  Web routes and responsive design, selecting their input and playback profile
+  at runtime.
 - iOS stands alone at the UI layer (SwiftUI, AVFoundation, FairPlay) because
   nothing else shares Swift or Apple's DRM stack, but still consumes the
   same OpenAPI-generated client contract as every other platform.

@@ -101,4 +101,16 @@ describe("TokenStore", () => {
     store.set(session);
     expect(store.get()).toEqual(session);
   });
+
+  it("keeps the Android mobile host session in sync", () => {
+    const syncSession = vi.fn();
+    vi.stubGlobal("PlayarrAndroidMobile", { syncSession });
+
+    const store = new TokenStore();
+    store.set(session);
+    store.clear();
+
+    expect(syncSession).toHaveBeenNthCalledWith(1, JSON.stringify(session));
+    expect(syncSession).toHaveBeenNthCalledWith(2, "");
+  });
 });

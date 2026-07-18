@@ -154,6 +154,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   metadata as one native page with parallax artwork, and show titles in the Settings navigation.
 - Separate the mobile Settings menu from each full-width settings page so routed content never
   overlaps the titled navigation list.
+- Host Android Mobile in the same responsive Playarr Web application as Android TV, retaining
+  native server recovery, Back and fullscreen handling, image selection, updates, and push
+  session registration without a second mobile UI implementation.
 - Let Android TV builds configure their Playarr server at build time, use the television's
   system volume, and apply a stable 1920 by 1080 web viewport.
 - Require completed changes to be committed and pushed promptly as small, atomic Conventional

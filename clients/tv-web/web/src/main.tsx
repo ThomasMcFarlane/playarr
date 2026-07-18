@@ -15,6 +15,8 @@ if (!container) {
 
 if (navigator.userAgent.includes("PlayarrAndroidTV/")) {
   document.documentElement.dataset.platform = "android-tv";
+} else if (navigator.userAgent.includes("PlayarrAndroidMobile/")) {
+  document.documentElement.dataset.platform = "android-mobile";
 }
 
 createRoot(container).render(

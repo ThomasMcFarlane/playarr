@@ -60,6 +60,19 @@ function writePersisted(session: StoredSession | undefined): void {
   }
 }
 
+interface AndroidMobileSessionBridge {
+  syncSession(serialisedSession: string): void;
+}
+
+function syncAndroidMobileSession(session: StoredSession | undefined): void {
+  const bridge = (
+    globalThis as typeof globalThis & {
+      PlayarrAndroidMobile?: AndroidMobileSessionBridge;
+    }
+  ).PlayarrAndroidMobile;
+  bridge?.syncSession(session ? JSON.stringify(session) : "");
+}
+
 // Module-level, not a `TokenStore` instance field: the in-memory fallback
 // (used only when `localStorage` is unavailable) must be shared by every
 // `TokenStore()` constructed anywhere in the app, not private to whichever
@@ -87,11 +100,13 @@ export class TokenStore {
   set(session: StoredSession): void {
     memoryFallback = session;
     writePersisted(session);
+    syncAndroidMobileSession(session);
   }
 
   clear(): void {
     memoryFallback = undefined;
     writePersisted(undefined);
+    syncAndroidMobileSession(undefined);
   }
 
   /** True when a session is stored and its access token has not (yet) passed its expiry. */
