@@ -1,11 +1,17 @@
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
+import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
+import { LanguageProvider } from "../lib/i18n/LanguageProvider";
 import { ProfileAuthLayout } from "./ProfileAuthLayout";
+
+function renderLayout(children: ReactNode): string {
+  return renderToStaticMarkup(<LanguageProvider>{children}</LanguageProvider>);
+}
 
 describe("ProfileAuthLayout", () => {
   it("keeps sign-up free of back navigation", () => {
-    const markup = renderToStaticMarkup(
+    const markup = renderLayout(
       <ProfileAuthLayout className="signup-profile-page">
         <form>Sign-up fields</form>
       </ProfileAuthLayout>
@@ -15,7 +21,7 @@ describe("ProfileAuthLayout", () => {
   });
 
   it("places optional back navigation in the shared stage chrome", () => {
-    const markup = renderToStaticMarkup(
+    const markup = renderLayout(
       <ProfileAuthLayout backLabel="Back" onBack={() => undefined}>
         <form>Sign-in fields</form>
       </ProfileAuthLayout>
@@ -35,7 +41,7 @@ describe("ProfileAuthLayout", () => {
   });
 
   it("marks overflowing auth fields as a native vertical scroll viewport", () => {
-    const markup = renderToStaticMarkup(
+    const markup = renderLayout(
       <ProfileAuthLayout>
         <form>Sign-up fields</form>
       </ProfileAuthLayout>

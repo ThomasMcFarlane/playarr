@@ -73,6 +73,10 @@ function optionMatchesQuery(option: LanguagePreference, query: string, label: st
   return option !== "system" && LANGUAGE_SEARCH_ALIASES[option].includes(query);
 }
 
+export function languageSearchHandlesKey(key: string): boolean {
+  return key === "Enter" || key === "Escape";
+}
+
 /**
  * Searchable language picker used on the Signup page and Settings > Language
  * -- a trigger button (globe icon + current selection) that opens a listbox
@@ -139,23 +143,8 @@ export function LanguageDropdown({
   }
 
   function handleSearchKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (!languageSearchHandlesKey(event.key)) return;
     switch (event.key) {
-      case "ArrowDown":
-        event.preventDefault();
-        setHighlightedIndex((index) => {
-          const next = Math.min(filteredOptions.length - 1, index + 1);
-          optionRefs.current[next]?.scrollIntoView({ block: "nearest" });
-          return next;
-        });
-        break;
-      case "ArrowUp":
-        event.preventDefault();
-        setHighlightedIndex((index) => {
-          const next = Math.max(0, index - 1);
-          optionRefs.current[next]?.scrollIntoView({ block: "nearest" });
-          return next;
-        });
-        break;
       case "Enter": {
         event.preventDefault();
         const option = filteredOptions[highlightedIndex];
@@ -212,7 +201,12 @@ export function LanguageDropdown({
             />
           </div>
 
-          <div className="language-dropdown-options">
+          <div
+            className="language-dropdown-options"
+            data-tv-scroll-container
+            data-tv-scroll-axis="vertical"
+            data-navigation-scroll-key="language:options"
+          >
             {filteredOptions.length === 0 ? (
               <p className="language-dropdown-empty">
                 {t("components.languageDropdown.noResults")}
@@ -233,6 +227,7 @@ export function LanguageDropdown({
                       highlightedIndex === index ? " is-highlighted" : ""
                     }${selected ? " is-selected" : ""}`}
                     onMouseEnter={() => setHighlightedIndex(index)}
+                    onFocus={() => setHighlightedIndex(index)}
                     onClick={() => selectOption(option)}
                   >
                     <span>{optionLabel(option, t)}</span>

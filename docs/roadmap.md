@@ -208,11 +208,12 @@ someone runs them for real.
   over the shared TV shell using `player-shaka`.
 - **Tizen.** **Built.** `clients/tv-web/apps/tv-tizen/`, using the
   `player-avplay` adapter for Samsung's `AVPlay`.
-- **VIDAA hosted Web App.** **Browser client built; launcher distribution
-  pending.** The hosted Playarr Web client persists a `tv-vidaa` identity
+- **VIDAA hosted Web App.** **Browser client and experimental launcher gateway
+  built; deployment and hardware validation pending.** The hosted Playarr Web client persists a `tv-vidaa` identity
   and negotiates a conservative television playback profile. Users can open it
-  directly in the TV Browser; a dedicated launcher tile requires VIDAA partner
-  distribution or device-specific developer access. The older
+  directly in the TV Browser. The source-IP-gated DNS portal can install a fixed
+  launcher on compatible firmware, while official distribution still requires
+  VIDAA partner or device-specific developer access. The older
   `apps/tv-vidaa-fallback/` PWA remains an experimental prototype.
 
 The packaged webOS/Tizen shells share `VersionBanner.tsx`; hosted VIDAA uses

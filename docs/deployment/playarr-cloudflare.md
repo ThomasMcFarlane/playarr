@@ -5,6 +5,14 @@ Static Assets at <https://playarr.app>. Cloudflare serves the Vite build from
 `clients/tv-web/web/dist`; unmatched paths return `index.html` so direct
 navigation to React Router routes works.
 
+The public Clients hub is served at `/clients`; `/download` and `/install`
+redirect there, and `/clients/vidaa` hosts the experimental launcher setup.
+Cloudflare serves those pages and the Playarr client only. It cannot provide
+the VIDAA resolver's UDP/TCP port 53 or the intercepted `vidaahub.com` TLS
+endpoint. Deploy that fixed-IP service separately by following
+[`infra/vidaa-gateway/README.md`](../../infra/vidaa-gateway/README.md), and keep
+the `dns.playarr.app` A record DNS-only.
+
 ## One-time Cloudflare and GitHub setup
 
 1. In Cloudflare, create an API token from the **Edit Cloudflare Workers**

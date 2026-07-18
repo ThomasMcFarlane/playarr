@@ -19,10 +19,10 @@ that already do it well. Playarr is what you actually install to watch things:
 Android Mobile, Android TV, iOS, LG webOS, Samsung Tizen, Hisense VIDAA, and a
 browser-based Web client, all speaking the same versioned API contract.
 
-Hisense owners can follow the
-[VIDAA guide](docs/clients/vidaa.md) to open the hosted Playarr Web App in the
-television Browser. A dedicated launcher tile requires VIDAA distribution or
-developer access.
+See the public [Playarr Clients page](https://playarr.app/clients) for current
+availability. Hisense owners can follow the [VIDAA guide](docs/clients/vidaa.md)
+to open the hosted Playarr Web App in the television Browser or try the
+experimental, temporary-DNS launcher installer on compatible firmware.
 
 Streamarr is designed to run at three tiers without a different codebase or a
 data-migration story at each step: a single systemd-managed binary against
@@ -116,7 +116,8 @@ see [`docs/roadmap.md`](docs/roadmap.md).
 │   │                          plus local observability/mocks for dev.
 │   ├── kubernetes/           Tier 3: base manifests, Helm chart, and
 │   │                          per-environment overlays.
-│   └── k6/                    Load-test harness.
+│   ├── k6/                    Load-test harness.
+│   └── vidaa-gateway/         Expiring DNS and fixed Playarr launcher portal.
 ├── scripts/               Dev tooling: local environment seeding, SDK
 │                           codegen entry points, and related scripts invoked
 │                           by the Justfile recipes below.

@@ -11,6 +11,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Add held-playlist actions for renaming, choosing a new parent, or deleting personal playlists
   with explicit cascade confirmation.
+- Add a public, localised Playarr Clients hub with truthful platform availability and a guided,
+  experimental VIDAA launcher setup.
+- Add an expiring, source-IP-gated VIDAA DNS and fixed Playarr installer gateway that refuses
+  inactive recursive queries.
 - Add audio-only playlists and a held-track context action for adding individual music tracks,
   albums, or complete artists while keeping existing and new video playlists free of audio items.
 - Link live and historical administrator playback activity to named users and catalogue items,

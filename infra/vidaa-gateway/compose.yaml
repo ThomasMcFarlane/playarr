@@ -1,0 +1,29 @@
+services:
+  vidaa-gateway:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "53:5353/tcp"
+      - "53:5353/udp"
+      - "443:8443/tcp"
+      - "127.0.0.1:8080:8080/tcp"
+    volumes:
+      - type: bind
+        source: ${VIDAA_API_CERT_DIR}
+        target: /run/certs/api
+        read_only: true
+      - type: bind
+        source: ${VIDAA_PORTAL_CERT_DIR}
+        target: /run/certs/portal
+        read_only: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    pids_limit: 128
+    mem_limit: 128m

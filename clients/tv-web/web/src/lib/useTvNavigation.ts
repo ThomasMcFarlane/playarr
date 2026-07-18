@@ -242,6 +242,50 @@ function parsePixelValue(value: string): number {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 
+export function directionalVerticalScrollTop({
+  clientHeight,
+  direction,
+  scrollHeight,
+  scrollTop,
+}: {
+  clientHeight: number;
+  direction: "up" | "down";
+  scrollHeight: number;
+  scrollTop: number;
+}): number {
+  const maximum = Math.max(0, scrollHeight - clientHeight);
+  const distance = Math.max(160, clientHeight * 0.72);
+  return Math.max(
+    0,
+    Math.min(maximum, scrollTop + (direction === "down" ? distance : -distance))
+  );
+}
+
+function scrollVerticalContainer(
+  current: HTMLElement,
+  direction: Direction
+): boolean {
+  if (direction !== "up" && direction !== "down") return false;
+  const container =
+    current.closest<HTMLElement>(
+      '[data-tv-scroll-container][data-tv-scroll-axis="vertical"]'
+    ) ??
+    document.querySelector<HTMLElement>(
+      '[data-tv-scroll-container][data-tv-scroll-axis="vertical"]'
+    );
+  if (!container) return false;
+
+  const target = directionalVerticalScrollTop({
+    clientHeight: container.clientHeight,
+    direction,
+    scrollHeight: container.scrollHeight,
+    scrollTop: container.scrollTop,
+  });
+  if (Math.abs(target - container.scrollTop) < 1) return false;
+  container.scrollTo({ top: target, behavior: "smooth" });
+  return true;
+}
+
 function focusActiveAlphabet(current: HTMLElement, direction: Direction): boolean {
   const activeLetter =
     document.querySelector<HTMLElement>(".tv-alphabet button.is-active") ??
@@ -387,10 +431,13 @@ function moveFocus(direction: Direction): void {
       pageScroller.scrollTop = pageScrollTop;
       pageScroller.scrollLeft = pageScrollLeft ?? 0;
     }
+    return;
   }
+
+  scrollVerticalContainer(current, direction);
 }
 
-function parentRoute(pathname: string, requestedBackTo?: string): string {
+export function parentRoute(pathname: string, requestedBackTo?: string): string {
   if (
     requestedBackTo === "/" ||
     requestedBackTo === "/series" ||
@@ -399,6 +446,7 @@ function parentRoute(pathname: string, requestedBackTo?: string): string {
     requestedBackTo === "/music" ||
     requestedBackTo === "/profiles" ||
     requestedBackTo === "/settings" ||
+    requestedBackTo === "/clients" ||
     (typeof requestedBackTo === "string" &&
       /^\/playlists(?:\?playlist=[^&]+(?:&.*)?)?$/.test(requestedBackTo)) ||
     (typeof requestedBackTo === "string" && /^\/search(?:\?.*)?$/.test(requestedBackTo))
@@ -412,6 +460,7 @@ function parentRoute(pathname: string, requestedBackTo?: string): string {
   if (/^\/music\/[^/]+$/.test(pathname)) return "/music";
   if (/^\/playlists\/[^/]+$/.test(pathname)) return "/playlists";
   if (/^\/settings\/[^/]+$/.test(pathname)) return "/settings";
+  if (pathname === "/clients/vidaa") return "/clients";
   if (
     pathname === "/search" ||
     pathname === "/series" ||
@@ -419,7 +468,8 @@ function parentRoute(pathname: string, requestedBackTo?: string): string {
     pathname === "/sites" ||
     pathname === "/music" ||
     pathname === "/profiles" ||
-    pathname === "/settings"
+    pathname === "/settings" ||
+    pathname === "/clients"
   ) {
     return "/";
   }

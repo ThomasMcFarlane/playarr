@@ -1,23 +1,17 @@
 # Using Playarr on a Hisense VIDAA TV
 
-Playarr runs on VIDAA televisions in the built-in Browser. There is no Playarr
-APK, USB package, or generally available household sideload route for VIDAA.
-Adding a dedicated launcher tile requires VIDAA App Store distribution or
-developer access supplied by VIDAA for the target television.
+Playarr runs on VIDAA televisions as the hosted Web client. The built-in Browser
+route is the reliable default; compatible firmware may also install a dedicated
+launcher tile through Playarr's experimental temporary-DNS portal. There is no
+Playarr APK or USB package for VIDAA.
 
 ## Before you start
 
 1. Update the TV under **Settings > Support > System Upgrade > Check Firmware
    Upgrade**.
 2. Put the TV and Streamarr server on the same trusted home network.
-3. Find the Playarr Web address exposed by the Streamarr server. For example,
-   a development server configured on port 18080 might be available as
-   `http://streamarr.local:18080`. Do not assume port 8484: deployments can use
-   a different port, and development services on 8484 may listen only on the
-   server itself.
-4. Open that address from another phone or computer on the same LAN. Do not use
-   `localhost`: on the TV that means the television itself.
-5. Confirm the normal Playarr page loads and you can sign in.
+3. Open <https://playarr.app> from another phone or computer and confirm that
+   you can connect to your Streamarr server and sign in.
 
 Use HTTPS if the server already has a certificate trusted by the television.
 Plain HTTP may work in the Browser on a trusted, isolated home LAN, but it must
@@ -26,8 +20,7 @@ not be exposed directly to the internet.
 ## Open Playarr on the TV
 
 1. Open the **Browser** application on the TV.
-2. Enter the verified Playarr address with `?platform=tv-vidaa` appended, for
-   example `http://streamarr.local:18080/?platform=tv-vidaa`.
+2. Enter `https://playarr.app/?platform=tv-vidaa`.
 3. When Playarr loads, save it as a Browser favourite if the television offers
    that option.
 4. Sign in with the same Streamarr account you use on other devices.
@@ -38,17 +31,26 @@ normal in-app navigation does not need to keep the query string visible.
 
 ## About launcher installation
 
-Older VIDAA firmware sometimes exposed an undocumented `hisense://debug`
-scheme. It is invalid, removed, or developer-password-protected on many current
-models and must not be treated as a supported installation method. Do not try
-random service-menu codes, DNS interception, firmware downgrades, or third-party
-firmware to enable it.
+The [Playarr Clients page](https://playarr.app/clients/vidaa) can temporarily
+allow the public IPv4 address used by your home network to reach a fixed-purpose
+DNS resolver. While active, that resolver redirects only `vidaahub.com` to the
+Playarr installer portal and forwards other queries. The portal can install only
+the fixed `https://playarr.app/?platform=tv-vidaa` launcher.
 
-For a dedicated Playarr tile, the supported route is a VIDAA App Store or
-partner/developer deployment. Until that distribution exists, use the Browser
-favourite. If the Browser cannot run Playarr reliably, use casting supported by
-the TV or connect a supported Android TV/Google TV device and install Playarr
-there.
+1. On a phone or computer using the same home internet connection as the TV,
+   open the Clients page and choose **Activate installer**.
+2. Temporarily set the displayed IPv4 DNS server on the TV or router. Keep every
+   other network setting unchanged.
+3. Open the TV Browser and visit `https://vidaahub.com`. Compatible firmware may
+   require you to accept a certificate warning.
+4. Choose **Install Playarr**, restart the television, and confirm the tile opens.
+5. Restore automatic DNS immediately, even if installation did not succeed.
+
+Access expires automatically. Firmware support varies: some televisions reject
+the portal certificate or do not expose either supported installation API. The
+installer must therefore remain labelled experimental and must not replace the
+Browser route or the official VIDAA partner distribution path. Do not use random
+service-menu codes, firmware downgrades, or third-party firmware.
 
 ## Register and publish through the VIDAA App Store
 
@@ -79,13 +81,12 @@ before partner access is granted.
 
 ### Playarr submission gap
 
-The current Playarr VIDAA URL is a private, per-household Streamarr address. It
-is suitable for the TV Browser, but it is not a single production origin that
-VIDAA can review and publish globally. Before an App Store submission, agree one
-of these delivery models with VIDAA:
+The current Playarr VIDAA client is a public bootstrap at `playarr.app` that
+connects to each viewer's Streamarr server. Before an App Store submission,
+confirm this delivery model with VIDAA or agree an alternative:
 
-- a public HTTPS Playarr bootstrap app that lets the user configure or navigate
-  to their private Streamarr server; or
+- the existing public HTTPS Playarr bootstrap that lets the user configure or
+  navigate to their private Streamarr server; or
 - a VIDAA-packaged shell, if the partner programme permits it, with equivalent
   server configuration.
 
@@ -103,3 +104,4 @@ reporting compatibility problems.
 - [VIDAA Partner Support and registration](https://www.vidaa.com/partner-support/)
 - [VIDAA Partner Portal terms](https://www.vidaa.com/terms-and-conditions/)
 - [VIDAA privacy notice](https://www.vidaa.com/privacy-policy-2026/)
+- [VIDAA gateway operations](../../infra/vidaa-gateway/README.md)

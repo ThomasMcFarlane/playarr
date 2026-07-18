@@ -9,13 +9,16 @@ downloadable TV package.
 
 There is no public, self-service VIDAA App Store submission route comparable to
 LG Seller Lounge or Samsung Seller Office. Store and developer deployment
-require a VIDAA partner relationship or device-specific developer access. The
-older `hisense://debug` browser scheme is not a supported household installation
-route: current firmware may reject it or require credentials.
+require a VIDAA partner relationship or device-specific developer access.
 
 Playarr remains a hosted Web App at `playarr.app`, not an APK, `.ipk`, `.wgt`,
 or USB-installable binary. Opening Playarr in the TV Browser receives the latest
 hosted bundle independently of the selected Streamarr server.
+
+An experimental fixed-purpose gateway under `infra/vidaa-gateway/` can give an
+activated household temporary DNS access and serve a launcher portal at the
+intercepted `vidaahub.com` hostname. It can install only the hosted Playarr URL;
+it does not provide arbitrary URL, file, console, or script controls.
 
 ## Implementation
 
@@ -53,9 +56,9 @@ rules, local-network access, reviewer access, and territory/device certification
 
 The Browser route is available only when the television can reach the
 Streamarr host and its embedded browser supports the required media features.
-There is no repository-side package that can bypass VIDAA launcher restrictions.
-Use a Browser favourite, casting, or an external Android TV/Google TV device
-unless a VIDAA partner deployment is available.
+The experimental gateway is firmware-dependent and separate from official
+VIDAA distribution. Use a Browser favourite, casting, or an external Android
+TV/Google TV device if it is incompatible and no partner deployment is available.
 
 No real VIDAA television or simulator is available in this development
 environment. Builds and platform-selection behaviour are testable here;

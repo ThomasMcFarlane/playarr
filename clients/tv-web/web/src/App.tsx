@@ -37,6 +37,7 @@ import { PlaylistsPage } from "./pages/Playlists";
 import { ProfilesPage } from "./pages/Profiles";
 import { MusicDetailPage } from "./pages/MusicDetail";
 import { NotFoundPage } from "./pages/NotFound";
+import { ClientsPage, VidaaClientsPage } from "./pages/Clients";
 import { UpdateToast } from "./components/UpdateToast";
 import { PageScrollRoot } from "./components/PageScrollRoot";
 import {
@@ -533,6 +534,10 @@ export function App() {
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/link" element={<DeviceLinkPage />} />
       <Route path="/profiles" element={<ProfilesPage />} />
+      <Route path="/clients" element={<ClientsPage />} />
+      <Route path="/clients/vidaa" element={<VidaaClientsPage />} />
+      <Route path="/download" element={<Navigate to="/clients" replace />} />
+      <Route path="/install" element={<Navigate to="/clients" replace />} />
       <Route element={<AppShell />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/search" element={<SearchPage />} />

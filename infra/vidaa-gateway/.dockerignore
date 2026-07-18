@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+certs/
+**/certs/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.git/
+.DS_Store
+tests/
