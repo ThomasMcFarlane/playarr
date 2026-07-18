@@ -66,6 +66,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Lower the music detail title and synopsis so the left-hand copy aligns visually with movie and
+  series detail pages.
 - Match item names after the detail-page heading pipe to the compact metadata typography used by
   other page headers instead of repeating the main heading size.
 - Show `Music | Artist`, `Movies | Title`, or `Series | Title` in detail-page headers, and move
