@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add an installable native Playarr iPhone and iPad project with reusable StreamarrKit business
+  logic, App Store-ready bundle metadata, privacy resources, and iOS unit-test targets.
 - Add a native Roku SceneGraph client with server setup, device linking, household
   profiles, paginated library browsing, title details, native playback and session telemetry.
 - Make the Tizen client package-ready by emitting and validating its widget manifest and
@@ -84,6 +86,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Align the iOS architecture and roadmap with the installable Xcode project and remaining runtime
+  validation boundary.
 - Align the Tizen architecture guidance with the package-ready production build.
 - Align the webOS architecture guidance with the package-ready production build.
 

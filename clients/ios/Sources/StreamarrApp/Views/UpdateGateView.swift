@@ -43,7 +43,7 @@ struct UpdateGateModifier: ViewModifier {
                 Button("Update") { viewModel.openAppStore() }
                 Button("Not Now", role: .cancel) { viewModel.dismissSoftNudge() }
             } message: { latestVersion in
-                Text("Streamarr \(latestVersion) is available. Update when you get a chance.")
+                Text("Playarr \(latestVersion) is available. Update when you get a chance.")
             }
     }
 
@@ -93,7 +93,7 @@ private struct BlockingUpdateInterstitial: View {
 
             if case .blocked(let minSupportedVersion) = viewModel.status {
                 Text(
-                    "This version of Streamarr is no longer supported by your server " +
+                    "This version of Playarr is no longer supported by your server " +
                     "(minimum supported: \(minSupportedVersion)). Update the app to keep using it."
                 )
                 .multilineTextAlignment(.center)
