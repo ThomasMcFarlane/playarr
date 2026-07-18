@@ -19,6 +19,7 @@ import {
 } from "../../lib/playerControlVisibility";
 import { MediaThumbnailArtwork } from "../MediaThumbnailArtwork";
 import { useMediaContextMenu } from "../MediaContextMenu";
+import { MiniPlayerTransport } from "./MiniPlayerTransport";
 import { PlayerControls } from "./PlayerControls";
 import {
   BackIcon,
@@ -887,6 +888,8 @@ export function PlayerSurface({
         minimised ? " player-shell-minimised" : ""
       }${musicContext ? " player-shell-music" : ""}${
         inlineMusic ? " player-shell-inline-music" : ""
+      }${
+        minimised && !inlineMusic ? " player-shell-with-transport" : ""
       }`}
       onMouseEnter={minimised ? undefined : handleActivity}
       onMouseMove={minimised ? undefined : handleActivity}
@@ -998,6 +1001,20 @@ export function PlayerSurface({
           <span className="mini-player-maximise" aria-hidden="true">
             <MaximiseIcon />
           </span>
+          <MiniPlayerTransport
+            playing={
+              engineState.state === "playing" ||
+              engineState.state === "buffering"
+            }
+            canPrevious={activePlaylistIndex > 0}
+            canNext={
+              activePlaylistIndex >= 0 &&
+              activePlaylistIndex < playlistItems.length - 1
+            }
+            onPrevious={onPrevious}
+            onTogglePlay={togglePlayback}
+            onNext={onNext}
+          />
         </>
       )}
 
