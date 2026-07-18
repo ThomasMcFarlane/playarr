@@ -16,6 +16,30 @@ class PlayarrAppTest {
     }
 
     @Test
+    fun `public ipv4 address uses its secure direct relay hostname`() {
+        assertEquals(
+            "https://v4-11-22-33-44.relay.playarr.app:8484",
+            normaliseServerUrl("http://11.22.33.44:8484/"),
+        )
+    }
+
+    @Test
+    fun `existing relay hostname is normalised before authenticated requests`() {
+        assertEquals(
+            "https://v4-203-0-113-10.relay.playarr.app:8484",
+            normaliseServerUrl("http://v4-203-0-113-10.relay.playarr.app"),
+        )
+    }
+
+    @Test
+    fun `public relay preserves path query and fragment`() {
+        assertEquals(
+            "https://v4-11-22-33-44.relay.playarr.app:8484/api?q=one#result",
+            normaliseServerUrl("https://11.22.33.44:9443/api?q=one#result"),
+        )
+    }
+
+    @Test
     fun `invalid server address is rejected`() {
         assertThrows(IllegalArgumentException::class.java) { normaliseServerUrl("not a server") }
     }

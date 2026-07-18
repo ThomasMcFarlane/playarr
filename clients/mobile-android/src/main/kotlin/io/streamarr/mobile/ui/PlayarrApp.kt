@@ -118,12 +118,16 @@ sealed interface RootState {
 @HiltViewModel
 class PlayarrRootViewModel @Inject constructor(
     tokenStore: TokenStore,
-    serverConfigStore: ServerConfigStore,
+    private val serverConfigStore: ServerConfigStore,
 ) : ViewModel() {
     val state: StateFlow<RootState> = combine(
         tokenStore.accessToken,
         serverConfigStore.baseUrl,
-    ) { token, serverUrl ->
+    ) { token, savedServerUrl ->
+        val serverUrl = savedServerUrl.takeIf { it.isNotBlank() }
+            ?.let { runCatching { normaliseServerUrl(it) }.getOrDefault(it) }
+            .orEmpty()
+        if (serverUrl != savedServerUrl) serverConfigStore.setBaseUrl(serverUrl)
         if (token.isNullOrBlank() || serverUrl.isBlank()) {
             RootState.SignedOut(serverUrl)
         } else {
@@ -184,10 +188,53 @@ internal fun normaliseServerUrl(value: String): String {
     val uri = runCatching { URI(candidate) }.getOrElse { throw IllegalArgumentException("Invalid server URL", it) }
     require(uri.scheme == "http" || uri.scheme == "https")
     require(!uri.host.isNullOrBlank())
-    return candidate.trimEnd('/')
+    return publicIpv4RelayUrl(uri) ?: candidate.trimEnd('/')
 }
 
 private val SCHEME_PATTERN = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
+private val RELAY_HOST_PATTERN = Regex(
+    "^v4-(\\d{1,3})-(\\d{1,3})-(\\d{1,3})-(\\d{1,3})\\.relay\\.playarr\\.app$",
+    RegexOption.IGNORE_CASE,
+)
+private const val RELAY_DOMAIN = "relay.playarr.app"
+private const val STREAMARR_PORT = 8484
+
+private fun publicIpv4RelayUrl(uri: URI): String? {
+    val hostname = uri.host ?: return null
+    val encodedAddress = RELAY_HOST_PATTERN.matchEntire(hostname)
+        ?.groupValues
+        ?.drop(1)
+        ?.joinToString(".")
+    val octets = publicIpv4Octets(encodedAddress ?: hostname) ?: return null
+    val suffix = buildString {
+        uri.rawPath?.takeUnless { it.isEmpty() || it == "/" }?.let(::append)
+        uri.rawQuery?.let { append('?').append(it) }
+        uri.rawFragment?.let { append('#').append(it) }
+    }
+    return "https://v4-${octets.joinToString("-")}.$RELAY_DOMAIN:$STREAMARR_PORT$suffix"
+}
+
+private fun publicIpv4Octets(hostname: String): List<Int>? {
+    val octets = hostname.split('.').mapNotNull { it.toIntOrNull() }
+    if (octets.size != 4 || octets.any { it !in 0..255 }) return null
+    val (first, second, third) = octets
+    if (
+        first == 0 ||
+        first == 10 ||
+        first == 127 ||
+        (first == 100 && second in 64..127) ||
+        (first == 169 && second == 254) ||
+        (first == 172 && second in 16..31) ||
+        (first == 192 && second == 0 && third in setOf(0, 2)) ||
+        (first == 192 && second == 88 && third == 99) ||
+        (first == 192 && second == 168) ||
+        (first == 198 && second in 18..19) ||
+        (first == 198 && second == 51 && third == 100) ||
+        (first == 203 && second == 0 && third == 113) ||
+        first >= 224
+    ) return null
+    return octets
+}
 
 private fun loginErrorMessage(error: Exception): String = when {
     error.message?.contains("400") == true -> "This server requires a username and password."
