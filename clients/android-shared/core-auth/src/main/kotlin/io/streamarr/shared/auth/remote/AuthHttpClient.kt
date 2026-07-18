@@ -40,6 +40,10 @@ object AuthHttpClient {
     fun createLoginApi(baseUrlProvider: () -> String, enableHttpLogging: Boolean = false): LoginApi =
         buildRetrofit(baseUrlProvider, enableHttpLogging).create(LoginApi::class.java)
 
+    /** Builds the unauthenticated client used to rotate a persisted refresh token. */
+    fun createRefreshApi(baseUrlProvider: () -> String, enableHttpLogging: Boolean = false): RefreshApi =
+        buildRetrofit(baseUrlProvider, enableHttpLogging).create(RefreshApi::class.java)
+
     private fun buildRetrofit(baseUrlProvider: () -> String, enableHttpLogging: Boolean): Retrofit {
         val json = Json { ignoreUnknownKeys = true }
 

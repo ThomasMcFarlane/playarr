@@ -8,6 +8,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Response
 import okhttp3.logging.HttpLoggingInterceptor
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import retrofit2.Retrofit
@@ -54,6 +55,7 @@ object StreamarrHttpClient {
      * @param clientPlatform stamped onto every request via `X-Streamarr-Client-Platform`,
      *   matching the header contract `streamarr-model::platform::ClientPlatform::wire_name` documents server-side.
      * @param clientVersion this app build's version name, sent alongside the platform header.
+     * @param refreshAccessToken rotates the stored token pair after a 401 and returns the replacement bearer token.
      * @param enableHttpLogging verbose body logging; callers should gate this behind a debug build flag.
      */
     fun create(
@@ -61,6 +63,7 @@ object StreamarrHttpClient {
         clientPlatform: ClientPlatform,
         clientVersion: String,
         accessTokenProvider: () -> String? = { null },
+        refreshAccessToken: (rejectedAccessToken: String?) -> String? = { null },
         enableHttpLogging: Boolean = false,
     ): StreamarrApi {
         val okHttpClient = OkHttpClient.Builder()
@@ -73,6 +76,19 @@ object StreamarrHttpClient {
                     .header("Authorization", "Bearer $token")
                     .build()
                 chain.proceed(request)
+            }
+            .authenticator { _, response ->
+                if (response.retryCount() >= 2) return@authenticator null
+                val rejectedToken = response.request.header("Authorization")
+                    ?.removePrefix("Bearer ")
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                val replacement = refreshAccessToken(rejectedToken)
+                    ?.takeIf { it.isNotBlank() && it != rejectedToken }
+                    ?: return@authenticator null
+                response.request.newBuilder()
+                    .header("Authorization", "Bearer $replacement")
+                    .build()
             }
             .apply {
                 if (enableHttpLogging) {
@@ -101,6 +117,16 @@ object StreamarrHttpClient {
 
     /** Never actually dialled -- see [create]'s KDoc. Must be a syntactically valid absolute URL for [Retrofit.Builder.baseUrl]. */
     private const val PLACEHOLDER_BASE_URL = "http://streamarr.invalid/"
+}
+
+private fun Response.retryCount(): Int {
+    var count = 1
+    var prior = priorResponse
+    while (prior != null) {
+        count++
+        prior = prior.priorResponse
+    }
+    return count
 }
 
 /**

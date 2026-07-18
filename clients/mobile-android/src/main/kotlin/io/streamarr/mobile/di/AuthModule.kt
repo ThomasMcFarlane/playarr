@@ -13,6 +13,7 @@ import dagger.hilt.components.SingletonComponent
 import io.streamarr.shared.auth.remote.AuthHttpClient
 import io.streamarr.shared.auth.remote.DeviceAuthApi
 import io.streamarr.shared.auth.remote.LoginApi
+import io.streamarr.shared.auth.remote.RefreshApi
 import io.streamarr.shared.data.config.ServerConfigStore
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.first
@@ -55,7 +56,14 @@ object AuthModule {
         enableHttpLogging = false,
     )
 
-    // DeviceAuthClient, TokenStore, SessionManager, and ServerConfigStore
+    @Provides
+    @Singleton
+    fun provideRefreshApi(serverConfigStore: ServerConfigStore): RefreshApi = AuthHttpClient.createRefreshApi(
+        baseUrlProvider = { runBlocking { serverConfigStore.baseUrl.first() } },
+        enableHttpLogging = false,
+    )
+
+    // DeviceAuthClient, TokenStore, SessionManager, SessionRefresher, and ServerConfigStore
     // are not provided here: all carry `@Inject constructor(...)` over
     // dependencies already bound above (DeviceAuthApi, LoginApi,
     // DataStore<Preferences>), so Hilt constructs them directly without an

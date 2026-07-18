@@ -187,6 +187,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Authenticate iOS catalogue and playback requests, rotate expired sessions through the server's
   refresh endpoint, and persist each server's token pair in the iOS Keychain across relaunches.
 - Rebind every iOS screen to the newly selected Streamarr server as soon as its saved URL changes.
+- Refresh and retry the native Android app's authenticated request after an access-token `401`,
+  persisting the server's rotated token pair so a successful login no longer immediately appears
+  as an expired session.
 - Replace the blank Android WebView shell with the single native responsive Compose application
   and defer notification permission until it is relevant to the signed-in user, without logging
   account credentials or access tokens from debug-signed distribution builds.

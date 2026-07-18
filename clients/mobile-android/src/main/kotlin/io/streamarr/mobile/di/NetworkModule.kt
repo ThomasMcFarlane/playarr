@@ -9,6 +9,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.streamarr.mobile.BuildConfig
+import io.streamarr.shared.auth.SessionRefresher
 import io.streamarr.shared.auth.TokenStore
 import io.streamarr.shared.data.config.ServerConfigStore
 import io.streamarr.shared.data.model.ClientPlatform
@@ -33,6 +34,7 @@ object NetworkModule {
         @ApplicationContext context: Context,
         serverConfigStore: ServerConfigStore,
         tokenStore: TokenStore,
+        sessionRefresher: SessionRefresher,
     ): StreamarrApi = StreamarrHttpClient.create(
         // Re-invoked on every request (see StreamarrHttpClient.create's
         // KDoc), so a base URL saved from the Settings screen takes effect
@@ -44,6 +46,9 @@ object NetworkModule {
         ) ClientPlatform.AndroidTv else ClientPlatform.AndroidMobile,
         clientVersion = BuildConfig.VERSION_NAME,
         accessTokenProvider = { runBlocking { tokenStore.accessToken.first() } },
+        refreshAccessToken = { rejectedToken ->
+            runBlocking { sessionRefresher.refreshAccessToken(rejectedToken) }
+        },
         // Access tokens and private catalogue responses must not reach logcat.
         enableHttpLogging = false,
     )
