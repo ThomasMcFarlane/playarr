@@ -10,6 +10,7 @@ import {
 import type { Work } from "@streamarr-tv/api-client";
 import type { PlaybackEngineController } from "../../lib/usePlaybackEngine";
 import { CachedArtworkImage } from "../../lib/artwork";
+import { useGlobalMediaControls } from "../../lib/useGlobalMediaControls";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../../lib/i18n/translations";
 import {
@@ -18,7 +19,6 @@ import {
 } from "../../lib/playerControlVisibility";
 import { MediaThumbnailArtwork } from "../MediaThumbnailArtwork";
 import { useMediaContextMenu } from "../MediaContextMenu";
-import { MiniPlayerTransport } from "./MiniPlayerTransport";
 import { PlayerControls } from "./PlayerControls";
 import {
   BackIcon,
@@ -745,9 +745,19 @@ export function PlayerSurface({
     togglePlay();
   }, [activateMusicVisualiser, onStop, stopPlaybackOnPause, togglePlay]);
 
-  // Keyboard shortcuts remain available on the video surface: space/k/Enter
+  useGlobalMediaControls({
+    onPlay: player.play,
+    onPause: player.pause,
+    onTogglePlay: togglePlayback,
+    onPrevious,
+    onNext,
+    playbackState: engineState.state,
+  });
+
+  // Player-only keyboard shortcuts remain available on the video surface: Enter
   // play-pause, arrows seek/volume, m mute, and f fullscreen. Player controls
-  // own their D-pad events, so these shortcuts cannot steal directional focus.
+  // own their D-pad events, while the global media-control hook owns Space/K
+  // and hardware media keys without stealing directional focus.
   useEffect(() => {
     if (minimised) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -772,8 +782,6 @@ export function PlayerSurface({
       }
 
       switch (event.key) {
-        case " ":
-        case "k":
         case "Enter":
           event.preventDefault();
           togglePlayback();
@@ -865,8 +873,6 @@ export function PlayerSurface({
         minimised ? " player-shell-minimised" : ""
       }${musicContext ? " player-shell-music" : ""}${
         inlineMusic ? " player-shell-inline-music" : ""
-      }${
-        minimised && !inlineMusic ? " player-shell-with-transport" : ""
       }`}
       onMouseEnter={minimised ? undefined : handleActivity}
       onMouseMove={minimised ? undefined : handleActivity}
@@ -967,20 +973,6 @@ export function PlayerSurface({
           <span className="mini-player-maximise" aria-hidden="true">
             <MaximiseIcon />
           </span>
-          <MiniPlayerTransport
-            playing={
-              engineState.state === "playing" ||
-              engineState.state === "buffering"
-            }
-            canPrevious={activePlaylistIndex > 0}
-            canNext={
-              activePlaylistIndex >= 0 &&
-              activePlaylistIndex < playlistItems.length - 1
-            }
-            onPrevious={onPrevious}
-            onTogglePlay={togglePlayback}
-            onNext={onNext}
-          />
         </>
       )}
 

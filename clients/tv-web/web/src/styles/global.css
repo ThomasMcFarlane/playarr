@@ -3137,12 +3137,6 @@ body[data-input-mode="remote"]
   pointer-events: none;
 }
 
-.player-shell-with-transport .mini-player-details {
-  top: 12px;
-  gap: 0.28rem;
-  transform: none;
-}
-
 .mini-player-title {
   overflow: hidden;
   color: #ffffff;
@@ -3199,66 +3193,6 @@ body[data-input-mode="remote"]
 .mini-player-maximise svg {
   width: 14px;
   height: 14px;
-}
-
-.mini-player-transport {
-  position: absolute;
-  z-index: 12;
-  right: 10px;
-  bottom: 7px;
-  left: 43%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
-.mini-player-control {
-  width: 30px;
-  height: 30px;
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.86);
-  cursor: pointer;
-  transition:
-    background-color 180ms ease,
-    color 180ms ease,
-    opacity 180ms ease,
-    transform 180ms ease;
-}
-
-.mini-player-control svg {
-  width: 16px;
-  height: 16px;
-}
-
-.mini-player-control-primary {
-  background: rgba(255, 255, 255, 0.16);
-  color: #ffffff;
-}
-
-.mini-player-control:hover,
-.mini-player-control:focus-visible,
-body[data-input-mode="remote"] .mini-player-control:focus {
-  outline: 0;
-  background: #ffffff;
-  color: var(--player-accent);
-  transform: scale(1.12);
-}
-
-.mini-player-control:disabled {
-  opacity: 0.28;
-  cursor: default;
-  transform: none;
-}
-
-.mini-player-control:disabled:hover {
-  background: transparent;
-  color: rgba(255, 255, 255, 0.86);
 }
 
 .app-shell.is-player-route,

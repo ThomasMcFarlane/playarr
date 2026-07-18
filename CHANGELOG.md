@@ -61,8 +61,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   cover when Lidarr only reports unusable local paths for artist artwork.
 - Play albums directly from artist Cover Flow with inline controls, a live visualiser attached to
   the active cover, album-scoped track queues, and a persistent artwork-rich minimised player.
-- Control persistent playback from anywhere in Playarr with previous, play/pause, and next buttons
-  on the minimised player.
+- Control persistent playback from anywhere in Playarr with keyboard media keys, app-wide Space/K
+  shortcuts, and browser Media Session actions for play, pause, previous, and next.
 
 ### Changed
 
