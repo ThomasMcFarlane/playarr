@@ -45,6 +45,7 @@ describe("mobile music layout", () => {
       detailSource.indexOf("<AlbumTrackList")
     );
     expect(playerSource).toContain("createPortal(playerSurface, inlineMusicHost)");
+    expect(playerSource).toContain("watchInlineMusicHost(media, (nextHost)");
     expect(css).toMatch(
       /\.tv-inline-music-player-host \.player-page\.is-minimised\.is-inline-music\s*\{[^}]*position: relative;[^}]*height: 88px;/s
     );

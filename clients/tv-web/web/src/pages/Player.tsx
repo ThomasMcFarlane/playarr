@@ -14,6 +14,7 @@ import {
 } from "../lib/usePlaybackEngine";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
+import { watchInlineMusicHost } from "../lib/inlineMusicHost";
 import {
   navigationOriginFromState,
   type NavigationOrigin,
@@ -175,16 +176,11 @@ export function PlayerPage({
     }
 
     const media = window.matchMedia(MOBILE_MUSIC_LAYOUT_QUERY);
-    const updateHost = () => {
-      setInlineMusicHost(
-        media.matches
-          ? document.getElementById("inline-music-player-host")
-          : null
+    return watchInlineMusicHost(media, (nextHost) => {
+      setInlineMusicHost((currentHost) =>
+        currentHost === nextHost ? currentHost : nextHost
       );
-    };
-    updateHost();
-    media.addEventListener("change", updateHost);
-    return () => media.removeEventListener("change", updateHost);
+    });
   }, [inlineMusic]);
   const navigationOrigin = navigationOriginFromState(locationState);
   const title = locationState?.title;
