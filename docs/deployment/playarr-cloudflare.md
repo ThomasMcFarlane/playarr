@@ -13,6 +13,8 @@ and control a compatible DNS, proxy, or self-hosted interception method themselv
 Signed Android APKs are stored in the private `playarr-client-downloads` R2 bucket.
 The Worker streams the stable mobile and TV objects from same-origin `/downloads/android/`
 URLs while continuing to serve ordinary application routes from Static Assets.
+Android TV releases also publish a short-lived latest-version manifest and an immutable,
+versioned TV APK route used by the profile page's native self-update action.
 
 ## One-time Cloudflare and GitHub setup
 

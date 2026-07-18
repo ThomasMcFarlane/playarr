@@ -116,6 +116,8 @@ export type TdarrConnectionResponse = components["schemas"]["TdarrConnectionResp
 
 export type CreateUserRequest = components["schemas"]["CreateUserRequest"];
 export type SignupRequest = components["schemas"]["SignupRequest"];
+export type CreateUserInvite = components["schemas"]["CreateUserInvite"];
+export type CreateUserInviteRequest = components["schemas"]["CreateUserInviteRequest"];
 export type UserInviteResponse = components["schemas"]["UserInviteResponse"];
 export type UserInviteRequestResponse = components["schemas"]["UserInviteRequestResponse"];
 export type UserInviteRequestStatus = components["schemas"]["UserInviteRequestStatus"];
@@ -714,8 +716,8 @@ export class ApiClient {
   }
 
   /** Issues a 24-hour, one-use invitation for the Playarr sign-up flow. */
-  async createUserInvite(): Promise<UserInviteResponse> {
-    return this.unwrap(await this.raw.POST("/api/v1/admin/user-invites", {}));
+  async createUserInvite(body: CreateUserInvite): Promise<UserInviteResponse> {
+    return this.unwrap(await this.raw.POST("/api/v1/admin/user-invites", { body }));
   }
 
   async listUserInviteRequests(): Promise<UserInviteRequestResponse[]> {
@@ -738,8 +740,12 @@ export class ApiClient {
     return this.unwrap(await this.raw.GET("/api/v1/users/me/user-invite-request", {}));
   }
 
-  async createUserInviteRequest(): Promise<UserInviteRequestResponse> {
-    return this.unwrap(await this.raw.POST("/api/v1/users/me/user-invite-request", {}));
+  async createUserInviteRequest(
+    body: CreateUserInviteRequest
+  ): Promise<UserInviteRequestResponse> {
+    return this.unwrap(
+      await this.raw.POST("/api/v1/users/me/user-invite-request", { body })
+    );
   }
 
   async generateApprovedUserInvite(): Promise<UserInviteResponse> {

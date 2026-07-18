@@ -462,6 +462,12 @@ paths:
         combines this token with its externally visible server origin when it
         builds the `playarr.app/signup` QR link.
       operationId: create_user_invite_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserInvite'
+        required: true
       responses:
         '200':
           description: Account invitation issued
@@ -2138,6 +2144,12 @@ paths:
         pending or approved request remains the one active request; denied and
         generated requests may be followed by a new request.
       operationId: create_user_invite_request_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserInviteRequest'
+        required: true
       responses:
         '200':
           description: Current invitation request
@@ -2662,6 +2674,25 @@ components:
             `Some(id)` nests this playlist under an existing one the caller can
             already write to (e.g. "Sample Movie Golf" under "MCU") -- checked in
             [`create_playlist_handler`], not structurally enforced here.
+    CreateUserInvite:
+      type: object
+      description: Access attached to a direct administrator-issued invitation.
+      properties:
+        can_stream:
+          type: boolean
+        library_allow:
+          type: array
+          items:
+            type: string
+            format: uuid
+    CreateUserInviteRequest:
+      type: object
+      description: Optional context supplied by the Playarr user requesting an invitation.
+      properties:
+        message:
+          type:
+          - string
+          - 'null'
     CreateUserRequest:
       type: object
       description: |-
@@ -3854,6 +3885,13 @@ components:
         approved:
           type: boolean
           description: '`true` grants exactly one generation; `false` denies this request.'
+        can_stream:
+          type: boolean
+        library_allow:
+          type: array
+          items:
+            type: string
+            format: uuid
     Season:
       type: object
       required:
@@ -4011,8 +4049,8 @@ components:
       type: object
       description: |-
         Public account-creation body. The bearer invitation is write-only and
-        grants exactly one ordinary Playarr account: never administrator access,
-        and no libraries until an administrator shares them after sign-up.
+        grants exactly one ordinary Playarr account with the access chosen by the
+        administrator who issued or approved it.
       required:
       - invite_token
       - username
@@ -4513,7 +4551,11 @@ components:
       - display_name
       - status
       - requested_at
+      - can_stream
+      - library_allow
       properties:
+        can_stream:
+          type: boolean
         display_name:
           type: string
         generated_at:
@@ -4524,6 +4566,15 @@ components:
         id:
           type: string
           format: uuid
+        library_allow:
+          type: array
+          items:
+            type: string
+            format: uuid
+        message:
+          type:
+          - string
+          - 'null'
         requested_at:
           type: string
           format: date-time
