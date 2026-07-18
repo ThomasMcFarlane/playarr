@@ -204,7 +204,8 @@ function focusExplicitEdgeTarget(
   const selector = current.getAttribute(attribute);
   if (!selector) return false;
   const target = document.querySelector<HTMLElement>(selector);
-  target?.focus({ preventScroll: true });
+  if (!target) return false;
+  target.focus({ preventScroll: true });
   return true;
 }
 

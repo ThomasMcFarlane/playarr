@@ -121,6 +121,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the actively playing album with a darker, blurred backdrop while preserving playback across
   page refreshes.
 - Centre inline music controls beneath Cover Flow and show the active track title above them.
+- Keep the inline Previous, Play/Pause, and Next buttons centred independently of the time readout.
+- Keep the inline mini-player visible without artwork metadata and hide playback controls while
+  music is still loading.
+- Route directional navigation directly between Cover Flow, inline playback controls, and tracks.
 - Enable Up and Down navigation from sign-in fields, and return Left from the server-address
   boundary to the active Settings option instead of a diagonally positioned item.
 - Let Left and Right leave Playarr text inputs at their matching caret boundaries while

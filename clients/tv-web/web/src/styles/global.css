@@ -2986,6 +2986,23 @@ code {
   display: none;
 }
 
+.player-inline-music-art-fallback {
+  position: absolute;
+  z-index: 0;
+  inset: 0 auto 0 0;
+  width: 48%;
+  display: grid;
+  place-items: center;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 34% 28%, rgba(207, 49, 87, 0.48), transparent 34%),
+    linear-gradient(145deg, #2a1720, #0d090b);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: clamp(2rem, 4vw, 3.8rem);
+  font-weight: 260;
+  text-transform: uppercase;
+}
+
 .player-page.is-minimised.is-inline-music {
   inset: 0 0 auto auto;
   z-index: 18;
@@ -3029,6 +3046,7 @@ code {
 }
 
 .player-shell-inline-music .player-controls-row {
+  position: relative;
   justify-content: center;
 }
 
@@ -3054,7 +3072,9 @@ code {
 }
 
 .player-shell-inline-music .player-time {
-  margin-left: clamp(8px, 0.8vw, 14px);
+  position: absolute;
+  right: 0;
+  margin-left: 0;
 }
 
 .mini-player-hit-target {
@@ -9825,6 +9845,10 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   .player-shell-inline-music .player-controls {
     top: 190px;
     width: calc(100% - 32px);
+  }
+
+  .player-shell-inline-music .player-time {
+    display: none;
   }
 }
 

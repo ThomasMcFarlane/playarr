@@ -13,7 +13,10 @@ import type { PlaybackEngineController } from "../../lib/usePlaybackEngine";
 import { CachedArtworkImage } from "../../lib/artwork";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../../lib/i18n/translations";
-import { shouldAutoHidePlayerControls } from "../../lib/playerControlVisibility";
+import {
+  shouldAutoHidePlayerControls,
+  shouldRenderPlayerControls,
+} from "../../lib/playerControlVisibility";
 import { MediaThumbnailArtwork } from "../MediaThumbnailArtwork";
 import { useMediaContextMenu } from "../MediaContextMenu";
 import { PlayerControls } from "./PlayerControls";
@@ -370,7 +373,7 @@ export function InlineMusicMiniPlayer({
   progressPercentage,
   onMaximise,
 }: {
-  context: PlayerMusicContext;
+  context?: PlayerMusicContext;
   title: string;
   positionSeconds: number;
   durationSeconds: number;
@@ -381,11 +384,17 @@ export function InlineMusicMiniPlayer({
   return createPortal(
     <div className="player-page is-minimised player-inline-music-mini">
       <div className="player-shell player-shell-minimised player-shell-music">
-        <MusicPlayerVisual
-          context={context}
-          title={title}
-          inlineVisualiserHost={null}
-        />
+        {context ? (
+          <MusicPlayerVisual
+            context={context}
+            title={title}
+            inlineVisualiserHost={null}
+          />
+        ) : (
+          <span className="player-inline-music-art-fallback" aria-hidden="true">
+            {title.slice(0, 1)}
+          </span>
+        )}
         <button
           type="button"
           className="mini-player-hit-target"
@@ -904,7 +913,7 @@ export function PlayerSurface({
                 event.stopPropagation();
                 const selector =
                   event.key === "ArrowUp"
-                    ? ".tv-music-album-card.is-playing, .tv-music-album-card.is-selected"
+                    ? ".tv-music-album-card.is-selected"
                     : ".tv-music-track-row.is-selected";
                 document
                   .querySelector<HTMLElement>(selector)
@@ -1185,11 +1194,16 @@ export function PlayerSurface({
       )}
       {!minimised && playlistContext.contextMenu}
 
-      {(!minimised || inlineMusic) && (
+      {shouldRenderPlayerControls({
+        inlineMusic,
+        minimised,
+        playbackBusy: isBusy,
+      }) && (
         <PlayerControls
           engineState={engineState}
           visible={showControls}
           contextTitle={inlineMusic ? title : undefined}
+          defaultFocusId={inlineMusic ? "inline-music-playback-control" : undefined}
           isFullscreen={isFullscreen}
           systemVolumeOnly={systemVolumeOnly}
           onTogglePlay={togglePlayback}

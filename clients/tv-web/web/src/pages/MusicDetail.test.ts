@@ -38,5 +38,21 @@ describe("MusicDetail track list", () => {
     expect(inlineControlsRule).toContain("width: min(76%, 720px)");
     expect(inlineControlsRule).toContain("transform: translateX(-50%)");
     expect(css).toContain(".player-shell-inline-music .player-controls-context-title");
+    expect(css).toMatch(
+      /\.player-shell-inline-music \.player-time\s*\{[^}]*position: absolute;[^}]*right: 0;/s
+    );
+  });
+
+  it("uses an unambiguous directional target for inline playback controls", () => {
+    const detailSource = readFileSync(new URL("./MusicDetail.tsx", import.meta.url), "utf8");
+    const controlsSource = readFileSync(
+      new URL("../components/player/PlayerControls.tsx", import.meta.url),
+      "utf8"
+    );
+
+    expect(detailSource).toContain(
+      'data-tv-edge-target-down="#inline-music-playback-control"'
+    );
+    expect(controlsSource).toContain("id={defaultFocusId}");
   });
 });

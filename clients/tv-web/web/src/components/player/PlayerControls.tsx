@@ -34,6 +34,7 @@ export interface PlayerControlsProps {
   engineState: PlaybackEngineState;
   visible: boolean;
   contextTitle?: string;
+  defaultFocusId?: string;
   isFullscreen: boolean;
   systemVolumeOnly?: boolean;
   onTogglePlay: () => void;
@@ -88,6 +89,7 @@ export function PlayerControls({
   engineState,
   visible,
   contextTitle,
+  defaultFocusId,
   isFullscreen,
   systemVolumeOnly = false,
   onTogglePlay,
@@ -626,6 +628,7 @@ export function PlayerControls({
 
         <button
           ref={playButtonRef}
+          id={defaultFocusId}
           type="button"
           className="player-btn player-btn-primary"
           data-player-default-focus

@@ -203,16 +203,17 @@ export function PlayerPage({
     locationState?.serverUrl
   );
   const playerTitle = title ?? activePlaylistItem?.title ?? t("pages.player.nowPlaying");
+  const miniPlayerMusicContext =
+    activePlaylistItem?.music ?? playlistItems.find((item) => item.music)?.music;
   const durationSeconds = player.engineState.durationSeconds;
   const positionSeconds = player.engineState.currentTimeSeconds;
   const progressPercentage =
     durationSeconds > 0
       ? Math.min(100, Math.max(0, (positionSeconds / durationSeconds) * 100))
       : 0;
-  const inlineMiniPlayer =
-    inlineMusic && activePlaylistItem?.music ? (
+  const inlineMiniPlayer = inlineMusic ? (
       <InlineMusicMiniPlayer
-        context={activePlaylistItem.music}
+        context={miniPlayerMusicContext}
         title={playerTitle}
         positionSeconds={positionSeconds}
         durationSeconds={durationSeconds}

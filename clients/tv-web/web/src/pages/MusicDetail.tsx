@@ -146,7 +146,7 @@ function AlbumCoverFlow({
               style={flowStyle}
               data-tv-focus-default={isSelected ? true : undefined}
               data-navigation-focus-key={`music:${artistId}:album:${album.album.id}`}
-              data-tv-edge-target-down={`.player-page.is-inline-music [data-player-default-focus], #music-track-${firstTrack.track.id}`}
+              data-tv-edge-target-down="#inline-music-playback-control"
               aria-pressed={isSelected}
               aria-label={t("pages.musicDetail.play", { title: album.album.title })}
               onKeyDown={(event) => {

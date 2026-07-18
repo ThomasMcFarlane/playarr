@@ -16,3 +16,15 @@ export function shouldAutoHidePlayerControls({
     !interactionPinned
   );
 }
+
+export function shouldRenderPlayerControls({
+  inlineMusic,
+  minimised,
+  playbackBusy,
+}: {
+  inlineMusic: boolean;
+  minimised: boolean;
+  playbackBusy: boolean;
+}): boolean {
+  return !minimised || (inlineMusic && !playbackBusy);
+}
