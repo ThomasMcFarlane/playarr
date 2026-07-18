@@ -183,6 +183,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Link the public Android download to its immutable versioned route and force the `.apk` filename,
+  avoiding stale browser or edge fallbacks from the previously missing stable path.
 - Remove source archives and loose web bundles from the Clients catalogue so download actions are
   shown only for installable app packages, and consolidate iOS and Apple TV into one shared Apple
   client entry.

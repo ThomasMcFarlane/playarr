@@ -9,7 +9,7 @@ function environment(object) {
 }
 
 describe("Android APK downloads", () => {
-  it("serves a published APK as a same-origin attachment", async () => {
+  it("serves a published APK without authentication as a same-origin attachment", async () => {
     const env = environment({
       body: new Uint8Array([1, 2, 3]),
       httpEtag: '"release-etag"',
@@ -31,6 +31,7 @@ describe("Android APK downloads", () => {
     expect(response.headers.get("Content-Type")).toBe(
       "application/vnd.android.package-archive"
     );
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(env.CLIENT_DOWNLOADS.get).toHaveBeenCalledWith(
       "android/playarr-android.apk"
     );

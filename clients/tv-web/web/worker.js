@@ -59,6 +59,7 @@ export default {
           : "text/plain; charset=utf-8"
     );
     headers.set("ETag", object.httpEtag);
+    headers.set("X-Content-Type-Options", "nosniff");
 
     return new Response(request.method === "HEAD" ? null : object.body, { headers });
   },

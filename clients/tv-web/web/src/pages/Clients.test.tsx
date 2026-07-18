@@ -76,7 +76,11 @@ describe("ClientsPage", () => {
   it("renders one responsive APK for mobile and TV", () => {
     const markup = renderPage(<AndroidDownloadDetails />, "/clients");
 
-    expect(markup).toContain('href="/downloads/android/playarr-android.apk"');
+    expect(markup).toContain(
+      'href="/downloads/android/releases/0.1.4/playarr-android.apk"'
+    );
+    expect(markup).toContain('download="playarr-android.apk"');
+    expect(markup).toContain('type="application/vnd.android.package-archive"');
     expect(markup).not.toContain("playarr-android-mobile.apk");
     expect(markup).not.toContain("playarr-android-tv.apk");
     expect(markup).toContain('data-tv-edge-target-up="#client-android-action"');
