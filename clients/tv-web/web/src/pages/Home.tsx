@@ -468,7 +468,6 @@ export function HomePage() {
             items={rail.items}
             selectedId={selectedByRail[rail.id] ?? rail.items[0]?.id ?? null}
             isActive={activeRail === rail.id}
-            onSelect={selectFromRail}
             onFocusItem={focusFromRail}
             progressByWork={progressByWork}
             progressReady={watchProgress !== null}
@@ -529,7 +528,6 @@ function HomeRail({
   items,
   selectedId,
   isActive,
-  onSelect,
   onFocusItem,
   progressByWork = new Map(),
   progressReady,
@@ -543,7 +541,6 @@ function HomeRail({
   items: Work[];
   selectedId: string | null;
   isActive: boolean;
-  onSelect: (rail: HomeRailId, id: string) => void;
   onFocusItem: (
     rail: HomeRailId,
     id: string,
@@ -614,7 +611,6 @@ function HomeRail({
                   );
                   if (section) onFocusItem(railId, work.id, section);
                 }}
-                onMouseEnter={() => onSelect(railId, work.id)}
                 {...mediaContext.itemProps({
                   work,
                   detailRoute: detailRoute(work),

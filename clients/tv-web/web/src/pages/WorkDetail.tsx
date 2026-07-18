@@ -536,7 +536,6 @@ function MovieChapterTrack({
           }`}
           data-navigation-focus-key={`detail:${workId}:chapter:${chapter.index}`}
           onFocus={() => setSelectedChapterIndex(chapter.index)}
-          onMouseEnter={() => setSelectedChapterIndex(chapter.index)}
           onClick={(event) => {
             onNavigate(event);
             if (workSources.length > 1) {
@@ -673,7 +672,6 @@ function MoviePeopleTrack({
             className={`tv-episode-card tv-person-card${selected ? " is-selected" : ""}`}
             data-navigation-focus-key={`detail:${workId}:person:${groupKey}:${credit.id}`}
             onFocus={() => setSelectedCreditId(credit.id)}
-            onMouseEnter={() => setSelectedCreditId(credit.id)}
             aria-label={`${credit.person.name}${subtitle ? `, ${subtitle}` : ""}`}
           >
             <span className="tv-episode-art tv-person-art">
@@ -750,7 +748,6 @@ function SimilarTitlesTrack({
             className={`tv-episode-card${selected ? " is-selected" : ""}`}
             data-navigation-focus-key={`detail:${workId}:similar:${similarWork.id}`}
             onFocus={() => setSelectedWorkId(similarWork.id)}
-            onMouseEnter={() => setSelectedWorkId(similarWork.id)}
             onClick={onNavigate}
             aria-label={t("pages.workDetail.openTitle", { title: similarWork.title })}
             {...mediaContext.itemProps({
@@ -873,7 +870,6 @@ function SeasonEpisodeTrack({
                   onSelect(seasonNumber, episode.episode.id);
                   revealSeasonTrack(event.currentTarget);
                 }}
-                onMouseEnter={() => onSelect(seasonNumber, episode.episode.id)}
                 onClick={(event) => {
                   onSelect(seasonNumber, episode.episode.id);
                   onNavigate(event);

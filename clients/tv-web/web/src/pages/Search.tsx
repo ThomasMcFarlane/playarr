@@ -881,7 +881,6 @@ export function SearchPage() {
                           selectedId === key ? " is-selected" : ""
                         }`}
                         onFocus={() => setSelectedId(key)}
-                        onMouseEnter={() => setSelectedId(key)}
                         onKeyDown={handleResultKeyDown}
                         onClick={navigationLayer.captureLink}
                         data-navigation-focus-key={`search:${key}`}
@@ -941,7 +940,6 @@ export function SearchPage() {
                       }`}
                       {...contextProps}
                       onFocus={() => setSelectedId(key)}
-                      onMouseEnter={() => setSelectedId(key)}
                       onKeyDown={(event) => {
                         if (event.key === "ArrowLeft") {
                           handleResultKeyDown(event);

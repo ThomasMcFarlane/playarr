@@ -622,7 +622,6 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                       void appendNextPage().catch(() => undefined);
                     }
                   }}
-                  onMouseEnter={() => setSelectedId(work.id)}
                   data-library-letter={letter}
                   data-tv-focus-default={index === 0 ? true : undefined}
                   data-navigation-focus-key={`library:${kind}:${work.id}`}

@@ -1046,7 +1046,6 @@ export function PlaylistsPage() {
                 isActive={activeDetailTrack?.playlist.id === track.playlist.id}
                 progressByWork={progressByWork}
                 progressReady={watchProgress !== null}
-                onSelect={selectFromTrack}
                 onFocusItem={focusFromTrack}
                 onProgressChanged={handleProgressChanged}
                 onPlaylistItemChanged={handlePlaylistMembershipChanged}
@@ -1411,7 +1410,6 @@ function PlaylistDirectoryCard({
       }`}
       onClick={onNavigate}
       onFocus={onFocus}
-      onMouseEnter={onFocus}
       data-tv-focus-default={defaultFocus ? true : undefined}
       data-navigation-focus-key={`playlists:directory:${track.playlist.id}`}
       aria-label={t("pages.playlists.openPlaylistAriaLabel", {
@@ -1511,7 +1509,6 @@ function PlaylistMediaTrack({
   isActive,
   progressByWork,
   progressReady,
-  onSelect,
   onFocusItem,
   onProgressChanged,
   onPlaylistItemChanged,
@@ -1526,7 +1523,6 @@ function PlaylistMediaTrack({
   isActive: boolean;
   progressByWork: Map<string, WatchProgress>;
   progressReady: boolean;
-  onSelect: (trackId: string, itemId: string) => void;
   onFocusItem: (
     trackId: string,
     itemId: string,
@@ -1601,7 +1597,6 @@ function PlaylistMediaTrack({
                 onFocusItem(track.playlist.id, item.id, section);
               }
             }}
-            onMouseEnter={() => onSelect(track.playlist.id, item.id)}
             {...mediaContext.itemProps({
               work,
               workId: work.id,

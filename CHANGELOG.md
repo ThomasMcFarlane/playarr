@@ -66,6 +66,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Require an explicit click, keyboard focus, or remote action to select media cards and rows instead
+  of changing the active navigation item when the pointer merely passes over it.
 - Lower the music detail title and synopsis so the left-hand copy aligns visually with movie and
   series detail pages.
 - Match item names after the detail-page heading pipe to the compact metadata typography used by

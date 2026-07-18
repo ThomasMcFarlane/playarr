@@ -203,7 +203,6 @@ function AlbumCoverFlow({
                 }
               }}
               onFocus={() => onSelect(album)}
-              onMouseEnter={() => onSelect(album)}
               onClick={() => {
                 onSelect(album);
                 onPlay(album, firstTrack);
@@ -349,7 +348,6 @@ function AlbumTrackList({
                   index === 0 ? "#inline-music-playback-control" : undefined
                 }
                 onFocus={() => onSelect(album.album.id, track.track.id)}
-                onMouseEnter={() => onSelect(album.album.id, track.track.id)}
                 onClick={(event) => {
                   event.preventDefault();
                   onNavigate(event);
