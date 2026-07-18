@@ -11,6 +11,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Add a native Playarr Apple TV app with focus-friendly catalogue browsing, search, device-code
   pairing, server configuration, and AVKit playback backed by the shared Swift client kit.
+- Let administrators choose Playarr and shared-library access when creating or approving an
+  invitation, and let requesters include an admin-visible message about who the invite is for.
 - Add playful per-profile avatar choices in Playarr settings, with crop, reposition, zoom, and
   locally resized custom photo uploads on devices that provide an image picker.
 - Add held-playlist actions for renaming, choosing a new parent, or deleting personal playlists
@@ -61,6 +63,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   chapter, progress, retry, minimised-player, and remote-control support.
 - Add an Android TV shell that hosts Playarr Web with saved server configuration, D-pad and Menu
   handling, fullscreen playback, and recoverable connection errors.
+- Let Android TV viewers check for updates from the profile page, securely download the latest
+  signed APK from `playarr.app`, and open Android's installer when a newer build is available.
 - Include Whisparr sites in Playarr home rails, return navigation, playlists, context actions, and
   episodic watch-progress handling.
 - Add a dedicated music playback visual with album artwork, track metadata, responsive audio
@@ -131,6 +135,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Make Playarr Web responsive on mobile with safe-area-aware navigation, touch-sized controls,
   stacked content regions, and phone-friendly library, detail, search, profile, settings, and
   player layouts while preserving the existing desktop and television presentation.
+- Give mobile catalogue rails the full homepage and directory width, scroll item details and their
+  metadata as one native page with parallax artwork, and show titles in the Settings navigation.
 - Let Android TV builds configure their Playarr server at build time, use the television's
   system volume, and apply a stable 1920 by 1080 web viewport.
 - Require completed changes to be committed and pushed promptly as small, atomic Conventional

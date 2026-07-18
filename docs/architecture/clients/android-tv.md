@@ -20,7 +20,7 @@ The native layer owns only platform responsibilities:
 
 - TV launcher and Google Play metadata
 - app lifecycle and immersive mode
-- Play in-app updates
+- Play in-app updates and direct signed-APK updates from `playarr.app`
 - persisted server bootstrap
 - Menu and Back-key behaviour
 - WebView cookies and DOM storage
@@ -81,7 +81,14 @@ fullscreen video.
 
 ## Updates
 
-Two update layers remain independent:
+The profile page exposes a native **Check for updates** action for sideloaded
+installations. The native shell fetches the latest Android TV release manifest
+from `playarr.app`, compares its monotonic `version_code`, downloads the
+versioned APK over HTTPS, verifies its SHA-256 checksum, and opens Android's
+package installer. Android still requires the viewer to trust Playarr as an
+installation source and to confirm the signed package replacement.
+
+The remaining update layers stay independent:
 
 - Google Play updates the Android APK, driven by
   `AppUpdateEffect` and the Android-TV compatibility row.

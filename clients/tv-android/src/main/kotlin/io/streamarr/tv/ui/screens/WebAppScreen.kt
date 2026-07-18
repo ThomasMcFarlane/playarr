@@ -15,6 +15,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import androidx.annotation.Keep
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,7 +51,10 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import io.streamarr.tv.BuildConfig
 import io.streamarr.tv.R
+import io.streamarr.tv.update.AndroidTvSelfUpdater
+import io.streamarr.tv.update.AndroidTvUpdateEvent
 import java.net.URI
+import org.json.JSONObject
 
 /**
  * Normalises the operator-entered address without changing paths used by
@@ -102,6 +107,14 @@ fun StreamarrWebAppScreen(
     var fullscreenView by remember { mutableStateOf<View?>(null) }
     var fullscreenCallback by remember {
         mutableStateOf<WebChromeClient.CustomViewCallback?>(null)
+    }
+    val updateScope = rememberCoroutineScope()
+    val selfUpdater = remember(activity, updateScope) {
+        AndroidTvSelfUpdater(
+            activity = activity,
+            scope = updateScope,
+            onEvent = { event -> webView?.dispatchAndroidTvUpdateEvent(event) },
+        )
     }
 
     LaunchedEffect(openServerEditorRequest) {
@@ -173,6 +186,7 @@ fun StreamarrWebAppScreen(
                     onHideFullscreen = {
                         closeFullscreen(notifyWebView = false)
                     },
+                    onCheckForUpdates = selfUpdater::checkForUpdates,
                 )
             },
             update = { view ->
@@ -240,7 +254,10 @@ fun StreamarrWebAppScreen(
         val activeWebView = webView
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> activeWebView?.onResume()
+                Lifecycle.Event.ON_RESUME -> {
+                    activeWebView?.onResume()
+                    selfUpdater.resumePendingInstall()
+                }
                 Lifecycle.Event.ON_PAUSE -> {
                     CookieManager.getInstance().flush()
                     activeWebView?.onPause()
@@ -268,6 +285,7 @@ private fun createPlayarrWebView(
     onOpenServerEditor: () -> Unit,
     onShowFullscreen: (View, WebChromeClient.CustomViewCallback) -> Unit,
     onHideFullscreen: () -> Unit,
+    onCheckForUpdates: () -> Unit,
 ): WebView = WebView(context).apply {
     WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
     setBackgroundColor(android.graphics.Color.rgb(21, 19, 21))
@@ -295,6 +313,7 @@ private fun createPlayarrWebView(
         setAcceptCookie(true)
         setAcceptThirdPartyCookies(playarrWebView, false)
     }
+    addJavascriptInterface(PlayarrAndroidBridge(onCheckForUpdates), "PlayarrAndroid")
 
     webViewClient = object : WebViewClient() {
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
@@ -368,6 +387,49 @@ private fun createPlayarrWebView(
 
     onWebViewReady(this)
     requestFocus()
+}
+
+@Keep
+private class PlayarrAndroidBridge(
+    private val onCheckForUpdates: () -> Unit,
+) {
+    @android.webkit.JavascriptInterface
+    fun checkForUpdates() = onCheckForUpdates()
+}
+
+private fun WebView.dispatchAndroidTvUpdateEvent(event: AndroidTvUpdateEvent) {
+    val detail = JSONObject().apply {
+        when (event) {
+            AndroidTvUpdateEvent.Checking -> put("status", "checking")
+            is AndroidTvUpdateEvent.UpToDate -> {
+                put("status", "up_to_date")
+                put("versionName", event.versionName)
+            }
+            is AndroidTvUpdateEvent.Downloading -> {
+                put("status", "downloading")
+                put("versionName", event.versionName)
+                event.progress?.let { put("progress", it) }
+            }
+            is AndroidTvUpdateEvent.PermissionRequired -> {
+                put("status", "permission_required")
+                put("versionName", event.versionName)
+            }
+            is AndroidTvUpdateEvent.Installing -> {
+                put("status", "installing")
+                put("versionName", event.versionName)
+            }
+            is AndroidTvUpdateEvent.Error -> {
+                put("status", "error")
+                put("message", event.message)
+            }
+        }
+    }
+    post {
+        evaluateJavascript(
+            "window.dispatchEvent(new CustomEvent('playarr:android-update', { detail: $detail }));",
+            null,
+        )
+    }
 }
 
 private fun WebView.syncTvViewport() {

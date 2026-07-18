@@ -99,6 +99,31 @@ describe("SettingsIndexPage", () => {
     expect(markup).toContain("Appearance controls");
   });
 
+  it("keeps every settings title visible in the mobile navigation rail", () => {
+    const markup = renderSettingsRoute("/settings/appearance");
+    const css = readFileSync(
+      new URL("../../styles/global.css", import.meta.url),
+      "utf8"
+    );
+
+    expect(markup).toContain("Appearance");
+    expect(markup).toContain("Profile avatar");
+    expect(markup).toContain("Language");
+    expect(markup).toContain("Player");
+    expect(markup).toContain("Server");
+    expect(markup).toContain("Profile lock");
+    expect(markup).toContain("Invite a friend");
+    expect(css).toMatch(
+      /\.settings-workspace-track\s*\{[^}]*grid-template-columns:\s*minmax\(132px, 38%\) minmax\(0, 1fr\)/s
+    );
+    expect(css).toMatch(
+      /\.settings-detail-panel\s*\{[^}]*position:\s*relative[^}]*width:\s*auto/s
+    );
+    expect(css).toMatch(
+      /\.settings-option-copy\s*\{[^}]*display:\s*block/s
+    );
+  });
+
   it("moves the intact list left and gives both panels independent scrolling", () => {
     const markup = renderSettingsRoute("/settings/appearance");
     const css = readFileSync(
