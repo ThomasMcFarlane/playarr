@@ -778,6 +778,8 @@ export const en = {
   "pages.clients.ios.platform": "iPhone and iPad",
   "pages.clients.ios.description":
     "The native Apple client is coming soon; a distributable signed release is not available yet.",
+  "pages.clients.apple.name": "Apple",
+  "pages.clients.apple.platform": "iPhone, iPad and Apple TV",
   "pages.clients.appleTv.name": "Apple TV",
   "pages.clients.appleTv.platform": "Apple TV",
   "pages.clients.webos.name": "LG webOS",
@@ -790,9 +792,9 @@ export const en = {
     "The TV shell exists, but a signed production package is not published yet.",
   "pages.clients.vidaaSetup": "Install",
   "pages.clients.downloadApk": "Download APK",
-  "pages.clients.downloadPreview": "Download preview",
-  "pages.clients.previewNote":
-    "Preview downloads are for developers and sideloading. Apple packages require Xcode and signing; webOS and Tizen bundles require their vendor SDKs and signing; Roku requires developer mode.",
+  "pages.clients.downloadApp": "Download app",
+  "pages.clients.downloadNote":
+    "Only installable app packages are offered for download. The Roku app requires developer mode; other native clients remain unavailable until their signed packages are published.",
   "pages.clients.notYetPublished": "Signed download not yet published",
   "pages.clients.footer": "One library. Every screen. Your server stays yours.",
   "pages.clients.androidPage.kicker": "Android",

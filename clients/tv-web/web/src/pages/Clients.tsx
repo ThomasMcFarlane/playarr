@@ -41,35 +41,24 @@ const PLAYARR_CLIENTS: readonly PlayarrClient[] = [
     icon: "android",
   },
   {
-    id: "ios",
-    nameKey: "pages.clients.ios.name",
-    platformKey: "pages.clients.ios.platform",
-    status: "experimental",
-    downloadFile: "playarr-ios-source.zip",
-    icon: "apple",
-  },
-  {
-    id: "apple-tv",
-    nameKey: "pages.clients.appleTv.name",
-    platformKey: "pages.clients.appleTv.platform",
-    status: "experimental",
-    downloadFile: "playarr-apple-tv-source.zip",
+    id: "apple",
+    nameKey: "pages.clients.apple.name",
+    platformKey: "pages.clients.apple.platform",
+    status: "soon",
     icon: "apple",
   },
   {
     id: "webos",
     nameKey: "pages.clients.webos.name",
     platformKey: "pages.clients.webos.platform",
-    status: "experimental",
-    downloadFile: "playarr-webos-developer-bundle.zip",
+    status: "soon",
     icon: "lg",
   },
   {
     id: "tizen",
     nameKey: "pages.clients.tizen.name",
     platformKey: "pages.clients.tizen.platform",
-    status: "experimental",
-    downloadFile: "playarr-tizen-developer-bundle.zip",
+    status: "soon",
     icon: "samsung",
   },
   {
@@ -275,7 +264,7 @@ export function ClientsPage() {
                       : undefined
                   }
                 >
-                  <strong>{t("pages.clients.downloadPreview")}</strong>
+                  <strong>{t("pages.clients.downloadApp")}</strong>
                 </a>
               ) : (
                 <button
@@ -319,7 +308,7 @@ export function ClientsPage() {
         </div>
       ) : null}
 
-      <p className="clients-preview-note">{t("pages.clients.previewNote")}</p>
+      <p className="clients-preview-note">{t("pages.clients.downloadNote")}</p>
       <p className="clients-footer">{t("pages.clients.footer")}</p>
     </PublicClientsLayout>
   );

@@ -767,6 +767,8 @@ export const ja: Translations = {
   "pages.clients.ios.name": "iOS",
   "pages.clients.ios.platform": "iPhoneとiPad",
   "pages.clients.ios.description": "Apple向けネイティブクライアントは近日公開予定です。配布用の署名済みリリースはまだありません。",
+  "pages.clients.apple.name": "Apple",
+  "pages.clients.apple.platform": "iPhone、iPad、Apple TV",
   "pages.clients.appleTv.name": "Apple TV",
   "pages.clients.appleTv.platform": "Apple TV",
   "pages.clients.webos.name": "LG webOS",
@@ -777,9 +779,9 @@ export const ja: Translations = {
   "pages.clients.tizen.description": "テレビ用シェルはありますが、署名済み製品パッケージはまだ公開されていません。",
   "pages.clients.vidaaSetup": "インストール",
   "pages.clients.downloadApk": "APKをダウンロード",
-  "pages.clients.downloadPreview": "プレビューをダウンロード",
-  "pages.clients.previewNote":
-    "プレビュー版は開発者およびサイドロード向けです。Apple版にはXcodeと署名、webOS版とTizen版には各社SDKと署名、Roku版には開発者モードが必要です。",
+  "pages.clients.downloadApp": "アプリをダウンロード",
+  "pages.clients.downloadNote":
+    "インストール可能なアプリパッケージのみダウンロードできます。Roku版には開発者モードが必要です。その他のネイティブクライアントは、署名済みパッケージが公開されるまで利用できません。",
   "pages.clients.notYetPublished": "署名済みダウンロードは未公開",
   "pages.clients.footer": "ひとつのライブラリを、すべての画面で。サーバーはあなたのもの。",
   "pages.clients.androidPage.kicker": "Android",

@@ -38,7 +38,7 @@ describe("ClientsPage", () => {
     expect(markup).not.toContain("The complete Playarr experience, ready now");
     expect(markup).not.toContain("The hosted TV app is available now");
     expect(markup).not.toContain("Fire TV");
-    expect(markup).not.toContain("Coming soon");
+    expect(markup.match(/Coming soon/g)).toHaveLength(3);
     expect(markup).toContain('data-client-icon="android"');
     expect(markup).toContain('data-client-icon="apple"');
     expect(markup).toContain('data-client-icon="lg"');
@@ -49,30 +49,25 @@ describe("ClientsPage", () => {
     expect(markup.match(/data-tv-edge-stop-left="true"/g)).toHaveLength(2);
     expect(markup.match(/data-tv-edge-stop-right="true"/g)).toHaveLength(2);
     expect(markup).toContain("Apple TV");
+    expect(markup).toContain("iPhone, iPad and Apple TV");
+    expect(markup).toContain('id="client-apple"');
+    expect(markup).not.toContain('id="client-apple-tv"');
     expect(markup).toContain("Roku TV");
     expect(markup).toContain('aria-controls="vidaa-install-details"');
     expect(markup).toContain('aria-controls="android-install-details"');
     expect(markup).toContain('aria-expanded="false"');
     expect(markup).toContain('id="client-android-action"');
     expect(markup).toContain("Download APK");
-    expect(markup.match(/Download preview/g)).toHaveLength(5);
-    expect(markup).toContain(
-      "releases/download/clients-v0.1.0-preview.1/playarr-ios-source.zip"
-    );
-    expect(markup).toContain(
-      "releases/download/clients-v0.1.0-preview.1/playarr-apple-tv-source.zip"
-    );
-    expect(markup).toContain(
-      "releases/download/clients-v0.1.0-preview.1/playarr-webos-developer-bundle.zip"
-    );
-    expect(markup).toContain(
-      "releases/download/clients-v0.1.0-preview.1/playarr-tizen-developer-bundle.zip"
-    );
+    expect(markup.match(/Download app/g)).toHaveLength(1);
     expect(markup).toContain(
       "releases/download/clients-v0.1.0-preview.1/playarr-roku.zip"
     );
-    expect(markup).toContain("Preview downloads are for developers and sideloading");
-    expect(markup).not.toContain('aria-disabled="true"');
+    expect(markup).not.toContain("playarr-ios-source.zip");
+    expect(markup).not.toContain("playarr-apple-tv-source.zip");
+    expect(markup).not.toContain("playarr-webos-developer-bundle.zip");
+    expect(markup).not.toContain("playarr-tizen-developer-bundle.zip");
+    expect(markup).toContain("Only installable app packages are offered for download");
+    expect(markup.match(/aria-disabled="true"/g)).toHaveLength(3);
     expect(markup).not.toContain('href="/clients/vidaa"');
     expect(markup).not.toContain("app-shell");
     expect(markup).not.toContain("clients-header");
