@@ -33,7 +33,9 @@ describe("Home layout", () => {
     expect(sharedTitleRule).toContain("font-size: clamp(2.2rem, 3.6vw, 5rem)");
     expect(sharedTitleRule).toContain("line-height: 0.9");
     expect(sharedSynopsisRule).toContain("max-width: 42ch");
-    expect(sharedSynopsisRule).toContain("margin-top: clamp(16px, 2vh, 28px)");
+    expect(sharedSynopsisRule).toContain(
+      "margin-top: clamp(16px, calc(2 * var(--viewport-unit)), 28px)"
+    );
     expect(sharedSynopsisRule).toContain("-webkit-line-clamp: 5");
     expect(mobileDetailCopyRule).toContain(
       "top: calc(var(--mobile-top-inset) + 58px)"
@@ -46,7 +48,7 @@ describe("Home layout", () => {
       /\.tv-home:not\(\.tv-playlists\) > \.tv-home-feature,\s*\.tv-playlists\.is-playlist-directory > \.tv-playlist-feature\s*\{[^}]*display:\s*none/s
     );
     expect(css).toMatch(
-      /\.tv-detail > \.tv-key-art,\s*\.tv-playlists\.is-playlist-detail > \.tv-key-art\s*\{[^}]*position:\s*sticky[^}]*margin-bottom:\s*-24vh/s
+      /\.tv-detail > \.tv-key-art,\s*\.tv-playlists\.is-playlist-detail > \.tv-key-art\s*\{[^}]*position:\s*sticky[^}]*margin-bottom:\s*calc\(-24 \* var\(--viewport-unit\)\)/s
     );
     expect(css).toMatch(
       /\.tv-detail-copy\s*\{[^}]*position:\s*relative[^}]*padding-top:\s*calc\(var\(--mobile-top-inset\) \+ 64px\)/s

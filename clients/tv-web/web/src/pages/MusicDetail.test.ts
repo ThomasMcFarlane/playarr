@@ -69,11 +69,17 @@ describe("MusicDetail track list", () => {
       /\.tv-music-track-list-scroll\s*\{(?<declarations>[^}]*)\}/
     )?.groups?.declarations;
 
-    expect(musicBrowserRule).toContain("padding: clamp(104px, 13vh, 142px) 0 0");
-    expect(trackListRule).toContain("padding: clamp(58px, 6vh, 76px) 0 0");
+    expect(musicBrowserRule).toContain(
+      "padding: clamp(104px, calc(13 * var(--viewport-unit)), 142px) 0 0"
+    );
+    expect(trackListRule).toContain(
+      "padding: clamp(58px, calc(6 * var(--viewport-unit)), 76px) 0 0"
+    );
     expect(trackWindowRule).toContain("min-height: 0");
     expect(trackWindowRule).toContain("overflow: hidden");
-    expect(trackScrollRule).toContain("clamp(34px, 5vh, 58px)");
+    expect(trackScrollRule).toContain(
+      "clamp(34px, calc(5 * var(--viewport-unit)), 58px)"
+    );
     expect(trackScrollRule).toContain("overflow-y: auto");
     expect(trackScrollRule).toContain("scroll-behavior: auto");
   });

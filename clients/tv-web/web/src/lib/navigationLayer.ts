@@ -125,12 +125,59 @@ export function captureNavigationLayer(
 }
 
 let restoringNavigationLayer = false;
+const NAVIGATION_RESTORE_SETTLE_MS = 700;
+const NAVIGATION_RESTORE_INTERRUPTION_EVENTS = [
+  "keydown",
+  "pointerdown",
+  "touchstart",
+  "wheel",
+] as const;
 
 export function isNavigationLayerRestoring(): boolean {
   return restoringNavigationLayer;
 }
 
-function restoreSnapshot(snapshot: NavigationSnapshot): boolean {
+export function maintainNavigationScrollRestore(
+  applyScroll: () => void,
+  focusTarget: HTMLElement | null,
+  settleMs = NAVIGATION_RESTORE_SETTLE_MS
+): () => void {
+  let animationFrame = 0;
+  let startedAt: number | null = null;
+  let cancelled = false;
+
+  const cancel = () => {
+    if (cancelled) return;
+    cancelled = true;
+    window.cancelAnimationFrame(animationFrame);
+    for (const eventName of NAVIGATION_RESTORE_INTERRUPTION_EVENTS) {
+      window.removeEventListener(eventName, cancel, true);
+    }
+  };
+
+  const reapply = (timestamp: number) => {
+    if (cancelled) return;
+    if (focusTarget && document.activeElement !== focusTarget) {
+      cancel();
+      return;
+    }
+    applyScroll();
+    startedAt ??= timestamp;
+    if (timestamp - startedAt >= settleMs) {
+      cancel();
+      return;
+    }
+    animationFrame = window.requestAnimationFrame(reapply);
+  };
+
+  for (const eventName of NAVIGATION_RESTORE_INTERRUPTION_EVENTS) {
+    window.addEventListener(eventName, cancel, true);
+  }
+  animationFrame = window.requestAnimationFrame(reapply);
+  return cancel;
+}
+
+function restoreSnapshot(snapshot: NavigationSnapshot): (() => void) | false {
   const focusTarget = snapshot.focusKey
     ? document.querySelector<HTMLElement>(
         `[data-navigation-focus-key="${CSS.escape(snapshot.focusKey)}"]`
@@ -155,11 +202,10 @@ function restoreSnapshot(snapshot: NavigationSnapshot): boolean {
     focusTarget.focus({ preventScroll: true });
     restoringNavigationLayer = false;
   }
-  // Focus handlers update the selected item synchronously and may queue
-  // their own rail-centering animation. Reasserting the captured positions
-  // on the next frame keeps restoration exact and cancels that stale motion.
-  window.requestAnimationFrame(applyScroll);
-  return true;
+  // Focus handlers and WebView spatial navigation can queue smooth centring
+  // after focus() returns. Keep the captured position stable through that
+  // settling window, but stop immediately when the viewer interacts.
+  return maintainNavigationScrollRestore(applyScroll, focusTarget);
 }
 
 export function useNavigationLayer(
@@ -204,10 +250,13 @@ export function useNavigationLayer(
     }
     let cancelled = false;
     let secondFrame = 0;
+    let cancelRestore: (() => void) | null = null;
     const firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
         if (cancelled) return;
-        if (restoreSnapshot(snapshot)) {
+        const restoration = restoreSnapshot(snapshot);
+        if (restoration) {
+          cancelRestore = restoration;
           restoredEntryRef.current = location.key;
         } else if (discardMissingWhenReady) {
           removeSnapshot(location.key);
@@ -219,6 +268,7 @@ export function useNavigationLayer(
       cancelled = true;
       window.cancelAnimationFrame(firstFrame);
       window.cancelAnimationFrame(secondFrame);
+      cancelRestore?.();
     };
   }, [
     discardMissingWhenReady,

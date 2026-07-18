@@ -4,10 +4,10 @@
 
 .clients-scroll.profile-auth-scroll {
   display: block;
-  padding: clamp(128px, 18vh, 188px) clamp(24px, 7vw, 110px)
-    clamp(58px, 8vh, 96px);
-  scroll-padding-block: clamp(128px, 18vh, 188px)
-    clamp(58px, 8vh, 96px);
+  padding: clamp(128px, calc(18 * var(--viewport-unit)), 188px) clamp(24px, 7vw, 110px)
+    clamp(58px, calc(8 * var(--viewport-unit)), 96px);
+  scroll-padding-block: clamp(128px, calc(18 * var(--viewport-unit)), 188px)
+    clamp(58px, calc(8 * var(--viewport-unit)), 96px);
 }
 
 .clients-stage-panel {
@@ -25,7 +25,7 @@
 
 .clients-hero {
   max-width: 760px;
-  margin: 0 auto clamp(42px, 6vh, 72px);
+  margin: 0 auto clamp(42px, calc(6 * var(--viewport-unit)), 72px);
 }
 
 .clients-hero .auth-title,
@@ -66,7 +66,7 @@
   align-items: flex-start;
   justify-content: center;
   gap: clamp(22px, 2.2vw, 44px);
-  padding: clamp(22px, 3vh, 38px) clamp(72px, 10vw, 190px) 34px;
+  padding: clamp(22px, calc(3 * var(--viewport-unit)), 38px) clamp(72px, 10vw, 190px) 34px;
 }
 
 .client-choice {
@@ -202,7 +202,7 @@
 
 .clients-preview-note {
   max-width: 76ch;
-  margin: clamp(46px, 7vh, 78px) auto 0;
+  margin: clamp(46px, calc(7 * var(--viewport-unit)), 78px) auto 0;
   color: var(--ink-soft);
   font-size: 0.78rem;
   line-height: 1.6;
@@ -210,7 +210,7 @@
 }
 
 .client-inline-details {
-  margin-top: clamp(54px, 8vh, 96px);
+  margin-top: clamp(54px, calc(8 * var(--viewport-unit)), 96px);
 }
 
 .android-inline-details {
@@ -252,7 +252,7 @@
 
 .vidaa-hero {
   max-width: 820px;
-  margin: 0 auto clamp(42px, 6vh, 72px);
+  margin: 0 auto clamp(42px, calc(6 * var(--viewport-unit)), 72px);
 }
 
 .vidaa-experimental {

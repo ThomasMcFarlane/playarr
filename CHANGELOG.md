@@ -180,6 +180,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Remove source archives and loose web bundles from the Clients catalogue so download actions are
   shown only for installable app packages, and consolidate iOS and Apple TV into one shared Apple
   client entry.
+- Match Android TV's 1920 by 1080 vertical spacing to Playarr Web even when its WebView resolves
+  viewport-height units to zero, and preserve the web app's initial route focus after loading.
+- Keep a restored library card and its captured native scroll position visible after returning
+  from a detail page, while yielding immediately to new remote, pointer, wheel, or touch input.
 - Keep directory preview animations from narrowing the shared media-copy width and wrapping titles
   differently from their detail pages.
 - Persist the focused audio or video choice when creating a playlist instead of allowing visual

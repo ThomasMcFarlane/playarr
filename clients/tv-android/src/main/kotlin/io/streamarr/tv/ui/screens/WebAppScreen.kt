@@ -323,7 +323,6 @@ private fun createPlayarrWebView(
         override fun onPageFinished(view: WebView, url: String?) {
             onLoadingChanged(false)
             view.syncTvViewport()
-            view.requestFocus()
             CookieManager.getInstance().flush()
         }
 
@@ -447,6 +446,10 @@ private fun WebView.syncTvViewport() {
             "width=$TV_LAYOUT_WIDTH_CSS_PX, height=$TV_LAYOUT_HEIGHT_CSS_PX, " +
             "initial-scale=$TV_LAYOUT_SCALE, minimum-scale=$TV_LAYOUT_SCALE, " +
             "maximum-scale=$TV_LAYOUT_SCALE, user-scalable=no";
+          document.documentElement.style.setProperty(
+            "--viewport-unit",
+            "${TV_LAYOUT_HEIGHT_CSS_PX / 100f}px"
+          );
           document.documentElement.style.setProperty(
             "--viewport-height",
             "${TV_LAYOUT_HEIGHT_CSS_PX}px"
