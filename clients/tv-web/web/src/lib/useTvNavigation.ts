@@ -5,6 +5,7 @@ import {
   shouldNavigateFromFormControl,
   type FormControlDescriptor,
 } from "./arrowNavigationPolicy";
+import { findClosestItemInNextTrack } from "./trackNavigation";
 
 const FOCUSABLE_SELECTOR = [
   "a[href]",
@@ -148,6 +149,43 @@ function focusWithinScrollContainer(
   return true;
 }
 
+function closestItemInAdjacentTrack(
+  current: HTMLElement,
+  direction: Direction,
+  nodes: HTMLElement[]
+): HTMLElement | undefined {
+  if (direction !== "up" && direction !== "down") return undefined;
+
+  const currentTrack = current.closest<HTMLElement>(".tv-media-track");
+  const surface = currentTrack?.parentElement;
+  if (!currentTrack || !surface?.matches(".tv-rail-surface.is-vertical-tracks")) {
+    return undefined;
+  }
+
+  const tracks = Array.from(surface.children).filter(
+    (child): child is HTMLElement =>
+      child instanceof HTMLElement && child.matches(".tv-media-track")
+  );
+  const currentTrackIndex = tracks.indexOf(currentTrack);
+  if (currentTrackIndex < 0) return undefined;
+
+  const itemsByTrack = tracks.map((track) =>
+    nodes
+      .filter((node) => track.contains(node))
+      .map((node) => ({
+        value: node,
+        centreX: centre(node.getBoundingClientRect()).x,
+      }))
+  );
+
+  return findClosestItemInNextTrack(
+    itemsByTrack,
+    currentTrackIndex,
+    centre(current.getBoundingClientRect()).x,
+    direction
+  );
+}
+
 function focusExplicitEdgeTarget(
   current: HTMLElement,
   direction: Direction
@@ -271,11 +309,19 @@ function moveFocus(direction: Direction): void {
 
   const currentRect = current.getBoundingClientRect();
   const candidates = nodes.filter((node) => !node.closest(".app-user-identity"));
-  const next = candidates
-    .filter((node) => node !== current && visibleOnPerpendicularAxis(node, direction))
-    .map((node) => ({ node, score: scoreCandidate(currentRect, node.getBoundingClientRect(), direction) }))
-    .filter((candidate): candidate is { node: HTMLElement; score: number } => candidate.score !== null)
-    .sort((a, b) => a.score - b.score)[0]?.node;
+  const next =
+    closestItemInAdjacentTrack(current, direction, candidates) ??
+    candidates
+      .filter((node) => node !== current && visibleOnPerpendicularAxis(node, direction))
+      .map((node) => ({
+        node,
+        score: scoreCandidate(currentRect, node.getBoundingClientRect(), direction),
+      }))
+      .filter(
+        (candidate): candidate is { node: HTMLElement; score: number } =>
+          candidate.score !== null
+      )
+      .sort((a, b) => a.score - b.score)[0]?.node;
 
   if (next) {
     const homeMove = Boolean(current.closest(".tv-home") || next.closest(".tv-home"));

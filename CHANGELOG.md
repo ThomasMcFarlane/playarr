@@ -124,6 +124,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   additional CMake-based provider.
 - Let ArrowUp and ArrowDown move remote/keyboard focus out of a text field on Playarr Web instead
   of getting stuck there, since those keys have no native effect in a single-line input.
+- Move vertical focus to the closest card in the next Playarr media track, even when shorter tracks
+  have no card directly above or below the current horizontal position.
 - Leave the hosted server field blank instead of pre-filling the previously selected address.
 - Connect directly from `playarr.app` to operator-entered HTTP or HTTPS IPs and domains, using
   Local Network Access for private addresses and the browser's explicit insecure-content
