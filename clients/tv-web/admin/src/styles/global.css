@@ -1177,6 +1177,34 @@ button {
   display: block;
 }
 
+.artwork-lazy-anchor {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.artwork-loading {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    105deg,
+    var(--color-bg-raised) 35%,
+    rgba(255, 255, 255, 0.08) 48%,
+    var(--color-bg-raised) 62%
+  );
+  background-size: 220% 100%;
+  animation: artwork-loading-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes artwork-loading-sweep {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
 .poster-placeholder {
   width: 100%;
   height: 100%;
@@ -1284,6 +1312,10 @@ button {
   background-position: center 20%;
 }
 
+.work-detail-hero-backdrop.artwork-loading {
+  opacity: 0.45;
+}
+
 .work-detail-hero-overlay {
   position: absolute;
   inset: 0;
@@ -1311,6 +1343,29 @@ button {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.work-detail-album-artwork {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--color-bg-raised);
+}
+
+.work-detail-album-artwork img,
+.work-detail-album-artwork .artwork-loading,
+.album-artwork-placeholder {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.album-artwork-placeholder {
+  background: linear-gradient(145deg, #333333, #202020);
 }
 
 .work-detail-info {

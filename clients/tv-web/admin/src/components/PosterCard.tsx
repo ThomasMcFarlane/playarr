@@ -1,7 +1,7 @@
 import { forwardRef } from "react";
 import { Link } from "react-router-dom";
 import type { Availability, Work, WorkKind } from "@streamarr-tv/api-client";
-import { pickImage } from "../lib/images";
+import { CachedWorkArtworkImage } from "./CachedArtwork";
 
 /** Streamarr's actual `WorkKind` values -- "Books" reads better than the literal "Author" for an operator. */
 export const KIND_LABELS: Record<WorkKind, string> = {
@@ -81,16 +81,18 @@ export const PosterCard = forwardRef<HTMLLIElement, { work: Work }>(function Pos
   { work },
   ref
 ) {
-  const posterUrl = pickImage(work.images, "poster");
   return (
     <li className="poster-card" ref={ref}>
       <Link to={`/library/${work.id}`} className="poster-card-link">
         <div className="poster-art">
-          {posterUrl ? (
-            <img src={posterUrl} alt="" loading="lazy" />
-          ) : (
-            <div className="poster-placeholder">{work.title}</div>
-          )}
+          <CachedWorkArtworkImage
+            work={work}
+            kinds={["poster", "backdrop"]}
+            alt=""
+            loading="lazy"
+            loadingFallback={<div className="artwork-loading" aria-hidden="true" />}
+            fallback={<div className="poster-placeholder">{work.title}</div>}
+          />
         </div>
         <div className={`poster-status-strip ${statusStripClass(work.availability)}`} />
         <span className="poster-title">{work.title}</span>

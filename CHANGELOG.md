@@ -117,6 +117,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Load authenticated, cached work and album artwork throughout Streamarr Admin, including music,
+  with visible loading placeholders and graceful missing-artwork fallbacks.
 - Refresh access tokens centrally before authenticated media requests and keep playback buffered
   through the existing stream retry window instead of failing when a short-lived token expires.
 - Inset visualiser bars over the full-cover gradient in Cover Flow and the mini-player, and keep

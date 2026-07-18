@@ -10,8 +10,12 @@ import {
 } from "@streamarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
-import { pickImage } from "../lib/images";
 import { KIND_LABELS } from "../components/PosterCard";
+import {
+  CachedAlbumArtworkImage,
+  CachedWorkArtworkImage,
+  useCachedWorkArtwork,
+} from "../components/CachedArtwork";
 
 function availabilityLabel(availability: Availability): string {
   switch (availability) {
@@ -46,6 +50,21 @@ function formatRuntime(ms: number | null | undefined): string | null {
   const hours = Math.floor(minutes / 60);
   const remaining = minutes % 60;
   return hours > 0 ? `${hours}h ${remaining}m` : `${remaining}m`;
+}
+
+function WorkDetailBackdrop({ work }: { work: WorkDetailDto["work"] }) {
+  const backdrop = useCachedWorkArtwork(work, ["backdrop", "poster"]);
+  if (backdrop.url) {
+    return (
+      <div
+        className="work-detail-hero-backdrop"
+        style={{ backgroundImage: `url(${backdrop.url})` }}
+      />
+    );
+  }
+  return backdrop.loading ? (
+    <div className="work-detail-hero-backdrop artwork-loading" />
+  ) : null;
 }
 
 /**
@@ -101,8 +120,6 @@ export function WorkDetailPage() {
   }
 
   const { work } = detail;
-  const posterUrl = pickImage(work.images, "poster");
-  const backdropUrl = pickImage(work.images, "backdrop");
   const releaseDate = formatDate(work.release_date);
   const year = formatYear(work.release_date) ?? String(new Date(work.added_at).getFullYear());
   const runtime = formatRuntime(detail.runtime_ms);
@@ -110,17 +127,17 @@ export function WorkDetailPage() {
   return (
     <div className="page work-detail-page">
       <div className="work-detail-hero">
-        {backdropUrl && (
-          <div className="work-detail-hero-backdrop" style={{ backgroundImage: `url(${backdropUrl})` }} />
-        )}
+        <WorkDetailBackdrop work={work} />
         <div className="work-detail-hero-overlay" />
         <div className="work-detail-hero-content">
           <div className="work-detail-poster">
-            {posterUrl ? (
-              <img src={posterUrl} alt="" />
-            ) : (
-              <div className="poster-placeholder">{work.title}</div>
-            )}
+            <CachedWorkArtworkImage
+              work={work}
+              kinds={["poster", "backdrop"]}
+              alt=""
+              loadingFallback={<div className="artwork-loading" aria-hidden="true" />}
+              fallback={<div className="poster-placeholder">{work.title}</div>}
+            />
           </div>
           <div className="work-detail-info">
             <h1 className="work-detail-title">{work.title}</h1>
@@ -174,12 +191,14 @@ function allAvailable(availabilities: Availability[]): boolean {
 
 function AccordionRow({
   title,
+  artwork,
   availableCount,
   totalCount,
   isFullyAvailable,
   children,
 }: {
   title: string;
+  artwork?: React.ReactNode;
   availableCount: number;
   totalCount: number;
   isFullyAvailable: boolean;
@@ -194,6 +213,7 @@ function AccordionRow({
         onClick={() => setExpanded((e) => !e)}
         aria-expanded={expanded}
       >
+        {artwork}
         <span className="work-detail-accordion-title">{title}</span>
         <span className={`badge badge-pill ${isFullyAvailable ? "badge-success" : "badge-neutral"}`}>
           {availableCount} / {totalCount}
@@ -271,6 +291,19 @@ function WorkChildrenSection({ detail }: { detail: WorkDetailDto }) {
             <AccordionRow
               key={album.album.id}
               title={album.album.title}
+              artwork={
+                <span className="work-detail-album-artwork">
+                  <CachedAlbumArtworkImage
+                    artistWorkId={detail.work.id}
+                    album={album.album}
+                    kinds={["poster", "backdrop"]}
+                    alt=""
+                    loading="lazy"
+                    loadingFallback={<span className="artwork-loading" aria-hidden="true" />}
+                    fallback={<span className="album-artwork-placeholder" aria-hidden="true" />}
+                  />
+                </span>
+              }
               availableCount={availabilities.filter((a) => a === "available").length}
               totalCount={availabilities.length}
               isFullyAvailable={allAvailable(availabilities)}

@@ -1,6 +1,0 @@
-import type { ImageAsset, ImageKind } from "@streamarr-tv/api-client";
-
-/** Picks the URL of the first image of a given kind off a real `Work`. */
-export function pickImage(images: ImageAsset[], kind: ImageKind): string | undefined {
-  return images.find((image) => image.kind === kind)?.url;
-}
