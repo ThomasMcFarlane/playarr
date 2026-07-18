@@ -756,8 +756,6 @@ export const ja: Translations = {
     "対応するDNSまたはインターセプト設定と組み合わせることで、ホスト型カスタムストアからPlayarrランチャータイルを追加できます。",
   "pages.clients.android.name": "Android",
   "pages.clients.android.platform": "スマートフォン、タブレット、テレビ",
-  "pages.clients.fireTv.name": "Fire TV",
-  "pages.clients.fireTv.platform": "Amazon Fire TV",
   "pages.clients.roku.name": "Roku TV",
   "pages.clients.roku.platform": "Rokuテレビ",
   "pages.clients.androidMobile.name": "Android Mobile",

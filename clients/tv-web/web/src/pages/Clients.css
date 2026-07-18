@@ -125,18 +125,6 @@
   color: #3ddc84;
 }
 
-.client-choice.is-fire-tv .client-platform-icon {
-  color: #ff9900;
-}
-
-.client-choice.is-fire-tv .client-platform-icon svg {
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.45;
-}
-
 .client-choice.is-apple .client-platform-icon {
   color: var(--ink);
 }

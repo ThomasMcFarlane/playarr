@@ -760,8 +760,6 @@ export const th: Translations = {
     "สโตร์แบบกำหนดเองที่โฮสต์ไว้สามารถเพิ่มไทล์ตัวเรียก Playarr ได้เมื่อใช้ร่วมกับ DNS หรือระบบดักรับที่รองรับ",
   "pages.clients.android.name": "Android",
   "pages.clients.android.platform": "โทรศัพท์ แท็บเล็ต และทีวี",
-  "pages.clients.fireTv.name": "Fire TV",
-  "pages.clients.fireTv.platform": "Amazon Fire TV",
   "pages.clients.roku.name": "Roku TV",
   "pages.clients.roku.platform": "ทีวี Roku",
   "pages.clients.androidMobile.name": "Android Mobile",
