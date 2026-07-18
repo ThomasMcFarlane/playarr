@@ -4350,18 +4350,20 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, var(--surface) 0%, transparent 23%, transparent 52%, var(--surface) 79%),
-    linear-gradient(0deg, var(--surface) 0%, transparent 20%, transparent 82%, var(--surface) 100%);
+    linear-gradient(90deg, var(--surface) 0%, transparent 22%, transparent 100%),
+    linear-gradient(0deg, var(--surface) 0%, transparent 22%, transparent 82%, var(--surface) 100%);
 }
 
 .tv-key-art img {
-  width: 64%;
-  height: 112%;
-  margin-left: 7%;
+  width: 52%;
+  height: 106%;
+  margin-left: 0;
   object-fit: cover;
   object-position: center 20%;
   filter: grayscale(1) contrast(0.88) brightness(1.1);
-  opacity: 0.58;
+  opacity: 0.4;
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 72%, transparent 100%);
+  mask-image: linear-gradient(90deg, #000 0%, #000 72%, transparent 100%);
   transform: scale(1.04);
 }
 
@@ -4388,8 +4390,8 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   z-index: 1;
   pointer-events: none;
   background:
-    linear-gradient(90deg, color-mix(in srgb, var(--surface) 90%, transparent) 0%, transparent 38%),
-    linear-gradient(270deg, color-mix(in srgb, var(--surface) 76%, transparent) 0%, transparent 48%);
+    linear-gradient(90deg, color-mix(in srgb, var(--surface) 94%, transparent) 0%, transparent 31%),
+    linear-gradient(270deg, color-mix(in srgb, var(--surface) 50%, transparent) 0%, transparent 34%);
 }
 
 .tv-title-panel {
@@ -5181,25 +5183,6 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   letter-spacing: 0.035em;
   line-height: 1;
   text-transform: none;
-}
-
-.tv-directory .tv-key-art img {
-  width: 52%;
-  height: 106%;
-  margin-left: 4%;
-  opacity: 0.4;
-}
-
-.tv-directory .tv-key-art::after {
-  background:
-    linear-gradient(90deg, var(--surface) 0%, transparent 22%, transparent 42%, var(--surface) 68%),
-    linear-gradient(0deg, var(--surface) 0%, transparent 22%, transparent 82%, var(--surface) 100%);
-}
-
-.tv-directory .tv-stage-wash {
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--surface) 94%, transparent) 0%, transparent 31%),
-    linear-gradient(270deg, color-mix(in srgb, var(--surface) 50%, transparent) 0%, transparent 34%);
 }
 
 .tv-library-heading {
@@ -6051,26 +6034,6 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   color: var(--ink);
 }
 
-.tv-home .tv-key-art img {
-  width: 64%;
-  height: 112%;
-  margin-left: 7%;
-  object-position: center 24%;
-  opacity: 0.48;
-}
-
-.tv-home .tv-key-art::after {
-  background:
-    linear-gradient(90deg, var(--surface) 0%, color-mix(in srgb, var(--surface) 88%, transparent) 24%, transparent 58%, var(--surface) 100%),
-    linear-gradient(0deg, var(--surface) 0%, transparent 20%, transparent 79%, var(--surface) 100%);
-}
-
-.tv-home .tv-stage-wash {
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--surface) 96%, transparent) 0%, transparent 43%),
-    linear-gradient(0deg, color-mix(in srgb, var(--surface) 90%, transparent) 0%, transparent 45%);
-}
-
 .tv-home-feature {
   z-index: 8;
   animation: tv-copy-in 520ms 80ms cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -6844,26 +6807,6 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   margin-top: 0.16rem;
   color: var(--ink-muted);
   font-size: clamp(0.4rem, 0.45vw, 0.55rem);
-}
-
-.tv-detail .tv-key-art img {
-  width: 74%;
-  height: 110%;
-  margin-left: 4%;
-  object-position: center 28%;
-  opacity: 0.52;
-}
-
-.tv-detail .tv-key-art::after {
-  background:
-    linear-gradient(90deg, var(--surface) 0%, color-mix(in srgb, var(--surface) 85%, transparent) 25%, transparent 58%, var(--surface) 100%),
-    linear-gradient(0deg, var(--surface) 0%, transparent 20%, transparent 82%, var(--surface) 100%);
-}
-
-.tv-detail .tv-stage-wash {
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--surface) 96%, transparent) 0%, color-mix(in srgb, var(--surface) 80%, transparent) 24%, transparent 54%),
-    linear-gradient(270deg, color-mix(in srgb, var(--surface) 48%, transparent) 0%, transparent 38%);
 }
 
 .tv-detail .tv-back {
@@ -7708,37 +7651,6 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   min-height: 620px;
   overflow: hidden;
   background: var(--surface);
-}
-
-.tv-search .tv-key-art img {
-  width: 72%;
-  height: 108%;
-  margin-left: 0;
-  object-position: left center;
-  opacity: 0.42;
-}
-
-.tv-search .tv-key-art::after {
-  background:
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--surface) 98%, transparent) 0%,
-      color-mix(in srgb, var(--surface) 66%, transparent) 30%,
-      transparent 56%,
-      var(--surface) 82%
-    ),
-    linear-gradient(0deg, var(--surface) 0%, transparent 24%, transparent 80%, var(--surface) 100%);
-}
-
-.tv-search .tv-stage-wash {
-  background:
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--surface) 96%, transparent) 0%,
-      color-mix(in srgb, var(--surface) 72%, transparent) 30%,
-      transparent 58%
-    ),
-    linear-gradient(270deg, color-mix(in srgb, var(--surface) 52%, transparent) 0%, transparent 36%);
 }
 
 .tv-search-copy {
