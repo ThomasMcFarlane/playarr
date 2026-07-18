@@ -189,6 +189,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Restore visible native iOS Home rails in dark mode, match Playarr Web's on-deck and recent
+  catalogue grouping, and constrain mobile artwork and carousels to the web layout proportions.
 - Persist native iOS sessions in app-scoped simulator storage when running an unsigned build,
   while keeping physical-device tokens exclusively in Keychain and surfacing useful Security
   status details if device persistence fails.
