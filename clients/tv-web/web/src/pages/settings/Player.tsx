@@ -4,6 +4,12 @@ import { usePrimaryApiClient } from "../../lib/ApiClientProvider";
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useToast } from "../../lib/toast";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
+import {
+  PLAYER_QUALITY_DEFAULTS,
+  readPlayerDefaults,
+  writePlayerDefaults,
+  type PlayerDefaults,
+} from "../../lib/playerDefaults";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
 
 const AUDIO_LANGUAGE_OPTIONS = [
@@ -40,6 +46,7 @@ export function SettingsPlayerPage() {
   const client = usePrimaryApiClient();
   const { showToast } = useToast();
   const [audioLanguage, setAudioLanguage] = useState<AudioLanguage>("en");
+  const [playerDefaults, setPlayerDefaults] = useState<PlayerDefaults>(readPlayerDefaults);
   const [playerPreferenceState, setPlayerPreferenceState] = useState<PlayerPreferenceState>({
     status: "loading",
   });
@@ -101,6 +108,13 @@ export function SettingsPlayerPage() {
     }
   }
 
+  function updatePlayerDefaults(update: Partial<PlayerDefaults>) {
+    const nextDefaults = { ...playerDefaults, ...update };
+    writePlayerDefaults(nextDefaults);
+    setPlayerDefaults(nextDefaults);
+    showToast(t("settings.playerPreferences.toastDefaultsSaved"));
+  }
+
   const selectedAudioLanguage =
     AUDIO_LANGUAGE_OPTIONS.find((option) => option.value === audioLanguage)?.label ?? "English";
 
@@ -111,47 +125,144 @@ export function SettingsPlayerPage() {
       description={t("settings.playerPreferences.description")}
     >
       <section className="card settings-card settings-card-wide">
-        <div
-          className="player-language-choice"
-          role="radiogroup"
-          aria-label={t("settings.playerPreferences.audioLanguageAriaLabel")}
-          aria-busy={
-            playerPreferenceState.status === "loading" ||
-            playerPreferenceState.status === "saving"
-          }
-        >
-          {AUDIO_LANGUAGE_OPTIONS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              role="radio"
-              className={`player-language-button${
-                audioLanguage === option.value ? " is-active" : ""
-              }`}
-              aria-checked={audioLanguage === option.value}
-              onClick={() => void handleAudioLanguageChange(option.value)}
-            >
-              <span>{option.label}</span>
-              <small>{option.value}</small>
-            </button>
-          ))}
+        <div className="player-default-group">
+          <div className="player-default-heading">
+            <h3>{t("settings.playerPreferences.qualityTitle")}</h3>
+            <p>{t("settings.playerPreferences.qualityDescription")}</p>
+          </div>
+          <div
+            className="player-default-choice"
+            role="radiogroup"
+            aria-label={t("settings.playerPreferences.qualityAriaLabel")}
+          >
+            {PLAYER_QUALITY_DEFAULTS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                role="radio"
+                className={`player-default-button${
+                  playerDefaults.qualityId === option.id ? " is-active" : ""
+                }`}
+                aria-checked={playerDefaults.qualityId === option.id}
+                onClick={() => updatePlayerDefaults({ qualityId: option.id })}
+              >
+                <span>{option.label}</span>
+                <small>{option.detail}</small>
+              </button>
+            ))}
+          </div>
         </div>
 
-        <p
-          className={`player-preference-status${
-            playerPreferenceState.status === "error" ? " is-error" : ""
-          }`}
-          aria-live="polite"
-        >
-          {playerPreferenceState.status === "loading"
-            ? t("settings.playerPreferences.statusLoading")
-            : playerPreferenceState.status === "saving"
-              ? t("settings.playerPreferences.statusSaving", { language: selectedAudioLanguage })
-              : playerPreferenceState.status === "error"
-                ? t("settings.playerPreferences.statusError", {
-                    message: playerPreferenceState.message,
+        <div className="player-default-group">
+          <div className="player-default-heading">
+            <h3>{t("settings.playerPreferences.subtitlesTitle")}</h3>
+            <p>{t("settings.playerPreferences.subtitlesDescription")}</p>
+          </div>
+          <div
+            className="player-default-choice"
+            role="radiogroup"
+            aria-label={t("settings.playerPreferences.subtitlesAriaLabel")}
+          >
+            {([
+              ["off", t("settings.playerPreferences.subtitlesOff")],
+              ["forced", t("settings.playerPreferences.subtitlesForced")],
+              ["always", t("settings.playerPreferences.subtitlesAlways")],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                className={`player-default-button${
+                  playerDefaults.subtitleMode === value ? " is-active" : ""
+                }`}
+                aria-checked={playerDefaults.subtitleMode === value}
+                onClick={() => updatePlayerDefaults({ subtitleMode: value })}
+              >
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
+
+          {playerDefaults.subtitleMode !== "off" && (
+            <div
+              className="player-language-choice player-subtitle-language-choice"
+              role="radiogroup"
+              aria-label={t("settings.playerPreferences.subtitleLanguageAriaLabel")}
+            >
+              {AUDIO_LANGUAGE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="radio"
+                  className={`player-language-button${
+                    playerDefaults.subtitleLanguage === option.value ? " is-active" : ""
+                  }`}
+                  aria-checked={playerDefaults.subtitleLanguage === option.value}
+                  onClick={() => updatePlayerDefaults({ subtitleLanguage: option.value })}
+                >
+                  <span>{option.label}</span>
+                  <small>{option.value}</small>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="player-default-group">
+          <div className="player-default-heading">
+            <h3>{t("settings.playerPreferences.audioTitle")}</h3>
+            <p>{t("settings.playerPreferences.audioDescription")}</p>
+          </div>
+          <div
+            className="player-language-choice"
+            role="radiogroup"
+            aria-label={t("settings.playerPreferences.audioLanguageAriaLabel")}
+            aria-busy={
+              playerPreferenceState.status === "loading" ||
+              playerPreferenceState.status === "saving"
+            }
+          >
+            {AUDIO_LANGUAGE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                className={`player-language-button${
+                  audioLanguage === option.value ? " is-active" : ""
+                }`}
+                aria-checked={audioLanguage === option.value}
+                onClick={() => void handleAudioLanguageChange(option.value)}
+              >
+                <span>{option.label}</span>
+                <small>{option.value}</small>
+              </button>
+            ))}
+          </div>
+
+          <p
+            className={`player-preference-status${
+              playerPreferenceState.status === "error" ? " is-error" : ""
+            }`}
+            aria-live="polite"
+          >
+            {playerPreferenceState.status === "loading"
+              ? t("settings.playerPreferences.statusLoading")
+              : playerPreferenceState.status === "saving"
+                ? t("settings.playerPreferences.statusSaving", {
+                    language: selectedAudioLanguage,
                   })
-                : t("settings.playerPreferences.statusReady", { language: selectedAudioLanguage })}
+                : playerPreferenceState.status === "error"
+                  ? t("settings.playerPreferences.statusError", {
+                      message: playerPreferenceState.message,
+                    })
+                  : t("settings.playerPreferences.statusReady", {
+                      language: selectedAudioLanguage,
+                    })}
+          </p>
+        </div>
+
+        <p className="player-default-device-note">
+          {t("settings.playerPreferences.deviceNote")}
         </p>
       </section>
     </SettingsSectionLayout>

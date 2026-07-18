@@ -25,6 +25,10 @@ import type {
 } from "@streamarr-tv/player-core";
 import { useServerAccessToken, useServerClient } from "./ApiClientProvider";
 import { WEB_PLAYBACK_CAPABILITIES } from "./playbackCapabilities";
+import {
+  readPlayerDefaults,
+  selectDefaultSubtitleTrackId,
+} from "./playerDefaults";
 
 const initialNegotiations = new WeakMap<
   ApiClient,
@@ -211,6 +215,7 @@ export function usePlaybackEngine(
 ): PlaybackEngineController {
   const client = useServerClient(serverUrl);
   const getAccessToken = useServerAccessToken(serverUrl);
+  const playerDefaults = useMemo(() => readPlayerDefaults(), [mediaFileId]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const engineRef = useRef<ShakaPlaybackEngine | null>(null);
   const loadedForUrl = useRef<string | null>(null);
@@ -279,16 +284,15 @@ export function usePlaybackEngine(
     sourceSubtitleOptionsRef.current = new Map(
       info.subtitle_tracks.map((track) => [track.id, track])
     );
-    if (
-      preferredSourceSubtitleTrackIdRef.current === null &&
-      info.selected_subtitle_track_id
-    ) {
-      preferredSourceSubtitleTrackIdRef.current = info.selected_subtitle_track_id;
+    if (preferredSourceSubtitleTrackIdRef.current === null) {
+      preferredSourceSubtitleTrackIdRef.current =
+        info.selected_subtitle_track_id ??
+        selectDefaultSubtitleTrackId(info.subtitle_tracks, playerDefaults);
     }
     setSourceAudioTracks(sourceAudioTracksFromInfo(info));
     setSelectedSourceAudioTrackId(info.selected_audio_track_id ?? null);
     setSourceSubtitleTracks(sourceSubtitleTracksFromInfo(info));
-  }, [clearSourceSubtitleBlobs]);
+  }, [clearSourceSubtitleBlobs, playerDefaults]);
 
   const loadSourceSubtitleTrack = useCallback(
     async (trackId: string, selectionRequestId: number): Promise<boolean> => {
@@ -394,6 +398,7 @@ export function usePlaybackEngine(
   );
 
   useEffect(() => {
+    const preferredQualityId = initialSettings?.qualityId ?? playerDefaults.qualityId;
     loadedForUrl.current = null;
     lastProgressWriteAtRef.current = 0;
     previousPlaybackStateRef.current = IDLE_ENGINE_STATE.state;
@@ -403,10 +408,10 @@ export function usePlaybackEngine(
     pendingQualitySwitchRef.current = null;
     negotiationRequestRef.current = {
       ...WEB_PLAYBACK_CAPABILITIES,
-      ...(initialSettings?.qualityId && initialSettings.qualityId !== "original"
+      ...(preferredQualityId !== "original"
         ? {
-            profile: initialSettings.profile ?? initialSettings.qualityId,
-            forceTranscode: initialSettings.forceTranscode,
+            profile: initialSettings?.profile ?? preferredQualityId,
+            forceTranscode: initialSettings?.forceTranscode ?? true,
           }
         : {}),
       ...(initialSettings?.audioStreamIndex !== null &&
@@ -423,7 +428,7 @@ export function usePlaybackEngine(
     preferredSourceSubtitleTrackIdRef.current =
       initialSettings?.subtitleTrackId ?? null;
     setQualityOptions([]);
-    setActiveQualityId(initialSettings?.qualityId ?? "original");
+    setActiveQualityId(preferredQualityId);
     setQualitySwitching(false);
     setQualityError(undefined);
     setSourceAudioTracks([]);
@@ -444,6 +449,7 @@ export function usePlaybackEngine(
     initialSettings?.qualityId,
     initialSettings?.subtitleTrackId,
     mediaFileId,
+    playerDefaults.qualityId,
   ]);
 
   useEffect(

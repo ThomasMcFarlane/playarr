@@ -29,7 +29,6 @@ import { SettingsPlayerPage } from "./pages/settings/Player";
 import { SettingsServerPage } from "./pages/settings/Server";
 import { SettingsProfileLockPage } from "./pages/settings/ProfileLock";
 import { SettingsInvitePage } from "./pages/settings/Invite";
-import { SettingsAccountPage } from "./pages/settings/Account";
 import { LoginPage } from "./pages/Login";
 import { SignupPage } from "./pages/Signup";
 import { DeviceLinkPage } from "./pages/DeviceLink";
@@ -556,13 +555,13 @@ export function App() {
         <Route path="/playlists/:workId" element={<WorkDetailPage />} />
         <Route path="/player/:mediaFileId" element={null} />
         <Route path="/settings" element={<SettingsIndexPage />}>
+          <Route index element={<SettingsAppearancePage />} />
           <Route path="appearance" element={<SettingsAppearancePage />} />
           <Route path="language" element={<SettingsLanguagePage />} />
           <Route path="player" element={<SettingsPlayerPage />} />
           <Route path="server" element={<SettingsServerPage />} />
           <Route path="profile-lock" element={<SettingsProfileLockPage />} />
           <Route path="invite" element={<SettingsInvitePage />} />
-          <Route path="account" element={<SettingsAccountPage />} />
         </Route>
       </Route>
     </Routes>

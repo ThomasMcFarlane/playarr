@@ -62,6 +62,14 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   remote-friendly Right-to-open and Left-to-close navigation.
 - Align the Settings back control and page title with the shared television stage used by
   library pages.
+- Keep Settings in a permanent split view with Appearance open by default, a narrower option
+  list, directional focus movement between panes, active-section headings in the shared page
+  header, live Up/Down section selection, Enter/Right detail activation, and unboxed left
+  navigation that stays clear of the signed-in profile.
+- Add working default quality, subtitle mode and subtitle language controls under Player while
+  retaining the profile's preferred default audio language.
+- Move each Settings section title and help text into the shared top-left heading, remove the
+  repeated in-panel intro, and remove the redundant Account page now sign-out lives on Profiles.
 - Use the profile switcher as Playarr's signed-out landing page, animate sign-in fields into its
   centred visual treatment, and give invitation sign-up the same design without back navigation.
 - Localise Playarr Web in English, Thai, and Japanese, with system-language detection and a

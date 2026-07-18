@@ -23,6 +23,10 @@ import { useToast } from "../lib/toast";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
 import {
+  readPlayerDefaults,
+  selectDefaultSubtitleTrackId,
+} from "../lib/playerDefaults";
+import {
   isNavigationLayerRestoring,
   navigationOriginFromState,
   useNavigationLayer,
@@ -116,8 +120,13 @@ function resolvePlaybackLaunchSettings(
 ): PlaybackLaunchSettings | null {
   if (!options) return null;
   const { preferences } = options;
+  const playerDefaults = readPlayerDefaults();
+  const preferredQualityId =
+    preferences.quality_id === "original"
+      ? playerDefaults.qualityId
+      : preferences.quality_id;
   const quality = options.quality_options.find(
-    (option) => option.id === preferences.quality_id
+    (option) => option.id === preferredQualityId
   );
   const audio = options.audio_tracks.find(
     (track) => track.id === preferences.audio_track_id
@@ -128,7 +137,9 @@ function resolvePlaybackLaunchSettings(
     forceTranscode: Boolean(quality && quality.id !== "original"),
     audioTrackId: audio?.id ?? null,
     audioStreamIndex: audio?.stream_index ?? null,
-    subtitleTrackId: preferences.subtitle_track_id ?? null,
+    subtitleTrackId:
+      preferences.subtitle_track_id ??
+      selectDefaultSubtitleTrackId(options.subtitle_tracks, playerDefaults),
   };
 }
 

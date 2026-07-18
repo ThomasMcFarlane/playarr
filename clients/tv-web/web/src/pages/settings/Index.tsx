@@ -1,5 +1,4 @@
 import {
-  useEffect,
   useRef,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -41,13 +40,13 @@ function buildSettingsSections(t: TFunction): readonly SettingsSection[] {
       to: "/settings/language",
       number: "02",
       title: t("settings.index.language.title"),
-      description: t("settings.index.language.description"),
+      description: t("settings.language.description"),
     },
     {
       to: "/settings/player",
       number: "03",
       title: t("settings.index.player.title"),
-      description: t("settings.index.player.description"),
+      description: t("settings.playerPreferences.description"),
     },
     {
       to: "/settings/server",
@@ -67,12 +66,6 @@ function buildSettingsSections(t: TFunction): readonly SettingsSection[] {
       title: t("settings.index.invite.title"),
       description: t("settings.index.invite.description"),
     },
-    {
-      to: "/settings/account",
-      number: "07",
-      title: t("settings.index.account.title"),
-      description: t("settings.index.account.description"),
-    },
   ] as const;
 }
 
@@ -84,12 +77,22 @@ function keepsHorizontalArrows(target: EventTarget | null): boolean {
   );
 }
 
-export function shouldCloseSettingsDetailOnLeft(
+export function shouldReturnSettingsFocusToList(
   key: string,
   keepsNativeArrow: boolean,
   hasControlToLeft: boolean
 ): boolean {
   return key === "ArrowLeft" && !keepsNativeArrow && !hasControlToLeft;
+}
+
+export function adjacentSettingsIndex(
+  key: string,
+  currentIndex: number,
+  sectionCount: number
+): number | null {
+  if (key !== "ArrowUp" && key !== "ArrowDown") return null;
+  const nextIndex = currentIndex + (key === "ArrowDown" ? 1 : -1);
+  return nextIndex >= 0 && nextIndex < sectionCount ? nextIndex : null;
 }
 
 function hasFocusableControlToLeft(
@@ -121,9 +124,9 @@ function hasFocusableControlToLeft(
 }
 
 /**
- * Persistent settings master/detail shell. The route outlet changes inside
- * the right panel while the option list remains mounted, allowing the track
- * to slide left and focus to return to the exact option that opened it.
+ * Persistent settings master/detail shell. Appearance is the index route,
+ * so both panes are always present; Left and Right move focus between them
+ * while selecting another list item replaces the detail route in place.
  */
 export function SettingsIndexPage() {
   const { t } = useLanguage();
@@ -131,27 +134,17 @@ export function SettingsIndexPage() {
   const navigate = useNavigate();
   const navigationLayer = useNavigationLayer("settings:index");
   const settingsSections = buildSettingsSections(t);
-  const activeSection = settingsSections.find(
-    (section) => section.to === location.pathname
-  );
+  const activeSection =
+    settingsSections.find((section) => section.to === location.pathname) ??
+    settingsSections[0]!;
   const detailOrigin = navigationOriginFromState(location.state);
   const requestedBackTo = (location.state as { backTo?: unknown } | null)?.backTo;
   const pageBackTo = typeof requestedBackTo === "string" ? requestedBackTo : "/";
   const detailPanelRef = useRef<HTMLElement>(null);
-  useDocumentTitle(t("settings.index.documentTitle"), !activeSection);
-
-  function closeDetail() {
-    if (detailOrigin?.route === "/settings") {
-      navigate(-1);
-    } else {
-      navigate("/settings");
-    }
-  }
+  useDocumentTitle(t("settings.index.documentTitle"), false);
 
   function leaveSettings() {
-    if (activeSection) {
-      closeDetail();
-    } else if (detailOrigin) {
+    if (detailOrigin && detailOrigin.route !== "/settings") {
       navigate(-1);
     } else {
       navigate(pageBackTo);
@@ -161,29 +154,64 @@ export function SettingsIndexPage() {
   function openSection(
     section: SettingsSection,
     target: HTMLElement,
-    replace: boolean
+    moveToDetail = false
   ) {
-    const navigationOrigin = activeSection
-      ? detailOrigin ?? undefined
-      : navigationLayer.capture(target);
+    const navigationOrigin =
+      detailOrigin ?? navigationLayer.capture(target);
     navigate(section.to, {
-      replace,
+      replace: true,
       state: { backTo: "/settings", navigationOrigin },
     });
+    if (moveToDetail) window.requestAnimationFrame(focusDetail);
+  }
+
+  function focusDetail() {
+    detailPanelRef.current
+      ?.querySelector<HTMLElement>(DETAIL_FOCUSABLE_SELECTOR)
+      ?.focus({ preventScroll: true });
   }
 
   function handleOptionKeyDown(
     event: ReactKeyboardEvent<HTMLAnchorElement>,
     section: SettingsSection
   ) {
+    if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      const currentIndex = settingsSections.findIndex((item) => item.to === section.to);
+      const nextIndex = adjacentSettingsIndex(
+        event.key,
+        currentIndex,
+        settingsSections.length
+      );
+      const nextSection = nextIndex === null ? undefined : settingsSections[nextIndex];
+      if (!nextSection) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openSection(nextSection, event.currentTarget);
+      window.requestAnimationFrame(() => {
+        document
+          .querySelector<HTMLElement>(
+            `[data-navigation-focus-key="settings:${nextSection.number}"]`
+          )
+          ?.focus({ preventScroll: true });
+      });
+      return;
+    }
+
     if (event.key !== "ArrowRight") return;
     event.preventDefault();
     event.stopPropagation();
-    openSection(section, event.currentTarget, Boolean(activeSection));
+    if (section.to === activeSection.to) focusDetail();
+    else openSection(section, event.currentTarget, true);
   }
 
-  function handleOptionClick(event: ReactMouseEvent<HTMLAnchorElement>) {
-    if (!activeSection) navigationLayer.capture(event.currentTarget);
+  function handleOptionClick(
+    event: ReactMouseEvent<HTMLAnchorElement>,
+    section: SettingsSection
+  ) {
+    event.preventDefault();
+    if (!detailOrigin) navigationLayer.capture(event.currentTarget);
+    if (section.to === activeSection.to) focusDetail();
+    else openSection(section, event.currentTarget, true);
   }
 
   function handleDetailKeyDown(event: ReactKeyboardEvent<HTMLElement>) {
@@ -193,7 +221,7 @@ export function SettingsIndexPage() {
       hasFocusableControlToLeft(detailPanelRef.current, event.target)
     );
     if (
-      !shouldCloseSettingsDetailOnLeft(
+      !shouldReturnSettingsFocusToList(
         event.key,
         keepsHorizontalArrows(event.target),
         hasControlToLeft
@@ -203,24 +231,14 @@ export function SettingsIndexPage() {
     }
     event.preventDefault();
     event.stopPropagation();
-    closeDetail();
+    document
+      .querySelector<HTMLElement>("#settings-active-option")
+      ?.focus({ preventScroll: true });
   }
-
-  useEffect(() => {
-    if (!activeSection) return;
-    const frame = window.requestAnimationFrame(() => {
-      detailPanelRef.current
-        ?.querySelector<HTMLElement>(DETAIL_FOCUSABLE_SELECTOR)
-        ?.focus({ preventScroll: true });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [activeSection?.to]);
 
   return (
     <TvStageShell
-      className={`tv-library tv-directory settings-page settings-workspace-page${
-        activeSection ? " is-detail-open" : ""
-      }`}
+      className="tv-library tv-directory settings-page settings-workspace-page"
       ariaLabel={t("settings.index.sectionsAriaLabel")}
     >
       <header className="tv-library-heading">
@@ -234,6 +252,10 @@ export function SettingsIndexPage() {
           <span aria-hidden="true">←</span>
         </button>
         <h1>{t("settings.index.title")}</h1>
+        <span className="settings-heading-detail">
+          <strong>{activeSection.title}</strong>
+          <small>{activeSection.description}</small>
+        </span>
       </header>
 
       <div className="settings-workspace">
@@ -253,16 +275,14 @@ export function SettingsIndexPage() {
                     <Link
                       id={isActive ? "settings-active-option" : undefined}
                       to={section.to}
-                      replace={Boolean(activeSection)}
+                      replace
                       className={`settings-option${isActive ? " is-active" : ""}`}
                       state={{
                         backTo: "/settings",
-                        navigationOrigin: activeSection
-                          ? detailOrigin ?? undefined
-                          : navigationLayer.origin,
+                        navigationOrigin: detailOrigin ?? navigationLayer.origin,
                       }}
                       aria-current={isActive ? "page" : undefined}
-                      onClick={handleOptionClick}
+                      onClick={(event) => handleOptionClick(event, section)}
                       onKeyDown={(event) => handleOptionKeyDown(event, section)}
                       data-navigation-focus-key={`settings:${section.number}`}
                     >
@@ -285,19 +305,16 @@ export function SettingsIndexPage() {
             ref={detailPanelRef}
             className="settings-detail-panel"
             aria-label={activeSection?.title}
-            aria-hidden={activeSection ? undefined : true}
             onKeyDownCapture={handleDetailKeyDown}
           >
-            {activeSection && (
-              <div
-                className="settings-detail-scroll"
-                data-tv-scroll-container
-                data-tv-scroll-axis="vertical"
-                data-navigation-scroll-key={`settings:detail:${activeSection.number}`}
-              >
-                <Outlet />
-              </div>
-            )}
+            <div
+              className="settings-detail-scroll"
+              data-tv-scroll-container
+              data-tv-scroll-axis="vertical"
+              data-navigation-scroll-key={`settings:detail:${activeSection.number}`}
+            >
+              <Outlet />
+            </div>
           </section>
         </div>
       </div>
