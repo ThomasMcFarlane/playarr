@@ -2,6 +2,28 @@
 import XCTest
 
 final class LoginServerURLTests: XCTestCase {
+    @MainActor
+    func testInteractiveServerChangeKeepsTheLoginScreenActive() async {
+        let suiteName = "LoginServerURLTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(
+            "https://initial-\(UUID().uuidString.lowercased()).example.test",
+            forKey: AppEnvironment.serverBaseURLDefaultsKey
+        )
+        let environment = AppEnvironment(userDefaults: defaults)
+
+        await environment.restoreSessionState()
+        XCTAssertEqual(environment.sessionState, .signedOut)
+
+        let selectedServer = URL(string: "http://192.168.1.20:8484")!
+        environment.prepareServerForSignIn(selectedServer)
+
+        XCTAssertEqual(environment.sessionState, .signedOut)
+        XCTAssertEqual(environment.serverBaseURL, selectedServer)
+        XCTAssertEqual(environment.apiClient.baseURL, selectedServer)
+    }
+
     func testCanonicalisesAbsoluteURLAndTrailingSlashes() throws {
         XCTAssertEqual(
             try LoginServerURL.normalise(" https://media.example.test/streamarr/// ").absoluteString,
