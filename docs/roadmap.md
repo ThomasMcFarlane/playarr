@@ -191,14 +191,13 @@ someone runs them for real.
 - **Android Mobile.** **Built.** `clients/android-shared/` (core-auth,
   core-data, core-domain, core-designsystem, core-player, core-update) plus
   `clients/mobile-android/` for the app shell.
-- **iOS.** **Built**, within the documented environment constraint:
-  `clients/ios/Sources/StreamarrKit/` and `StreamarrApp/` are real Swift
-  source. **Deferred: no Xcode project layer** — the
-  package is real SPM source but there's no `.xcodeproj`/real App target,
-  documented explicitly in `clients/ios/README.md` as a consequence of
-  Xcode not being installed in the environment this was built in
-  (`xcodebuild` errors immediately without a real Xcode install). This is
-  an environment limitation, not unfinished application logic.
+- **iOS.** **Built.** `clients/ios/Streamarr.xcodeproj` produces a native
+  `Playarr.app`, links the reusable `StreamarrKit` package, includes App Store
+  bundle/privacy/icon resources, and defines application and kit XCTest
+  targets. **Deferred: runtime and device validation** — this Xcode install
+  has the iOS SDK but no iOS Simulator runtime, signing identity, or physical
+  device, so XCTest/UI execution, a signed archive, and store submission remain
+  external validation steps rather than unfinished application logic.
 
 ## Wave 6 — TV Clients
 

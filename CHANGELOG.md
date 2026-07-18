@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add an installable native Playarr iPhone and iPad project with reusable StreamarrKit business
+  logic, App Store-ready bundle metadata, privacy resources, and iOS unit-test targets.
 - Add playful per-profile avatar choices in Playarr settings, with crop, reposition, zoom, and
   locally resized custom photo uploads on devices that provide an image picker.
 - Add held-playlist actions for renaming, choosing a new parent, or deleting personal playlists
@@ -73,6 +75,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shortcuts, and browser Media Session actions for play, pause, previous, and next.
 
 ### Changed
+
+- Align the iOS architecture and roadmap with the installable Xcode project and remaining runtime
+  validation boundary.
 
 - Match the Clients catalogue to the profile selector with an offscreen horizontal platform row,
   hidden scrollbars, recognisable icons, directional action navigation, inline installation

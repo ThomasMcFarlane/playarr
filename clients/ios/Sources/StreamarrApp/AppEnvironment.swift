@@ -26,7 +26,7 @@ public final class AppEnvironment {
     /// a `UIKit`-sourced device name (`UIDevice.current.name`), since
     /// `StreamarrKit` (where `APIClientConfiguration` lives) deliberately
     /// has no UIKit dependency — see `Package.swift`'s tvOS-reuse note.
-    static let deviceName = "Streamarr iOS"
+    static let deviceName = "Playarr iOS"
 
     public private(set) var apiClient: StreamarrAPIClient
     public private(set) var deviceFlowClient: DeviceFlowClient
