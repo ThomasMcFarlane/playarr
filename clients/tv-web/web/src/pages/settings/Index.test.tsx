@@ -37,6 +37,18 @@ function renderSettingsRoute(initialEntry: string): string {
 }
 
 describe("SettingsIndexPage", () => {
+  const textInput = (
+    selectionStart: number,
+    selectionEnd = selectionStart,
+    valueLength = 10
+  ) => ({
+    kind: "input" as const,
+    type: "text",
+    selectionStart,
+    selectionEnd,
+    valueLength,
+  });
+
   it("renders every settings option in a native vertical list", () => {
     const markup = renderSettingsRoute("/settings");
 
@@ -56,10 +68,17 @@ describe("SettingsIndexPage", () => {
   });
 
   it("returns focus to the list only at the detail panel's left boundary", () => {
-    expect(shouldReturnSettingsFocusToList("ArrowLeft", false, false)).toBe(true);
-    expect(shouldReturnSettingsFocusToList("ArrowLeft", false, true)).toBe(false);
-    expect(shouldReturnSettingsFocusToList("ArrowLeft", true, false)).toBe(false);
-    expect(shouldReturnSettingsFocusToList("ArrowRight", false, false)).toBe(false);
+    expect(shouldReturnSettingsFocusToList("ArrowLeft", null, false)).toBe(true);
+    expect(shouldReturnSettingsFocusToList("ArrowLeft", null, true)).toBe(false);
+    expect(
+      shouldReturnSettingsFocusToList("ArrowLeft", textInput(0), false)
+    ).toBe(true);
+    expect(
+      shouldReturnSettingsFocusToList("ArrowLeft", textInput(3), false)
+    ).toBe(false);
+    expect(
+      shouldReturnSettingsFocusToList("ArrowRight", textInput(10), false)
+    ).toBe(false);
   });
 
   it("selects adjacent sections with vertical navigation without wrapping", () => {

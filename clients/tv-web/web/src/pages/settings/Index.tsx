@@ -6,6 +6,11 @@ import {
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import {
+  formControlDescriptor,
+  shouldNavigateFromFormControl,
+  type FormControlDescriptor,
+} from "../../lib/arrowNavigationPolicy";
+import {
   navigationOriginFromState,
   useNavigationLayer,
 } from "../../lib/navigationLayer";
@@ -69,20 +74,16 @@ function buildSettingsSections(t: TFunction): readonly SettingsSection[] {
   ] as const;
 }
 
-function keepsHorizontalArrows(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLSelectElement ||
-    target instanceof HTMLTextAreaElement
-  );
-}
-
 export function shouldReturnSettingsFocusToList(
   key: string,
-  keepsNativeArrow: boolean,
+  formControl: FormControlDescriptor | null,
   hasControlToLeft: boolean
 ): boolean {
-  return key === "ArrowLeft" && !keepsNativeArrow && !hasControlToLeft;
+  return (
+    key === "ArrowLeft" &&
+    !hasControlToLeft &&
+    (formControl === null || shouldNavigateFromFormControl(key, formControl))
+  );
 }
 
 export function adjacentSettingsIndex(
@@ -223,7 +224,7 @@ export function SettingsIndexPage() {
     if (
       !shouldReturnSettingsFocusToList(
         event.key,
-        keepsHorizontalArrows(event.target),
+        formControlDescriptor(event.target),
         hasControlToLeft
       )
     ) {

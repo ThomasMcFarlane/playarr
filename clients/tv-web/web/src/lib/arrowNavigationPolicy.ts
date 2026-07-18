@@ -17,6 +17,23 @@ export type FormControlDescriptor =
     }
   | { kind: "select" | "textarea" };
 
+export function formControlDescriptor(
+  target: EventTarget | null
+): FormControlDescriptor | null {
+  if (target instanceof HTMLInputElement) {
+    return {
+      kind: "input",
+      type: target.type,
+      selectionStart: target.selectionStart,
+      selectionEnd: target.selectionEnd,
+      valueLength: target.value.length,
+    };
+  }
+  if (target instanceof HTMLTextAreaElement) return { kind: "textarea" };
+  if (target instanceof HTMLSelectElement) return { kind: "select" };
+  return null;
+}
+
 /**
  * Text-entry controls keep Left/Right while the caret can move, then release
  * the key to spatial navigation at the matching boundary. They always release

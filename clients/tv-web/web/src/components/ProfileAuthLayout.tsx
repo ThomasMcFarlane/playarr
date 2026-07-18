@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTvDirectionalNavigation } from "../lib/useTvNavigation";
 import { TvStageChrome } from "./tv/TvStage";
 
 interface ProfileAuthLayoutProps {
@@ -16,6 +17,8 @@ export function ProfileAuthLayout({
   onBack,
   transitionFromProfiles = false,
 }: ProfileAuthLayoutProps) {
+  useTvDirectionalNavigation();
+
   return (
     <div
       className={`profiles-page profile-auth-page${

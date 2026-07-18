@@ -111,6 +111,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Enable Up and Down navigation from sign-in fields, and return Left from the server-address
+  boundary to the active Settings option instead of a diagonally positioned item.
 - Let Left and Right leave Playarr text inputs at their matching caret boundaries while
   preserving native caret movement within the value.
 - Match Settings to the Series and Movies 35/65 stage: keep its rail-styled detail panel full

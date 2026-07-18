@@ -2,8 +2,8 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import type { NavigationOrigin } from "./navigationLayer";
 import {
+  formControlDescriptor,
   shouldNavigateFromFormControl,
-  type FormControlDescriptor,
 } from "./arrowNavigationPolicy";
 import { findClosestItemInNextTrack } from "./trackNavigation";
 
@@ -17,21 +17,6 @@ const FOCUSABLE_SELECTOR = [
 ].join(",");
 
 type Direction = "up" | "down" | "left" | "right";
-
-function formControlDescriptor(target: EventTarget | null): FormControlDescriptor | null {
-  if (target instanceof HTMLInputElement) {
-    return {
-      kind: "input",
-      type: target.type,
-      selectionStart: target.selectionStart,
-      selectionEnd: target.selectionEnd,
-      valueLength: target.value.length,
-    };
-  }
-  if (target instanceof HTMLTextAreaElement) return { kind: "textarea" };
-  if (target instanceof HTMLSelectElement) return { kind: "select" };
-  return null;
-}
 
 function visibleFocusables(requestedScope?: Document | HTMLElement): HTMLElement[] {
   const modal = document.querySelector<HTMLElement>('[aria-modal="true"]');
@@ -440,6 +425,51 @@ function parentRoute(pathname: string, requestedBackTo?: string): string {
   return "/";
 }
 
+function handleDirectionalKeyDown(event: KeyboardEvent): boolean {
+  const direction: Direction | undefined =
+    event.key === "ArrowUp"
+      ? "up"
+      : event.key === "ArrowDown"
+        ? "down"
+        : event.key === "ArrowLeft"
+          ? "left"
+          : event.key === "ArrowRight"
+            ? "right"
+            : undefined;
+  if (!direction) return false;
+
+  const formControl = formControlDescriptor(event.target);
+  if (formControl && !shouldNavigateFromFormControl(event.key, formControl)) {
+    return false;
+  }
+
+  event.preventDefault();
+  document.body.dataset.inputMode = "remote";
+  moveFocus(direction);
+  return true;
+}
+
+/** Directional focus bridge for pre-auth surfaces without route-back handling. */
+export function useTvDirectionalNavigation(disabled = false): void {
+  useEffect(() => {
+    if (disabled) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      handleDirectionalKeyDown(event);
+    };
+    const handlePointer = () => {
+      document.body.dataset.inputMode = "pointer";
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("pointerdown", handlePointer, { passive: true });
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("pointerdown", handlePointer);
+    };
+  }, [disabled]);
+}
+
 /**
  * Browser/remote bridge for the Playarr TV-style web surface. Arrow keys
  * move focus geometrically, while Escape and common TV back-key codes
@@ -483,28 +513,7 @@ export function useTvNavigation(
 
     const handleKeyDown = (event: KeyboardEvent) => {
       userInteracted = true;
-      const formControl = formControlDescriptor(event.target);
-      if (formControl && !shouldNavigateFromFormControl(event.key, formControl)) {
-        return;
-      }
-
-      const direction: Direction | undefined =
-        event.key === "ArrowUp"
-          ? "up"
-          : event.key === "ArrowDown"
-            ? "down"
-            : event.key === "ArrowLeft"
-              ? "left"
-              : event.key === "ArrowRight"
-                ? "right"
-                : undefined;
-
-      if (direction) {
-        event.preventDefault();
-        document.body.dataset.inputMode = "remote";
-        moveFocus(direction);
-        return;
-      }
+      if (handleDirectionalKeyDown(event)) return;
 
       const isBack =
         event.key === "Escape" ||
