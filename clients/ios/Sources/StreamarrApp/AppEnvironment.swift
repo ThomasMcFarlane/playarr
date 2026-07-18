@@ -61,6 +61,7 @@ public final class AppEnvironment {
     @ObservationIgnored private let userDefaults: UserDefaults
     @ObservationIgnored private var tokenStore: KeychainTokenStore
     @ObservationIgnored private let demoMode: Bool
+    @ObservationIgnored private var suppressAutomaticSessionRestore = false
 
     public init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
@@ -115,7 +116,7 @@ public final class AppEnvironment {
         let url = try LoginServerURL.normalise(serverURL)
 
         if url != serverBaseURL {
-            serverBaseURL = url
+            prepareServerForSignIn(url)
         }
 
         let response = try await apiClient.login(
@@ -138,6 +139,13 @@ public final class AppEnvironment {
         currentUserName = resolvedName
         currentUserID = response.userID
         userDefaults.set(resolvedName, forKey: Self.userNameDefaultsKey(for: serverBaseURL))
+    }
+
+    func prepareServerForSignIn(_ url: URL) {
+        guard url != serverBaseURL else { return }
+        suppressAutomaticSessionRestore = true
+        defer { suppressAutomaticSessionRestore = false }
+        serverBaseURL = url
     }
 
     public func switchProfile(_ profile: AvailableProfile, pin: String?) async throws {
@@ -219,8 +227,12 @@ public final class AppEnvironment {
         isSignedIn = false
         currentUserID = nil
         currentUserName = userDefaults.string(forKey: Self.userNameDefaultsKey(for: serverBaseURL))
-        sessionState = .restoring
-        Task { await restoreSessionState() }
+        if suppressAutomaticSessionRestore {
+            sessionState = .signedOut
+        } else {
+            sessionState = .restoring
+            Task { await restoreSessionState() }
+        }
     }
 
     private static func userNameDefaultsKey(for url: URL) -> String {

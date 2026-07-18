@@ -192,6 +192,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Advance the actual Cover Flow album selection during touch dragging instead of shifting the
   entire carousel, keep album artwork uncropped and inline controls tightly positioned, and let
   vertical page scrolling begin on music, episode, movie, and playlist rows.
+- Keep the native iOS login form and its error feedback active while switching to the entered
+  Streamarr server instead of clearing the fields during an unnecessary session restore.
 - Complete the native iOS Playarr parity pass across responsive library, search, title detail,
   playlist, and settings screens; use dark appearance for new installs, keep artwork fallbacks
   dark, and apply login-equivalent server URL correction when changing servers in settings.
