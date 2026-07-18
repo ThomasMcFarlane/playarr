@@ -535,14 +535,15 @@ export function App() {
         <Route path="/playlists" element={<PlaylistsPage />} />
         <Route path="/playlists/:workId" element={<WorkDetailPage />} />
         <Route path="/player/:mediaFileId" element={null} />
-        <Route path="/settings" element={<SettingsIndexPage />} />
-        <Route path="/settings/appearance" element={<SettingsAppearancePage />} />
-        <Route path="/settings/language" element={<SettingsLanguagePage />} />
-        <Route path="/settings/player" element={<SettingsPlayerPage />} />
-        <Route path="/settings/server" element={<SettingsServerPage />} />
-        <Route path="/settings/profile-lock" element={<SettingsProfileLockPage />} />
-        <Route path="/settings/invite" element={<SettingsInvitePage />} />
-        <Route path="/settings/account" element={<SettingsAccountPage />} />
+        <Route path="/settings" element={<SettingsIndexPage />}>
+          <Route path="appearance" element={<SettingsAppearancePage />} />
+          <Route path="language" element={<SettingsLanguagePage />} />
+          <Route path="player" element={<SettingsPlayerPage />} />
+          <Route path="server" element={<SettingsServerPage />} />
+          <Route path="profile-lock" element={<SettingsProfileLockPage />} />
+          <Route path="invite" element={<SettingsInvitePage />} />
+          <Route path="account" element={<SettingsAccountPage />} />
+        </Route>
       </Route>
     </Routes>
   );

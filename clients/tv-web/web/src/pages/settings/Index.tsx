@@ -1,6 +1,15 @@
-import { Link } from "react-router-dom";
+import {
+  useEffect,
+  useRef,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
-import { useNavigationLayer } from "../../lib/navigationLayer";
+import {
+  navigationOriginFromState,
+  useNavigationLayer,
+} from "../../lib/navigationLayer";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 
 interface SettingsSection {
@@ -8,10 +17,16 @@ interface SettingsSection {
   number: string;
   title: string;
   description: string;
-  wide?: boolean;
 }
 
 type TFunction = ReturnType<typeof useLanguage>["t"];
+const DETAIL_FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not(:disabled)",
+  "input:not(:disabled)",
+  "select:not(:disabled)",
+  "summary",
+].join(",");
 
 function buildSettingsSections(t: TFunction): readonly SettingsSection[] {
   return [
@@ -38,7 +53,6 @@ function buildSettingsSections(t: TFunction): readonly SettingsSection[] {
       number: "04",
       title: t("settings.index.server.title"),
       description: t("settings.index.server.description"),
-      wide: true,
     },
     {
       to: "/settings/profile-lock",
@@ -61,51 +75,230 @@ function buildSettingsSections(t: TFunction): readonly SettingsSection[] {
   ] as const;
 }
 
+function keepsHorizontalArrows(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLSelectElement ||
+    target instanceof HTMLTextAreaElement
+  );
+}
+
+export function shouldCloseSettingsDetailOnLeft(
+  key: string,
+  keepsNativeArrow: boolean,
+  hasControlToLeft: boolean
+): boolean {
+  return key === "ArrowLeft" && !keepsNativeArrow && !hasControlToLeft;
+}
+
+function hasFocusableControlToLeft(
+  panel: HTMLElement,
+  current: HTMLElement
+): boolean {
+  const currentRect = current.getBoundingClientRect();
+  const currentCentreX = currentRect.left + currentRect.width / 2;
+
+  return Array.from(
+    panel.querySelectorAll<HTMLElement>(DETAIL_FOCUSABLE_SELECTOR)
+  ).some((candidate) => {
+    if (candidate === current) return false;
+    const style = window.getComputedStyle(candidate);
+    if (style.display === "none" || style.visibility === "hidden") return false;
+    const rect = candidate.getBoundingClientRect();
+    const verticalOverlap = Math.max(
+      0,
+      Math.min(currentRect.bottom, rect.bottom) -
+        Math.max(currentRect.top, rect.top)
+    );
+    return (
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.left + rect.width / 2 < currentCentreX - 2 &&
+      verticalOverlap >= Math.min(currentRect.height, rect.height) * 0.4
+    );
+  });
+}
+
 /**
- * Settings hub -- a menu of the sections that used to be stacked as one long
- * scroll (see git history for the previous single-page `pages/Settings.tsx`).
- * Split so a remote's Down arrow moves through a handful of focusable items
- * per screen instead of every control on every section at once; each card
- * links to its own route under `pages/settings/`, reached exactly the way
- * `Profiles.tsx`'s gear icon already reached `/settings` before this split.
+ * Persistent settings master/detail shell. The route outlet changes inside
+ * the right panel while the option list remains mounted, allowing the track
+ * to slide left and focus to return to the exact option that opened it.
  */
 export function SettingsIndexPage() {
   const { t } = useLanguage();
-  useDocumentTitle(t("settings.index.documentTitle"));
+  const location = useLocation();
+  const navigate = useNavigate();
   const navigationLayer = useNavigationLayer("settings:index");
   const settingsSections = buildSettingsSections(t);
+  const activeSection = settingsSections.find(
+    (section) => section.to === location.pathname
+  );
+  const detailOrigin = navigationOriginFromState(location.state);
+  const requestedBackTo = (location.state as { backTo?: unknown } | null)?.backTo;
+  const pageBackTo = typeof requestedBackTo === "string" ? requestedBackTo : "/";
+  const detailPanelRef = useRef<HTMLElement>(null);
+  useDocumentTitle(t("settings.index.documentTitle"), !activeSection);
+
+  function closeDetail() {
+    if (detailOrigin?.route === "/settings") {
+      navigate(-1);
+    } else {
+      navigate("/settings");
+    }
+  }
+
+  function leaveSettings() {
+    if (activeSection) {
+      closeDetail();
+    } else if (detailOrigin) {
+      navigate(-1);
+    } else {
+      navigate(pageBackTo);
+    }
+  }
+
+  function openSection(
+    section: SettingsSection,
+    target: HTMLElement,
+    replace: boolean
+  ) {
+    const navigationOrigin = activeSection
+      ? detailOrigin ?? undefined
+      : navigationLayer.capture(target);
+    navigate(section.to, {
+      replace,
+      state: { backTo: "/settings", navigationOrigin },
+    });
+  }
+
+  function handleOptionKeyDown(
+    event: ReactKeyboardEvent<HTMLAnchorElement>,
+    section: SettingsSection
+  ) {
+    if (event.key !== "ArrowRight") return;
+    event.preventDefault();
+    event.stopPropagation();
+    openSection(section, event.currentTarget, Boolean(activeSection));
+  }
+
+  function handleOptionClick(event: ReactMouseEvent<HTMLAnchorElement>) {
+    if (!activeSection) navigationLayer.capture(event.currentTarget);
+  }
+
+  function handleDetailKeyDown(event: ReactKeyboardEvent<HTMLElement>) {
+    const hasControlToLeft = Boolean(
+      event.target instanceof HTMLElement &&
+      detailPanelRef.current &&
+      hasFocusableControlToLeft(detailPanelRef.current, event.target)
+    );
+    if (
+      !shouldCloseSettingsDetailOnLeft(
+        event.key,
+        keepsHorizontalArrows(event.target),
+        hasControlToLeft
+      )
+    ) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    closeDetail();
+  }
+
+  useEffect(() => {
+    if (!activeSection) return;
+    const frame = window.requestAnimationFrame(() => {
+      detailPanelRef.current
+        ?.querySelector<HTMLElement>(DETAIL_FOCUSABLE_SELECTOR)
+        ?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeSection?.to]);
 
   return (
-    <div className="page settings-page">
-      <div className="page-intro">
-        <p className="page-kicker">{t("settings.index.kicker")}</p>
-        <h1 className="page-title">{t("settings.index.title")}</h1>
-        <p className="page-description">{t("settings.index.description")}</p>
-      </div>
+    <div
+      className={`page settings-page settings-workspace-page${
+        activeSection ? " is-detail-open" : ""
+      }`}
+    >
+      <header className="tv-library-heading settings-page-heading">
+        <button
+          type="button"
+          className="tv-page-back"
+          aria-label={t("settings.sectionLayout.backLink")}
+          onClick={leaveSettings}
+          data-tv-focus-default
+        >
+          <span aria-hidden="true">←</span>
+        </button>
+        <h1>{t("settings.index.title")}</h1>
+      </header>
 
-      <nav className="settings-grid" aria-label={t("settings.index.sectionsAriaLabel")}>
-        {settingsSections.map((section) => (
-          <Link
-            key={section.to}
-            to={section.to}
-            className={`settings-card settings-nav-card${section.wide ? " settings-card-wide" : ""}`}
-            state={{ backTo: "/settings", navigationOrigin: navigationLayer.origin }}
-            onClick={navigationLayer.captureLink}
-            data-navigation-focus-key={`settings:${section.number}`}
+      <div className="settings-workspace">
+        <div className="settings-workspace-track">
+          <nav
+            className="settings-options-panel"
+            aria-label={t("settings.index.sectionsAriaLabel")}
+            data-tv-scroll-container
+            data-tv-scroll-axis="vertical"
+            data-navigation-scroll-key="settings:options"
           >
-            <div className="settings-card-heading">
-              <span className="settings-card-number">{section.number}</span>
-              <div>
-                <h2 className="section-title">{section.title}</h2>
-                <p className="muted">{section.description}</p>
+            <ol className="settings-options-list">
+              {settingsSections.map((section) => {
+                const isActive = section.to === activeSection?.to;
+                return (
+                  <li key={section.to}>
+                    <Link
+                      id={isActive ? "settings-active-option" : undefined}
+                      to={section.to}
+                      replace={Boolean(activeSection)}
+                      className={`settings-option${isActive ? " is-active" : ""}`}
+                      state={{
+                        backTo: "/settings",
+                        navigationOrigin: activeSection
+                          ? detailOrigin ?? undefined
+                          : navigationLayer.origin,
+                      }}
+                      aria-current={isActive ? "page" : undefined}
+                      onClick={handleOptionClick}
+                      onKeyDown={(event) => handleOptionKeyDown(event, section)}
+                      data-navigation-focus-key={`settings:${section.number}`}
+                    >
+                      <span className="settings-option-number">{section.number}</span>
+                      <span className="settings-option-copy">
+                        <strong>{section.title}</strong>
+                        <small>{section.description}</small>
+                      </span>
+                      <span className="settings-option-arrow" aria-hidden="true">
+                        →
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ol>
+          </nav>
+
+          <section
+            ref={detailPanelRef}
+            className="settings-detail-panel"
+            aria-label={activeSection?.title}
+            aria-hidden={activeSection ? undefined : true}
+            onKeyDownCapture={handleDetailKeyDown}
+          >
+            {activeSection && (
+              <div
+                className="settings-detail-scroll"
+                data-tv-scroll-container
+                data-tv-scroll-axis="vertical"
+                data-navigation-scroll-key={`settings:detail:${activeSection.number}`}
+              >
+                <Outlet />
               </div>
-            </div>
-            <span className="settings-nav-arrow" aria-hidden="true">
-              →
-            </span>
-          </Link>
-        ))}
-      </nav>
+            )}
+          </section>
+        </div>
+      </div>
     </div>
   );
 }

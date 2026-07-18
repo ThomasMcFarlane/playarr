@@ -1448,12 +1448,178 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 
 /* Settings and login stay editorial rather than dashboard-like. */
 
-.settings-grid {
-  max-width: 1320px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
+.settings-workspace-page {
+  position: relative;
+  height: var(--viewport-height);
+  min-height: 620px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.settings-page-heading {
+  right: auto;
+}
+
+.settings-workspace {
+  position: absolute;
+  top: clamp(116px, 14vh, 164px);
+  right: clamp(28px, 3vw, 56px);
+  bottom: clamp(48px, 6vh, 78px);
+  left: clamp(102px, 8vw, 160px);
+  min-height: 0;
+  width: auto;
+  overflow: hidden;
   background: var(--line);
+  border: 1px solid var(--line);
+}
+
+.settings-workspace-track {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
+  transition: grid-template-columns 430ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: grid-template-columns;
+}
+
+.settings-workspace-page.is-detail-open .settings-workspace-track {
+  grid-template-columns: minmax(0, 36fr) minmax(0, 64fr);
+}
+
+.settings-options-panel,
+.settings-detail-scroll {
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+.settings-options-list {
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--bg);
+}
+
+.settings-options-list li + li {
+  border-top: 1px solid var(--line);
+}
+
+.settings-option {
+  min-height: 88px;
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(14px, 1.6vw, 28px);
+  padding: clamp(18px, 2.2vh, 28px) clamp(22px, 3vw, 48px);
+  color: inherit;
+  text-decoration: none;
+  background: var(--bg);
+  transition:
+    background 180ms ease,
+    padding 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.settings-option:hover,
+.settings-option:focus-visible,
+.settings-option.is-active {
+  background: var(--surface-soft);
+  outline: none;
+}
+
+.settings-option:focus-visible {
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.settings-option-number {
+  align-self: start;
+  padding-top: 0.22rem;
+  color: var(--ink-muted);
+  font-size: 0.62rem;
+  font-weight: 760;
+}
+
+.settings-option-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.settings-option-copy strong {
+  overflow: hidden;
+  font-size: clamp(1.15rem, 1.6vw, 1.85rem);
+  font-weight: 480;
+  letter-spacing: -0.035em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-option-copy small {
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: clamp(0.68rem, 0.78vw, 0.84rem);
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-option-arrow {
+  color: var(--ink-muted);
+  font-size: 1.3rem;
+  transition:
+    color 180ms ease,
+    transform 220ms ease;
+}
+
+.settings-option:hover .settings-option-arrow,
+.settings-option:focus-visible .settings-option-arrow,
+.settings-option.is-active .settings-option-arrow {
+  color: var(--ink);
+  transform: translateX(5px);
+}
+
+.settings-workspace-page.is-detail-open .settings-option {
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  padding-inline: clamp(18px, 2vw, 32px);
+}
+
+.settings-workspace-page.is-detail-open .settings-option-copy small {
+  display: none;
+}
+
+.settings-detail-panel {
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background: var(--bg);
+  border-left: 1px solid var(--line);
+}
+
+.settings-detail-scroll {
+  width: 100%;
+  height: 100%;
+  scroll-padding-block: 2rem;
+}
+
+.settings-section {
+  padding: clamp(32px, 4vw, 64px) clamp(24px, 4vw, 64px) clamp(48px, 5vw, 80px);
+}
+
+.settings-section-intro {
+  margin-bottom: clamp(24px, 3vh, 40px);
+}
+
+.settings-section-intro .page-title {
+  font-size: clamp(2.35rem, 4.2vw, 5.2rem);
+}
+
+.settings-section-content {
   border: 1px solid var(--line);
 }
 
@@ -1462,58 +1628,12 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   display: flex;
   flex-direction: column;
   gap: clamp(20px, 2.8vh, 38px);
-  padding: clamp(28px, 3.2vw, 58px);
+  padding: clamp(26px, 3vw, 48px);
   background: var(--bg);
 }
 
 .settings-card-wide {
-  grid-column: 1 / -1;
-}
-
-.settings-nav-card {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  color: inherit;
-  text-decoration: none;
-  cursor: pointer;
-  transition:
-    background 200ms ease,
-    transform 200ms ease;
-}
-
-.settings-nav-card:hover,
-.settings-nav-card:focus-visible {
-  background: var(--surface-soft);
-  transform: translateX(6px);
-  outline: none;
-}
-
-.settings-nav-arrow {
-  flex: 0 0 auto;
-  margin-left: 1.2rem;
-  color: var(--ink-muted);
-  font-size: 1.4rem;
-  transition:
-    transform 220ms ease,
-    color 180ms ease;
-}
-
-.settings-nav-card:hover .settings-nav-arrow,
-.settings-nav-card:focus-visible .settings-nav-arrow {
-  transform: translateX(6px);
-  color: var(--ink);
-}
-
-.settings-card-heading {
-  display: flex;
-  gap: 1.2rem;
-}
-
-.settings-card-number {
-  color: var(--ink-muted);
-  font-size: 0.62rem;
-  font-weight: 760;
+  width: 100%;
 }
 
 .section-title {
@@ -3625,12 +3745,12 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     grid-column: 1 / -1;
   }
 
-  .settings-grid {
-    grid-template-columns: 1fr;
+  .settings-workspace-track {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
   }
 
-  .settings-card-wide {
-    grid-column: auto;
+  .settings-workspace-page.is-detail-open .settings-workspace-track {
+    grid-template-columns: minmax(0, 40fr) minmax(0, 60fr);
   }
 }
 
@@ -4549,9 +4669,8 @@ body[data-input-mode="remote"] .player-quality-option:focus {
 }
 
 .settings-page {
-  min-height: var(--viewport-height);
-  padding-top: max(var(--screen-y), 11vh);
-  padding-bottom: 130px;
+  min-height: 620px;
+  padding: 0;
 }
 
 @keyframes tv-key-art-in {
@@ -9131,32 +9250,58 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   }
 
   .settings-page {
-    min-height: 100%;
-    padding: calc(var(--mobile-top-inset) + 18px) var(--mobile-page-gutter)
-      calc(var(--mobile-nav-height) + 28px);
+    min-height: 0;
+    padding: 0;
   }
 
-  .settings-page .page-intro {
-    padding-right: 48px;
+  .settings-page-heading {
+    right: 64px;
   }
 
-  .page-title {
-    font-size: clamp(2.5rem, 13vw, 4rem);
+  .settings-workspace {
+    top: calc(var(--mobile-top-inset) + 58px);
+    right: var(--mobile-page-gutter);
+    bottom: calc(var(--mobile-nav-height) + 14px);
+    left: var(--mobile-page-gutter);
   }
 
-  .settings-grid {
+  .settings-workspace-track {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
+  }
+
+  .settings-workspace-page.is-detail-open .settings-workspace-track {
+    grid-template-columns: minmax(0, 72px) minmax(0, 1fr);
+  }
+
+  .settings-option {
+    min-height: 82px;
+    grid-template-columns: 2rem minmax(0, 1fr) auto;
+    padding: 18px;
+  }
+
+  .settings-workspace-page.is-detail-open .settings-option {
     grid-template-columns: 1fr;
+    justify-items: center;
+    padding-inline: 10px;
+  }
+
+  .settings-workspace-page.is-detail-open .settings-option-copy,
+  .settings-workspace-page.is-detail-open .settings-option-arrow {
+    display: none;
+  }
+
+  .settings-section {
+    padding: 28px 18px 48px;
+  }
+
+  .settings-section-intro .page-title {
+    font-size: clamp(2.25rem, 11vw, 3.6rem);
   }
 
   .settings-card,
   .settings-card-wide {
-    grid-column: auto;
     gap: 20px;
     padding: 24px 18px;
-  }
-
-  .settings-card-heading {
-    gap: 0.8rem;
   }
 
   .section-title {
