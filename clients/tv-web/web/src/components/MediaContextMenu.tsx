@@ -88,6 +88,8 @@ export interface MediaContextItem {
   startPositionSeconds?: number;
   /** Exact track represented by an audio item; `workId` is its artist work. */
   playlistTrackId?: string;
+  /** Exact tracks represented by an audio album; `workId` is its artist work. */
+  playlistTrackIds?: string[];
   playlistMembership?: {
     playlistId: string;
     itemId: string;
@@ -99,17 +101,33 @@ interface PlaylistTarget {
   mediaType: PlaylistResponse["media_type"];
   workId: string;
   trackId?: string;
+  trackIds?: string[];
   title: string;
 }
 
 function playlistTarget(item: MediaContextItem | null): PlaylistTarget | null {
   if (!item) return null;
+  if (item.playlistTrackIds?.length && item.workId) {
+    return {
+      mediaType: "audio",
+      workId: item.workId,
+      trackIds: [...new Set(item.playlistTrackIds)],
+      title: item.title ?? "Album",
+    };
+  }
   if (item.playlistTrackId && item.workId) {
     return {
       mediaType: "audio",
       workId: item.workId,
       trackId: item.playlistTrackId,
       title: item.title ?? "Track",
+    };
+  }
+  if (item.work?.kind === "artist") {
+    return {
+      mediaType: "audio",
+      workId: item.work.id,
+      title: item.work.title,
     };
   }
   if (
@@ -125,6 +143,25 @@ function playlistTarget(item: MediaContextItem | null): PlaylistTarget | null {
     };
   }
   return null;
+}
+
+function playableAudioTrackIds(detail: WorkDetail): string[] {
+  if (
+    typeof detail.children !== "object" ||
+    detail.children === null ||
+    !("Artist" in detail.children)
+  ) {
+    return [];
+  }
+  return [
+    ...new Set(
+      detail.children.Artist.flatMap((album) =>
+        album.tracks.flatMap((track) =>
+          track.media_file_id ? [track.track.id] : []
+        )
+      )
+    )
+  ];
 }
 
 export type PlaylistMembershipChange =
@@ -563,14 +600,26 @@ export function useMediaContextMenu({
       setBusyAction(`playlist:${playlist.id}`);
       setError(null);
       try {
+        const trackIds =
+          target.mediaType === "audio"
+            ? target.trackIds ??
+              (target.trackId
+                ? [target.trackId]
+                : playableAudioTrackIds(await getDetail(target.workId)))
+            : [undefined];
+        if (trackIds.length === 0) {
+          throw new Error(t("components.mediaContextMenu.noPlayableMedia"));
+        }
         const existingItems = await client.listPlaylistItems(playlist.id);
-        if (
-          existingItems.some(
-            (item) =>
-              item.work_id === target.workId &&
-              (item.track_id ?? undefined) === target.trackId
-          )
-        ) {
+        const missingTrackIds = trackIds.filter(
+          (trackId) =>
+            !existingItems.some(
+              (item) =>
+                item.work_id === target.workId &&
+                (item.track_id ?? undefined) === trackId
+            )
+        );
+        if (missingTrackIds.length === 0) {
           throw new Error(
             t("components.mediaContextMenu.alreadyInPlaylist", {
               title: target.title,
@@ -578,10 +627,25 @@ export function useMediaContextMenu({
             })
           );
         }
-        await client.addPlaylistItem(playlist.id, {
-          work_id: target.workId,
-          track_id: target.trackId,
-        });
+        const addedItemIds: string[] = [];
+        try {
+          for (const trackId of missingTrackIds) {
+            const added = await client.addPlaylistItem(playlist.id, {
+              work_id: target.workId,
+              track_id: trackId,
+            });
+            addedItemIds.push(added.id);
+          }
+        } catch (caught) {
+          await Promise.all(
+            addedItemIds.map((itemId) =>
+              client
+                .removePlaylistItem(playlist.id, itemId)
+                .catch(() => undefined)
+            )
+          );
+          throw caught;
+        }
         close();
         showToast(
           t("components.mediaContextMenu.addedToPlaylist", {
@@ -597,7 +661,16 @@ export function useMediaContextMenu({
         );
       }
     },
-    [activeItem, busyAction, client, close, showToast, suppressOriginRelease, t]
+    [
+      activeItem,
+      busyAction,
+      client,
+      close,
+      getDetail,
+      showToast,
+      suppressOriginRelease,
+      t,
+    ]
   );
 
   const choosePlaylist = useCallback(

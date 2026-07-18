@@ -10,7 +10,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Add audio-only playlists and a held-track context action for adding individual music tracks,
-  while keeping existing and new video playlists free of audio items.
+  albums, or complete artists while keeping existing and new video playlists free of audio items.
 - Link live and historical administrator playback activity to named users and catalogue items,
   with a scaffolded settings page for each user.
 - Let administrators name each instance through persisted Streamarr system settings, and show that

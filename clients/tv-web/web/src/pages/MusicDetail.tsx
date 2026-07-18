@@ -89,6 +89,7 @@ function AlbumCoverFlow({
   artistId,
   selectedAlbumId,
   playingAlbumId,
+  parentRoute,
   onSelect,
   onPlay,
 }: {
@@ -96,10 +97,12 @@ function AlbumCoverFlow({
   artistId: string;
   selectedAlbumId: string;
   playingAlbumId: string | null;
+  parentRoute: string;
   onSelect: (album: AlbumDetail) => void;
   onPlay: (album: AlbumDetail, track: TrackDetail) => void;
 }) {
   const { t } = useLanguage();
+  const mediaContext = useMediaContextMenu();
   const selectedIndex = Math.max(
     0,
     albums.findIndex((album) => album.album.id === selectedAlbumId)
@@ -137,6 +140,31 @@ function AlbumCoverFlow({
             ),
             "--music-flow-z": String(offset === 0 ? 40 : Math.max(1, 20 - distance)),
           } as CSSProperties;
+          const contextProps = mediaContext.itemProps({
+            workId: artistId,
+            title: album.album.title,
+            detailRoute: `/music/${artistId}`,
+            parentRoute,
+            preferredMediaFileId: firstTrack.media_file_id,
+            playlistTrackIds: playableTracks(album).map(
+              (track) => track.track.id
+            ),
+            leaves: playableTracks(album).flatMap((track) =>
+              track.media_file_id
+                ? [
+                    {
+                      mediaFileId: track.media_file_id,
+                      runtimeMs:
+                        track.runtime_ms ??
+                        (track.track.duration_seconds ?? 0) * 1_000,
+                      title: track.track.title,
+                    },
+                  ]
+                : []
+            ),
+            activateOrigin: true,
+            onPlay: () => onPlay(album, firstTrack),
+          });
 
           return (
             <button
@@ -152,7 +180,10 @@ function AlbumCoverFlow({
               data-tv-edge-target-down="#inline-music-scrubber-control"
               aria-pressed={isSelected}
               aria-label={t("pages.musicDetail.play", { title: album.album.title })}
+              {...contextProps}
               onKeyDown={(event) => {
+                contextProps.onKeyDown(event);
+                if (event.defaultPrevented) return;
                 if (event.key === "ArrowLeft") moveSelection(event, -1);
                 else if (event.key === "ArrowRight") moveSelection(event, 1);
                 else if (event.key === "ArrowUp") {
@@ -201,6 +232,7 @@ function AlbumCoverFlow({
           );
         })}
       </div>
+      {mediaContext.contextMenu}
     </section>
   );
 }
@@ -757,6 +789,7 @@ export function MusicDetailPage() {
             artistId={work.id}
             selectedAlbumId={selectedAlbum?.album.id ?? albums[0]!.album.id}
             playingAlbumId={playingAlbumId}
+            parentRoute={backTo}
             onSelect={(album) => {
               const firstTrack = playableTracks(album)[0] ?? null;
               setSelectedAlbumId(album.album.id);
