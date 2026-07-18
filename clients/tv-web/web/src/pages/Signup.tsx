@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiClient, ApiError } from "@streamarr-tv/api-client";
 import { useAuth } from "../lib/ApiClientProvider";
@@ -27,6 +27,7 @@ export function SignupPage() {
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [serverName, setServerName] = useState<string | null>(null);
   const signupClient = useMemo(
     () =>
       invite
@@ -37,6 +38,22 @@ export function SignupPage() {
         : null,
     []
   );
+
+  useEffect(() => {
+    if (!invite || !signupClient) return;
+    let cancelled = false;
+    void signupClient
+      .getVersion()
+      .then((version) => {
+        if (!cancelled) setServerName(version.instance_name || invite.serverUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setServerName(invite.serverUrl);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [signupClient]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -97,9 +114,10 @@ export function SignupPage() {
               name="server-url"
               type="text"
               className="input auth-input"
-              value={invite.serverUrl}
+              value={serverName ?? t("pages.signup.serverNameLoading")}
               readOnly
               aria-readonly="true"
+              aria-busy={serverName === null}
               tabIndex={-1}
             />
             <p className="hint auth-server-hint">

@@ -557,6 +557,7 @@ mod tests {
             .await
             .unwrap();
         let envelope: VersionEnvelope = serde_json::from_slice(&body).unwrap();
+        assert_eq!(envelope.instance_name, "Test Streamarr");
         assert_eq!(envelope.server_version, "0.1.0");
     }
 

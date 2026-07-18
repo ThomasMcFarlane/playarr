@@ -656,8 +656,9 @@ export const th: Translations = {
   "pages.signup.description": "กำหนดรายละเอียดบัญชีของคุณสำหรับเซิร์ฟเวอร์ Streamarr ที่เชิญคุณ",
   "pages.signup.inviteMissing":
     "ลิงก์คำเชิญนี้ไม่สมบูรณ์หรือไม่ถูกต้อง กรุณาขอคิวอาร์โค้ดใหม่จากผู้ดูแลระบบ Streamarr ของคุณ",
-  "pages.signup.serverUrlLabel": "URL เซิร์ฟเวอร์",
-  "pages.signup.serverUrlHint": "ที่อยู่นี้ถูกล็อกไว้กับเซิร์ฟเวอร์ที่ออกคำเชิญของคุณ",
+  "pages.signup.serverNameLoading": "กำลังโหลดชื่อเซิร์ฟเวอร์…",
+  "pages.signup.serverUrlLabel": "เซิร์ฟเวอร์",
+  "pages.signup.serverUrlHint": "เซิร์ฟเวอร์นี้ถูกล็อกไว้กับเซิร์ฟเวอร์ที่ออกคำเชิญของคุณ",
   "pages.signup.usernameLabel": "ชื่อผู้ใช้",
   "pages.signup.displayNameLabel": "ชื่อที่แสดง",
   "pages.signup.emailLabel": "อีเมล (ไม่บังคับ)",

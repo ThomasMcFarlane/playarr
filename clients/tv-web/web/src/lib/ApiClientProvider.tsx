@@ -1,4 +1,13 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { ApiClient, type LoginRequest } from "@streamarr-tv/api-client";
 import {
   decodeAccessTokenDeviceId,
@@ -570,6 +579,26 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     return [primary, ...secondary];
   }, [activeProfileKey, apiBaseUrl, client, persistProfileSession, storedProfileSessions]);
 
+  const [serverNames, setServerNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all(
+      serverClients.map(async (server) => {
+        try {
+          const version = await server.client.getVersion();
+          return [server.url, version.instance_name] as const;
+        } catch {
+          return [server.url, server.label] as const;
+        }
+      })
+    ).then((entries) => {
+      if (!cancelled) setServerNames(Object.fromEntries(entries));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [serverClients]);
+
   const joinedClient = useMemo(
     () => (serverClients.length > 0 ? createJoinedApiClient(serverClients) : client),
     [client, serverClients]
@@ -901,7 +930,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
           );
           return {
             url: server.url,
-            label: server.label,
+            label: serverNames[server.url] ?? server.label,
             username: profile?.name ?? currentUserName ?? t("lib.apiClientProvider.defaultViewerName"),
             primary: server.url === apiBaseUrl,
           };

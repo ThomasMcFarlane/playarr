@@ -652,8 +652,9 @@ export const ja: Translations = {
   "pages.signup.description": "あなたを招待したStreamarrサーバー用のアカウント情報を選択してください。",
   "pages.signup.inviteMissing":
     "この招待リンクは不完全か無効です。Streamarrの管理者に新しいQRコードを依頼してください。",
-  "pages.signup.serverUrlLabel": "サーバーURL",
-  "pages.signup.serverUrlHint": "このアドレスは、招待を発行したサーバーに固定されています。",
+  "pages.signup.serverNameLoading": "サーバー名を読み込んでいます…",
+  "pages.signup.serverUrlLabel": "サーバー",
+  "pages.signup.serverUrlHint": "このサーバーは、招待を発行したサーバーに固定されています。",
   "pages.signup.usernameLabel": "ユーザー名",
   "pages.signup.displayNameLabel": "表示名",
   "pages.signup.emailLabel": "メールアドレス(任意)",

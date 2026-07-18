@@ -44,7 +44,7 @@ are valid) -- the container would have refused to boot as shipped (fixed to
   source of truth deriving one from the other, so if either changes,
   update both.
 - **Env var names**: the binary reads `DATABASE_URL`, `REDIS_URL`,
-  `STREAMARR_ROLE`, `STREAMARR_LOG`, `STREAMARR_HTTP_BIND_ADDR`,
+  `STREAMARR_ROLE`, `STREAMARR_LOG`, `STREAMARR_INSTANCE_NAME`, `STREAMARR_HTTP_BIND_ADDR`,
   `STREAMARR_METRICS_BIND_ADDR`, `STREAMARR_OTLP_ENDPOINT` -- nothing else.
   `STREAMARR_HTTP_BIND_ADDR`/`STREAMARR_METRICS_BIND_ADDR` are full socket
   addresses (`"0.0.0.0:8484"`), not bare port numbers. Earlier drafts of

@@ -2293,6 +2293,7 @@ export interface components {
             api_version: string;
             build_sha?: string | null;
             compatibility: components["schemas"]["CompatibilityEntry"][];
+            instance_name: string;
             server_version: string;
         };
         ViewCriteriaDto: {

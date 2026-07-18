@@ -4439,6 +4439,7 @@ components:
       type: object
       description: Response body for `GET /api/system/version`.
       required:
+      - instance_name
       - server_version
       - api_version
       - compatibility
@@ -4453,6 +4454,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CompatibilityEntry'
+        instance_name:
+          type: string
         server_version:
           type: string
     ViewCriteriaDto:

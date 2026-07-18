@@ -178,6 +178,7 @@ services:
     container_name: streamarr-dev-streamarr
     environment:
       STREAMARR_ROLE: all
+      STREAMARR_INSTANCE_NAME: ${STREAMARR_INSTANCE_NAME:-Streamarr Dev}
       # Real env vars streamarr-config::Config::from_env reads -- see that
       # crate's docs for the full list/defaults. Matches the postgres
       # service's own credentials above rather than hardcoding a second

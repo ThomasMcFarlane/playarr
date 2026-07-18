@@ -57,6 +57,7 @@ x-streamarr-env: &streamarr-env
   # binary actually reads (a prior pass invented those against a
   # docs-described-but-never-implemented config surface).
   STREAMARR_LOG: ${STREAMARR_LOG_LEVEL:-info}
+  STREAMARR_INSTANCE_NAME: ${STREAMARR_INSTANCE_NAME:-Streamarr}
   STREAMARR_HTTP_BIND_ADDR: 0.0.0.0:8484
   STREAMARR_METRICS_BIND_ADDR: 0.0.0.0:9090
   DATABASE_URL: postgres://streamarr:${STREAMARR_DB_PASSWORD:?Set STREAMARR_DB_PASSWORD (e.g. in a .env file) before starting the prod stack}@postgres:5432/streamarr

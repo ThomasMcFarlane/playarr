@@ -366,6 +366,7 @@ describe("ApiClient", () => {
     const fetchImpl = mockFetch((request) => {
       expect(request.headers.has("Authorization")).toBe(false);
       return jsonResponse(200, {
+        instance_name: "Test Streamarr",
         server_version: "0.1.0",
         api_version: "0.1.0",
         build_sha: null,
@@ -376,6 +377,7 @@ describe("ApiClient", () => {
     const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken });
 
     const version = await client.getVersion();
+    expect(version.instance_name).toBe("Test Streamarr");
     expect(version.server_version).toBe("0.1.0");
     expect(getAccessToken).not.toHaveBeenCalled();
   });

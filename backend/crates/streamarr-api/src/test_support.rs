@@ -484,6 +484,7 @@ pub async fn test_state() -> (Router, TestState) {
         readiness: ReadinessState::new(),
         version: VersionState {
             envelope: streamarr_model::VersionEnvelope {
+                instance_name: "Test Streamarr".to_string(),
                 server_version: "0.1.0".to_string(),
                 api_version: "1".to_string(),
                 build_sha: None,

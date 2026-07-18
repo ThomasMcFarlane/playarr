@@ -87,6 +87,7 @@ pub struct CompatibilityEntry {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct VersionEnvelope {
+    pub instance_name: String,
     pub server_version: String,
     pub api_version: String,
     pub build_sha: Option<String>,

@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Let operators name each Streamarr instance and show those names in Playarr's connected-server
+  settings and invitation sign-up screen.
 - Acquire and hot-renew browser-trusted HTTPS certificates inside Streamarr through an explicitly
   configured Let's Encrypt ACME environment and a built-in HTTP-01 challenge listener.
 - Serve authoritative DNS-only public IPv4 hostnames inside the Streamarr process when enabled.

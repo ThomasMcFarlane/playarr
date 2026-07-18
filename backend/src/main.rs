@@ -842,6 +842,7 @@ async fn boot_api(
     let compatibility_table = ClientCompatibilityTable::from_toml_str(CLIENT_COMPATIBILITY_TOML)?;
 
     let version_envelope = VersionEnvelope {
+        instance_name: config.instance_name.clone(),
         server_version: compatibility_table.server.version.clone(),
         api_version: compatibility_table.server.api_version.clone(),
         build_sha: option_env!("STREAMARR_BUILD_SHA").map(str::to_string),
