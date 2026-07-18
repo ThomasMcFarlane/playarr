@@ -781,6 +781,9 @@ export const th: Translations = {
   "pages.clients.tizen.description": "มีโครงแอปทีวีแล้ว แต่ยังไม่มีแพ็กเกจใช้งานจริงที่ลงลายเซ็นเผยแพร่",
   "pages.clients.vidaaSetup": "ติดตั้ง",
   "pages.clients.downloadApk": "ดาวน์โหลด APK",
+  "pages.clients.downloadPreview": "ดาวน์โหลดรุ่นพรีวิว",
+  "pages.clients.previewNote":
+    "ไฟล์พรีวิวมีไว้สำหรับนักพัฒนาและการไซด์โหลด แพ็กเกจ Apple ต้องใช้ Xcode และการลงลายเซ็น บันเดิล webOS และ Tizen ต้องใช้ SDK ของผู้ผลิตและการลงลายเซ็น ส่วน Roku ต้องเปิดโหมดนักพัฒนา",
   "pages.clients.notYetPublished": "ยังไม่มีไฟล์ดาวน์โหลดที่ลงลายเซ็นเผยแพร่",
   "pages.clients.footer": "คลังเดียว ทุกหน้าจอ เซิร์ฟเวอร์ยังเป็นของคุณ",
   "pages.clients.androidPage.kicker": "Android",

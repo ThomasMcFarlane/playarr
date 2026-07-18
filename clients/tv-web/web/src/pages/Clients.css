@@ -194,9 +194,18 @@
 }
 
 .clients-footer {
+  margin: 1rem auto 0;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.clients-preview-note {
+  max-width: 76ch;
   margin: clamp(46px, 7vh, 78px) auto 0;
   color: var(--ink-soft);
   font-size: 0.78rem;
+  line-height: 1.6;
   text-align: center;
 }
 

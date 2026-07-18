@@ -777,6 +777,9 @@ export const ja: Translations = {
   "pages.clients.tizen.description": "テレビ用シェルはありますが、署名済み製品パッケージはまだ公開されていません。",
   "pages.clients.vidaaSetup": "インストール",
   "pages.clients.downloadApk": "APKをダウンロード",
+  "pages.clients.downloadPreview": "プレビューをダウンロード",
+  "pages.clients.previewNote":
+    "プレビュー版は開発者およびサイドロード向けです。Apple版にはXcodeと署名、webOS版とTizen版には各社SDKと署名、Roku版には開発者モードが必要です。",
   "pages.clients.notYetPublished": "署名済みダウンロードは未公開",
   "pages.clients.footer": "ひとつのライブラリを、すべての画面で。サーバーはあなたのもの。",
   "pages.clients.androidPage.kicker": "Android",
