@@ -50,8 +50,9 @@ pub use source::{SourceInstance, SourceKind};
 pub use system_settings::{SystemSettings, DEFAULT_INSTANCE_NAME};
 pub use tdarr::TdarrConnection;
 pub use user::{
-    Device, MediaPlaybackPreferences, PushRegistration, RefreshTokenRecord, Session, User,
-    UserInvite, UserInviteRequest, UserInviteRequestStatus, DEFAULT_PREFERRED_AUDIO_LANGUAGE,
+    Device, MediaPlaybackPreferences, ProfileAvatarKind, ProfileAvatarPreference, PushRegistration,
+    RefreshTokenRecord, Session, User, UserInvite, UserInviteRequest, UserInviteRequestStatus,
+    DEFAULT_PREFERRED_AUDIO_LANGUAGE,
 };
 pub use work::{
     Availability, ExternalProvider, ExternalRef, ImageAsset, ImageKind, Work, WorkKind,

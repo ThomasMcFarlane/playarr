@@ -1070,6 +1070,22 @@ export interface paths {
         patch: operations["update_player_preferences_handler"];
         trace?: never;
     };
+    "/api/v1/users/me/profile-avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_profile_avatar_handler"];
+        put: operations["update_profile_avatar_handler"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/me/profile-pin": {
         parameters: {
             query?: never;
@@ -1987,6 +2003,24 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        /**
+         * @description The two durable avatar sources a Playarr profile can select. Custom
+         *     photos are cropped and resized by the client before persistence.
+         * @enum {string}
+         */
+        ProfileAvatarKind: "preset" | "custom";
+        /**
+         * @description A signed-in profile's server-backed avatar choice. `value` is a known
+         *     preset id for [`ProfileAvatarKind::Preset`] or a resized JPEG data URL
+         *     for [`ProfileAvatarKind::Custom`].
+         */
+        ProfileAvatarPreference: {
+            kind: components["schemas"]["ProfileAvatarKind"];
+            value: string;
+        };
+        ProfileAvatarSettingResponse: {
+            preference?: null | components["schemas"]["ProfileAvatarPreference"];
+        };
         ProfilePinSettingResponse: {
             pin_locked: boolean;
         };
@@ -2278,6 +2312,9 @@ export interface components {
             name: string;
             /** Format: uuid */
             parent_playlist_id?: string | null;
+        };
+        UpdateProfileAvatarRequest: {
+            preference: components["schemas"]["ProfileAvatarPreference"];
         };
         UpdateProfilePinRequest: {
             /** @description Exactly four ASCII decimal digits. `null` removes the profile lock. */
@@ -5531,6 +5568,85 @@ export interface operations {
                 };
             };
             /** @description Invalid preferred audio language */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The signed-in user no longer exists */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_profile_avatar_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The signed-in user's cross-device avatar preference */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileAvatarSettingResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The signed-in user no longer exists */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_profile_avatar_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProfileAvatarRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated cross-device avatar preference */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileAvatarSettingResponse"];
+                };
+            };
+            /** @description Invalid preset or custom photo data */
             400: {
                 headers: {
                     [name: string]: unknown;

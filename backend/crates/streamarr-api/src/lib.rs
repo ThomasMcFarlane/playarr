@@ -178,6 +178,10 @@ fn api_router() -> OpenApiRouter<AppState> {
             users::get_profile_pin_setting_handler,
             users::update_profile_pin_setting_handler
         ))
+        .routes(routes!(
+            users::get_profile_avatar_handler,
+            users::update_profile_avatar_handler
+        ))
         .routes(routes!(users::list_available_profiles_handler))
         .routes(routes!(users::verify_profile_pin_handler))
         .routes(routes!(
@@ -587,6 +591,7 @@ mod tests {
         assert!(json.contains("/api/v1/admin/views"));
         assert!(json.contains("/api/v1/views"));
         assert!(json.contains("/api/v1/views/{id}/resolve"));
+        assert!(json.contains("/api/v1/users/me/profile-avatar"));
     }
 
     /// Regenerates (with `UPDATE_OPENAPI_SPEC=1`) or verifies (without it)

@@ -20,7 +20,8 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use streamarr_auth::PasswordVerifier;
 use streamarr_model::{
-    Policy, Sensitive, User, UserInvite, UserInviteRequest, UserInviteRequestStatus,
+    Policy, ProfileAvatarKind, ProfileAvatarPreference, Sensitive, User, UserInvite,
+    UserInviteRequest, UserInviteRequestStatus,
 };
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -270,6 +271,18 @@ pub struct ProfilePinSettingResponse {
     pub pin_locked: bool,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ProfileAvatarSettingResponse {
+    /// `null` means this profile has not chosen an avatar yet; clients may
+    /// render their deterministic built-in default.
+    pub preference: Option<ProfileAvatarPreference>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateProfileAvatarRequest {
+    pub preference: ProfileAvatarPreference,
+}
+
 #[derive(Debug, ToSchema)]
 pub struct UpdateProfilePinRequest {
     /// Exactly four ASCII decimal digits. `null` removes the profile lock.
@@ -336,6 +349,39 @@ fn validate_profile_pin(pin: &str) -> Result<(), ApiError> {
         return Err(ApiError::bad_request(
             "pin must contain exactly four ASCII decimal digits",
         ));
+    }
+    Ok(())
+}
+
+const PROFILE_AVATAR_PRESETS: [&str; 6] =
+    ["astronaut", "cat", "dinosaur", "robot", "pirate", "alien"];
+const MAX_PROFILE_AVATAR_DATA_URL_BYTES: usize = 1024 * 1024;
+
+fn validate_profile_avatar(preference: &ProfileAvatarPreference) -> Result<(), ApiError> {
+    match preference.kind {
+        ProfileAvatarKind::Preset => {
+            if !PROFILE_AVATAR_PRESETS.contains(&preference.value.as_str()) {
+                return Err(ApiError::bad_request("unknown profile avatar preset"));
+            }
+        }
+        ProfileAvatarKind::Custom => {
+            let Some(payload) = preference.value.strip_prefix("data:image/jpeg;base64,") else {
+                return Err(ApiError::bad_request(
+                    "custom profile avatar must be a JPEG data URL",
+                ));
+            };
+            if preference.value.len() > MAX_PROFILE_AVATAR_DATA_URL_BYTES
+                || payload.is_empty()
+                || payload.len() % 4 != 0
+                || !payload
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'='))
+            {
+                return Err(ApiError::bad_request(
+                    "custom profile avatar is not valid resized JPEG data",
+                ));
+            }
+        }
     }
     Ok(())
 }
@@ -1031,6 +1077,96 @@ pub async fn update_profile_pin_setting_handler(
             })?;
         Ok(Json(ProfilePinSettingResponse { pin_locked: false }))
     }
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/me/profile-avatar",
+    tag = "users",
+    responses(
+        (status = 200, description = "The signed-in user's cross-device avatar preference", body = ProfileAvatarSettingResponse),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 404, description = "The signed-in user no longer exists")
+    )
+)]
+pub async fn get_profile_avatar_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<ProfileAvatarSettingResponse>, ApiError> {
+    let user_exists = state
+        .user_repo
+        .find_by_id(auth.user_id)
+        .await
+        .map_err(|error| {
+            ApiError::internal(format!(
+                "failed to load user {} before reading profile avatar: {error}",
+                auth.user_id
+            ))
+        })?
+        .is_some();
+    if !user_exists {
+        return Err(ApiError::not_found("signed-in user no longer exists"));
+    }
+
+    let preference = state
+        .user_repo
+        .get_profile_avatar(auth.user_id)
+        .await
+        .map_err(|error| {
+            ApiError::internal(format!(
+                "failed to load profile avatar for user {}: {error}",
+                auth.user_id
+            ))
+        })?;
+    Ok(Json(ProfileAvatarSettingResponse { preference }))
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/v1/users/me/profile-avatar",
+    tag = "users",
+    request_body = UpdateProfileAvatarRequest,
+    responses(
+        (status = 200, description = "Updated cross-device avatar preference", body = ProfileAvatarSettingResponse),
+        (status = 400, description = "Invalid preset or custom photo data"),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 404, description = "The signed-in user no longer exists")
+    )
+)]
+pub async fn update_profile_avatar_handler(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<UpdateProfileAvatarRequest>,
+) -> Result<Json<ProfileAvatarSettingResponse>, ApiError> {
+    validate_profile_avatar(&body.preference)?;
+    let user_exists = state
+        .user_repo
+        .find_by_id(auth.user_id)
+        .await
+        .map_err(|error| {
+            ApiError::internal(format!(
+                "failed to load user {} before updating profile avatar: {error}",
+                auth.user_id
+            ))
+        })?
+        .is_some();
+    if !user_exists {
+        return Err(ApiError::not_found("signed-in user no longer exists"));
+    }
+
+    state
+        .user_repo
+        .upsert_profile_avatar(auth.user_id, &body.preference)
+        .await
+        .map_err(|error| {
+            ApiError::internal(format!(
+                "failed to persist profile avatar for user {}: {error}",
+                auth.user_id
+            ))
+        })?;
+    Ok(Json(ProfileAvatarSettingResponse {
+        preference: Some(body.preference),
+    }))
 }
 
 #[utoipa::path(
@@ -1954,6 +2090,116 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/v1/users/me/player-preferences")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn profile_avatar_persists_for_the_signed_in_user() {
+        let (router, state) = test_state().await;
+        let user_id = Uuid::new_v4();
+        crate::test_support::seed_streaming_user(&state, user_id).await;
+        let token = mint_access_token(&state, user_id);
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/users/me/profile-avatar")
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let setting: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert!(setting["preference"].is_null());
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/v1/users/me/profile-avatar")
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::from(
+                        serde_json::json!({
+                            "preference": {
+                                "kind": "custom",
+                                "value": "data:image/jpeg;base64,YXZhdGFy"
+                            }
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/users/me/profile-avatar")
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let setting: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(setting["preference"]["kind"], "custom");
+        assert_eq!(
+            setting["preference"]["value"],
+            "data:image/jpeg;base64,YXZhdGFy"
+        );
+    }
+
+    #[tokio::test]
+    async fn profile_avatar_rejects_invalid_values_and_requires_authentication() {
+        let (router, state) = test_state().await;
+        let user_id = Uuid::new_v4();
+        crate::test_support::seed_streaming_user(&state, user_id).await;
+        let token = mint_access_token(&state, user_id);
+
+        for preference in [
+            serde_json::json!({ "kind": "preset", "value": "unknown" }),
+            serde_json::json!({ "kind": "custom", "value": "https://example.test/avatar.jpg" }),
+        ] {
+            let response = router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("PUT")
+                        .uri("/api/v1/users/me/profile-avatar")
+                        .header("content-type", "application/json")
+                        .header("Authorization", bearer_header(&token))
+                        .body(Body::from(
+                            serde_json::json!({ "preference": preference }).to_string(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        }
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/users/me/profile-avatar")
                     .body(Body::empty())
                     .unwrap(),
             )

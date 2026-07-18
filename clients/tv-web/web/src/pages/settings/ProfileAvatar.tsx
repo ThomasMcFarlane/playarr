@@ -5,13 +5,14 @@ import {
   type ChangeEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { ProfileAvatar } from "../../components/ProfileAvatar";
-import { useApiBaseUrl, useAuth } from "../../lib/ApiClientProvider";
+import { ProfileAvatar, useStoredProfileAvatar } from "../../components/ProfileAvatar";
+import { useApiBaseUrl, useApiClient, useAuth } from "../../lib/ApiClientProvider";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import {
   PROFILE_AVATAR_PRESETS,
   createCustomAvatarSource,
   drawCustomAvatarCrop,
+  profileAvatarToRemotePreference,
   profileAvatarScope,
   readProfileAvatar,
   releaseCustomAvatarSource,
@@ -31,6 +32,7 @@ export function SettingsProfileAvatarPage() {
   const { t } = useLanguage();
   useDocumentTitle(t("settings.profileAvatar.documentTitle"));
   const [apiBaseUrl] = useApiBaseUrl();
+  const client = useApiClient();
   const { currentUserId } = useAuth();
   const { showToast } = useToast();
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -41,6 +43,7 @@ export function SettingsProfileAvatarPage() {
     scope && currentUserId ? readProfileAvatar(scope, currentUserId) : null
   );
   const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [editorSource, setEditorSource] = useState<CustomAvatarSource | null>(null);
   const [crop, setCrop] = useState<CustomAvatarCrop>({
     zoom: 1,
@@ -49,10 +52,11 @@ export function SettingsProfileAvatarPage() {
   });
   const [error, setError] = useState<string | null>(null);
   const canUpload = supportsCustomAvatarUpload();
+  const syncedPreference = useStoredProfileAvatar(scope, currentUserId, client);
 
   useEffect(() => {
-    setPreference(scope && currentUserId ? readProfileAvatar(scope, currentUserId) : null);
-  }, [currentUserId, scope]);
+    setPreference(syncedPreference);
+  }, [syncedPreference]);
 
   useEffect(() => {
     if (!editorSource) return;
@@ -88,20 +92,34 @@ export function SettingsProfileAvatarPage() {
     }
   }, [crop, editorSource, t]);
 
-  function savePreference(next: ProfileAvatarPreference, toast: string): boolean {
-    if (!scope || !writeProfileAvatar(scope, next)) {
+  async function savePreference(
+    next: ProfileAvatarPreference,
+    toast: string
+  ): Promise<boolean> {
+    if (!scope || saving) return false;
+    setSaving(true);
+    try {
+      await client.updateProfileAvatar({
+        preference: profileAvatarToRemotePreference(next),
+      });
+      if (!writeProfileAvatar(scope, next)) {
+        throw new Error("profile_avatar_cache_failed");
+      }
+      setPreference(next);
+      setError(null);
+      showToast(toast);
+      return true;
+    } catch {
       setError(t("settings.profileAvatar.saveFailed"));
       return false;
+    } finally {
+      setSaving(false);
     }
-    setPreference(next);
-    setError(null);
-    showToast(toast);
-    return true;
   }
 
-  function selectPreset(preset: ProfileAvatarPresetId) {
+  async function selectPreset(preset: ProfileAvatarPresetId) {
     if (preference?.kind === "preset" && preference.preset === preset) return;
-    savePreference(
+    await savePreference(
       { kind: "preset", preset },
       t("settings.profileAvatar.presetSaved")
     );
@@ -154,12 +172,12 @@ export function SettingsProfileAvatarPage() {
     if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
   }
 
-  function saveCrop() {
+  async function saveCrop() {
     if (!editorSource) return;
     try {
       const dataUrl = renderCustomAvatar(editorSource, crop);
       if (
-        savePreference(
+        await savePreference(
           { kind: "custom", dataUrl },
           t("settings.profileAvatar.customSaved")
         )
@@ -199,7 +217,8 @@ export function SettingsProfileAvatarPage() {
                 className={`profile-avatar-preset${selected ? " is-active" : ""}`}
                 aria-label={t(`settings.profileAvatar.preset.${preset.id}`)}
                 aria-pressed={selected}
-                onClick={() => selectPreset(preset.id)}
+                disabled={saving}
+                onClick={() => void selectPreset(preset.id)}
               >
                 <ProfileAvatar
                   preference={{ kind: "preset", preset: preset.id }}
@@ -234,7 +253,7 @@ export function SettingsProfileAvatarPage() {
             <button
               type="button"
               className="btn btn-secondary"
-              disabled={uploading}
+              disabled={uploading || saving}
               onClick={() => uploadInputRef.current?.click()}
             >
               {uploading
@@ -346,7 +365,12 @@ export function SettingsProfileAvatarPage() {
               >
                 {t("settings.profileAvatar.cancelCrop")}
               </button>
-              <button type="button" className="btn btn-primary" onClick={saveCrop}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={saving}
+                onClick={() => void saveCrop()}
+              >
                 {t("settings.profileAvatar.saveCrop")}
               </button>
             </div>

@@ -3,7 +3,9 @@ import {
   PROFILE_AVATAR_CHANGED_EVENT,
   profileAvatarPreset,
   readProfileAvatar,
+  syncProfileAvatar,
   type ProfileAvatarPreference,
+  type ProfileAvatarSyncClient,
 } from "../lib/profileAvatar";
 
 interface ProfileAvatarProps {
@@ -110,14 +112,28 @@ export function ProfileAvatar({ className = "", preference }: ProfileAvatarProps
   );
 }
 
-export function useStoredProfileAvatar(scope: string | undefined, userId: string | undefined) {
+export function useStoredProfileAvatar(
+  scope: string | undefined,
+  userId: string | undefined,
+  client?: ProfileAvatarSyncClient
+) {
   const [preference, setPreference] = useState<ProfileAvatarPreference | null>(() =>
     scope && userId ? readProfileAvatar(scope, userId) : null
   );
 
   useEffect(() => {
+    let cancelled = false;
     setPreference(scope && userId ? readProfileAvatar(scope, userId) : null);
     if (!scope || !userId) return;
+    if (client) {
+      void syncProfileAvatar(client, scope, userId)
+        .then((syncedPreference) => {
+          if (!cancelled) setPreference(syncedPreference);
+        })
+        .catch(() => {
+          // The local value remains usable while this device is offline.
+        });
+    }
     const handleChange = (event: Event) => {
       if (
         event instanceof CustomEvent &&
@@ -128,8 +144,11 @@ export function useStoredProfileAvatar(scope: string | undefined, userId: string
       setPreference(readProfileAvatar(scope, userId));
     };
     window.addEventListener(PROFILE_AVATAR_CHANGED_EVENT, handleChange);
-    return () => window.removeEventListener(PROFILE_AVATAR_CHANGED_EVENT, handleChange);
-  }, [scope, userId]);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(PROFILE_AVATAR_CHANGED_EVENT, handleChange);
+    };
+  }, [client, scope, userId]);
 
   return preference;
 }

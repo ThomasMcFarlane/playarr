@@ -2,6 +2,10 @@ import {
   PLAYARR_CLIENT_PLATFORM,
   type PlayarrWebPlatform,
 } from "./clientPlatform";
+import type {
+  ApiClient,
+  ProfileAvatarPreference as RemoteProfileAvatarPreference,
+} from "@streamarr-tv/api-client";
 
 const PROFILE_AVATAR_STORAGE_KEY = "playarr.profileAvatars.v1";
 const MAX_AVATAR_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -23,6 +27,11 @@ export type ProfileAvatarPresetId = (typeof PROFILE_AVATAR_PRESETS)[number]["id"
 export type ProfileAvatarPreference =
   | { kind: "preset"; preset: ProfileAvatarPresetId }
   | { kind: "custom"; dataUrl: string };
+
+export type ProfileAvatarSyncClient = Pick<
+  ApiClient,
+  "getProfileAvatar" | "updateProfileAvatar"
+>;
 
 type AvatarStorage = Pick<Storage, "getItem" | "setItem">;
 
@@ -129,6 +138,71 @@ export function writeProfileAvatar(
   } catch {
     return false;
   }
+}
+
+export function profileAvatarToRemotePreference(
+  preference: ProfileAvatarPreference
+): RemoteProfileAvatarPreference {
+  return {
+    kind: preference.kind,
+    value: preference.kind === "preset" ? preference.preset : preference.dataUrl,
+  };
+}
+
+export function profileAvatarFromRemotePreference(
+  preference: RemoteProfileAvatarPreference
+): ProfileAvatarPreference | null {
+  if (preference.kind === "preset" && isPresetId(preference.value)) {
+    return { kind: "preset", preset: preference.value };
+  }
+  if (
+    preference.kind === "custom" &&
+    /^data:image\/jpeg;base64,/i.test(preference.value)
+  ) {
+    return { kind: "custom", dataUrl: preference.value };
+  }
+  return null;
+}
+
+/**
+ * Loads the account-backed avatar and refreshes this device's cache. An
+ * account without a preference receives the current local choice once, which
+ * migrates avatars created before server-side synchronisation was available.
+ */
+export async function syncProfileAvatar(
+  client: ProfileAvatarSyncClient,
+  scope: string,
+  userId: string,
+  storage: AvatarStorage | undefined = browserStorage()
+): Promise<ProfileAvatarPreference> {
+  const storedPreference = readPreferences(storage)[scope];
+  const localPreference = storedPreference ?? {
+    kind: "preset" as const,
+    preset: defaultProfileAvatarPreset(userId),
+  };
+  const remote = await client.getProfileAvatar();
+  if (remote.preference) {
+    const remotePreference = profileAvatarFromRemotePreference(remote.preference);
+    if (remotePreference) {
+      writeProfileAvatar(scope, remotePreference, storage);
+      return remotePreference;
+    }
+  }
+
+  // Do not let a new device's generated default race and overwrite an avatar
+  // that an older device has not migrated yet. Only explicit local choices
+  // are eligible for the one-time upload.
+  if (!storedPreference) return localPreference;
+
+  const saved = await client.updateProfileAvatar({
+    preference: profileAvatarToRemotePreference(localPreference),
+  });
+  const savedPreference = saved.preference
+    ? profileAvatarFromRemotePreference(saved.preference)
+    : null;
+  const preference = savedPreference ?? localPreference;
+  writeProfileAvatar(scope, preference, storage);
+  return preference;
 }
 
 export function supportsCustomAvatarUpload(

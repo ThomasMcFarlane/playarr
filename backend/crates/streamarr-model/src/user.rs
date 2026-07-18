@@ -15,6 +15,26 @@ fn default_preferred_audio_language() -> String {
     DEFAULT_PREFERRED_AUDIO_LANGUAGE.to_string()
 }
 
+/// The two durable avatar sources a Playarr profile can select. Custom
+/// photos are cropped and resized by the client before persistence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub enum ProfileAvatarKind {
+    Preset,
+    Custom,
+}
+
+/// A signed-in profile's server-backed avatar choice. `value` is a known
+/// preset id for [`ProfileAvatarKind::Preset`] or a resized JPEG data URL
+/// for [`ProfileAvatarKind::Custom`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct ProfileAvatarPreference {
+    pub kind: ProfileAvatarKind,
+    pub value: String,
+}
+
 // Note: intentionally *not* `ToSchema`, even under the `openapi` feature —
 // this struct carries `password_hash`, a secret. Handlers that expose user
 // data over HTTP should map to a separate, secret-free DTO rather than

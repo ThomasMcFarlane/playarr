@@ -187,7 +187,11 @@ function AppShell() {
   const currentAvatarScope = currentUserId
     ? profileAvatarScope(apiBaseUrl, currentUserId)
     : undefined;
-  const currentAvatar = useStoredProfileAvatar(currentAvatarScope, currentUserId);
+  const currentAvatar = useStoredProfileAvatar(
+    currentAvatarScope,
+    currentUserId,
+    client
+  );
   const catalogKindsCacheScope = createCatalogKindsCacheScope(
     currentUserId,
     connectedServers.map((server) => server.url)

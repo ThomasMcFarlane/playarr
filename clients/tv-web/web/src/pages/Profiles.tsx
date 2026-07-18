@@ -11,7 +11,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { describeApiError } from "@streamarr-tv/api-client";
 import { useApiBaseUrl, useApiClient, useAuth } from "../lib/ApiClientProvider";
 import { selectDeviceProfiles } from "../lib/deviceProfiles";
-import { ProfileAvatar } from "../components/ProfileAvatar";
+import { ProfileAvatar, useStoredProfileAvatar } from "../components/ProfileAvatar";
 import { profileAvatarScope, readProfileAvatar } from "../lib/profileAvatar";
 import { SettingsIcon } from "../components/NavIcons";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
@@ -121,6 +121,14 @@ export function ProfilesPage(
   });
   const pinInputRef = useRef<HTMLInputElement>(null);
   const isAndroidTv = PLAYARR_CLIENT_PLATFORM === "android-tv";
+  const currentAvatarScope = currentUserId
+    ? profileAvatarScope(apiBaseUrl, currentUserId)
+    : undefined;
+  const currentAvatar = useStoredProfileAvatar(
+    currentAvatarScope,
+    currentUserId,
+    client
+  );
 
   useEffect(() => {
     if (!loginFromOverride) clearActivePlayerSession();
@@ -481,10 +489,14 @@ export function ProfilesPage(
                 >
                   <ProfileAvatar
                     className="profile-avatar"
-                    preference={readProfileAvatar(
-                      profileAvatarScope(apiBaseUrl, profile.id),
-                      profile.id
-                    )}
+                    preference={
+                      profile.id === currentUserId && currentAvatar
+                        ? currentAvatar
+                        : readProfileAvatar(
+                            profileAvatarScope(apiBaseUrl, profile.id),
+                            profile.id
+                          )
+                    }
                   />
                   <strong>{profile.name}</strong>
                   <small>
@@ -626,10 +638,14 @@ export function ProfilesPage(
             </button>
             <ProfileAvatar
               className="profile-pin-avatar"
-              preference={readProfileAvatar(
-                profileAvatarScope(apiBaseUrl, pinProfile.id),
-                pinProfile.id
-              )}
+              preference={
+                pinProfile.id === currentUserId && currentAvatar
+                  ? currentAvatar
+                  : readProfileAvatar(
+                      profileAvatarScope(apiBaseUrl, pinProfile.id),
+                      pinProfile.id
+                    )
+              }
             />
             <p>{t("pages.profiles.switchProfile")}</p>
             <h2 id="profile-pin-title">{pinProfile.name}</h2>

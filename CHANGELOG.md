@@ -184,6 +184,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   viewport-height units to zero, and preserve the web app's initial route focus after loading.
 - Keep a restored library card and its captured native scroll position visible after returning
   from a detail page, while yielding immediately to new remote, pointer, wheel, or touch input.
+- Persist profile avatar presets and resized custom photos with the signed-in account so an
+  existing choice renders on other web and TV devices.
 - Keep directory preview animations from narrowing the shared media-copy width and wrapping titles
   differently from their detail pages.
 - Persist the focused audio or video choice when creating a playlist instead of allowing visual

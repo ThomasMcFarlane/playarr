@@ -414,6 +414,34 @@ describe("ApiClient", () => {
     });
   });
 
+  it("reads and updates the signed-in profile avatar with authentication", async () => {
+    const customPreference = {
+      kind: "custom" as const,
+      value: "data:image/jpeg;base64,YXZhdGFy",
+    };
+    const fetchImpl = mockFetch(async (request) => {
+      expect(new URL(request.url).pathname).toBe("/api/v1/users/me/profile-avatar");
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+      if (request.method === "PUT") {
+        await expect(request.json()).resolves.toEqual({ preference: customPreference });
+      }
+      return jsonResponse(200, { preference: customPreference });
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "viewer-token",
+    });
+
+    await expect(client.getProfileAvatar()).resolves.toEqual({
+      preference: customPreference,
+    });
+    await expect(
+      client.updateProfileAvatar({ preference: customPreference })
+    ).resolves.toEqual({ preference: customPreference });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it("logs in with the real LoginRequest shape and parses a real LoginResponse", async () => {
     const fetchImpl = mockFetch(async (request) => {
       expect(new URL(request.url).pathname).toBe("/api/v1/auth/login");

@@ -129,6 +129,11 @@ export type UserResponse = components["schemas"]["UserResponse"];
 export type PlayerPreferences = components["schemas"]["PlayerPreferencesResponse"];
 export type UpdatePlayerPreferencesRequest =
   components["schemas"]["UpdatePlayerPreferencesRequest"];
+export type ProfileAvatarPreference = components["schemas"]["ProfileAvatarPreference"];
+export type ProfileAvatarSettingResponse =
+  components["schemas"]["ProfileAvatarSettingResponse"];
+export type UpdateProfileAvatarRequest =
+  components["schemas"]["UpdateProfileAvatarRequest"];
 export type AvailableProfile = components["schemas"]["AvailableProfileResponse"];
 export type ProfilePinSetting = components["schemas"]["ProfilePinSettingResponse"];
 export type UpdateProfilePinRequest = components["schemas"]["UpdateProfilePinRequest"];
@@ -284,6 +289,8 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/admin/users/{id}", method: "DELETE" },
   { schemaPath: "/api/v1/users/me/player-preferences", method: "GET" },
   { schemaPath: "/api/v1/users/me/player-preferences", method: "PATCH" },
+  { schemaPath: "/api/v1/users/me/profile-avatar", method: "GET" },
+  { schemaPath: "/api/v1/users/me/profile-avatar", method: "PUT" },
   { schemaPath: "/api/v1/users/me/profile-pin", method: "GET" },
   { schemaPath: "/api/v1/users/me/profile-pin", method: "PATCH" },
   { schemaPath: "/api/v1/users/profiles", method: "GET" },
@@ -789,6 +796,18 @@ export class ApiClient {
     return this.unwrap(
       await this.raw.PATCH("/api/v1/users/me/player-preferences", { body })
     );
+  }
+
+  /** The signed-in user's profile avatar, shared by every client device. */
+  async getProfileAvatar(): Promise<ProfileAvatarSettingResponse> {
+    return this.unwrap(await this.raw.GET("/api/v1/users/me/profile-avatar", {}));
+  }
+
+  /** Replaces the signed-in user's server-backed profile avatar. */
+  async updateProfileAvatar(
+    body: UpdateProfileAvatarRequest
+  ): Promise<ProfileAvatarSettingResponse> {
+    return this.unwrap(await this.raw.PUT("/api/v1/users/me/profile-avatar", { body }));
   }
 
   /** Profiles available to the signed-in viewer, including browser-switch lock state. */

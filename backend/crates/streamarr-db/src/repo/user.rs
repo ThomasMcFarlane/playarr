@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use streamarr_model::{MediaPlaybackPreferences, Sensitive, User};
+use streamarr_model::{MediaPlaybackPreferences, ProfileAvatarPreference, Sensitive, User};
 use uuid::Uuid;
 
 use crate::codec::{bool_from_i64, bool_to_i64, format_datetime, parse_datetime, parse_uuid};
@@ -43,6 +43,17 @@ pub trait UserRepo: Send + Sync {
         &self,
         user_id: Uuid,
         preferences: &MediaPlaybackPreferences,
+    ) -> Result<(), DbError>;
+
+    async fn get_profile_avatar(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Option<ProfileAvatarPreference>, DbError>;
+
+    async fn upsert_profile_avatar(
+        &self,
+        user_id: Uuid,
+        preference: &ProfileAvatarPreference,
     ) -> Result<(), DbError>;
 }
 
@@ -249,6 +260,53 @@ impl UserRepo for SqlxUserRepo {
             .bind(preferences.quality_id.as_str())
             .bind(preferences.audio_track_id.as_deref())
             .bind(preferences.subtitle_track_id.as_deref())
+            .bind(format_datetime(chrono::Utc::now()))
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn get_profile_avatar(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Option<ProfileAvatarPreference>, DbError> {
+        let sql = match self.backend {
+            Backend::Sqlite => "SELECT preference FROM user_profile_avatars WHERE user_id = ?",
+            Backend::Postgres => "SELECT preference FROM user_profile_avatars WHERE user_id = $1",
+        };
+        let row = sqlx::query(sql)
+            .bind(user_id.to_string())
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(|row| {
+            let preference: String = row.try_get("preference")?;
+            serde_json::from_str(&preference).map_err(DbError::from)
+        })
+        .transpose()
+    }
+
+    async fn upsert_profile_avatar(
+        &self,
+        user_id: Uuid,
+        preference: &ProfileAvatarPreference,
+    ) -> Result<(), DbError> {
+        let sql = match self.backend {
+            Backend::Sqlite => {
+                "INSERT INTO user_profile_avatars (user_id, preference, updated_at) \
+                 VALUES (?, ?, ?) \
+                 ON CONFLICT (user_id) DO UPDATE SET \
+                 preference = excluded.preference, updated_at = excluded.updated_at"
+            }
+            Backend::Postgres => {
+                "INSERT INTO user_profile_avatars (user_id, preference, updated_at) \
+                 VALUES ($1, $2, $3) \
+                 ON CONFLICT (user_id) DO UPDATE SET \
+                 preference = EXCLUDED.preference, updated_at = EXCLUDED.updated_at"
+            }
+        };
+        sqlx::query(sql)
+            .bind(user_id.to_string())
+            .bind(serde_json::to_string(preference)?)
             .bind(format_datetime(chrono::Utc::now()))
             .execute(&self.pool)
             .await?;
@@ -496,5 +554,34 @@ mod tests {
         let repo = SqlxUserRepo::new(pool);
         let err = repo.delete(Uuid::new_v4()).await.unwrap_err();
         assert!(matches!(err, DbError::NotFound));
+    }
+
+    #[tokio::test]
+    async fn profile_avatar_round_trips_and_updates() {
+        let pool = test_sqlite_pool().await;
+        let policy_id = sample_policy_id(&pool).await;
+        let repo = SqlxUserRepo::new(pool.clone());
+        let user = sample_user(policy_id, "avatar-viewer");
+        repo.upsert(&user).await.unwrap();
+
+        let preset = streamarr_model::ProfileAvatarPreference {
+            kind: streamarr_model::ProfileAvatarKind::Preset,
+            value: "robot".to_string(),
+        };
+        repo.upsert_profile_avatar(user.id, &preset).await.unwrap();
+        assert_eq!(
+            repo.get_profile_avatar(user.id).await.unwrap(),
+            Some(preset)
+        );
+
+        let custom = streamarr_model::ProfileAvatarPreference {
+            kind: streamarr_model::ProfileAvatarKind::Custom,
+            value: "data:image/jpeg;base64,YXZhdGFy".to_string(),
+        };
+        repo.upsert_profile_avatar(user.id, &custom).await.unwrap();
+        assert_eq!(
+            repo.get_profile_avatar(user.id).await.unwrap(),
+            Some(custom)
+        );
     }
 }

@@ -2058,6 +2058,45 @@ paths:
           description: Missing or invalid access token
         '404':
           description: The signed-in user no longer exists
+  /api/v1/users/me/profile-avatar:
+    get:
+      tags:
+      - users
+      operationId: get_profile_avatar_handler
+      responses:
+        '200':
+          description: The signed-in user's cross-device avatar preference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileAvatarSettingResponse'
+        '401':
+          description: Missing or invalid access token
+        '404':
+          description: The signed-in user no longer exists
+    put:
+      tags:
+      - users
+      operationId: update_profile_avatar_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileAvatarRequest'
+        required: true
+      responses:
+        '200':
+          description: Updated cross-device avatar preference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileAvatarSettingResponse'
+        '400':
+          description: Invalid preset or custom photo data
+        '401':
+          description: Missing or invalid access token
+        '404':
+          description: The signed-in user no longer exists
   /api/v1/users/me/profile-pin:
     get:
       tags:
@@ -3805,6 +3844,38 @@ components:
         updated_at:
           type: string
           format: date-time
+    ProfileAvatarKind:
+      type: string
+      description: |-
+        The two durable avatar sources a Playarr profile can select. Custom
+        photos are cropped and resized by the client before persistence.
+      enum:
+      - preset
+      - custom
+    ProfileAvatarPreference:
+      type: object
+      description: |-
+        A signed-in profile's server-backed avatar choice. `value` is a known
+        preset id for [`ProfileAvatarKind::Preset`] or a resized JPEG data URL
+        for [`ProfileAvatarKind::Custom`].
+      required:
+      - kind
+      - value
+      properties:
+        kind:
+          $ref: '#/components/schemas/ProfileAvatarKind'
+        value:
+          type: string
+    ProfileAvatarSettingResponse:
+      type: object
+      properties:
+        preference:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/ProfileAvatarPreference'
+            description: |-
+              `null` means this profile has not chosen an avatar yet; clients may
+              render their deterministic built-in default.
     ProfilePinSettingResponse:
       type: object
       required:
@@ -4459,6 +4530,13 @@ components:
           - string
           - 'null'
           format: uuid
+    UpdateProfileAvatarRequest:
+      type: object
+      required:
+      - preference
+      properties:
+        preference:
+          $ref: '#/components/schemas/ProfileAvatarPreference'
     UpdateProfilePinRequest:
       type: object
       required:

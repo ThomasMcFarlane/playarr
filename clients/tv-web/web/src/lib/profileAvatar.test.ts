@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   defaultProfileAvatarPreset,
   customAvatarDrawRect,
   profileAvatarScope,
   readProfileAvatar,
+  syncProfileAvatar,
   supportsCustomAvatarUpload,
   writeProfileAvatar,
 } from "./profileAvatar";
@@ -48,6 +49,82 @@ describe("profile avatar preferences", () => {
     expect(readProfileAvatar("broken", "user-2", storage)).toEqual({
       kind: "preset",
       preset: defaultProfileAvatarPreset("user-2"),
+    });
+  });
+
+  it("uses and caches a custom photo already saved on another device", async () => {
+    const storage = createMemoryStorage();
+    const scope = profileAvatarScope("https://one.example", "user-1");
+    writeProfileAvatar(scope, { kind: "preset", preset: "robot" }, storage);
+    const dataUrl = "data:image/jpeg;base64,Y3Jvc3MtZGV2aWNl";
+    const client = {
+      getProfileAvatar: vi.fn(async () => ({
+        preference: { kind: "custom" as const, value: dataUrl },
+      })),
+      updateProfileAvatar: vi.fn(),
+    };
+
+    await expect(syncProfileAvatar(client, scope, "user-1", storage)).resolves.toEqual({
+      kind: "custom",
+      dataUrl,
+    });
+    expect(readProfileAvatar(scope, "user-1", storage)).toEqual({
+      kind: "custom",
+      dataUrl,
+    });
+    expect(client.updateProfileAvatar).not.toHaveBeenCalled();
+  });
+
+  it("migrates an existing local avatar when the account has no saved preference", async () => {
+    const storage = createMemoryStorage();
+    const scope = profileAvatarScope("https://one.example", "user-1");
+    writeProfileAvatar(scope, { kind: "preset", preset: "pirate" }, storage);
+    const client = {
+      getProfileAvatar: vi.fn(async () => ({ preference: null })),
+      updateProfileAvatar: vi.fn(async (request) => ({ preference: request.preference })),
+    };
+
+    await expect(syncProfileAvatar(client, scope, "user-1", storage)).resolves.toEqual({
+      kind: "preset",
+      preset: "pirate",
+    });
+    expect(client.updateProfileAvatar).toHaveBeenCalledWith({
+      preference: { kind: "preset", value: "pirate" },
+    });
+  });
+
+  it("does not upload a generated default from a new device", async () => {
+    const storage = createMemoryStorage();
+    const scope = profileAvatarScope("https://one.example", "user-1");
+    const client = {
+      getProfileAvatar: vi.fn(async () => ({ preference: null })),
+      updateProfileAvatar: vi.fn(),
+    };
+
+    await expect(syncProfileAvatar(client, scope, "user-1", storage)).resolves.toEqual({
+      kind: "preset",
+      preset: defaultProfileAvatarPreset("user-1"),
+    });
+    expect(client.updateProfileAvatar).not.toHaveBeenCalled();
+  });
+
+  it("keeps the cached avatar when account synchronisation is unavailable", async () => {
+    const storage = createMemoryStorage();
+    const scope = profileAvatarScope("https://one.example", "user-1");
+    writeProfileAvatar(scope, { kind: "preset", preset: "cat" }, storage);
+    const client = {
+      getProfileAvatar: vi.fn(async () => {
+        throw new Error("offline");
+      }),
+      updateProfileAvatar: vi.fn(),
+    };
+
+    await expect(syncProfileAvatar(client, scope, "user-1", storage)).rejects.toThrow(
+      "offline"
+    );
+    expect(readProfileAvatar(scope, "user-1", storage)).toEqual({
+      kind: "preset",
+      preset: "cat",
     });
   });
 
