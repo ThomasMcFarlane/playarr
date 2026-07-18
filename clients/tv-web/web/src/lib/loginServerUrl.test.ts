@@ -34,6 +34,16 @@ describe("publicIpv4RelayUrl", () => {
   });
 
   it.each([
+    "v4-203-0-113-10.relay.playarr.app",
+    "http://v4-203-0-113-10.relay.playarr.app",
+    "https://v4-203-0-113-10.relay.playarr.app",
+  ])("normalises relay hostname form %s to HTTPS on the Streamarr port", (value) => {
+    expect(publicIpv4RelayUrl(value)).toBe(
+      "https://v4-203-0-113-10.relay.playarr.app:8484"
+    );
+  });
+
+  it.each([
     "11.22.33.44:8080/api?q=one#result",
     "http://11.22.33.44:8080/api?q=one#result",
     "https://11.22.33.44:9443/api?q=one#result",

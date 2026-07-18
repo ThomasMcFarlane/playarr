@@ -92,6 +92,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Limit Playarr's profile selector to users with a session on the current device.
+- Accept bare `v4-A-B-C-D.relay.playarr.app` hostnames in Playarr server fields and normalise
+  them to HTTPS on Streamarr's application port.
 - Redirect plaintext requests on Streamarr's HTTP and HTTPS ports to the configured browser-trusted
   HTTPS hostname instead of returning a 404 or an invalid TLS response.
 - Load cross-origin media with CORS enabled so Playarr's Web Audio visualiser receives real audio

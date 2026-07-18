@@ -38,6 +38,15 @@ function publicIpv4Octets(hostname: string): [number, number, number, number] | 
   return parsed;
 }
 
+function encodedPublicIpv4Octets(
+  hostname: string
+): [number, number, number, number] | undefined {
+  const match = hostname.match(
+    /^v4-(\d{1,3})-(\d{1,3})-(\d{1,3})-(\d{1,3})\.relay\.playarr\.app$/i
+  );
+  return match ? publicIpv4Octets(match.slice(1).join(".")) : undefined;
+}
+
 /**
  * Give public IPv4 Streamarr servers a secure, deterministic DNS name.
  * DNS resolves the name straight back to the encoded address; neither
@@ -55,7 +64,8 @@ export function publicIpv4RelayUrl(value: string): string {
     const url = new URL(candidate);
     if (url.protocol !== "http:" && url.protocol !== "https:") return value;
 
-    const octets = publicIpv4Octets(url.hostname);
+    const encodedOctets = encodedPublicIpv4Octets(url.hostname);
+    const octets = encodedOctets ?? publicIpv4Octets(url.hostname);
     if (!octets) return value;
 
     const hostname = `v4-${octets.join("-")}.${PUBLIC_IPV4_RELAY_HOSTNAME}`;
