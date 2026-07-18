@@ -20,14 +20,16 @@ export function TvStageChrome({
         <img className="app-logo-icon" src="/playarr-icon.svg" alt="" />
       </span>
       {backLabel && onBack ? (
-        <button
-          type="button"
-          className="tv-page-back tv-stage-chrome-back"
-          aria-label={backLabel}
-          onClick={onBack}
-        >
-          <span aria-hidden="true">←</span>
-        </button>
+        <div className="tv-library-heading tv-stage-chrome-heading">
+          <button
+            type="button"
+            className="tv-page-back tv-stage-chrome-back"
+            aria-label={backLabel}
+            onClick={onBack}
+          >
+            <span aria-hidden="true">←</span>
+          </button>
+        </div>
       ) : null}
     </header>
   );

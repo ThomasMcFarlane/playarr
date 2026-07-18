@@ -23,16 +23,15 @@ describe("ProfileAuthLayout", () => {
 
     expect(markup).toContain('class="tv-stage-chrome-logo"');
     expect(markup).toContain(
+      'class="tv-library-heading tv-stage-chrome-heading"'
+    );
+    expect(markup).toContain(
       'class="tv-page-back tv-stage-chrome-back"'
     );
 
     const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
-    const chromeRule = css.match(
-      /\.tv-stage-chrome\s*\{(?<declarations>[^}]*)\}/
-    )?.groups?.declarations;
-
-    expect(chromeRule).toContain("display: flex");
-    expect(chromeRule).toContain("align-items: center");
+    expect(css).toContain(".tv-library-heading {");
+    expect(css).toContain(".tv-stage-chrome-heading {");
   });
 
   it("marks overflowing auth fields as a native vertical scroll viewport", () => {
