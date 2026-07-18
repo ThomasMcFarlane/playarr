@@ -7,8 +7,6 @@
   "title": "Streamarr",
   "icon": "icon.png",
   "largeIcon": "icon.png",
-  "bgImage": "splash.png",
-  "splashBackground": "splash.png",
   "iconColor": "#000000",
   "uiRevision": "2",
   "resolution": "1920x1080",

@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "build": "tsc -p tsconfig.json --noEmit && vite build && node scripts/prepare-package.mjs",
+    "test": "node --test scripts/prepare-package.test.mjs",
+    "package:wgt": "pnpm run build && tizen package -t wgt -- dist",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",
     "clean": "rm -rf dist"

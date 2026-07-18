@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
+import { StrictMode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { TvApp } from "@streamarr-tv/ui-tv";
 import type { PlaybackCapabilities } from "@streamarr-tv/api-client/react";
@@ -23,14 +23,15 @@ const PLAYBACK_CAPABILITIES: PlaybackCapabilities = {
 const RUNTIME_CONFIG_URL = `${import.meta.env.BASE_URL}streamarr-config.json`;
 
 function App() {
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [engine] = useState(() => new ShakaPlaybackEngine());
-
-  useMemo(() => {
-    if (videoRef.current) {
-      engine.attach(videoRef.current);
-    }
-  }, [engine]);
+  const attachVideo = useCallback(
+    (element: HTMLVideoElement | null) => {
+      if (element) {
+        engine.attach(element);
+      }
+    },
+    [engine]
+  );
 
   const [apiBaseUrl, setApiBaseUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -50,7 +51,10 @@ function App() {
       appVersion={__APP_VERSION__}
       playbackCapabilities={PLAYBACK_CAPABILITIES}
       videoSurface={
-        <video ref={videoRef} style={{ position: "fixed", inset: 0, width: "100%", height: "100%" }} />
+        <video
+          ref={attachVideo}
+          style={{ position: "fixed", inset: 0, width: "100%", height: "100%" }}
+        />
       }
     />
   );

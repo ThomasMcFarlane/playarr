@@ -11,6 +11,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Add an installable native Playarr iPhone and iPad project with reusable StreamarrKit business
   logic, App Store-ready bundle metadata, privacy resources, and iOS unit-test targets.
+- Add a native Roku SceneGraph client with server setup, device linking, household
+  profiles, paginated library browsing, title details, native playback and session telemetry.
+- Make the Tizen client package-ready by emitting and validating its widget manifest and
+  application icon alongside the production bundle.
+- Make the webOS client package-ready with a validated manifest and application icon, and attach
+  its Shaka playback engine when the video surface mounts.
 - Let administrators choose Playarr and shared-library access when creating or approving an
   invitation, and let requesters include an admin-visible message about who the invite is for.
 - Add playful per-profile avatar choices in Playarr settings, with crop, reposition, zoom, and
@@ -82,6 +88,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Align the iOS architecture and roadmap with the installable Xcode project and remaining runtime
   validation boundary.
+- Align the Tizen architecture guidance with the package-ready production build.
+- Align the webOS architecture guidance with the package-ready production build.
 
 - Match the Clients catalogue to the profile selector with an offscreen horizontal platform row,
   hidden scrollbars, recognisable icons, directional action navigation, inline installation
