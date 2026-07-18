@@ -6,12 +6,13 @@ Static Assets at <https://playarr.app>. Cloudflare serves the Vite build from
 navigation to React Router routes works.
 
 The public Clients hub is served at `/clients`; `/download` and `/install`
-redirect there, and `/clients/vidaa` hosts the experimental launcher setup.
-Cloudflare serves those pages and the Playarr client only. It cannot provide
-the VIDAA resolver's UDP/TCP port 53 or the intercepted `vidaahub.com` TLS
-endpoint. Deploy that fixed-IP service separately by following
-[`infra/vidaa-gateway/README.md`](../../infra/vidaa-gateway/README.md), and keep
-the `dns.playarr.app` A record DNS-only.
+redirect there, and `/vidaa-store/` publishes the fixed Playarr-only VIDAA custom
+store assets. Playarr does not operate a public VIDAA DNS resolver. Viewers choose
+and control a compatible DNS, proxy, or self-hosted interception method themselves.
+
+Signed Android APKs are stored in the private `playarr-client-downloads` R2 bucket.
+The Worker streams the stable mobile and TV objects from same-origin `/downloads/android/`
+URLs while continuing to serve ordinary application routes from Static Assets.
 
 ## One-time Cloudflare and GitHub setup
 
@@ -22,7 +23,10 @@ the `dns.playarr.app` A record DNS-only.
 3. In the GitHub repository, add these Actions secrets:
    - `CLOUDFLARE_API_TOKEN`
    - `CLOUDFLARE_ACCOUNT_ID`
-4. Run the **Deploy Playarr Web** workflow once, or deploy locally. The first
+4. Create the private R2 bucket `playarr-client-downloads`. Add a separate
+   `CLOUDFLARE_R2_API_TOKEN` secret with only Account R2 Storage Edit access to
+   the `release-android` environment.
+5. Run the **Deploy Playarr Web** workflow once, or deploy locally. The first
    deployment creates the `playarr-web` Worker and attaches the `playarr.app`
    custom domain. Cloudflare manages its DNS record and TLS certificate.
 

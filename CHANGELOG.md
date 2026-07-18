@@ -77,6 +77,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Match the Clients catalogue to the profile selector with an offscreen horizontal platform row,
   hidden scrollbars, recognisable icons, directional action navigation, inline installation
   details, consolidated Android downloads, Fire TV, Apple TV, Roku TV, and a Profiles-page link.
+- Publish signed Android mobile and TV releases automatically to same-origin Playarr download
+  URLs, and host the VIDAA custom store assets without operating a public DNS resolver.
 - Use the same left-aligned background artwork sizing, crop, tint, and positioning across all media
   surfaces, with a right-edge fade that scales with the artwork.
 - Use the standard library-heading divider and spacing between the media section and selected item

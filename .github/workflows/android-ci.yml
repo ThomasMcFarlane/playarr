@@ -1,26 +1,4 @@
-# =============================================================================
-# Android Release
-# =============================================================================
-#
-# Release-track workflow for the Android client family. Triggered by
-# pushing a tag like `android-v2.3.0` -- a combined release train covering
-# both publishable app modules (clients/mobile-android, clients/tv-android;
-# clients/android-shared is a library, not independently published).
-#
-# NOTE: this is intentionally a lightweight skeleton. The Android client
-# modules don't exist yet (see the Android client shell scaffolding task),
-# so the real build/sign/publish steps below are TODO placeholders showing
-# the intended shape of the pipeline (Fastlane -> Play Console) without
-# depending on Gradle/Fastlane/signing configuration that isn't written
-# yet. Toolchain setup steps (JDK, Gradle) ARE real since they don't depend
-# on repo content. Replace the placeholder steps with real
-# `bundle exec fastlane ...` lanes once the client apps land. See ci.yml's
-# android-check job for the PR-time build gate that already runs against
-# real Gradle output once clients/{mobile-android,tv-android,android-shared}
-# have content.
-# =============================================================================
-
-name: Android Release
+name: Publish Android APKs
 
 on:
   push:
@@ -28,17 +6,26 @@ on:
       - 'android-v*'
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: publish-android-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build-and-publish:
-    name: Build & publish (${{ matrix.module }})
+    name: Build, sign and publish Android APKs
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: release-android
-    strategy:
-      fail-fast: false
-      matrix:
-        module: [mobile-android, tv-android]
+    defaults:
+      run:
+        working-directory: clients/android-shared
+    env:
+      ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/playarr-android-release.jks
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -49,25 +36,96 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # TODO: once clients/${{ matrix.module }} exists, replace with the
-      # real Gradle task, e.g.:
-      #   ./gradlew :${{ matrix.module }}:bundleRelease
-      - name: Build release bundle (placeholder)
-        run: |
-          echo "TODO: ./gradlew :${{ matrix.module }}:bundleRelease"
-          echo "Would build a release .aab for '${{ matrix.module }}' from tag ${GITHUB_REF_NAME}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-      # TODO: sign the .aab with the release keystore, sourced from secrets
-      # (e.g. via r0adkll/sign-android-release or a Fastlane 'sign' lane).
-      - name: Sign release bundle (placeholder)
+      - name: Resolve release version
+        id: version
+        shell: bash
         run: |
-          echo "TODO: sign clients/${{ matrix.module }}/build/outputs/bundle/release/*.aab"
+          version="${GITHUB_REF_NAME#android-v}"
+          if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "Expected a tag such as android-v1.2.3" >&2
+            exit 1
+          fi
+          major="${BASH_REMATCH[1]}"
+          minor="${BASH_REMATCH[2]}"
+          patch="${BASH_REMATCH[3]}"
+          if (( minor > 999 || patch > 999 )); then
+            echo "Minor and patch versions must be below 1000" >&2
+            exit 1
+          fi
+          echo "name=$version" >> "$GITHUB_OUTPUT"
+          echo "code=$((major * 1000000 + minor * 1000 + patch))" >> "$GITHUB_OUTPUT"
 
-      # TODO: wire a Fastlane 'supply' lane (or google-github-actions
-      # upload-google-play-action) to push to the Play Console. Requires a
-      # GOOGLE_PLAY_SERVICE_ACCOUNT secret with Play Console API access,
-      # and a distinct Play Console app listing per module (mobile vs TV).
-      - name: Publish to Play Console (placeholder)
+      - name: Restore release signing key
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          echo "TODO: bundle exec fastlane android deploy module:${{ matrix.module }} track:internal"
-          echo "Would upload the signed .aab for '${{ matrix.module }}' to the Play Console."
+          if [[ -z "$ANDROID_KEYSTORE_BASE64" || -z "$ANDROID_KEYSTORE_PASSWORD" || -z "$ANDROID_KEY_ALIAS" || -z "$ANDROID_KEY_PASSWORD" ]]; then
+            echo "Android release-signing secrets are not configured" >&2
+            exit 1
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
+          chmod 600 "$ANDROID_KEYSTORE_PATH"
+
+      - name: Test and build signed APKs
+        env:
+          PLAYARR_VERSION_NAME: ${{ steps.version.outputs.name }}
+          PLAYARR_VERSION_CODE: ${{ steps.version.outputs.code }}
+        run: >-
+          ./gradlew
+          :mobile-android:testDebugUnitTest
+          :tv-android:testDebugUnitTest
+          :mobile-android:assembleRelease
+          :tv-android:assembleRelease
+
+      - name: Verify and package APKs
+        id: package
+        shell: bash
+        run: |
+          mobile_apk="$(find ../mobile-android/build/outputs/apk/release -name '*.apk' -type f -print -quit)"
+          tv_apk="$(find ../tv-android/build/outputs/apk/release -name '*.apk' -type f -print -quit)"
+          if [[ -z "$mobile_apk" || -z "$tv_apk" ]]; then
+            echo "Signed release APK output is missing" >&2
+            exit 1
+          fi
+          apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          "$apksigner" verify --verbose --print-certs "$mobile_apk"
+          "$apksigner" verify --verbose --print-certs "$tv_apk"
+          mkdir -p release
+          cp "$mobile_apk" release/playarr-android-mobile.apk
+          cp "$tv_apk" release/playarr-android-tv.apk
+          sha256sum release/*.apk > release/SHA256SUMS
+
+      - name: Upload workflow artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: playarr-android-${{ steps.version.outputs.name }}
+          path: clients/android-shared/release/
+          if-no-files-found: error
+
+      - name: Upload versioned and latest APKs to Cloudflare R2
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_R2_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VERSION: ${{ steps.version.outputs.name }}
+        run: |
+          for platform in mobile tv; do
+            file="release/playarr-android-${platform}.apk"
+            npx --yes wrangler@4 r2 object put "playarr-client-downloads/android/releases/${VERSION}/playarr-android-${platform}.apk" --file "$file" --content-type application/vnd.android.package-archive --remote
+            npx --yes wrangler@4 r2 object put "playarr-client-downloads/android/playarr-android-${platform}.apk" --file "$file" --content-type application/vnd.android.package-archive --remote
+          done
+          npx --yes wrangler@4 r2 object put "playarr-client-downloads/android/releases/${VERSION}/SHA256SUMS" --file release/SHA256SUMS --content-type text/plain --remote
+
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            clients/android-shared/release/playarr-android-mobile.apk
+            clients/android-shared/release/playarr-android-tv.apk
+            clients/android-shared/release/SHA256SUMS
+          generate_release_notes: true

@@ -10,6 +10,18 @@ val firebaseApiKey = providers.gradleProperty("firebaseApiKey").orElse("")
 val firebaseApplicationId = providers.gradleProperty("firebaseMobileApplicationId").orElse("")
 val firebaseProjectId = providers.gradleProperty("firebaseProjectId").orElse("")
 val firebaseSenderId = providers.gradleProperty("firebaseSenderId").orElse("")
+val playarrVersionCode = providers.environmentVariable("PLAYARR_VERSION_CODE").map(String::toInt).orElse(1)
+val playarrVersionName = providers.environmentVariable("PLAYARR_VERSION_NAME").orElse("0.1.0")
+val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH")
+val releaseKeystorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS")
+val releaseKeyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD")
+val releaseSigningReady = listOf(
+    releaseKeystorePath,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { it.isPresent }
 
 android {
     namespace = "io.streamarr.mobile"
@@ -20,8 +32,8 @@ android {
         // Android 8.0+, per docs/architecture/overview.md's client table.
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = playarrVersionCode.get()
+        versionName = playarrVersionName.get()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -37,10 +49,24 @@ android {
         // an arbitrary operator-run instance.
     }
 
+    signingConfigs {
+        if (releaseSigningReady) {
+            create("playarrRelease") {
+                storeFile = file(releaseKeystorePath.get())
+                storePassword = releaseKeystorePassword.get()
+                keyAlias = releaseKeyAlias.get()
+                keyPassword = releaseKeyPassword.get()
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (releaseSigningReady) {
+                signingConfig = signingConfigs.getByName("playarrRelease")
+            }
         }
         debug {
             isMinifyEnabled = false

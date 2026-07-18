@@ -212,6 +212,32 @@ commonly plain HTTP on a home LAN.
   error-code mapping against a fake `DeviceAuthApi`, but nothing in this
   pass could be verified against a live server (it wasn't running).
 - No app icon/banner artwork beyond simple placeholder vector drawables.
-- Release-build signing config is the AGP default debug-keystore fallback;
-  no real release signing config exists (correctly out of scope for a
-  scaffold).
+- Release builds remain unsigned locally unless all four `ANDROID_KEYSTORE_*`
+  environment variables are present. The `android-v*` release workflow supplies
+  the permanent signing identity, builds both app modules, verifies the APKs and
+  publishes them through `playarr.app`.
+
+## Publishing Android APKs
+
+The mobile and television clients are presented as one Android family, but remain
+separate packages and APKs because their launcher, input and interface contracts differ.
+Amazon Fire TV is presented separately in the catalogue but uses the television APK for
+sideloading because Fire OS is Android-derived.
+Create one durable release keystore, back it up offline, and configure these secrets in
+the `release-android` GitHub environment:
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+- `CLOUDFLARE_R2_API_TOKEN`
+
+The repository-level `CLOUDFLARE_ACCOUNT_ID` secret is shared with the web deployment.
+Pushing `android-v1.2.3` derives a monotonic version code, tests and signs both APKs,
+uploads an auditable GitHub release, and replaces the stable objects served at:
+
+- `https://playarr.app/downloads/android/playarr-android-mobile.apk`
+- `https://playarr.app/downloads/android/playarr-android-tv.apk`
+
+The first published signing certificate is permanent: later APKs signed with another
+certificate cannot update existing installations.

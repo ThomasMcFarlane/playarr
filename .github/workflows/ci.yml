@@ -146,14 +146,8 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # ASSUMPTION: the Gradle root (settings.gradle.kts + gradlew) lives at
-      # clients/, as the common parent that can reference all three sibling
-      # module directories (mobile-android, tv-android, android-shared)
-      # without cross-directory include() gymnastics. Adjust
-      # working-directory here if the Android client shell task lands the
-      # wrapper somewhere else (e.g. inside clients/mobile-android/).
       - name: Gradle build (all modules)
-        working-directory: clients
+        working-directory: clients/android-shared
         run: ./gradlew build
 
   # ---------------------------------------------------------------------
