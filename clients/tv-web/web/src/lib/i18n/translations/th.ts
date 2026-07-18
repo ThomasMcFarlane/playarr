@@ -640,6 +640,8 @@ export const th: Translations = {
   "pages.signup.documentTitle": "สร้างบัญชี",
   "pages.signup.passwordMismatch": "รหัสผ่านไม่ตรงกัน",
   "pages.signup.kicker": "คุณได้รับเชิญ",
+  "pages.signup.alreadyHaveAccount": "มีบัญชีอยู่แล้วใช่ไหม",
+  "pages.signup.loginLink": "เข้าสู่ระบบ",
   "pages.signup.title": "สร้างบัญชี Playarr ของคุณ",
   "pages.signup.description": "กำหนดรายละเอียดบัญชีของคุณสำหรับเซิร์ฟเวอร์ Streamarr ที่เชิญคุณ",
   "pages.signup.inviteMissing":
@@ -653,7 +655,7 @@ export const th: Translations = {
   "pages.signup.confirmPasswordLabel": "ยืนยันรหัสผ่าน",
   "pages.signup.submit": "สร้างบัญชี",
   "pages.signup.submitting": "กำลังสร้างบัญชี…",
-  "pages.signup.error.expired": "คำเชิญนี้หมดอายุหรือถูกใช้ไปแล้ว",
+  "pages.signup.error.inviteAlreadyUsedToast": "คำเชิญนี้ถูกใช้ไปแล้ว กรุณาเข้าสู่ระบบแทน",
   "pages.signup.error.usernameTaken": "ชื่อผู้ใช้นี้ถูกใช้ไปแล้ว",
   "pages.signup.error.generic": "ไม่สามารถสร้างบัญชีได้ กรุณาขอคำเชิญใหม่จากผู้ดูแลระบบของคุณ",
   "pages.signup.error.networkUnreachable":

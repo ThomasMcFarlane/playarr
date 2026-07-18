@@ -408,21 +408,23 @@ export const en = {
   "pages.search.title": "Search",
   "pages.search.typeLabel": "Type",
   "pages.search.zeroResults": "0 results",
+  "pages.signup.alreadyHaveAccount": "Already have an account?",
   "pages.signup.confirmPasswordLabel": "Confirm password",
   "pages.signup.description":
     "Choose your account details for the Streamarr server that invited you.",
   "pages.signup.displayNameLabel": "Display name",
   "pages.signup.documentTitle": "Create account",
   "pages.signup.emailLabel": "Email (optional)",
-  "pages.signup.error.expired": "This invitation has expired or has already been used.",
   "pages.signup.error.generic":
     "Could not create the account. Ask your administrator for a new invitation.",
+  "pages.signup.error.inviteAlreadyUsedToast": "This invite has already been used. Log in instead.",
   "pages.signup.error.networkUnreachable":
     "Could not reach this Streamarr server. Check that you are on the same network and allow Local Network Access when asked.",
   "pages.signup.error.usernameTaken": "That username is already taken.",
   "pages.signup.inviteMissing":
     "This invitation link is incomplete or invalid. Ask your Streamarr administrator for a new QR code.",
   "pages.signup.kicker": "You're invited",
+  "pages.signup.loginLink": "Log in",
   "pages.signup.passwordLabel": "Password",
   "pages.signup.passwordMismatch": "Passwords do not match.",
   "pages.signup.serverUrlHint": "This address is locked to the server that issued your invitation.",

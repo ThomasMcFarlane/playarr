@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ApiClient, ApiError } from "@streamarr-tv/api-client";
 import { useAuth } from "../lib/ApiClientProvider";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
@@ -7,6 +7,7 @@ import { LanguageDropdown } from "../components/LanguageDropdown";
 import { createLocalNetworkFetch } from "../lib/localNetworkFetch";
 import { parseSignupInvite } from "../lib/signupInvite";
 import { publicIpv4RelayUrl } from "../lib/loginServerUrl";
+import { useToast } from "../lib/toast";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { ProfileAuthLayout } from "../components/ProfileAuthLayout";
 
@@ -18,6 +19,7 @@ export function SignupPage() {
   useDocumentTitle(t("pages.signup.documentTitle"));
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { showToast } = useToast();
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -57,6 +59,11 @@ export function SignupPage() {
       await login({ serverUrl: invite.serverUrl, username, password });
       navigate("/", { replace: true });
     } catch (err) {
+      if (err instanceof ApiError && err.status === 410) {
+        showToast(t("pages.signup.error.inviteAlreadyUsedToast"));
+        navigate("/login", { replace: true, state: { initialUsername: username } });
+        return;
+      }
       setError(signupErrorMessage(err, t));
       setSubmitting(false);
     }
@@ -69,6 +76,13 @@ export function SignupPage() {
         <h1 className="auth-title">{t("pages.signup.title")}</h1>
         <p className="muted auth-description">
           {t("pages.signup.description")}
+        </p>
+
+        <p className="auth-switch">
+          {t("pages.signup.alreadyHaveAccount")}{" "}
+          <Link to="/login" className="auth-switch-link">
+            {t("pages.signup.loginLink")}
+          </Link>
         </p>
 
         {!invite ? (
@@ -169,7 +183,6 @@ function signupErrorMessage(err: unknown, t: ReturnType<typeof useLanguage>["t"]
   if (err instanceof ApiError) {
     const body = err.body as { message?: unknown } | undefined;
     if (typeof body?.message === "string" && body.message.length > 0) return body.message;
-    if (err.status === 410) return t("pages.signup.error.expired");
     if (err.status === 409) return t("pages.signup.error.usernameTaken");
     return t("pages.signup.error.generic");
   }

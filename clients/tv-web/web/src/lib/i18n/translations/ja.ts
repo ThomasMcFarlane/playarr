@@ -636,6 +636,8 @@ export const ja: Translations = {
   "pages.signup.documentTitle": "アカウントを作成",
   "pages.signup.passwordMismatch": "パスワードが一致しません。",
   "pages.signup.kicker": "招待されました",
+  "pages.signup.alreadyHaveAccount": "すでにアカウントをお持ちですか?",
+  "pages.signup.loginLink": "ログイン",
   "pages.signup.title": "Playarrアカウントを作成",
   "pages.signup.description": "あなたを招待したStreamarrサーバー用のアカウント情報を選択してください。",
   "pages.signup.inviteMissing":
@@ -649,7 +651,7 @@ export const ja: Translations = {
   "pages.signup.confirmPasswordLabel": "パスワード(確認)",
   "pages.signup.submit": "アカウントを作成",
   "pages.signup.submitting": "アカウントを作成しています…",
-  "pages.signup.error.expired": "この招待は期限切れか、すでに使用されています。",
+  "pages.signup.error.inviteAlreadyUsedToast": "この招待はすでに使用されています。ログインしてください。",
   "pages.signup.error.usernameTaken": "そのユーザー名はすでに使用されています。",
   "pages.signup.error.generic": "アカウントを作成できませんでした。管理者に新しい招待を依頼してください。",
   "pages.signup.error.networkUnreachable":
