@@ -63,7 +63,7 @@ export interface paths {
          * Every currently-active playback session, newest first -- backs the
          *     admin Activity page's "live" section. Concurrently-active sessions are a
          *     small set (dozens, not thousands), so the N+1 user/media lookups
-         *     `enrich` does per row are acceptable here.
+         *     `enrich_active` does per row are acceptable here.
          */
         get: operations["list_active_sessions_handler"];
         put?: never;
@@ -82,7 +82,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Filtered, paginated raw session history -- backs the admin Activity
+         * Filtered, paginated and enriched session history -- backs the admin Activity
          *     page's "history" section. `limit` is clamped to 500 server-side
          *     regardless of what's requested, matching the two indexes
          *     (`idx_playback_sessions_user_id`/`idx_playback_sessions_started_at`)
@@ -1247,8 +1247,8 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
-         * @description One live session, enriched (best-effort) with a human-readable user/
-         *     media label -- the raw [`PlaybackSession`] only carries ids.
+         * @description One live session, enriched with the labels and route target used by the
+         *     administrator Activity and Tasks pages.
          */
         ActiveSessionView: {
             /** Format: int32 */
@@ -1264,8 +1264,8 @@ export interface components {
             /** Format: uuid */
             media_file_id: string;
             /**
-             * @description Best-effort `CatalogService` lookup via the media file's `work_id`;
-             *     same "never an error" tolerance as `user_display_name`.
+             * @description Best-effort `CatalogService` lookup. For child media, this names the
+             *     actual episode, track, or book rather than only its parent work.
              */
             media_title?: string | null;
             play_method: components["schemas"]["PlayMethod"];
@@ -1284,6 +1284,12 @@ export interface components {
             user_display_name?: string | null;
             /** Format: uuid */
             user_id: string;
+            /**
+             * Format: uuid
+             * @description Best-effort media-file lookup; provides the route target for the
+             *     linked item title in Streamarr Admin.
+             */
+            work_id?: string | null;
         };
         AddPlaylistItemRequest: {
             /** Format: uuid */
@@ -2018,6 +2024,51 @@ export interface components {
             season: components["schemas"]["Season"];
         };
         /**
+         * @description Historical playback-session fields plus the same best-effort linked
+         *     user/media context as [`ActiveSessionView`]. The original raw-session
+         *     fields stay intact so enriching the endpoint remains backwards compatible.
+         */
+        SessionHistoryView: {
+            /** Format: int32 */
+            buffering_events: number;
+            /** Format: int64 */
+            buffering_ms_total: number;
+            /** Format: int64 */
+            bytes_streamed: number;
+            client_platform: components["schemas"]["ClientPlatform"];
+            client_version: string;
+            /** Format: uuid */
+            device_id: string;
+            /** Format: date-time */
+            ended_at?: string | null;
+            /** Format: uuid */
+            id: string;
+            ip_address?: string | null;
+            /** Format: uuid */
+            media_file_id: string;
+            media_title?: string | null;
+            play_method: components["schemas"]["PlayMethod"];
+            /** Format: uuid */
+            rendition_id?: string | null;
+            /** Format: int64 */
+            source_bitrate?: number | null;
+            source_codec: string;
+            source_container: string;
+            /** Format: date-time */
+            started_at: string;
+            stop_reason?: null | components["schemas"]["StopReason"];
+            /** Format: int64 */
+            target_bitrate?: number | null;
+            target_codec: string;
+            target_container: string;
+            transcode_reason?: null | components["schemas"]["TranscodeReason"];
+            user_display_name?: string | null;
+            /** Format: uuid */
+            user_id: string;
+            /** Format: uuid */
+            work_id?: string | null;
+        };
+        /**
          * @description Public account-creation body. The bearer invitation is write-only and
          *     grants exactly one ordinary Playarr account: never administrator access,
          *     and no libraries until an administrator shares them after sign-up.
@@ -2582,7 +2633,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PlaybackSession"][];
+                    "application/json": components["schemas"]["SessionHistoryView"][];
                 };
             };
             /** @description Missing or invalid access token */

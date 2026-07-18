@@ -45,7 +45,7 @@ paths:
         Every currently-active playback session, newest first -- backs the
         admin Activity page's "live" section. Concurrently-active sessions are a
         small set (dozens, not thousands), so the N+1 user/media lookups
-        `enrich` does per row are acceptable here.
+        `enrich_active` does per row are acceptable here.
       operationId: list_active_sessions_handler
       responses:
         '200':
@@ -65,7 +65,7 @@ paths:
       tags:
       - admin
       summary: |-
-        Filtered, paginated raw session history -- backs the admin Activity
+        Filtered, paginated and enriched session history -- backs the admin Activity
         page's "history" section. `limit` is clamped to 500 server-side
         regardless of what's requested, matching the two indexes
         (`idx_playback_sessions_user_id`/`idx_playback_sessions_started_at`)
@@ -116,7 +116,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/PlaybackSession'
+                  $ref: '#/components/schemas/SessionHistoryView'
         '401':
           description: Missing or invalid access token
         '403':
@@ -2321,8 +2321,8 @@ components:
     ActiveSessionView:
       type: object
       description: |-
-        One live session, enriched (best-effort) with a human-readable user/
-        media label -- the raw [`PlaybackSession`] only carries ids.
+        One live session, enriched with the labels and route target used by the
+        administrator Activity and Tasks pages.
       required:
       - session_id
       - user_id
@@ -2365,8 +2365,8 @@ components:
           - string
           - 'null'
           description: |-
-            Best-effort `CatalogService` lookup via the media file's `work_id`;
-            same "never an error" tolerance as `user_display_name`.
+            Best-effort `CatalogService` lookup. For child media, this names the
+            actual episode, track, or book rather than only its parent work.
         play_method:
           $ref: '#/components/schemas/PlayMethod'
         session_id:
@@ -2391,6 +2391,14 @@ components:
         user_id:
           type: string
           format: uuid
+        work_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: |-
+            Best-effort media-file lookup; provides the route target for the
+            linked item title in Streamarr Admin.
     AddPlaylistItemRequest:
       type: object
       required:
@@ -3864,6 +3872,117 @@ components:
             $ref: '#/components/schemas/EpisodeDetailSchema'
         season:
           $ref: '#/components/schemas/Season'
+    SessionHistoryView:
+      type: object
+      description: |-
+        Historical playback-session fields plus the same best-effort linked
+        user/media context as [`ActiveSessionView`]. The original raw-session
+        fields stay intact so enriching the endpoint remains backwards compatible.
+      required:
+      - id
+      - user_id
+      - device_id
+      - media_file_id
+      - started_at
+      - play_method
+      - source_codec
+      - source_container
+      - target_codec
+      - target_container
+      - client_platform
+      - client_version
+      - bytes_streamed
+      - buffering_events
+      - buffering_ms_total
+      properties:
+        buffering_events:
+          type: integer
+          format: int32
+          minimum: 0
+        buffering_ms_total:
+          type: integer
+          format: int64
+          minimum: 0
+        bytes_streamed:
+          type: integer
+          format: int64
+          minimum: 0
+        client_platform:
+          $ref: '#/components/schemas/ClientPlatform'
+        client_version:
+          type: string
+        device_id:
+          type: string
+          format: uuid
+        ended_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        ip_address:
+          type:
+          - string
+          - 'null'
+        media_file_id:
+          type: string
+          format: uuid
+        media_title:
+          type:
+          - string
+          - 'null'
+        play_method:
+          $ref: '#/components/schemas/PlayMethod'
+        rendition_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        source_bitrate:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        source_codec:
+          type: string
+        source_container:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        stop_reason:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/StopReason'
+        target_bitrate:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        target_codec:
+          type: string
+        target_container:
+          type: string
+        transcode_reason:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/TranscodeReason'
+        user_display_name:
+          type:
+          - string
+          - 'null'
+        user_id:
+          type: string
+          format: uuid
+        work_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
     SignupRequest:
       type: object
       description: |-

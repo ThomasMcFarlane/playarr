@@ -73,6 +73,7 @@ pub use version_gate::{ClientCompatibilityTable, VersionGateLayer};
 #[derive(OpenApi)]
 #[openapi(
     info(title = "Streamarr API", version = "0.1.0"),
+    components(schemas(streamarr_model::PlaybackSession)),
     tags(
         (name = "system", description = "Process health, readiness, and version endpoints"),
         (name = "auth", description = "Session login and access-token issuance"),

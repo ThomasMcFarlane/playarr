@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   describeApiError,
   type CreateUserRequest,
@@ -594,7 +595,9 @@ export function UsersPage() {
             const typeCount = instances ? selectedTypeCount(user.library_allow, instances) : null;
             return (
               <div key={user.id} className="provider-card">
-                <div className="provider-card-name">{user.username}</div>
+                <div className="provider-card-name">
+                  <Link className="activity-link" to={`/users/${user.id}`}>{user.username}</Link>
+                </div>
                 <p
                   className="muted"
                   style={{

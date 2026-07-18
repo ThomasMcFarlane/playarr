@@ -80,8 +80,10 @@ export type WatchState = components["schemas"]["WatchState"];
 
 /** One playback attempt from start to finish -- `playback_sessions` row shape, verbatim. */
 export type PlaybackSession = components["schemas"]["PlaybackSession"];
-/** One live session, enriched with a best-effort user/media display label. */
+/** One live session enriched with linked user/media context. */
 export type ActiveSessionView = components["schemas"]["ActiveSessionView"];
+/** One historical session enriched with linked user/media context. */
+export type SessionHistoryView = components["schemas"]["SessionHistoryView"];
 export type PlayMethod = components["schemas"]["PlayMethod"];
 export type StopReason = components["schemas"]["StopReason"];
 export type TranscodeReason = components["schemas"]["TranscodeReason"];
@@ -924,8 +926,8 @@ export class ApiClient {
     return this.unwrap(await this.raw.GET("/api/v1/admin/playback/sessions/active", {}));
   }
 
-  /** Filtered, paginated raw session history, newest first. `params.limit` is clamped to 500 server-side. */
-  async sessionHistory(params: SessionHistoryParams = {}): Promise<PlaybackSession[]> {
+  /** Filtered, paginated and enriched session history, newest first. `params.limit` is clamped to 500 server-side. */
+  async sessionHistory(params: SessionHistoryParams = {}): Promise<SessionHistoryView[]> {
     return this.unwrap(
       await this.raw.GET("/api/v1/admin/playback/sessions/history", {
         params: {

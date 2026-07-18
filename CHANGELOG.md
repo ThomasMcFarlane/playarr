@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Link live and historical administrator playback activity to named users and catalogue items,
+  with a scaffolded settings page for each user.
 - Let administrators name each instance through persisted Streamarr system settings, and show that
   name in Playarr's connected-server settings and invitation sign-up screen.
 - Acquire and hot-renew browser-trusted HTTPS certificates inside Streamarr through an explicitly

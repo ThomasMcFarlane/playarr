@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   describeApiError,
   type ActiveSessionView,
-  type PlaybackSession,
   type PlayMethod,
+  type SessionHistoryView,
   type SessionHistoryParams,
   type StopReason,
 } from "@streamarr-tv/api-client";
@@ -72,6 +73,33 @@ function formatDurationMs(ms: number): string {
   return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 }
 
+interface LinkedSessionContext {
+  user_id: string;
+  user_display_name?: string | null;
+  media_file_id: string;
+  work_id?: string | null;
+  media_title?: string | null;
+}
+
+function UserLink({ session }: { session: LinkedSessionContext }) {
+  return (
+    <Link className="activity-link" to={`/users/${session.user_id}`}>
+      {session.user_display_name ?? session.user_id}
+    </Link>
+  );
+}
+
+function MediaLink({ session }: { session: LinkedSessionContext }) {
+  const label = session.media_title ?? session.media_file_id;
+  return session.work_id ? (
+    <Link className="activity-link" to={`/library/${session.work_id}`}>
+      {label}
+    </Link>
+  ) : (
+    <span>{label}</span>
+  );
+}
+
 /**
  * The "who's watching now" live table -- polls
  * `GET /api/v1/admin/playback/sessions/active` (`client.activeSessions()`)
@@ -129,9 +157,9 @@ function LiveSessionsSection() {
           <tbody>
             {sessions.map((session) => (
               <tr key={session.session_id}>
-                <td>{session.user_display_name ?? session.user_id}</td>
+                <td><UserLink session={session} /></td>
                 <td className="muted">{session.client_platform}</td>
-                <td>{session.media_title ?? session.media_file_id}</td>
+                <td><MediaLink session={session} /></td>
                 <td>
                   <span className={playMethodBadgeClass(session.play_method)}>
                     {playMethodLabel(session.play_method)}
@@ -174,7 +202,7 @@ function toRfc3339(localValue: string | undefined): string | undefined {
 function SessionHistorySection() {
   const client = useApiClient();
   const [filters, setFilters] = useState<SessionHistoryParams>(EMPTY_FILTERS);
-  const [sessions, setSessions] = useState<PlaybackSession[] | null>(null);
+  const [sessions, setSessions] = useState<SessionHistoryView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -265,6 +293,7 @@ function SessionHistorySection() {
           <thead>
             <tr>
               <th>User</th>
+              <th>Title</th>
               <th>Method</th>
               <th>Started</th>
               <th>Ended</th>
@@ -275,7 +304,8 @@ function SessionHistorySection() {
           <tbody>
             {sessions.map((session) => (
               <tr key={session.id}>
-                <td className="muted">{session.user_id}</td>
+                <td><UserLink session={session} /></td>
+                <td><MediaLink session={session} /></td>
                 <td>
                   <span className={playMethodBadgeClass(session.play_method)}>
                     {playMethodLabel(session.play_method)}

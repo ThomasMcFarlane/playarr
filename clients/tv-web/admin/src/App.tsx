@@ -3,6 +3,7 @@ import { Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom"
 import { TokenStore } from "@streamarr-tv/device-auth";
 import { SourceInstancesPage } from "./pages/SourceInstances";
 import { UsersPage } from "./pages/Users";
+import { UserSettingsPage } from "./pages/UserSettings";
 import { LibraryPage } from "./pages/Library";
 import { WorkDetailPage } from "./pages/WorkDetail";
 import { TasksPage } from "./pages/Tasks";
@@ -239,6 +240,7 @@ export function App() {
                     <Route path="/library" element={<LibraryPage />} />
                     <Route path="/library/:id" element={<WorkDetailPage />} />
                     <Route path="/users" element={<UsersPage />} />
+                    <Route path="/users/:id" element={<UserSettingsPage />} />
                     <Route path="/tasks" element={<TasksPage />} />
                     <Route path="/activity" element={<ActivityPage />} />
                     <Route path="/settings" element={<SystemSettingsPage />} />
