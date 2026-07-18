@@ -51,6 +51,12 @@ inside the application target.
 
 ## Build and test
 
+`platforms: [.iOS(.v17), .tvOS(.v17)]`. The iOS client and the native
+Apple TV Xcode project at `clients/apple-tv` both consume the same
+`StreamarrKit` product. Networking, domain, authentication, and
+AVFoundation playback stay shared; the Apple TV target owns its separate
+focus-engine and remote-control UI.
+
 Run tests from Xcode with Product > Test on an installed iOS Simulator runtime. From the command
 line, use an available simulator name from `xcrun simctl list devices available`:
 

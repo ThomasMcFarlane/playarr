@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add a native Playarr Apple TV app with focus-friendly catalogue browsing, search, device-code
+  pairing, server configuration, and AVKit playback backed by the shared Swift client kit.
 - Add an installable native Playarr iPhone and iPad project with reusable StreamarrKit business
   logic, App Store-ready bundle metadata, privacy resources, and iOS unit-test targets.
 - Add a native Roku SceneGraph client with server setup, device linking, household

@@ -1,0 +1,464 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		226B2B04940D4525C9DB2A6E /* PlayarrTVApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3221EA6B4513A57FE50ACE0E /* PlayarrTVApp.swift */; };
+		31DC9F51BED1EEE01A240A21 /* TVAppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A3F02E31E21A4B6C76F061 /* TVAppEnvironment.swift */; };
+		4667E9FA407CD2E4D3FA1F50 /* TVRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D582C12CA26152EFDEE5953 /* TVRootView.swift */; };
+		5F8107D4351619115ED35636 /* TVPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E53D2E91ED2B7BA71E18FA96 /* TVPlayerView.swift */; };
+		9C02BF2443FB6202643F7608 /* TVLibraryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F39006E3292B3C3FCE2911BE /* TVLibraryViews.swift */; };
+		AF7DF9EA8CB93994B825C73E /* StreamarrKit in Frameworks */ = {isa = PBXBuildFile; productRef = ABDF4D6CFC05316980A29BBD /* StreamarrKit */; };
+		B3106D278BEB5C717AF146C8 /* TVSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61029885CE1ECACC599117A4 /* TVSettingsView.swift */; };
+		BDE28F6F95544F39B3758DF4 /* TVServerAddressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12FAD6061A7EC7A3F76D02CF /* TVServerAddressTests.swift */; };
+		D4F8C82E8C75016BF2E13541 /* TVViewModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3BE36C32CF04D86B4AE838A /* TVViewModels.swift */; };
+		E767AB886D58490C7EEB8970 /* TVDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12E4DA2002EFA25EC8BDF5D8 /* TVDetailView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		8A079F48A5C17F366CE14C1E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A0F02D254DA0E80636F242E6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4D965032404117B41A3E1D1C;
+			remoteInfo = PlayarrTV;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		12E4DA2002EFA25EC8BDF5D8 /* TVDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVDetailView.swift; sourceTree = "<group>"; };
+		12FAD6061A7EC7A3F76D02CF /* TVServerAddressTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVServerAddressTests.swift; sourceTree = "<group>"; };
+		2D582C12CA26152EFDEE5953 /* TVRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVRootView.swift; sourceTree = "<group>"; };
+		3221EA6B4513A57FE50ACE0E /* PlayarrTVApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayarrTVApp.swift; sourceTree = "<group>"; };
+		41935314E8276AC50A9746A6 /* PlayarrTVTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PlayarrTVTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		61029885CE1ECACC599117A4 /* TVSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVSettingsView.swift; sourceTree = "<group>"; };
+		7D92F8DF06F34E21C388ADDB /* PlayarrTV.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PlayarrTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B55D266DA17523B0E68FD342 /* ios */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ios; path = ../ios; sourceTree = SOURCE_ROOT; };
+		D5A3F02E31E21A4B6C76F061 /* TVAppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVAppEnvironment.swift; sourceTree = "<group>"; };
+		E53D2E91ED2B7BA71E18FA96 /* TVPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPlayerView.swift; sourceTree = "<group>"; };
+		F39006E3292B3C3FCE2911BE /* TVLibraryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVLibraryViews.swift; sourceTree = "<group>"; };
+		F3BE36C32CF04D86B4AE838A /* TVViewModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVViewModels.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		5A7117D1999A629F0214700A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AF7DF9EA8CB93994B825C73E /* StreamarrKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		3C10A307C8E1D18D0055C05D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				7D92F8DF06F34E21C388ADDB /* PlayarrTV.app */,
+				41935314E8276AC50A9746A6 /* PlayarrTVTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		66A396CCE97C43937D7A9BD7 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				12FAD6061A7EC7A3F76D02CF /* TVServerAddressTests.swift */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		C58245455747F1533147EFAD /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				3221EA6B4513A57FE50ACE0E /* PlayarrTVApp.swift */,
+				D5A3F02E31E21A4B6C76F061 /* TVAppEnvironment.swift */,
+				12E4DA2002EFA25EC8BDF5D8 /* TVDetailView.swift */,
+				F39006E3292B3C3FCE2911BE /* TVLibraryViews.swift */,
+				E53D2E91ED2B7BA71E18FA96 /* TVPlayerView.swift */,
+				2D582C12CA26152EFDEE5953 /* TVRootView.swift */,
+				61029885CE1ECACC599117A4 /* TVSettingsView.swift */,
+				F3BE36C32CF04D86B4AE838A /* TVViewModels.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		DB2B72D2056E6445413753C7 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				B55D266DA17523B0E68FD342 /* ios */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		E4BE1A990FF65E2AE11FD4A8 = {
+			isa = PBXGroup;
+			children = (
+				DB2B72D2056E6445413753C7 /* Packages */,
+				C58245455747F1533147EFAD /* Sources */,
+				66A396CCE97C43937D7A9BD7 /* Tests */,
+				3C10A307C8E1D18D0055C05D /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		4D965032404117B41A3E1D1C /* PlayarrTV */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BCE81007F91E7B73ABC4059D /* Build configuration list for PBXNativeTarget "PlayarrTV" */;
+			buildPhases = (
+				FEF49D8951F4C942BCFB42A2 /* Sources */,
+				5A7117D1999A629F0214700A /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PlayarrTV;
+			packageProductDependencies = (
+				ABDF4D6CFC05316980A29BBD /* StreamarrKit */,
+			);
+			productName = PlayarrTV;
+			productReference = 7D92F8DF06F34E21C388ADDB /* PlayarrTV.app */;
+			productType = "com.apple.product-type.application";
+		};
+		F2D5AE02E6269B36E0D8DEF0 /* PlayarrTVTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3BAB54BAE7380A44F62F51C0 /* Build configuration list for PBXNativeTarget "PlayarrTVTests" */;
+			buildPhases = (
+				6E2D563667F6EE146BF2D230 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				91DFD7FDFD597136F0D2E4AE /* PBXTargetDependency */,
+			);
+			name = PlayarrTVTests;
+			packageProductDependencies = (
+			);
+			productName = PlayarrTVTests;
+			productReference = 41935314E8276AC50A9746A6 /* PlayarrTVTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A0F02D254DA0E80636F242E6 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 76685712B07AFBB39A59BEE3 /* Build configuration list for PBXProject "PlayarrTV" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = E4BE1A990FF65E2AE11FD4A8;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				B03D58F9664E938BE32A32AA /* XCLocalSwiftPackageReference "../ios" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 3C10A307C8E1D18D0055C05D /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4D965032404117B41A3E1D1C /* PlayarrTV */,
+				F2D5AE02E6269B36E0D8DEF0 /* PlayarrTVTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		6E2D563667F6EE146BF2D230 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BDE28F6F95544F39B3758DF4 /* TVServerAddressTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FEF49D8951F4C942BCFB42A2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				226B2B04940D4525C9DB2A6E /* PlayarrTVApp.swift in Sources */,
+				31DC9F51BED1EEE01A240A21 /* TVAppEnvironment.swift in Sources */,
+				E767AB886D58490C7EEB8970 /* TVDetailView.swift in Sources */,
+				9C02BF2443FB6202643F7608 /* TVLibraryViews.swift in Sources */,
+				5F8107D4351619115ED35636 /* TVPlayerView.swift in Sources */,
+				4667E9FA407CD2E4D3FA1F50 /* TVRootView.swift in Sources */,
+				B3106D278BEB5C717AF146C8 /* TVSettingsView.swift in Sources */,
+				D4F8C82E8C75016BF2E13541 /* TVViewModels.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		91DFD7FDFD597136F0D2E4AE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4D965032404117B41A3E1D1C /* PlayarrTV */;
+			targetProxy = 8A079F48A5C17F366CE14C1E /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0222DB23692665FADC7B34B1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = appletvos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Debug;
+		};
+		1AA2E886999E4CA724299C77 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = Supporting/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.streamarr.playarr.tvos;
+				PRODUCT_MODULE_NAME = PlayarrTV;
+				SDKROOT = appletvos;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+			};
+			name = Release;
+		};
+		1DAD404018C9BE37D4498F0E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.streamarr.playarr.tvos.tests;
+				SDKROOT = appletvos;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PlayarrTV.app/PlayarrTV";
+			};
+			name = Release;
+		};
+		1DC6AC374B7B44268852D946 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = Supporting/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.streamarr.playarr.tvos;
+				PRODUCT_MODULE_NAME = PlayarrTV;
+				SDKROOT = appletvos;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+			};
+			name = Debug;
+		};
+		3C96EE71C7F0844FB465BEC1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.streamarr.playarr.tvos.tests;
+				SDKROOT = appletvos;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PlayarrTV.app/PlayarrTV";
+			};
+			name = Debug;
+		};
+		BE4B1CA823EDD54D85FA32DC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = appletvos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		3BAB54BAE7380A44F62F51C0 /* Build configuration list for PBXNativeTarget "PlayarrTVTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3C96EE71C7F0844FB465BEC1 /* Debug */,
+				1DAD404018C9BE37D4498F0E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		76685712B07AFBB39A59BEE3 /* Build configuration list for PBXProject "PlayarrTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0222DB23692665FADC7B34B1 /* Debug */,
+				BE4B1CA823EDD54D85FA32DC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		BCE81007F91E7B73ABC4059D /* Build configuration list for PBXNativeTarget "PlayarrTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1DC6AC374B7B44268852D946 /* Debug */,
+				1AA2E886999E4CA724299C77 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		B03D58F9664E938BE32A32AA /* XCLocalSwiftPackageReference "../ios" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ios;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		ABDF4D6CFC05316980A29BBD /* StreamarrKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = StreamarrKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = A0F02D254DA0E80636F242E6 /* Project object */;
+}
