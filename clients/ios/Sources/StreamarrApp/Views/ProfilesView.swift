@@ -1,6 +1,7 @@
 import Observation
 import StreamarrKit
 import SwiftUI
+import UIKit
 
 @MainActor
 @Observable
@@ -8,6 +9,7 @@ private final class ProfilesViewModel {
     enum State { case idle, loading, loaded, failed(String) }
     var state: State = .idle
     var profiles: [AvailableProfile] = []
+    var currentAvatar: ProfileAvatarPreference?
     var switching = false
     var errorMessage: String?
     let environment: AppEnvironment
@@ -18,6 +20,7 @@ private final class ProfilesViewModel {
         state = .loading
         do {
             profiles = try await environment.apiClient.listProfiles()
+            currentAvatar = (try? await environment.apiClient.getProfileAvatar())?.preference
             state = .loaded
         } catch let error as APIError {
             state = .failed(error.displayMessage)
@@ -194,26 +197,15 @@ struct ProfilesView: View {
                 choose(profile)
             } label: {
                 ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: avatarColours(index),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [.white.opacity(0.3), .clear],
-                                center: UnitPoint(x: 0.34, y: 0.26),
-                                startRadius: 0,
-                                endRadius: size * 0.36
-                            )
-                        )
-                    Image(systemName: avatarSymbol(index))
-                        .font(.system(size: size * 0.4, weight: .ultraLight))
-                        .foregroundStyle(.white.opacity(0.94))
+                    if profile.isCurrent, let preference = viewModel.currentAvatar {
+                        savedAvatar(preference, size: size)
+                    } else {
+                        Circle().fill(LinearGradient(colors: avatarColours(index), startPoint: .topLeading, endPoint: .bottomTrailing))
+                        Circle().fill(RadialGradient(colors: [.white.opacity(0.3), .clear], center: UnitPoint(x: 0.34, y: 0.26), startRadius: 0, endRadius: size * 0.36))
+                        Image(systemName: avatarSymbol(index))
+                            .font(.system(size: size * 0.4, weight: .ultraLight))
+                            .foregroundStyle(.white.opacity(0.94))
+                    }
                     if profile.pinLocked {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 11, weight: .bold))
@@ -271,6 +263,42 @@ struct ProfilesView: View {
         .frame(width: size)
         .offset(y: selected ? -8 : 0)
         .onTapGesture { selectedProfileID = profile.id }
+    }
+
+    @ViewBuilder
+    private func savedAvatar(_ preference: ProfileAvatarPreference, size: CGFloat) -> some View {
+        if preference.kind == .custom,
+           let comma = preference.value.firstIndex(of: ","),
+           let data = Data(base64Encoded: String(preference.value[preference.value.index(after: comma)...])),
+           let image = UIImage(data: data) {
+            Image(uiImage: image).resizable().scaledToFill().frame(width: size, height: size).clipShape(Circle())
+        } else {
+            Circle().fill(LinearGradient(colors: presetColours(preference.value), startPoint: .topLeading, endPoint: .bottomTrailing))
+            Image(systemName: presetSymbol(preference.value))
+                .font(.system(size: size * 0.4, weight: .ultraLight)).foregroundStyle(.white)
+        }
+    }
+
+    private func presetSymbol(_ value: String) -> String {
+        switch value {
+        case "astronaut": "moon.stars"
+        case "cat": "cat"
+        case "dinosaur": "fossil.shell"
+        case "robot": "cpu"
+        case "pirate": "sailboat"
+        default: "sparkles"
+        }
+    }
+
+    private func presetColours(_ value: String) -> [Color] {
+        switch value {
+        case "astronaut": [Color(red: 0.32, green: 0.40, blue: 0.68), Color(red: 0.13, green: 0.18, blue: 0.37)]
+        case "cat": [Color(red: 0.89, green: 0.49, blue: 0.41), Color(red: 0.61, green: 0.25, blue: 0.40)]
+        case "dinosaur": [Color(red: 0.33, green: 0.64, blue: 0.43), Color(red: 0.14, green: 0.45, blue: 0.40)]
+        case "robot": [Color(red: 0.36, green: 0.61, blue: 0.69), Color(red: 0.21, green: 0.33, blue: 0.51)]
+        case "pirate": [Color(red: 0.83, green: 0.60, blue: 0.28), Color(red: 0.57, green: 0.27, blue: 0.30)]
+        default: [Color(red: 0.55, green: 0.44, blue: 0.77), Color(red: 0.29, green: 0.28, blue: 0.50)]
+        }
     }
 
     private func avatarColours(_ index: Int) -> [Color] {

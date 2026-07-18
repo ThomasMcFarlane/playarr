@@ -1,15 +1,74 @@
+import PhotosUI
+import StreamarrKit
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
-    let environment: AppEnvironment
+    private enum Section: String, CaseIterable, Identifiable {
+        case appearance, avatar, language, player, server, lock, invite
+        var id: String { rawValue }
+        var number: String { String(format: "%02d", Self.allCases.firstIndex(of: self)! + 1) }
+        var title: String {
+            switch self {
+            case .appearance: "Appearance"
+            case .avatar: "Profile avatar"
+            case .language: "Language"
+            case .player: "Player"
+            case .server: "Server"
+            case .lock: "Profile lock"
+            case .invite: "Invite a friend"
+            }
+        }
+        var description: String {
+            switch self {
+            case .appearance: "Choose how Playarr looks on this device."
+            case .avatar: "Pick a playful preset or use your own photo."
+            case .language: "Choose the language used by Playarr."
+            case .player: "Set quality, audio, and subtitle defaults."
+            case .server: "Review or change the connected Streamarr server."
+            case .lock: "Protect this profile with a four-digit PIN."
+            case .invite: "Request a one-use invitation for someone else."
+            }
+        }
+        var icon: String {
+            switch self {
+            case .appearance: "circle.lefthalf.filled"
+            case .avatar: "person.crop.circle"
+            case .language: "globe"
+            case .player: "play.rectangle"
+            case .server: "server.rack"
+            case .lock: "lock"
+            case .invite: "person.badge.plus"
+            }
+        }
+    }
 
+    private struct AvatarPreset: Identifiable {
+        let id: String
+        let symbol: String
+        let colours: [Color]
+    }
+
+    let environment: AppEnvironment
     @AppStorage("com.streamarr.ios.appearance") private var appearance = "dark"
+    @AppStorage("com.streamarr.ios.language") private var language = "en"
     @AppStorage(NativePlayerDefaults.qualityKey) private var qualityID = "original"
     @AppStorage(NativePlayerDefaults.subtitleModeKey) private var subtitleMode = "off"
     @AppStorage(NativePlayerDefaults.subtitleLanguageKey) private var subtitleLanguage = "en"
     @AppStorage(NativePlayerDefaults.audioLanguageKey) private var audioLanguage = "en"
+
+    @State private var selected: Section? = .appearance
     @State private var serverURL: String
+    @State private var avatar: ProfileAvatarPreference?
+    @State private var photoItem: PhotosPickerItem?
+    @State private var pinLocked = false
+    @State private var pin = ""
+    @State private var inviteRequest: UserInviteRequest?
+    @State private var inviteMessage = ""
+    @State private var inviteLink: URL?
+    @State private var statusMessage: String?
     @State private var errorMessage: String?
+    @State private var busy = false
     @State private var signingOut = false
 
     init(environment: AppEnvironment) {
@@ -20,225 +79,407 @@ struct SettingsView: View {
     var body: some View {
         GeometryReader { proxy in
             let phone = proxy.size.width <= 760
-            ZStack(alignment: .topLeading) {
-                LinearGradient(
-                    colors: [PlayarrStyle.surface, PlayarrStyle.background],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                RadialGradient(
-                    colors: [PlayarrStyle.pink.opacity(0.1), .clear],
-                    center: UnitPoint(x: phone ? 0.5 : 0.25, y: 0.38),
-                    startRadius: 0,
-                    endRadius: 360
-                )
-
-                if !phone {
-                    profileHeader
-                        .padding(.leading, max(102, proxy.size.width * 0.08))
-                        .padding(.top, proxy.size.height * 0.25)
-                        .zIndex(2)
-                }
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: phone ? 22 : 30) {
-                        if phone { profileHeader }
-
-                        settingsCard(title: "Appearance", icon: "circle.lefthalf.filled") {
-                            Picker("Appearance", selection: $appearance) {
-                                Text("System").tag("system")
-                                Text("Light").tag("light")
-                                Text("Dark").tag("dark")
-                            }
-                            .pickerStyle(.segmented)
-                        }
-
-                        settingsCard(title: "Server", icon: "server.rack") {
-                            TextField("Server URL", text: $serverURL)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                                .keyboardType(.URL)
-                                .padding(.horizontal, 14)
-                                .frame(height: 50)
-                                .background(PlayarrStyle.surfaceStrong.opacity(0.64))
-                                .overlay { Rectangle().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
-
-                            Button("Save server") { saveServer() }
-                                .buttonStyle(PlayarrPrimaryButtonStyle())
-
-                            Text("Changing server returns you to sign-in. The connection remains direct from this device to your Streamarr server.")
-                                .font(.custom("Avenir Next", fixedSize: 10.5))
-                                .foregroundStyle(PlayarrStyle.muted)
-                                .lineSpacing(4)
-                        }
-
-                        settingsCard(title: "Playback", icon: "play.rectangle") {
-                            settingPicker("Quality", selection: $qualityID) {
-                                Text("Original · Best available source").tag("original")
-                                Text("1080p · Up to 8 Mbps").tag("h264-1080p-8mbps")
-                                Text("720p · Up to 4 Mbps").tag("h264-720p-4mbps")
-                                Text("480p · Up to 2 Mbps").tag("h264-480p-2mbps")
-                            }
-
-                            settingPicker("Subtitles", selection: $subtitleMode) {
-                                Text("Off").tag("off")
-                                Text("Forced only").tag("forced")
-                                Text("Always").tag("always")
-                            }
-
-                            if subtitleMode != "off" {
-                                settingPicker("Subtitle language", selection: $subtitleLanguage) {
-                                    languageOptions
-                                }
-                            }
-
-                            settingPicker("Audio language", selection: $audioLanguage) {
-                                languageOptions
-                            }
-
-                            Text("These defaults are applied to the next title you play.")
-                                .font(.custom("Avenir Next", fixedSize: 10.5))
-                                .foregroundStyle(PlayarrStyle.muted)
-                        }
-
-                        if let errorMessage {
-                            Text(errorMessage)
-                                .font(.custom("Avenir Next", fixedSize: 11).weight(.semibold))
-                                .foregroundStyle(PlayarrStyle.danger)
-                        }
-
-                        Button(role: .destructive) {
-                            signingOut = true
-                            Task {
-                                try? await environment.signOut()
-                                signingOut = false
-                            }
-                        } label: {
-                            HStack {
-                                if signingOut { ProgressView() }
-                                Text("Sign out")
-                            }
-                            .font(.custom("Avenir Next", fixedSize: 12).weight(.bold))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(PlayarrStyle.danger)
-                        .overlay { Capsule().stroke(PlayarrStyle.danger.opacity(0.52), lineWidth: 1) }
-                    }
-                    .padding(.horizontal, phone ? 16 : max(28, proxy.size.width * 0.028))
-                    .padding(.top, phone ? 92 : max(128, proxy.size.height * 0.15))
-                    .padding(.bottom, phone ? 118 : 70)
-                }
-                .frame(width: phone ? proxy.size.width : proxy.size.width * 0.65, height: proxy.size.height)
-                .offset(x: phone ? 0 : proxy.size.width * 0.35)
-                .scrollIndicators(.hidden)
-                .background {
-                    if !phone {
-                        LinearGradient(
-                            colors: [.clear, PlayarrStyle.surface.opacity(0.92), PlayarrStyle.surface],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    }
-                }
-                .zIndex(1)
-
-                Text("Profile")
-                    .font(.custom("Avenir Next", fixedSize: phone ? 22 : min(34, proxy.size.width * 0.0175)).weight(.medium))
-                    .tracking(phone ? -1 : -1.5)
-                    .foregroundStyle(PlayarrStyle.ink)
-                    .padding(.leading, phone ? 16 : max(102, proxy.size.width * 0.08))
-                    .padding(.top, phone ? max(56, proxy.safeAreaInsets.top + 6) : min(66, max(34, proxy.size.height * 0.052)))
-                    .zIndex(3)
+            ZStack {
+                settingsBackground
+                if phone { phoneLayout(safeTop: proxy.safeAreaInsets.top) }
+                else { wideLayout(proxy: proxy) }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .ignoresSafeArea()
         .navigationBarHidden(true)
+        .task { await loadRemoteSettings() }
+        .onChange(of: photoItem) { _, item in
+            guard let item else { return }
+            Task { await saveCustomAvatar(from: item) }
+        }
+        .alert("Playarr", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) { Button("OK") { errorMessage = nil } } message: { Text(errorMessage ?? "") }
     }
 
-    private var profileHeader: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                Circle().fill(PlayarrStyle.pink.gradient)
-                Text(String((environment.currentUserName ?? "P").prefix(1)).uppercased())
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(.white)
-            }
-            .frame(width: 64, height: 64)
+    private var settingsBackground: some View {
+        ZStack {
+            LinearGradient(colors: [PlayarrStyle.surface, PlayarrStyle.background], startPoint: .topLeading, endPoint: .bottomTrailing)
+            RadialGradient(colors: [PlayarrStyle.pink.opacity(0.12), .clear], center: UnitPoint(x: 0.2, y: 0.4), startRadius: 0, endRadius: 420)
+        }
+    }
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(environment.currentUserName ?? "Playarr viewer")
-                    .font(.custom("Avenir Next", fixedSize: 24).weight(.semibold))
+    private func phoneLayout(safeTop: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                if selected != nil {
+                    Button { selected = nil } label: {
+                        Image(systemName: "chevron.left").frame(width: 42, height: 42)
+                    }
+                }
+                Text(selected?.title ?? "Settings")
+                    .font(.custom("Avenir Next", fixedSize: 23).weight(.semibold))
                     .tracking(-1)
+                Spacer()
+            }
+            .foregroundStyle(PlayarrStyle.ink)
+            .padding(.horizontal, 16)
+            .padding(.top, max(56, safeTop + 6))
+            .padding(.bottom, 12)
+
+            if let selected {
+                ScrollView { detail(for: selected).padding(16).padding(.bottom, 120) }
+                    .scrollIndicators(.hidden)
+            } else {
+                ScrollView { sectionList.padding(.horizontal, 16).padding(.bottom, 120) }
+                    .scrollIndicators(.hidden)
+            }
+        }
+        .onAppear { selected = nil }
+    }
+
+    private func wideLayout(proxy: GeometryProxy) -> some View {
+        HStack(spacing: 0) {
+            profileFeature
+                .frame(width: proxy.size.width * 0.35, height: proxy.size.height)
+            HStack(spacing: 0) {
+                ScrollView { sectionList.padding(.horizontal, 24).padding(.vertical, 88) }
+                    .frame(width: proxy.size.width * 0.24)
+                    .scrollIndicators(.hidden)
+                ScrollView {
+                    detail(for: selected ?? .appearance)
+                        .padding(.horizontal, 32)
+                        .padding(.top, 94)
+                        .padding(.bottom, 70)
+                }
+                .scrollIndicators(.hidden)
+                .frame(maxWidth: .infinity)
+            }
+            .background(PlayarrStyle.surface.opacity(0.9))
+        }
+    }
+
+    private var profileFeature: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Spacer()
+            avatarView(size: 88)
+            Text(environment.currentUserName ?? "Playarr viewer")
+                .font(.custom("Avenir Next", fixedSize: 34).weight(.semibold))
+                .tracking(-2)
+                .foregroundStyle(PlayarrStyle.ink)
+            Text(environment.serverBaseURL.host ?? environment.serverBaseURL.absoluteString)
+                .font(.custom("Avenir Next", fixedSize: 11).weight(.semibold))
+                .foregroundStyle(PlayarrStyle.muted)
+            Spacer()
+        }
+        .padding(.horizontal, 42)
+    }
+
+    private var sectionList: some View {
+        LazyVStack(spacing: 0) {
+            ForEach(Section.allCases) { section in
+                Button { selected = section } label: {
+                    HStack(spacing: 14) {
+                        Text(section.number)
+                            .font(.caption2.monospacedDigit().weight(.bold))
+                            .foregroundStyle(selected == section ? PlayarrStyle.pink : PlayarrStyle.muted)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(section.title).font(.subheadline.weight(.semibold))
+                            Text(section.description).font(.caption2).foregroundStyle(PlayarrStyle.muted).lineLimit(2)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(PlayarrStyle.muted)
+                    }
                     .foregroundStyle(PlayarrStyle.ink)
-                Text(environment.serverBaseURL.host ?? environment.serverBaseURL.absoluteString)
-                    .font(.custom("Avenir Next", fixedSize: 10.5).weight(.semibold))
-                    .foregroundStyle(PlayarrStyle.muted)
+                    .padding(.vertical, 17)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                Divider().overlay(PlayarrStyle.line)
             }
         }
     }
 
-    private func settingsCard<Content: View>(
-        title: String,
-        icon: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Label(title, systemImage: icon)
-                .font(.custom("Avenir Next", fixedSize: 14).weight(.semibold))
-                .foregroundStyle(PlayarrStyle.ink)
+    @ViewBuilder
+    private func detail(for section: Section) -> some View {
+        VStack(alignment: .leading, spacing: 22) {
+            if let statusMessage {
+                Label(statusMessage, systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(PlayarrStyle.pink)
+            }
+            switch section {
+            case .appearance: appearanceContent
+            case .avatar: avatarContent
+            case .language: languageContent
+            case .player: playerContent
+            case .server: serverContent
+            case .lock: lockContent
+            case .invite: inviteContent
+            }
+        }
+        .frame(maxWidth: 620, alignment: .leading)
+    }
+
+    private var appearanceContent: some View {
+        settingsCard(title: "Theme", description: "Match the system or choose a fixed appearance.") {
+            Picker("Appearance", selection: $appearance) {
+                Text("System").tag("system"); Text("Light").tag("light"); Text("Dark").tag("dark")
+            }
+            .pickerStyle(.segmented)
+        }
+    }
+
+    private var avatarContent: some View {
+        settingsCard(title: "Profile avatar", description: "Your choice is shared with Playarr on every device.") {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 14)], spacing: 14) {
+                ForEach(Self.avatarPresets) { preset in
+                    Button { saveAvatar(ProfileAvatarPreference(kind: .preset, value: preset.id)) } label: {
+                        ZStack {
+                            Circle().fill(LinearGradient(colors: preset.colours, startPoint: .topLeading, endPoint: .bottomTrailing))
+                            Image(systemName: preset.symbol).font(.system(size: 30, weight: .light)).foregroundStyle(.white)
+                        }
+                        .frame(width: 72, height: 72)
+                        .overlay { Circle().stroke(avatar?.value == preset.id ? PlayarrStyle.pink : PlayarrStyle.lineStrong, lineWidth: avatar?.value == preset.id ? 4 : 1).padding(avatar?.value == preset.id ? -4 : 0) }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(busy)
+                }
+            }
+            PhotosPicker(selection: $photoItem, matching: .images) {
+                Label(avatar?.kind == .custom ? "Replace photo" : "Use a photo", systemImage: "photo.badge.plus")
+            }
+            .buttonStyle(.bordered)
+            .tint(PlayarrStyle.inkSoft)
+        }
+    }
+
+    private var languageContent: some View {
+        settingsCard(title: "Language", description: "Used for Playarr labels and preferred metadata when available.") {
+            Picker("Language", selection: $language) { languageOptions }
+                .pickerStyle(.menu)
+                .tint(PlayarrStyle.ink)
+        }
+    }
+
+    private var playerContent: some View {
+        settingsCard(title: "Playback defaults", description: "Applied when a title has no remembered per-title choice.") {
+            settingPicker("Quality", selection: $qualityID) {
+                Text("Original · Best source").tag("original")
+                Text("1080p · Up to 8 Mbps").tag("h264-1080p-8mbps")
+                Text("720p · Up to 4 Mbps").tag("h264-720p-4mbps")
+                Text("480p · Up to 2 Mbps").tag("h264-480p-2mbps")
+            }
+            settingPicker("Subtitles", selection: $subtitleMode) {
+                Text("Off").tag("off"); Text("Forced only").tag("forced"); Text("Always").tag("always")
+            }
+            if subtitleMode != "off" { settingPicker("Subtitle language", selection: $subtitleLanguage) { languageOptions } }
+            settingPicker("Audio language", selection: $audioLanguage) { languageOptions }
+                .onChange(of: audioLanguage) { _, value in savePlayerLanguage(value) }
+        }
+    }
+
+    private var serverContent: some View {
+        settingsCard(title: "Connected server", description: "Changing server signs this device out. Connections stay direct.") {
+            TextField("Server URL", text: $serverURL)
+                .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                .padding(.horizontal, 14).frame(height: 50)
+                .background(PlayarrStyle.background.opacity(0.6))
+                .overlay { Rectangle().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
+            Button("Save server") { saveServer() }.buttonStyle(PlayarrPrimaryButtonStyle())
+            signOutButton
+        }
+    }
+
+    private var lockContent: some View {
+        settingsCard(title: "Profile lock", description: pinLocked ? "This profile is protected." : "Anyone with access to this server can switch to this profile.") {
+            SecureField("Four-digit PIN", text: $pin)
+                .keyboardType(.numberPad)
+                .onChange(of: pin) { _, value in pin = String(value.filter(\.isNumber).prefix(4)) }
+                .padding(.horizontal, 14).frame(height: 50)
+                .background(PlayarrStyle.background.opacity(0.6))
+                .overlay { Rectangle().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
+            Button(pinLocked ? "Replace PIN" : "Set PIN") { savePin(pin) }
+                .buttonStyle(PlayarrPrimaryButtonStyle()).disabled(pin.count != 4 || busy)
+            if pinLocked { Button("Remove PIN", role: .destructive) { savePin(nil) } }
+        }
+    }
+
+    private var inviteContent: some View {
+        settingsCard(title: "Invite a friend", description: "Ask an administrator for one invitation. It expires 24 hours after generation.") {
+            if let inviteLink {
+                Text(inviteLink.absoluteString).font(.caption.monospaced()).textSelection(.enabled)
+                ShareLink(item: inviteLink) { Label("Share invitation", systemImage: "square.and.arrow.up") }
+                    .buttonStyle(PlayarrPrimaryButtonStyle())
+            } else if inviteRequest?.status == .approved {
+                Button("Generate invitation") { generateInvite() }.buttonStyle(PlayarrPrimaryButtonStyle()).disabled(busy)
+            } else if let request = inviteRequest {
+                Label(request.status.rawValue.capitalized, systemImage: request.status == .pending ? "clock" : "info.circle")
+                    .foregroundStyle(PlayarrStyle.inkSoft)
+            } else {
+                TextField("Who is the invitation for? (optional)", text: $inviteMessage, axis: .vertical)
+                    .lineLimit(3...5).padding(14)
+                    .background(PlayarrStyle.background.opacity(0.6))
+                    .overlay { Rectangle().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
+                Button("Request invitation") { requestInvite() }.buttonStyle(PlayarrPrimaryButtonStyle()).disabled(busy)
+            }
+        }
+    }
+
+    private var signOutButton: some View {
+        Button(role: .destructive) {
+            signingOut = true
+            Task { try? await environment.signOut(); signingOut = false }
+        } label: { Label(signingOut ? "Signing out…" : "Sign out", systemImage: "rectangle.portrait.and.arrow.right") }
+            .disabled(signingOut)
+    }
+
+    private func settingsCard<Content: View>(title: String, description: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 17) {
+            Text(title).font(.title2.weight(.semibold)).foregroundStyle(PlayarrStyle.ink)
+            Text(description).font(.caption).foregroundStyle(PlayarrStyle.muted).lineSpacing(3)
+            Divider().overlay(PlayarrStyle.line)
             content()
         }
         .padding(22)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(PlayarrStyle.surfaceStrong.opacity(0.68))
-        .overlay { Rectangle().stroke(PlayarrStyle.line.opacity(0.72), lineWidth: 1) }
+        .background(PlayarrStyle.surfaceStrong.opacity(0.7))
+        .overlay { Rectangle().stroke(PlayarrStyle.line, lineWidth: 1) }
     }
 
-    private func settingPicker<Content: View>(
-        _ label: String,
-        selection: Binding<String>,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        HStack(spacing: 12) {
-            Text(label)
-                .foregroundStyle(PlayarrStyle.ink)
-            Spacer(minLength: 18)
-            Picker(label, selection: selection, content: content)
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .tint(PlayarrStyle.inkSoft)
+    private func settingPicker<Content: View>(_ label: String, selection: Binding<String>, @ViewBuilder content: () -> Content) -> some View {
+        HStack { Text(label).foregroundStyle(PlayarrStyle.ink); Spacer(); Picker(label, selection: selection, content: content).labelsHidden().pickerStyle(.menu).tint(PlayarrStyle.inkSoft) }
+            .font(.subheadline).padding(.vertical, 5)
+    }
+
+    @ViewBuilder private var languageOptions: some View {
+        Text("English").tag("en"); Text("Spanish").tag("es"); Text("French").tag("fr"); Text("German").tag("de")
+        Text("Italian").tag("it"); Text("Portuguese").tag("pt"); Text("Japanese").tag("ja"); Text("Korean").tag("ko")
+        Text("Chinese").tag("zh"); Text("Hindi").tag("hi"); Text("Arabic").tag("ar"); Text("Thai").tag("th")
+    }
+
+    @ViewBuilder private func avatarView(size: CGFloat) -> some View {
+        if avatar?.kind == .custom, let value = avatar?.value,
+           let comma = value.firstIndex(of: ","), let data = Data(base64Encoded: String(value[value.index(after: comma)...])),
+           let image = UIImage(data: data) {
+            Image(uiImage: image).resizable().scaledToFill().frame(width: size, height: size).clipShape(Circle())
+        } else {
+            let preset = Self.avatarPresets.first(where: { $0.id == avatar?.value }) ?? Self.avatarPresets[0]
+            ZStack {
+                Circle().fill(LinearGradient(colors: preset.colours, startPoint: .topLeading, endPoint: .bottomTrailing))
+                Image(systemName: preset.symbol).font(.system(size: size * 0.38, weight: .light)).foregroundStyle(.white)
+            }.frame(width: size, height: size)
         }
-        .font(.custom("Avenir Next", fixedSize: 12))
-        .padding(.vertical, 6)
     }
 
-    @ViewBuilder
-    private var languageOptions: some View {
-        Text("English").tag("en")
-        Text("Spanish").tag("es")
-        Text("French").tag("fr")
-        Text("German").tag("de")
-        Text("Italian").tag("it")
-        Text("Portuguese").tag("pt")
-        Text("Japanese").tag("ja")
-        Text("Korean").tag("ko")
-        Text("Chinese").tag("zh")
-        Text("Hindi").tag("hi")
-        Text("Arabic").tag("ar")
-        Text("Thai").tag("th")
+    private func loadRemoteSettings() async {
+        async let remoteAvatar = try? environment.apiClient.getProfileAvatar()
+        async let remotePin = try? environment.apiClient.getProfilePinSetting()
+        async let remotePlayer = try? environment.apiClient.getPlayerPreferences()
+        async let remoteInvite = try? environment.apiClient.getMyUserInviteRequest()
+        avatar = await remoteAvatar?.preference
+        pinLocked = await remotePin?.pinLocked ?? false
+        if let preferred = await remotePlayer?.preferredAudioLanguage { audioLanguage = preferred }
+        inviteRequest = await remoteInvite ?? nil
+    }
+
+    private func saveAvatar(_ preference: ProfileAvatarPreference) {
+        Task { await persistAvatar(preference) }
+    }
+
+    private func persistAvatar(_ preference: ProfileAvatarPreference) async {
+        busy = true
+        defer { busy = false }
+        do {
+            let saved = try await environment.apiClient.updateProfileAvatar(UpdateProfileAvatarRequest(preference: preference))
+            avatar = saved.preference
+            statusMessage = "Avatar saved"
+            await environment.refreshCurrentAvatar()
+        } catch { show(error) }
+    }
+
+    private func saveCustomAvatar(from item: PhotosPickerItem) async {
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self), let image = UIImage(data: data),
+                  let jpeg = Self.squareJPEG(image) else { throw APIError.invalidResponse }
+            await persistAvatar(ProfileAvatarPreference(kind: .custom, value: "data:image/jpeg;base64,\(jpeg.base64EncodedString())"))
+        } catch { show(error) }
+    }
+
+    private func savePlayerLanguage(_ value: String) {
+        Task {
+            do { _ = try await environment.apiClient.updatePlayerPreferences(PlayerPreferences(preferredAudioLanguage: value)); statusMessage = "Player defaults saved" }
+            catch { show(error) }
+        }
+    }
+
+    private func savePin(_ value: String?) {
+        busy = true
+        Task {
+            do {
+                let setting = try await environment.apiClient.updateProfilePinSetting(UpdateProfilePinRequest(pin: value))
+                pinLocked = setting.pinLocked; pin = ""; statusMessage = value == nil ? "Profile lock removed" : "Profile lock saved"
+            } catch { show(error) }
+            busy = false
+        }
+    }
+
+    private func requestInvite() {
+        busy = true
+        Task {
+            do {
+                inviteRequest = try await environment.apiClient.createUserInviteRequest(CreateUserInviteRequest(message: inviteMessage.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty))
+                inviteMessage = ""; statusMessage = "Invitation request sent"
+            } catch { show(error) }
+            busy = false
+        }
+    }
+
+    private func generateInvite() {
+        busy = true
+        Task {
+            do {
+                let invite = try await environment.apiClient.generateApprovedUserInvite()
+                var components = URLComponents(string: "https://playarr.app/signup")!
+                components.queryItems = [URLQueryItem(name: "server", value: environment.serverBaseURL.absoluteString), URLQueryItem(name: "invite", value: invite.inviteToken)]
+                inviteLink = components.url; statusMessage = "Invitation generated"
+            } catch { show(error) }
+            busy = false
+        }
     }
 
     private func saveServer() {
         do {
             let corrected = try LoginServerURL.normalise(serverURL)
-            serverURL = corrected.absoluteString
-            errorMessage = nil
-            environment.serverBaseURL = corrected
-        } catch {
-            errorMessage = "Enter a valid HTTP or HTTPS server URL."
-        }
+            serverURL = corrected.absoluteString; environment.serverBaseURL = corrected
+        } catch { errorMessage = "Enter a valid HTTP or HTTPS server URL." }
+    }
+
+    private func show(_ error: Error) {
+        errorMessage = (error as? APIError)?.displayMessage ?? error.localizedDescription
+    }
+
+    private static func squareJPEG(_ image: UIImage) -> Data? {
+        let side = min(image.size.width, image.size.height)
+        let origin = CGPoint(x: (image.size.width - side) / 2, y: (image.size.height - side) / 2)
+        guard let cg = image.cgImage?.cropping(to: CGRect(origin: origin, size: CGSize(width: side, height: side))) else { return nil }
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 512, height: 512))
+        return renderer.image { _ in UIImage(cgImage: cg, scale: 1, orientation: image.imageOrientation).draw(in: CGRect(x: 0, y: 0, width: 512, height: 512)) }.jpegData(compressionQuality: 0.82)
+    }
+
+    private static let avatarPresets: [AvatarPreset] = [
+        .init(id: "astronaut", symbol: "moon.stars", colours: [Color(hex: 0x5267AD), Color(hex: 0x222D5F)]),
+        .init(id: "cat", symbol: "cat", colours: [Color(hex: 0xE37C68), Color(hex: 0x9C3F66)]),
+        .init(id: "dinosaur", symbol: "fossil.shell", colours: [Color(hex: 0x55A46E), Color(hex: 0x237265)]),
+        .init(id: "robot", symbol: "cpu", colours: [Color(hex: 0x5D9CAF), Color(hex: 0x365383)]),
+        .init(id: "pirate", symbol: "sailboat", colours: [Color(hex: 0xD39A48), Color(hex: 0x91464C)]),
+        .init(id: "alien", symbol: "sparkles", colours: [Color(hex: 0x8B71C5), Color(hex: 0x4A477F)]),
+    ]
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
+private extension Color {
+    init(hex: Int) {
+        self.init(red: Double((hex >> 16) & 0xff) / 255, green: Double((hex >> 8) & 0xff) / 255, blue: Double(hex & 0xff) / 255)
     }
 }

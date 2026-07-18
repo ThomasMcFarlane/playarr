@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Complete the native iOS profile journey with Playarr-styled invited sign-up, synced preset and
+  photo avatars, appearance and language choices, player defaults, PIN locking, and friend invites.
 - Match Playarr Web's native iOS catalogue and playlist flows with available-only pagination,
   search scopes, library view and sort controls, cast and recommendations, and editable nesting.
 - Expose available-only ordered library browsing, cast and recommendation data, friend invites,
