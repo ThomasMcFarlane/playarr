@@ -119,6 +119,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Replace the playlist type dropdown with styled video and audio icon buttons that support
+  directional remote and keyboard navigation.
 - Render Streamarr activity links in the surrounding text colour and report bytes actually
   delivered during direct and adaptive playback instead of leaving session totals at zero.
 - Keep global Space/K playback shortcuts active across Playarr unless the viewer is typing in an

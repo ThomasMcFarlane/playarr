@@ -6375,12 +6375,64 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   gap: 0.8rem;
 }
 
-.tv-playlist-create-form label {
+.tv-playlist-create-form label,
+.tv-playlist-field-label {
   color: var(--ink-muted);
   font-size: clamp(0.44rem, 0.5vw, 0.62rem);
   font-weight: 720;
   letter-spacing: 0.07em;
   text-transform: uppercase;
+}
+
+.tv-playlist-media-type-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.tv-playlist-media-type-switch button {
+  min-height: clamp(58px, 4.8vw, 74px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--line-strong) 74%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-soft) 68%, transparent);
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: clamp(0.56rem, 0.64vw, 0.78rem);
+  font-weight: 680;
+  cursor: pointer;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.tv-playlist-media-type-switch button svg {
+  width: clamp(20px, 1.7vw, 28px);
+  height: clamp(20px, 1.7vw, 28px);
+}
+
+.tv-playlist-media-type-switch button.is-active,
+.tv-playlist-media-type-switch button:hover,
+.tv-playlist-media-type-switch button:focus-visible {
+  outline: 0;
+  border-color: color-mix(in srgb, #cf3157 76%, transparent);
+  background: var(--ink);
+  color: var(--bg);
+  box-shadow: 0 0 0 4px color-mix(in srgb, #cf3157 16%, transparent);
+  transform: scale(1.025);
+}
+
+.tv-playlist-media-type-switch button:disabled {
+  cursor: default;
+  opacity: 0.7;
+  transform: none;
 }
 
 .tv-playlist-create-form input,

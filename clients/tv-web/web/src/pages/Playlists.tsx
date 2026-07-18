@@ -47,6 +47,7 @@ import {
   TvStageShell,
 } from "../components/tv/TvStage";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
+import { MoviesIcon, MusicIcon } from "../components/NavIcons";
 
 interface ResolvedPlaylistItem {
   id: string;
@@ -237,6 +238,8 @@ export function PlaylistsPage() {
   const filterButtonRef = useRef<HTMLButtonElement>(null);
   const filterDrawerRef = useRef<HTMLElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const parentSelectRef = useRef<HTMLSelectElement>(null);
+  const createSubmitRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -742,6 +745,50 @@ export function PlaylistsPage() {
     ]?.focus({ preventScroll: true });
   }
 
+  function selectPlaylistMediaType(type: PlaylistResponse["media_type"]) {
+    if (fixedParentPlaylist) return;
+    setPlaylistMediaType(type);
+    setParentPlaylistId("");
+  }
+
+  function handlePlaylistMediaTypeKeyDown(
+    event: KeyboardEvent<HTMLButtonElement>,
+    type: PlaylistResponse["media_type"]
+  ) {
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      event.stopPropagation();
+      const nextType =
+        event.key === "ArrowLeft"
+          ? type === "audio"
+            ? "video"
+            : "audio"
+          : type === "video"
+            ? "audio"
+            : "video";
+      selectPlaylistMediaType(nextType);
+      event.currentTarget.parentElement
+        ?.querySelector<HTMLButtonElement>(
+          `[data-playlist-media-type="${nextType}"]`
+        )
+        ?.focus({ preventScroll: true });
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      event.stopPropagation();
+      nameInputRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      event.stopPropagation();
+      (parentSelectRef.current ?? createSubmitRef.current)?.focus({
+        preventScroll: true,
+      });
+    }
+  }
+
   async function createPlaylist(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = playlistName.trim();
@@ -1180,34 +1227,52 @@ export function PlaylistsPage() {
               placeholder={t("pages.playlists.namePlaceholder")}
               autoComplete="off"
             />
-            <label htmlFor="playlist-media-type">
-              {t("pages.playlists.mediaTypeLabel")}
-            </label>
-            <select
-              id="playlist-media-type"
-              className="tv-playlist-parent-select"
-              value={effectivePlaylistMediaType}
-              disabled={Boolean(fixedParentPlaylist)}
-              onChange={(event) => {
-                setPlaylistMediaType(
-                  event.target.value as PlaylistResponse["media_type"]
-                );
-                setParentPlaylistId("");
-              }}
+            <span
+              id="playlist-media-type-label"
+              className="tv-playlist-field-label"
             >
-              <option value="video">
-                {t("pages.playlists.mediaTypeVideo")}
-              </option>
-              <option value="audio">
-                {t("pages.playlists.mediaTypeAudio")}
-              </option>
-            </select>
+              {t("pages.playlists.mediaTypeLabel")}
+            </span>
+            <div
+              className="tv-playlist-media-type-switch"
+              role="radiogroup"
+              aria-labelledby="playlist-media-type-label"
+            >
+              {(["video", "audio"] as const).map((type) => {
+                const selected = effectivePlaylistMediaType === type;
+                const label = t(
+                  type === "video"
+                    ? "pages.playlists.mediaTypeVideo"
+                    : "pages.playlists.mediaTypeAudio"
+                );
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    aria-label={label}
+                    className={selected ? "is-active" : undefined}
+                    data-playlist-media-type={type}
+                    disabled={Boolean(fixedParentPlaylist)}
+                    onClick={() => selectPlaylistMediaType(type)}
+                    onKeyDown={(event) =>
+                      handlePlaylistMediaTypeKeyDown(event, type)
+                    }
+                  >
+                    {type === "video" ? <MoviesIcon /> : <MusicIcon />}
+                    <span>{label}</span>
+                  </button>
+                );
+              })}
+            </div>
             {!fixedParentPlaylist ? (
               <>
                 <label htmlFor="playlist-parent">
                   {t("pages.playlists.parentPlaylistLabel")}
                 </label>
                 <select
+                  ref={parentSelectRef}
                   id="playlist-parent"
                   className="tv-playlist-parent-select"
                   value={parentPlaylistId}
@@ -1228,6 +1293,7 @@ export function PlaylistsPage() {
               </p>
             ) : null}
             <button
+              ref={createSubmitRef}
               type="submit"
               className="btn btn-primary"
               disabled={
