@@ -17,16 +17,17 @@ Media3 player, and one public download.
 `MainActivity` detects television UI mode and mounts `PlayarrApp`. All visible
 routes are native Compose:
 
-- account and server sign-in;
-- responsive home shelves and library grid;
-- work details and playable child rows;
+- account and server sign-in plus profile switching;
+- responsive feature stages, progress shelves, search, and filtered libraries;
+- playlists, work details, watched-state actions, and playable child rows;
 - Media3 direct/HLS playback; and
-- connected-server settings and sign-out.
+- appearance, avatar, language, player, server, profile-lock, invitation, and
+  sign-out settings.
 
-Phones use bottom navigation and compact touch geometry. Wide screens and
-televisions use a navigation rail, larger poster geometry, immersive mode, and
-D-pad focus scaling. Short landscape windows use a compact sign-in form so all
-fields and the submit action remain visible.
+Phones use safe-area-aware bottom navigation and compact touch geometry. Wide
+screens and televisions use grouped navigation, larger landscape artwork,
+immersive mode, and D-pad focus scaling. Television density maps the native
+layout to Playarr Web's 1920 x 1080 presentation canvas.
 
 ## Authentication and server ownership
 

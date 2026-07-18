@@ -1,7 +1,28 @@
 package io.streamarr.shared.data.remote
 
 import io.streamarr.shared.data.model.CatalogPage
+import io.streamarr.shared.data.model.AddPlaylistItemRequest
+import io.streamarr.shared.data.model.AvailableProfile
+import io.streamarr.shared.data.model.CreatePlaylistRequest
+import io.streamarr.shared.data.model.CreateUserInviteRequest
+import io.streamarr.shared.data.model.PlayerPreferences
+import io.streamarr.shared.data.model.OptionalUserInviteRequest
+import io.streamarr.shared.data.model.Playlist
+import io.streamarr.shared.data.model.PlaylistItem
 import io.streamarr.shared.data.model.PlaybackInfoResponse
+import io.streamarr.shared.data.model.ProfileAvatarSetting
+import io.streamarr.shared.data.model.ProfilePinSetting
+import io.streamarr.shared.data.model.ReorderPlaylistItemsRequest
+import io.streamarr.shared.data.model.UpdatePlayerPreferencesRequest
+import io.streamarr.shared.data.model.UpdatePlaylistRequest
+import io.streamarr.shared.data.model.UpdateProfileAvatarRequest
+import io.streamarr.shared.data.model.UpdateProfilePinRequest
+import io.streamarr.shared.data.model.UpdateWatchProgressRequest
+import io.streamarr.shared.data.model.UserInvite
+import io.streamarr.shared.data.model.UserInviteRequest
+import io.streamarr.shared.data.model.VerifyProfilePinRequest
+import io.streamarr.shared.data.model.VerifyProfilePinResponse
+import io.streamarr.shared.data.model.WatchProgress
 import io.streamarr.shared.data.model.VersionEnvelope
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkDetail
@@ -11,9 +32,12 @@ import kotlinx.serialization.Serializable
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.PUT
 import retrofit2.http.Query
 
 /**
@@ -119,7 +143,96 @@ interface StreamarrApi {
         @Query("audio_codecs") audioCodecs: String? = null,
         @Query("max_bitrate_bps") maxBitrateBps: Long? = null,
         @Query("profile") profile: String? = null,
+        @Query("start_position_ms") startPositionMs: Long? = null,
     ): PlaybackInfoResponse
+
+    @GET("api/v1/playback/progress")
+    suspend fun listWatchProgress(): List<WatchProgress>
+
+    @GET("api/v1/playback/{media_file_id}/progress")
+    suspend fun getWatchProgress(@Path("media_file_id") mediaFileId: String): WatchProgress
+
+    @PUT("api/v1/playback/{media_file_id}/progress")
+    suspend fun updateWatchProgress(
+        @Path("media_file_id") mediaFileId: String,
+        @Body request: UpdateWatchProgressRequest,
+    ): WatchProgress
+
+    // ---- Playarr profiles and preferences ---------------------------------
+
+    @GET("api/v1/users/profiles")
+    suspend fun listAvailableProfiles(): List<AvailableProfile>
+
+    @POST("api/v1/users/profiles/{id}/verify-pin")
+    suspend fun verifyProfilePin(
+        @Path("id") id: String,
+        @Body request: VerifyProfilePinRequest,
+    ): VerifyProfilePinResponse
+
+    @GET("api/v1/users/me/profile-pin")
+    suspend fun getProfilePinSetting(): ProfilePinSetting
+
+    @PATCH("api/v1/users/me/profile-pin")
+    suspend fun updateProfilePinSetting(@Body request: UpdateProfilePinRequest): ProfilePinSetting
+
+    @GET("api/v1/users/me/player-preferences")
+    suspend fun getPlayerPreferences(): PlayerPreferences
+
+    @PATCH("api/v1/users/me/player-preferences")
+    suspend fun updatePlayerPreferences(@Body request: UpdatePlayerPreferencesRequest): PlayerPreferences
+
+    @GET("api/v1/users/me/profile-avatar")
+    suspend fun getProfileAvatar(): ProfileAvatarSetting
+
+    @PUT("api/v1/users/me/profile-avatar")
+    suspend fun updateProfileAvatar(@Body request: UpdateProfileAvatarRequest): ProfileAvatarSetting
+
+    @GET("api/v1/users/me/user-invite-request")
+    suspend fun getMyUserInviteRequest(): OptionalUserInviteRequest
+
+    @POST("api/v1/users/me/user-invite-request")
+    suspend fun createUserInviteRequest(@Body request: CreateUserInviteRequest): UserInviteRequest
+
+    @POST("api/v1/users/me/user-invite-request/generate")
+    suspend fun generateApprovedUserInvite(): UserInvite
+
+    // ---- playlists --------------------------------------------------------
+
+    @GET("api/v1/playlists")
+    suspend fun listPlaylists(): List<Playlist>
+
+    @POST("api/v1/playlists")
+    suspend fun createPlaylist(@Body request: CreatePlaylistRequest): Playlist
+
+    @GET("api/v1/playlists/{id}")
+    suspend fun getPlaylist(@Path("id") id: String): Playlist
+
+    @PUT("api/v1/playlists/{id}")
+    suspend fun updatePlaylist(@Path("id") id: String, @Body request: UpdatePlaylistRequest): Playlist
+
+    @DELETE("api/v1/playlists/{id}")
+    suspend fun deletePlaylist(@Path("id") id: String): Response<ResponseBody>
+
+    @GET("api/v1/playlists/{id}/items")
+    suspend fun listPlaylistItems(@Path("id") id: String): List<PlaylistItem>
+
+    @POST("api/v1/playlists/{id}/items")
+    suspend fun addPlaylistItem(
+        @Path("id") id: String,
+        @Body request: AddPlaylistItemRequest,
+    ): PlaylistItem
+
+    @DELETE("api/v1/playlists/{id}/items/{item_id}")
+    suspend fun removePlaylistItem(
+        @Path("id") id: String,
+        @Path("item_id") itemId: String,
+    ): Response<ResponseBody>
+
+    @PUT("api/v1/playlists/{id}/items/order")
+    suspend fun reorderPlaylistItems(
+        @Path("id") id: String,
+        @Body request: ReorderPlaylistItemsRequest,
+    ): List<PlaylistItem>
 
     // ---- webhooks --------------------------------------------------------------
 

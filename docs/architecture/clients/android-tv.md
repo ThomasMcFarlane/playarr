@@ -8,8 +8,10 @@ and tablets: `clients/mobile-android/`, package `io.streamarr.mobile`.
 The app is Jetpack Compose throughout. It does not host Playarr Web in a
 WebView. Runtime UI-mode and window-width checks adapt the shared screens:
 
-- television and wide displays use an always-visible navigation rail;
-- poster dimensions and spacing grow for ten-foot viewing;
+- television displays use the same grouped navigation rail and 1920 x 1080
+  stage geometry as Playarr Web;
+- landscape artwork, progress shelves, and spacing are tuned for ten-foot
+  viewing;
 - focusable content scales when reached with a D-pad;
 - the Activity enters immersive fullscreen mode on televisions; and
 - the same catalogue, title-detail, settings, and Media3 player routes remain
@@ -21,11 +23,12 @@ Android form factors.
 
 ## Server and authentication
 
-There is no build-time or default Streamarr URL. The native sign-in screen asks
-for the server URL with the account credentials, normalises a missing scheme to
-LAN-friendly HTTP, and stores the selected URL in `ServerConfigStore` for that
-session. Signing out returns to the same screen so another account or server can
-be selected.
+There is no build-time or default Streamarr URL. The native television linking
+screen asks for the server URL, requests a device code from that server, and
+polls it until the viewer approves the television. A missing scheme is
+normalised to LAN-friendly HTTP and the selected URL is stored in
+`ServerConfigStore`. Signing out returns to linking so another account or
+server can be selected.
 
 Requests identify as `android-tv` on television UI mode and `android-mobile`
 elsewhere. Both identities come from the same installed package.

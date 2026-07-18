@@ -19,6 +19,16 @@ object StreamarrPalette {
     val PlayarrInkSoft = Color(0xFFC5B8BD)
     val PlayarrInkMuted = Color(0xFF887A82)
 
+    // Playarr Web light-theme tokens.
+    val PlayarrLightBackground = Color(0xFFF5F3F2)
+    val PlayarrLightSurface = Color(0xFFFBFAF9)
+    val PlayarrLightSurfaceStrong = Color(0xFFFFFFFF)
+    val PlayarrLightSurfaceSoft = Color(0xFFDFDCDD)
+    val PlayarrLightInk = Color(0xFF382621)
+    val PlayarrLightInkSoft = Color(0xFF675961)
+    val PlayarrLightInkMuted = Color(0xFFA5969E)
+    val PlayarrLightAccent = Color(0xFF675961)
+
     val Violet40 = Color(0xFF6750E4)
     val Violet80 = Color(0xFFC9BFFF)
     val Violet20 = Color(0xFF211360)

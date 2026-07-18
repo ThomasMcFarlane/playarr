@@ -109,7 +109,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Rebuild the universal Android client as a native responsive counterpart to Playarr Web: the
   phone and television layouts now share its pink identity, landscape media rails, selected-title
-  artwork stages, floating navigation, search, kind-specific libraries, detail hierarchy, and
+  artwork stages, floating access-gated navigation, progress shelves, search, filtered and sorted
+  libraries, playlists, profile switching and PIN entry, full profile settings, runtime server
+  selection, TV device linking, detail actions, resume progress, appearance themes, and
   authenticated artwork loading while retaining native Compose and Media3 playback.
 - Align the iOS architecture and roadmap with the installable Xcode project and remaining runtime
   validation boundary.

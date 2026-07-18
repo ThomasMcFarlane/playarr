@@ -7,16 +7,18 @@ navigation, focus treatment, and client identity to the current device.
 The app targets Android 8.0+ (`minSdk 26`). Its native UI owns:
 
 - per-account Streamarr server sign-in and connection recovery;
-- responsive phone, tablet, and television catalogue navigation;
-- native title details and Media3 playback;
+- responsive phone, tablet, and television Home, Search, libraries, and
+  playlist navigation;
+- native profiles, settings, title details, watch progress, and Media3 playback;
 - Google Play in-app updates and Firebase invite notifications;
 - Android lifecycle and fullscreen handling; and
 - native push registration aligned with the authenticated account.
 
 The app detects Android's current UI mode. Phones and tablets identify as
 `android-mobile` and use touch layouts; televisions identify as `android-tv`,
-expose a Leanback launcher, use the wide navigation rail, and support D-pad
-focus. Both device types install and update the same package.
+expose a Leanback launcher, use Playarr's grouped wide navigation and support
+D-pad focus. Both device types install and update the same package. Television
+sign-in uses device-code linking against the server address entered on screen.
 
 This module is included by the Gradle root at
 `../android-shared/settings.gradle.kts`.

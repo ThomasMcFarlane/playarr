@@ -43,6 +43,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -79,7 +80,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import io.streamarr.mobile.BuildConfig
 import io.streamarr.mobile.R
 import io.streamarr.shared.auth.TokenStore
+import io.streamarr.shared.auth.DeviceAuthClient
 import io.streamarr.shared.auth.model.ClientPlatform
+import io.streamarr.shared.auth.model.DeviceCodeResponse
+import io.streamarr.shared.auth.model.DevicePollResult
 import io.streamarr.shared.auth.model.LoginRequest
 import io.streamarr.shared.auth.model.toTokenResponse
 import io.streamarr.shared.auth.remote.LoginApi
@@ -90,6 +94,7 @@ import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
 import io.streamarr.shared.data.model.WorkDetail
 import io.streamarr.shared.data.model.WorkKind
+import io.streamarr.shared.data.remote.StreamarrApi
 import io.streamarr.shared.designsystem.component.PosterCard
 import io.streamarr.shared.domain.model.StreamarrError
 import io.streamarr.shared.domain.model.StreamarrResult
@@ -108,9 +113,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-private val PlayarrBackground = Color(0xFF151315)
-private val PlayarrPanel = Color(0xFF211D21)
-private val PlayarrViolet = Color(0xFFCF3157)
+private val PlayarrBackground get() = WebBackground
+private val PlayarrPanel get() = WebSurfaceStrong
+private val PlayarrViolet get() = WebPink
 
 sealed interface RootState {
     data object Loading : RootState
@@ -145,14 +150,25 @@ sealed interface LoginState {
     data class Failed(val message: String) : LoginState
 }
 
+sealed interface PairingState {
+    data object Idle : PairingState
+    data object Requesting : PairingState
+    data class Waiting(val code: DeviceCodeResponse) : PairingState
+    data class Failed(val message: String) : PairingState
+}
+
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     private val loginApi: LoginApi,
+    private val deviceAuthClient: DeviceAuthClient,
     private val tokenStore: TokenStore,
     private val serverConfigStore: ServerConfigStore,
+    private val api: StreamarrApi,
 ) : ViewModel() {
     private val _state = MutableStateFlow<LoginState>(LoginState.Idle)
     val state: StateFlow<LoginState> = _state.asStateFlow()
+    private val _pairing = MutableStateFlow<PairingState>(PairingState.Idle)
+    val pairing: StateFlow<PairingState> = _pairing.asStateFlow()
 
     fun login(serverUrl: String, username: String, password: String, isTelevision: Boolean) {
         if (_state.value == LoginState.Submitting) return
@@ -176,9 +192,44 @@ class LoginViewModel @Inject constructor(
                     ),
                 )
                 tokenStore.save(response.toTokenResponse())
+                tokenStore.saveIdentity(response.userId, username.trim().ifBlank { null })
                 _state.value = LoginState.Idle
             } catch (error: Exception) {
                 _state.value = LoginState.Failed(loginErrorMessage(error))
+            }
+        }
+    }
+
+    fun pairTelevision(serverUrl: String) {
+        if (_pairing.value == PairingState.Requesting || _pairing.value is PairingState.Waiting) return
+        viewModelScope.launch {
+            val normalisedUrl = runCatching { normaliseServerUrl(serverUrl) }.getOrElse {
+                _pairing.value = PairingState.Failed("Enter a valid Streamarr server address.")
+                return@launch
+            }
+            _pairing.value = PairingState.Requesting
+            runCatching {
+                serverConfigStore.setBaseUrl(normalisedUrl)
+                tokenStore.clear()
+                deviceAuthClient.requestDeviceCode(ClientPlatform.AndroidTv)
+            }.onFailure {
+                _pairing.value = PairingState.Failed("Couldn’t start TV linking. Check the server address and try again.")
+            }.onSuccess { code ->
+                _pairing.value = PairingState.Waiting(code)
+                deviceAuthClient.pollUntilResolved(code.deviceCode, code.interval).collect { result ->
+                    when (result) {
+                        is DevicePollResult.Approved -> {
+                            tokenStore.save(result.token)
+                            val current = runCatching { api.listAvailableProfiles().firstOrNull { it.isCurrent } }.getOrNull()
+                            current?.let { tokenStore.saveIdentity(it.id, it.displayName) }
+                            _pairing.value = PairingState.Idle
+                        }
+                        DevicePollResult.AuthorizationPending, DevicePollResult.SlowDown -> Unit
+                        DevicePollResult.Expired -> _pairing.value = PairingState.Failed("That link code expired. Start again for a new code.")
+                        DevicePollResult.Denied -> _pairing.value = PairingState.Failed("This TV link request was declined.")
+                        is DevicePollResult.Failed -> _pairing.value = PairingState.Failed(result.message)
+                    }
+                }
             }
         }
     }
@@ -285,6 +336,7 @@ private fun LoginScreen(
     viewModel: LoginViewModel = hiltViewModel(),
 ) {
     val loginState by viewModel.state.collectAsState()
+    val pairingState by viewModel.pairing.collectAsState()
     var serverUrl by remember(savedServerUrl) { mutableStateOf(savedServerUrl) }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -300,49 +352,183 @@ private fun LoginScreen(
             )
             .safeDrawingPadding(),
     ) {
-        val wide = isTelevision || maxWidth >= 720.dp
         val compact = maxHeight < 600.dp
-        val form: @Composable () -> Unit = {
-            LoginForm(
+        if (isTelevision) {
+            TelevisionPairingScreen(
                 serverUrl = serverUrl,
                 onServerUrlChange = { serverUrl = it },
-                username = username,
-                onUsernameChange = { username = it },
-                password = password,
-                onPasswordChange = { password = it },
-                state = loginState,
-                onSubmit = { viewModel.login(serverUrl, username, password, isTelevision) },
-                compact = compact,
-                modifier = Modifier
-                    .width(if (wide) 440.dp else maxWidth)
-                    .padding(if (compact) 8.dp else 24.dp),
+                state = pairingState,
+                onStart = { viewModel.pairTelevision(serverUrl) },
             )
+            return@BoxWithConstraints
         }
-        if (wide) {
-            Row(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 64.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                Column(modifier = Modifier.weight(1f).padding(40.dp)) {
-                    PlayarrMark()
-                    Spacer(Modifier.height(24.dp))
-                    Text(
-                        "Your media. Your server. One native Android app.",
-                        style = if (compact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
-                        color = Color.White,
-                    )
-                }
-                form()
+        MobileLoginScreen(
+            serverUrl = serverUrl,
+            onServerUrlChange = { serverUrl = it },
+            username = username,
+            onUsernameChange = { username = it },
+            password = password,
+            onPasswordChange = { password = it },
+            state = loginState,
+            onSubmit = { viewModel.login(serverUrl, username, password, false) },
+            compact = compact,
+        )
+    }
+}
+
+@Composable
+private fun MobileLoginScreen(
+    serverUrl: String,
+    onServerUrlChange: (String) -> Unit,
+    username: String,
+    onUsernameChange: (String) -> Unit,
+    password: String,
+    onPasswordChange: (String) -> Unit,
+    state: LoginState,
+    onSubmit: () -> Unit,
+    compact: Boolean,
+) {
+    val display = LocalPlayarrDisplayPreferences.current
+    Box(Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                painterResource(R.drawable.playarr_mark),
+                contentDescription = "Playarr",
+                tint = Color.Unspecified,
+                modifier = Modifier.size(30.dp),
+            )
+            Surface(
+                onClick = {},
+                color = Color.Transparent,
+                border = androidx.compose.foundation.BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.3f)),
+                shape = CircleShape,
+                modifier = Modifier.padding(start = 22.dp).size(42.dp),
+            ) { Box(contentAlignment = Alignment.Center) { Text("←", color = WebInkSoft) } }
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = {
+                display.setLanguage(if (display.language == "en") "system" else "en")
+            }) {
+                Text("◎  ${if (display.language == "system") "Auto" else "English"}", color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
-        } else {
-            Column(
-                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 36.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+        }
+        Column(
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(
+                start = 22.dp,
+                end = 22.dp,
+                top = if (compact) 96.dp else 188.dp,
+                bottom = 48.dp,
+            ),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("WELCOME HOME", color = WebInkMuted, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.7.sp)
+            Text(
+                "Sign in to Playarr",
+                color = WebInk,
+                fontSize = if (compact) 40.sp else 48.sp,
+                fontWeight = FontWeight.Normal,
+                letterSpacing = (-2.5).sp,
+                maxLines = 1,
+                modifier = Modifier.padding(top = 7.dp),
+            )
+            Text(
+                "Choose your Streamarr server, then save this profile on the current device.",
+                color = WebInkMuted,
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.padding(top = 14.dp, bottom = 30.dp),
+            )
+            LoginField("SERVER URL", serverUrl, onServerUrlChange, KeyboardType.Uri, ImeAction.Next)
+            Text("Your device connects directly to this server. Playarr does not proxy your login.", color = WebInkMuted, fontSize = 8.sp, modifier = Modifier.fillMaxWidth().padding(top = 5.dp, bottom = 18.dp))
+            LoginField("USERNAME", username, onUsernameChange, KeyboardType.Text, ImeAction.Next)
+            Spacer(Modifier.height(18.dp))
+            LoginField("PASSWORD", password, onPasswordChange, KeyboardType.Password, ImeAction.Done, password = true)
+            if (state is LoginState.Failed) {
+                Text(state.message, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
+            }
+            Button(
+                onClick = onSubmit,
+                enabled = state != LoginState.Submitting && serverUrl.isNotBlank(),
+                modifier = Modifier.fillMaxWidth().padding(top = 24.dp).height(48.dp),
+                shape = CircleShape,
             ) {
-                PlayarrMark()
-                Spacer(Modifier.height(18.dp))
-                form()
+                if (state == LoginState.Submitting) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                else Text("Sign in", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LoginField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    keyboardType: KeyboardType,
+    imeAction: ImeAction,
+    password: Boolean = false,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(label, color = WebInkMuted, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp, modifier = Modifier.padding(bottom = 6.dp))
+        OutlinedTextField(
+            value,
+            onValueChange,
+            singleLine = true,
+            visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+            keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = imeAction),
+            modifier = Modifier.fillMaxWidth().height(60.dp),
+            shape = RoundedCornerShape(0.dp),
+        )
+    }
+}
+
+@Composable
+private fun TelevisionPairingScreen(
+    serverUrl: String,
+    onServerUrlChange: (String) -> Unit,
+    state: PairingState,
+    onStart: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        Column(Modifier.weight(0.9f).padding(50.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            PlayarrMark()
+            Text("Link this TV", color = WebInk, fontSize = 42.sp, fontWeight = FontWeight.Medium)
+            Text("Choose your Streamarr server, then approve this television from Playarr on another device.", color = WebInkMuted, fontSize = 15.sp, lineHeight = 22.sp)
+        }
+        Surface(
+            modifier = Modifier.weight(1.1f).padding(44.dp),
+            color = WebSurfaceStrong.copy(alpha = 0.95f),
+            shape = RoundedCornerShape(28.dp),
+        ) {
+            Column(Modifier.padding(32.dp), verticalArrangement = Arrangement.spacedBy(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                OutlinedTextField(
+                    serverUrl,
+                    onServerUrlChange,
+                    label = { Text("Server URL") },
+                    placeholder = { Text("192.168.1.20:8484") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                when (state) {
+                    PairingState.Idle -> Button(onClick = onStart, enabled = serverUrl.isNotBlank(), modifier = Modifier.fillMaxWidth().height(54.dp)) { Text("Get link code") }
+                    PairingState.Requesting -> CircularProgressIndicator(color = WebPink)
+                    is PairingState.Waiting -> {
+                        Text(state.code.userCode, color = WebInk, fontSize = 42.sp, fontWeight = FontWeight.Bold, letterSpacing = 5.sp)
+                        Text("Open ${state.code.verificationUri} and enter this code", color = WebInkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Text("Waiting for approval…", color = WebPink, fontWeight = FontWeight.SemiBold)
+                    }
+                    is PairingState.Failed -> {
+                        Text(state.message, color = MaterialTheme.colorScheme.error, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text("Try again") }
+                    }
+                }
             }
         }
     }

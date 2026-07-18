@@ -23,14 +23,19 @@ private val StreamarrDarkColorScheme = darkColorScheme(
 )
 
 private val StreamarrLightColorScheme = lightColorScheme(
-    primary = StreamarrPalette.Violet40,
-    onPrimary = StreamarrPalette.SurfaceLight,
-    secondary = StreamarrPalette.Teal40,
-    onSecondary = StreamarrPalette.SurfaceLight,
-    tertiary = StreamarrPalette.Amber40,
+    primary = StreamarrPalette.PlayarrLightAccent,
+    onPrimary = StreamarrPalette.PlayarrLightSurfaceStrong,
+    secondary = StreamarrPalette.PlayarrLightInkSoft,
+    onSecondary = StreamarrPalette.PlayarrLightSurfaceStrong,
+    tertiary = StreamarrPalette.PlayarrPink,
     error = StreamarrPalette.Error40,
-    background = StreamarrPalette.SurfaceLight,
-    surface = StreamarrPalette.SurfaceLight,
+    background = StreamarrPalette.PlayarrLightBackground,
+    onBackground = StreamarrPalette.PlayarrLightInk,
+    surface = StreamarrPalette.PlayarrLightSurface,
+    onSurface = StreamarrPalette.PlayarrLightInk,
+    surfaceVariant = StreamarrPalette.PlayarrLightSurfaceSoft,
+    onSurfaceVariant = StreamarrPalette.PlayarrLightInkSoft,
+    outline = StreamarrPalette.PlayarrLightInkMuted,
 )
 
 /**

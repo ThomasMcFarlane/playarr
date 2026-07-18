@@ -6,6 +6,13 @@ import io.streamarr.shared.data.model.CatalogPage
 import io.streamarr.shared.data.model.ExternalProvider
 import io.streamarr.shared.data.model.PlaybackMode
 import io.streamarr.shared.data.model.PlaybackInfoResponse
+import io.streamarr.shared.data.model.OptionalUserInviteRequest
+import io.streamarr.shared.data.model.AvailableProfile
+import io.streamarr.shared.data.model.Playlist
+import io.streamarr.shared.data.model.PlaylistItem
+import io.streamarr.shared.data.model.PlaylistMediaType
+import io.streamarr.shared.data.model.WatchProgress
+import io.streamarr.shared.data.model.WatchState
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
 import io.streamarr.shared.data.model.WorkDetail
@@ -205,6 +212,50 @@ class StreamarrJsonModelTest {
 
         val hls = json.decodeFromString(PlaybackInfoResponse.serializer(), """{"mode": "hls", "url": "/hls/a.m3u8"}""")
         assertEquals(PlaybackMode.Hls, hls.mode)
+    }
+
+    @Test
+    fun `decodes watch progress and clamps the rendered fraction`() {
+        val progress = json.decodeFromString(
+            WatchProgress.serializer(),
+            """{"media_file_id":"mf-1","work_id":"w1","position_ms":125000,"duration_ms":100000,"state":"part_watched","updated_at":"2026-07-19T00:00:00Z"}""",
+        )
+
+        assertEquals(WatchState.PartWatched, progress.state)
+        assertEquals(1f, progress.fraction)
+    }
+
+    @Test
+    fun `decodes playlist directory and item contracts`() {
+        val playlist = json.decodeFromString(
+            Playlist.serializer(),
+            """{"id":"p1","name":"Friday","is_system":false,"media_type":"video","created_at":"2026-07-19T00:00:00Z","updated_at":"2026-07-19T00:00:00Z","owner_user_id":"u1"}""",
+        )
+        val item = json.decodeFromString(
+            PlaylistItem.serializer(),
+            """{"id":"i1","playlist_id":"p1","work_id":"w1","track_id":"e1","position":0,"added_at":"2026-07-19T00:00:00Z"}""",
+        )
+
+        assertEquals(PlaylistMediaType.Video, playlist.mediaType)
+        assertEquals("e1", item.trackId)
+    }
+
+    @Test
+    fun `decodes profile picker access state`() {
+        val profile = json.decodeFromString(
+            AvailableProfile.serializer(),
+            """{"id":"u2","username":"guest","display_name":"Guest","is_current":false,"pin_locked":true}""",
+        )
+
+        assertEquals("Guest", profile.displayName)
+        assertTrue(profile.pinLocked)
+    }
+
+    @Test
+    fun `decodes a missing invite request from literal json null`() {
+        val response = json.decodeFromString(OptionalUserInviteRequest.serializer(), "null")
+
+        assertEquals(null, response.value)
     }
 
     companion object {

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,15 +43,19 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.PlaylistPlay
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,6 +64,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -74,6 +81,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -98,10 +106,16 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import io.streamarr.mobile.R
 import io.streamarr.shared.auth.TokenStore
 import io.streamarr.shared.data.model.ImageKind
+import io.streamarr.shared.data.model.Playlist
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
 import io.streamarr.shared.data.model.WorkDetail
 import io.streamarr.shared.data.model.WorkKind
+import io.streamarr.shared.data.model.WatchProgress
+import io.streamarr.shared.data.model.WatchState
+import io.streamarr.shared.data.model.UpdateWatchProgressRequest
+import io.streamarr.shared.data.model.wireName
+import io.streamarr.shared.data.remote.StreamarrApi
 import io.streamarr.shared.domain.model.StreamarrResult
 import io.streamarr.shared.domain.usecase.BrowseLibraryUseCase
 import io.streamarr.shared.domain.usecase.GetPlaybackInfoUseCase
@@ -111,6 +125,8 @@ import io.streamarr.shared.domain.usecase.SearchCatalogUseCase
 import io.streamarr.shared.player.StreamFormat
 import io.streamarr.shared.player.StreamarrPlayer
 import java.net.URI
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -121,14 +137,39 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-private val WebBackground = Color(0xFF151315)
-private val WebSurface = Color(0xFF1B181B)
-private val WebSurfaceStrong = Color(0xFF211D21)
-private val WebSurfaceSoft = Color(0xFF312A30)
-private val WebInk = Color(0xFFF4F0F1)
-private val WebInkSoft = Color(0xFFC5B8BD)
-private val WebInkMuted = Color(0xFF887A82)
-private val WebPink = Color(0xFFCF3157)
+private data class WebPalette(
+    val background: Color,
+    val surface: Color,
+    val surfaceStrong: Color,
+    val surfaceSoft: Color,
+    val ink: Color,
+    val inkSoft: Color,
+    val inkMuted: Color,
+    val accent: Color,
+)
+
+private val darkWebPalette = WebPalette(
+    Color(0xFF151315), Color(0xFF1B181B), Color(0xFF211D21), Color(0xFF312A30),
+    Color(0xFFF4F0F1), Color(0xFFC5B8BD), Color(0xFF887A82), Color(0xFFDFDCDD),
+)
+private val lightWebPalette = WebPalette(
+    Color(0xFFF5F3F2), Color(0xFFFBFAF9), Color.White, Color(0xFFDFDCDD),
+    Color(0xFF382621), Color(0xFF675961), Color(0xFFA5969E), Color(0xFF675961),
+)
+private var webPalette = darkWebPalette
+
+internal fun setPlayarrWebPalette(darkTheme: Boolean) {
+    webPalette = if (darkTheme) darkWebPalette else lightWebPalette
+}
+
+internal val WebBackground get() = webPalette.background
+internal val WebSurface get() = webPalette.surface
+internal val WebSurfaceStrong get() = webPalette.surfaceStrong
+internal val WebSurfaceSoft get() = webPalette.surfaceSoft
+internal val WebInk get() = webPalette.ink
+internal val WebInkSoft get() = webPalette.inkSoft
+internal val WebInkMuted get() = webPalette.inkMuted
+internal val WebPink get() = webPalette.accent
 
 internal sealed interface ExperienceLoad<out T> {
     data object Loading : ExperienceLoad<Nothing>
@@ -144,6 +185,7 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     private val searchCatalog: SearchCatalogUseCase,
     private val listCatalogKinds: ListCatalogKindsUseCase,
     private val tokenStore: TokenStore,
+    private val api: StreamarrApi,
 ) : ViewModel() {
     private val _home = MutableStateFlow<ExperienceLoad<List<HomeRail>>>(ExperienceLoad.Loading)
     val home: StateFlow<ExperienceLoad<List<HomeRail>>> = _home.asStateFlow()
@@ -154,10 +196,18 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     private val _search = MutableStateFlow<ExperienceLoad<List<Work>>>(ExperienceLoad.Ready(emptyList()))
     val search: StateFlow<ExperienceLoad<List<Work>>> = _search.asStateFlow()
 
+    private val _searchPlaylists = MutableStateFlow<List<Playlist>>(emptyList())
+    val searchPlaylists: StateFlow<List<Playlist>> = _searchPlaylists.asStateFlow()
+
     private val _availableKinds = MutableStateFlow<Set<WorkKind>?>(null)
     val availableKinds: StateFlow<Set<WorkKind>?> = _availableKinds.asStateFlow()
 
+    private val _progress = MutableStateFlow<List<WatchProgress>>(emptyList())
+    val progress: StateFlow<List<WatchProgress>> = _progress.asStateFlow()
+
     val accessToken = tokenStore.accessToken.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val currentUserId = tokenStore.currentUserId.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val currentUserName = tokenStore.currentUserName.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     init {
         loadAvailableKinds()
@@ -176,6 +226,7 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     fun loadHome() {
         viewModelScope.launch {
             _home.value = ExperienceLoad.Loading
+            val progressRequest = async { runCatching { api.listWatchProgress() }.getOrDefault(emptyList()) }
             val kinds = listOf(WorkKind.Movie, WorkKind.Series, WorkKind.Site, WorkKind.Artist)
             val results = kinds.map { kind ->
                 async { kind to browseLibrary(kind = kind, availableOnly = true, sort = "recent", limit = 36) }
@@ -190,8 +241,18 @@ internal class PlayarrExperienceViewModel @Inject constructor(
             val byKind = results.associate { (kind, result) ->
                 kind to ((result as? StreamarrResult.Success)?.value ?: emptyList())
             }
-            _home.value = ExperienceLoad.Ready(buildHomeRails(byKind))
+            val progress = progressRequest.await()
+            _progress.value = progress
+            _home.value = ExperienceLoad.Ready(buildHomeRails(byKind, progress))
         }
+    }
+
+    fun reloadForProfile() {
+        _availableKinds.value = null
+        _libraries.value = emptyMap()
+        _search.value = ExperienceLoad.Ready(emptyList())
+        loadAvailableKinds()
+        loadHome()
     }
 
     fun loadLibrary(kind: WorkKind) {
@@ -211,25 +272,55 @@ internal class PlayarrExperienceViewModel @Inject constructor(
         val normalised = query.trim()
         if (normalised.isEmpty()) {
             _search.value = ExperienceLoad.Ready(emptyList())
+            _searchPlaylists.value = emptyList()
             return
         }
         viewModelScope.launch {
             _search.value = ExperienceLoad.Loading
+            val playlists = async {
+                runCatching { api.listPlaylists().filter { it.name.contains(normalised, ignoreCase = true) } }.getOrDefault(emptyList())
+            }
             _search.value = when (val result = searchCatalog(normalised, limit = 80)) {
                 is StreamarrResult.Success -> ExperienceLoad.Ready(result.value)
                 is StreamarrResult.Failure -> ExperienceLoad.Failed(result.error.userMessageForExperience("search"))
             }
+            _searchPlaylists.value = playlists.await()
         }
     }
 
-    private fun buildHomeRails(byKind: Map<WorkKind, List<Work>>): List<HomeRail> {
+    fun markWork(work: Work, watched: Boolean) {
+        viewModelScope.launch {
+            val detail = runCatching { api.getWork(work.id) }.getOrNull() ?: return@launch
+            val existing = _progress.value.associateBy(WatchProgress::mediaFileId)
+            detail.mediaFileIds().forEach { mediaFileId ->
+                val current = existing[mediaFileId]
+                val duration = current?.durationMs?.takeIf { it > 0 } ?: 1L
+                runCatching {
+                    api.updateWatchProgress(
+                        mediaFileId,
+                        UpdateWatchProgressRequest(
+                            positionMs = if (watched) duration else 0L,
+                            durationMs = duration,
+                            completed = watched,
+                        ),
+                    )
+                }
+            }
+            loadHome()
+        }
+    }
+
+    private fun buildHomeRails(byKind: Map<WorkKind, List<Work>>, progress: List<WatchProgress>): List<HomeRail> {
         val movies = byKind[WorkKind.Movie].orEmpty()
         val series = byKind[WorkKind.Series].orEmpty()
         val sites = byKind[WorkKind.Site].orEmpty()
         val music = byKind[WorkKind.Artist].orEmpty()
         val recent = (movies + series + sites).sortedByDescending(Work::addedAt)
+        val partWatchedIds = progress.filter { it.state == WatchState.PartWatched }.map(WatchProgress::workId).toSet()
+        val continueWatching = (movies + series + sites).filter { it.id in partWatchedIds }
         return listOf(
-            HomeRail("Start watching", recent.take(12)),
+            HomeRail("Continue watching", continueWatching.take(12)),
+            HomeRail("Start watching", recent.filterNot { it.id in partWatchedIds }.take(12)),
             HomeRail("New movies", movies.take(12)),
             HomeRail("New series", series.take(12)),
             HomeRail("New sites", sites.take(12)),
@@ -245,6 +336,9 @@ private data class ExperienceDestination(
     val kind: WorkKind? = null,
 )
 
+private enum class LibraryViewMode { List, Screen, Cover, CoverFlow }
+private enum class LibraryArtworkSize { Small, Medium, Large }
+
 private val experienceDestinations = listOf(
     ExperienceDestination("search", "Search", Icons.Outlined.Search),
     ExperienceDestination("home", "Home", Icons.Outlined.Home),
@@ -252,6 +346,7 @@ private val experienceDestinations = listOf(
     ExperienceDestination("movies", "Movies", Icons.Outlined.Movie, WorkKind.Movie),
     ExperienceDestination("sites", "Sites", Icons.Outlined.Language, WorkKind.Site),
     ExperienceDestination("music", "Music", Icons.Outlined.MusicNote, WorkKind.Artist),
+    ExperienceDestination("playlists", "Playlists", Icons.Outlined.PlaylistPlay),
 )
 
 @Composable
@@ -264,13 +359,20 @@ internal fun PlayarrExperience(
     val entry by navController.currentBackStackEntryAsState()
     val currentRoute = entry?.destination?.route.orEmpty()
     val token by viewModel.accessToken.collectAsState()
+    val currentUserId by viewModel.currentUserId.collectAsState()
+    val currentUserName by viewModel.currentUserName.collectAsState()
     val availableKinds by viewModel.availableKinds.collectAsState()
     val isPlayer = currentRoute.startsWith("experience-player")
+    val isProfiles = currentRoute == "profiles"
+
+    LaunchedEffect(currentUserId) {
+        if (currentUserId != null) viewModel.reloadForProfile()
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(WebBackground)) {
         ExperienceNavHost(navController, serverUrl, token, isTelevision, viewModel)
 
-        if (!isPlayer) {
+        if (!isPlayer && !isProfiles) {
             ExperienceNavigation(
                 destinations = experienceDestinations.filter { destination ->
                     destination.kind == null || availableKinds?.contains(destination.kind) == true
@@ -278,17 +380,24 @@ internal fun PlayarrExperience(
                 currentRoute = currentRoute,
                 isTelevision = isTelevision,
                 onNavigate = { navController.openExperienceTopLevel(it) },
-                modifier = Modifier.align(Alignment.BottomCenter),
+                modifier = Modifier.align(if (isTelevision) Alignment.CenterStart else Alignment.BottomCenter),
             )
             ProfileControl(
                 isTelevision = isTelevision,
-                onClick = { navController.openExperienceTopLevel("settings") },
+                userName = currentUserName,
+                onClick = { navController.openExperienceTopLevel("profiles") },
                 modifier = Modifier.align(if (isTelevision) Alignment.BottomStart else Alignment.TopEnd),
             )
             if (isTelevision) {
                 PlayarrLogo(
-                    modifier = Modifier.align(Alignment.TopStart).padding(start = 34.dp, top = 30.dp),
+                    modifier = Modifier.align(Alignment.TopStart).padding(start = 59.dp, top = 34.dp),
                 )
+                Box(
+                    modifier = Modifier.fillMaxWidth(0.38f).align(Alignment.TopStart).padding(top = 34.dp, end = 28.dp),
+                    contentAlignment = Alignment.TopEnd,
+                ) {
+                    ExperienceClock()
+                }
             }
         }
     }
@@ -310,6 +419,10 @@ private fun ExperienceNavigation(
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (isTelevision) {
+        TelevisionNavigation(destinations, currentRoute, onNavigate, modifier)
+        return
+    }
     val bottomInsets = if (isTelevision) WindowInsets(0) else WindowInsets.navigationBars.only(androidx.compose.foundation.layout.WindowInsetsSides.Bottom)
     Surface(
         modifier = modifier
@@ -357,21 +470,94 @@ private fun ExperienceNavigation(
 }
 
 @Composable
-private fun ProfileControl(isTelevision: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun TelevisionNavigation(
+    destinations: List<ExperienceDestination>,
+    currentRoute: String,
+    onNavigate: (String) -> Unit,
+    modifier: Modifier,
+) {
+    val groups = listOf(
+        destinations.filter { it.route == "search" },
+        destinations.filter { it.route in setOf("home", "series", "movies", "sites", "music") },
+        destinations.filter { it.route == "playlists" },
+    ).filter(List<ExperienceDestination>::isNotEmpty)
+    Column(
+        modifier = modifier.padding(start = 42.dp),
+        verticalArrangement = Arrangement.spacedBy(13.dp),
+    ) {
+        groups.forEach { group ->
+            Surface(
+                color = WebSurfaceStrong.copy(alpha = 0.72f),
+                shape = RoundedCornerShape(22.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.18f)),
+                shadowElevation = 16.dp,
+            ) {
+                Column(Modifier.padding(horizontal = 6.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    group.forEach { destination ->
+                        val selected = currentRoute == destination.route
+                        var focused by remember { mutableStateOf(false) }
+                        Surface(
+                            onClick = { onNavigate(destination.route) },
+                            color = if (selected || focused) WebInk.copy(alpha = if (focused) 0.14f else 0.09f) else Color.Transparent,
+                            contentColor = if (selected || focused) WebInk else WebInkMuted,
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .size(64.dp)
+                                .scale(if (focused) 1.1f else if (selected) 1.05f else 1f)
+                                .onFocusChanged { focused = it.isFocused },
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                Icon(destination.icon, contentDescription = null, modifier = Modifier.size(20.dp))
+                                Text(destination.label, fontSize = 7.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExperienceClock(modifier: Modifier = Modifier) {
+    var now by remember { mutableStateOf(LocalDateTime.now()) }
+    val locale = LocalConfiguration.current.locales[0]
+    val dateFormatter = remember(locale) { DateTimeFormatter.ofPattern("EEE d MMM", locale) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(30_000)
+            now = LocalDateTime.now()
+        }
+    }
+    Row(modifier, verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(now.format(DateTimeFormatter.ofPattern("HH:mm")), color = WebInk, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+        Text(now.format(dateFormatter), color = WebInkMuted, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun ProfileControl(isTelevision: Boolean, userName: String?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         onClick = onClick,
         modifier = modifier
             .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.safeDrawing)
-            .padding(if (isTelevision) 26.dp else 16.dp)
-            .size(42.dp),
+            .padding(if (isTelevision) 42.dp else 16.dp)
+            .then(if (isTelevision) Modifier.height(46.dp) else Modifier.size(42.dp)),
         shape = CircleShape,
         color = WebSurfaceStrong.copy(alpha = 0.94f),
         contentColor = WebInkSoft,
         border = androidx.compose.foundation.BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.35f)),
         shadowElevation = 12.dp,
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.Person, contentDescription = "Profiles and settings", modifier = Modifier.size(22.dp))
+        Row(
+            modifier = Modifier.padding(horizontal = if (isTelevision) 7.dp else 0.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Icon(Icons.Outlined.Person, contentDescription = "Profiles", modifier = Modifier.size(22.dp))
+            if (isTelevision) {
+                Text(userName ?: "Viewer", fontSize = 9.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 9.dp))
+            }
         }
     }
 }
@@ -427,7 +613,28 @@ private fun ExperienceNavHost(
                 onBack = navController::popBackStack,
             )
         }
-        composable("settings") { ExperienceSettingsScreen(serverUrl, isTelevision) }
+        composable("playlists") {
+            ExperiencePlaylistsScreen(serverUrl, accessToken, isTelevision, navController)
+        }
+        composable("playlists/{playlistId}") { entry ->
+            ExperiencePlaylistDetailScreen(
+                playlistId = entry.arguments?.getString("playlistId").orEmpty(),
+                serverUrl = serverUrl,
+                accessToken = accessToken,
+                isTelevision = isTelevision,
+                onBack = navController::popBackStack,
+                onOpenWork = { navController.navigate("experience-detail/$it") },
+                onPlay = { navController.navigate("experience-player/${Uri.encode(it)}") },
+            )
+        }
+        composable("profiles") {
+            ExperienceProfilesScreen(
+                isTelevision = isTelevision,
+                onHome = { navController.openExperienceTopLevel("home") },
+                onSettings = { navController.openExperienceTopLevel("settings") },
+            )
+        }
+        composable("settings") { ExperienceParitySettingsScreen(serverUrl, isTelevision) }
     }
 }
 
@@ -440,6 +647,8 @@ private fun ExperienceHomeScreen(
     viewModel: PlayarrExperienceViewModel,
 ) {
     val state by viewModel.home.collectAsState()
+    val progress by viewModel.progress.collectAsState()
+    val progressByWork = remember(progress) { progress.associateBy(WatchProgress::workId) }
     when (val current = state) {
         ExperienceLoad.Loading -> ExperienceLoading("Preparing home")
         is ExperienceLoad.Failed -> ExperienceFailure(current.message, viewModel::loadHome)
@@ -450,6 +659,7 @@ private fun ExperienceHomeScreen(
             }
             val allWorks = current.value.flatMap(HomeRail::works)
             var selectedId by remember(allWorks) { mutableStateOf(allWorks.first().id) }
+            var contextWork by remember { mutableStateOf<Work?>(null) }
             val selected = allWorks.firstOrNull { it.id == selectedId } ?: allWorks.first()
             ExperienceStage(
                 selected = selected,
@@ -457,16 +667,16 @@ private fun ExperienceHomeScreen(
                 accessToken = accessToken,
                 isTelevision = isTelevision,
                 feature = {
-                    FeatureCopy(selected)
+                    FeatureCopy(selected, true)
                 },
                 rails = {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
-                            top = if (isTelevision) 210.dp else 68.dp,
+                            top = if (isTelevision) 480.dp else 68.dp,
                             bottom = if (isTelevision) 120.dp else 98.dp,
                         ),
-                        verticalArrangement = Arrangement.spacedBy(if (isTelevision) 30.dp else 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (isTelevision) 48.dp else 16.dp),
                     ) {
                         items(current.value, key = HomeRail::title) { rail ->
                             ExperienceMediaRail(
@@ -475,13 +685,23 @@ private fun ExperienceHomeScreen(
                                 accessToken = accessToken,
                                 isTelevision = isTelevision,
                                 selectedId = selectedId,
+                                progressByWork = progressByWork,
                                 onSelected = { selectedId = it.id },
                                 onClick = { navController.navigate("experience-detail/${it.id}") },
+                                onContext = { contextWork = it },
                             )
                         }
                     }
                 },
             )
+            contextWork?.let { work ->
+                MediaContextDialog(
+                    work = work,
+                    onDismiss = { contextWork = null },
+                    onOpen = { contextWork = null; navController.navigate("experience-detail/${work.id}") },
+                    onMark = { watched -> viewModel.markWork(work, watched); contextWork = null },
+                )
+            }
         }
     }
 }
@@ -516,7 +736,7 @@ private fun ExperienceStage(
             ),
         )
         if (isTelevision) {
-            Box(Modifier.fillMaxWidth(0.38f).fillMaxHeight().padding(start = 64.dp, end = 28.dp), contentAlignment = Alignment.CenterStart) {
+            Box(Modifier.fillMaxWidth(0.38f).fillMaxHeight().padding(start = 154.dp, top = 259.dp, end = 28.dp), contentAlignment = Alignment.TopStart) {
                 feature()
             }
             Box(
@@ -531,7 +751,7 @@ private fun ExperienceStage(
 }
 
 @Composable
-private fun FeatureCopy(work: Work) {
+private fun FeatureCopy(work: Work, isTelevision: Boolean = false) {
     Column {
         Text(
             listOfNotNull(work.kind.label(), work.genres.firstOrNull()).joinToString(" · ").uppercase(),
@@ -543,10 +763,10 @@ private fun FeatureCopy(work: Work) {
         Text(
             work.title,
             color = WebInk,
-            fontSize = 50.sp,
+            fontSize = if (isTelevision) 69.sp else 42.sp,
             fontWeight = FontWeight.Medium,
             letterSpacing = (-2).sp,
-            lineHeight = 46.sp,
+            lineHeight = if (isTelevision) 62.sp else 38.sp,
             modifier = Modifier.padding(top = 20.dp),
         )
         work.overview?.takeIf(String::isNotBlank)?.let {
@@ -570,26 +790,30 @@ private fun ExperienceMediaRail(
     accessToken: String?,
     isTelevision: Boolean,
     selectedId: String,
+    progressByWork: Map<String, WatchProgress>,
     onSelected: (Work) -> Unit,
     onClick: (Work) -> Unit,
+    onContext: (Work) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(start = if (isTelevision) 24.dp else 16.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(start = if (isTelevision) 46.dp else 16.dp)) {
         Text(rail.title, color = WebInk, fontSize = if (isTelevision) 18.sp else 16.sp, fontWeight = FontWeight.SemiBold)
         Text("${rail.works.size} titles", color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp))
         LazyRow(
             modifier = Modifier.fillMaxWidth().padding(top = 7.dp),
             contentPadding = PaddingValues(end = 20.dp, top = 6.dp, bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 24.dp else 12.dp),
         ) {
             items(rail.works, key = Work::id) { work ->
                 ExperienceLandscapeCard(
                     work = work,
                     serverUrl = serverUrl,
                     accessToken = accessToken,
-                    width = if (isTelevision) 194.dp else 178.dp,
+                    width = if (isTelevision) 219.dp else 178.dp,
                     selected = selectedId == work.id,
+                    progress = progressByWork[work.id],
                     onSelected = { onSelected(work) },
                     onClick = { onClick(work) },
+                    onContext = { onContext(work) },
                 )
             }
         }
@@ -603,8 +827,10 @@ private fun ExperienceLandscapeCard(
     accessToken: String?,
     width: Dp,
     selected: Boolean,
+    progress: WatchProgress? = null,
     onSelected: () -> Unit,
     onClick: () -> Unit,
+    onContext: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -615,23 +841,185 @@ private fun ExperienceLandscapeCard(
             .scale(scale)
             .onFocusChanged { if (it.isFocused) { focused = true; onSelected() } else focused = false }
             .focusable()
-            .clickable { onSelected(); onClick() },
+            .combinedClickable(
+                onClick = { onSelected(); onClick() },
+                onLongClick = onContext,
+            ),
     ) {
-        AuthenticatedArtwork(
-            work = work,
-            kinds = listOf(ImageKind.Backdrop, ImageKind.Thumb, ImageKind.Poster),
-            serverUrl = serverUrl,
-            accessToken = accessToken,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(10.dp))
-                .background(WebSurfaceSoft)
+        Box(
+            Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)).background(WebSurfaceSoft)
                 .then(if (focused || selected) Modifier.border(1.dp, WebInk.copy(alpha = 0.62f), RoundedCornerShape(10.dp)) else Modifier),
-        )
+        ) {
+            AuthenticatedArtwork(
+                work = work,
+                kinds = listOf(ImageKind.Backdrop, ImageKind.Thumb, ImageKind.Poster),
+                serverUrl = serverUrl,
+                accessToken = accessToken,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            progress?.takeIf { it.state != WatchState.Unseen }?.let {
+                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.28f))) {
+                    Box(Modifier.fillMaxWidth(it.fraction).fillMaxHeight().background(WebPink))
+                }
+            }
+        }
         Text(work.title, color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp))
         Text(work.kind.label(), color = WebInkMuted, fontSize = 10.sp, maxLines = 1)
+    }
+}
+
+@Composable
+private fun LibraryResults(
+    works: List<Work>,
+    viewMode: LibraryViewMode,
+    artworkSize: LibraryArtworkSize,
+    serverUrl: String,
+    accessToken: String?,
+    isTelevision: Boolean,
+    selectedId: String,
+    progressByWork: Map<String, WatchProgress>,
+    onSelected: (Work) -> Unit,
+    onOpen: (Work) -> Unit,
+    onContext: (Work) -> Unit,
+) {
+    val landscapeWidth = when (artworkSize) {
+        LibraryArtworkSize.Small -> if (isTelevision) 150.dp else 132.dp
+        LibraryArtworkSize.Medium -> if (isTelevision) 190.dp else 164.dp
+        LibraryArtworkSize.Large -> if (isTelevision) 250.dp else 206.dp
+    }
+    val padding = PaddingValues(start = if (isTelevision) 32.dp else 16.dp, end = if (isTelevision) 82.dp else 16.dp, top = if (isTelevision) 18.dp else 28.dp, bottom = 104.dp)
+    when (viewMode) {
+        LibraryViewMode.Screen -> LazyVerticalGrid(
+            columns = GridCells.Adaptive(landscapeWidth),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = padding,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp),
+        ) {
+            items(works, key = Work::id) { work ->
+                ExperienceLandscapeCard(
+                    work, serverUrl, accessToken, landscapeWidth, work.id == selectedId,
+                    progressByWork[work.id], { onSelected(work) }, { onOpen(work) }, { onContext(work) }, Modifier.fillMaxWidth(),
+                )
+            }
+        }
+        LibraryViewMode.List -> LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = padding,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(works, key = Work::id) { work ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(WebSurfaceSoft.copy(alpha = 0.72f))
+                        .combinedClickable(onClick = { onSelected(work); onOpen(work) }, onLongClick = { onContext(work) }).padding(9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AuthenticatedArtwork(work, listOf(ImageKind.Backdrop, ImageKind.Poster), serverUrl, accessToken, ContentScale.Crop, Modifier.width(126.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)))
+                    Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+                        Text(work.title, color = WebInk, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(work.genres.take(2).joinToString(" · "), color = WebInkMuted, fontSize = 10.sp)
+                    }
+                    Text("›", color = WebInkMuted, fontSize = 22.sp)
+                }
+            }
+        }
+        LibraryViewMode.Cover -> LazyVerticalGrid(
+            columns = GridCells.Adaptive(landscapeWidth * 0.72f),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = padding,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp),
+        ) {
+            items(works, key = Work::id) { work ->
+                LibraryCoverCard(work, serverUrl, accessToken, landscapeWidth * 0.72f, work.id == selectedId, onSelected, onOpen, onContext)
+            }
+        }
+        LibraryViewMode.CoverFlow -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(
+                    start = if (isTelevision) 120.dp else 32.dp,
+                    end = if (isTelevision) 120.dp else 32.dp,
+                    bottom = 80.dp,
+                ),
+                horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 34.dp else 18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                items(works, key = Work::id) { work ->
+                    LibraryCoverCard(work, serverUrl, accessToken, landscapeWidth * 0.84f, work.id == selectedId, onSelected, onOpen, onContext)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LibraryCoverCard(
+    work: Work,
+    serverUrl: String,
+    accessToken: String?,
+    width: Dp,
+    selected: Boolean,
+    onSelected: (Work) -> Unit,
+    onOpen: (Work) -> Unit,
+    onContext: (Work) -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    Column(
+        Modifier.width(width).scale(if (focused || selected) 1.04f else 1f)
+            .onFocusChanged { focused = it.isFocused; if (it.isFocused) onSelected(work) }.focusable()
+            .combinedClickable(onClick = { onSelected(work); onOpen(work) }, onLongClick = { onContext(work) }),
+    ) {
+        AuthenticatedArtwork(
+            work, listOf(ImageKind.Poster, ImageKind.Backdrop), serverUrl, accessToken, ContentScale.Crop,
+            Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(12.dp))
+                .then(if (focused || selected) Modifier.border(1.dp, WebInkSoft, RoundedCornerShape(12.dp)) else Modifier),
+        )
+        Text(work.title, color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+    }
+}
+
+@Composable
+private fun LibraryFiltersDialog(
+    viewMode: LibraryViewMode,
+    artworkSize: LibraryArtworkSize,
+    sortMode: String,
+    descending: Boolean,
+    onViewMode: (LibraryViewMode) -> Unit,
+    onArtworkSize: (LibraryArtworkSize) -> Unit,
+    onSortMode: (String) -> Unit,
+    onDescending: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Library filters") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                LibraryFilterChoices("View", LibraryViewMode.entries, viewMode, onViewMode)
+                LibraryFilterChoices("Artwork size", LibraryArtworkSize.entries, artworkSize, onArtworkSize)
+                LibraryFilterChoices("Sort by", listOf("title", "recent"), sortMode, onSortMode)
+                LibraryFilterChoices("Order", listOf(false, true), descending, onDescending, label = { if (it) "Descending" else "Ascending" })
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+    )
+}
+
+@Composable
+private fun <T> LibraryFilterChoices(
+    title: String,
+    values: List<T>,
+    selected: T,
+    onSelected: (T) -> Unit,
+    label: (T) -> String = { it.toString().replace("CoverFlow", "Cover flow") },
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title.uppercase(), color = WebInkMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(values) { value -> OutlinedButton(onClick = { onSelected(value) }, enabled = value != selected) { Text(label(value)) } }
+        }
     }
 }
 
@@ -645,6 +1033,8 @@ private fun ExperienceLibraryScreen(
     viewModel: PlayarrExperienceViewModel,
 ) {
     val states by viewModel.libraries.collectAsState()
+    val progress by viewModel.progress.collectAsState()
+    val progressByWork = remember(progress) { progress.associateBy(WatchProgress::workId) }
     LaunchedEffect(kind) { viewModel.loadLibrary(kind) }
     when (val state = states[kind] ?: ExperienceLoad.Loading) {
         ExperienceLoad.Loading -> ExperienceLoading("Loading ${kind.label().lowercase()}")
@@ -655,7 +1045,19 @@ private fun ExperienceLibraryScreen(
                 return
             }
             var selectedId by remember(state.value) { mutableStateOf(state.value.first().id) }
-            val selected = state.value.firstOrNull { it.id == selectedId } ?: state.value.first()
+            var contextWork by remember { mutableStateOf<Work?>(null) }
+            var activeLetter by remember(kind) { mutableStateOf("#") }
+            var filtersOpen by remember { mutableStateOf(false) }
+            var viewMode by remember { mutableStateOf(LibraryViewMode.Screen) }
+            var artworkSize by remember { mutableStateOf(LibraryArtworkSize.Medium) }
+            var sortMode by remember { mutableStateOf("title") }
+            var descending by remember { mutableStateOf(false) }
+            val filteredWorks = remember(state.value, activeLetter, sortMode, descending) {
+                val matching = state.value.filter { work -> activeLetter == "#" || work.sortTitle.startsWith(activeLetter, ignoreCase = true) }
+                val sorted = if (sortMode == "recent") matching.sortedBy(Work::addedAt) else matching.sortedBy(Work::sortTitle)
+                if (descending) sorted.reversed() else sorted
+            }
+            val selected = filteredWorks.firstOrNull { it.id == selectedId } ?: filteredWorks.firstOrNull() ?: state.value.first()
             Box(modifier = Modifier.fillMaxSize().background(WebSurface)) {
                 AuthenticatedArtwork(
                     work = selected,
@@ -667,7 +1069,7 @@ private fun ExperienceLibraryScreen(
                 )
                 Box(Modifier.fillMaxSize().background(if (isTelevision) Brush.horizontalGradient(listOf(WebSurface.copy(alpha = 0.16f), WebSurface)) else Brush.verticalGradient(listOf(Color.Transparent, WebSurface), endY = 820f)))
                 if (isTelevision) {
-                    Box(Modifier.fillMaxWidth(0.35f).fillMaxHeight().padding(start = 64.dp, end = 26.dp), contentAlignment = Alignment.CenterStart) { FeatureCopy(selected) }
+                    Box(Modifier.fillMaxWidth(0.35f).fillMaxHeight().padding(start = 154.dp, top = 259.dp, end = 26.dp), contentAlignment = Alignment.TopStart) { FeatureCopy(selected, true) }
                 }
                 Column(
                     modifier = Modifier
@@ -677,27 +1079,68 @@ private fun ExperienceLibraryScreen(
                 ) {
                     Text(kind.label(), color = WebInk, fontSize = if (isTelevision) 28.sp else 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(horizontal = if (isTelevision) 32.dp else 16.dp))
                     Text("${state.value.size} titles", color = WebInkMuted, fontSize = 11.sp, modifier = Modifier.padding(horizontal = if (isTelevision) 32.dp else 16.dp, vertical = 4.dp))
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(if (isTelevision) 190.dp else 164.dp),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = if (isTelevision) 32.dp else 16.dp, end = 16.dp, top = if (isTelevision) 24.dp else 160.dp, bottom = 104.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(22.dp),
+                    LibraryResults(
+                        works = filteredWorks,
+                        viewMode = viewMode,
+                        artworkSize = artworkSize,
+                        serverUrl = serverUrl,
+                        accessToken = accessToken,
+                        isTelevision = isTelevision,
+                        selectedId = selectedId,
+                        progressByWork = progressByWork,
+                        onSelected = { selectedId = it.id },
+                        onOpen = { navController.navigate("experience-detail/${it.id}") },
+                        onContext = { contextWork = it },
+                    )
+                }
+                Surface(
+                    onClick = { filtersOpen = true },
+                    color = WebSurfaceStrong.copy(alpha = 0.9f),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.statusBars)
+                        .padding(top = if (isTelevision) 116.dp else 14.dp, end = if (isTelevision) 14.dp else 66.dp)
+                        .size(44.dp),
+                ) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.FilterList, "Filters", tint = WebInkMuted) } }
+                if (isTelevision && sortMode == "title") {
+                    LazyColumn(
+                        modifier = Modifier.align(Alignment.CenterEnd).width(28.dp).fillMaxHeight(0.72f),
+                        verticalArrangement = Arrangement.SpaceEvenly,
                     ) {
-                        items(state.value, key = Work::id) { work ->
-                            ExperienceLandscapeCard(
-                                work = work,
-                                serverUrl = serverUrl,
-                                accessToken = accessToken,
-                                width = if (isTelevision) 190.dp else 164.dp,
-                                selected = work.id == selectedId,
-                                onSelected = { selectedId = work.id },
-                                onClick = { navController.navigate("experience-detail/${work.id}") },
-                                modifier = Modifier.fillMaxWidth(),
+                        items(listOf("#") + ('A'..'Z').map(Char::toString)) { letter ->
+                            Text(
+                                letter,
+                                color = if (activeLetter == letter) WebInk else WebInkMuted,
+                                fontSize = 9.sp,
+                                fontWeight = if (activeLetter == letter) FontWeight.Bold else FontWeight.Normal,
+                                modifier = Modifier.fillMaxWidth().clickable { activeLetter = letter },
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             )
                         }
                     }
                 }
+            }
+            if (filtersOpen) {
+                LibraryFiltersDialog(
+                    viewMode = viewMode,
+                    artworkSize = artworkSize,
+                    sortMode = sortMode,
+                    descending = descending,
+                    onViewMode = { viewMode = it },
+                    onArtworkSize = { artworkSize = it },
+                    onSortMode = { sortMode = it; if (it != "title") activeLetter = "#" },
+                    onDescending = { descending = it },
+                    onDismiss = { filtersOpen = false },
+                )
+            }
+            contextWork?.let { work ->
+                MediaContextDialog(
+                    work = work,
+                    onDismiss = { contextWork = null },
+                    onOpen = { contextWork = null; navController.navigate("experience-detail/${work.id}") },
+                    onMark = { watched -> viewModel.markWork(work, watched); contextWork = null },
+                )
             }
         }
     }
@@ -712,7 +1155,13 @@ private fun ExperienceSearchScreen(
     viewModel: PlayarrExperienceViewModel,
 ) {
     val state by viewModel.search.collectAsState()
+    val playlists by viewModel.searchPlaylists.collectAsState()
+    val progress by viewModel.progress.collectAsState()
+    val progressByWork = remember(progress) { progress.associateBy(WatchProgress::workId) }
     var query by remember { mutableStateOf("") }
+    var mediaFilter by remember { mutableStateOf("all") }
+    var filtersOpen by remember { mutableStateOf(false) }
+    var contextWork by remember { mutableStateOf<Work?>(null) }
     Column(
         modifier = Modifier.fillMaxSize().background(WebSurface).padding(
             start = if (isTelevision) 72.dp else 16.dp,
@@ -732,14 +1181,51 @@ private fun ExperienceSearchScreen(
             keyboardActions = KeyboardActions(onSearch = { viewModel.search(query) }),
             shape = RoundedCornerShape(18.dp),
         )
+        OutlinedButton(
+            onClick = { filtersOpen = !filtersOpen },
+            modifier = Modifier.padding(top = 10.dp),
+            shape = RoundedCornerShape(14.dp),
+        ) {
+            Icon(Icons.Outlined.FilterList, contentDescription = null, modifier = Modifier.size(18.dp))
+            Text("Filters · ${mediaFilter.replaceFirstChar(Char::uppercase)}", modifier = Modifier.padding(start = 7.dp))
+        }
+        if (filtersOpen) {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                items(
+                    listOf(
+                        "all" to "All",
+                        "movie" to "Movies",
+                        "series" to "Series",
+                        "site" to "Sites",
+                        "artist" to "Music",
+                        "playlist" to "Playlists",
+                    ),
+                ) { (value, label) ->
+                    OutlinedButton(
+                        onClick = { mediaFilter = value },
+                        enabled = mediaFilter != value,
+                        modifier = Modifier.height(36.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp),
+                    ) { Text(label, fontSize = 10.sp) }
+                }
+            }
+        }
         when (val current = state) {
             ExperienceLoad.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebPink) }
             is ExperienceLoad.Failed -> ExperienceFailure(current.message) { viewModel.search(query) }
             is ExperienceLoad.Ready -> if (query.isBlank()) {
                 Text("Find films, series, sites, and music.", color = WebInkMuted, modifier = Modifier.padding(top = 26.dp))
-            } else if (current.value.isEmpty()) {
+            } else if (
+                current.value.none { mediaFilter == "all" || it.kind.wireName() == mediaFilter } &&
+                playlists.none { mediaFilter == "all" || mediaFilter == "playlist" }
+            ) {
                 Text("No results for ‘$query’.", color = WebInkMuted, modifier = Modifier.padding(top = 26.dp))
             } else {
+                val visibleWorks = current.value.filter { mediaFilter == "all" || it.kind.wireName() == mediaFilter }
+                val visiblePlaylists = if (mediaFilter == "all" || mediaFilter == "playlist") playlists else emptyList()
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(if (isTelevision) 210.dp else 164.dp),
                     modifier = Modifier.fillMaxSize().padding(top = 22.dp),
@@ -747,19 +1233,70 @@ private fun ExperienceSearchScreen(
                     verticalArrangement = Arrangement.spacedBy(22.dp),
                     contentPadding = PaddingValues(bottom = 104.dp),
                 ) {
-                    items(current.value, key = Work::id) { work ->
+                    items(visibleWorks, key = { "work:${it.id}" }) { work ->
                         ExperienceLandscapeCard(
                             work, serverUrl, accessToken,
                             width = if (isTelevision) 210.dp else 164.dp,
                             selected = false,
+                            progress = progressByWork[work.id],
                             onSelected = {},
                             onClick = { navController.navigate("experience-detail/${work.id}") },
+                            onContext = { contextWork = work },
                         )
+                    }
+                    items(visiblePlaylists, key = { "playlist:${it.id}" }) { playlist ->
+                        PlaylistCard(playlist) { navController.navigate("playlists/${playlist.id}") }
                     }
                 }
             }
         }
     }
+    contextWork?.let { work ->
+        MediaContextDialog(
+            work = work,
+            onDismiss = { contextWork = null },
+            onOpen = { contextWork = null; navController.navigate("experience-detail/${work.id}") },
+            onMark = { watched -> viewModel.markWork(work, watched); contextWork = null },
+        )
+    }
+}
+
+@Composable
+private fun MediaContextDialog(
+    work: Work,
+    onDismiss: () -> Unit,
+    onOpen: () -> Unit,
+    onMark: (Boolean) -> Unit,
+) {
+    var addToPlaylist by remember(work.id) { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(work.title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onOpen, modifier = Modifier.fillMaxWidth()) { Text("Open") }
+                OutlinedButton(onClick = { addToPlaylist = true }, modifier = Modifier.fillMaxWidth()) { Text("Add to playlist") }
+                OutlinedButton(onClick = { onMark(true) }, modifier = Modifier.fillMaxWidth()) { Text("Mark as watched") }
+                OutlinedButton(onClick = { onMark(false) }, modifier = Modifier.fillMaxWidth()) { Text("Mark as unwatched") }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+    if (addToPlaylist) {
+        AddToPlaylistDialog(
+            workId = work.id,
+            trackId = null,
+            mediaType = if (work.kind == WorkKind.Artist) io.streamarr.shared.data.model.PlaylistMediaType.Audio else io.streamarr.shared.data.model.PlaylistMediaType.Video,
+            onDismiss = { addToPlaylist = false; onDismiss() },
+        )
+    }
+}
+
+private fun WorkDetail.mediaFileIds(): List<String> = when (val tree = children) {
+    WorkChildren.Movie -> listOfNotNull(mediaFileId)
+    is WorkChildren.Series -> tree.seasons.flatMap { it.episodes }.mapNotNull { it.mediaFileId }
+    is WorkChildren.Artist -> tree.albums.flatMap { it.tracks }.mapNotNull { it.mediaFileId }
+    is WorkChildren.Author -> tree.books.mapNotNull { it.mediaFileId }
 }
 
 @HiltViewModel
@@ -797,6 +1334,8 @@ private fun ExperienceDetailScreen(
         is ExperienceLoad.Failed -> ExperienceFailure(current.message) { viewModel.load(workId) }
         is ExperienceLoad.Ready -> {
             val detail = current.value
+            var pendingPlaylistTrackId by remember(detail.work.id) { mutableStateOf<String?>(null) }
+            var addWorkToPlaylist by remember(detail.work.id) { mutableStateOf(false) }
             Box(Modifier.fillMaxSize().background(WebSurface)) {
                 AuthenticatedArtwork(
                     work = detail.work,
@@ -817,19 +1356,29 @@ private fun ExperienceDetailScreen(
                     Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = WebInk)
                 }
                 if (isTelevision) {
-                    Box(Modifier.fillMaxWidth(0.38f).fillMaxHeight().padding(start = 64.dp, end = 24.dp), contentAlignment = Alignment.CenterStart) { FeatureCopy(detail.work) }
+                    Box(Modifier.fillMaxWidth(0.38f).fillMaxHeight().padding(start = 154.dp, top = 259.dp, end = 24.dp), contentAlignment = Alignment.TopStart) { FeatureCopy(detail.work, true) }
                     Surface(
                         modifier = Modifier.fillMaxWidth(0.55f).fillMaxHeight(0.62f).align(Alignment.CenterEnd).padding(end = 52.dp),
                         color = WebSurfaceStrong.copy(alpha = 0.88f),
                         shape = RoundedCornerShape(2.dp),
-                    ) { DetailChildren(detail, onPlay, PaddingValues(30.dp), scrollable = true) }
+                    ) {
+                        DetailChildren(detail, onPlay, { trackId -> pendingPlaylistTrackId = trackId; addWorkToPlaylist = true }, PaddingValues(30.dp), scrollable = true)
+                    }
                 } else {
                     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 250.dp, bottom = 108.dp)) {
                         item { FeatureCopy(detail.work) }
                         item { Spacer(Modifier.height(22.dp)) }
-                        item { DetailChildren(detail, onPlay, PaddingValues(0.dp), scrollable = false) }
+                        item { DetailChildren(detail, onPlay, { trackId -> pendingPlaylistTrackId = trackId; addWorkToPlaylist = true }, PaddingValues(0.dp), scrollable = false) }
                     }
                 }
+            }
+            if (addWorkToPlaylist) {
+                AddToPlaylistDialog(
+                    workId = detail.work.id,
+                    trackId = pendingPlaylistTrackId,
+                    mediaType = if (detail.work.kind == WorkKind.Artist) io.streamarr.shared.data.model.PlaylistMediaType.Audio else io.streamarr.shared.data.model.PlaylistMediaType.Video,
+                    onDismiss = { addWorkToPlaylist = false },
+                )
             }
         }
     }
@@ -839,6 +1388,7 @@ private fun ExperienceDetailScreen(
 private fun DetailChildren(
     detail: WorkDetail,
     onPlay: (String) -> Unit,
+    onAddToPlaylist: (String?) -> Unit,
     padding: PaddingValues,
     scrollable: Boolean,
 ) {
@@ -851,25 +1401,25 @@ private fun DetailChildren(
     ) {
         when (val children = detail.children) {
             WorkChildren.Movie -> detail.mediaFileId?.let { id ->
-                PlayRow("Play ${detail.work.title}", true) { onPlay(id) }
+                PlayRow("Play ${detail.work.title}", true, { onAddToPlaylist(null) }) { onPlay(id) }
             } ?: Text("This title is not available to play.", color = WebInkMuted)
             is WorkChildren.Series -> children.seasons.forEach { season ->
                 Text("Season ${season.season.seasonNumber}", color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
                 season.episodes.forEach { episode ->
-                    PlayRow(episode.episode.title ?: "Episode ${episode.episode.episodeNumber}", episode.mediaFileId != null) { episode.mediaFileId?.let(onPlay) }
+                    PlayRow(episode.episode.title ?: "Episode ${episode.episode.episodeNumber}", episode.mediaFileId != null, { onAddToPlaylist(episode.episode.id) }) { episode.mediaFileId?.let(onPlay) }
                 }
             }
             is WorkChildren.Artist -> children.albums.forEach { album ->
                 Text(album.album.title, color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
-                album.tracks.forEach { track -> PlayRow(track.track.title, track.mediaFileId != null) { track.mediaFileId?.let(onPlay) } }
+                album.tracks.forEach { track -> PlayRow(track.track.title, track.mediaFileId != null, { onAddToPlaylist(track.track.id) }) { track.mediaFileId?.let(onPlay) } }
             }
-            is WorkChildren.Author -> children.books.forEach { book -> PlayRow(book.book.title, book.mediaFileId != null) { book.mediaFileId?.let(onPlay) } }
+            is WorkChildren.Author -> children.books.forEach { book -> PlayRow(book.book.title, book.mediaFileId != null, { onAddToPlaylist(book.book.id) }) { book.mediaFileId?.let(onPlay) } }
         }
     }
 }
 
 @Composable
-private fun PlayRow(title: String, available: Boolean, onClick: () -> Unit) {
+private fun PlayRow(title: String, available: Boolean, onAddToPlaylist: (() -> Unit)? = null, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         enabled = available,
@@ -880,6 +1430,9 @@ private fun PlayRow(title: String, available: Boolean, onClick: () -> Unit) {
     ) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(title, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            onAddToPlaylist?.let { add ->
+                IconButton(onClick = add) { Icon(Icons.Outlined.Add, contentDescription = "Add to playlist", tint = WebInkMuted) }
+            }
             Icon(Icons.Outlined.PlayArrow, contentDescription = if (available) "Play" else "Unavailable", tint = if (available) WebPink else WebInkMuted)
         }
     }
@@ -889,16 +1442,28 @@ private fun PlayRow(title: String, available: Boolean, onClick: () -> Unit) {
 internal class ExperiencePlayerViewModel @Inject constructor(
     val player: StreamarrPlayer,
     private val getPlaybackInfo: GetPlaybackInfoUseCase,
+    private val api: StreamarrApi,
 ) : ViewModel() {
     private val _state = MutableStateFlow<ExperienceLoad<Unit>>(ExperienceLoad.Loading)
     val state = _state.asStateFlow()
+    private var activeMediaFileId: String? = null
 
     fun play(mediaFileId: String) {
         viewModelScope.launch {
+            activeMediaFileId = mediaFileId
             _state.value = ExperienceLoad.Loading
+            val resumePosition = runCatching { api.getWatchProgress(mediaFileId) }
+                .getOrNull()
+                ?.takeIf { it.state == WatchState.PartWatched }
+                ?.positionMs
+                ?: 0L
             _state.value = when (val result = getPlaybackInfo(mediaFileId)) {
                 is StreamarrResult.Success -> {
-                    player.prepare(result.value.url, if (result.value.mode == io.streamarr.shared.data.model.PlaybackMode.Hls) StreamFormat.Hls else StreamFormat.Direct)
+                    player.prepare(
+                        result.value.url,
+                        if (result.value.mode == io.streamarr.shared.data.model.PlaybackMode.Hls) StreamFormat.Hls else StreamFormat.Direct,
+                        resumePosition,
+                    )
                     player.play()
                     ExperienceLoad.Ready(Unit)
                 }
@@ -907,7 +1472,23 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         }
     }
 
+    fun persistProgress(completed: Boolean = false) {
+        val mediaFileId = activeMediaFileId ?: return
+        val position = player.rawPlayer.currentPosition.coerceAtLeast(0L)
+        val duration = player.rawPlayer.duration.coerceAtLeast(0L)
+        if (duration <= 0L) return
+        viewModelScope.launch {
+            runCatching {
+                api.updateWatchProgress(
+                    mediaFileId,
+                    UpdateWatchProgressRequest(position, duration, completed || position >= duration - 5_000L),
+                )
+            }
+        }
+    }
+
     override fun onCleared() {
+        persistProgress()
         player.pause()
     }
 }
@@ -920,6 +1501,13 @@ private fun ExperiencePlayerScreen(
 ) {
     val state by viewModel.state.collectAsState()
     LaunchedEffect(mediaFileId) { viewModel.play(mediaFileId) }
+    LaunchedEffect(state, mediaFileId) {
+        if (state !is ExperienceLoad.Ready) return@LaunchedEffect
+        while (true) {
+            kotlinx.coroutines.delay(10_000)
+            viewModel.persistProgress()
+        }
+    }
     Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
         when (val current = state) {
             ExperienceLoad.Loading -> CircularProgressIndicator(color = WebPink)
@@ -929,7 +1517,7 @@ private fun ExperiencePlayerScreen(
                 factory = { context -> androidx.media3.ui.PlayerView(context).apply { player = viewModel.player.rawPlayer; useController = true } },
             )
         }
-        IconButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp).background(Color.Black.copy(alpha = 0.55f), CircleShape)) {
+        IconButton(onClick = { viewModel.persistProgress(); onBack() }, modifier = Modifier.align(Alignment.TopStart).windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp).background(Color.Black.copy(alpha = 0.55f), CircleShape)) {
             Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = Color.White)
         }
     }
@@ -987,7 +1575,7 @@ private fun SettingsServerCard(serverUrl: String, onSignOut: () -> Unit, modifie
 }
 
 @Composable
-private fun AuthenticatedArtwork(
+internal fun AuthenticatedArtwork(
     work: Work,
     kinds: List<ImageKind>,
     serverUrl: String,

@@ -29,12 +29,22 @@ class TokenStore @Inject constructor(
 ) {
     val accessToken: Flow<String?> = dataStore.data.map { it[ACCESS_TOKEN_KEY] }
     val refreshToken: Flow<String?> = dataStore.data.map { it[REFRESH_TOKEN_KEY] }
+    val currentUserId: Flow<String?> = dataStore.data.map { it[USER_ID_KEY] }
+    val currentUserName: Flow<String?> = dataStore.data.map { it[USER_NAME_KEY] }
 
     suspend fun save(token: TokenResponse) {
         dataStore.edit { prefs ->
             prefs[ACCESS_TOKEN_KEY] = token.accessToken
             prefs[REFRESH_TOKEN_KEY] = token.refreshToken
             prefs[TOKEN_TYPE_KEY] = token.tokenType
+        }
+    }
+
+    suspend fun saveIdentity(userId: String, displayName: String?) {
+        dataStore.edit { prefs ->
+            prefs[USER_ID_KEY] = userId
+            if (displayName.isNullOrBlank()) prefs.remove(USER_NAME_KEY)
+            else prefs[USER_NAME_KEY] = displayName
         }
     }
 
@@ -50,6 +60,8 @@ class TokenStore @Inject constructor(
             prefs.remove(ACCESS_TOKEN_KEY)
             prefs.remove(REFRESH_TOKEN_KEY)
             prefs.remove(TOKEN_TYPE_KEY)
+            prefs.remove(USER_ID_KEY)
+            prefs.remove(USER_NAME_KEY)
         }
     }
 
@@ -76,5 +88,7 @@ class TokenStore @Inject constructor(
         val REFRESH_TOKEN_KEY = stringPreferencesKey("streamarr_refresh_token")
         val TOKEN_TYPE_KEY = stringPreferencesKey("streamarr_token_type")
         val DEVICE_ID_KEY = stringPreferencesKey("streamarr_device_id")
+        val USER_ID_KEY = stringPreferencesKey("streamarr_user_id")
+        val USER_NAME_KEY = stringPreferencesKey("streamarr_user_name")
     }
 }
