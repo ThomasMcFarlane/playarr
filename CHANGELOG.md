@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Bring native iOS playback to Playarr parity with resume, per-title quality, audio and subtitle
+  choices, chapter seeking, watch-progress updates, and complete playback-session telemetry.
 - Complete the native iOS profile journey with Playarr-styled invited sign-up, synced preset and
   photo avatars, appearance and language choices, player defaults, PIN locking, and friend invites.
 - Match Playarr Web's native iOS catalogue and playlist flows with available-only pagination,
