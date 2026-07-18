@@ -25,11 +25,41 @@ describe("MusicDetail track list", () => {
 
     expect(visualiserRule).toContain("inset: 0");
     expect(visualiserRule).toContain("height: 100%");
+    expect(visualiserRule).toContain("padding: 46% 10% 9%");
     expect(visualiserRule).toContain("transparent 0%");
     expect(visualiserRule).toContain("rgba(8, 5, 7, 0.68) 100%");
     expect(visualiserRule).toContain("box-shadow: none");
     expect(visualiserRule).toContain("backdrop-filter: blur(3px) brightness(0.78)");
     expect(visualiserRule).toContain("mix-blend-mode: normal");
+  });
+
+  it("uses the same inset full-art gradient in the mini-player", () => {
+    const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    const miniVisualiserRule = css.match(
+      /\.player-shell-minimised\.player-shell-music \.player-music-visualiser\s*\{(?<declarations>[^}]*)\}/
+    )?.groups?.declarations;
+
+    expect(miniVisualiserRule).toContain("inset: 0");
+    expect(miniVisualiserRule).toContain("height: 100%");
+    expect(miniVisualiserRule).toContain("padding: 45% 10% 9%");
+    expect(miniVisualiserRule).toContain("transparent 0%");
+    expect(miniVisualiserRule).toContain("rgba(8, 5, 7, 0.68) 100%");
+    expect(miniVisualiserRule).toContain("mix-blend-mode: normal");
+  });
+
+  it("keeps the final track clear of the viewport edge", () => {
+    const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    const trackWindowRule = css.match(
+      /\.tv-music-track-list-window\s*\{(?<declarations>[^}]*)\}/
+    )?.groups?.declarations;
+    const trackScrollRule = css.match(
+      /\.tv-music-track-list-scroll\s*\{(?<declarations>[^}]*)\}/
+    )?.groups?.declarations;
+
+    expect(trackWindowRule).toContain("min-height: 0");
+    expect(trackWindowRule).toContain("overflow: hidden");
+    expect(trackScrollRule).toContain("max(clamp(72px, 9vh, 110px)");
+    expect(trackScrollRule).toContain("overflow-y: auto");
   });
 
   it("centres persistent inline controls beneath Cover Flow", () => {
