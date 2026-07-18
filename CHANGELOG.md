@@ -144,6 +144,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Keep directory preview animations from narrowing the shared media-copy width and wrapping titles
+  differently from their detail pages.
 - Persist the focused audio or video choice when creating a playlist instead of allowing visual
   focus and the submitted playlist type to diverge, and roll back mismatched results from an
   outdated server instead of silently leaving a video playlist behind.

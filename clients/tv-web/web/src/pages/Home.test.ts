@@ -22,6 +22,10 @@ describe("Home layout", () => {
     const sharedMobileSynopsisRule = css.match(
       /\.tv-home-feature > p:not\(\.tv-provider\),\s*\.tv-detail-synopsis\s*\{(?<declarations>[^}]*0\.72rem[^}]*)\}/
     )?.groups?.declarations;
+    const previewExpandFrames = css.slice(
+      css.indexOf("@keyframes tv-preview-expand"),
+      css.indexOf("@keyframes tv-loader-spin")
+    );
 
     expect(sharedCopyRule).toContain("top: 24%");
     expect(sharedCopyRule).toContain("left: clamp(102px, 8vw, 160px)");
@@ -39,5 +43,6 @@ describe("Home layout", () => {
     expect(sharedMobileSynopsisRule).toContain("margin-top: 10px");
     expect(sharedMobileSynopsisRule).toContain("-webkit-line-clamp: 3");
     expect(css).not.toContain(".tv-music-detail .tv-detail-copy");
+    expect(previewExpandFrames).not.toContain("width:");
   });
 });
