@@ -1919,7 +1919,7 @@ paths:
     post:
       tags:
       - playlists
-      summary: Appends a work to the end of a playlist.
+      summary: Appends a video work or individual audio track to the end of a playlist.
       operationId: add_playlist_item_handler
       parameters:
       - name: id
@@ -2404,6 +2404,11 @@ components:
       required:
       - work_id
       properties:
+        track_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
         work_id:
           type: string
           format: uuid
@@ -2641,6 +2646,11 @@ components:
             this is rejected with `403`, not silently downgraded to a personal
             playlist, so a client bug never creates the wrong kind of playlist
             unnoticed.
+        media_type:
+          $ref: '#/components/schemas/PlaylistMediaType'
+          description: |-
+            Existing clients default to video; new clients present this choice
+            when creating a top-level playlist.
         name:
           type: string
         parent_playlist_id:
@@ -3703,15 +3713,27 @@ components:
         position:
           type: integer
           format: int32
+        track_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
         work_id:
           type: string
           format: uuid
+    PlaylistMediaType:
+      type: string
+      description: The single class of media a playlist accepts.
+      enum:
+      - video
+      - audio
     PlaylistResponse:
       type: object
       required:
       - id
       - name
       - is_system
+      - media_type
       - created_at
       - updated_at
       properties:
@@ -3726,6 +3748,8 @@ components:
           description: |-
             `true` for a System (admin-managed, globally visible) playlist,
             `false` for a personal one.
+        media_type:
+          $ref: '#/components/schemas/PlaylistMediaType'
         name:
           type: string
         owner_user_id:
@@ -4911,6 +4935,6 @@ tags:
 - name: views
   description: Saved catalog filter presets ('Views') -- admin-managed, surfaced to Playarr as browsable shelves
 - name: playlists
-  description: User + System playlists -- named, ordered, optionally-nested lists of works
+  description: User + System playlists -- named, ordered, optionally-nested lists of video works or audio tracks
 - name: credits
   description: Cast/crew for a work, and every work a given person is credited on

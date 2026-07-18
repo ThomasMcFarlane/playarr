@@ -56,6 +56,8 @@ export function PlaylistsPage() {
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
+  const [mediaType, setMediaType] =
+    useState<PlaylistResponse["media_type"]>("video");
   const [parentId, setParentId] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -78,6 +80,7 @@ export function PlaylistsPage() {
 
   function openCreateModal() {
     setName("");
+    setMediaType("video");
     setParentId("");
     setCreateError(null);
     setCreateOpen(true);
@@ -92,6 +95,7 @@ export function PlaylistsPage() {
         name,
         is_system: true,
         parent_playlist_id: parentId || undefined,
+        media_type: mediaType,
       });
       setCreateOpen(false);
       refresh();
@@ -137,6 +141,7 @@ export function PlaylistsPage() {
             <tr>
               <th style={{ textAlign: "left" }}>Name</th>
               <th style={{ textAlign: "left" }}>Owner</th>
+              <th style={{ textAlign: "left" }}>Type</th>
             </tr>
           </thead>
           <tbody>
@@ -155,6 +160,7 @@ export function PlaylistsPage() {
                     {ownerLabel(playlist)}
                   </span>
                 </td>
+                <td>{playlist.media_type === "audio" ? "Audio" : "Video"}</td>
               </tr>
             ))}
           </tbody>
@@ -195,6 +201,24 @@ export function PlaylistsPage() {
             style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
           >
             <div className="modal-field">
+              <label className="form-label" htmlFor="playlist-media-type">
+                Type
+              </label>
+              <select
+                id="playlist-media-type"
+                className="input"
+                style={{ width: "100%" }}
+                value={mediaType}
+                onChange={(e) => {
+                  setMediaType(e.target.value as PlaylistResponse["media_type"]);
+                  setParentId("");
+                }}
+              >
+                <option value="video">Video</option>
+                <option value="audio">Audio</option>
+              </select>
+            </div>
+            <div className="modal-field">
               <label className="form-label" htmlFor="playlist-name">
                 Name
               </label>
@@ -220,11 +244,13 @@ export function PlaylistsPage() {
                 onChange={(e) => setParentId(e.target.value)}
               >
                 <option value="">None -- top-level playlist</option>
-                {systemPlaylists.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
+                {systemPlaylists
+                  .filter((p) => p.media_type === mediaType)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
               </select>
             </div>
           </form>

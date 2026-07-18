@@ -150,4 +150,18 @@ describe("MusicDetail track list", () => {
     expect(miniPlayerSource).toContain("player-inline-music-mini");
     expect(miniPlayerSource).not.toContain("createPortal(");
   });
+
+  it("opens the shared hold menu for tracks and targets audio playlists", () => {
+    const detailSource = readFileSync(new URL("./MusicDetail.tsx", import.meta.url), "utf8");
+    const contextMenuSource = readFileSync(
+      new URL("../components/MediaContextMenu.tsx", import.meta.url),
+      "utf8"
+    );
+
+    expect(detailSource).toContain("playlistTrackId: track.track.id");
+    expect(contextMenuSource).toContain('mediaType: "audio"');
+    expect(contextMenuSource).toContain("playlist.media_type === target.mediaType");
+    expect(contextMenuSource).toContain("track_id: target.trackId");
+    expect(contextMenuSource).toContain("const LONG_PRESS_MS = 650");
+  });
 });

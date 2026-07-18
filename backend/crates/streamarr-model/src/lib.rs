@@ -41,7 +41,7 @@ pub use playback::{
     PlayMethod, PlaybackEvent, PlaybackEventKind, PlaybackSession, StopReason, TranscodeReason,
     WatchProgress, WatchState,
 };
-pub use playlist::{Playlist, PlaylistItem};
+pub use playlist::{Playlist, PlaylistItem, PlaylistMediaType};
 pub use policy::{AccessWindow, Policy, TimeRange, Weekday};
 pub use publishing::{Author, Book};
 pub use sensitive::Sensitive;

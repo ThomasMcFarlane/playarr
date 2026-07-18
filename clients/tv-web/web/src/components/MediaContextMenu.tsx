@@ -86,11 +86,45 @@ export interface MediaContextItem {
   onPlay?: () => void;
   activateOrigin?: boolean;
   startPositionSeconds?: number;
+  /** Exact track represented by an audio item; `workId` is its artist work. */
+  playlistTrackId?: string;
   playlistMembership?: {
     playlistId: string;
     itemId: string;
     onChanged?: (change: PlaylistMembershipChange) => void;
   };
+}
+
+interface PlaylistTarget {
+  mediaType: PlaylistResponse["media_type"];
+  workId: string;
+  trackId?: string;
+  title: string;
+}
+
+function playlistTarget(item: MediaContextItem | null): PlaylistTarget | null {
+  if (!item) return null;
+  if (item.playlistTrackId && item.workId) {
+    return {
+      mediaType: "audio",
+      workId: item.workId,
+      trackId: item.playlistTrackId,
+      title: item.title ?? "Track",
+    };
+  }
+  if (
+    item.work &&
+    (item.work.kind === "movie" ||
+      item.work.kind === "series" ||
+      item.work.kind === "site")
+  ) {
+    return {
+      mediaType: "video",
+      workId: item.work.id,
+      title: item.work.title,
+    };
+  }
+  return null;
 }
 
 export type PlaylistMembershipChange =
@@ -466,8 +500,10 @@ export function useMediaContextMenu({
   }, []);
 
   const openPlaylistPicker = useCallback(async () => {
-    if (!activeItem?.work || busyAction) return;
-    const movingPlaylistItem = Boolean(activeItem.playlistMembership);
+    const target = playlistTarget(activeItem);
+    if (!target || busyAction) return;
+    const membership = activeItem?.playlistMembership;
+    const movingPlaylistItem = Boolean(membership);
     setContextView(
       movingPlaylistItem ? "playlist-destinations" : "playlists"
     );
@@ -475,7 +511,10 @@ export function useMediaContextMenu({
     setPlaylistPicker({ status: "loading" });
     try {
       const playlists = (await client.listPlaylists())
-        .filter((playlist) => !playlist.is_system)
+        .filter(
+          (playlist) =>
+            !playlist.is_system && playlist.media_type === target.mediaType
+        )
         .sort((left, right) =>
           left.name.localeCompare(right.name, undefined, {
             numeric: true,
@@ -486,7 +525,7 @@ export function useMediaContextMenu({
       if (movingPlaylistItem) {
         const currentPlaylist = playlists.find(
           (playlist) =>
-            playlist.id === activeItem.playlistMembership?.playlistId
+            playlist.id === membership?.playlistId
         );
         let rootPlaylist = currentPlaylist ?? null;
         const byId = new Map(
@@ -517,27 +556,36 @@ export function useMediaContextMenu({
 
   const addToPlaylist = useCallback(
     async (playlist: PlaylistResponse, keyboardActivation = false) => {
-      const work = activeItem?.work;
-      if (!work || busyAction || playlistActionInFlightRef.current) return;
+      const target = playlistTarget(activeItem);
+      if (!target || busyAction || playlistActionInFlightRef.current) return;
       playlistActionInFlightRef.current = true;
       if (keyboardActivation) suppressOriginRelease();
       setBusyAction(`playlist:${playlist.id}`);
       setError(null);
       try {
         const existingItems = await client.listPlaylistItems(playlist.id);
-        if (existingItems.some((item) => item.work_id === work.id)) {
+        if (
+          existingItems.some(
+            (item) =>
+              item.work_id === target.workId &&
+              (item.track_id ?? undefined) === target.trackId
+          )
+        ) {
           throw new Error(
             t("components.mediaContextMenu.alreadyInPlaylist", {
-              title: work.title,
+              title: target.title,
               playlist: playlist.name,
             })
           );
         }
-        await client.addPlaylistItem(playlist.id, { work_id: work.id });
+        await client.addPlaylistItem(playlist.id, {
+          work_id: target.workId,
+          track_id: target.trackId,
+        });
         close();
         showToast(
           t("components.mediaContextMenu.addedToPlaylist", {
-            title: work.title,
+            title: target.title,
             playlist: playlist.name,
           })
         );
@@ -571,10 +619,10 @@ export function useMediaContextMenu({
 
   const movePlaylistItem = useCallback(
     async (playlist: PlaylistResponse, keyboardActivation = false) => {
-      const work = activeItem?.work;
+      const target = playlistTarget(activeItem);
       const membership = activeItem?.playlistMembership;
       if (
-        !work ||
+        !target ||
         !membership ||
         playlist.id === membership.playlistId ||
         busyAction ||
@@ -588,16 +636,23 @@ export function useMediaContextMenu({
       setError(null);
       try {
         const existingItems = await client.listPlaylistItems(playlist.id);
-        if (existingItems.some((item) => item.work_id === work.id)) {
+        if (
+          existingItems.some(
+            (item) =>
+              item.work_id === target.workId &&
+              (item.track_id ?? undefined) === target.trackId
+          )
+        ) {
           throw new Error(
             t("components.mediaContextMenu.alreadyInPlaylist", {
-              title: work.title,
+              title: target.title,
               playlist: playlist.name,
             })
           );
         }
         const destinationItem = await client.addPlaylistItem(playlist.id, {
-          work_id: work.id,
+          work_id: target.workId,
+          track_id: target.trackId,
         });
         try {
           await client.removePlaylistItem(
@@ -620,7 +675,7 @@ export function useMediaContextMenu({
         close();
         showToast(
           t("components.mediaContextMenu.movedToPlaylist", {
-            title: work.title,
+            title: target.title,
             playlist: playlist.name,
           })
         );
@@ -651,8 +706,8 @@ export function useMediaContextMenu({
       setError(null);
       try {
         const title =
-          activeItem.work?.title ??
           activeItem.title ??
+          activeItem.work?.title ??
           t("components.mediaContextMenu.genericItem");
         await client.removePlaylistItem(
           membership.playlistId,
@@ -731,10 +786,7 @@ export function useMediaContextMenu({
     [clearLongPress, open, suppressReleaseClick]
   );
 
-  const canAddToPlaylist =
-    activeItem?.work?.kind === "movie" ||
-    activeItem?.work?.kind === "series" ||
-    activeItem?.work?.kind === "site";
+  const canAddToPlaylist = Boolean(playlistTarget(activeItem));
   const isPlaylistItem = Boolean(activeItem?.playlistMembership);
 
   const contextMenu = activeItem ? (
@@ -753,14 +805,14 @@ export function useMediaContextMenu({
           contextView === "actions"
             ? t("components.mediaContextMenu.dialogAriaLabelActions", {
                 title:
-                  activeItem.work?.title ??
                   activeItem.title ??
+                  activeItem.work?.title ??
                   t("components.mediaContextMenu.genericTitle"),
               })
             : t("components.mediaContextMenu.dialogAriaLabelPlaylistPicker", {
                 title:
-                  activeItem.work?.title ??
                   activeItem.title ??
+                  activeItem.work?.title ??
                   t("components.mediaContextMenu.genericTitle"),
               })
         }
@@ -825,8 +877,8 @@ export function useMediaContextMenu({
             <header>
               <p>{t("components.mediaContextMenu.titleActionsHeading")}</p>
               <h2>
-                {activeItem.work?.title ??
-                  activeItem.title ??
+                {activeItem.title ??
+                  activeItem.work?.title ??
                   t("components.mediaContextMenu.genericTitle")}
               </h2>
             </header>
@@ -920,7 +972,8 @@ export function useMediaContextMenu({
                   : t("components.mediaContextMenu.addToPlaylistHeading")}
               </p>
               <h2>
-                {activeItem.work?.title ??
+                {activeItem.title ??
+                  activeItem.work?.title ??
                   t("components.mediaContextMenu.genericTitle")}
               </h2>
             </header>
@@ -1000,7 +1053,8 @@ export function useMediaContextMenu({
                   : t("components.mediaContextMenu.addToPlaylistHeading")}
               </p>
               <h2>
-                {activeItem.work?.title ??
+                {activeItem.title ??
+                  activeItem.work?.title ??
                   t("components.mediaContextMenu.genericTitle")}
               </h2>
             </header>

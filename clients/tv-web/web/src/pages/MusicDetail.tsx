@@ -278,6 +278,7 @@ function AlbumTrackList({
               parentRoute: detailParentBackTo,
               progress,
               preferredMediaFileId: mediaFileId,
+              playlistTrackId: track.track.id,
               leaves: [
                 {
                   mediaFileId,

@@ -84,7 +84,7 @@ pub use version_gate::{ClientCompatibilityTable, VersionGateLayer};
         (name = "admin", description = "Admin-only configuration: registering *arr source instances"),
         (name = "users", description = "User account management and signed-in player preferences"),
         (name = "views", description = "Saved catalog filter presets ('Views') -- admin-managed, surfaced to Playarr as browsable shelves"),
-        (name = "playlists", description = "User + System playlists -- named, ordered, optionally-nested lists of works"),
+        (name = "playlists", description = "User + System playlists -- named, ordered, optionally-nested lists of video works or audio tracks"),
         (name = "credits", description = "Cast/crew for a work, and every work a given person is credited on")
     )
 )]

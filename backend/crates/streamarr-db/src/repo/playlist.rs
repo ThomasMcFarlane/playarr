@@ -10,7 +10,7 @@
 use async_trait::async_trait;
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use streamarr_model::{Playlist, PlaylistItem};
+use streamarr_model::{Playlist, PlaylistItem, PlaylistMediaType};
 use uuid::Uuid;
 
 use crate::codec::{decode_err, format_datetime, parse_datetime, parse_uuid};
@@ -61,7 +61,12 @@ pub trait PlaylistRepo: Send + Sync {
     /// anyway, so there is no meaningful "fresh vs. fetched-then-mutated"
     /// case to support here the way there is for a `Playlist`/`LibraryView`
     /// rename.
-    async fn add_item(&self, playlist_id: Uuid, work_id: Uuid) -> Result<PlaylistItem, DbError>;
+    async fn add_item(
+        &self,
+        playlist_id: Uuid,
+        work_id: Uuid,
+        track_id: Option<Uuid>,
+    ) -> Result<PlaylistItem, DbError>;
 
     /// `DbError::NotFound` if no such item exists on this playlist.
     async fn remove_item(&self, playlist_id: Uuid, item_id: Uuid) -> Result<(), DbError>;
@@ -97,6 +102,7 @@ impl SqlxPlaylistRepo {
         let name: String = row.try_get("name")?;
         let owner_user_id: Option<String> = row.try_get("owner_user_id")?;
         let parent_playlist_id: Option<String> = row.try_get("parent_playlist_id")?;
+        let media_type: String = row.try_get("media_type")?;
         let created_at: String = row.try_get("created_at")?;
         let updated_at: String = row.try_get("updated_at")?;
 
@@ -105,6 +111,11 @@ impl SqlxPlaylistRepo {
             name,
             owner_user_id: owner_user_id.map(|s| parse_uuid(&s)).transpose()?,
             parent_playlist_id: parent_playlist_id.map(|s| parse_uuid(&s)).transpose()?,
+            media_type: match media_type.as_str() {
+                "video" => PlaylistMediaType::Video,
+                "audio" => PlaylistMediaType::Audio,
+                other => return Err(decode_err(format!("unknown playlist media type: {other}"))),
+            },
             created_at: parse_datetime(&created_at)?,
             updated_at: parse_datetime(&updated_at)?,
         })
@@ -114,6 +125,7 @@ impl SqlxPlaylistRepo {
         let id: String = row.try_get("id")?;
         let playlist_id: String = row.try_get("playlist_id")?;
         let work_id: String = row.try_get("work_id")?;
+        let track_id: Option<String> = row.try_get("track_id")?;
         let position: i32 = row.try_get("position")?;
         let added_at: String = row.try_get("added_at")?;
 
@@ -121,6 +133,7 @@ impl SqlxPlaylistRepo {
             id: parse_uuid(&id)?,
             playlist_id: parse_uuid(&playlist_id)?,
             work_id: parse_uuid(&work_id)?,
+            track_id: track_id.map(|s| parse_uuid(&s)).transpose()?,
             position,
             added_at: parse_datetime(&added_at)?,
         })
@@ -132,11 +145,11 @@ impl PlaylistRepo for SqlxPlaylistRepo {
     async fn get(&self, id: Uuid) -> Result<Playlist, DbError> {
         let sql = match self.backend {
             Backend::Sqlite => {
-                "SELECT id, name, owner_user_id, parent_playlist_id, created_at, updated_at \
+                "SELECT id, name, owner_user_id, parent_playlist_id, media_type, created_at, updated_at \
                  FROM playlists WHERE id = ?"
             }
             Backend::Postgres => {
-                "SELECT id, name, owner_user_id, parent_playlist_id, created_at, updated_at \
+                "SELECT id, name, owner_user_id, parent_playlist_id, media_type, created_at, updated_at \
                  FROM playlists WHERE id = $1"
             }
         };
@@ -151,12 +164,12 @@ impl PlaylistRepo for SqlxPlaylistRepo {
     async fn list_visible_to_user(&self, user_id: Uuid) -> Result<Vec<Playlist>, DbError> {
         let sql = match self.backend {
             Backend::Sqlite => {
-                "SELECT id, name, owner_user_id, parent_playlist_id, created_at, updated_at \
+                "SELECT id, name, owner_user_id, parent_playlist_id, media_type, created_at, updated_at \
                  FROM playlists WHERE owner_user_id = ? OR owner_user_id IS NULL \
                  ORDER BY created_at ASC"
             }
             Backend::Postgres => {
-                "SELECT id, name, owner_user_id, parent_playlist_id, created_at, updated_at \
+                "SELECT id, name, owner_user_id, parent_playlist_id, media_type, created_at, updated_at \
                  FROM playlists WHERE owner_user_id = $1 OR owner_user_id IS NULL \
                  ORDER BY created_at ASC"
             }
@@ -169,14 +182,14 @@ impl PlaylistRepo for SqlxPlaylistRepo {
     }
 
     async fn list_system(&self) -> Result<Vec<Playlist>, DbError> {
-        let sql = "SELECT id, name, owner_user_id, parent_playlist_id, created_at, updated_at \
+        let sql = "SELECT id, name, owner_user_id, parent_playlist_id, media_type, created_at, updated_at \
                     FROM playlists WHERE owner_user_id IS NULL ORDER BY created_at ASC";
         let rows = sqlx::query(sql).fetch_all(&self.pool).await?;
         rows.iter().map(Self::playlist_from_row).collect()
     }
 
     async fn list_all(&self) -> Result<Vec<Playlist>, DbError> {
-        let sql = "SELECT id, name, owner_user_id, parent_playlist_id, created_at, updated_at \
+        let sql = "SELECT id, name, owner_user_id, parent_playlist_id, media_type, created_at, updated_at \
                     FROM playlists ORDER BY created_at ASC";
         let rows = sqlx::query(sql).fetch_all(&self.pool).await?;
         rows.iter().map(Self::playlist_from_row).collect()
@@ -186,20 +199,20 @@ impl PlaylistRepo for SqlxPlaylistRepo {
         let sql = match self.backend {
             Backend::Sqlite => {
                 "INSERT INTO playlists \
-                 (id, name, owner_user_id, parent_playlist_id, created_at, updated_at) \
-                 VALUES (?, ?, ?, ?, ?, ?) \
+                 (id, name, owner_user_id, parent_playlist_id, media_type, created_at, updated_at) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (id) DO UPDATE SET \
                  name = excluded.name, owner_user_id = excluded.owner_user_id, \
-                 parent_playlist_id = excluded.parent_playlist_id, \
+                 parent_playlist_id = excluded.parent_playlist_id, media_type = excluded.media_type, \
                  created_at = excluded.created_at, updated_at = excluded.updated_at"
             }
             Backend::Postgres => {
                 "INSERT INTO playlists \
-                 (id, name, owner_user_id, parent_playlist_id, created_at, updated_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6) \
+                 (id, name, owner_user_id, parent_playlist_id, media_type, created_at, updated_at) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7) \
                  ON CONFLICT (id) DO UPDATE SET \
                  name = excluded.name, owner_user_id = excluded.owner_user_id, \
-                 parent_playlist_id = excluded.parent_playlist_id, \
+                 parent_playlist_id = excluded.parent_playlist_id, media_type = excluded.media_type, \
                  created_at = excluded.created_at, updated_at = excluded.updated_at"
             }
         };
@@ -208,6 +221,10 @@ impl PlaylistRepo for SqlxPlaylistRepo {
             .bind(playlist.name.as_str())
             .bind(playlist.owner_user_id.map(|id| id.to_string()))
             .bind(playlist.parent_playlist_id.map(|id| id.to_string()))
+            .bind(match playlist.media_type {
+                PlaylistMediaType::Video => "video",
+                PlaylistMediaType::Audio => "audio",
+            })
             .bind(format_datetime(playlist.created_at))
             .bind(format_datetime(playlist.updated_at))
             .execute(&self.pool)
@@ -233,11 +250,11 @@ impl PlaylistRepo for SqlxPlaylistRepo {
     async fn list_items(&self, playlist_id: Uuid) -> Result<Vec<PlaylistItem>, DbError> {
         let sql = match self.backend {
             Backend::Sqlite => {
-                "SELECT id, playlist_id, work_id, position, added_at FROM playlist_items \
+                "SELECT id, playlist_id, work_id, track_id, position, added_at FROM playlist_items \
                  WHERE playlist_id = ? ORDER BY position ASC"
             }
             Backend::Postgres => {
-                "SELECT id, playlist_id, work_id, position, added_at FROM playlist_items \
+                "SELECT id, playlist_id, work_id, track_id, position, added_at FROM playlist_items \
                  WHERE playlist_id = $1 ORDER BY position ASC"
             }
         };
@@ -248,7 +265,12 @@ impl PlaylistRepo for SqlxPlaylistRepo {
         rows.iter().map(Self::item_from_row).collect()
     }
 
-    async fn add_item(&self, playlist_id: Uuid, work_id: Uuid) -> Result<PlaylistItem, DbError> {
+    async fn add_item(
+        &self,
+        playlist_id: Uuid,
+        work_id: Uuid,
+        track_id: Option<Uuid>,
+    ) -> Result<PlaylistItem, DbError> {
         let max_position_sql = match self.backend {
             Backend::Sqlite => "SELECT MAX(position) FROM playlist_items WHERE playlist_id = ?",
             Backend::Postgres => "SELECT MAX(position) FROM playlist_items WHERE playlist_id = $1",
@@ -264,24 +286,26 @@ impl PlaylistRepo for SqlxPlaylistRepo {
             id: Uuid::new_v4(),
             playlist_id,
             work_id,
+            track_id,
             position: current_max.map(|p| p + 1).unwrap_or(0),
             added_at: chrono::Utc::now(),
         };
 
         let insert_sql = match self.backend {
             Backend::Sqlite => {
-                "INSERT INTO playlist_items (id, playlist_id, work_id, position, added_at) \
-                 VALUES (?, ?, ?, ?, ?)"
+                "INSERT INTO playlist_items (id, playlist_id, work_id, track_id, position, added_at) \
+                 VALUES (?, ?, ?, ?, ?, ?)"
             }
             Backend::Postgres => {
-                "INSERT INTO playlist_items (id, playlist_id, work_id, position, added_at) \
-                 VALUES ($1, $2, $3, $4, $5)"
+                "INSERT INTO playlist_items (id, playlist_id, work_id, track_id, position, added_at) \
+                 VALUES ($1, $2, $3, $4, $5, $6)"
             }
         };
         sqlx::query(insert_sql)
             .bind(item.id.to_string())
             .bind(item.playlist_id.to_string())
             .bind(item.work_id.to_string())
+            .bind(item.track_id.map(|id| id.to_string()))
             .bind(item.position)
             .bind(format_datetime(item.added_at))
             .execute(&self.pool)
@@ -363,6 +387,7 @@ mod tests {
             name: name.to_string(),
             owner_user_id,
             parent_playlist_id: None,
+            media_type: PlaylistMediaType::Video,
             created_at: now,
             updated_at: now,
         }
@@ -475,8 +500,8 @@ mod tests {
 
         let work_a = Uuid::new_v4();
         let work_b = Uuid::new_v4();
-        let item_a = repo.add_item(playlist.id, work_a).await.unwrap();
-        let item_b = repo.add_item(playlist.id, work_b).await.unwrap();
+        let item_a = repo.add_item(playlist.id, work_a, None).await.unwrap();
+        let item_b = repo.add_item(playlist.id, work_b, None).await.unwrap();
 
         assert_eq!(item_a.position, 0);
         assert_eq!(item_b.position, 1);
@@ -488,14 +513,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn audio_item_round_trips_its_track_id() {
+        let pool = test_sqlite_pool().await;
+        let repo = SqlxPlaylistRepo::new(pool);
+        let mut playlist = sample_playlist("Road Trip", None);
+        playlist.media_type = PlaylistMediaType::Audio;
+        repo.upsert(&playlist).await.unwrap();
+
+        let artist_work_id = Uuid::new_v4();
+        let track_id = Uuid::new_v4();
+        let item = repo
+            .add_item(playlist.id, artist_work_id, Some(track_id))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            repo.get(playlist.id).await.unwrap().media_type,
+            PlaylistMediaType::Audio
+        );
+        assert_eq!(item.track_id, Some(track_id));
+        let fetched_items = repo.list_items(playlist.id).await.unwrap();
+        let fetched = &fetched_items[0];
+        assert_eq!(fetched.id, item.id);
+        assert_eq!(fetched.work_id, artist_work_id);
+        assert_eq!(fetched.track_id, Some(track_id));
+    }
+
+    #[tokio::test]
     async fn remove_item_removes_only_that_item() {
         let pool = test_sqlite_pool().await;
         let repo = SqlxPlaylistRepo::new(pool);
         let playlist = sample_playlist("Watchlist", None);
         repo.upsert(&playlist).await.unwrap();
 
-        let item_a = repo.add_item(playlist.id, Uuid::new_v4()).await.unwrap();
-        let item_b = repo.add_item(playlist.id, Uuid::new_v4()).await.unwrap();
+        let item_a = repo
+            .add_item(playlist.id, Uuid::new_v4(), None)
+            .await
+            .unwrap();
+        let item_b = repo
+            .add_item(playlist.id, Uuid::new_v4(), None)
+            .await
+            .unwrap();
 
         repo.remove_item(playlist.id, item_a.id).await.unwrap();
 
@@ -525,9 +583,18 @@ mod tests {
         let playlist = sample_playlist("Watchlist", None);
         repo.upsert(&playlist).await.unwrap();
 
-        let item_a = repo.add_item(playlist.id, Uuid::new_v4()).await.unwrap();
-        let item_b = repo.add_item(playlist.id, Uuid::new_v4()).await.unwrap();
-        let item_c = repo.add_item(playlist.id, Uuid::new_v4()).await.unwrap();
+        let item_a = repo
+            .add_item(playlist.id, Uuid::new_v4(), None)
+            .await
+            .unwrap();
+        let item_b = repo
+            .add_item(playlist.id, Uuid::new_v4(), None)
+            .await
+            .unwrap();
+        let item_c = repo
+            .add_item(playlist.id, Uuid::new_v4(), None)
+            .await
+            .unwrap();
 
         repo.reorder_items(playlist.id, &[item_c.id, item_a.id, item_b.id])
             .await

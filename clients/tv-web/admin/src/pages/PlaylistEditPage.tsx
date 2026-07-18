@@ -60,7 +60,14 @@ export function PlaylistEditPage() {
         setName(playlistResult.name);
         setParentId(playlistResult.parent_playlist_id ?? "");
         setItems(itemsResult);
-        setAllSystemPlaylists(allResult.filter((p) => p.is_system && p.id !== id));
+        setAllSystemPlaylists(
+          allResult.filter(
+            (p) =>
+              p.is_system &&
+              p.id !== id &&
+              p.media_type === playlistResult.media_type
+          )
+        );
         if (!playlistResult.is_system && playlistResult.owner_user_id) {
           client
             .listUsers()
@@ -133,7 +140,14 @@ export function PlaylistEditPage() {
     setAddError(null);
     try {
       const found = await client.searchCatalog(query, 10);
-      setResults(found);
+      setResults(
+        found.filter(
+          (work) =>
+            work.kind === "movie" ||
+            work.kind === "series" ||
+            work.kind === "site"
+        )
+      );
     } catch (err) {
       setAddError(describeApiError(err));
     } finally {
@@ -212,6 +226,9 @@ export function PlaylistEditPage() {
   return (
     <div className="page">
       <h1 className="page-title">{playlist.name}</h1>
+      <p className="muted">
+        {playlist.media_type === "audio" ? "Audio playlist" : "Video playlist"}
+      </p>
 
       {saveError && <p className="error-text hint" style={{ marginBottom: "1rem" }}>{saveError}</p>}
 
@@ -296,25 +313,31 @@ export function PlaylistEditPage() {
         </table>
       )}
 
-      <form
-        onSubmit={(e) => void handleSearch(e)}
-        style={{ display: "flex", gap: "0.75rem", maxWidth: 480, marginBottom: "1rem" }}
-      >
-        <input
-          className="input"
-          style={{ flex: 1 }}
-          placeholder="Search titles to add..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <button type="submit" className="btn btn-secondary" disabled={searching}>
-          {searching ? "Searching..." : "Search"}
-        </button>
-      </form>
+      {playlist.media_type === "video" ? (
+        <form
+          onSubmit={(e) => void handleSearch(e)}
+          style={{ display: "flex", gap: "0.75rem", maxWidth: 480, marginBottom: "1rem" }}
+        >
+          <input
+            className="input"
+            style={{ flex: 1 }}
+            placeholder="Search titles to add..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <button type="submit" className="btn btn-secondary" disabled={searching}>
+            {searching ? "Searching..." : "Search"}
+          </button>
+        </form>
+      ) : (
+        <p className="muted">
+          Add individual tracks from their hold menu in Playarr.
+        </p>
+      )}
 
       {addError && <p className="error-text hint">{addError}</p>}
 
-      {results.length > 0 && (
+      {playlist.media_type === "video" && results.length > 0 && (
         <table className="table" style={{ width: "100%", maxWidth: 640 }}>
           <tbody>
             {results.map((work) => (

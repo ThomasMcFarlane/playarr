@@ -1,4 +1,4 @@
-//! User + System playlists -- named, ordered lists of works, optionally
+//! User + System playlists -- named, ordered lists of video works or audio tracks, optionally
 //! nested. See `streamarr_model::playlist`'s module doc comment for the
 //! full domain rationale.
 //!
@@ -51,7 +51,8 @@ use axum::http::StatusCode;
 use axum::Json;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use streamarr_model::{Playlist, PlaylistItem};
+use streamarr_catalog::WorkChildren;
+use streamarr_model::{Playlist, PlaylistItem, PlaylistMediaType, WorkKind};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -115,6 +116,7 @@ pub struct PlaylistResponse {
     /// practice for them.
     pub owner_user_id: Option<Uuid>,
     pub parent_playlist_id: Option<Uuid>,
+    pub media_type: PlaylistMediaType,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -127,6 +129,7 @@ impl From<Playlist> for PlaylistResponse {
             is_system: playlist.owner_user_id.is_none(),
             owner_user_id: playlist.owner_user_id,
             parent_playlist_id: playlist.parent_playlist_id,
+            media_type: playlist.media_type,
             created_at: playlist.created_at,
             updated_at: playlist.updated_at,
         }
@@ -147,6 +150,10 @@ pub struct CreatePlaylistRequest {
     /// unnoticed.
     #[serde(default)]
     pub is_system: bool,
+    /// Existing clients default to video; new clients present this choice
+    /// when creating a top-level playlist.
+    #[serde(default)]
+    pub media_type: PlaylistMediaType,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -161,6 +168,7 @@ pub struct PlaylistItemResponse {
     pub id: Uuid,
     pub playlist_id: Uuid,
     pub work_id: Uuid,
+    pub track_id: Option<Uuid>,
     pub position: i32,
     pub added_at: DateTime<Utc>,
 }
@@ -171,6 +179,7 @@ impl From<PlaylistItem> for PlaylistItemResponse {
             id: item.id,
             playlist_id: item.playlist_id,
             work_id: item.work_id,
+            track_id: item.track_id,
             position: item.position,
             added_at: item.added_at,
         }
@@ -180,6 +189,8 @@ impl From<PlaylistItem> for PlaylistItemResponse {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct AddPlaylistItemRequest {
     pub work_id: Uuid,
+    #[serde(default)]
+    pub track_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -277,6 +288,11 @@ pub async fn create_playlist_handler(
                 "caller does not have write access to the requested parent playlist",
             ));
         }
+        if parent.media_type != body.media_type {
+            return Err(ApiError::bad_request(
+                "a nested playlist must use the same media type as its parent",
+            ));
+        }
     }
 
     let now = Utc::now();
@@ -289,6 +305,7 @@ pub async fn create_playlist_handler(
             Some(viewer.user_id)
         },
         parent_playlist_id: body.parent_playlist_id,
+        media_type: body.media_type,
         created_at: now,
         updated_at: now,
     };
@@ -360,6 +377,11 @@ pub async fn update_playlist_handler(
                 "caller does not have write access to the requested parent playlist",
             ));
         }
+        if parent.media_type != existing.media_type {
+            return Err(ApiError::bad_request(
+                "a nested playlist must use the same media type as its parent",
+            ));
+        }
     }
 
     let updated = Playlist {
@@ -367,6 +389,7 @@ pub async fn update_playlist_handler(
         name: body.name,
         owner_user_id: existing.owner_user_id,
         parent_playlist_id: body.parent_playlist_id,
+        media_type: existing.media_type,
         created_at: existing.created_at,
         updated_at: Utc::now(),
     };
@@ -453,7 +476,7 @@ pub async fn list_playlist_items_handler(
     ))
 }
 
-/// Appends a work to the end of a playlist.
+/// Appends a video work or individual audio track to the end of a playlist.
 #[utoipa::path(
     post,
     path = "/api/v1/playlists/{id}/items",
@@ -482,7 +505,44 @@ pub async fn add_playlist_item_handler(
             "caller does not have write access to this playlist",
         ));
     }
-    let item = state.playlist_repo.add_item(id, body.work_id).await?;
+    let detail = state.catalog.get_by_id(body.work_id, None).await?;
+    match playlist.media_type {
+        PlaylistMediaType::Video => {
+            if body.track_id.is_some()
+                || !matches!(
+                    detail.work.kind,
+                    WorkKind::Movie | WorkKind::Series | WorkKind::Site
+                )
+            {
+                return Err(ApiError::bad_request(
+                    "video playlists accept only movie, series, or site works",
+                ));
+            }
+        }
+        PlaylistMediaType::Audio => {
+            let Some(track_id) = body.track_id else {
+                return Err(ApiError::bad_request(
+                    "audio playlists require an individual track",
+                ));
+            };
+            let track_belongs_to_artist = match &detail.children {
+                WorkChildren::Artist(albums) => albums
+                    .iter()
+                    .flat_map(|album| &album.tracks)
+                    .any(|track| track.track.id == track_id),
+                _ => false,
+            };
+            if detail.work.kind != WorkKind::Artist || !track_belongs_to_artist {
+                return Err(ApiError::bad_request(
+                    "audio playlist track does not belong to the supplied artist work",
+                ));
+            }
+        }
+    }
+    let item = state
+        .playlist_repo
+        .add_item(id, body.work_id, body.track_id)
+        .await?;
     Ok(Json(item.into()))
 }
 
@@ -986,6 +1046,74 @@ mod tests {
         let listed: Vec<PlaylistItemResponse> = json_body(response).await;
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].id, items[1].id);
+    }
+
+    #[tokio::test]
+    async fn audio_playlist_rejects_video_items_and_video_children() {
+        use crate::test_support::seed_movie;
+
+        let (router, state) = test_state().await;
+        let user_id = Uuid::new_v4();
+        seed_streaming_user(&state, user_id).await;
+        let token = mint_access_token(&state, user_id);
+        let movie_id = seed_movie(&state, "Wrong media type").await;
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/playlists")
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::from(
+                        serde_json::json!({"name": "Road Trip", "media_type": "audio"}).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let playlist: PlaylistResponse = json_body(response).await;
+        assert_eq!(playlist.media_type, PlaylistMediaType::Audio);
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/api/v1/playlists/{}/items", playlist.id))
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::from(
+                        serde_json::json!({"work_id": movie_id}).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/playlists")
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::from(
+                        serde_json::json!({
+                            "name": "Video child",
+                            "parent_playlist_id": playlist.id,
+                            "media_type": "video"
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
     /// Per-user library access control: an admin-authored System playlist

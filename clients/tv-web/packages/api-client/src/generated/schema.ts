@@ -1012,7 +1012,7 @@ export interface paths {
         /** Every item on a playlist, in order. */
         get: operations["list_playlist_items_handler"];
         put?: never;
-        /** Appends a work to the end of a playlist. */
+        /** Appends a video work or individual audio track to the end of a playlist. */
         post: operations["add_playlist_item_handler"];
         delete?: never;
         options?: never;
@@ -1293,6 +1293,8 @@ export interface components {
         };
         AddPlaylistItemRequest: {
             /** Format: uuid */
+            track_id?: string | null;
+            /** Format: uuid */
             work_id: string;
         };
         Album: {
@@ -1414,6 +1416,11 @@ export interface components {
              *     unnoticed.
              */
             is_system?: boolean;
+            /**
+             * @description Existing clients default to video; new clients present this choice
+             *     when creating a top-level playlist.
+             */
+            media_type?: components["schemas"]["PlaylistMediaType"];
             name: string;
             /**
              * Format: uuid
@@ -1933,8 +1940,15 @@ export interface components {
             /** Format: int32 */
             position: number;
             /** Format: uuid */
+            track_id?: string | null;
+            /** Format: uuid */
             work_id: string;
         };
+        /**
+         * @description The single class of media a playlist accepts.
+         * @enum {string}
+         */
+        PlaylistMediaType: "video" | "audio";
         PlaylistResponse: {
             /** Format: date-time */
             created_at: string;
@@ -1945,6 +1959,7 @@ export interface components {
              *     `false` for a personal one.
              */
             is_system: boolean;
+            media_type: components["schemas"]["PlaylistMediaType"];
             name: string;
             /**
              * Format: uuid

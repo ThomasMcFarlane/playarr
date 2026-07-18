@@ -51,6 +51,13 @@ import { TvEmptyState } from "../components/tv/TvEmptyState";
 interface ResolvedPlaylistItem {
   id: string;
   work: Work;
+  audioTrack?: {
+    id: string;
+    title: string;
+    albumTitle: string;
+    mediaFileId: string | null;
+    runtimeMs: number;
+  };
 }
 
 interface PlaylistTrack {
@@ -72,7 +79,31 @@ type CreateState =
   | { status: "error"; message: string };
 
 function detailRoute(work: Work): string {
-  return `/playlists/${work.id}`;
+  return work.kind === "artist" ? `/music/${work.id}` : `/playlists/${work.id}`;
+}
+
+function resolveAudioTrack(detail: WorkDetail, trackId: string) {
+  if (
+    typeof detail.children !== "object" ||
+    detail.children === null ||
+    !("Artist" in detail.children)
+  ) {
+    return undefined;
+  }
+  for (const album of detail.children.Artist) {
+    const track = album.tracks.find((candidate) => candidate.track.id === trackId);
+    if (track) {
+      return {
+        id: track.track.id,
+        title: track.track.title,
+        albumTitle: album.album.title,
+        mediaFileId: track.media_file_id ?? null,
+        runtimeMs:
+          track.runtime_ms ?? (track.track.duration_seconds ?? 0) * 1_000,
+      };
+    }
+  }
+  return undefined;
 }
 
 function orderPlaylistTracks(
@@ -195,6 +226,8 @@ export function PlaylistsPage() {
   );
   const [drawer, setDrawer] = useState<PlaylistDrawer>(null);
   const [playlistName, setPlaylistName] = useState("");
+  const [playlistMediaType, setPlaylistMediaType] =
+    useState<PlaylistResponse["media_type"]>("video");
   const [parentPlaylistId, setParentPlaylistId] = useState("");
   const [createState, setCreateState] = useState<CreateState>({ status: "idle" });
   const gridRef = useRef<HTMLDivElement>(null);
@@ -231,18 +264,23 @@ export function PlaylistsPage() {
             }
           })
         );
-        const workById = new Map(
+        const detailById = new Map(
           details
             .filter((detail): detail is WorkDetail => detail !== null)
-            .map((detail) => [detail.work.id, detail.work])
+            .map((detail) => [detail.work.id, detail])
         );
         const tracks = playlists.map((playlist, index) => ({
           playlist,
           items: [...(itemGroups[index] ?? [])]
             .sort((left, right) => left.position - right.position)
             .flatMap((item) => {
-              const work = workById.get(item.work_id);
-              return work ? [{ id: item.id, work }] : [];
+              const detail = detailById.get(item.work_id);
+              if (!detail) return [];
+              const audioTrack = item.track_id
+                ? resolveAudioTrack(detail, item.track_id)
+                : undefined;
+              if (item.track_id && !audioTrack) return [];
+              return [{ id: item.id, work: detail.work, audioTrack }];
             }),
         }));
         if (cancelled) return;
@@ -524,7 +562,7 @@ export function PlaylistsPage() {
   );
 
   const handlePlaylistMembershipChanged = useCallback(
-    (change: PlaylistMembershipChange, work: Work) => {
+    (change: PlaylistMembershipChange, item: ResolvedPlaylistItem) => {
       setPageState((current) => {
         if (current.status !== "ready") return current;
         return {
@@ -540,7 +578,7 @@ export function PlaylistsPage() {
             ) {
               items = [
                 ...items,
-                { id: change.destinationItemId, work },
+                { ...item, id: change.destinationItemId },
               ];
             }
             return items === track.items ? track : { ...track, items };
@@ -624,6 +662,7 @@ export function PlaylistsPage() {
     setDrawer(nextDrawer);
     setCreateState({ status: "idle" });
     if (nextDrawer === "create") {
+      setPlaylistMediaType(fixedParentPlaylist?.playlist.media_type ?? "video");
       setParentPlaylistId(
         fixedParentPlaylist ? fixedParentPlaylist.playlist.id : ""
       );
@@ -721,6 +760,8 @@ export function PlaylistsPage() {
       const created = await client.createPlaylist({
         name,
         parent_playlist_id: createdParentId,
+        media_type:
+          fixedParentPlaylist?.playlist.media_type ?? playlistMediaType,
       });
       setPageState((current) =>
         current.status === "ready"
@@ -808,16 +849,24 @@ export function PlaylistsPage() {
   }
 
   const isDetail = Boolean(requestedPlaylistId);
+  const effectivePlaylistMediaType =
+    fixedParentPlaylist?.playlist.media_type ?? playlistMediaType;
   const personalParentOptions = orderPlaylistTracks(
-    rootTracks.filter((track) => !track.playlist.is_system),
+    rootTracks.filter(
+      (track) =>
+        !track.playlist.is_system &&
+        track.playlist.media_type === effectivePlaylistMediaType
+    ),
     "asc"
   );
   const featureTrack = isDetail ? activeDetailTrack : selectedDirectoryTrack;
   const featureTitle =
+    selectedDetailItem?.audioTrack?.title ??
     selectedDetailItem?.work.title ??
     featureTrack?.playlist.name ??
     (isDetail ? t("pages.playlists.playlistUnavailable") : t("pages.playlists.title"));
   const featureOverview =
+    selectedDetailItem?.audioTrack?.albumTitle ??
     selectedDetailItem?.work.overview ??
     (featureTrack
       ? t(
@@ -1131,6 +1180,28 @@ export function PlaylistsPage() {
               placeholder={t("pages.playlists.namePlaceholder")}
               autoComplete="off"
             />
+            <label htmlFor="playlist-media-type">
+              {t("pages.playlists.mediaTypeLabel")}
+            </label>
+            <select
+              id="playlist-media-type"
+              className="tv-playlist-parent-select"
+              value={effectivePlaylistMediaType}
+              disabled={Boolean(fixedParentPlaylist)}
+              onChange={(event) => {
+                setPlaylistMediaType(
+                  event.target.value as PlaylistResponse["media_type"]
+                );
+                setParentPlaylistId("");
+              }}
+            >
+              <option value="video">
+                {t("pages.playlists.mediaTypeVideo")}
+              </option>
+              <option value="audio">
+                {t("pages.playlists.mediaTypeAudio")}
+              </option>
+            </select>
             {!fixedParentPlaylist ? (
               <>
                 <label htmlFor="playlist-parent">
@@ -1398,7 +1469,7 @@ function PlaylistMediaTrack({
   onProgressChanged: (workId: string, progress: WatchProgress[]) => void;
   onPlaylistItemChanged: (
     change: PlaylistMembershipChange,
-    work: Work
+    item: ResolvedPlaylistItem
   ) => void;
   navigationOrigin: ReturnType<typeof useNavigationLayer>["origin"];
   onNavigate: ReturnType<typeof useNavigationLayer>["captureLink"];
@@ -1439,6 +1510,7 @@ function PlaylistMediaTrack({
       ) : null}
       {track.items.map((item, index) => {
         const work = item.work;
+        const audioTrack = item.audioTrack;
         const progress = progressByWork.get(work.id);
         const route = detailRoute(work);
         return (
@@ -1447,6 +1519,7 @@ function PlaylistMediaTrack({
             to={route}
             state={{
               backTo: parentRoute,
+              mediaFileId: audioTrack?.mediaFileId ?? undefined,
               navigationOrigin,
             }}
             className={`tv-home-card${
@@ -1465,14 +1538,29 @@ function PlaylistMediaTrack({
             onMouseEnter={() => onSelect(track.playlist.id, item.id)}
             {...mediaContext.itemProps({
               work,
+              workId: work.id,
+              title: audioTrack?.title ?? work.title,
               detailRoute: route,
               parentRoute,
               progress,
+              preferredMediaFileId: audioTrack?.mediaFileId,
+              playlistTrackId: audioTrack?.id,
+              leaves:
+                audioTrack?.mediaFileId
+                  ? [
+                      {
+                        mediaFileId: audioTrack.mediaFileId,
+                        runtimeMs: audioTrack.runtimeMs,
+                        title: audioTrack.title,
+                        seriesTitle: work.title,
+                      },
+                    ]
+                  : undefined,
               playlistMembership: {
                 playlistId: track.playlist.id,
                 itemId: item.id,
                 onChanged: (change) =>
-                  onPlaylistItemChanged(change, work),
+                  onPlaylistItemChanged(change, item),
               },
             })}
           >
@@ -1489,9 +1577,11 @@ function PlaylistMediaTrack({
                 showUnwatched={progressReady}
               />
             </span>
-            <strong>{work.title}</strong>
+            <strong>{audioTrack?.title ?? work.title}</strong>
             <small>
-              {work.kind === "site"
+              {audioTrack
+                ? `${work.title} · ${audioTrack.albumTitle}`
+                : work.kind === "site"
                 ? t("pages.playlists.workKind.site")
                 : work.kind === "series"
                   ? t("pages.playlists.workKind.series")

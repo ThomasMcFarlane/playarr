@@ -1,4 +1,4 @@
-//! [`Playlist`] -- a named, ordered list of catalog works, owned either by
+//! [`Playlist`] -- a named, ordered list of video works or audio tracks, owned either by
 //! one user (a personal playlist) or by nobody (a "System" playlist,
 //! admin-managed and visible to every user, the same ownership shape
 //! `crate::LibraryView` uses for its own global/admin-managed scope).
@@ -23,7 +23,17 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// A named, ordered collection of works -- see the module doc comment.
+/// The single class of media a playlist accepts.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub enum PlaylistMediaType {
+    #[default]
+    Video,
+    Audio,
+}
+
+/// A named, ordered collection of one media type -- see the module doc comment.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Playlist {
@@ -44,6 +54,8 @@ pub struct Playlist {
     /// structurally, matching how `ViewCriteria`'s own invariants are
     /// caller-enforced rather than type-enforced.
     pub parent_playlist_id: Option<Uuid>,
+    /// Playlists never mix video works and individual audio tracks.
+    pub media_type: PlaylistMediaType,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -55,6 +67,10 @@ pub struct PlaylistItem {
     pub id: Uuid,
     pub playlist_id: Uuid,
     pub work_id: Uuid,
+    /// Present only for an audio playlist item. `work_id` remains the owning
+    /// artist work so access control and detail resolution use the existing
+    /// aggregate boundary.
+    pub track_id: Option<Uuid>,
     /// Zero-based, dense, unique within a playlist -- the sole ordering
     /// signal; `streamarr_db::repo::playlist::PlaylistRepo::reorder_items`
     /// is the only place these values change after an item's first insert.
