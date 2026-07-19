@@ -14,6 +14,7 @@ enum HomeLayout {
 struct HomeView: View {
     let viewModel: HomeViewModel
     let apiClient: StreamarrAPIClient
+    @State private var railSessionID = UUID()
 
     var body: some View {
         Group {
@@ -54,15 +55,17 @@ struct HomeView: View {
                 )
                     .frame(
                         width: phone ? proxy.size.width : proxy.size.width * 0.62,
-                        height: proxy.size.height
+                        height: proxy.size.height,
+                        alignment: .topLeading
                     )
-                    .offset(x: phone ? 0 : proxy.size.width * 0.38)
+                    .offset(x: phone ? 16 : proxy.size.width * 0.38)
+                    .zIndex(2)
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .clipped()
         }
         .background(PlayarrStyle.surface)
-        .ignoresSafeArea()
+        .ignoresSafeArea(edges: .vertical)
         .navigationBarHidden(true)
     }
 
@@ -132,16 +135,21 @@ struct HomeView: View {
     }
 
     private func rails(phone: Bool, width: CGFloat, height: CGFloat, safeTop: CGFloat) -> some View {
-        ScrollView(.vertical) {
+        let signature = viewModel.rails
+            .flatMap { [$0.id] + $0.works.map { $0.id.uuidString } }
+            .joined(separator: ":")
+        return ScrollView(.vertical) {
             LazyVStack(alignment: .leading, spacing: phone ? 24 : 48) {
                 ForEach(viewModel.rails) { rail in
-                    mediaRail(title: rail.title, works: rail.works, phone: phone, width: width)
+                    mediaRail(rail, phone: phone, width: width)
                 }
             }
+            .frame(width: phone ? width : width * 0.62, alignment: .leading)
             .padding(.top, phone ? max(76, safeTop + 58) : height * 0.5)
             .padding(.bottom, phone ? 112 : height * 0.5)
         }
         .refreshable { await viewModel.load() }
+        .contentMargins(.horizontal, 0, for: .scrollContent)
         .scrollIndicators(.hidden)
         .background {
             if phone {
@@ -158,56 +166,55 @@ struct HomeView: View {
                 )
             }
         }
+        .frame(
+            width: phone ? width : width * 0.62,
+            height: height,
+            alignment: .topLeading
+        )
+        .id("\(railSessionID.uuidString):\(signature)")
     }
 
-    private func mediaRail(title: String, works: [Work], phone: Bool, width: CGFloat) -> some View {
+    private func mediaRail(_ rail: HomeViewModel.Rail, phone: Bool, width: CGFloat) -> some View {
         let mediaCardWidth = cardWidth(phone: phone, viewport: width)
-        return railSection(title: title, count: works.count, phone: phone, cardWidth: mediaCardWidth) {
-            ForEach(works) { work in
-                workLink(work) {
-                    PlayarrMediaCard(
-                        work: work,
-                        apiClient: apiClient,
-                        progress: viewModel.progressByWorkID[work.id],
-                        width: mediaCardWidth
-                    )
-                }
-            }
-        }
-    }
-
-    private func railSection<Content: View>(
-        title: String,
-        count: Int,
-        phone: Bool,
-        cardWidth: CGFloat,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: phone ? 8 : 12) {
+        let railWidth = phone ? width : width * 0.62
+        return VStack(alignment: .leading, spacing: phone ? 8 : 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(title)
+                Text(rail.title)
                     .font(.custom("Avenir Next", fixedSize: phone ? 16 : 14).weight(.semibold))
                     .tracking(-0.4)
                     .foregroundStyle(PlayarrStyle.ink)
-                Text("\(count) titles")
+                Text("\(rail.works.count) titles")
                     .font(.custom("Avenir Next", fixedSize: phone ? 10.5 : 8.5).weight(.semibold))
                     .foregroundStyle(PlayarrStyle.muted)
             }
             .padding(.horizontal, phone ? 16 : 24)
 
-            ScrollView(.horizontal) {
-                LazyHStack(alignment: .top, spacing: phone ? 12 : 18, content: content)
+            GeometryReader { proxy in
+                ScrollView(.horizontal) {
+                    LazyHStack(alignment: .top, spacing: phone ? 12 : 18) {
+                        ForEach(rail.works) { work in
+                            workLink(work) {
+                                PlayarrMediaCard(
+                                    work: work,
+                                    apiClient: apiClient,
+                                    progress: viewModel.progressByWorkID[work.id],
+                                    width: mediaCardWidth
+                                )
+                            }
+                        }
+                    }
+                    .padding(.horizontal, phone ? 16 : 24)
                     .padding(.vertical, 8)
+                }
+                .contentMargins(.horizontal, 0, for: .scrollContent)
+                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .leading)
+                .scrollIndicators(.hidden)
+                .id("\(railSessionID.uuidString):\(rail.id):\(rail.works.map { $0.id.uuidString }.joined(separator: ":"))")
             }
-            .contentMargins(
-                .horizontal,
-                phone ? 16 : 24,
-                for: .scrollContent
-            )
-            .defaultScrollAnchor(.leading)
-            .frame(height: HomeLayout.carouselHeight(cardWidth: cardWidth, phone: phone))
-            .scrollIndicators(.hidden)
+            .frame(width: railWidth, height: HomeLayout.carouselHeight(cardWidth: mediaCardWidth, phone: phone))
         }
+        .frame(width: railWidth, alignment: .leading)
+        .id(rail.id)
     }
 
     private func cardWidth(phone: Bool, viewport: CGFloat) -> CGFloat {
