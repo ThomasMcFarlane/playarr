@@ -3,14 +3,15 @@ import StreamarrKit
 import SwiftUI
 
 struct PlayerView: View {
-    let viewModel: PlayerViewModel
+    let apiClient: StreamarrAPIClient
     let mediaFileID: UUID?
     let title: String
 
+    @State private var viewModel: PlayerViewModel?
     @State private var controlsVisible = true
 
-    init(viewModel: PlayerViewModel, initialMediaFileID: String = "", initialTitle: String = "") {
-        self.viewModel = viewModel
+    init(apiClient: StreamarrAPIClient, initialMediaFileID: String = "", initialTitle: String = "") {
+        self.apiClient = apiClient
         self.mediaFileID = UUID(uuidString: initialMediaFileID)
         self.title = initialTitle
     }
@@ -19,8 +20,8 @@ struct PlayerView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            switch viewModel.loadState {
-            case .idle, .loadingPlaybackInfo:
+            switch viewModel?.loadState {
+            case nil, .idle, .loadingPlaybackInfo:
                 VStack(spacing: 14) {
                     ProgressView().tint(.white).controlSize(.large)
                     Text("Preparing playback…")
@@ -45,13 +46,15 @@ struct PlayerView: View {
                 .foregroundStyle(.white)
                 .padding(30)
             case .playing:
-                VideoPlayer(player: viewModel.avPlayer)
+                if let viewModel {
+                    VideoPlayer(player: viewModel.avPlayer)
                     .ignoresSafeArea()
                     .onTapGesture { withAnimation { controlsVisible.toggle() } }
 
-                if controlsVisible {
-                    controls
-                        .transition(.opacity)
+                    if controlsVisible {
+                        controls(viewModel)
+                            .transition(.opacity)
+                    }
                 }
             }
         }
@@ -61,12 +64,15 @@ struct PlayerView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .playarrChromeHidden()
         .task {
-            if case .idle = viewModel.loadState { startPlayback() }
+            if viewModel == nil {
+                viewModel = PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient)
+            }
+            if case .idle = viewModel?.loadState { startPlayback() }
         }
-        .onDisappear { viewModel.stop() }
+        .onDisappear { viewModel?.stop() }
     }
 
-    private var controls: some View {
+    private func controls(_ viewModel: PlayerViewModel) -> some View {
         VStack {
             Spacer()
             VStack(spacing: 12) {
@@ -192,7 +198,7 @@ struct PlayerView: View {
     }
 
     private func startPlayback() {
-        guard let mediaFileID else { return }
+        guard let mediaFileID, let viewModel else { return }
         Task { await viewModel.play(mediaFileID: mediaFileID, title: title) }
     }
 

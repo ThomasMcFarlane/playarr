@@ -201,6 +201,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Fix native iOS Home, navigation, avatar, media-track, playlist, and playback parity: use the
+  mobile Web composition on landscape phones, progressively load playable Home rails, cache
+  authenticated artwork, preserve AVPlayer ownership, and render series, music, and playlist
+  tracks with Playarr's responsive media surfaces.
 - Keep native iOS title and player actions fully visible by using immersive detail and playback
   surfaces instead of allowing the responsive app navigation to cover their controls.
 - Start every native iOS Home carousel at its leading content gutter instead of restoring a

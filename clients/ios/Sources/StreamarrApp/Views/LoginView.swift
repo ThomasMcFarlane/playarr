@@ -26,7 +26,7 @@ struct LoginView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let phone = proxy.size.width <= 760
+            let phone = PlayarrLayout.isPhone(proxy.size)
             let topPadding = phone
                 ? max(14, proxy.safeAreaInsets.top) + 124
                 : min(188, max(128, proxy.size.height * 0.18))
@@ -360,7 +360,7 @@ private struct SignupView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let phone = proxy.size.width <= 760
+            let phone = PlayarrLayout.isPhone(proxy.size)
             ZStack(alignment: .topLeading) {
                 PlayarrAuthBackground()
 
