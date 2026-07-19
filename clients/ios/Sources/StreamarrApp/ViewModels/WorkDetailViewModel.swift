@@ -48,9 +48,9 @@ public final class WorkDetailViewModel {
             async let fetchedCredits = apiClient.fetchWorkCredits(id: workID)
             async let fetchedSimilar = apiClient.fetchSimilarWorks(id: workID, limit: 20)
             detail = try await fetchedDetail
+            loadState = .loaded
             credits = (try? await fetchedCredits) ?? WorkCredits(cast: [], crew: [])
             similarWorks = (try? await fetchedSimilar) ?? []
-            loadState = .loaded
         } catch let error as APIError {
             loadState = .failed(error.displayMessage)
         } catch {

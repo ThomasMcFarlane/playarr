@@ -79,6 +79,12 @@ final class HomeParityTests: XCTestCase {
         XCTAssertEqual(HomeLayout.backdropHeight(viewportHeight: 800, phone: false), 800, accuracy: 0.001)
     }
 
+    func testLandscapePhoneUsesMobileWebLayout() {
+        XCTAssertTrue(PlayarrLayout.isPhone(CGSize(width: 852, height: 393)))
+        XCTAssertTrue(PlayarrLayout.isPhone(CGSize(width: 393, height: 852)))
+        XCTAssertFalse(PlayarrLayout.isPhone(CGSize(width: 1_024, height: 768)))
+    }
+
     private func makeWork(title: String, kind: WorkKind, addedAt: TimeInterval) -> Work {
         Work(
             id: UUID(),

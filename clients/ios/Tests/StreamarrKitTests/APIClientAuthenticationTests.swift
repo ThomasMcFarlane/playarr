@@ -206,6 +206,38 @@ final class APIClientAuthenticationTests: XCTestCase {
         XCTAssertEqual(String(decoding: data, as: UTF8.self), "album-art")
     }
 
+    func testProfileAvatarUpdateUsesAuthenticatedWebContract() async throws {
+        let store = TestTokenStore(
+            session: StoredAuthSession(
+                accessToken: "access",
+                refreshToken: "refresh",
+                tokenType: "Bearer",
+                expiresAt: .distantFuture
+            )
+        )
+        URLProtocolStub.handler = { request in
+            XCTAssertEqual(request.url?.path, "/api/v1/users/me/profile-avatar")
+            XCTAssertEqual(request.httpMethod, "PUT")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access")
+            let body = String(decoding: Self.bodyData(for: request), as: UTF8.self)
+            XCTAssertTrue(body.contains(#""kind":"preset""#))
+            XCTAssertTrue(body.contains(#""value":"robot""#))
+            return Self.response(
+                request,
+                json: #"{"preference":{"kind":"preset","value":"robot"}}"#
+            )
+        }
+
+        let saved = try await makeClient(store: store).updateProfileAvatar(
+            UpdateProfileAvatarRequest(
+                preference: ProfileAvatarPreference(kind: .preset, value: "robot")
+            )
+        )
+
+        XCTAssertEqual(saved.preference?.kind, .preset)
+        XCTAssertEqual(saved.preference?.value, "robot")
+    }
+
     private func makeClient(store: TestTokenStore) -> APIClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [URLProtocolStub.self]

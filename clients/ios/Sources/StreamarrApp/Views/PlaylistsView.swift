@@ -8,6 +8,8 @@ private final class PlaylistsViewModel {
     enum State { case idle, loading, loaded, failed(String) }
     var state: State = .idle
     var playlists: [Playlist] = []
+    var coverWorksByPlaylist: [UUID: [Work]] = [:]
+    var itemCountByPlaylist: [UUID: Int] = [:]
     let apiClient: StreamarrAPIClient
 
     init(apiClient: StreamarrAPIClient) { self.apiClient = apiClient }
@@ -15,9 +17,11 @@ private final class PlaylistsViewModel {
     func load() async {
         state = .loading
         do {
-            playlists = try await apiClient.listPlaylists()
+            let loaded = try await apiClient.listPlaylists()
                 .sorted { $0.updatedAt > $1.updatedAt }
+            playlists = loaded
             state = .loaded
+            await loadDirectorySummaries(for: loaded)
         } catch let error as APIError {
             state = .failed(error.displayMessage)
         } catch {
@@ -43,6 +47,40 @@ private final class PlaylistsViewModel {
     func delete(_ playlist: Playlist) async throws {
         try await apiClient.deletePlaylist(id: playlist.id)
         playlists.removeAll { $0.id == playlist.id || $0.parentPlaylistID == playlist.id }
+    }
+
+    func childCount(for playlist: Playlist) -> Int {
+        playlists.count { $0.parentPlaylistID == playlist.id }
+    }
+
+    private func loadDirectorySummaries(for playlists: [Playlist]) async {
+        let itemGroups = await withTaskGroup(of: (UUID, [PlaylistItem]).self, returning: [UUID: [PlaylistItem]].self) { group in
+            for playlist in playlists {
+                group.addTask {
+                    (playlist.id, (try? await self.apiClient.listPlaylistItems(playlistID: playlist.id)) ?? [])
+                }
+            }
+            var result: [UUID: [PlaylistItem]] = [:]
+            for await (playlistID, items) in group { result[playlistID] = items }
+            return result
+        }
+        itemCountByPlaylist = itemGroups.mapValues(\.count)
+
+        let workIDs = Set(itemGroups.values.flatMap { $0.prefix(3).map(\.workID) })
+        let works = await withTaskGroup(of: (UUID, Work?).self, returning: [UUID: Work].self) { group in
+            for workID in workIDs {
+                group.addTask { (workID, try? await self.apiClient.fetchWork(id: workID).work) }
+            }
+            var result: [UUID: Work] = [:]
+            for await (workID, work) in group {
+                if let work { result[workID] = work }
+            }
+            return result
+        }
+
+        coverWorksByPlaylist = itemGroups.mapValues { items in
+            items.prefix(3).compactMap { works[$0.workID] }
+        }
     }
 }
 
@@ -108,7 +146,7 @@ struct PlaylistsView: View {
 
     private var playlistList: some View {
         GeometryReader { proxy in
-            let phone = proxy.size.width <= 760
+            let phone = PlayarrLayout.isPhone(proxy.size)
             let columns = phone ? 2 : 3
             let contentWidth = phone ? proxy.size.width : proxy.size.width * 0.65
             let leading: CGFloat = phone ? 16 : max(28, proxy.size.width * 0.028)
@@ -291,27 +329,33 @@ struct PlaylistsView: View {
     private func playlistCard(_ playlist: Playlist, width: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack {
-                ForEach(0..<3, id: \.self) { index in
+                let coverWorks = viewModel.coverWorksByPlaylist[playlist.id] ?? []
+                if coverWorks.isEmpty {
                     RoundedRectangle(cornerRadius: min(13, max(8, width * 0.058)), style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    PlayarrStyle.pink.opacity(0.18 + Double(index) * 0.07),
-                                    PlayarrStyle.surfaceStrong,
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(LinearGradient(colors: [PlayarrStyle.pink.opacity(0.24), PlayarrStyle.surfaceStrong], startPoint: .topLeading, endPoint: .bottomTrailing))
                         .overlay {
                             RoundedRectangle(cornerRadius: min(13, max(8, width * 0.058)))
                                 .stroke(PlayarrStyle.lineStrong, lineWidth: 1)
                         }
-                        .offset(x: CGFloat(index - 1) * width * 0.055, y: CGFloat(abs(index - 1)) * 5)
+                    Text(playlist.name)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(PlayarrStyle.muted)
+                        .lineLimit(2)
+                        .padding(16)
+                } else {
+                    ForEach(Array(coverWorks.enumerated()), id: \.element.id) { index, work in
+                        PlayarrArtwork(work: work, kind: .poster, apiClient: viewModel.apiClient)
+                            .frame(width: width * 0.86, height: width * 0.61)
+                            .clipShape(RoundedRectangle(cornerRadius: min(13, max(8, width * 0.058)), style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: min(13, max(8, width * 0.058)))
+                                    .stroke(PlayarrStyle.lineStrong, lineWidth: 1)
+                            }
+                            .rotationEffect(.degrees((Double(index) - Double(coverWorks.count - 1) / 2) * -1.5))
+                            .offset(x: CGFloat(index) * width * 0.022, y: CGFloat(index) * 4)
+                            .zIndex(Double(coverWorks.count - index))
+                    }
                 }
-                Image(systemName: playlist.mediaType == .audio ? "music.note" : "play.rectangle")
-                    .font(.system(size: width * 0.16, weight: .ultraLight))
-                    .foregroundStyle(PlayarrStyle.pink)
             }
             .frame(width: width, height: width * 0.625)
 
@@ -319,19 +363,36 @@ struct PlaylistsView: View {
                 .font(.custom("Avenir Next", fixedSize: width <= 210 ? 12.5 : 11).weight(.semibold))
                 .foregroundStyle(PlayarrStyle.ink)
                 .lineLimit(1)
-            Text(playlist.isSystem ? "System playlist" : "Personal playlist")
+            Text(playlistMetadata(playlist))
                 .font(.custom("Avenir Next", fixedSize: width <= 210 ? 10 : 8.5).weight(.semibold))
                 .foregroundStyle(PlayarrStyle.muted)
+                .lineLimit(2)
         }
         .frame(width: width, alignment: .leading)
+    }
+
+    private func playlistMetadata(_ playlist: Playlist) -> String {
+        let media = playlist.mediaType == .audio ? "Audio" : "Video"
+        let ownership = playlist.isSystem ? "Shared" : "Personal"
+        let items = viewModel.itemCountByPlaylist[playlist.id] ?? 0
+        let children = viewModel.childCount(for: playlist)
+        return "\(media) · \(ownership) · \(items) \(items == 1 ? "item" : "items")" +
+            (children > 0 ? " · \(children) \(children == 1 ? "folder" : "folders")" : "")
     }
 }
 
 struct PlaylistDetailView: View {
+    private struct ResolvedItem: Sendable {
+        let work: Work
+        let title: String
+        let subtitle: String
+    }
+
     let playlist: Playlist
     let apiClient: StreamarrAPIClient
+    @Environment(\.dismiss) private var dismiss
     @State private var items: [PlaylistItem] = []
-    @State private var worksByID: [UUID: Work] = [:]
+    @State private var resolvedByItemID: [UUID: ResolvedItem] = [:]
     @State private var errorMessage: String?
     @State private var loading = true
 
@@ -342,53 +403,182 @@ struct PlaylistDetailView: View {
             } else if let errorMessage {
                 PlayarrFailureView(title: "Couldn’t load playlist", message: errorMessage) { load() }
             } else {
-                List {
-                    if items.isEmpty {
-                        ContentUnavailableView(
-                            "Playlist is empty",
-                            systemImage: "music.note.list",
-                            description: Text("Add a title from its detail page.")
-                        )
-                        .listRowBackground(Color.clear)
-                    }
-                    ForEach(items) { item in
-                        if let work = worksByID[item.workID] {
-                            NavigationLink {
-                                WorkDetailView(
-                                    viewModel: WorkDetailViewModel(apiClient: apiClient, workID: work.id),
-                                    apiClient: apiClient
-                                )
-                            } label: {
-                                HStack(spacing: 14) {
-                                    PlayarrArtwork(work: work, kind: .backdrop, apiClient: apiClient)
-                                        .frame(width: 120, height: 74)
-                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(work.title).font(.headline).lineLimit(2)
-                                        Text(work.kind.displayName)
-                                            .font(.caption2.bold())
-                                            .foregroundStyle(PlayarrStyle.muted)
-                                    }
-                                    Spacer()
-                                }
-                                .foregroundStyle(PlayarrStyle.ink)
-                                .padding(.vertical, 5)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .onDelete { offsets in remove(at: offsets) }
-                    .onMove { source, destination in move(from: source, to: destination) }
-                }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .background(PlayarrStyle.background)
+                playlistStage
             }
         }
-        .navigationTitle(playlist.name)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar { if !playlist.isSystem { EditButton() } }
+        .navigationBarHidden(true)
         .task { await loadItems() }
+    }
+
+    private var playlistStage: some View {
+        GeometryReader { proxy in
+            let phone = PlayarrLayout.isPhone(proxy.size)
+            let firstWork = items.compactMap { resolvedByItemID[$0.id]?.work }.first
+            ZStack(alignment: .topLeading) {
+                PlayarrStyle.surface
+                if let firstWork {
+                    PlayarrArtwork(work: firstWork, kind: .backdrop, apiClient: apiClient)
+                        .frame(width: proxy.size.width, height: phone ? proxy.size.height * 0.46 : proxy.size.height)
+                        .opacity(phone ? 0.34 : 0.68)
+                        .overlay {
+                            LinearGradient(
+                                colors: phone
+                                    ? [.clear, PlayarrStyle.surface]
+                                    : [PlayarrStyle.surface.opacity(0.44), .clear, PlayarrStyle.surface.opacity(0.18)],
+                                startPoint: phone ? .top : .leading,
+                                endPoint: phone ? .bottom : .trailing
+                            )
+                        }
+                }
+
+                if !phone {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text(playlist.mediaType == .audio ? "AUDIO · \(playlist.isSystem ? "SHARED" : "PERSONAL")" : "VIDEO · \(playlist.isSystem ? "SHARED" : "PERSONAL")")
+                            .font(.custom("Avenir Next", fixedSize: 10).weight(.heavy))
+                            .tracking(1.1)
+                            .foregroundStyle(PlayarrStyle.pink)
+                        Text(playlist.name)
+                            .font(.custom("Avenir Next", fixedSize: 52).weight(.medium))
+                            .tracking(-3.7)
+                            .lineLimit(3)
+                            .foregroundStyle(PlayarrStyle.ink)
+                        Text("\(items.count) \(items.count == 1 ? "item" : "items")")
+                            .font(.custom("Avenir Next", fixedSize: 11).weight(.semibold))
+                            .foregroundStyle(PlayarrStyle.muted)
+                    }
+                    .frame(width: proxy.size.width * 0.25, alignment: .leading)
+                    .padding(.leading, max(102, proxy.size.width * 0.08))
+                    .padding(.top, proxy.size.height * 0.27)
+                }
+
+                playlistTrack(phone: phone, proxy: proxy)
+
+                HStack(spacing: 14) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "arrow.left")
+                            .frame(width: 44, height: 44)
+                            .background(PlayarrStyle.surfaceStrong.opacity(0.76), in: Circle())
+                            .overlay { Circle().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
+                    }
+                    Text(playlist.name)
+                        .font(.custom("Avenir Next", fixedSize: phone ? 22 : 30).weight(.medium))
+                        .tracking(-1)
+                        .lineLimit(1)
+                    Text("\(items.count) ITEMS")
+                        .font(.custom("Avenir Next", fixedSize: 9).weight(.bold))
+                        .foregroundStyle(PlayarrStyle.muted)
+                }
+                .foregroundStyle(PlayarrStyle.ink)
+                .padding(.leading, phone ? 16 : max(102, proxy.size.width * 0.08))
+                .padding(.top, phone ? max(56, proxy.safeAreaInsets.top + 6) : min(66, max(34, proxy.size.height * 0.052)))
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .ignoresSafeArea()
+    }
+
+    private func playlistTrack(phone: Bool, proxy: GeometryProxy) -> some View {
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(playlist.name)
+                        .font(.custom("Avenir Next", fixedSize: phone ? 16 : 14).weight(.semibold))
+                    Spacer()
+                    Text("\(playlist.mediaType.rawValue.capitalized) · \(items.count) items")
+                        .font(.custom("Avenir Next", fixedSize: phone ? 10 : 9).weight(.semibold))
+                        .foregroundStyle(PlayarrStyle.muted)
+                }
+                .foregroundStyle(PlayarrStyle.ink)
+                .padding(.horizontal, phone ? 16 : 24)
+
+                if items.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "music.note.list")
+                            .font(.system(size: 40, weight: .ultraLight))
+                            .foregroundStyle(PlayarrStyle.pink)
+                        Text("Playlist is empty").font(.headline)
+                        Text("Add a title from its detail page.")
+                            .font(.caption).foregroundStyle(PlayarrStyle.muted)
+                    }
+                    .foregroundStyle(PlayarrStyle.ink)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 54)
+                } else {
+                    ScrollView(.horizontal) {
+                        LazyHStack(alignment: .top, spacing: phone ? 12 : 18) {
+                            ForEach(items) { item in
+                                if let resolved = resolvedByItemID[item.id] {
+                                    playlistItemCard(item, resolved: resolved, width: phone ? min(210, proxy.size.width * 0.46) : 190)
+                                } else {
+                                    playlistItemPlaceholder(width: phone ? min(210, proxy.size.width * 0.46) : 190)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 8)
+                    }
+                    .contentMargins(.horizontal, phone ? 16 : 24, for: .scrollContent)
+                    .scrollIndicators(.hidden)
+                }
+            }
+            .padding(.top, phone ? max(122, proxy.size.height * 0.34) : proxy.size.height * 0.5)
+            .padding(.bottom, phone ? 120 : proxy.size.height * 0.5)
+        }
+        .frame(width: phone ? proxy.size.width : proxy.size.width * 0.62, height: proxy.size.height)
+        .offset(x: phone ? 0 : proxy.size.width * 0.38)
+        .background {
+            LinearGradient(
+                colors: phone ? [.clear, PlayarrStyle.surface] : [.clear, PlayarrStyle.surface.opacity(0.92), PlayarrStyle.surface],
+                startPoint: phone ? .top : .leading,
+                endPoint: phone ? .bottom : .trailing
+            )
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private func playlistItemCard(_ item: PlaylistItem, resolved: ResolvedItem, width: CGFloat) -> some View {
+        NavigationLink {
+            WorkDetailView(
+                viewModel: WorkDetailViewModel(apiClient: apiClient, workID: resolved.work.id),
+                apiClient: apiClient
+            )
+        } label: {
+            VStack(alignment: .leading, spacing: 7) {
+                PlayarrArtwork(work: resolved.work, kind: .backdrop, apiClient: apiClient)
+                    .frame(width: width, height: width * 9 / 16)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay { RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
+                Text(resolved.title)
+                    .font(.custom("Avenir Next", fixedSize: 12.5).weight(.semibold))
+                    .foregroundStyle(PlayarrStyle.ink)
+                    .lineLimit(1)
+                Text(resolved.subtitle)
+                    .font(.custom("Avenir Next", fixedSize: 10).weight(.semibold))
+                    .foregroundStyle(PlayarrStyle.muted)
+                    .lineLimit(1)
+            }
+            .frame(width: width, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            if !playlist.isSystem {
+                Button("Move earlier", systemImage: "arrow.left") { move(item, by: -1) }
+                Button("Move later", systemImage: "arrow.right") { move(item, by: 1) }
+                Button("Remove from playlist", systemImage: "minus.circle", role: .destructive) { remove(item) }
+            }
+        }
+    }
+
+    private func playlistItemPlaceholder(width: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(PlayarrStyle.surfaceStrong.opacity(0.72))
+                .frame(width: width, height: width * 9 / 16)
+                .overlay { ProgressView().tint(PlayarrStyle.pink) }
+            RoundedRectangle(cornerRadius: 3).fill(PlayarrStyle.lineStrong).frame(width: width * 0.7, height: 10)
+            RoundedRectangle(cornerRadius: 3).fill(PlayarrStyle.line).frame(width: width * 0.42, height: 8)
+        }
+        .frame(width: width, alignment: .leading)
+        .accessibilityLabel("Loading playlist item")
     }
 
     private func load() { Task { await loadItems() } }
@@ -399,13 +589,26 @@ struct PlaylistDetailView: View {
         do {
             items = try await apiClient.listPlaylistItems(playlistID: playlist.id)
                 .sorted { $0.position < $1.position }
-            var resolved: [UUID: Work] = [:]
-            for item in items {
-                if let detail = try? await apiClient.fetchWork(id: item.workID) {
-                    resolved[item.workID] = detail.work
+            let loadedItems = items
+            resolvedByItemID = [:]
+            loading = false
+            await withTaskGroup(of: (PlaylistItem, WorkDetail?).self) { group in
+                for item in loadedItems {
+                    group.addTask { (item, try? await apiClient.fetchWork(id: item.workID)) }
+                }
+                for await (item, detail) in group {
+                    guard let detail else { continue }
+                    let track = item.trackID.flatMap { trackID -> TrackDetail? in
+                        guard case .artist(let albums) = detail.children else { return nil }
+                        return albums.lazy.flatMap(\.tracks).first { $0.track.id == trackID }
+                    }
+                    resolvedByItemID[item.id] = ResolvedItem(
+                        work: detail.work,
+                        title: track?.track.title ?? detail.work.title,
+                        subtitle: track.map { "\(detail.work.title) · Track \($0.track.trackNumber)" } ?? detail.work.kind.displayName
+                    )
                 }
             }
-            worksByID = resolved
         } catch let error as APIError {
             errorMessage = error.displayMessage
         } catch {
@@ -426,8 +629,21 @@ struct PlaylistDetailView: View {
         }
     }
 
-    private func move(from source: IndexSet, to destination: Int) {
-        items.move(fromOffsets: source, toOffset: destination)
+    private func remove(_ item: PlaylistItem) {
+        guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
+        remove(at: IndexSet(integer: index))
+    }
+
+    private func move(_ item: PlaylistItem, by delta: Int) {
+        guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
+        let target = min(max(0, index + delta), items.count - 1)
+        guard index != target else { return }
+        let moved = items.remove(at: index)
+        items.insert(moved, at: target)
+        persistOrder()
+    }
+
+    private func persistOrder() {
         let order = items.map(\.id)
         Task {
             do { items = try await apiClient.reorderPlaylistItems(playlistID: playlist.id, body: ReorderPlaylistItemsRequest(itemIDs: order)) }

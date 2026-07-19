@@ -35,7 +35,7 @@ struct HomeView: View {
 
     private var loadedContent: some View {
         GeometryReader { proxy in
-            let phone = proxy.size.width <= 760
+            let phone = PlayarrLayout.isPhone(proxy.size)
             ZStack(alignment: .topLeading) {
                 stageBackdrop(phone: phone, height: proxy.size.height)
 

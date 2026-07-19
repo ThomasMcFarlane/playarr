@@ -2,12 +2,17 @@ import StreamarrKit
 import SwiftUI
 
 struct WorkDetailView: View {
-    let viewModel: WorkDetailViewModel
+    @State private var viewModel: WorkDetailViewModel
     let apiClient: StreamarrAPIClient
     @Environment(\.dismiss) private var dismiss
     @State private var playlists: [Playlist] = []
     @State private var playlistMessage: String?
     @State private var selectedAlbumID: UUID?
+
+    init(viewModel: WorkDetailViewModel, apiClient: StreamarrAPIClient) {
+        _viewModel = State(initialValue: viewModel)
+        self.apiClient = apiClient
+    }
 
     var body: some View {
         Group {
@@ -41,7 +46,7 @@ struct WorkDetailView: View {
 
     private func detailContent(_ detail: WorkDetail) -> some View {
         GeometryReader { proxy in
-            let phone = proxy.size.width <= 760
+            let phone = PlayarrLayout.isPhone(proxy.size)
             ZStack(alignment: .topLeading) {
                 if phone {
                     phoneDetail(detail, proxy: proxy)
@@ -244,7 +249,7 @@ struct WorkDetailView: View {
                 HStack(spacing: 12) {
                     NavigationLink {
                         PlayerView(
-                            viewModel: PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient),
+                            apiClient: apiClient,
                             initialMediaFileID: mediaFileID.uuidString,
                             initialTitle: detail.work.title
                         )
@@ -299,20 +304,9 @@ struct WorkDetailView: View {
         case .movie:
             EmptyView()
         case .series(let seasons):
-            VStack(alignment: .leading, spacing: 28) {
+            VStack(alignment: .leading, spacing: 34) {
                 ForEach(seasons, id: \.season.id) { season in
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(season.season.title ?? "Season \(season.season.seasonNumber)")
-                            .font(.custom("Avenir Next", fixedSize: 18).weight(.semibold))
-                            .foregroundStyle(PlayarrStyle.ink)
-                        ForEach(season.episodes) { episode in
-                            playableRow(
-                                title: episode.episode.title ?? "Episode \(episode.episode.episodeNumber)",
-                                subtitle: "Episode \(episode.episode.episodeNumber)",
-                                mediaFileID: episode.mediaFileID
-                            )
-                        }
-                    }
+                    seasonEpisodeTrack(season)
                 }
             }
         case .artist(let albums):
@@ -387,7 +381,7 @@ struct WorkDetailView: View {
                     if let first = selected.tracks.first(where: { $0.mediaFileID != nil }), let mediaFileID = first.mediaFileID {
                         NavigationLink {
                             PlayerView(
-                                viewModel: PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient),
+                                apiClient: apiClient,
                                 initialMediaFileID: mediaFileID.uuidString,
                                 initialTitle: first.track.title
                             )
@@ -397,15 +391,138 @@ struct WorkDetailView: View {
                 }
                 .foregroundStyle(PlayarrStyle.ink)
 
-                ForEach(selected.tracks) { track in
-                    playableRow(
-                        title: track.track.title,
-                        subtitle: "Track \(track.track.trackNumber)",
-                        mediaFileID: track.mediaFileID
-                    )
+                VStack(spacing: 0) {
+                    let playableTracks = selected.tracks.filter { $0.mediaFileID != nil }
+                    ForEach(Array(playableTracks.enumerated()), id: \.element.id) { index, track in
+                        musicTrackRow(track)
+                        if index < playableTracks.count - 1 {
+                            Divider().overlay(PlayarrStyle.line)
+                        }
+                    }
                 }
+                .background(PlayarrStyle.surfaceStrong.opacity(0.48), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(PlayarrStyle.line, lineWidth: 1) }
             }
         }
+    }
+
+    private func seasonEpisodeTrack(_ season: SeasonDetail) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(season.season.title ?? "Season \(season.season.seasonNumber)")
+                    .font(.custom("Avenir Next", fixedSize: 18).weight(.semibold))
+                    .foregroundStyle(PlayarrStyle.ink)
+                Spacer()
+                Text("\(season.episodes.count) episodes")
+                    .font(.custom("Avenir Next", fixedSize: 10).weight(.semibold))
+                    .foregroundStyle(PlayarrStyle.muted)
+            }
+
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .top, spacing: 12) {
+                    ForEach(season.episodes) { episode in
+                        episodeCard(episode, seasonNumber: season.season.seasonNumber)
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+            .scrollIndicators(.hidden)
+        }
+    }
+
+    @ViewBuilder
+    private func episodeCard(_ detail: EpisodeDetail, seasonNumber: Int32) -> some View {
+        let episode = detail.episode
+        let title = episode.title ?? "Episode \(episode.episodeNumber)"
+        let label = "S\(String(format: "%02d", seasonNumber)) · E\(String(format: "%02d", episode.episodeNumber))"
+
+        Group {
+            if let mediaFileID = detail.mediaFileID {
+                NavigationLink {
+                    PlayerView(apiClient: apiClient, initialMediaFileID: mediaFileID.uuidString, initialTitle: title)
+                } label: {
+                    episodeCardLabel(title: title, label: label, playable: true)
+                }
+                .buttonStyle(.plain)
+            } else {
+                episodeCardLabel(title: title, label: label, playable: false)
+            }
+        }
+    }
+
+    private func episodeCardLabel(title: String, label: String, playable: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            ZStack(alignment: .bottomLeading) {
+                if let work = viewModel.detail?.work {
+                    PlayarrArtwork(work: work, kind: .backdrop, apiClient: apiClient)
+                } else {
+                    PlayarrStyle.surfaceStrong
+                }
+                LinearGradient(colors: [.clear, .black.opacity(0.68)], startPoint: .center, endPoint: .bottom)
+                HStack {
+                    Text(label)
+                        .font(.custom("Avenir Next", fixedSize: 10).weight(.heavy))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Image(systemName: playable ? "play.fill" : "clock")
+                        .font(.caption.bold())
+                        .foregroundStyle(.white)
+                        .frame(width: 30, height: 30)
+                        .background(.black.opacity(0.56), in: Circle())
+                }
+                .padding(10)
+            }
+            .frame(width: 210, height: 118)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
+
+            Text(title)
+                .font(.custom("Avenir Next", fixedSize: 12.5).weight(.semibold))
+                .foregroundStyle(PlayarrStyle.ink)
+                .lineLimit(1)
+            Text(playable ? "Episode" : "Not available yet")
+                .font(.custom("Avenir Next", fixedSize: 10).weight(.semibold))
+                .foregroundStyle(PlayarrStyle.muted)
+        }
+        .frame(width: 210, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func musicTrackRow(_ detail: TrackDetail) -> some View {
+        if let mediaFileID = detail.mediaFileID {
+            NavigationLink {
+                PlayerView(apiClient: apiClient, initialMediaFileID: mediaFileID.uuidString, initialTitle: detail.track.title)
+            } label: {
+                HStack(spacing: 14) {
+                    Text(String(format: "%02d", detail.track.trackNumber))
+                        .font(.custom("Avenir Next", fixedSize: 11).weight(.bold))
+                        .monospacedDigit()
+                        .foregroundStyle(PlayarrStyle.muted)
+                        .frame(width: 28)
+                    Text(detail.track.title)
+                        .font(.custom("Avenir Next", fixedSize: 13).weight(.semibold))
+                        .foregroundStyle(PlayarrStyle.ink)
+                        .lineLimit(1)
+                    Spacer()
+                    if let seconds = detail.track.durationSeconds {
+                        Text(Self.duration(seconds))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(PlayarrStyle.muted)
+                    }
+                    Image(systemName: "play.fill")
+                        .font(.caption.bold())
+                        .foregroundStyle(PlayarrStyle.pink)
+                }
+                .padding(.horizontal, 16)
+                .frame(minHeight: 52)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private static func duration(_ seconds: Int32) -> String {
+        String(format: "%d:%02d", seconds / 60, seconds % 60)
     }
 
     @ViewBuilder
@@ -413,7 +530,7 @@ struct WorkDetailView: View {
         if let mediaFileID {
             NavigationLink {
                 PlayerView(
-                    viewModel: PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient),
+                    apiClient: apiClient,
                     initialMediaFileID: mediaFileID.uuidString,
                     initialTitle: title
                 )

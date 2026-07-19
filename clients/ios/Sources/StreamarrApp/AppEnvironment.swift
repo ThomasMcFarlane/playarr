@@ -198,7 +198,11 @@ public final class AppEnvironment {
             sessionState = .signedIn
             return
         }
-        isSignedIn = await tokenStore.currentSession() != nil
+        let storedSession = await tokenStore.currentSession()
+        isSignedIn = storedSession != nil
+        currentUserID = storedSession.flatMap {
+            JWTClaims.subject(ofAccessToken: $0.accessToken.exposeSecret())
+        }
         currentUserName = userDefaults.string(forKey: Self.userNameDefaultsKey(for: serverBaseURL))
         sessionState = isSignedIn ? .signedIn : .signedOut
         if isSignedIn { await refreshCurrentAvatar() }
@@ -214,6 +218,16 @@ public final class AppEnvironment {
 
     public func refreshCurrentAvatar() async {
         currentAvatar = (try? await apiClient.getProfileAvatar())?.preference
+    }
+
+    @discardableResult
+    public func updateCurrentAvatar(_ preference: ProfileAvatarPreference) async throws -> ProfileAvatarPreference {
+        let saved = try await apiClient.updateProfileAvatar(
+            UpdateProfileAvatarRequest(preference: preference)
+        )
+        let resolved = saved.preference ?? preference
+        currentAvatar = resolved
+        return resolved
     }
 
     private func rebuildClients() {

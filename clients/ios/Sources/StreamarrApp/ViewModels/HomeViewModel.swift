@@ -64,8 +64,11 @@ public final class HomeViewModel {
                 seriesRequest,
                 sitesRequest
             )
-            let progress = (try? await progressRequest) ?? []
             recentlyAdded = (movies + series + sites).sorted { $0.addedAt > $1.addedAt }
+            rails = Self.makeRails(movies: movies, series: series, sites: sites, onDeck: [])
+            loadState = .loaded
+
+            let progress = (try? await progressRequest) ?? []
             progressByWorkID = Self.indexLatestProgress(progress)
 
             var workByID = Dictionary(uniqueKeysWithValues: recentlyAdded.map { ($0.id, $0) })
@@ -76,11 +79,18 @@ public final class HomeViewModel {
                 .filter { seenWorkIDs.insert($0.workID).inserted }
                 .prefix(10)
 
-            for item in resumable where workByID[item.workID] == nil {
-                if let detail = try? await apiClient.fetchWork(id: item.workID) {
-                    workByID[item.workID] = detail.work
+            let missingIDs = resumable.map(\.workID).filter { workByID[$0] == nil }
+            let fetched = await withTaskGroup(of: (UUID, Work?).self, returning: [UUID: Work].self) { group in
+                for workID in missingIDs {
+                    group.addTask { (workID, try? await self.apiClient.fetchWork(id: workID).work) }
                 }
+                var result: [UUID: Work] = [:]
+                for await (workID, work) in group {
+                    if let work { result[workID] = work }
+                }
+                return result
             }
+            workByID.merge(fetched) { current, _ in current }
 
             continueWatching = resumable.compactMap { progress in
                 workByID[progress.workID].map { ProgressItem(work: $0, progress: progress) }
@@ -100,11 +110,11 @@ public final class HomeViewModel {
     }
 
     private func browse(kind: WorkKind) async throws -> [Work] {
-        try await apiClient.browseCatalog(
+        try await apiClient.browseLibrary(
             kind: kind,
-            genre: nil,
-            tag: nil,
             sort: "recent",
+            order: "desc",
+            availableOnly: true,
             limit: 36,
             offset: 0
         ).items

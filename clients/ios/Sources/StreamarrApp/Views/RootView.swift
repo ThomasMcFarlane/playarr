@@ -1,6 +1,5 @@
 import StreamarrKit
 import SwiftUI
-import UIKit
 
 private struct PlayarrChromeHiddenKey: PreferenceKey {
     static let defaultValue = false
@@ -106,6 +105,7 @@ private struct AuthenticatedPlayarrShell: View {
     @State private var availableKinds: Set<WorkKind> = []
     @State private var homeViewModel: HomeViewModel
     @State private var chromeHidden = false
+    @State private var routeTransitionTitle: String?
     #if DEBUG
     @State private var demoDetailViewModel: WorkDetailViewModel
     #endif
@@ -136,6 +136,11 @@ private struct AuthenticatedPlayarrShell: View {
         ZStack {
             selectedContent
             if !chromeHidden { chrome }
+            if let routeTransitionTitle {
+                PlayarrLoadingView(title: "Opening \(routeTransitionTitle.lowercased())…")
+                    .transition(.opacity)
+                    .zIndex(20)
+            }
         }
         .background(PlayarrStyle.background.ignoresSafeArea())
         .task {
@@ -167,8 +172,8 @@ private struct AuthenticatedPlayarrShell: View {
             NavigationStack {
                 ProfilesView(
                     environment: environment,
-                    onOpenSettings: { selected = .settings },
-                    onHome: { selected = .home }
+                    onOpenSettings: { select(.settings) },
+                    onHome: { select(.home) }
                 )
             }
         case .settings:
@@ -191,7 +196,7 @@ private struct AuthenticatedPlayarrShell: View {
         GeometryReader { proxy in
             if selected == .profiles {
                 EmptyView()
-            } else if proxy.size.width <= 760 {
+            } else if PlayarrLayout.isPhone(proxy.size) {
                 phoneChrome(proxy: proxy)
             } else {
                 stageChrome(proxy: proxy)
@@ -211,7 +216,7 @@ private struct AuthenticatedPlayarrShell: View {
                 ScrollView(.horizontal) {
                     HStack(spacing: 2) {
                         ForEach(destinations, id: \.self) { destination in
-                            Button { selected = destination } label: {
+                            Button { select(destination) } label: {
                                 Image(systemName: destination.icon)
                                     .font(.system(size: 21, weight: .medium))
                                     .foregroundStyle(
@@ -278,7 +283,7 @@ private struct AuthenticatedPlayarrShell: View {
     private func navGroup(_ group: [Destination]) -> some View {
         VStack(spacing: 10) {
             ForEach(group, id: \.self) { destination in
-                Button { selected = destination } label: {
+                Button { select(destination) } label: {
                     VStack(spacing: 5) {
                         Image(systemName: destination.icon)
                             .font(.system(size: 20, weight: .medium))
@@ -312,7 +317,7 @@ private struct AuthenticatedPlayarrShell: View {
     }
 
     private func profileButton(size: CGFloat, avatarSize: CGFloat) -> some View {
-        Button { selected = .profiles } label: {
+        Button { select(.profiles) } label: {
             ZStack {
                 currentAvatar(size: avatarSize)
             }
@@ -327,38 +332,22 @@ private struct AuthenticatedPlayarrShell: View {
 
     @ViewBuilder
     private func currentAvatar(size: CGFloat) -> some View {
-        if let avatar = environment.currentAvatar,
-           avatar.kind == .custom,
-           let comma = avatar.value.firstIndex(of: ","),
-           let data = Data(base64Encoded: String(avatar.value[avatar.value.index(after: comma)...])),
-           let image = UIImage(data: data) {
-            Image(uiImage: image).resizable().scaledToFill().frame(width: size, height: size).clipShape(Circle())
-        } else {
-            Circle().fill(
-                LinearGradient(
-                    colors: [Color(red: 0.847, green: 0.31, blue: 0.439), Color(red: 0.659, green: 0.149, blue: 0.333)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            if let preset = environment.currentAvatar?.value {
-                Image(systemName: presetAvatarSymbol(preset))
-                    .font(.system(size: size * 0.42, weight: .light)).foregroundStyle(.white)
-            } else {
-                Text(String((environment.currentUserName ?? "P").prefix(1)).uppercased())
-                    .font(.custom("Avenir Next", fixedSize: size * 0.42).weight(.bold)).foregroundStyle(.white)
-            }
-        }
+        PlayarrProfileAvatar(
+            preference: environment.currentAvatar,
+            userID: environment.currentUserID,
+            userName: environment.currentUserName,
+            size: size
+        )
     }
 
-    private func presetAvatarSymbol(_ value: String) -> String {
-        switch value {
-        case "astronaut": "moon.stars"
-        case "cat": "cat"
-        case "dinosaur": "fossil.shell"
-        case "robot": "cpu"
-        case "pirate": "sailboat"
-        default: "sparkles"
+    private func select(_ destination: Destination) {
+        guard destination != selected else { return }
+        routeTransitionTitle = destination.title
+        selected = destination
+        Task {
+            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(180))
+            withAnimation(.easeOut(duration: 0.14)) { routeTransitionTitle = nil }
         }
     }
 

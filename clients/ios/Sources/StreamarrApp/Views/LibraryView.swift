@@ -46,7 +46,7 @@ struct LibraryView: View {
 
     private func stage<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some View {
         GeometryReader { proxy in
-            let phone = proxy.size.width <= 760
+            let phone = PlayarrLayout.isPhone(proxy.size)
             ZStack(alignment: .topLeading) {
                 if !phone, let preview = viewModel.works.first {
                     PlayarrArtwork(work: preview, kind: .backdrop, apiClient: apiClient)
@@ -78,7 +78,7 @@ struct LibraryView: View {
 
     private var libraryContent: some View {
         GeometryReader { proxy in
-            let phone = proxy.size.width <= 760
+            let phone = PlayarrLayout.isPhone(proxy.size)
             let panelWidth = phone ? proxy.size.width : proxy.size.width * 0.65
             let columnCount = viewModel.viewMode == .list ? 1 : (viewModel.viewMode == .cover ? (phone ? 3 : 5) : (phone ? 2 : 3))
             let gutter: CGFloat = phone ? 16 : max(28, proxy.size.width * 0.028)

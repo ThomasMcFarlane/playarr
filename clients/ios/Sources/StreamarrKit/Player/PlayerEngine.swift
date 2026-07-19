@@ -284,7 +284,12 @@ public final class AVPlayerEngine: NSObject, PlayerEngine {
             Task { @MainActor in
                 switch playerItem.status {
                 case .readyToPlay:
-                    self.updateState(.readyToPlay)
+                    // Item readiness may arrive after `play()` has already
+                    // advanced the state. Do not turn an actively playing
+                    // player back into a stopped-looking ready state.
+                    if self.state == .loading {
+                        self.updateState(.readyToPlay)
+                    }
                 case .failed:
                     let message = playerItem.error?.localizedDescription ?? "Unknown playback error"
                     self.updateState(.failed(message))

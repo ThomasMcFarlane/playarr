@@ -78,7 +78,7 @@ struct SettingsView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let phone = proxy.size.width <= 760
+            let phone = PlayarrLayout.isPhone(proxy.size)
             ZStack {
                 settingsBackground
                 if phone { phoneLayout(safeTop: proxy.safeAreaInsets.top) }
@@ -356,17 +356,12 @@ struct SettingsView: View {
     }
 
     @ViewBuilder private func avatarView(size: CGFloat) -> some View {
-        if avatar?.kind == .custom, let value = avatar?.value,
-           let comma = value.firstIndex(of: ","), let data = Data(base64Encoded: String(value[value.index(after: comma)...])),
-           let image = UIImage(data: data) {
-            Image(uiImage: image).resizable().scaledToFill().frame(width: size, height: size).clipShape(Circle())
-        } else {
-            let preset = Self.avatarPresets.first(where: { $0.id == avatar?.value }) ?? Self.avatarPresets[0]
-            ZStack {
-                Circle().fill(LinearGradient(colors: preset.colours, startPoint: .topLeading, endPoint: .bottomTrailing))
-                Image(systemName: preset.symbol).font(.system(size: size * 0.38, weight: .light)).foregroundStyle(.white)
-            }.frame(width: size, height: size)
-        }
+        PlayarrProfileAvatar(
+            preference: avatar ?? environment.currentAvatar,
+            userID: environment.currentUserID,
+            userName: environment.currentUserName,
+            size: size
+        )
     }
 
     private func loadRemoteSettings() async {
@@ -374,7 +369,7 @@ struct SettingsView: View {
         async let remotePin = try? environment.apiClient.getProfilePinSetting()
         async let remotePlayer = try? environment.apiClient.getPlayerPreferences()
         async let remoteInvite = try? environment.apiClient.getMyUserInviteRequest()
-        avatar = await remoteAvatar?.preference
+        avatar = await remoteAvatar?.preference ?? environment.currentAvatar
         pinLocked = await remotePin?.pinLocked ?? false
         if let preferred = await remotePlayer?.preferredAudioLanguage { audioLanguage = preferred }
         inviteRequest = await remoteInvite ?? nil
@@ -387,12 +382,15 @@ struct SettingsView: View {
     private func persistAvatar(_ preference: ProfileAvatarPreference) async {
         busy = true
         defer { busy = false }
+        let previous = avatar
+        avatar = preference
         do {
-            let saved = try await environment.apiClient.updateProfileAvatar(UpdateProfileAvatarRequest(preference: preference))
-            avatar = saved.preference
+            avatar = try await environment.updateCurrentAvatar(preference)
             statusMessage = "Avatar saved"
-            await environment.refreshCurrentAvatar()
-        } catch { show(error) }
+        } catch {
+            avatar = previous
+            show(error)
+        }
     }
 
     private func saveCustomAvatar(from item: PhotosPickerItem) async {
