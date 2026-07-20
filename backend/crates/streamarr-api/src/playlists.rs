@@ -34,17 +34,29 @@
 //!   rendered read-only there even though the backend would technically
 //!   allow an admin write.
 //!
-//! [`list_playlist_items_handler`] additionally filters out items whose
-//! `work_id` falls outside the caller's per-user library access control
-//! ceiling ([`CatalogViewer::allowed_libraries`], via
-//! `streamarr_catalog::CatalogService::is_work_visible`) -- a playlist
-//! itself (its name, its existence) is an owner/System-visibility concern
-//! handled entirely by [`can_read`]/[`can_write`] above, but the *content*
-//! of an item on it is subject to the same `Policy::library_allow`
-//! enforcement as every other catalog read path. Adding/removing/
-//! reordering items is deliberately left unrestricted by library --
-//! authoring a playlist's structure stays an owner/admin action, not a
-//! viewing one (already-approved scope decision, not expanded here).
+//! [`list_playlist_items_handler`] and [`reorder_playlist_items_handler`]
+//! additionally filter out items whose `work_id` falls outside the caller's
+//! per-user library access control ceiling
+//! ([`CatalogViewer::allowed_libraries`], via
+//! `streamarr_catalog::CatalogService::is_work_visible`) before returning
+//! them -- a playlist itself (its name, its existence) is an owner/
+//! System-visibility concern handled entirely by [`can_read`]/[`can_write`]
+//! above, but the *content* of an item on it is subject to the same
+//! `Policy::library_allow` enforcement as every other catalog read path,
+//! on every response that echoes items back, not just the initial `GET`.
+//! [`add_playlist_item_handler`] additionally resolves the work being added
+//! via [`CatalogViewer::allowed_libraries`] (same
+//! `streamarr_catalog::CatalogService::get_by_id` call every other
+//! work-detail read path uses) rather than an unrestricted lookup, so a
+//! restricted caller can neither probe for a work's existence outside their
+//! own libraries nor persist a `PlaylistItem` row pointing at one --
+//! owning the playlist grants write access to its structure, not a bypass
+//! of the caller's library grants. Removing/reordering items already on a
+//! playlist perform no such re-check (they operate on ids already agreed to
+//! be part of the playlist; visibility is re-applied on every read via
+//! [`list_playlist_items_handler`]/[`reorder_playlist_items_handler`]
+//! above, so a since-revoked grant still hides the item without needing a
+//! check on the mutation itself).
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -208,7 +220,28 @@ pub struct ReorderPlaylistItemsRequest {
     path = "/api/v1/playlists",
     tag = "playlists",
     responses(
-        (status = 200, description = "Every playlist visible to the caller", body = Vec<PlaylistResponse>),
+        (status = 200, description = "Every playlist visible to the caller", body = Vec<PlaylistResponse>, example = json!([
+            {
+                "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                "name": "Sample Cinematic Universe",
+                "is_system": false,
+                "owner_user_id": "9d3b3f8a-6b34-4b1e-8a4a-2e6f6b1a9c11",
+                "parent_playlist_id": null,
+                "media_type": "video",
+                "created_at": "2026-01-15T10:30:00Z",
+                "updated_at": "2026-01-16T08:45:00Z"
+            },
+            {
+                "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+                "name": "Staff Picks",
+                "is_system": true,
+                "owner_user_id": null,
+                "parent_playlist_id": null,
+                "media_type": "video",
+                "created_at": "2026-01-10T09:00:00Z",
+                "updated_at": "2026-01-10T09:00:00Z"
+            }
+        ])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller has neither Playarr streaming access nor admin access")
     )
@@ -232,7 +265,28 @@ pub async fn list_playlists_handler(
     path = "/api/v1/admin/playlists",
     tag = "playlists",
     responses(
-        (status = 200, description = "Every playlist, System and personal", body = Vec<PlaylistResponse>),
+        (status = 200, description = "Every playlist, System and personal", body = Vec<PlaylistResponse>, example = json!([
+            {
+                "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+                "name": "Staff Picks",
+                "is_system": true,
+                "owner_user_id": null,
+                "parent_playlist_id": null,
+                "media_type": "video",
+                "created_at": "2026-01-10T09:00:00Z",
+                "updated_at": "2026-01-10T09:00:00Z"
+            },
+            {
+                "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                "name": "Sample Cinematic Universe",
+                "is_system": false,
+                "owner_user_id": "9d3b3f8a-6b34-4b1e-8a4a-2e6f6b1a9c11",
+                "parent_playlist_id": null,
+                "media_type": "video",
+                "created_at": "2026-01-15T10:30:00Z",
+                "updated_at": "2026-01-16T08:45:00Z"
+            }
+        ])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin")
     )
@@ -257,9 +311,23 @@ pub async fn list_admin_playlists_handler(
     post,
     path = "/api/v1/playlists",
     tag = "playlists",
-    request_body = CreatePlaylistRequest,
+    request_body(content = CreatePlaylistRequest, example = json!({
+        "name": "Sample Movie Golf",
+        "parent_playlist_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "is_system": false,
+        "media_type": "video"
+    })),
     responses(
-        (status = 200, description = "The created playlist", body = PlaylistResponse),
+        (status = 200, description = "The created playlist", body = PlaylistResponse, example = json!({
+            "id": "1b2c3d4e-5f60-4a7b-8c9d-0e1f2a3b4c5d",
+            "name": "Sample Movie Golf",
+            "is_system": false,
+            "owner_user_id": "9d3b3f8a-6b34-4b1e-8a4a-2e6f6b1a9c11",
+            "parent_playlist_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "media_type": "video",
+            "created_at": "2026-01-15T10:30:00Z",
+            "updated_at": "2026-01-15T10:30:00Z"
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Non-admin caller set is_system, or lacks write access to the requested parent"),
         (status = 404, description = "No such parent_playlist_id")
@@ -320,7 +388,16 @@ pub async fn create_playlist_handler(
     tag = "playlists",
     params(("id" = Uuid, Path, description = "Playlist id")),
     responses(
-        (status = 200, description = "The playlist", body = PlaylistResponse),
+        (status = 200, description = "The playlist", body = PlaylistResponse, example = json!({
+            "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "name": "Sample Cinematic Universe",
+            "is_system": false,
+            "owner_user_id": "9d3b3f8a-6b34-4b1e-8a4a-2e6f6b1a9c11",
+            "parent_playlist_id": null,
+            "media_type": "video",
+            "created_at": "2026-01-15T10:30:00Z",
+            "updated_at": "2026-01-16T08:45:00Z"
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 404, description = "No such playlist, or not visible to the caller")
     )
@@ -345,9 +422,21 @@ pub async fn get_playlist_handler(
     path = "/api/v1/playlists/{id}",
     tag = "playlists",
     params(("id" = Uuid, Path, description = "Playlist id")),
-    request_body = UpdatePlaylistRequest,
+    request_body(content = UpdatePlaylistRequest, example = json!({
+        "name": "Sample Cinematic Universe",
+        "parent_playlist_id": null
+    })),
     responses(
-        (status = 200, description = "The updated playlist", body = PlaylistResponse),
+        (status = 200, description = "The updated playlist", body = PlaylistResponse, example = json!({
+            "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "name": "Sample Cinematic Universe",
+            "is_system": false,
+            "owner_user_id": "9d3b3f8a-6b34-4b1e-8a4a-2e6f6b1a9c11",
+            "parent_playlist_id": null,
+            "media_type": "video",
+            "created_at": "2026-01-15T10:30:00Z",
+            "updated_at": "2026-01-16T08:45:00Z"
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller lacks write access to this playlist, or to the requested new parent"),
         (status = 404, description = "No such playlist, or not visible to the caller")
@@ -436,7 +525,24 @@ pub async fn delete_playlist_handler(
     tag = "playlists",
     params(("id" = Uuid, Path, description = "Playlist id")),
     responses(
-        (status = 200, description = "This playlist's items, position-ordered", body = Vec<PlaylistItemResponse>),
+        (status = 200, description = "This playlist's items, position-ordered", body = Vec<PlaylistItemResponse>, example = json!([
+            {
+                "id": "e8b3a0c4-1d5f-4061-8c3d-4e5f6a7b8c9d",
+                "playlist_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                "work_id": "c6f1e8a2-9b3d-4e5f-8a1b-2c3d4e5f6a7b",
+                "track_id": null,
+                "position": 0,
+                "added_at": "2026-01-15T10:31:00Z"
+            },
+            {
+                "id": "f9c4b1d5-2e60-4172-9d4e-5f6a7b8c9d0e",
+                "playlist_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                "work_id": "b5e0d7f1-8a2c-4d3e-9f0a-1b2c3d4e5f6a",
+                "track_id": null,
+                "position": 1,
+                "added_at": "2026-01-15T10:32:00Z"
+            }
+        ])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 404, description = "No such playlist, or not visible to the caller")
     )
@@ -482,12 +588,22 @@ pub async fn list_playlist_items_handler(
     path = "/api/v1/playlists/{id}/items",
     tag = "playlists",
     params(("id" = Uuid, Path, description = "Playlist id")),
-    request_body = AddPlaylistItemRequest,
+    request_body(content = AddPlaylistItemRequest, example = json!({
+        "work_id": "c6f1e8a2-9b3d-4e5f-8a1b-2c3d4e5f6a7b",
+        "track_id": null
+    })),
     responses(
-        (status = 200, description = "The created item", body = PlaylistItemResponse),
+        (status = 200, description = "The created item", body = PlaylistItemResponse, example = json!({
+            "id": "e8b3a0c4-1d5f-4061-8c3d-4e5f6a7b8c9d",
+            "playlist_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "work_id": "c6f1e8a2-9b3d-4e5f-8a1b-2c3d4e5f6a7b",
+            "track_id": null,
+            "position": 0,
+            "added_at": "2026-01-15T10:31:00Z"
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller lacks write access to this playlist"),
-        (status = 404, description = "No such playlist, or not visible to the caller")
+        (status = 404, description = "No such playlist (or not visible to the caller), or the referenced work is outside the caller's allowed libraries")
     )
 )]
 pub async fn add_playlist_item_handler(
@@ -505,7 +621,18 @@ pub async fn add_playlist_item_handler(
             "caller does not have write access to this playlist",
         ));
     }
-    let detail = state.catalog.get_by_id(body.work_id, None).await?;
+    // Per-user library access control: validating/adding an item is gated
+    // by the same `Policy::library_allow` ceiling as every other catalog
+    // read path (`get_work_handler`, `is_work_visible` above in
+    // `list_playlist_items_handler`) -- owning the playlist grants write
+    // access to the playlist's *structure*, not a bypass of the caller's
+    // library grants, so a work outside `allowed` 404s here exactly as it
+    // would via `GET /api/v1/catalog/works/{id}`.
+    let allowed = viewer.allowed_libraries();
+    let detail = state
+        .catalog
+        .get_by_id(body.work_id, allowed.as_deref())
+        .await?;
     match playlist.media_type {
         PlaylistMediaType::Video => {
             if body.track_id.is_some()
@@ -580,15 +707,39 @@ pub async fn remove_playlist_item_handler(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Replaces the full item ordering of a playlist.
+/// Replaces the full item ordering of a playlist. The returned item list is
+/// filtered by the caller's `Policy::library_allow` exactly like
+/// [`list_playlist_items_handler`] -- see that handler's doc comment.
 #[utoipa::path(
     put,
     path = "/api/v1/playlists/{id}/items/order",
     tag = "playlists",
     params(("id" = Uuid, Path, description = "Playlist id")),
-    request_body = ReorderPlaylistItemsRequest,
+    request_body(content = ReorderPlaylistItemsRequest, example = json!({
+        "item_ids": [
+            "f9c4b1d5-2e60-4172-9d4e-5f6a7b8c9d0e",
+            "e8b3a0c4-1d5f-4061-8c3d-4e5f6a7b8c9d"
+        ]
+    })),
     responses(
-        (status = 200, description = "The playlist's items in their new order", body = Vec<PlaylistItemResponse>),
+        (status = 200, description = "The playlist's items in their new order", body = Vec<PlaylistItemResponse>, example = json!([
+            {
+                "id": "f9c4b1d5-2e60-4172-9d4e-5f6a7b8c9d0e",
+                "playlist_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                "work_id": "b5e0d7f1-8a2c-4d3e-9f0a-1b2c3d4e5f6a",
+                "track_id": null,
+                "position": 0,
+                "added_at": "2026-01-15T10:32:00Z"
+            },
+            {
+                "id": "e8b3a0c4-1d5f-4061-8c3d-4e5f6a7b8c9d",
+                "playlist_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                "work_id": "c6f1e8a2-9b3d-4e5f-8a1b-2c3d4e5f6a7b",
+                "track_id": null,
+                "position": 1,
+                "added_at": "2026-01-15T10:31:00Z"
+            }
+        ])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller lacks write access to this playlist"),
         (status = 404, description = "No such playlist, or not visible to the caller")
@@ -614,8 +765,28 @@ pub async fn reorder_playlist_items_handler(
         .reorder_items(id, &body.item_ids)
         .await?;
     let items = state.playlist_repo.list_items(id).await?;
+
+    // Per-user library access control, mirroring `list_playlist_items_handler`
+    // exactly (see its doc comment): the reordered list returned here is the
+    // same response shape and must be gated by the same
+    // `Policy::library_allow` ceiling, not just the initial `GET`.
+    let allowed = viewer.allowed_libraries();
+    let mut visible = Vec::with_capacity(items.len());
+    for item in items {
+        if state
+            .catalog
+            .is_work_visible(item.work_id, allowed.as_deref())
+            .await?
+        {
+            visible.push(item);
+        }
+    }
+
     Ok(Json(
-        items.into_iter().map(PlaylistItemResponse::from).collect(),
+        visible
+            .into_iter()
+            .map(PlaylistItemResponse::from)
+            .collect(),
     ))
 }
 
@@ -1050,13 +1221,24 @@ mod tests {
 
     #[tokio::test]
     async fn audio_playlist_rejects_video_items_and_video_children() {
-        use crate::test_support::seed_movie;
+        use crate::test_support::{
+            seed_media_file, seed_movie, seed_streaming_user_with_library_allow,
+        };
+        use streamarr_model::media::LeafRef;
 
         let (router, state) = test_state().await;
         let user_id = Uuid::new_v4();
-        seed_streaming_user(&state, user_id).await;
+        // `seed_streaming_user`'s policy has an empty (deny-all)
+        // `library_allow`, and `get_by_id` now enforces that ceiling on
+        // this endpoint too -- grant an explicit instance and give the
+        // movie a synced media file under it, so this test still exercises
+        // the media-type/kind mismatch it's named for rather than
+        // incidentally 404ing on library ACL first.
+        let source_instance = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user_id, vec![source_instance]).await;
         let token = mint_access_token(&state, user_id);
         let movie_id = seed_movie(&state, "Wrong media type").await;
+        seed_media_file(&state, movie_id, LeafRef::Work, source_instance).await;
 
         let response = router
             .clone()
@@ -1195,6 +1377,217 @@ mod tests {
         let listed: Vec<PlaylistItemResponse> = json_body(response).await;
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].work_id, allowed_work);
+    }
+
+    /// Regression test for the ACL gap where `add_playlist_item_handler`
+    /// resolved `body.work_id` via `CatalogService::get_by_id(.., None)` --
+    /// an unrestricted lookup -- even though the caller is a library-
+    /// restricted (non-admin) user. Owning a personal playlist grants write
+    /// access to that playlist's structure, not a bypass of the caller's
+    /// own `Policy::library_allow`: a work outside the caller's allowed
+    /// libraries must 404 here exactly as it would via
+    /// `GET /api/v1/catalog/works/{id}`, both so the endpoint can't be used
+    /// as a cross-library existence oracle and so no `PlaylistItem` ever
+    /// gets persisted pointing at a work the caller has no grant for.
+    #[tokio::test]
+    async fn add_item_outside_the_callers_allowed_libraries_is_404() {
+        use crate::test_support::{
+            seed_media_file, seed_movie, seed_streaming_user_with_library_allow,
+        };
+        use streamarr_model::media::LeafRef;
+
+        let (router, state) = test_state().await;
+
+        let allowed_instance = Uuid::new_v4();
+        let other_instance = Uuid::new_v4();
+        let allowed_work = seed_movie(&state, "Owner Allowed Movie").await;
+        seed_media_file(&state, allowed_work, LeafRef::Work, allowed_instance).await;
+        let other_work = seed_movie(&state, "Owner Restricted Movie").await;
+        seed_media_file(&state, other_work, LeafRef::Work, other_instance).await;
+
+        let viewer_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, viewer_id, vec![allowed_instance]).await;
+        let viewer_token = mint_access_token(&state, viewer_id);
+
+        // A personal playlist owned by the restricted viewer -- `can_write`
+        // grants them write access to it regardless of library_allow.
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/playlists")
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&viewer_token))
+                    .body(Body::from(
+                        serde_json::json!({"name": "My Movies"}).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let playlist: PlaylistResponse = json_body(response).await;
+
+        // A work outside the viewer's library_allow 404s -- not a 400/403,
+        // and indistinguishable from a genuinely nonexistent work_id, same
+        // as `get_work_handler`.
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/api/v1/playlists/{}/items", playlist.id))
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&viewer_token))
+                    .body(Body::from(
+                        serde_json::json!({"work_id": other_work}).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        // A work inside the viewer's library_allow still succeeds.
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/api/v1/playlists/{}/items", playlist.id))
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&viewer_token))
+                    .body(Body::from(
+                        serde_json::json!({"work_id": allowed_work}).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // The rejected add must never have been persisted -- listing items
+        // back (as the same viewer, so no visibility filtering hides a
+        // written-but-blocked row) shows only the one that succeeded.
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/v1/playlists/{}/items", playlist.id))
+                    .header("Authorization", bearer_header(&viewer_token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let listed: Vec<PlaylistItemResponse> = json_body(response).await;
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].work_id, allowed_work);
+    }
+
+    /// Same enforcement as `list_items_omits_works_outside_the_callers_allowed_libraries`,
+    /// but for `PUT /api/v1/playlists/{id}/items/order`: an admin can add an
+    /// item to a user's own personal playlist on their behalf (bypassing
+    /// the target user's `Policy::library_allow`, per this module's doc
+    /// comment), so the owner's playlist can legitimately contain a work
+    /// outside their own allow-list. Reordering that playlist is something
+    /// the owner (not just the admin) can call, and its response echoes the
+    /// full post-reorder item list -- that response must omit the
+    /// out-of-library item exactly like the plain `GET` does, not leak its
+    /// `work_id` just because the request happened to be a `PUT`.
+    #[tokio::test]
+    async fn reorder_response_omits_items_outside_the_callers_allowed_libraries() {
+        use crate::test_support::{
+            seed_media_file, seed_movie, seed_streaming_user_with_library_allow,
+        };
+        use streamarr_model::media::LeafRef;
+
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+        let admin_token = mint_access_token(&state, admin_id);
+
+        let allowed_instance = Uuid::new_v4();
+        let other_instance = Uuid::new_v4();
+        let allowed_work = seed_movie(&state, "Reorder Allowed Movie").await;
+        seed_media_file(&state, allowed_work, LeafRef::Work, allowed_instance).await;
+        let other_work = seed_movie(&state, "Reorder Other Movie").await;
+        seed_media_file(&state, other_work, LeafRef::Work, other_instance).await;
+
+        // The owner's own `Policy::library_allow` only covers one of the
+        // two source instances.
+        let owner_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, owner_id, vec![allowed_instance]).await;
+        let owner_token = mint_access_token(&state, owner_id);
+
+        // Owner creates their own personal playlist.
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/playlists")
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&owner_token))
+                    .body(Body::from(
+                        serde_json::json!({"name": "Owner Watchlist"}).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let playlist: PlaylistResponse = json_body(response).await;
+
+        // Admin adds both works on the owner's behalf -- admin's own
+        // `allowed_libraries()` is unrestricted, so this succeeds even
+        // though the owner could not have added `other_work` themselves.
+        let mut items = Vec::new();
+        for work_id in [allowed_work, other_work] {
+            let response = router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri(format!("/api/v1/playlists/{}/items", playlist.id))
+                        .header("content-type", "application/json")
+                        .header("Authorization", bearer_header(&admin_token))
+                        .body(Body::from(
+                            serde_json::json!({"work_id": work_id}).to_string(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            items.push(json_body::<PlaylistItemResponse>(response).await);
+        }
+
+        // Owner reorders their own playlist (reversing the two items).
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(format!("/api/v1/playlists/{}/items/order", playlist.id))
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&owner_token))
+                    .body(Body::from(
+                        serde_json::json!({"item_ids": [items[1].id, items[0].id]}).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let reordered: Vec<PlaylistItemResponse> = json_body(response).await;
+
+        // The reorder response must be filtered exactly like `list_items`:
+        // only the item inside the owner's own `Policy::library_allow`
+        // comes back, and its `work_id` is never the out-of-library one.
+        assert_eq!(reordered.len(), 1);
+        assert_eq!(reordered[0].work_id, allowed_work);
+        assert!(reordered.iter().all(|item| item.work_id != other_work));
     }
 
     #[tokio::test]

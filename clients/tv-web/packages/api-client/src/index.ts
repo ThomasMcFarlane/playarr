@@ -343,6 +343,8 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/playlists/{id}/items", method: "POST" },
   { schemaPath: "/api/v1/playlists/{id}/items/{item_id}", method: "DELETE" },
   { schemaPath: "/api/v1/playlists/{id}/items/order", method: "PUT" },
+  { schemaPath: "/api/v1/openapi.json", method: "GET" },
+  { schemaPath: "/api/v1/admin/users/{user_id}/impersonate", method: "POST" },
 ];
 
 function isProtectedOperation(schemaPath: string, method: string): boolean {

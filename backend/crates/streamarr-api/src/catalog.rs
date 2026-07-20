@@ -181,7 +181,29 @@ pub struct WorkDetailSchema {
     tag = "catalog",
     params(BrowseQueryParams),
     responses(
-        (status = 200, description = "A page of catalog works", body = CatalogPageSchema),
+        (status = 200, description = "A page of catalog works", body = CatalogPageSchema, example = json!({
+            "items": [{
+                "id": "4c9e2a1b-7f3d-4e6a-9b2c-8d5f1e3a7c90",
+                "kind": "movie",
+                "external_refs": [{"provider": "tmdb", "external_id": "155"}],
+                "title": "The Test Film",
+                "sort_title": "Test Film, The",
+                "overview": "Sample Vigilante raises the stakes in his war on crime with the help of Lt. Jim Gordon and District Attorney Harvey Dent.",
+                "images": [{
+                    "kind": "poster",
+                    "url": "https://image.tmdb.org/t/p/original/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
+                    "width": 2000,
+                    "height": 3000
+                }],
+                "genres": ["Action", "Crime", "Drama"],
+                "tags": [],
+                "added_at": "2024-01-15T10:30:00Z",
+                "release_date": "2008-07-16T00:00:00Z",
+                "monitored": true,
+                "availability": "available"
+            }],
+            "total": 1
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller has neither Playarr streaming access nor admin access")
     )
@@ -203,7 +225,7 @@ pub async fn browse_catalog_handler(
     path = "/api/v1/catalog/kinds",
     tag = "catalog",
     responses(
-        (status = 200, description = "Configured catalog kinds visible to the caller", body = Vec<WorkKind>),
+        (status = 200, description = "Configured catalog kinds visible to the caller", body = Vec<WorkKind>, example = json!(["movie", "series"])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller has neither Playarr streaming access nor admin access")
     )
@@ -220,7 +242,7 @@ pub async fn catalog_kinds_handler(
         .filter(|instance| {
             allowed
                 .as_ref()
-                .map_or(true, |ids| ids.contains(&instance.id))
+                .is_none_or(|ids| ids.contains(&instance.id))
         })
         .filter_map(|instance| {
             streamarr_arr_sync::arr_client::work_kind_and_provider(instance.kind)
@@ -246,7 +268,31 @@ pub async fn catalog_kinds_handler(
     tag = "catalog",
     params(("id" = Uuid, Path, description = "Work id")),
     responses(
-        (status = 200, description = "A work and its full kind-specific tree", body = WorkDetailSchema),
+        (status = 200, description = "A work and its full kind-specific tree", body = WorkDetailSchema, example = json!({
+            "work": {
+                "id": "4c9e2a1b-7f3d-4e6a-9b2c-8d5f1e3a7c90",
+                "kind": "movie",
+                "external_refs": [{"provider": "tmdb", "external_id": "155"}],
+                "title": "The Test Film",
+                "sort_title": "Test Film, The",
+                "overview": "Sample Vigilante raises the stakes in his war on crime with the help of Lt. Jim Gordon and District Attorney Harvey Dent.",
+                "images": [{
+                    "kind": "poster",
+                    "url": "https://image.tmdb.org/t/p/original/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
+                    "width": 2000,
+                    "height": 3000
+                }],
+                "genres": ["Action", "Crime", "Drama"],
+                "tags": [],
+                "added_at": "2024-01-15T10:30:00Z",
+                "release_date": "2008-07-16T00:00:00Z",
+                "monitored": true,
+                "availability": "available"
+            },
+            "children": "Movie",
+            "media_file_id": "5d8f2a91-3c7e-4b6a-8f1d-2e9c4a7b3f60",
+            "runtime_ms": 9120000
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller has neither Playarr streaming access nor admin access"),
         (status = 404, description = "No work with this id")
@@ -268,7 +314,26 @@ pub async fn get_work_handler(
     tag = "catalog",
     params(SearchQueryParams),
     responses(
-        (status = 200, description = "Matching works", body = Vec<Work>),
+        (status = 200, description = "Matching works", body = Vec<Work>, example = json!([{
+            "id": "4c9e2a1b-7f3d-4e6a-9b2c-8d5f1e3a7c90",
+            "kind": "movie",
+            "external_refs": [{"provider": "tmdb", "external_id": "155"}],
+            "title": "The Test Film",
+            "sort_title": "Test Film, The",
+            "overview": "Sample Vigilante raises the stakes in his war on crime with the help of Lt. Jim Gordon and District Attorney Harvey Dent.",
+            "images": [{
+                "kind": "poster",
+                "url": "https://image.tmdb.org/t/p/original/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
+                "width": 2000,
+                "height": 3000
+            }],
+            "genres": ["Action", "Crime", "Drama"],
+            "tags": [],
+            "added_at": "2024-01-15T10:30:00Z",
+            "release_date": "2008-07-16T00:00:00Z",
+            "monitored": true,
+            "availability": "available"
+        }])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller has neither Playarr streaming access nor admin access")
     )
@@ -297,14 +362,35 @@ pub struct SimilarQueryParams {
 /// hasn't been embedded yet (not yet synced, or this deployment hasn't
 /// configured embedding generation) -- `streamarr_catalog::CatalogService::
 /// similar`'s doc comment covers why those collapse to one status here
-/// rather than a distinct "not available" shape.
+/// rather than a distinct "not available" shape. Like `search`, a
+/// restricted caller's results silently omit works outside their
+/// `CatalogViewer::allowed_libraries` rather than surfacing them.
 #[utoipa::path(
     get,
     path = "/api/v1/catalog/{id}/similar",
     tag = "catalog",
     params(("id" = Uuid, Path, description = "Work id"), SimilarQueryParams),
     responses(
-        (status = 200, description = "Works ranked by semantic similarity to this one", body = Vec<Work>),
+        (status = 200, description = "Works ranked by semantic similarity to this one", body = Vec<Work>, example = json!([{
+            "id": "6b1e4f83-2a9c-4d7e-8b3f-1c6a9e2d4b70",
+            "kind": "movie",
+            "external_refs": [{"provider": "tmdb", "external_id": "272"}],
+            "title": "Sample Movie Hotel",
+            "sort_title": "Sample Movie Hotel",
+            "overview": "After training with his mentor, Sample Vigilante begins his fight to free crime-ridden Gotham City from corruption.",
+            "images": [{
+                "kind": "poster",
+                "url": "https://image.tmdb.org/t/p/original/dr6x4GyyESClpG4RG3aSVSXVMlv.jpg",
+                "width": 2000,
+                "height": 3000
+            }],
+            "genres": ["Action", "Crime", "Drama"],
+            "tags": [],
+            "added_at": "2024-01-10T08:15:00Z",
+            "release_date": "2005-06-15T00:00:00Z",
+            "monitored": true,
+            "availability": "available"
+        }])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller has neither Playarr streaming access nor admin access"),
         (status = 404, description = "No work with this id, or it has no cached embedding yet")
@@ -312,13 +398,14 @@ pub struct SimilarQueryParams {
 )]
 pub async fn similar_works_handler(
     State(state): State<AppState>,
-    _viewer: CatalogViewer,
+    viewer: CatalogViewer,
     Path(id): Path<Uuid>,
     Query(params): Query<SimilarQueryParams>,
 ) -> Result<Json<Vec<Work>>, ApiError> {
+    let allowed = viewer.allowed_libraries();
     let results = state
         .catalog
-        .similar(id, params.limit.unwrap_or(20))
+        .similar(id, params.limit.unwrap_or(20), allowed.as_deref())
         .await?;
     Ok(Json(results))
 }
@@ -772,8 +859,14 @@ mod tests {
                 .unwrap();
         }
 
+        // Admin (unrestricted `allowed_libraries`), not a plain streaming
+        // user: none of these fixture movies have a synced `MediaFile`, so
+        // a restricted caller (whose `library_allow` gates on synced-file
+        // source instances) would see every candidate filtered out here --
+        // this test is about ranking, not library ACL enforcement (see
+        // `similar_restricts_to_the_callers_allowed_libraries` for that).
         let user_id = Uuid::new_v4();
-        seed_streaming_user(&state, user_id).await;
+        seed_admin_user(&state, user_id).await;
         let token = mint_access_token(&state, user_id);
 
         let response = router
@@ -794,6 +887,63 @@ mod tests {
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].title, "Close Movie");
         assert_eq!(results[1].title, "Far Movie");
+    }
+
+    /// Same enforcement as `search_restricts_to_the_callers_allowed_libraries`,
+    /// through `GET /api/v1/catalog/{id}/similar` instead: a candidate work
+    /// outside the caller's `library_allow` is silently omitted from the
+    /// ranked results, while one inside it still surfaces normally.
+    #[tokio::test]
+    async fn similar_restricts_to_the_callers_allowed_libraries() {
+        let (router, state) = test_state().await;
+        let target = seed_movie(&state, "Similar Target").await;
+        let allowed_instance = Uuid::new_v4();
+        let other_instance = Uuid::new_v4();
+
+        let allowed_match = seed_movie(&state, "Similar Allowed").await;
+        seed_media_file(&state, allowed_match, LeafRef::Work, allowed_instance).await;
+        let other_match = seed_movie(&state, "Similar Other").await;
+        seed_media_file(&state, other_match, LeafRef::Work, other_instance).await;
+
+        for (work_id, vector) in [
+            (target, vec![1.0, 0.0, 0.0]),
+            (allowed_match, vec![0.9, 0.1, 0.0]),
+            (other_match, vec![0.8, 0.2, 0.0]),
+        ] {
+            state
+                .embedding_repo
+                .upsert(&streamarr_model::WorkEmbedding {
+                    work_id,
+                    model_id: "test".to_string(),
+                    source_text: "x".to_string(),
+                    vector,
+                    updated_at: chrono::Utc::now(),
+                })
+                .await
+                .unwrap();
+        }
+
+        let user_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user_id, vec![allowed_instance]).await;
+        let token = mint_access_token(&state, user_id);
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/v1/catalog/{target}/similar"))
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let results: Vec<Work> = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, allowed_match);
     }
 
     #[tokio::test]

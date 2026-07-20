@@ -61,9 +61,21 @@ pub struct RefreshResponse {
     post,
     path = "/api/v1/auth/refresh",
     tag = "auth",
-    request_body = RefreshRequest,
+    request_body(
+        content = RefreshRequest,
+        example = json!({
+            "device_id": "8f14e45f-ceea-467e-adde-3fb5c8f88e4b",
+            "refresh_token": "rt_9f8c2e1a4b3d4c5e8f9a0b1c2d3e4f5a"
+        })
+    ),
     responses(
-        (status = 200, description = "Fresh access + rotated refresh token pair", body = RefreshResponse),
+        (status = 200, description = "Fresh access + rotated refresh token pair", body = RefreshResponse, example = json!({
+            "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1ZjNjZjk2YS0xZjI0LTQ4ZTQtOWJkNC0zZTg5N2VlYjY0YTgiLCJkZXZpY2VfaWQiOiI4ZjE0ZTQ1Zi1jZWVhLTQ2N2UtYWRkZS0zZmI1YzhmODhlNGIiLCJzZXNzaW9uX2lkIjoiZDJiOWYwYTQtNzY1Yy00ZjNlLWFjOTQtN2NmMDQ1YjBkOTFlIiwiaXNzIjoic3RyZWFtYXJyIiwiaWF0IjoxNzE4ODAwMDAwLCJleHAiOjE3MTg4MDA5MDB9.dGhpc19pc19hX2Zha2Vfc2lnbmF0dXJl",
+            "refresh_token": "rt_1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+            "token_type": "Bearer",
+            "expires_in": 900,
+            "user_id": "5f3cf96a-1f24-48e4-9bd4-3e897eeb64a8"
+        })),
         (status = 401, description = "refresh token is invalid, expired, revoked, or reused")
     )
 )]

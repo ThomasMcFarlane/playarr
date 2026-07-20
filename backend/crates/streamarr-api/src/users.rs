@@ -502,9 +502,28 @@ async fn persist_new_user(
     post,
     path = "/api/v1/admin/users",
     tag = "users",
-    request_body = CreateUserRequest,
+    request_body(content = CreateUserRequest, example = json!({
+        "username": "alice",
+        "display_name": "Alice Nguyen",
+        "email": "alice@example.com",
+        "password": "correct horse battery staple",
+        "is_admin": false,
+        "can_stream": true,
+        "library_allow": ["11111111-1111-4111-8111-111111111111"]
+    })),
     responses(
-        (status = 200, description = "Account created", body = UserResponse),
+        (status = 200, description = "Account created", body = UserResponse, example = json!({
+            "id": "22222222-2222-4222-8222-222222222222",
+            "username": "alice",
+            "display_name": "Alice Nguyen",
+            "email": "alice@example.com",
+            "is_admin": false,
+            "can_stream": true,
+            "library_allow": ["11111111-1111-4111-8111-111111111111"],
+            "disabled": false,
+            "created_at": "2026-07-20T12:00:00Z",
+            "preferred_audio_language": "en"
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin"),
         (status = 409, description = "Username is already taken")
@@ -526,9 +545,15 @@ pub async fn create_user_handler(
     post,
     path = "/api/v1/admin/user-invites",
     tag = "users",
-    request_body = CreateUserInvite,
+    request_body(content = CreateUserInvite, example = json!({
+        "can_stream": true,
+        "library_allow": ["11111111-1111-4111-8111-111111111111"]
+    })),
     responses(
-        (status = 200, description = "Account invitation issued", body = UserInviteResponse),
+        (status = 200, description = "Account invitation issued", body = UserInviteResponse, example = json!({
+            "invite_token": "5f8a1c2e9b3d4f6a8c1e2b3d4f6a8c1e",
+            "expires_at": "2026-07-21T12:00:00Z"
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin")
     )
@@ -568,9 +593,23 @@ pub async fn create_user_invite_handler(
     post,
     path = "/api/v1/users/me/user-invite-request",
     tag = "users",
-    request_body = CreateUserInviteRequest,
+    request_body(content = CreateUserInviteRequest, example = json!({
+        "message": "Can I invite my roommate?"
+    })),
     responses(
-        (status = 200, description = "Current invitation request", body = UserInviteRequestResponse),
+        (status = 200, description = "Current invitation request", body = UserInviteRequestResponse, example = json!({
+            "id": "33333333-3333-4333-8333-333333333333",
+            "user_id": "22222222-2222-4222-8222-222222222222",
+            "username": "alice",
+            "display_name": "Alice Nguyen",
+            "message": "Can I invite my roommate?",
+            "status": "pending",
+            "requested_at": "2026-07-20T12:00:00Z",
+            "reviewed_at": null,
+            "generated_at": null,
+            "can_stream": true,
+            "library_allow": []
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Account cannot use Playarr")
     )
@@ -622,7 +661,19 @@ pub async fn create_user_invite_request_handler(
     path = "/api/v1/users/me/user-invite-request",
     tag = "users",
     responses(
-        (status = 200, description = "Latest invitation request, if any", body = Option<UserInviteRequestResponse>),
+        (status = 200, description = "Latest invitation request, if any", body = Option<UserInviteRequestResponse>, example = json!({
+            "id": "33333333-3333-4333-8333-333333333333",
+            "user_id": "22222222-2222-4222-8222-222222222222",
+            "username": "alice",
+            "display_name": "Alice Nguyen",
+            "message": "Can I invite my roommate?",
+            "status": "approved",
+            "requested_at": "2026-07-20T12:00:00Z",
+            "reviewed_at": "2026-07-20T13:00:00Z",
+            "generated_at": null,
+            "can_stream": true,
+            "library_allow": ["11111111-1111-4111-8111-111111111111"]
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Account cannot use Playarr")
     )
@@ -650,7 +701,10 @@ pub async fn get_my_user_invite_request_handler(
     path = "/api/v1/users/me/user-invite-request/generate",
     tag = "users",
     responses(
-        (status = 200, description = "Friend invitation generated", body = UserInviteResponse),
+        (status = 200, description = "Friend invitation generated", body = UserInviteResponse, example = json!({
+            "invite_token": "9c1e2b3d4f6a8c1e2b3d4f6a8c1e2b3d",
+            "expires_at": "2026-07-21T13:00:00Z"
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Account cannot use Playarr"),
         (status = 409, description = "No unused approval is available")
@@ -709,7 +763,21 @@ pub async fn generate_user_invite_handler(
     path = "/api/v1/admin/user-invite-requests",
     tag = "users",
     responses(
-        (status = 200, description = "Invitation requests", body = Vec<UserInviteRequestResponse>),
+        (status = 200, description = "Invitation requests", body = Vec<UserInviteRequestResponse>, example = json!([
+            {
+                "id": "33333333-3333-4333-8333-333333333333",
+                "user_id": "22222222-2222-4222-8222-222222222222",
+                "username": "alice",
+                "display_name": "Alice Nguyen",
+                "message": "Can I invite my roommate?",
+                "status": "pending",
+                "requested_at": "2026-07-20T12:00:00Z",
+                "reviewed_at": null,
+                "generated_at": null,
+                "can_stream": true,
+                "library_allow": []
+            }
+        ])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin")
     )
@@ -737,9 +805,25 @@ pub async fn list_user_invite_requests_handler(
     path = "/api/v1/admin/user-invite-requests/{id}",
     tag = "users",
     params(("id" = Uuid, Path, description = "Invitation request id")),
-    request_body = ReviewUserInviteRequest,
+    request_body(content = ReviewUserInviteRequest, example = json!({
+        "approved": true,
+        "can_stream": true,
+        "library_allow": ["11111111-1111-4111-8111-111111111111"]
+    })),
     responses(
-        (status = 200, description = "Reviewed invitation request", body = UserInviteRequestResponse),
+        (status = 200, description = "Reviewed invitation request", body = UserInviteRequestResponse, example = json!({
+            "id": "33333333-3333-4333-8333-333333333333",
+            "user_id": "22222222-2222-4222-8222-222222222222",
+            "username": "alice",
+            "display_name": "Alice Nguyen",
+            "message": "Can I invite my roommate?",
+            "status": "approved",
+            "requested_at": "2026-07-20T12:00:00Z",
+            "reviewed_at": "2026-07-20T13:00:00Z",
+            "generated_at": null,
+            "can_stream": true,
+            "library_allow": ["11111111-1111-4111-8111-111111111111"]
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin"),
         (status = 404, description = "Invitation request not found"),
@@ -807,9 +891,26 @@ pub async fn review_user_invite_request_handler(
     post,
     path = "/api/v1/auth/signup",
     tag = "auth",
-    request_body = SignupRequest,
+    request_body(content = SignupRequest, example = json!({
+        "invite_token": "5f8a1c2e9b3d4f6a8c1e2b3d4f6a8c1e",
+        "username": "bob",
+        "display_name": "Bob Martinez",
+        "email": "bob@example.com",
+        "password": "another secure passphrase"
+    })),
     responses(
-        (status = 200, description = "Account created", body = UserResponse),
+        (status = 200, description = "Account created", body = UserResponse, example = json!({
+            "id": "44444444-4444-4444-8444-444444444444",
+            "username": "bob",
+            "display_name": "Bob Martinez",
+            "email": "bob@example.com",
+            "is_admin": false,
+            "can_stream": true,
+            "library_allow": ["11111111-1111-4111-8111-111111111111"],
+            "disabled": false,
+            "created_at": "2026-07-20T12:05:00Z",
+            "preferred_audio_language": "en"
+        })),
         (status = 409, description = "Username is already taken"),
         (status = 410, description = "Invitation is invalid, expired, or already used")
     )
@@ -872,7 +973,20 @@ fn invalid_invite() -> ApiError {
     path = "/api/v1/admin/users",
     tag = "users",
     responses(
-        (status = 200, description = "All provisioned accounts", body = Vec<UserResponse>),
+        (status = 200, description = "All provisioned accounts", body = Vec<UserResponse>, example = json!([
+            {
+                "id": "22222222-2222-4222-8222-222222222222",
+                "username": "alice",
+                "display_name": "Alice Nguyen",
+                "email": "alice@example.com",
+                "is_admin": false,
+                "can_stream": true,
+                "library_allow": ["11111111-1111-4111-8111-111111111111"],
+                "disabled": false,
+                "created_at": "2026-07-20T12:00:00Z",
+                "preferred_audio_language": "en"
+            }
+        ])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin")
     )
@@ -929,7 +1043,15 @@ pub async fn list_users_handler(
     path = "/api/v1/users/profiles",
     tag = "users",
     responses(
-        (status = 200, description = "Enabled Playarr profiles available on this server", body = Vec<AvailableProfileResponse>),
+        (status = 200, description = "Enabled Playarr profiles available on this server", body = Vec<AvailableProfileResponse>, example = json!([
+            {
+                "id": "22222222-2222-4222-8222-222222222222",
+                "username": "alice",
+                "display_name": "Alice Nguyen",
+                "is_current": true,
+                "pin_locked": false
+            }
+        ])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller does not have Playarr streaming access")
     )
@@ -996,7 +1118,9 @@ pub async fn list_available_profiles_handler(
     path = "/api/v1/users/me/profile-pin",
     tag = "users",
     responses(
-        (status = 200, description = "The signed-in user's profile PIN setting", body = ProfilePinSettingResponse),
+        (status = 200, description = "The signed-in user's profile PIN setting", body = ProfilePinSettingResponse, example = json!({
+            "pin_locked": true
+        })),
         (status = 401, description = "Missing or invalid access token")
     )
 )]
@@ -1022,9 +1146,13 @@ pub async fn get_profile_pin_setting_handler(
     patch,
     path = "/api/v1/users/me/profile-pin",
     tag = "users",
-    request_body = UpdateProfilePinRequest,
+    request_body(content = UpdateProfilePinRequest, example = json!({
+        "pin": "4821"
+    })),
     responses(
-        (status = 200, description = "Updated profile PIN setting", body = ProfilePinSettingResponse),
+        (status = 200, description = "Updated profile PIN setting", body = ProfilePinSettingResponse, example = json!({
+            "pin_locked": true
+        })),
         (status = 400, description = "PIN is not exactly four decimal digits"),
         (status = 401, description = "Missing or invalid access token"),
         (status = 404, description = "The signed-in user no longer exists")
@@ -1084,7 +1212,12 @@ pub async fn update_profile_pin_setting_handler(
     path = "/api/v1/users/me/profile-avatar",
     tag = "users",
     responses(
-        (status = 200, description = "The signed-in user's cross-device avatar preference", body = ProfileAvatarSettingResponse),
+        (status = 200, description = "The signed-in user's cross-device avatar preference", body = ProfileAvatarSettingResponse, example = json!({
+            "preference": {
+                "kind": "preset",
+                "value": "astronaut"
+            }
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 404, description = "The signed-in user no longer exists")
     )
@@ -1125,9 +1258,19 @@ pub async fn get_profile_avatar_handler(
     put,
     path = "/api/v1/users/me/profile-avatar",
     tag = "users",
-    request_body = UpdateProfileAvatarRequest,
+    request_body(content = UpdateProfileAvatarRequest, example = json!({
+        "preference": {
+            "kind": "preset",
+            "value": "astronaut"
+        }
+    })),
     responses(
-        (status = 200, description = "Updated cross-device avatar preference", body = ProfileAvatarSettingResponse),
+        (status = 200, description = "Updated cross-device avatar preference", body = ProfileAvatarSettingResponse, example = json!({
+            "preference": {
+                "kind": "preset",
+                "value": "astronaut"
+            }
+        })),
         (status = 400, description = "Invalid preset or custom photo data"),
         (status = 401, description = "Missing or invalid access token"),
         (status = 404, description = "The signed-in user no longer exists")
@@ -1174,9 +1317,13 @@ pub async fn update_profile_avatar_handler(
     path = "/api/v1/users/profiles/{id}/verify-pin",
     tag = "users",
     params(("id" = Uuid, Path, description = "Profile user id")),
-    request_body = VerifyProfilePinRequest,
+    request_body(content = VerifyProfilePinRequest, example = json!({
+        "pin": "4821"
+    })),
     responses(
-        (status = 200, description = "The profile is unlocked for switching", body = VerifyProfilePinResponse),
+        (status = 200, description = "The profile is unlocked for switching", body = VerifyProfilePinResponse, example = json!({
+            "verified": true
+        })),
         (status = 401, description = "The target profile is unavailable or the PIN is invalid"),
         (status = 403, description = "Caller does not have Playarr streaming access")
     )
@@ -1244,9 +1391,25 @@ pub async fn verify_profile_pin_handler(
     path = "/api/v1/admin/users/{id}",
     tag = "users",
     params(("id" = Uuid, Path, description = "User id")),
-    request_body = UpdateUserRequest,
+    request_body(content = UpdateUserRequest, example = json!({
+        "display_name": "Alice N.",
+        "email": "alice.n@example.com",
+        "can_stream": true,
+        "library_allow": ["11111111-1111-4111-8111-111111111111"]
+    })),
     responses(
-        (status = 200, description = "Updated", body = UserResponse),
+        (status = 200, description = "Updated", body = UserResponse, example = json!({
+            "id": "22222222-2222-4222-8222-222222222222",
+            "username": "alice",
+            "display_name": "Alice N.",
+            "email": "alice.n@example.com",
+            "is_admin": false,
+            "can_stream": true,
+            "library_allow": ["11111111-1111-4111-8111-111111111111"],
+            "disabled": false,
+            "created_at": "2026-07-20T12:00:00Z",
+            "preferred_audio_language": "en"
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin"),
         (status = 404, description = "No user with this id")
@@ -1358,7 +1521,9 @@ pub async fn update_user_handler(
     path = "/api/v1/users/me/player-preferences",
     tag = "users",
     responses(
-        (status = 200, description = "The signed-in user's player preferences", body = PlayerPreferencesResponse),
+        (status = 200, description = "The signed-in user's player preferences", body = PlayerPreferencesResponse, example = json!({
+            "preferred_audio_language": "en"
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 404, description = "The signed-in user no longer exists")
     )
@@ -1387,9 +1552,13 @@ pub async fn get_player_preferences_handler(
     patch,
     path = "/api/v1/users/me/player-preferences",
     tag = "users",
-    request_body = UpdatePlayerPreferencesRequest,
+    request_body(content = UpdatePlayerPreferencesRequest, example = json!({
+        "preferred_audio_language": "es"
+    })),
     responses(
-        (status = 200, description = "Updated player preferences", body = PlayerPreferencesResponse),
+        (status = 200, description = "Updated player preferences", body = PlayerPreferencesResponse, example = json!({
+            "preferred_audio_language": "es"
+        })),
         (status = 400, description = "Invalid preferred audio language"),
         (status = 401, description = "Missing or invalid access token"),
         (status = 404, description = "The signed-in user no longer exists")

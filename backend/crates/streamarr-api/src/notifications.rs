@@ -215,7 +215,15 @@ impl PushNotifier for FcmNotifier {
     path = "/api/v1/notifications/config",
     tag = "users",
     responses(
-        (status = 200, description = "Firebase Web configuration", body = FirebaseWebConfig),
+        (status = 200, description = "Firebase Web configuration", body = FirebaseWebConfig, example = json!({
+            "api_key": "AIzaSyD-example1234567890abcdefghijklmno",
+            "auth_domain": "streamarr-prod.firebaseapp.com",
+            "project_id": "streamarr-prod",
+            "storage_bucket": "streamarr-prod.appspot.com",
+            "messaging_sender_id": "000000000000",
+            "app_id": "1:000000000000:web:9f2a3b7c1d4e5f6a7b8c9d",
+            "vapid_public_key": "BEl62iUYgUivxIkv69yViEuiBIa40HI8YlOm5EF7Wv3-VBs9aLLpFBc5eDo8mV5yYBQNe4x7l9mLKQ3sXk9ZgYo"
+        })),
         (status = 404, description = "Push notifications are not configured"),
         (status = 401, description = "Missing or invalid access token")
     )
@@ -236,7 +244,10 @@ pub async fn push_config_handler(
     post,
     path = "/api/v1/users/me/push-registrations",
     tag = "users",
-    request_body = RegisterPushRequest,
+    request_body(content = RegisterPushRequest, example = json!({
+        "token": "firebase-installation-id",
+        "platform": "web"
+    })),
     responses(
         (status = 204, description = "Push registration saved"),
         (status = 400, description = "Unsupported platform or invalid token"),

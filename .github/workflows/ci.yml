@@ -191,6 +191,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # dist/ is gitignored for every workspace package (see
+      # clients/tv-web/.gitignore), so a fresh checkout -- this one, same
+      # as any contributor's first clone -- has none of it yet. Several
+      # packages import a workspace sibling's published types (e.g.
+      # packages/player-avplay imports @streamarr-tv/player-core), which
+      # plain `tsc --noEmit` resolves against that package's *built*
+      # dist/index.d.ts, not its src/ -- so typecheck (and therefore lint,
+      # which runs first below but doesn't itself need this) fails with
+      # "Cannot find module" until every workspace package has been built
+      # at least once. Building here, once, up front avoids every
+      # individual package's script needing to know or care about that
+      # ordering itself.
+      - name: Build workspace packages
+        run: pnpm run build
+
       # These delegate to the workspace root's own scripts (see
       # clients/tv-web/package.json: "lint": "pnpm -r --if-present run
       # lint", "typecheck": "pnpm -r run typecheck"), which is exactly a

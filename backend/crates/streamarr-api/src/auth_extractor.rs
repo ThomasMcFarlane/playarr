@@ -438,6 +438,7 @@ mod tests {
                 iss: "test".to_string(),
                 iat: 0,
                 exp: 0,
+                impersonated_by: None,
             },
         }
     }

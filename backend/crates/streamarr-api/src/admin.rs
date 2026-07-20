@@ -99,9 +99,27 @@ impl From<SourceInstance> for SourceInstanceResponse {
     post,
     path = "/api/v1/admin/source-instances",
     tag = "admin",
-    request_body = SourceInstanceRequest,
+    request_body(content = SourceInstanceRequest, example = json!({
+        "kind": "radarr",
+        "name": "Radarr (4K)",
+        "base_url": "http://radarr.local:7878",
+        "api_key": "s3cr3t-api-key",
+        "priority": 0,
+        "default_root_folder_id": "/movies-4k",
+        "default_quality_profile_id": 4,
+        "best_effort": false
+    })),
     responses(
-        (status = 200, description = "Registered (or updated) and confirmed reachable", body = SourceInstanceResponse),
+        (status = 200, description = "Registered (or updated) and confirmed reachable", body = SourceInstanceResponse, example = json!({
+            "id": "9c858901-8a57-4791-81fe-4c455b099bc9",
+            "kind": "radarr",
+            "name": "Radarr (4K)",
+            "base_url": "http://radarr.local:7878",
+            "priority": 0,
+            "default_root_folder_id": "/movies-4k",
+            "default_quality_profile_id": 4,
+            "best_effort": false
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin"),
         (status = 502, description = "base_url/api_key rejected, or the instance could not be reached")
@@ -165,7 +183,18 @@ pub async fn create_source_instance_handler(
     path = "/api/v1/admin/source-instances",
     tag = "admin",
     responses(
-        (status = 200, description = "All registered source instances", body = Vec<SourceInstanceResponse>),
+        (status = 200, description = "All registered source instances", body = Vec<SourceInstanceResponse>, example = json!([
+            {
+                "id": "9c858901-8a57-4791-81fe-4c455b099bc9",
+                "kind": "radarr",
+                "name": "Radarr (4K)",
+                "base_url": "http://radarr.local:7878",
+                "priority": 0,
+                "default_root_folder_id": "/movies-4k",
+                "default_quality_profile_id": 4,
+                "best_effort": false
+            }
+        ])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin")
     )
@@ -281,7 +310,18 @@ pub struct SourceInstanceSyncStatusResponse {
     path = "/api/v1/admin/source-instances/sync-status",
     tag = "admin",
     responses(
-        (status = 200, description = "Every registered instance's last-known sync status", body = Vec<SourceInstanceSyncStatusResponse>),
+        (status = 200, description = "Every registered instance's last-known sync status", body = Vec<SourceInstanceSyncStatusResponse>, example = json!([
+            {
+                "source_instance_id": "9c858901-8a57-4791-81fe-4c455b099bc9",
+                "name": "Radarr (4K)",
+                "kind": "radarr",
+                "status": "succeeded",
+                "error": null,
+                "detail": null,
+                "started_at": "2026-07-20T18:40:00Z",
+                "finished_at": "2026-07-20T18:40:12Z"
+            }
+        ])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin")
     )
@@ -325,6 +365,94 @@ pub async fn sync_status_handler(
     Ok(Json(responses))
 }
 
+/// Response body for [`impersonate_user_handler`] -- mirrors
+/// [`crate::login::LoginResponse`]'s shape but deliberately has no
+/// `refresh_token`: impersonation mints a single stateless access token (no
+/// persisted `Session`/`Device` row backs it -- see the handler's doc
+/// comment), so there is nothing to refresh.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ImpersonationResponse {
+    pub access_token: String,
+    pub token_type: String,
+    pub expires_in: i64,
+    pub user_id: Uuid,
+    pub impersonated_by: Uuid,
+}
+
+/// Mints a short-lived access token for `user_id`, letting an admin act as
+/// that user (e.g. to reproduce a user-reported bug from their exact
+/// account state). Deliberately stateless and non-refreshable: no
+/// `Session`/`Device` row is persisted for this token, unlike a real login
+/// -- it simply expires with the normal access-token TTL and cannot be
+/// renewed, which bounds the blast radius of a leaked or misused
+/// impersonation token to that TTL with no separate revocation path
+/// required. Every issuance is logged at `warn` (not `info`) since this is
+/// a security-sensitive action operators should see by default.
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/users/{user_id}/impersonate",
+    tag = "admin",
+    params(("user_id" = Uuid, Path, description = "The user to impersonate")),
+    responses(
+        (status = 200, description = "Short-lived, non-refreshable access token minted for the target user", body = ImpersonationResponse, example = json!({
+            "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5Yzg1ODkwMS04YTU3LTQ3OTEtODFmZS00YzQ1NWIwOTliYzkifQ.dQw4w9WgXcQ",
+            "token_type": "Bearer",
+            "expires_in": 900,
+            "user_id": "9c858901-8a57-4791-81fe-4c455b099bc9",
+            "impersonated_by": "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+        })),
+        (status = 400, description = "Cannot impersonate yourself, or the target account is disabled"),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Caller is authenticated but not an admin"),
+        (status = 404, description = "No user with this id")
+    )
+)]
+pub async fn impersonate_user_handler(
+    State(state): State<AppState>,
+    admin: AdminUser,
+    Path(user_id): Path<Uuid>,
+) -> Result<Json<ImpersonationResponse>, ApiError> {
+    if user_id == admin.user_id {
+        return Err(ApiError::bad_request(
+            "cannot impersonate yourself -- you are already signed in as this account",
+        ));
+    }
+
+    let target = state
+        .user_repo
+        .find_by_id(user_id)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to look up user {user_id}: {err}")))?
+        .ok_or_else(|| ApiError::not_found(format!("no user with id {user_id}")))?;
+
+    if target.disabled {
+        return Err(ApiError::bad_request(format!(
+            "user {user_id} is disabled and cannot be impersonated"
+        )));
+    }
+
+    // Fresh, unpersisted device/session ids -- see the doc comment above
+    // for why this deliberately never touches `sessions`/`DeviceRepo`.
+    let access_token = state
+        .jwt
+        .issue_access_token_for(user_id, Uuid::new_v4(), Uuid::new_v4(), Some(admin.user_id))
+        .map_err(|err| ApiError::internal(format!("failed to issue impersonation token: {err}")))?;
+
+    tracing::warn!(
+        admin_id = %admin.user_id,
+        target_user_id = %user_id,
+        "admin impersonation issued"
+    );
+
+    Ok(Json(ImpersonationResponse {
+        access_token,
+        token_type: "Bearer".to_string(),
+        expires_in: state.jwt.access_ttl().num_seconds(),
+        user_id,
+        impersonated_by: admin.user_id,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use axum::body::Body;
@@ -334,7 +462,9 @@ mod tests {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    use crate::test_support::{bearer_header, mint_access_token, seed_admin_user, test_state};
+    use crate::test_support::{
+        bearer_header, mint_access_token, seed_admin_user, seed_streaming_user, test_state,
+    };
 
     #[tokio::test]
     async fn register_confirms_reachability_before_accepting() {
@@ -544,5 +674,122 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    fn impersonate_request(token: &str, target: Uuid) -> Request<Body> {
+        Request::builder()
+            .method("POST")
+            .uri(format!("/api/v1/admin/users/{target}/impersonate"))
+            .header("Authorization", bearer_header(token))
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn impersonate_requires_admin() {
+        let (router, state) = test_state().await;
+        let non_admin_id = Uuid::new_v4();
+        seed_streaming_user(&state, non_admin_id).await;
+        let caller_token = mint_access_token(&state, non_admin_id);
+
+        let target_id = Uuid::new_v4();
+        seed_streaming_user(&state, target_id).await;
+
+        let response = router
+            .oneshot(impersonate_request(&caller_token, target_id))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn admin_can_impersonate_a_real_user_and_claims_resolve_to_the_target() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+        let admin_token = mint_access_token(&state, admin_id);
+
+        let target_id = Uuid::new_v4();
+        seed_streaming_user(&state, target_id).await;
+
+        let response = router
+            .oneshot(impersonate_request(&admin_token, target_id))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["user_id"].as_str().unwrap(), target_id.to_string());
+        assert_eq!(
+            json["impersonated_by"].as_str().unwrap(),
+            admin_id.to_string()
+        );
+        assert_eq!(json["token_type"], "Bearer");
+
+        // The token itself, not just the response envelope, carries the
+        // impersonated user as `sub` (not the calling admin) and the
+        // calling admin as `impersonated_by` -- this is the actual
+        // security-relevant behavior, verified the same way any other
+        // caller of this token would: through `AppState::jwt`.
+        let access_token = json["access_token"].as_str().unwrap();
+        let claims = state.app.jwt.verify_access_token(access_token).unwrap();
+        assert_eq!(claims.sub, target_id);
+        assert_eq!(claims.impersonated_by, Some(admin_id));
+    }
+
+    #[tokio::test]
+    async fn impersonating_a_nonexistent_user_404s() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+        let admin_token = mint_access_token(&state, admin_id);
+
+        let response = router
+            .oneshot(impersonate_request(&admin_token, Uuid::new_v4()))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn self_impersonation_is_rejected() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+        let admin_token = mint_access_token(&state, admin_id);
+
+        let response = router
+            .oneshot(impersonate_request(&admin_token, admin_id))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn impersonating_a_disabled_user_is_rejected() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+        let admin_token = mint_access_token(&state, admin_id);
+
+        let target_id = Uuid::new_v4();
+        seed_streaming_user(&state, target_id).await;
+        let mut target = state
+            .user_repo
+            .find_by_id(target_id)
+            .await
+            .unwrap()
+            .unwrap();
+        target.disabled = true;
+        state.user_repo.upsert(&target).await.unwrap();
+
+        let response = router
+            .oneshot(impersonate_request(&admin_token, target_id))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 }

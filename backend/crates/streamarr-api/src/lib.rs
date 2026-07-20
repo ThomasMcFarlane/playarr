@@ -34,6 +34,7 @@ pub mod login;
 pub mod media;
 pub mod notifications;
 pub mod oauth;
+pub mod openapi_docs;
 pub mod playback;
 pub mod playlists;
 pub mod readiness;
@@ -58,7 +59,8 @@ use axum::extract::FromRef;
 use axum::Router;
 use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
-use utoipa::OpenApi;
+use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityRequirement, SecurityScheme};
+use utoipa::{Modify, OpenApi};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -70,9 +72,85 @@ pub use source_registry::{SourceInstanceRegistry, SyncTriggerError};
 pub use version::VersionState;
 pub use version_gate::{ClientCompatibilityTable, VersionGateLayer};
 
+/// Registers the `bearer_auth` HTTP bearer (JWT) security scheme every
+/// [`auth_extractor::AuthUser`]/[`AdminUser`]-family extractor implies, and
+/// marks every operation in the generated spec as requiring it *except*
+/// the genuinely public, no-token endpoints: the login, signup, and
+/// refresh handlers; the two unauthenticated legs of the RFC 8628
+/// device-flow (`/api/v1/oauth/device/code` and `/api/v1/oauth/token` --
+/// *not* `/api/v1/oauth/device/authorize`, which itself requires a
+/// [`auth_extractor::StreamingUser`]); the `*arr` webhook receiver; and the
+/// process health/readiness/version probes, none of which take an auth
+/// extractor at all (a container orchestrator's liveness check can't
+/// attach a JWT). Every other handler in this crate takes at least
+/// [`auth_extractor::AuthUser`] (directly, or via `AdminUser`/
+/// `StreamingUser`/`CatalogViewer`/`OptionalStreamingUser`, each of which
+/// require a valid bearer token to construct even when the caller may end
+/// up further rejected on authorization grounds), so this stays a blanket
+/// exclusion list rather than an inclusion list that would silently miss
+/// newly added routes.
+struct SecurityAddon;
+
+/// `path = "..."` strings (see each handler's `#[utoipa::path]`) for the
+/// operations excluded from the blanket `bearer_auth` requirement --
+/// see [`SecurityAddon`]'s doc comment for why each one is here.
+const PUBLIC_OPENAPI_PATHS: &[&str] = &[
+    "/api/system/health",
+    "/api/system/ready",
+    "/api/system/version",
+    "/api/v1/auth/login",
+    "/api/v1/auth/signup",
+    "/api/v1/auth/refresh",
+    "/api/v1/oauth/device/code",
+    "/api/v1/oauth/token",
+    "/webhooks/{instance_id}",
+];
+
+impl Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        openapi
+            .components
+            .get_or_insert_with(Default::default)
+            .add_security_scheme(
+                "bearer_auth",
+                SecurityScheme::Http(
+                    HttpBuilder::new()
+                        .scheme(HttpAuthScheme::Bearer)
+                        .bearer_format("JWT")
+                        .build(),
+                ),
+            );
+
+        for (path, item) in openapi.paths.paths.iter_mut() {
+            if PUBLIC_OPENAPI_PATHS.contains(&path.as_str()) {
+                continue;
+            }
+            for operation in [
+                item.get.as_mut(),
+                item.put.as_mut(),
+                item.post.as_mut(),
+                item.delete.as_mut(),
+                item.options.as_mut(),
+                item.head.as_mut(),
+                item.patch.as_mut(),
+                item.trace.as_mut(),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                operation.security = Some(vec![SecurityRequirement::new(
+                    "bearer_auth",
+                    Vec::<String>::new(),
+                )]);
+            }
+        }
+    }
+}
+
 #[derive(OpenApi)]
 #[openapi(
     info(title = "Streamarr API", version = "0.1.0"),
+    modifiers(&SecurityAddon),
     components(schemas(streamarr_model::PlaybackSession)),
     tags(
         (name = "system", description = "Process health, readiness, and version endpoints"),
@@ -101,6 +179,7 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(health::health_handler))
         .routes(routes!(readiness::readiness_handler))
         .routes(routes!(version::version_handler))
+        .routes(routes!(openapi_docs::openapi_json_handler))
         .routes(routes!(
             system_settings::get_system_settings_handler,
             system_settings::update_system_settings_handler
@@ -170,6 +249,7 @@ fn api_router() -> OpenApiRouter<AppState> {
             users::update_user_handler,
             users::delete_user_handler
         ))
+        .routes(routes!(admin::impersonate_user_handler))
         .routes(routes!(
             users::get_player_preferences_handler,
             users::update_player_preferences_handler
@@ -216,7 +296,18 @@ fn api_router() -> OpenApiRouter<AppState> {
 }
 
 pub fn openapi_spec() -> utoipa::openapi::OpenApi {
-    let (_router, api) = api_router().split_for_parts();
+    let (_router, mut api) = api_router().split_for_parts();
+    // `ApiDoc`'s `modifiers(&SecurityAddon)` already ran once inside
+    // `ApiDoc::openapi()` -- but at that point `openapi.paths` is still
+    // empty (this crate has no `paths(...)` in its `#[openapi(...)]`
+    // attribute; every route is merged in afterwards, incrementally, by
+    // each `.routes(routes!(...))` call above). Re-running the modifier
+    // here, after `split_for_parts` has merged every handler's path into
+    // `api`, is what actually gets `security` set on each operation; the
+    // `components.security_schemes` write it also does is a harmless
+    // no-op repeat (`Components::add_security_scheme` is a plain map
+    // insert).
+    SecurityAddon.modify(&mut api);
     api
 }
 
@@ -432,7 +523,12 @@ pub fn build_router(
     web_assets_dir: Option<PathBuf>,
 ) -> (Router, utoipa::openapi::OpenApi) {
     let readiness_for_alias = state.readiness.clone();
-    let (router, api) = api_router().with_state(state).split_for_parts();
+    let (router, mut api) = api_router().with_state(state).split_for_parts();
+    // See `openapi_spec`'s doc comment: paths only exist after
+    // `split_for_parts`, so `SecurityAddon` has to run again here to
+    // actually tag operations, not just rely on the `modifiers(...)` pass
+    // baked into `ApiDoc::openapi()`.
+    SecurityAddon.modify(&mut api);
     let router = router
         .route("/healthz", axum::routing::get(health::health_handler))
         .route(

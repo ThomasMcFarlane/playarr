@@ -608,27 +608,25 @@ impl CatalogService {
         // touch across all of a work's files is what "last played" means
         // here -- `HashMap::entry` + `Ord::max` below folds duplicates
         // down to that single latest timestamp per work.
-        let last_played: std::collections::HashMap<Uuid, chrono::DateTime<chrono::Utc>> = if user_id
-            .is_some()
-            && sort_keys.contains(&streamarr_model::ViewSort::LastPlayedByUser)
-        {
-            let uid = user_id.expect("checked Some above");
-            let mut map = std::collections::HashMap::new();
-            for progress in self.watch_progress_repo.list_for_user(uid).await? {
-                if let Some(updated_at) = progress.updated_at {
-                    map.entry(progress.work_id)
-                        .and_modify(|existing: &mut chrono::DateTime<chrono::Utc>| {
-                            if updated_at > *existing {
-                                *existing = updated_at;
-                            }
-                        })
-                        .or_insert(updated_at);
+        let last_played: std::collections::HashMap<Uuid, chrono::DateTime<chrono::Utc>> =
+            match user_id {
+                Some(uid) if sort_keys.contains(&streamarr_model::ViewSort::LastPlayedByUser) => {
+                    let mut map = std::collections::HashMap::new();
+                    for progress in self.watch_progress_repo.list_for_user(uid).await? {
+                        if let Some(updated_at) = progress.updated_at {
+                            map.entry(progress.work_id)
+                                .and_modify(|existing: &mut chrono::DateTime<chrono::Utc>| {
+                                    if updated_at > *existing {
+                                        *existing = updated_at;
+                                    }
+                                })
+                                .or_insert(updated_at);
+                        }
+                    }
+                    map
                 }
-            }
-            map
-        } else {
-            std::collections::HashMap::new()
-        };
+                _ => std::collections::HashMap::new(),
+            };
 
         // `slice::sort_by` is stable. Applying the least-significant key
         // first therefore preserves it as the tie-breaker when each more
@@ -792,7 +790,25 @@ impl CatalogService {
     /// [`Self::with_embedding_repo`]) -- distinct from an empty result
     /// list, which means "embedded, but nothing else in the catalog is
     /// close."
-    pub async fn similar(&self, work_id: Uuid, limit: i64) -> Result<Vec<Work>, CatalogError> {
+    ///
+    /// `allowed_source_instance_ids` is the same per-user library access
+    /// control ceiling [`Self::search`] and [`Self::get_by_id`] apply --
+    /// `None` for an unrestricted caller, `Some(ids)` (including empty) to
+    /// restrict results to works with at least one synced file from one of
+    /// those source instances. Applied via [`Self::is_work_visible`] (the
+    /// same underlying `MediaFileRepo::list_by_work_id` check [`Self::
+    /// search`]/[`Self::get_by_id`] use) after ranking but before
+    /// truncating to `limit`, for the same reason `search` filters after
+    /// ranking rather than before: a restricted caller still sees the same
+    /// similarity ordering as an unrestricted one, just with disallowed
+    /// entries removed, rather than silently getting fewer than `limit`
+    /// results when enough close matches exist catalog-wide.
+    pub async fn similar(
+        &self,
+        work_id: Uuid,
+        limit: i64,
+        allowed_source_instance_ids: Option<&[Uuid]>,
+    ) -> Result<Vec<Work>, CatalogError> {
         let embedding_repo = self.embedding_repo.as_ref().ok_or(CatalogError::NotFound)?;
         let limit = limit.max(0) as usize;
 
@@ -813,10 +829,18 @@ impl CatalogService {
             })
             .collect();
         scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        scored.truncate(limit);
 
-        let mut works = Vec::with_capacity(scored.len());
+        let mut works: Vec<Work> = Vec::with_capacity(scored.len().min(limit.max(1)));
         for (candidate_id, _score) in scored {
+            if works.len() >= limit {
+                break;
+            }
+            if !self
+                .is_work_visible(candidate_id, allowed_source_instance_ids)
+                .await?
+            {
+                continue;
+            }
             match self.work_repo.get(candidate_id).await {
                 Ok(work) => works.push(work),
                 Err(DbError::NotFound) => continue,
@@ -2330,7 +2354,7 @@ mod tests {
             .unwrap();
 
         let svc = service(pool, repo).with_embedding_repo(embeddings);
-        let results = svc.similar(target.id, 10).await.unwrap();
+        let results = svc.similar(target.id, 10, None).await.unwrap();
         assert_eq!(results.len(), 2);
         assert_eq!(
             results[0].title, "Close Movie",
@@ -2352,7 +2376,7 @@ mod tests {
         let embeddings = embedding_repo(pool.clone());
 
         let svc = service(pool, repo).with_embedding_repo(embeddings);
-        let err = svc.similar(target.id, 10).await.unwrap_err();
+        let err = svc.similar(target.id, 10, None).await.unwrap_err();
         assert!(matches!(err, CatalogError::NotFound));
     }
 
@@ -2364,8 +2388,61 @@ mod tests {
         repo.upsert(&target).await.unwrap();
 
         let svc = service(pool, repo); // no `.with_embedding_repo(...)`
-        let err = svc.similar(target.id, 10).await.unwrap_err();
+        let err = svc.similar(target.id, 10, None).await.unwrap_err();
         assert!(matches!(err, CatalogError::NotFound));
+    }
+
+    /// Mirrors `search_enforces_allowed_source_instance_ids` -- `similar`
+    /// must apply the exact same per-user library access control ceiling to
+    /// its ranked candidates, not just to `search`/`browse`/`get_by_id`.
+    #[tokio::test]
+    async fn similar_enforces_allowed_source_instance_ids() {
+        let pool = test_pool().await;
+        let repo = work_repo(pool.clone());
+        let target = movie("Similar Target", "Similar Target", &[], 0);
+        let allowed_match = movie("Similar Allowed", "Similar Allowed", &[], 0);
+        let disallowed_match = movie("Similar Disallowed", "Similar Disallowed", &[], 0);
+        for w in [&target, &allowed_match, &disallowed_match] {
+            repo.upsert(w).await.unwrap();
+        }
+
+        let instance_a = Uuid::new_v4();
+        let instance_b = Uuid::new_v4();
+        seed_media_file_for_source(&pool, allowed_match.id, LeafRef::Work, instance_a).await;
+        seed_media_file_for_source(&pool, disallowed_match.id, LeafRef::Work, instance_b).await;
+
+        let embeddings = embedding_repo(pool.clone());
+        for (work_id, vector) in [
+            (target.id, vec![1.0, 0.0, 0.0]),
+            (allowed_match.id, vec![0.9, 0.1, 0.0]),
+            (disallowed_match.id, vec![0.8, 0.2, 0.0]),
+        ] {
+            embeddings
+                .upsert(&streamarr_model::WorkEmbedding {
+                    work_id,
+                    model_id: "test".to_string(),
+                    source_text: "x".to_string(),
+                    vector,
+                    updated_at: Utc::now(),
+                })
+                .await
+                .unwrap();
+        }
+
+        let svc = service(pool, repo).with_embedding_repo(embeddings);
+
+        let unrestricted = svc.similar(target.id, 10, None).await.unwrap();
+        assert_eq!(unrestricted.len(), 2);
+
+        let restricted = svc
+            .similar(target.id, 10, Some(&[instance_a]))
+            .await
+            .unwrap();
+        assert_eq!(restricted.len(), 1);
+        assert_eq!(restricted[0].id, allowed_match.id);
+
+        let denied_all = svc.similar(target.id, 10, Some(&[])).await.unwrap();
+        assert!(denied_all.is_empty());
     }
 
     #[tokio::test]

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { TokenStore } from "@streamarr-tv/device-auth";
 import { SourceInstancesPage } from "./pages/SourceInstances";
@@ -17,6 +17,16 @@ import { LoginPage } from "./pages/Login";
 import { useEnsureSignedIn } from "./lib/ApiClientProvider";
 import { TopNav } from "./components/TopNav";
 
+/**
+ * Lazy-loaded: swagger-ui-react (and its swagger-client/apidom dependency
+ * chain) adds well over 1MB minified to whatever chunk imports it -- code-
+ * splitting it here keeps that weight out of the initial bundle every
+ * admin page pays for, since most sessions never open the API Explorer.
+ */
+const ApiExplorerPage = lazy(() =>
+  import("./pages/ApiExplorer").then((m) => ({ default: m.ApiExplorerPage }))
+);
+
 const NAV_LINKS = [
   { to: "/", label: "Source instances", end: true },
   { to: "/users", label: "Users", end: false },
@@ -34,6 +44,7 @@ const SYSTEM_NAV_LINKS = [
   { to: "/settings", label: "Settings", end: false },
   { to: "/tasks", label: "Tasks", end: false },
   { to: "/activity", label: "Activity", end: false },
+  { to: "/api-explorer", label: "API Explorer", end: false },
 ] as const;
 
 /**
@@ -244,6 +255,14 @@ export function App() {
                     <Route path="/tasks" element={<TasksPage />} />
                     <Route path="/activity" element={<ActivityPage />} />
                     <Route path="/settings" element={<SystemSettingsPage />} />
+                    <Route
+                      path="/api-explorer"
+                      element={
+                        <Suspense fallback={<div className="muted" style={{ padding: "2rem" }}>Loading API Explorer…</div>}>
+                          <ApiExplorerPage />
+                        </Suspense>
+                      }
+                    />
                     <Route path="/views" element={<ViewsPage />} />
                     <Route path="/views/new" element={<ViewEditPage />} />
                     <Route path="/views/:id" element={<ViewEditPage />} />

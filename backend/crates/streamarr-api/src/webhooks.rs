@@ -20,7 +20,17 @@ use crate::AppState;
     path = "/webhooks/{instance_id}",
     tag = "webhooks",
     params(("instance_id" = Uuid, Path, description = "Configured SourceInstance id")),
-    request_body = Value,
+    request_body(
+        content = Value,
+        example = json!({
+            "eventType": "SeriesAdd",
+            "series": {
+                "id": 42,
+                "title": "Test Series T",
+                "tvdbId": 275908
+            }
+        })
+    ),
     responses(
         (status = 202, description = "Signal parsed and enqueued for the reconciliation poller"),
         (status = 400, description = "Payload has no recognizable eventType"),

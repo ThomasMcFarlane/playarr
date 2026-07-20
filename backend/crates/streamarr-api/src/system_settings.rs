@@ -20,7 +20,9 @@ pub struct UpdateSystemSettingsRequest {
     path = "/api/v1/admin/system-settings",
     tag = "admin",
     responses(
-        (status = 200, description = "Current instance-wide settings", body = SystemSettings),
+        (status = 200, description = "Current instance-wide settings", body = SystemSettings, example = json!({
+            "instance_name": "Streamarr"
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin")
     )
@@ -41,9 +43,13 @@ pub async fn get_system_settings_handler(
     put,
     path = "/api/v1/admin/system-settings",
     tag = "admin",
-    request_body = UpdateSystemSettingsRequest,
+    request_body(content = UpdateSystemSettingsRequest, example = json!({
+        "instance_name": "REGION-A Cinema"
+    })),
     responses(
-        (status = 200, description = "Updated instance-wide settings", body = SystemSettings),
+        (status = 200, description = "Updated instance-wide settings", body = SystemSettings, example = json!({
+            "instance_name": "REGION-A Cinema"
+        })),
         (status = 400, description = "Instance name is empty or longer than 100 characters"),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin")

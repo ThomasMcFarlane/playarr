@@ -32,6 +32,16 @@ pub struct AccessTokenClaims {
     /// Expiry, seconds since the epoch (standard `exp` claim) —
     /// `jsonwebtoken` validates this automatically on decode.
     pub exp: i64,
+    /// Set only on a token minted via [`JwtIssuer::issue_access_token_for`]
+    /// with a caller-supplied admin id -- i.e. an admin-impersonation
+    /// token, not a normal login/refresh-issued one. Carries the
+    /// impersonating admin's user id so a handler acting on `sub` (the
+    /// *impersonated* user) can still tell, and audit-log, who is actually
+    /// behind the request. `#[serde(default)]` so tokens issued (or test
+    /// fixtures constructed) before this field existed still decode/build
+    /// fine with `impersonated_by: None`.
+    #[serde(default)]
+    pub impersonated_by: Option<Uuid>,
 }
 
 /// Issues and verifies HMAC-signed (HS256) access tokens. Holds both the
@@ -71,6 +81,22 @@ impl JwtIssuer {
         device_id: Uuid,
         session_id: Uuid,
     ) -> Result<String, JwtError> {
+        self.issue_access_token_for(user_id, device_id, session_id, None)
+    }
+
+    /// The real token-minting logic behind [`Self::issue_access_token`]
+    /// (a thin wrapper calling this with `impersonated_by: None`) --
+    /// also used directly by admin impersonation (`streamarr-api`'s
+    /// `admin::impersonate_user_handler`) to mint a token for a *different*
+    /// user than the caller, with `impersonated_by` set to the
+    /// impersonating admin's own user id.
+    pub fn issue_access_token_for(
+        &self,
+        user_id: Uuid,
+        device_id: Uuid,
+        session_id: Uuid,
+        impersonated_by: Option<Uuid>,
+    ) -> Result<String, JwtError> {
         let now = Utc::now();
         let claims = AccessTokenClaims {
             sub: user_id,
@@ -79,6 +105,7 @@ impl JwtIssuer {
             iss: self.issuer.clone(),
             iat: now.timestamp(),
             exp: (now + self.access_ttl).timestamp(),
+            impersonated_by,
         };
         let header = Header::new(self.algorithm);
         Ok(jsonwebtoken::encode(&header, &claims, &self.encoding_key)?)

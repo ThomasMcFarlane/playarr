@@ -109,9 +109,29 @@ impl From<TdarrConnection> for TdarrConnectionResponse {
     post,
     path = "/api/v1/admin/tdarr",
     tag = "admin",
-    request_body = TdarrConnectionRequest,
+    request_body(content = TdarrConnectionRequest, example = json!({
+        "base_url": "http://tdarr.local:8265",
+        "api_key": "s3cr3t-api-key",
+        "tdarr_db_id": "streamarr",
+        "default_profile": "h264-720p-4mbps",
+        "worker_process": "transcodecpu",
+        "default_worker_limit": 2,
+        "throttled_worker_limit": 0,
+        "active_session_threshold": 2,
+        "throttle_check_interval_secs": 30
+    })),
     responses(
-        (status = 200, description = "Registered (or updated) and confirmed reachable", body = TdarrConnectionResponse),
+        (status = 200, description = "Registered (or updated) and confirmed reachable", body = TdarrConnectionResponse, example = json!({
+            "base_url": "http://tdarr.local:8265",
+            "tdarr_db_id": "streamarr",
+            "default_profile": "h264-720p-4mbps",
+            "worker_process": "transcodecpu",
+            "default_worker_limit": 2,
+            "throttled_worker_limit": 0,
+            "active_session_threshold": 2,
+            "throttle_check_interval_secs": 30,
+            "updated_at": "2025-01-15T12:00:00Z"
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin"),
         (status = 502, description = "base_url/api_key rejected, or Tdarr could not be reached")
@@ -161,7 +181,17 @@ pub async fn create_tdarr_connection_handler(
     path = "/api/v1/admin/tdarr",
     tag = "admin",
     responses(
-        (status = 200, description = "The registered connection", body = TdarrConnectionResponse),
+        (status = 200, description = "The registered connection", body = TdarrConnectionResponse, example = json!({
+            "base_url": "http://tdarr.local:8265",
+            "tdarr_db_id": "streamarr",
+            "default_profile": "h264-720p-4mbps",
+            "worker_process": "transcodecpu",
+            "default_worker_limit": 2,
+            "throttled_worker_limit": 0,
+            "active_session_threshold": 2,
+            "throttle_check_interval_secs": 30,
+            "updated_at": "2025-01-15T12:00:00Z"
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin"),
         (status = 404, description = "No Tdarr connection has been registered yet")

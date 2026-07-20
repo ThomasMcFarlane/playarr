@@ -16,6 +16,11 @@ Cargo.lock.bak
 # lockfiles accidentally generated inside example/scratch crates.
 **/*.rs.bk
 *.pdb
+# Local SQLite dev databases (e.g. `DATABASE_URL=sqlite://./dev-streamarr.db`
+# for `cargo run` outside a real deployment) -- never meant to be committed.
+*.db
+*.db-shm
+*.db-wal
 
 # ------------------------------------------------------------------------
 # Node / pnpm / TypeScript (clients/tv-web/ and any other JS tooling)
