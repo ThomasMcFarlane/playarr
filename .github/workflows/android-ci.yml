@@ -20,7 +20,7 @@ jobs:
     environment: release-android
     defaults:
       run:
-        working-directory: clients/android-shared
+        working-directory: clients/android
     env:
       ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/playarr-android-release.jks
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -77,14 +77,14 @@ jobs:
           PLAYARR_VERSION_CODE: ${{ steps.version.outputs.code }}
         run: >-
           ./gradlew
-          :mobile-android:testDebugUnitTest
-          :mobile-android:assembleRelease
+          :app:testDebugUnitTest
+          :app:assembleRelease
 
       - name: Verify and package APK
         id: package
         shell: bash
         run: |
-          mobile_apk="$(find ../mobile-android/build/outputs/apk/release -name '*.apk' -type f -print -quit)"
+          mobile_apk="$(find app/build/outputs/apk/release -name '*.apk' -type f -print -quit)"
           if [[ -z "$mobile_apk" ]]; then
             echo "Signed release APK output is missing" >&2
             exit 1
@@ -106,7 +106,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playarr-android-${{ steps.version.outputs.name }}
-          path: clients/android-shared/release/
+          path: clients/android/release/
           if-no-files-found: error
 
       - name: Upload versioned and latest APK to Cloudflare R2
@@ -125,7 +125,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            clients/android-shared/release/playarr-android.apk
-            clients/android-shared/release/playarr-android.json
-            clients/android-shared/release/SHA256SUMS
+            clients/android/release/playarr-android.apk
+            clients/android/release/playarr-android.json
+            clients/android/release/SHA256SUMS
           generate_release_notes: true

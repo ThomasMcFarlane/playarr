@@ -70,8 +70,7 @@ jobs:
             rust:
               - 'backend/**'
             android:
-              - 'clients/mobile-android/**'
-              - 'clients/android-shared/**'
+              - 'clients/android/**'
             ios:
               - 'clients/ios/**'
             tv-web:
@@ -119,7 +118,7 @@ jobs:
         run: cargo deny check
 
   # ---------------------------------------------------------------------
-  # Android (one application plus shared core modules)
+  # Android (one project and one universal application)
   # ---------------------------------------------------------------------
   android-check:
     name: Android build
@@ -139,7 +138,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Gradle build (all modules)
-        working-directory: clients/android-shared
+        working-directory: clients/android
         run: ./gradlew build
 
   # ---------------------------------------------------------------------

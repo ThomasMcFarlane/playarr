@@ -38,9 +38,7 @@
 # Playarr clients
 # ------------------------------------------------------------------------
 /clients/                  @ThomasMcFarlane
-/clients/mobile-android/   @ThomasMcFarlane
-/clients/tv-android/       @ThomasMcFarlane
-/clients/android-shared/   @ThomasMcFarlane
+/clients/android/          @ThomasMcFarlane
 /clients/ios/              @ThomasMcFarlane
 /clients/tv-web/           @ThomasMcFarlane
 /clients/shared/           @ThomasMcFarlane

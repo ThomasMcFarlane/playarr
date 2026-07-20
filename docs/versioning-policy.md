@@ -136,7 +136,7 @@ them (`@streamarr-tv/api-client`'s `defaultHeaders`) but no call site
 currently populates them. Since the gate is a stub regardless, this has no
 behavioural effect yet — it's noted here for accuracy, not as a bug report.
 
-### Android — `clients/mobile-android/` and `clients/android-shared/core-update/`
+### Android — `clients/android/`
 
 - **`VersionComparator`** — a small, deliberately-not-full-SemVer numeric
   comparator: splits on `.`, compares components as integers, ignores build

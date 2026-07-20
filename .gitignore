@@ -46,7 +46,7 @@ coverage/
 /clients/tv-web/web/public/vidaa-store/
 
 # ------------------------------------------------------------------------
-# Gradle / Android / Kotlin (clients/mobile-android/, clients/tv-android/, clients/android-shared/)
+# Gradle / Android / Kotlin (clients/android/)
 # ------------------------------------------------------------------------
 .gradle/
 gradle-app.setting

@@ -7,7 +7,7 @@
 # creates an annotated git tag using the repo's tag scheme:
 #
 #   backend-vX.Y.Z          the Rust backend (backend/Cargo.toml [workspace.package].version)
-#   android-shared-vX.Y.Z   clients/android-shared (gradle.properties VERSION_NAME, if present)
+#   android-vX.Y.Z   clients/android (gradle.properties VERSION_NAME, if present)
 #   ios-vX.Y.Z              clients/ios (a top-level VERSION file, if present --
 #                            Xcode/SPM projects don't have one canonical
 #                            version field the way Cargo/Gradle/npm do)
@@ -26,7 +26,7 @@
 # Usage:
 #   ./scripts/release.sh backend 1.4.0
 #   ./scripts/release.sh tv-web 0.3.0 --dry-run
-#   ./scripts/release.sh android-shared 2.1.0-rc.1 --push
+#   ./scripts/release.sh android 2.1.0-rc.1 --push
 #   ./scripts/release.sh ios 1.0.0 --push --yes   # push without a confirmation prompt (e.g. CI)
 #
 # Flags:
@@ -83,12 +83,12 @@ done
 # (associative arrays need 4.0+), and this script has no other reason to
 # require a newer bash, so a plain case statement keeps it running
 # unmodified under whatever `bash` a contributor's `env` resolves to.
-KNOWN_COMPONENTS="backend android-shared ios tv-web"
+KNOWN_COMPONENTS="backend android ios tv-web"
 
 version_file_for() {
   case "$1" in
     backend) echo "backend/Cargo.toml" ;;
-    android-shared) echo "clients/android-shared/gradle.properties" ;;
+    android) echo "clients/android/gradle.properties" ;;
     ios) echo "clients/ios/VERSION" ;;
     tv-web) echo "clients/tv-web/package.json" ;;
     *) return 1 ;;
@@ -164,7 +164,7 @@ else
       run rm -f "${version_file}.bak"
       bumped=1
       ;;
-    android-shared)
+    android)
       if grep -q '^VERSION_NAME=' "${version_file}"; then
         run sed -i.bak -E "s/^VERSION_NAME=.*/VERSION_NAME=${VERSION}/" "${version_file}"
       else

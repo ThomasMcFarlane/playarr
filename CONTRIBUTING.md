@@ -10,8 +10,8 @@ this just done the simple way" questions are answered there.
 
 ```
 backend/          Streamarr: Rust workspace (Cargo workspace under backend/crates/*)
-clients/          Playarr: mobile-android/, tv-android/, android-shared/ (Gradle
-                   root for both), ios/, tv-web/ (Web + webOS + Tizen + VIDAA), shared/
+clients/          Playarr: android/ (one universal app project), ios/,
+                   tv-web/ (Web + webOS + Tizen + VIDAA), shared/
 infra/            systemd/, docker/, kubernetes/, k6/ — deployment for all three tiers
 scripts/          Local dev tooling (environment seeding, SDK codegen)
 docs/             Architecture, roadmap, versioning policy, ADRs
@@ -58,17 +58,14 @@ just tv-web-dev     # dev server with hot reload
 just tv-web-build    # production bundles for every tv-web target
 ```
 
-**Android** (mobile + TV): one Gradle build spanning three directories —
-`clients/android-shared/` is the Gradle root and owns the shared `core-*`
-library modules, and pulls in `clients/mobile-android/` and
-`clients/tv-android/` as sibling app modules (see
-`clients/android-shared/settings.gradle.kts` for why the root isn't at
-`clients/`). Always invoke Gradle from `android-shared/`, which is what
-`just` does for you:
+**Android** (mobile + TV): `clients/android/` is the only Android project. It
+contains one responsive `app` module plus internal `core-*` modules and emits
+one APK for every supported Android form factor. Always invoke Gradle from
+`clients/android/`, which is what `just` does for you:
 
 ```sh
-just android-build                                    # ./gradlew assembleDebug (both app modules)
-just android-build :mobile-android:assembleRelease     # target a single module/variant
+just android-build                         # ./gradlew assembleDebug
+just android-build :app:assembleRelease    # target the release variant
 ```
 
 **iOS** (`clients/ios/`): currently a source-only Swift package (no Xcode

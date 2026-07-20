@@ -22,13 +22,9 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 
 backend_dir := "backend"
 tv_web_dir := "clients/tv-web"
-# The Android Gradle root lives in android-shared/ (not a top-level
-# clients/android/): it declares the shared core-* library modules directly
-# and pulls in clients/mobile-android/ as the single responsive application
-# module by relative projectDir, since app-module source is out of this
-# Gradle root's own directory tree. See
-# clients/android-shared/settings.gradle.kts for why.
-android_dir := "clients/android-shared"
+# The only Android project. It contains one responsive application module and
+# its internal core modules, and produces one phone/tablet/TV APK.
+android_dir := "clients/android"
 ios_dir := "clients/ios"
 infra_dir := "infra"
 scripts_dir := "scripts"
@@ -88,7 +84,7 @@ playarr-deploy:
 # ------------------------------------------------------------------------
 
 # Target a single module/variant instead of the default, e.g.
-# `just android-build :mobile-android:assembleRelease`.
+# `just android-build :app:assembleRelease`.
 
 # Build the single Android phone/tablet/TV application.
 android-build TASK="assembleDebug":

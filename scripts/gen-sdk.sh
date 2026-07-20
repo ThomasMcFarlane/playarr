@@ -5,7 +5,7 @@
 # Generates the Streamarr client SDKs from backend/openapi/streamarr.yaml,
 # for each of the three non-Rust client platforms:
 #
-#   kotlin      -> clients/android-shared/sdk       (Android mobile + TV)
+#   kotlin      -> clients/android/sdk       (Android mobile + TV)
 #   swift5      -> clients/ios/StreamarrSDK          (iOS + tvOS)
 #   typescript  -> clients/tv-web/packages/api-client/src/generated
 #                  (Web, webOS, Tizen, VIDAA-fallback -- the pnpm workspace
@@ -37,7 +37,7 @@
 #   OPENAPI_GENERATOR_IMAGE  default: openapitools/openapi-generator-cli:v7.9.0
 #   NODE_IMAGE               default: node:20-alpine (only used for the
 #                              default TypeScript openapi-fetch mode)
-#   KOTLIN_OUTPUT_DIR        default: clients/android-shared/sdk
+#   KOTLIN_OUTPUT_DIR        default: clients/android/sdk
 #   SWIFT_OUTPUT_DIR         default: clients/ios/StreamarrSDK
 #   TS_OUTPUT_DIR             default (openapi-fetch mode):
 #                              clients/tv-web/packages/api-client/src/generated
@@ -63,7 +63,7 @@ KOTLIN_CONFIG="${REPO_ROOT}/clients/shared/sdk-codegen/kotlin-config.yaml"
 SWIFT_CONFIG="${REPO_ROOT}/clients/shared/sdk-codegen/swift-config.yaml"
 TS_CONFIG="${REPO_ROOT}/clients/shared/sdk-codegen/typescript-config.yaml"
 
-KOTLIN_OUTPUT_DIR="${KOTLIN_OUTPUT_DIR:-${REPO_ROOT}/clients/android-shared/sdk}"
+KOTLIN_OUTPUT_DIR="${KOTLIN_OUTPUT_DIR:-${REPO_ROOT}/clients/android/sdk}"
 SWIFT_OUTPUT_DIR="${SWIFT_OUTPUT_DIR:-${REPO_ROOT}/clients/ios/StreamarrSDK}"
 
 TS_MODE="openapi-fetch"

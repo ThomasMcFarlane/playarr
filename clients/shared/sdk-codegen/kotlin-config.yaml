@@ -5,10 +5,10 @@
 #     -i /local/backend/openapi/streamarr.yaml \
 #     -g kotlin \
 #     -c /local/clients/shared/sdk-codegen/kotlin-config.yaml \
-#     -o /local/clients/android-shared/sdk
+#     -o /local/clients/android/sdk
 #
-# Output lands in clients/android-shared/sdk -- a self-contained Gradle
-# module the android-shared owner wires into settings.gradle.kts via
+# Output lands in clients/android/sdk -- a self-contained Gradle
+# module the android owner wires into settings.gradle.kts via
 # `include(":sdk")`. It is deliberately generated into its own module rather
 # than directly into an existing hand-written module, so regeneration is a
 # clean `rm -rf` + regenerate with no risk of clobbering hand-written code.
