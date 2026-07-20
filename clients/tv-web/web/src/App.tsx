@@ -282,14 +282,15 @@ function AppShell() {
       .then((kinds) => {
         writeCachedCatalogKinds(catalogKindsCacheScope, kinds);
         if (!cancelled) {
-          // A cached navigation stays fixed for this shell mount. The refreshed
-          // value is ready for the next sign-in without moving visible items.
-          if (!cachedKinds) {
-            setAvailableWorkKindsState({
-              scope: catalogKindsCacheScope,
-              kinds: new Set(kinds),
-            });
-          }
+          // Always apply the server's answer once it arrives, even over a
+          // cached value shown for the instant paint -- library ACL can
+          // change mid-session (e.g. an admin revoking a source instance),
+          // and a stale cache must not keep a now-forbidden nav item visible
+          // for the rest of this sign-in.
+          setAvailableWorkKindsState({
+            scope: catalogKindsCacheScope,
+            kinds: new Set(kinds),
+          });
         }
       })
       .catch(() => {
