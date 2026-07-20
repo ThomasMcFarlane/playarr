@@ -1,7 +1,7 @@
 # Client architecture: universal Android app on TV
 
 Android TV and Google TV run the same native Playarr package and APK as phones
-and tablets: `clients/mobile-android/`, package `io.streamarr.mobile`.
+and tablets: `clients/android/`, package `io.streamarr.mobile`.
 
 ## Native presentation
 
@@ -44,15 +44,15 @@ delivery.
 
 ```bash
 export JAVA_HOME=/opt/homebrew/opt/openjdk@21
-cd clients/android-shared
-./gradlew :mobile-android:testDebugUnitTest \
-  :mobile-android:assembleDebug \
-  :mobile-android:lintDebug
+cd clients/android
+./gradlew :app:testDebugUnitTest \
+  :app:assembleDebug \
+  :app:lintDebug
 ```
 
 Install that one APK on both phone and television targets:
 
 ```bash
-adb -s <phone> install -r ../mobile-android/build/outputs/apk/debug/mobile-android-debug.apk
-adb -s <tv> install -r ../mobile-android/build/outputs/apk/debug/mobile-android-debug.apk
+adb -s <phone> install -r app/build/outputs/apk/debug/playarr-android-debug.apk
+adb -s <tv> install -r app/build/outputs/apk/debug/playarr-android-debug.apk
 ```

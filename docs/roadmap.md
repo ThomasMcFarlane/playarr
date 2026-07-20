@@ -179,7 +179,7 @@ someone runs them for real.
   is that real generated file. **Kotlin and Swift codegen are configured
   but never executed**: `clients/shared/sdk-codegen/{kotlin,swift}-config.yaml`
   and `scripts/gen-sdk.sh` are real `openapi-generator` configs pointing at
-  output directories (`clients/android-shared/sdk`,
+  output directories (`clients/android/sdk`,
   `clients/ios/StreamarrSDK`) that don't exist in the tree. Android and iOS
   instead ship **hand-written mirrors** of the OpenAPI schemas
   (`StreamarrHttpClient.kt`'s models, `OpenAPISchemas.swift`), written by
@@ -188,10 +188,9 @@ someone runs them for real.
   doesn't produce correct `Codable` conformances for several `oneOf`
   schemas), not an oversight. Regenerating for real is still available any
   time via `scripts/gen-sdk.sh`.
-- **Android.** **Built.** `clients/android-shared/` (core-auth,
-  core-data, core-domain, core-designsystem, core-player, core-update) plus
-  `clients/mobile-android/` for one native responsive Compose application
-  spanning phones, tablets, Android TV, and Google TV.
+- **Android.** **Built.** `clients/android/` is one Gradle project containing
+  one native responsive Compose application and its internal modules, spanning
+  phones, tablets, Android TV, and Google TV with one APK.
 - **iOS.** **Built.** `clients/ios/Streamarr.xcodeproj` produces a native
   `Playarr.app`, links the reusable `StreamarrKit` package, includes App Store
   bundle/privacy/icon resources, and defines application and kit XCTest
@@ -206,7 +205,7 @@ someone runs them for real.
 
 ## Wave 6 — TV Clients
 
-- **Android TV.** **Built.** The universal `clients/mobile-android/` package
+- **Android TV.** **Built.** The universal `clients/android/` project
   exposes a Leanback launcher and adapts the same native UI for D-pad use.
 - **webOS.** **Built.** `clients/tv-web/apps/tv-webos/`, a real adapter
   over the shared TV shell using `player-shaka`.

@@ -1,27 +1,21 @@
-# Streamarr / Playarr Android client tree
+# Playarr Android
 
-This directory is the Gradle root for one native Playarr Android application
-and its shared libraries. `clients/mobile-android/` is the only application
-module and produces the universal phone, tablet, Android TV, and Google TV APK.
+`clients/android/` is the repository's only Android project. It produces one
+native APK for phones, tablets, Android TV, and Google TV. The `app` directory
+is its single application module; the `core-*` directories are internal
+library modules in the same Gradle project.
 
 ## Module graph
 
 ```text
-streamarr-android
+playarr-android
 ├── core-auth          account and device authentication
 ├── core-data          server configuration, models, and Retrofit APIs
 ├── core-designsystem  shared Compose theme and components
 ├── core-domain        repositories and use cases
 ├── core-player        Media3/ExoPlayer wrapper
 ├── core-update        update policy and Play update integration
-└── mobile-android     responsive native application
-```
-
-The application is included as a sibling project from `settings.gradle.kts`:
-
-```kotlin
-include(":mobile-android")
-project(":mobile-android").projectDir = file("../mobile-android")
+└── app                responsive native application and APK
 ```
 
 ## Build
@@ -30,14 +24,13 @@ Use JDK 21:
 
 ```bash
 export JAVA_HOME=/opt/homebrew/opt/openjdk@21
-cd clients/android-shared
-./gradlew :mobile-android:testDebugUnitTest \
-  :mobile-android:assembleDebug \
-  :mobile-android:lintDebug
+cd clients/android
+./gradlew :app:testDebugUnitTest \
+  :app:assembleDebug \
+  :app:lintDebug
 ```
 
-The APK is written to
-`clients/mobile-android/build/outputs/apk/debug/mobile-android-debug.apk`.
+The APK is written to `clients/android/app/build/outputs/apk/debug/`.
 
 Firebase invite notifications accept the public Android project values through
 the `firebaseApiKey`, `firebaseMobileApplicationId`, `firebaseProjectId`, and

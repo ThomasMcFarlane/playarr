@@ -6,6 +6,10 @@ plugins {
     alias(libs.plugins.hilt.android)
 }
 
+base {
+    archivesName.set("playarr-android")
+}
+
 val firebaseApiKey = providers.gradleProperty("firebaseApiKey").orElse("")
 val firebaseApplicationId = providers.gradleProperty("firebaseMobileApplicationId").orElse("")
 val firebaseProjectId = providers.gradleProperty("firebaseProjectId").orElse("")

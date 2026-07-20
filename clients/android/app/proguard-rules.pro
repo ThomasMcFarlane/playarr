@@ -1,4 +1,4 @@
-# App-specific R8/ProGuard rules for mobile-android. Library modules
+# App-specific R8/ProGuard rules for the universal application. Library modules
 # contribute their own rules via consumerProguardFiles (see core-data's
 # consumer-rules.pro for the kotlinx.serialization rules, for example) so
 # this file only needs app-level concerns.
