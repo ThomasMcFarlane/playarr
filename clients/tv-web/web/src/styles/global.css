@@ -10829,9 +10829,7 @@ html[data-platform="android-tv"] .player-quality-option {
 .tv-downloads-storage-panel {
   display: grid;
   gap: 0.5rem;
-  padding-bottom: clamp(14px, 1.6vw, 22px);
   margin-bottom: clamp(14px, 1.6vw, 22px);
-  border-bottom: 1px solid var(--line);
   color: var(--ink-muted);
   font-size: clamp(0.5rem, 0.58vw, 0.68rem);
 }
