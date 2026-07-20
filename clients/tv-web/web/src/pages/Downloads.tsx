@@ -301,6 +301,14 @@ export function DownloadsPage() {
           <span aria-hidden="true">←</span>
         </Link>
         <h1>{t("pages.downloads.title")}</h1>
+        {storageSupported && storageUsage ? (
+          <span>
+            {t("pages.downloads.storageUsed", {
+              used: formatBytes(storageUsage.usageBytes),
+              quota: formatBytes(storageUsage.quotaBytes),
+            })}
+          </span>
+        ) : null}
         {!online ? <span className="tv-downloads-offline-badge">{t("pages.downloads.offline")}</span> : null}
       </header>
 
