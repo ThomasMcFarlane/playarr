@@ -266,6 +266,7 @@ fn api_router() -> OpenApiRouter<AppState> {
             users::get_player_preferences_handler,
             users::update_player_preferences_handler
         ))
+        .routes(routes!(users::get_self_capabilities_handler))
         .routes(routes!(
             users::get_profile_pin_setting_handler,
             users::update_profile_pin_setting_handler

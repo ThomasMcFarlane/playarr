@@ -1701,19 +1701,21 @@ export function WorkDetailPage() {
         </p>
         {work.kind === "movie" && playMediaFileId ? (
           <div className="tv-detail-actions">
-            <button
-              ref={movieDownloadButtonRef}
-              type="button"
-              className="tv-detail-download"
-              aria-label={t("pages.workDetail.downloadTitle", { title: work.title })}
-              aria-haspopup="dialog"
-              aria-expanded={movieDownloadOpen}
-              data-navigation-focus-key={`detail:${work.id}:download`}
-              onClick={() => setMovieDownloadOpen(true)}
-            >
-              <span aria-hidden="true">⇩</span>
-              <strong>{t("pages.workDetail.downloadButtonLabel")}</strong>
-            </button>
+            {downloads.canDownload === true ? (
+              <button
+                ref={movieDownloadButtonRef}
+                type="button"
+                className="tv-detail-download"
+                aria-label={t("pages.workDetail.downloadTitle", { title: work.title })}
+                aria-haspopup="dialog"
+                aria-expanded={movieDownloadOpen}
+                data-navigation-focus-key={`detail:${work.id}:download`}
+                onClick={() => setMovieDownloadOpen(true)}
+              >
+                <span aria-hidden="true">⇩</span>
+                <strong>{t("pages.workDetail.downloadButtonLabel")}</strong>
+              </button>
+            ) : null}
             <button
               ref={moviePlaybackSettingsButtonRef}
               type="button"

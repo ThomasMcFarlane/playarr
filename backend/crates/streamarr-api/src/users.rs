@@ -279,6 +279,40 @@ pub struct PlayerPreferencesResponse {
     pub preferred_audio_language: String,
 }
 
+/// The signed-in Playarr user's own capability grants -- the client-side
+/// counterpart to `ensure_can_download`'s server-side enforcement. A
+/// capability being enforced server-side is not the same as it being
+/// visibly gated in the UI: without this, a client has no way to know
+/// whether to show a "Download" button/nav item at all, only whether the
+/// resulting API call will succeed once clicked. Deliberately just the
+/// capability booleans a Playarr client actually needs to gate its own UI
+/// on -- not `library_allow`/`is_admin`/`max_rating`, which are either
+/// already enforced per-request server-side (so the client never needs to
+/// duplicate that check) or not relevant to what Playarr's own chrome
+/// renders.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SelfCapabilitiesResponse {
+    pub can_download: bool,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/me/capabilities",
+    tag = "users",
+    responses(
+        (status = 200, description = "The signed-in user's own capability grants", body = SelfCapabilitiesResponse, example = json!({
+            "can_download": true
+        })),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Caller does not have Playarr streaming access")
+    )
+)]
+pub async fn get_self_capabilities_handler(streaming: StreamingUser) -> Json<SelfCapabilitiesResponse> {
+    Json(SelfCapabilitiesResponse {
+        can_download: streaming.policy.can_download,
+    })
+}
+
 /// Minimal household-profile projection for Playarr's 'who is watching'
 /// screen. Password hashes, email addresses and policy details are never
 /// exposed.

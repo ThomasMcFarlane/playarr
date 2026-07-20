@@ -133,6 +133,16 @@ interface DownloadsContextValue {
    */
   getLocalPlaybackSource: (mediaFileId: string) => Promise<LocalPlaybackSource | null>;
   /**
+   * The signed-in user's own `can_download` grant -- the client-side
+   * counterpart to the server's enforcement. `null` until resolved (no
+   * signed-in user yet, or the capabilities fetch hasn't completed) --
+   * treat `null` the same as `false` for anything that gates rendering a
+   * download affordance (nav item, buttons, context-menu action): it is
+   * never correct to show download UI before this account's grant is
+   * actually known.
+   */
+  canDownload: boolean | null;
+  /**
    * Buffers a watch-progress update in IndexedDB instead of sending it
    * live -- `usePlaybackEngine`'s `persistProgress` calls this when
    * `useOnlineStatus()` is false rather than calling
@@ -205,6 +215,7 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
   const [downloads, setDownloads] = useState<DownloadRecord[]>([]);
   const [storageUsage, setStorageUsage] = useState<DownloadsStorageUsage | null>(null);
   const [storageSupported, setStorageSupported] = useState<boolean | null>(null);
+  const [canDownload, setCanDownload] = useState<boolean | null>(null);
 
   const downloadsRef = useRef<DownloadRecord[]>([]);
   downloadsRef.current = downloads;
@@ -408,6 +419,34 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally scoped by `apiBaseUrl`/`userId` only; `pollTicket`/`scheduleNext` are stable-enough callbacks re-created per render but not meaningful re-run triggers here.
   }, [apiBaseUrl, userId]);
+
+  // Resolves the signed-in user's own `can_download` grant so the UI can
+  // actually hide download affordances for an account that doesn't have
+  // one, instead of only having the underlying request 403 once clicked.
+  // Reset to `null` (not `false`) on sign-out/server-change so a brief gap
+  // before the next fetch resolves never renders as "confirmed no access".
+  useEffect(() => {
+    if (!userId) {
+      setCanDownload(null);
+      return;
+    }
+    let cancelled = false;
+    setCanDownload(null);
+    void client
+      .getSelfCapabilities()
+      .then((capabilities) => {
+        if (!cancelled) setCanDownload(capabilities.can_download);
+      })
+      .catch(() => {
+        // Transient network/server hiccup, or the account genuinely can't
+        // stream (StreamingUser extraction itself 403s) -- either way,
+        // fail closed rather than showing download UI on an error.
+        if (!cancelled) setCanDownload(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, client, userId]);
 
   useEffect(
     () => () => {
@@ -670,10 +709,12 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
       remove,
       getLocalPlaybackSource,
       queueWatchMutation,
+      canDownload,
     }),
     [
       activeSummary,
       cancel,
+      canDownload,
       downloads,
       enqueue,
       getLocalPlaybackSource,

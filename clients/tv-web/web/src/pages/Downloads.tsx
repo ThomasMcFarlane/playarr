@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import type { DownloadRecord } from "../lib/downloadsDb";
 import { useDownloads } from "../lib/DownloadsProvider";
 import { formatBytes } from "../lib/formatBytes";
@@ -207,8 +207,19 @@ export function DownloadsPage() {
   const { t } = useLanguage();
   const online = useOnlineStatus();
   const client = useApiClient();
-  const { downloads, storageUsage, storageSupported, cancel, retry, remove } = useDownloads();
+  const { downloads, storageUsage, storageSupported, cancel, retry, remove, canDownload } =
+    useDownloads();
   useDocumentTitle(t("pages.downloads.title"));
+
+  // Defense in depth: the nav item is already hidden without this grant,
+  // but a direct navigation (bookmark, typed URL) should still bounce
+  // rather than render a page whose every action would 403 anyway. `null`
+  // (not yet resolved) intentionally renders nothing below rather than
+  // redirecting -- redirecting on a transient loading state would kick out
+  // a user who does have the grant, just before it's confirmed.
+  if (canDownload === false) {
+    return <Navigate to="/" replace />;
+  }
 
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [focusedDetail, setFocusedDetail] = useState<WorkDetail | null>(null);

@@ -3208,6 +3208,26 @@ paths:
           description: No such playlist/item, or playlist not visible to the caller
       security:
       - bearer_auth: []
+  /api/v1/users/me/capabilities:
+    get:
+      tags:
+      - users
+      operationId: get_self_capabilities_handler
+      responses:
+        '200':
+          description: The signed-in user's own capability grants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SelfCapabilitiesResponse'
+              example:
+                can_download: true
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
+      security:
+      - bearer_auth: []
   /api/v1/users/me/player-preferences:
     get:
       tags:
@@ -5499,6 +5519,25 @@ components:
             $ref: '#/components/schemas/EpisodeDetailSchema'
         season:
           $ref: '#/components/schemas/Season'
+    SelfCapabilitiesResponse:
+      type: object
+      description: |-
+        The signed-in Playarr user's own capability grants -- the client-side
+        counterpart to `ensure_can_download`'s server-side enforcement. A
+        capability being enforced server-side is not the same as it being
+        visibly gated in the UI: without this, a client has no way to know
+        whether to show a "Download" button/nav item at all, only whether the
+        resulting API call will succeed once clicked. Deliberately just the
+        capability booleans a Playarr client actually needs to gate its own UI
+        on -- not `library_allow`/`is_admin`/`max_rating`, which are either
+        already enforced per-request server-side (so the client never needs to
+        duplicate that check) or not relevant to what Playarr's own chrome
+        renders.
+      required:
+      - can_download
+      properties:
+        can_download:
+          type: boolean
     SessionHistoryView:
       type: object
       description: |-

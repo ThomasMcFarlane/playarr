@@ -1120,6 +1120,22 @@ export interface paths {
         patch: operations["update_player_preferences_handler"];
         trace?: never;
     };
+    "/api/v1/users/me/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_self_capabilities_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/me/profile-avatar": {
         parameters: {
             query?: never;
@@ -2157,6 +2173,17 @@ export interface components {
         SeasonDetailSchema: {
             episodes: components["schemas"]["EpisodeDetailSchema"][];
             season: components["schemas"]["Season"];
+        };
+        /**
+         * @description The signed-in Playarr user's own capability grants -- the client-side
+         *     counterpart to `ensure_can_download`'s server-side enforcement. A
+         *     capability being enforced server-side is not the same as it being
+         *     visibly gated in the UI: without this, a client has no way to know
+         *     whether to show a "Download" button/nav item at all, only whether the
+         *     resulting API call will succeed once clicked.
+         */
+        SelfCapabilitiesResponse: {
+            can_download: boolean;
         };
         /**
          * @description Historical playback-session fields plus the same best-effort linked
@@ -6918,6 +6945,45 @@ export interface operations {
             };
             /** @description The signed-in user no longer exists */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_self_capabilities_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The signed-in user's own capability grants */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "can_download": true
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SelfCapabilitiesResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

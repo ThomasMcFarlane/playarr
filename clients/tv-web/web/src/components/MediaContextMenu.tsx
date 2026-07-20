@@ -1148,18 +1148,20 @@ export function useMediaContextMenu({
                     : t("components.mediaContextMenu.play")}
                 </strong>
               </button>
-              <button
-                type="button"
-                disabled={Boolean(busyAction)}
-                onClick={() => void download()}
-              >
-                <span aria-hidden="true">⇩</span>
-                <strong>
-                  {busyAction === "download"
-                    ? t("components.mediaContextMenu.opening")
-                    : t("components.mediaContextMenu.download")}
-                </strong>
-              </button>
+              {downloads.canDownload === true ? (
+                <button
+                  type="button"
+                  disabled={Boolean(busyAction)}
+                  onClick={() => void download()}
+                >
+                  <span aria-hidden="true">⇩</span>
+                  <strong>
+                    {busyAction === "download"
+                      ? t("components.mediaContextMenu.opening")
+                      : t("components.mediaContextMenu.download")}
+                  </strong>
+                </button>
+              ) : null}
               {isPlaylistItem ? (
                 <>
                   <button

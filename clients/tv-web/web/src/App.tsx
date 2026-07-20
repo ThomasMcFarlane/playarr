@@ -70,6 +70,7 @@ import {
 } from "./lib/playerSession";
 import { useTvNavigation } from "./lib/useTvNavigation";
 import { useOnlineStatus } from "./lib/useOnlineStatus";
+import { useDownloads } from "./lib/DownloadsProvider";
 import { PLAYARR_CLIENT_PLATFORM } from "./lib/clientPlatform";
 import { useLanguage } from "./lib/i18n/LanguageProvider";
 import type { TranslationKey } from "./lib/i18n/translations";
@@ -92,6 +93,8 @@ interface NavItem {
   end: boolean;
   Icon: ComponentType;
   workKind?: WorkKind;
+  /** Hidden until `DownloadsProvider`'s `canDownload` resolves `true` -- see the render filter below. */
+  requiresDownload?: boolean;
 }
 
 interface NavGroup {
@@ -109,7 +112,13 @@ const NAV_GROUPS: ReadonlyArray<NavGroup> = [
   {
     id: "search",
     items: [
-      { to: "/downloads", labelKey: "shell.nav.downloads", end: false, Icon: DownloadsIcon },
+      {
+        to: "/downloads",
+        labelKey: "shell.nav.downloads",
+        end: false,
+        Icon: DownloadsIcon,
+        requiresDownload: true,
+      },
       { to: "/search", labelKey: "shell.nav.search", end: false, Icon: SearchIcon },
     ],
   },
@@ -217,6 +226,7 @@ function AppShell() {
   const navigate = useNavigate();
   const now = useMinuteClock();
   const online = useOnlineStatus();
+  const { canDownload } = useDownloads();
   const playerRouteMatch = matchPath("/player/:mediaFileId", location.pathname);
   const routeMediaFileId = playerRouteMatch?.params.mediaFileId;
   const isPlayerRoute = routeMediaFileId !== undefined;
@@ -452,7 +462,8 @@ function AppShell() {
               {group.items
                 .filter(
                   (item) =>
-                    !item.workKind || availableWorkKinds?.has(item.workKind)
+                    (!item.workKind || availableWorkKinds?.has(item.workKind)) &&
+                    (!item.requiresDownload || canDownload === true)
                 )
                 .map(({ to, labelKey, end, Icon }) => (
                   <NavLink

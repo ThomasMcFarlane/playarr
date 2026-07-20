@@ -127,6 +127,7 @@ export type RegisterPushRequest = components["schemas"]["RegisterPushRequest"];
 export type UpdateUserRequest = components["schemas"]["UpdateUserRequest"];
 export type UserResponse = components["schemas"]["UserResponse"];
 export type PlayerPreferences = components["schemas"]["PlayerPreferencesResponse"];
+export type SelfCapabilities = components["schemas"]["SelfCapabilitiesResponse"];
 export type UpdatePlayerPreferencesRequest =
   components["schemas"]["UpdatePlayerPreferencesRequest"];
 export type ProfileAvatarPreference = components["schemas"]["ProfileAvatarPreference"];
@@ -879,6 +880,16 @@ export class ApiClient {
     this.assertOk(
       await this.raw.DELETE("/api/v1/admin/users/{id}", { params: { path: { id } } })
     );
+  }
+
+  /**
+   * The signed-in user's own capability grants (currently just
+   * `can_download`) -- the client-side counterpart to the server's
+   * `can_download` enforcement, used to decide whether to show download
+   * UI at all rather than just letting the underlying request 403.
+   */
+  async getSelfCapabilities(): Promise<SelfCapabilities> {
+    return this.unwrap(await this.raw.GET("/api/v1/users/me/capabilities", {}));
   }
 
   /** The signed-in user's persisted player defaults. */
