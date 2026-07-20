@@ -235,13 +235,20 @@ pub async fn person_works_handler(
     viewer: CatalogViewer,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<Work>>, ApiError> {
-    // 404s if the person doesn't exist, rather than silently returning an
-    // empty list -- distinguishes "no credits recorded yet" (200, empty)
-    // from "this id was never a real person" (404).
     state.credit_repo.get_person(id).await?;
 
+    // Same visibility gate as `get_person_handler`: 404, not 200 with an
+    // empty array, when every one of this person's credited works lies
+    // outside the caller's `library_allow` -- otherwise a restricted
+    // caller could tell "person exists, credited only on a library I
+    // can't see" (200, []) apart from "this id was never a real person"
+    // (404), the exact existence oracle `get_person_handler` is written
+    // to prevent.
     let allowed = viewer.allowed_libraries();
     let mut works = visible_works_for_person(&state, id, allowed.as_deref()).await?;
+    if works.is_empty() {
+        return Err(ApiError::not_found("person not found"));
+    }
     works.sort_by(|a, b| a.sort_title.cmp(&b.sort_title));
     Ok(Json(works))
 }
@@ -666,6 +673,48 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri(format!("/api/v1/people/{person_id}"))
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// `GET /api/v1/people/{id}/works` 404s for a person whose only
+    /// credited work lies outside the caller's `library_allow`, mirroring
+    /// `get_person_with_no_visible_credited_work_is_404` -- a 200 with an
+    /// empty array would let a restricted caller distinguish "this person
+    /// exists, just not visible to me" from "this id was never a real
+    /// person", the existence oracle both endpoints must close identically.
+    #[tokio::test]
+    async fn person_works_with_no_visible_credited_work_is_404() {
+        let (router, state) = test_state().await;
+        let allowed_instance = Uuid::new_v4();
+        let other_instance = Uuid::new_v4();
+
+        let other_movie = seed_movie(&state, "Only Other Movie").await;
+        seed_media_file(&state, other_movie, LeafRef::Work, other_instance).await;
+        let person_id = seed_credit(
+            &state,
+            other_movie,
+            "Fully Hidden Actor",
+            CreditRole::Cast {
+                character: "Role".to_string(),
+            },
+            0,
+        )
+        .await;
+
+        let user_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user_id, vec![allowed_instance]).await;
+        let token = mint_access_token(&state, user_id);
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/v1/people/{person_id}/works"))
                     .header("Authorization", bearer_header(&token))
                     .body(Body::empty())
                     .unwrap(),
