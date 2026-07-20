@@ -1512,6 +1512,14 @@ export interface components {
          */
         CreateUserRequest: {
             /**
+             * @description Grants permission to create/fetch downloads of media this account
+             *     can already stream -- see `streamarr_model::Policy::can_download`'s
+             *     doc comment. Defaults to `false` (least privilege), same philosophy
+             *     as `can_stream`/`library_allow` above: an admin has to explicitly
+             *     grant download access, it is never on by default.
+             */
+            can_download?: boolean;
+            /**
              * @description Grants Playarr streaming access -- see `streamarr_model::Policy::
              *     can_stream`'s doc comment. Independent of `is_admin`; defaults to
              *     `false` (least privilege), same as every other grant this handler
@@ -2397,6 +2405,12 @@ export interface components {
          *     `User` row itself (`is_admin` lives on `Policy`, not `User`).
          */
         UpdateUserRequest: {
+            /**
+             * @description `Some(bool)` replaces the account's `Policy::can_download`; `None`
+             *     (the field omitted) leaves it untouched -- same all-optional-patch
+             *     shape as every other field here.
+             */
+            can_download?: boolean | null;
             can_stream?: boolean | null;
             disabled?: boolean | null;
             display_name?: string | null;
@@ -2471,6 +2485,13 @@ export interface components {
          *     since it isn't a field on `User` at all.
          */
         UserResponse: {
+            /**
+             * @description Whether this account may create/fetch downloads -- see
+             *     `streamarr_model::Policy::can_download`'s doc comment. Independent
+             *     of `can_stream`/`library_allow`; defaults to `false` for a newly
+             *     created account.
+             */
+            can_download: boolean;
             /**
              * @description Whether this account is permitted to sign in to Playarr -- see
              *     `streamarr_model::Policy::can_stream`'s doc comment. Independent of

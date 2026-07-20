@@ -141,6 +141,7 @@
   padding: 4px 4px 24px;
   margin: -4px;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   scroll-padding-block: 8px 24px;
   scrollbar-width: none;
 }
@@ -1854,6 +1855,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
 .language-dropdown-options {
   max-height: 260px;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 0.35rem;
 }
 
@@ -2175,6 +2177,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   width: min(560px, 100%);
   max-height: min(720px, calc(calc(100 * var(--viewport-unit)) - 48px));
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
   display: grid;
   gap: 1.15rem;
   padding: clamp(24px, 4vw, 48px);
@@ -2339,6 +2342,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   padding: clamp(24px, 4vw, 44px);
   overflow-x: hidden;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   border: 1px solid var(--line-strong);
   background: var(--bg);
@@ -2467,6 +2471,7 @@ code {
   margin: 0 auto;
   padding: clamp(24px, 4vw, 70px);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .auth-language-switch {
@@ -4031,6 +4036,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   gap: 0.65rem;
   padding: 0.5rem 0.5rem 2rem;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   scrollbar-width: none;
 }
@@ -4433,6 +4439,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   min-height: 0;
   padding: 0;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .app-nav {
@@ -4720,6 +4727,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   padding: 12px clamp(24px, 3vw, 58px) 16px 8px;
   margin: -12px 0 -16px -8px;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   overflow-y: hidden;
   overscroll-behavior: contain;
   scroll-behavior: smooth;
@@ -4979,6 +4987,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   display: flex;
   gap: 0.32rem;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
 
@@ -5489,6 +5498,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   gap: clamp(22px, calc(2.8 * var(--viewport-unit)), 34px);
   padding: clamp(38px, calc(5 * var(--viewport-unit)), 62px) clamp(26px, 2.5vw, 46px);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: color-mix(in srgb, var(--surface-strong) 94%, transparent);
   box-shadow: -32px 0 90px rgba(40, 26, 24, 0.24);
   backdrop-filter: blur(38px) saturate(130%);
@@ -5897,6 +5907,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   margin: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   scroll-behavior: smooth;
   scroll-padding-block: clamp(38px, calc(4 * var(--viewport-unit)), 54px) clamp(76px, calc(8 * var(--viewport-unit)), 108px);
@@ -6005,6 +6016,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
 
 .tv-library-grid-panel.is-cover-flow .tv-title-grid {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   overflow-y: hidden;
   scroll-padding-inline: calc(50% - var(--cover-flow-card-width) / 2);
 }
@@ -6794,6 +6806,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   padding-block: var(--viewport-half-height);
   overflow-x: hidden;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: linear-gradient(
     90deg,
     transparent 0%,
@@ -6923,6 +6936,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   padding: 18px clamp(22px, 2.4vw, 46px) 24px 8px;
   margin: 0 0 -24px -8px;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   overflow-y: hidden;
   overscroll-behavior: contain;
   scroll-padding-inline: 8px clamp(22px, 2.4vw, 46px);
@@ -7248,6 +7262,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   padding: var(--viewport-half-height) 0;
   overflow-x: hidden;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   scroll-padding-block: var(--viewport-half-height);
   scrollbar-width: none;
@@ -7420,6 +7435,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   padding: 18px clamp(22px, 2.4vw, 46px) 24px 8px;
   margin: 0 0 -24px -8px;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   overflow-y: hidden;
   overscroll-behavior: contain;
   scroll-padding-inline: 8px clamp(22px, 2.4vw, 46px);
@@ -7628,6 +7644,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   padding: 4px clamp(22px, 2.4vw, 46px) clamp(34px, calc(5 * var(--viewport-unit)), 58px) 0;
   overflow-x: hidden;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   scroll-behavior: auto;
   scroll-padding-block: 4px clamp(34px, calc(5 * var(--viewport-unit)), 58px);
@@ -8037,6 +8054,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   max-height: min(calc(32 * var(--viewport-unit)), 280px);
   padding: clamp(12px, calc(1.7 * var(--viewport-unit)), 20px) 0 4px;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   opacity: 1;
   transform: translateY(0);
   scrollbar-width: none;
@@ -8153,6 +8171,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     clamp(88px, calc(11 * var(--viewport-unit)), 132px) clamp(50px, 5vw, 96px);
   overflow-x: hidden;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   scroll-padding-block: clamp(126px, calc(16 * var(--viewport-unit)), 184px)
     clamp(88px, calc(11 * var(--viewport-unit)), 132px);
@@ -8405,6 +8424,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   height: min(calc(55 * var(--viewport-unit)), 510px);
   padding: clamp(22px, calc(3 * var(--viewport-unit)), 38px) 0 120px;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   overflow-y: hidden;
   overscroll-behavior: contain;
   scroll-padding-inline: clamp(72px, 10vw, 190px);
@@ -8898,8 +8918,45 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     clamp(42px, calc(7 * var(--viewport-unit)), 84px);
   overflow-x: hidden;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   scroll-padding-block: clamp(128px, calc(18 * var(--viewport-unit)), 188px) clamp(42px, calc(7 * var(--viewport-unit)), 84px);
+}
+
+/*
+ * Some TV browsers (e.g. sideloaded Android TV cursor browsers) can only
+ * scroll the document itself: an edge-of-screen cursor gesture moves the
+ * WebView's own root scroll offset, not an arbitrary nested overflow div.
+ * useNativeScrollRoot() adds this class for the lifetime of a simple,
+ * self-contained pre-auth surface (sign-in, sign-up, Clients) so its real
+ * overflow lives on document.scrollingElement instead, where every scroll
+ * mechanism a TV browser might use can reach it.
+ */
+html.is-native-scroll-root {
+  height: auto;
+  min-height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.is-native-scroll-root body {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+}
+
+html.is-native-scroll-root .profiles-page {
+  height: auto;
+  min-height: var(--viewport-height);
+  overflow: visible;
+}
+
+html.is-native-scroll-root .profile-auth-scroll {
+  position: relative;
+  inset: auto;
+  overflow: visible;
+  min-height: var(--viewport-height);
 }
 
 .profile-auth-panel {
@@ -9323,6 +9380,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   .app-main {
     overflow-x: hidden;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
   }
 
@@ -9360,6 +9418,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     gap: 2px;
     padding: 5px;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     overflow-y: hidden;
     border-radius: 20px;
     background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
@@ -9508,6 +9567,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     padding: 22px 0 calc(var(--mobile-nav-height) + 24px);
     overflow-x: hidden;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     background: linear-gradient(180deg, transparent, var(--surface) 14%);
     scroll-padding-block: 22px calc(var(--mobile-nav-height) + 24px);
   }
@@ -9980,6 +10040,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     max-height: calc(var(--viewport-height) - 32px);
     padding: 30px 20px 24px;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     border-radius: 22px;
   }
 
@@ -10185,6 +10246,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     height: var(--viewport-height);
     overflow-x: hidden;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .auth-card {
@@ -10320,6 +10382,7 @@ body[data-input-mode="remote"] .player-quality-option:focus {
     max-width: none;
     max-height: calc(58 * var(--viewport-unit));
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .player-playlist-panel {
@@ -10779,10 +10842,10 @@ html[data-platform="android-tv"] .player-quality-option {
   }
 }
 
-.tv-downloads-storage-footer {
+.tv-downloads-preview-storage {
   display: grid;
   gap: 0.5rem;
-  padding: clamp(14px, 1.6vw, 22px) 0 0;
+  margin-bottom: clamp(14px, 1.6vw, 22px);
   color: var(--ink-muted);
   font-size: clamp(0.5rem, 0.58vw, 0.68rem);
 }

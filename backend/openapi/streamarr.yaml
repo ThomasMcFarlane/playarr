@@ -4084,6 +4084,14 @@ components:
       - display_name
       - password
       properties:
+        can_download:
+          type: boolean
+          description: |-
+            Grants permission to create/fetch downloads of media this account
+            can already stream -- see `streamarr_model::Policy::can_download`'s
+            doc comment. Defaults to `false` (least privilege), same philosophy
+            as `can_stream`/`library_allow` above: an admin has to explicitly
+            grant download access, it is never on by default.
         can_stream:
           type: boolean
           description: |-
@@ -6048,6 +6056,14 @@ components:
         is; `is_admin`, when set, updates the user's [`Policy`] rather than the
         `User` row itself (`is_admin` lives on `Policy`, not `User`).
       properties:
+        can_download:
+          type:
+          - boolean
+          - 'null'
+          description: |-
+            `Some(bool)` replaces the account's `Policy::can_download`; `None`
+            (the field omitted) leaves it untouched -- same all-optional-patch
+            shape as every other field here.
         can_stream:
           type:
           - boolean
@@ -6204,10 +6220,18 @@ components:
       - is_admin
       - can_stream
       - library_allow
+      - can_download
       - disabled
       - created_at
       - preferred_audio_language
       properties:
+        can_download:
+          type: boolean
+          description: |-
+            Whether this account may create/fetch downloads -- see
+            `streamarr_model::Policy::can_download`'s doc comment. Independent
+            of `can_stream`/`library_allow`; defaults to `false` for a newly
+            created account.
         can_stream:
           type: boolean
           description: |-

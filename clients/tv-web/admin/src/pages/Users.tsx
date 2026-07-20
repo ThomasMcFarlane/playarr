@@ -22,6 +22,7 @@ const EMPTY_FORM: CreateUserRequest = {
   password: "",
   is_admin: false,
   can_stream: true,
+  can_download: false,
 };
 
 type TypePermission = {
@@ -161,6 +162,27 @@ function PlayIcon() {
       aria-hidden="true"
     >
       <polygon points="5 3 19 12 5 21 5 3" />
+    </svg>
+  );
+}
+
+/** "Grant/Revoke download access" icon for a user card's `.icon-btn` -- purely decorative. */
+function DownloadIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
     </svg>
   );
 }
@@ -561,6 +583,19 @@ export function UsersPage() {
     }
   }
 
+  async function handleToggleDownload(user: UserResponse) {
+    setBusyId(user.id);
+    setError(null);
+    try {
+      const updated = await client.updateUser(user.id, { can_download: !user.can_download });
+      setUsers((current) => current?.map((u) => (u.id === user.id ? updated : u)) ?? current);
+    } catch (err) {
+      setError(describeApiError(err));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   function handleToggleDisabled(user: UserResponse) {
     const nextDisabled = !user.disabled;
     void withSelfLockoutGuard(
@@ -697,6 +732,9 @@ export function UsersPage() {
                   <span className={`badge badge-pill ${user.can_stream ? "badge-success" : "badge-neutral"}`}>
                     {user.can_stream ? "playarr access" : "no playarr access"}
                   </span>
+                  <span className={`badge badge-pill ${user.can_download ? "badge-success" : "badge-neutral"}`}>
+                    {user.can_download ? "can download" : "no downloads"}
+                  </span>
                   <span className={`badge badge-pill ${user.disabled ? "badge-danger" : "badge-success"}`}>
                     {user.disabled ? "disabled" : "enabled"}
                   </span>
@@ -747,6 +785,17 @@ export function UsersPage() {
                     style={busy ? { opacity: 0.55, cursor: "default" } : undefined}
                   >
                     <PlayIcon />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    title={user.can_download ? "Revoke download access" : "Grant download access"}
+                    aria-label={user.can_download ? "Revoke download access" : "Grant download access"}
+                    disabled={busy}
+                    onClick={() => void handleToggleDownload(user)}
+                    style={busy ? { opacity: 0.55, cursor: "default" } : undefined}
+                  >
+                    <DownloadIcon />
                   </button>
                   <button
                     type="button"
@@ -824,6 +873,14 @@ export function UsersPage() {
               onChange={(e) => setForm((f) => ({ ...f, can_stream: e.target.checked }))}
             />
             Playarr access
+          </label>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={form.can_download ?? false}
+              onChange={(e) => setForm((f) => ({ ...f, can_download: e.target.checked }))}
+            />
+            Download access
           </label>
           <label className="checkbox-label">
             <input

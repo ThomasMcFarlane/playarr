@@ -65,6 +65,14 @@ pub struct Policy {
     pub allowed_tags: Vec<String>,
 
     pub can_transcode: bool,
+    /// Grants permission to create and fetch downloads (original or a
+    /// transcoded quality) of media this account can already stream --
+    /// enforced per-item in addition to, not instead of, `library_allow`.
+    /// A separate, deliberate grant from `can_stream`/`library_allow`
+    /// (same reasoning as `can_stream` on this struct): being able to
+    /// browse and play a library does not imply being allowed to copy it
+    /// off the server. Defaults to `false` (least privilege) for every
+    /// newly created account -- an admin has to explicitly turn it on.
     pub can_download: bool,
     pub can_delete: bool,
     pub can_share_public: bool,

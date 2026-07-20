@@ -242,6 +242,11 @@ export function usePlaybackEngine(
     positionSeconds: number;
     shouldPlay: boolean;
   } | null>(null);
+  // Set once the user deliberately picks a quality via `selectQuality`
+  // (including picking "Downloaded" themselves). Once set, the automatic
+  // "default to the completed download" effect backs off for the rest of
+  // this viewing session instead of overriding a deliberate choice.
+  const userSelectedQualityRef = useRef(false);
   const negotiationRequestRef = useRef<PlaybackInfoParams>(WEB_PLAYBACK_CAPABILITIES);
   const automaticRecoveryUrlRef = useRef<string | null>(null);
   const initialNegotiationRef = useRef(true);
@@ -282,9 +287,16 @@ export function usePlaybackEngine(
   // to add a quality option (the separate effect further down handles
   // that merge without touching negotiation at all).
   const localSourceRef = useRef<LocalPlaybackSource | null>(null);
+  // Tracks whether the "auto-default to the completed download" effect
+  // further below has already fired for the current `mediaFileId` -- a
+  // local copy should become the active quality automatically exactly
+  // once per viewing session, never re-applied on every subsequent
+  // re-render once it has resolved.
+  const autoAppliedDownloadedQualityRef = useRef(false);
   useEffect(() => {
     let cancelled = false;
     localSourceRef.current = null;
+    autoAppliedDownloadedQualityRef.current = false;
     setLocalSource(null);
     if (!mediaFileId) return;
     void downloads.getLocalPlaybackSource(mediaFileId).then((source) => {
@@ -296,30 +308,6 @@ export function usePlaybackEngine(
       cancelled = true;
     };
   }, [downloads, mediaFileId]);
-
-  // Appends the synthetic "Downloaded" quality option once a local copy
-  // resolves for an already-negotiated (online) source, without
-  // restarting negotiation -- see the ref comment above.
-  const readyNegotiationMode = negotiation.kind === "ready" ? negotiation.mode : undefined;
-  useEffect(() => {
-    if (!localSource || readyNegotiationMode === undefined || readyNegotiationMode === "direct") {
-      return;
-    }
-    setQualityOptions((current) =>
-      current.some((option) => option.id === DOWNLOADED_QUALITY_ID)
-        ? current
-        : [
-            ...current,
-            {
-              id: DOWNLOADED_QUALITY_ID,
-              label: "Downloaded",
-              profile: null,
-              height: null,
-              video_bitrate_bps: null,
-            },
-          ]
-    );
-  }, [localSource, readyNegotiationMode]);
 
   const clearSourceSubtitleBlobs = useCallback(() => {
     subtitleSelectionRequestRef.current += 1;
@@ -475,6 +463,80 @@ export function usePlaybackEngine(
     [closeSession]
   );
 
+  // Switches playback straight to the completed local download's `blob:`
+  // URL -- the exact same position/play-state-preserving, session-
+  // stopping sequence `selectQuality`'s manual "Downloaded" pick uses,
+  // shared here so the automatic default-to-downloaded effect below can
+  // never drift out of sync with the manual path.
+  const switchToDownloadedQuality = useCallback(() => {
+    if (!localSource) return;
+    const current = engineRef.current?.getState() ?? engineState;
+    const absolutePositionSeconds =
+      current.currentTimeSeconds + sourceOffsetSecondsRef.current;
+    const shouldPlay = current.state === "playing" || current.state === "buffering";
+    pendingQualitySwitchRef.current = {
+      positionSeconds: absolutePositionSeconds,
+      shouldPlay,
+    };
+    qualitySwitchRequestRef.current += 1;
+    setQualitySwitching(true);
+    setQualityError(undefined);
+    loadedForUrl.current = null;
+    setActiveQualityId(DOWNLOADED_QUALITY_ID);
+    sourceOffsetSecondsRef.current = 0;
+    onDemandTranscodeRef.current = false;
+    void stopActiveSession("user_stopped");
+    setNegotiation({
+      kind: "ready",
+      mode: "direct",
+      url: localSource.blobUrl,
+      mimeType: localSource.mimeType,
+      durationSeconds: localSource.durationSeconds,
+      sourceOffsetSeconds: 0,
+    });
+  }, [engineState, localSource, stopActiveSession]);
+
+  // Appends the synthetic "Downloaded" quality option once a local copy
+  // resolves for an already-negotiated (online) source, without
+  // restarting negotiation -- see the `localSourceRef` comment above.
+  // Once the option is present, immediately switches playback to it too:
+  // a completed local copy is preferred over any network stream, even one
+  // the server itself negotiated as direct-play. This only ever
+  // auto-applies once per `mediaFileId` (`autoAppliedDownloadedQualityRef`,
+  // reset alongside `localSourceRef` above) and never overrides a quality
+  // the user already picked deliberately this session
+  // (`userSelectedQualityRef`) -- mirroring how `info.selected_quality_id`
+  // from the negotiation response only ever sets the *initial*
+  // `activeQualityId`, never an ongoing override. Gating on
+  // `readyNegotiationMode !== undefined` (i.e. `negotiation.kind ===
+  // "ready"`) ensures this always runs after the initial negotiation
+  // effect below has populated `activeSessionIdRef`, so
+  // `switchToDownloadedQuality`'s `stopActiveSession` call has a real
+  // session to close instead of racing ahead of negotiation.
+  const readyNegotiationMode = negotiation.kind === "ready" ? negotiation.mode : undefined;
+  useEffect(() => {
+    if (!localSource || readyNegotiationMode === undefined) return;
+    setQualityOptions((current) =>
+      current.some((option) => option.id === DOWNLOADED_QUALITY_ID)
+        ? current
+        : [
+            ...current,
+            {
+              id: DOWNLOADED_QUALITY_ID,
+              label: "Downloaded",
+              profile: null,
+              height: null,
+              video_bitrate_bps: null,
+            },
+          ]
+    );
+    if (autoAppliedDownloadedQualityRef.current || userSelectedQualityRef.current) {
+      return;
+    }
+    autoAppliedDownloadedQualityRef.current = true;
+    switchToDownloadedQuality();
+  }, [localSource, readyNegotiationMode, switchToDownloadedQuality]);
+
   useEffect(() => {
     const preferredQualityId = initialSettings?.qualityId ?? playerDefaults.qualityId;
     loadedForUrl.current = null;
@@ -499,6 +561,7 @@ export function usePlaybackEngine(
     };
     automaticRecoveryUrlRef.current = null;
     initialNegotiationRef.current = true;
+    userSelectedQualityRef.current = false;
     onDemandTranscodeRef.current = false;
     sourceOffsetSecondsRef.current = 0;
     sourceAudioStreamIndicesRef.current = new Map();
@@ -1213,35 +1276,13 @@ export function usePlaybackEngine(
       if (!mediaFileId || qualitySwitching || qualityId === activeQualityId) return;
       const option = qualityOptions.find((quality) => quality.id === qualityId);
       if (!option) return;
+      userSelectedQualityRef.current = true;
 
       if (qualityId === DOWNLOADED_QUALITY_ID && localSource) {
-        // The local copy needs no network negotiation at all -- switch the
-        // engine straight to its `blob:` URL, same "direct" shape the
-        // offline negotiation branch above builds.
-        const current = engineRef.current?.getState() ?? engineState;
-        const absolutePositionSeconds =
-          current.currentTimeSeconds + sourceOffsetSecondsRef.current;
-        const shouldPlay = current.state === "playing" || current.state === "buffering";
-        pendingQualitySwitchRef.current = {
-          positionSeconds: absolutePositionSeconds,
-          shouldPlay,
-        };
-        qualitySwitchRequestRef.current += 1;
-        setQualitySwitching(true);
-        setQualityError(undefined);
-        loadedForUrl.current = null;
-        setActiveQualityId(DOWNLOADED_QUALITY_ID);
-        sourceOffsetSecondsRef.current = 0;
-        onDemandTranscodeRef.current = false;
-        void stopActiveSession("user_stopped");
-        setNegotiation({
-          kind: "ready",
-          mode: "direct",
-          url: localSource.blobUrl,
-          mimeType: localSource.mimeType,
-          durationSeconds: localSource.durationSeconds,
-          sourceOffsetSeconds: 0,
-        });
+        // The local copy needs no network negotiation at all -- switch
+        // straight to it via the same helper the automatic
+        // default-to-downloaded effect uses, so both paths stay identical.
+        switchToDownloadedQuality();
         return;
       }
 
@@ -1349,6 +1390,7 @@ export function usePlaybackEngine(
       recordTerminalEvent,
       selectedSourceAudioTrackId,
       stopActiveSession,
+      switchToDownloadedQuality,
     ]
   );
   const retryNegotiation = useCallback(() => {
