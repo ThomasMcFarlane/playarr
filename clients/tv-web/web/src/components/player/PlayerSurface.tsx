@@ -1107,6 +1107,17 @@ export function PlayerSurface({
                           runtimeMs: 0,
                           episodeId: item.episodeId,
                           title: item.title,
+                          seriesTitle:
+                            item.music?.artistName ??
+                            (item.seasonNumber !== undefined ? item.subtitle : undefined),
+                          albumTitle: item.music?.albumTitle,
+                          seasonNumber: item.seasonNumber,
+                          episodeNumber: item.episodeNumber,
+                          workKind: item.music
+                            ? "artist"
+                            : item.seasonNumber !== undefined
+                              ? "series"
+                              : "movie",
                         },
                       ],
                       onPlay: () => {

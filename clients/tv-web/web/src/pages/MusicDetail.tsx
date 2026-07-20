@@ -90,6 +90,7 @@ function circularOffset(index: number, selectedIndex: number, count: number): nu
 function AlbumCoverFlow({
   albums,
   artistId,
+  artistTitle,
   selectedAlbumId,
   playingAlbumId,
   parentRoute,
@@ -98,6 +99,7 @@ function AlbumCoverFlow({
 }: {
   albums: AlbumDetail[];
   artistId: string;
+  artistTitle: string;
   selectedAlbumId: string;
   playingAlbumId: string | null;
   parentRoute: string;
@@ -241,6 +243,9 @@ function AlbumCoverFlow({
                         track.runtime_ms ??
                         (track.track.duration_seconds ?? 0) * 1_000,
                       title: track.track.title,
+                      seriesTitle: artistTitle,
+                      albumTitle: album.album.title,
+                      workKind: "artist",
                     },
                   ]
                 : []
@@ -336,6 +341,7 @@ function AlbumCoverFlow({
 function AlbumTrackList({
   album,
   artistId,
+  artistTitle,
   detailRoute,
   detailParentBackTo,
   playlistItems,
@@ -350,6 +356,7 @@ function AlbumTrackList({
 }: {
   album: AlbumDetail;
   artistId: string;
+  artistTitle: string;
   detailRoute: string;
   detailParentBackTo: string;
   playlistItems: PlayerPlaylistItem[];
@@ -407,6 +414,9 @@ function AlbumTrackList({
                   runtimeMs:
                     track.runtime_ms ?? (track.track.duration_seconds ?? 0) * 1_000,
                   title: track.track.title,
+                  seriesTitle: artistTitle,
+                  albumTitle: album.album.title,
+                  workKind: "artist",
                 },
               ],
               activateOrigin: true,
@@ -890,6 +900,7 @@ export function MusicDetailPage() {
           <AlbumCoverFlow
             albums={albums}
             artistId={work.id}
+            artistTitle={work.title}
             selectedAlbumId={selectedAlbum?.album.id ?? albums[0]!.album.id}
             playingAlbumId={playingAlbumId}
             parentRoute={backTo}
@@ -909,6 +920,7 @@ export function MusicDetailPage() {
               key={selectedAlbum.album.id}
               album={selectedAlbum}
               artistId={work.id}
+              artistTitle={work.title}
               detailRoute={detailRoute}
               detailParentBackTo={backTo}
               playlistItems={playlistItems}

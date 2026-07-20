@@ -1771,6 +1771,8 @@ function PlaylistMediaTrack({
                         runtimeMs: audioTrack.runtimeMs,
                         title: audioTrack.title,
                         seriesTitle: work.title,
+                        albumTitle: audioTrack.albumTitle,
+                        workKind: work.kind,
                       },
                     ]
                   : undefined,
