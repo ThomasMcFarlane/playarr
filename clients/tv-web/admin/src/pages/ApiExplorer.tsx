@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import SwaggerUI from "swagger-ui-react";
 import "swagger-ui-react/swagger-ui.css";
+import "./ApiExplorer.css";
 import { ApiError, describeApiError, type UserResponse } from "@streamarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
