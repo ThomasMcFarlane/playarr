@@ -85,10 +85,32 @@ describe("ClientsPage", () => {
     expect(markup).not.toContain("clients-header");
   });
 
+  it("keeps the platform selector available on every client URL", () => {
+    for (const client of ["vidaa", "android", "apple", "webos", "tizen", "roku"]) {
+      const markup = renderClientRoute(`/clients/${client}`);
+
+      expect(markup).toContain('data-navigation-scroll-key="clients:platforms"');
+      expect(markup.match(/href="\/clients\//g)).toHaveLength(6);
+      expect(markup).toMatch(
+        new RegExp(`id="client-${client}"[^>]*data-tv-focus-default="true"`)
+      );
+      expect(markup).toMatch(
+        new RegExp(`id="client-${client}-action"[^>]*aria-current="page"`)
+      );
+    }
+  });
+
   it("renders one responsive APK for mobile and TV on the Android URL", () => {
     const markup = renderClientRoute("/clients/android");
 
     expect(markup).toContain('data-navigation-scroll-key="clients:android"');
+    expect(markup).toContain('data-navigation-scroll-key="clients:platforms"');
+    expect(markup).toMatch(
+      /class="client-choice is-available is-android is-active"/
+    );
+    expect(markup).toMatch(
+      /id="client-android-action"[^>]*aria-current="page"/
+    );
     expect(markup).toContain(
       'href="/downloads/android/releases/0.2.7/playarr-android.apk"'
     );
@@ -104,13 +126,19 @@ describe("ClientsPage", () => {
     const markup = renderClientRoute("/clients/vidaa");
 
     expect(markup).toContain('data-navigation-scroll-key="clients:vidaa"');
+    expect(markup).toContain('data-navigation-scroll-key="clients:platforms"');
+    expect(markup).toMatch(
+      /class="client-choice is-experimental is-vidaa is-active"/
+    );
     expect(markup).toContain('aria-label="All clients"');
     expect(markup).toContain('href="/vidaa-store/"');
     expect(markup).toContain("Playarr does not operate a public DNS resolver");
     expect(markup).toContain("Firmware support varies");
     expect(markup).toContain("Restart and restore DNS");
     expect(markup).toContain("Restore automatic DNS after installation.");
-    expect(markup).not.toMatch(/\b(?:\d{1,3}\.){3}\d{1,3}\b/);
+    expect(markup.replace(/<[^>]+>/g, " ")).not.toMatch(
+      /\b(?:\d{1,3}\.){3}\d{1,3}\b/
+    );
     expect(markup).not.toContain("Activate installer");
   });
 
@@ -119,11 +147,16 @@ describe("ClientsPage", () => {
     const appleMarkup = renderClientRoute("/clients/apple");
 
     expect(rokuMarkup).toContain('data-navigation-scroll-key="clients:roku"');
+    expect(rokuMarkup).toContain('data-navigation-scroll-key="clients:platforms"');
+    expect(rokuMarkup).toMatch(
+      /class="client-choice is-experimental is-roku is-active"/
+    );
     expect(rokuMarkup).toContain(
       "releases/download/clients-v0.1.0-preview.1/playarr-roku.zip"
     );
     expect(rokuMarkup).toContain("Available · Experimental install");
     expect(appleMarkup).toContain('data-navigation-scroll-key="clients:apple"');
+    expect(appleMarkup).toContain('data-navigation-scroll-key="clients:platforms"');
     expect(appleMarkup).toContain("Coming soon");
     expect(appleMarkup).toContain("The native Apple client is coming soon");
   });

@@ -10,7 +10,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Give every Playarr client its own catalogue URL, with downloads, installation guidance, and
-  availability details shown on one client page at a time.
+  availability details shown on one client page at a time while keeping the platform selector
+  available for direct switching between clients.
 - Add the missing Playarr cover-flow experiences to native iOS libraries and Music, including
   authenticated album artwork, album selection, track lists, and first-track playback.
 - Bring native iOS playback to Playarr parity with resume, per-title quality, audio and subtitle

@@ -146,30 +146,24 @@ function PublicClientsLayout({
   );
 }
 
-export function ClientsPage() {
+function ClientsSelector({ activeClientId }: { activeClientId?: string }) {
   const { t } = useLanguage();
-  useDocumentTitle(t("pages.clients.documentTitle"));
 
   return (
-    <PublicClientsLayout backTo="/profiles" scrollKey="clients:index">
-      <section className="clients-hero" aria-labelledby="clients-title">
-        <p className="page-kicker">{t("pages.clients.kicker")}</p>
-        <h1 className="auth-title" id="clients-title">
-          {t("pages.clients.title")}
-        </h1>
-      </section>
+    <section
+      className="clients-row-window"
+      aria-label={t("pages.clients.gridAriaLabel")}
+      data-tv-scroll-container
+      data-tv-scroll-axis="horizontal"
+      data-navigation-scroll-key="clients:platforms"
+    >
+      <div className="clients-row">
+        {PLAYARR_CLIENTS.map((client, index) => {
+          const isActive = client.id === activeClientId;
 
-      <section
-        className="clients-row-window"
-        aria-label={t("pages.clients.gridAriaLabel")}
-        data-tv-scroll-container
-        data-tv-scroll-axis="horizontal"
-        data-navigation-scroll-key="clients:platforms"
-      >
-        <div className="clients-row">
-          {PLAYARR_CLIENTS.map((client, index) => (
+          return (
             <article
-              className={`client-choice is-${client.status} is-${client.icon}`}
+              className={`client-choice is-${client.status} is-${client.icon}${isActive ? " is-active" : ""}`}
               key={client.id}
             >
               <div
@@ -178,7 +172,9 @@ export function ClientsPage() {
                 role="group"
                 aria-label={`${t(client.nameKey)} — ${t(client.platformKey)}`}
                 tabIndex={0}
-                data-tv-focus-default={index === 0 ? true : undefined}
+                data-tv-focus-default={
+                  isActive || (!activeClientId && index === 0) ? true : undefined
+                }
                 data-navigation-focus-key={`clients:${client.id}`}
                 data-tv-edge-stop-left={index === 0 ? true : undefined}
                 data-tv-edge-stop-right={
@@ -208,6 +204,7 @@ export function ClientsPage() {
                 id={`client-${client.id}-action`}
                 className="profile-action-button client-choice-action"
                 to={`/clients/${client.id}`}
+                aria-current={isActive ? "page" : undefined}
                 data-navigation-focus-key={`clients:${client.id}:details`}
                 data-tv-edge-stop-left={index === 0 ? true : undefined}
                 data-tv-edge-stop-right={
@@ -236,9 +233,27 @@ export function ClientsPage() {
                 </strong>
               </Link>
             </article>
-          ))}
-        </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+export function ClientsPage() {
+  const { t } = useLanguage();
+  useDocumentTitle(t("pages.clients.documentTitle"));
+
+  return (
+    <PublicClientsLayout backTo="/profiles" scrollKey="clients:index">
+      <section className="clients-hero" aria-labelledby="clients-title">
+        <p className="page-kicker">{t("pages.clients.kicker")}</p>
+        <h1 className="auth-title" id="clients-title">
+          {t("pages.clients.title")}
+        </h1>
       </section>
+
+      <ClientsSelector />
 
       <p className="clients-preview-note">{t("pages.clients.downloadNote")}</p>
       <p className="clients-footer">{t("pages.clients.footer")}</p>
@@ -411,13 +426,16 @@ export function ClientDetailsPage() {
 
   return (
     <PublicClientsLayout backTo="/clients" scrollKey={`clients:${client.id}`}>
-      {client.id === "vidaa" ? (
-        <VidaaInstallDetails />
-      ) : client.id === "android" ? (
-        <AndroidDownloadDetails />
-      ) : (
-        <ClientOverviewDetails client={client} />
-      )}
+      <ClientsSelector activeClientId={client.id} />
+      <div className="client-details-content">
+        {client.id === "vidaa" ? (
+          <VidaaInstallDetails />
+        ) : client.id === "android" ? (
+          <AndroidDownloadDetails />
+        ) : (
+          <ClientOverviewDetails client={client} />
+        )}
+      </div>
     </PublicClientsLayout>
   );
 }
