@@ -859,7 +859,6 @@ export const ja: Translations = {
   "pages.workDetail.downloadButtonLabel": "ダウンロード",
   "pages.workDetail.downloadTitle": "{{title}} をダウンロード",
   "pages.workDetail.downloadStarted": "{{title}} をダウンロードしています。",
-  "pages.workDetail.downloadSeason": "{{season}} をダウンロード",
 
   "pages.downloads.title": "ダウンロード",
   "pages.downloads.backToHome": "ホームに戻る",

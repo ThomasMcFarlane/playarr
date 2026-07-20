@@ -546,7 +546,6 @@ export const en = {
   "pages.workDetail.datePremiered": "Premiered",
   "pages.workDetail.dateReleased": "Released",
   "pages.workDetail.downloadButtonLabel": "Download",
-  "pages.workDetail.downloadSeason": "Download {{season}}",
   "pages.workDetail.downloadStarted": "Downloading {{title}}.",
   "pages.workDetail.downloadTitle": "Download {{title}}",
   "pages.workDetail.episodeNumber": "Episode {{number}}",

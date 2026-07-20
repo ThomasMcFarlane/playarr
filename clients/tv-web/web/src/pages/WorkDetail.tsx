@@ -822,29 +822,6 @@ function SeasonEpisodeTrack({
   const seasonLabel =
     season.season.title ?? t("pages.workDetail.seasonNumber", { number: seasonNumber });
   const mediaContext = useMediaContextMenu({ onProgressChanged });
-  // A separate `useMediaContextMenu()` instance (per this component, not
-  // shared with the per-episode one above) so the season-header download
-  // affordance opens its own drawer/portal, fanned out over episodes
-  // already resolved in memory -- zero extra fetch.
-  const seasonDownloadContext = useMediaContextMenu();
-  const seasonLeaves = episodes.flatMap((episode) =>
-    episode.media_file_id
-      ? [
-          {
-            mediaFileId: episode.media_file_id,
-            runtimeMs:
-              episode.runtime_ms ?? (episode.episode.runtime_minutes ?? 0) * 60_000,
-            episodeId: episode.episode.id,
-            title:
-              episode.episode.title ??
-              t("pages.workDetail.episodeNumber", { number: episode.episode.episode_number }),
-            seriesTitle,
-            seasonNumber,
-            episodeNumber: episode.episode.episode_number,
-          },
-        ]
-      : []
-  );
 
   function revealSeasonTrack(card: HTMLElement) {
     if (isNavigationLayerRestoring()) return;
@@ -854,37 +831,13 @@ function SeasonEpisodeTrack({
 
   return (
     <TvMediaTrack
-      title={
-        <span className="tv-season-heading">
-          <span>{seasonLabel}</span>
-          <button
-            type="button"
-            className="tv-season-download-button"
-            aria-label={t("pages.workDetail.downloadSeason", { season: seasonLabel })}
-            data-navigation-focus-key={`detail:${workId}:season:${seasonNumber}:download`}
-            {...seasonDownloadContext.itemProps({
-              workId,
-              title: seasonLabel,
-              detailRoute,
-              parentRoute: detailParentBackTo,
-              leaves: seasonLeaves,
-            })}
-          >
-            <span aria-hidden="true">⇩</span>
-          </button>
-        </span>
-      }
+      title={seasonLabel}
       meta={t("pages.workDetail.episodesCount", { count: episodes.length })}
       ariaLabel={seasonLabel}
       scrollKey={`detail:${workId}:season:${seasonNumber}`}
       itemsKey={episodes.map((episode) => episode.episode.id).join(":")}
       dataTrackId={`season:${seasonNumber}`}
-      overlay={
-        <>
-          {mediaContext.contextMenu}
-          {seasonDownloadContext.contextMenu}
-        </>
-      }
+      overlay={mediaContext.contextMenu}
     >
       {episodes.map((episode) => {
             const mediaFileId = episode.media_file_id;

@@ -10627,35 +10627,6 @@ html[data-platform="android-tv"] .player-quality-option {
   transform: scale(1.06);
 }
 
-.tv-season-heading {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.tv-season-download-button {
-  width: clamp(26px, 2vw, 34px);
-  height: clamp(26px, 2vw, 34px);
-  display: inline-grid;
-  place-items: center;
-  padding: 0;
-  border-radius: 50%;
-  background: var(--surface-soft);
-  color: var(--ink-muted);
-  font-size: 0.85em;
-  cursor: pointer;
-  transition:
-    background 180ms ease,
-    color 180ms ease;
-}
-
-.tv-season-download-button:hover,
-.tv-season-download-button:focus-visible {
-  outline: 0;
-  background: var(--ink);
-  color: var(--bg);
-}
-
 .download-quality-drawer-field {
   display: grid;
   gap: 0.4rem;

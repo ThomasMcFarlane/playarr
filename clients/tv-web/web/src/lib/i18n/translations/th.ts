@@ -863,7 +863,6 @@ export const th: Translations = {
   "pages.workDetail.downloadButtonLabel": "ดาวน์โหลด",
   "pages.workDetail.downloadTitle": "ดาวน์โหลด {{title}}",
   "pages.workDetail.downloadStarted": "กำลังดาวน์โหลด {{title}}",
-  "pages.workDetail.downloadSeason": "ดาวน์โหลด {{season}}",
 
   "pages.downloads.title": "ดาวน์โหลด",
   "pages.downloads.backToHome": "กลับไปหน้าแรก",
