@@ -11,6 +11,7 @@
 //! [`VersionEnvelope`] and its friends). Left off by default so downstream
 //! crates that don't serve HTTP (workers, CLI) don't pull in utoipa.
 
+pub mod download;
 pub mod embedding;
 pub mod library_view;
 pub mod media;
@@ -30,6 +31,7 @@ pub mod tdarr;
 pub mod user;
 pub mod work;
 
+pub use download::{DownloadStatus, DownloadTicket};
 pub use embedding::WorkEmbedding;
 pub use library_view::{LibraryView, ViewCriteria, ViewSort};
 pub use media::{MediaFile, ProducedBy, Rendition, RenditionStatus};

@@ -224,6 +224,13 @@ public protocol StreamarrAPIClient: Sendable {
     func getWatchProgress(mediaFileID: UUID) async throws -> WatchProgress
     func updateWatchProgress(mediaFileID: UUID, body: UpdateWatchProgressRequest) async throws -> WatchProgress
 
+    // Downloads
+    func mediaDownloadOptions(mediaFileID: UUID) async throws -> MediaFileDownloadOptionsResponse
+    func createDownload(_ body: CreateDownloadRequest) async throws -> DownloadTicket
+    func listDownloads() async throws -> [DownloadTicket]
+    func getDownload(id: UUID) async throws -> DownloadTicket
+    func deleteDownload(id: UUID) async throws
+
     // Webhooks — primarily for admin/debug tooling; a normal client screen
     // has no reason to POST here (this is the *arr apps' job), but it's
     // wired for completeness against the spec.
@@ -275,6 +282,11 @@ public extension StreamarrAPIClient {
     func updateMediaPlaybackOptions(mediaFileID: UUID, body: MediaPlaybackPreference) async throws -> MediaPlaybackOptions { throw APIError.http(status: 501, body: nil, rawBody: nil) }
     func getWatchProgress(mediaFileID: UUID) async throws -> WatchProgress { throw APIError.notFound(nil) }
     func updateWatchProgress(mediaFileID: UUID, body: UpdateWatchProgressRequest) async throws -> WatchProgress { throw APIError.http(status: 501, body: nil, rawBody: nil) }
+    func mediaDownloadOptions(mediaFileID: UUID) async throws -> MediaFileDownloadOptionsResponse { throw APIError.notFound(nil) }
+    func createDownload(_ body: CreateDownloadRequest) async throws -> DownloadTicket { throw APIError.http(status: 501, body: nil, rawBody: nil) }
+    func listDownloads() async throws -> [DownloadTicket] { [] }
+    func getDownload(id: UUID) async throws -> DownloadTicket { throw APIError.notFound(nil) }
+    func deleteDownload(id: UUID) async throws { throw APIError.http(status: 501, body: nil, rawBody: nil) }
 }
 
 /// Real, working `URLSession`-backed implementation of `StreamarrAPIClient`.
@@ -555,6 +567,28 @@ public final class APIClient: StreamarrAPIClient {
             method: "PUT",
             body: body
         )
+    }
+
+    // MARK: Downloads
+
+    public func mediaDownloadOptions(mediaFileID: UUID) async throws -> MediaFileDownloadOptionsResponse {
+        try await get("/api/v1/media/\(mediaFileID.uuidString)/download-options")
+    }
+
+    public func createDownload(_ body: CreateDownloadRequest) async throws -> DownloadTicket {
+        try await authenticatedRequest("/api/v1/downloads", method: "POST", body: body, expectedStatuses: [200, 201])
+    }
+
+    public func listDownloads() async throws -> [DownloadTicket] {
+        try await get("/api/v1/downloads")
+    }
+
+    public func getDownload(id: UUID) async throws -> DownloadTicket {
+        try await get("/api/v1/downloads/\(id.uuidString)")
+    }
+
+    public func deleteDownload(id: UUID) async throws {
+        try await authenticatedRequestWithoutResponse("/api/v1/downloads/\(id.uuidString)", method: "DELETE", expectedStatuses: [204])
     }
 
     // MARK: Webhooks

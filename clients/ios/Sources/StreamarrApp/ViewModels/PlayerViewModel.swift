@@ -68,6 +68,7 @@ public final class PlayerViewModel {
 
     private let engine: PlayerEngine
     private let apiClient: StreamarrAPIClient
+    private let downloadRepository: DownloadRepository
     @ObservationIgnored private var cancellables: Set<AnyCancellable> = []
     @ObservationIgnored private var heartbeatTask: Task<Void, Never>?
     @ObservationIgnored private var activeMediaFileID: UUID?
@@ -75,20 +76,31 @@ public final class PlayerViewModel {
     @ObservationIgnored private var activeTitle = ""
     @ObservationIgnored private var qualityOverrideID: String?
 
-    public init(engine: PlayerEngine, apiClient: StreamarrAPIClient) {
+    public init(engine: PlayerEngine, apiClient: StreamarrAPIClient, downloadRepository: DownloadRepository) {
         self.engine = engine
         self.apiClient = apiClient
+        self.downloadRepository = downloadRepository
         bind()
     }
 
     /// Calls the real playback-negotiation endpoint for `mediaFileID`, then
-    /// loads and starts the returned URL in the local `PlayerEngine`.
+    /// loads and starts the returned URL in the local `PlayerEngine`. If
+    /// this media file has already been downloaded (`DownloadRepository
+    /// .localFileURL(forMediaFileID:)` resolves), plays straight from that
+    /// local file instead — no network call, works fully offline — before
+    /// ever reaching the network `playbackInfo()` negotiation below.
     /// `title` is display-only (the API has nothing else to show while
     /// negotiating/loading).
     public func play(mediaFileID: UUID, title: String) async {
         await finishActiveSession(reason: "user_stopped")
         loadState = .loadingPlaybackInfo
         errorMessage = nil
+
+        if let localFileURL = downloadRepository.localFileURL(forMediaFileID: mediaFileID) {
+            await playLocalFile(localFileURL, mediaFileID: mediaFileID, title: title)
+            return
+        }
+
         do {
             let defaults = NativePlayerDefaults.read()
             let progress = try? await apiClient.getWatchProgress(mediaFileID: mediaFileID)
@@ -147,6 +159,49 @@ public final class PlayerViewModel {
             loadState = .failed(error.displayMessage)
         } catch {
             await failActiveSession(message: error.localizedDescription)
+            errorMessage = error.localizedDescription
+            loadState = .failed(error.localizedDescription)
+        }
+    }
+
+    /// Plays a downloaded file directly with no `playbackInfo()` network
+    /// call — the whole point of a download is that this works offline.
+    /// Still opportunistically fetches/updates server watch progress
+    /// (`try?`-guarded so a lack of connectivity never blocks playback),
+    /// and skips every server-playback-session call (`recordPlaybackEvent`)
+    /// since there is no `PlaybackInfoResponse.sessionID` for a purely
+    /// local play.
+    private func playLocalFile(_ fileURL: URL, mediaFileID: UUID, title: String) async {
+        let defaults = NativePlayerDefaults.read()
+        let progress = try? await apiClient.getWatchProgress(mediaFileID: mediaFileID)
+        playbackMode = .direct
+        activeMediaFileID = mediaFileID
+        activeSessionID = nil
+        activeTitle = title
+        qualityOptions = []
+        audioTracks = []
+        subtitleTracks = []
+        selectedQualityID = "original"
+        selectedAudioTrackID = nil
+        selectedSubtitleTrackID = nil
+        chapters = []
+
+        let item = PlayableItem(
+            id: mediaFileID,
+            streamURL: fileURL,
+            title: title,
+            startPositionSeconds: progress.map { Double($0.positionMS) / 1_000 } ?? 0,
+            preferredAudioLanguageCode: defaults.audioLanguage,
+            preferredSubtitleLanguageCode: defaults.subtitleMode == "off" ? nil : defaults.subtitleLanguage
+        )
+        do {
+            try await engine.load(item)
+            await applyTrackDefaults(defaults)
+            duration = engine.duration
+            engine.play()
+            loadState = .playing
+            startHeartbeat()
+        } catch {
             errorMessage = error.localizedDescription
             loadState = .failed(error.localizedDescription)
         }
@@ -319,6 +374,10 @@ public final class PlayerViewModel {
                 mediaFileID: mediaFileID,
                 body: UpdateWatchProgressRequest(positionMS: durationMS, durationMS: durationMS, completed: true)
             )
+            // Anchors `KeepUntilPolicy.afterWatched` for a downloaded copy
+            // of this media file, if any — a no-op if it was never
+            // downloaded, or was already marked watched once before.
+            downloadRepository.markWatched(mediaFileID: mediaFileID)
         }
         guard let sessionID = activeSessionID else { return }
         await heartbeat()

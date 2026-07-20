@@ -144,6 +144,17 @@ pub(crate) fn ensure_library_allowed(
     }
 }
 
+/// Mirrors the `if !streaming.policy.can_transcode` inline check in
+/// playback.rs's `playback_info_handler` -- factored out because
+/// downloads.rs needs the identical check at multiple call sites.
+pub(crate) fn ensure_can_download(policy: &Policy) -> Result<(), ApiError> {
+    if policy.can_download {
+        Ok(())
+    } else {
+        Err(forbidden("this account does not have download access"))
+    }
+}
+
 /// Resolves `user_id`'s persisted `Policy` for a gated extractor, failing
 /// closed on every branch: an unknown user, an unknown/missing policy, and
 /// a real backend error all reject with the same caller-supplied `deny`
@@ -493,6 +504,20 @@ mod tests {
     #[test]
     fn ensure_library_allowed_rejects_everything_for_an_empty_allow_list() {
         let err = ensure_library_allowed(Uuid::new_v4(), Some(&[])).unwrap_err();
+        assert_eq!(err.status, StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn ensure_can_download_passes_when_the_policy_grants_it() {
+        let policy = test_policy(false, Vec::new());
+        assert!(ensure_can_download(&policy).is_ok());
+    }
+
+    #[test]
+    fn ensure_can_download_rejects_when_the_policy_denies_it() {
+        let mut policy = test_policy(false, Vec::new());
+        policy.can_download = false;
+        let err = ensure_can_download(&policy).unwrap_err();
         assert_eq!(err.status, StatusCode::FORBIDDEN);
     }
 }

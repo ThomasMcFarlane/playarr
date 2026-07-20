@@ -86,6 +86,7 @@ private final class PlaylistsViewModel {
 
 struct PlaylistsView: View {
     @State private var viewModel: PlaylistsViewModel
+    let downloadRepository: DownloadRepository
     @State private var showingCreate = false
     @State private var playlistName = ""
     @State private var playlistType: PlaylistMediaType = .video
@@ -95,8 +96,9 @@ struct PlaylistsView: View {
     @State private var mutationError: String?
     @State private var submitting = false
 
-    init(apiClient: StreamarrAPIClient) {
+    init(apiClient: StreamarrAPIClient, downloadRepository: DownloadRepository) {
         _viewModel = State(initialValue: PlaylistsViewModel(apiClient: apiClient))
+        self.downloadRepository = downloadRepository
     }
 
     var body: some View {
@@ -187,7 +189,7 @@ struct PlaylistsView: View {
                         ) {
                             ForEach(viewModel.playlists) { playlist in
                                 NavigationLink {
-                                    PlaylistDetailView(playlist: playlist, apiClient: viewModel.apiClient)
+                                    PlaylistDetailView(playlist: playlist, apiClient: viewModel.apiClient, downloadRepository: downloadRepository)
                                 } label: {
                                     playlistCard(playlist, width: cardWidth)
                                 }
@@ -390,6 +392,7 @@ struct PlaylistDetailView: View {
 
     let playlist: Playlist
     let apiClient: StreamarrAPIClient
+    let downloadRepository: DownloadRepository
     @Environment(\.dismiss) private var dismiss
     @State private var items: [PlaylistItem] = []
     @State private var resolvedByItemID: [UUID: ResolvedItem] = [:]
@@ -539,7 +542,8 @@ struct PlaylistDetailView: View {
         NavigationLink {
             WorkDetailView(
                 viewModel: WorkDetailViewModel(apiClient: apiClient, workID: resolved.work.id),
-                apiClient: apiClient
+                apiClient: apiClient,
+                downloadRepository: downloadRepository
             )
         } label: {
             VStack(alignment: .leading, spacing: 7) {

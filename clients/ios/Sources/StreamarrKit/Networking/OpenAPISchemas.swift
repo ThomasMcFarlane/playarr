@@ -1422,9 +1422,20 @@ public struct UpdateWatchProgressRequest: Codable, Sendable {
     public var positionMS: Int64
     public var durationMS: Int64
     public var completed: Bool?
-    enum CodingKeys: String, CodingKey { case positionMS = "position_ms"; case durationMS = "duration_ms"; case completed }
-    public init(positionMS: Int64, durationMS: Int64, completed: Bool? = nil) {
-        self.positionMS = positionMS; self.durationMS = durationMS; self.completed = completed
+    /// Additive, optional (Round: media downloads) — when this update is
+    /// being replayed after the fact (e.g. progress recorded while playing
+    /// a local download offline, then synced once back online), the moment
+    /// it actually happened rather than when it's replayed. Omitted
+    /// (`nil`) callers are unaffected: the server falls back to `now()`.
+    public var occurredAt: Date?
+    enum CodingKeys: String, CodingKey {
+        case positionMS = "position_ms"
+        case durationMS = "duration_ms"
+        case completed
+        case occurredAt = "occurred_at"
+    }
+    public init(positionMS: Int64, durationMS: Int64, completed: Bool? = nil, occurredAt: Date? = nil) {
+        self.positionMS = positionMS; self.durationMS = durationMS; self.completed = completed; self.occurredAt = occurredAt
     }
 }
 

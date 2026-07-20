@@ -18,8 +18,8 @@ use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
 // adding that export, since `streamarr-model` is outside this crate's scope.
 use streamarr_model::media::LeafRef;
 use streamarr_model::{
-    Availability, ExternalProvider, PlayMethod, PlaybackEventKind, ProducedBy, RenditionStatus,
-    SourceKind, StopReason, TranscodeReason, WorkKind,
+    Availability, DownloadStatus, ExternalProvider, PlayMethod, PlaybackEventKind, ProducedBy,
+    RenditionStatus, SourceKind, StopReason, TranscodeReason, WorkKind,
 };
 use uuid::Uuid;
 
@@ -198,6 +198,29 @@ pub(crate) fn rendition_status_from_str(raw: &str) -> Result<RenditionStatus, Db
         "failed" => Ok(RenditionStatus::Failed),
         "expired" => Ok(RenditionStatus::Expired),
         other => Err(decode_err(format!("unknown rendition status {other:?}"))),
+    }
+}
+
+pub(crate) fn download_status_to_str(status: DownloadStatus) -> &'static str {
+    match status {
+        DownloadStatus::Queued => "queued",
+        DownloadStatus::Processing => "processing",
+        DownloadStatus::Ready => "ready",
+        DownloadStatus::Failed => "failed",
+        DownloadStatus::Expired => "expired",
+        DownloadStatus::Canceled => "canceled",
+    }
+}
+
+pub(crate) fn download_status_from_str(raw: &str) -> Result<DownloadStatus, DbError> {
+    match raw {
+        "queued" => Ok(DownloadStatus::Queued),
+        "processing" => Ok(DownloadStatus::Processing),
+        "ready" => Ok(DownloadStatus::Ready),
+        "failed" => Ok(DownloadStatus::Failed),
+        "expired" => Ok(DownloadStatus::Expired),
+        "canceled" => Ok(DownloadStatus::Canceled),
+        other => Err(decode_err(format!("unknown download status {other:?}"))),
     }
 }
 

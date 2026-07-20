@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "./App";
 import { ApiClientProvider } from "./lib/ApiClientProvider";
+import { DownloadsProvider } from "./lib/DownloadsProvider";
 import { LanguageProvider } from "./lib/i18n/LanguageProvider";
 import { ThemeProvider } from "./lib/theme";
 import { ToastProvider } from "./lib/toast";
@@ -26,7 +27,9 @@ createRoot(container).render(
         <ThemeProvider>
           <ApiClientProvider>
             <ToastProvider>
-              <App />
+              <DownloadsProvider>
+                <App />
+              </DownloadsProvider>
             </ToastProvider>
           </ApiClientProvider>
         </ThemeProvider>

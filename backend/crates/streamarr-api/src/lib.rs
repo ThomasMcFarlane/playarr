@@ -28,6 +28,7 @@ pub mod artwork;
 pub mod auth_extractor;
 pub mod catalog;
 pub mod credits;
+pub mod downloads;
 pub mod error;
 pub mod health;
 pub mod login;
@@ -163,7 +164,8 @@ impl Modify for SecurityAddon {
         (name = "users", description = "User account management and signed-in player preferences"),
         (name = "views", description = "Saved catalog filter presets ('Views') -- admin-managed, surfaced to Playarr as browsable shelves"),
         (name = "playlists", description = "User + System playlists -- named, ordered, optionally-nested lists of video works or audio tracks"),
-        (name = "credits", description = "Cast/crew for a work, and every work a given person is credited on")
+        (name = "credits", description = "Cast/crew for a work, and every work a given person is credited on"),
+        (name = "downloads", description = "Server-staged, quality-selectable, resumable downloads of media the caller already has playback access to")
     )
 )]
 pub struct ApiDoc;
@@ -219,6 +221,16 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(media::media_thumbnail_handler))
         .routes(routes!(media::serve_rendition_file_handler))
         .routes(routes!(media::serve_session_file_handler))
+        .routes(routes!(media::media_download_options_handler))
+        .routes(routes!(
+            downloads::create_download_ticket_handler,
+            downloads::list_download_tickets_handler
+        ))
+        .routes(routes!(
+            downloads::get_download_ticket_handler,
+            downloads::cancel_download_ticket_handler
+        ))
+        .routes(routes!(downloads::download_ticket_file_handler))
         .routes(routes!(
             admin::create_source_instance_handler,
             admin::list_source_instances_handler
@@ -384,6 +396,13 @@ pub struct AppState {
     pub media_files: Arc<dyn MediaFileLookup>,
     /// Per-user durable resume positions and watched state.
     pub watch_progress: Arc<dyn streamarr_db::WatchProgressRepo>,
+    /// Per-user server-staged download tickets -- backs `downloads.rs`'s
+    /// create/list/get/cancel/file-serve endpoints and
+    /// `media.rs`'s `media_download_options_handler`. See
+    /// `streamarr_model::DownloadTicket`'s doc comment for how this differs
+    /// from `rendition_repo` (that one backs shared, playback-oriented HLS
+    /// renditions; this one backs per-user, single-file download grants).
+    pub download_tickets: Arc<dyn streamarr_db::DownloadTicketRepo>,
     /// Verifies the `Authorization: Bearer <token>` header every
     /// [`auth_extractor::AuthUser`]/[`auth_extractor::AdminUser`]
     /// extraction depends on -- the same issuer instance

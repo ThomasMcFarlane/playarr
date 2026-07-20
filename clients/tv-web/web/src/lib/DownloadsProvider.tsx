@@ -1,0 +1,697 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import type { DownloadTicket } from "@streamarr-tv/api-client";
+import { useApiBaseUrl, useApiClient, useAuth, useCurrentUserId } from "./ApiClientProvider";
+import {
+  abortDownload,
+  deleteStoredBytes,
+  detectDownloadStorage,
+  getPlaybackBlob,
+  runDownload,
+} from "./downloadEngine";
+import {
+  deleteDownload as deleteDownloadRow,
+  deleteQueuedWatchMutation,
+  listDownloads as listDownloadRows,
+  listQueuedWatchMutations,
+  putDownload,
+  putQueuedWatchMutation,
+  type DownloadKeepUntilPolicy,
+  type DownloadRecord,
+  type DownloadRecordStatus,
+  type QueuedWatchMutation,
+} from "./downloadsDb";
+import { useLanguage } from "./i18n/LanguageProvider";
+import { useOnlineStatus } from "./useOnlineStatus";
+import { useToast } from "./toast";
+
+const MAX_CONCURRENT_DOWNLOADS = 2;
+const TICKET_POLL_MS = 4_000;
+const EXPIRY_SWEEP_MS = 5 * 60_000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function mimeTypeForContainer(container: string): string {
+  const normalised = container.trim().toLowerCase().replace(/^\./, "");
+  switch (normalised) {
+    case "mp4":
+    case "m4v":
+      return "video/mp4";
+    case "webm":
+      return "video/webm";
+    case "mkv":
+    case "matroska":
+      return "video/x-matroska";
+    case "mp3":
+      return "audio/mpeg";
+    case "m4a":
+    case "aac":
+      return "audio/mp4";
+    case "flac":
+      return "audio/flac";
+    case "ogg":
+      return "audio/ogg";
+    default:
+      return "video/mp4";
+  }
+}
+
+function ticketToLocalStatus(ticket: DownloadTicket): DownloadRecordStatus {
+  switch (ticket.status) {
+    case "queued":
+      return "queued";
+    case "processing":
+      return "processing";
+    case "ready":
+      return "downloading";
+    case "failed":
+      return "failed";
+    case "expired":
+      return "expired";
+    case "canceled":
+    default:
+      return "canceled";
+  }
+}
+
+export interface DownloadLeafInput {
+  workId: string;
+  mediaFileId: string;
+  title: string;
+  subtitle?: string | null;
+  runtimeMs: number;
+}
+
+export interface EnqueueDownloadParams extends DownloadLeafInput {
+  qualityId: string;
+  qualityLabel: string;
+  keepUntil: DownloadKeepUntilPolicy;
+}
+
+export interface DownloadsActiveSummary {
+  count: number;
+  bytesDownloaded: number;
+  /** `null` when any active item's total size isn't known yet (still negotiating/estimating). */
+  totalBytes: number | null;
+}
+
+export interface DownloadsStorageUsage {
+  usageBytes: number;
+  quotaBytes: number;
+}
+
+export interface LocalPlaybackSource {
+  blobUrl: string;
+  mimeType: string;
+  durationSeconds: number;
+}
+
+interface DownloadsContextValue {
+  downloads: DownloadRecord[];
+  activeSummary: DownloadsActiveSummary;
+  storageUsage: DownloadsStorageUsage | null;
+  storageSupported: boolean | null;
+  enqueue: (params: EnqueueDownloadParams) => Promise<DownloadRecord>;
+  cancel: (id: string) => Promise<void>;
+  retry: (id: string) => Promise<void>;
+  remove: (id: string) => Promise<void>;
+  /**
+   * A completed local download's playable source, as a `blob:` URL --
+   * `usePlaybackEngine` builds a `"direct"` `NegotiationState` from this
+   * with zero player-engine changes (`ShakaPlaybackEngine`'s direct mode is
+   * `mediaElement.src = url`). Async because reading the underlying OPFS
+   * file (or reassembling the IndexedDB-Blob fallback's chunks) is itself
+   * async -- the returned `blob:` URL is cached, so repeat calls for the
+   * same media file resolve instantly after the first.
+   */
+  getLocalPlaybackSource: (mediaFileId: string) => Promise<LocalPlaybackSource | null>;
+  /**
+   * Buffers a watch-progress update in IndexedDB instead of sending it
+   * live -- `usePlaybackEngine`'s `persistProgress` calls this when
+   * `useOnlineStatus()` is false rather than calling
+   * `ApiClient.updateWatchProgress` directly. Flushed automatically once
+   * back online (gated on `!authFailed`, same as every other protected
+   * call) via `UpdateWatchProgressRequest.occurred_at` so the server
+   * timestamps it for when it actually happened, not when it's replayed.
+   */
+  queueWatchMutation: (params: {
+    mediaFileId: string;
+    positionMs: number;
+    durationMs: number;
+    completed?: boolean;
+  }) => Promise<void>;
+}
+
+const DownloadsContext = createContext<DownloadsContextValue | null>(null);
+
+function activeSummaryFor(downloads: DownloadRecord[]): DownloadsActiveSummary {
+  const active = downloads.filter((record) =>
+    record.status === "queued" ||
+    record.status === "processing" ||
+    record.status === "downloading"
+  );
+  const anyUnknownTotal = active.some((record) => record.totalBytes === null);
+  return {
+    count: active.length,
+    bytesDownloaded: active.reduce((sum, record) => sum + record.bytesDownloaded, 0),
+    totalBytes: anyUnknownTotal
+      ? null
+      : active.reduce((sum, record) => sum + (record.totalBytes ?? 0), 0),
+  };
+}
+
+function expiryTimeMs(record: DownloadRecord): number | null {
+  if (record.keepUntil.type === "forever") return null;
+  if (record.keepUntil.type === "date") {
+    const parsed = new Date(record.keepUntil.date).getTime();
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (!record.watchedAt) return null;
+  const watchedAtMs = new Date(record.watchedAt).getTime();
+  if (!Number.isFinite(watchedAtMs)) return null;
+  const unitMs = record.keepUntil.unit === "weeks" ? 7 * DAY_MS : DAY_MS;
+  return watchedAtMs + record.keepUntil.amount * unitMs;
+}
+
+/**
+ * Offline media downloads, following the same per-domain React Context
+ * shape every provider in this app uses (see `ApiClientProvider.tsx`).
+ * Mounted in `main.tsx` inside `ApiClientProvider`/`ToastProvider` (it
+ * needs both -- `useApiClient` for the downloads API, `useToast` for the
+ * keep-until expiry sweep's notifications).
+ *
+ * Owns: the download queue/manifest (persisted via `downloadsDb`, resumed
+ * on reload), a 2-at-a-time concurrency-limited engine scheduler
+ * (`downloadEngine.runDownload`), ticket polling for profiles still
+ * transcoding server-side, the periodic keep-until expiry sweep, and the
+ * offline watch-status mutation flush loop.
+ */
+export function DownloadsProvider({ children }: { children: ReactNode }) {
+  const client = useApiClient();
+  const userId = useCurrentUserId();
+  const [apiBaseUrl] = useApiBaseUrl();
+  const { authFailed } = useAuth();
+  const { t } = useLanguage();
+  const { showToast } = useToast();
+  const online = useOnlineStatus();
+
+  const [downloads, setDownloads] = useState<DownloadRecord[]>([]);
+  const [storageUsage, setStorageUsage] = useState<DownloadsStorageUsage | null>(null);
+  const [storageSupported, setStorageSupported] = useState<boolean | null>(null);
+
+  const downloadsRef = useRef<DownloadRecord[]>([]);
+  downloadsRef.current = downloads;
+  const activeEngineRunsRef = useRef(new Set<string>());
+  const pendingQueueRef = useRef<string[]>([]);
+  const pollTimersRef = useRef(new Map<string, number>());
+  const blobUrlCacheRef = useRef(new Map<string, LocalPlaybackSource>());
+  const loadedScopeRef = useRef<string | null>(null);
+
+  const upsertRecord = useCallback((record: DownloadRecord) => {
+    downloadsRef.current = [
+      ...downloadsRef.current.filter((existing) => existing.id !== record.id),
+      record,
+    ];
+    setDownloads(downloadsRef.current);
+    void putDownload(record);
+  }, []);
+
+  const patchRecord = useCallback(
+    (id: string, patch: Partial<DownloadRecord>) => {
+      const current = downloadsRef.current.find((record) => record.id === id);
+      if (!current) return;
+      upsertRecord({ ...current, ...patch });
+    },
+    [upsertRecord]
+  );
+
+  const refreshStorageUsage = useCallback(() => {
+    if (typeof navigator === "undefined" || !navigator.storage?.estimate) {
+      setStorageSupported(false);
+      return;
+    }
+    navigator.storage
+      .estimate()
+      .then((estimate) => {
+        setStorageSupported(true);
+        setStorageUsage({
+          usageBytes: estimate.usage ?? 0,
+          quotaBytes: estimate.quota ?? 0,
+        });
+      })
+      .catch(() => setStorageSupported(false));
+  }, []);
+
+  const clearPoll = useCallback((id: string) => {
+    const timer = pollTimersRef.current.get(id);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      pollTimersRef.current.delete(id);
+    }
+  }, []);
+
+  const scheduleNext = useCallback(() => {
+    while (
+      activeEngineRunsRef.current.size < MAX_CONCURRENT_DOWNLOADS &&
+      pendingQueueRef.current.length > 0
+    ) {
+      const id = pendingQueueRef.current.shift();
+      if (!id) continue;
+      const record = downloadsRef.current.find((candidate) => candidate.id === id);
+      if (!record || record.status !== "downloading") continue;
+      activeEngineRunsRef.current.add(id);
+
+      void (async () => {
+        try {
+          let storage = record.storage;
+          if (!storage) {
+            storage = await detectDownloadStorage();
+            if (!storage) {
+              patchRecord(id, {
+                status: "failed",
+                errorMessage: t("lib.downloads.storageUnsupported"),
+              });
+              return;
+            }
+            patchRecord(id, { storage });
+          }
+          await runDownload(
+            {
+              id,
+              fileUrl: client.downloadFileUrl(id),
+              totalBytes: record.totalBytes,
+              storage,
+              mimeType: record.mimeType,
+              getAccessToken: () => client.getAccessToken(),
+            },
+            {
+              onProgress: (bytesDownloaded, totalBytes) => {
+                patchRecord(id, {
+                  bytesDownloaded,
+                  lastCompletedByteOffset: bytesDownloaded,
+                  totalBytes: totalBytes ?? record.totalBytes,
+                });
+              },
+              onStatusChange: (status, errorMessage) => {
+                if (status === "ready") {
+                  patchRecord(id, {
+                    status: "ready",
+                    readyAt: new Date().toISOString(),
+                    errorMessage: null,
+                  });
+                  refreshStorageUsage();
+                } else if (status === "canceled") {
+                  patchRecord(id, { status: "canceled", errorMessage: null });
+                } else {
+                  patchRecord(id, { status: "failed", errorMessage: errorMessage ?? null });
+                }
+              },
+            }
+          );
+        } finally {
+          activeEngineRunsRef.current.delete(id);
+          scheduleNext();
+        }
+      })();
+    }
+  }, [client, patchRecord, refreshStorageUsage, t]);
+
+  const beginFetch = useCallback(
+    (id: string) => {
+      patchRecord(id, { status: "downloading", errorMessage: null });
+      if (!pendingQueueRef.current.includes(id)) {
+        pendingQueueRef.current.push(id);
+      }
+      scheduleNext();
+    },
+    [patchRecord, scheduleNext]
+  );
+
+  const pollTicket = useCallback(
+    (id: string) => {
+      clearPoll(id);
+      const tick = () => {
+        client
+          .getDownload(id)
+          .then((ticket) => {
+            const record = downloadsRef.current.find((candidate) => candidate.id === id);
+            if (!record) return;
+            if (ticket.status === "queued" || ticket.status === "processing") {
+              patchRecord(id, {
+                status: ticketToLocalStatus(ticket),
+                totalBytes: ticket.size_bytes ?? record.totalBytes,
+              });
+              pollTimersRef.current.set(id, window.setTimeout(tick, TICKET_POLL_MS));
+              return;
+            }
+            if (ticket.status === "ready") {
+              patchRecord(id, { totalBytes: ticket.size_bytes ?? record.totalBytes });
+              beginFetch(id);
+              return;
+            }
+            patchRecord(id, {
+              status: ticketToLocalStatus(ticket),
+              errorMessage: ticket.error_message,
+            });
+          })
+          .catch(() => {
+            // Transient network/server hiccup -- keep polling; the sweep/UI
+            // still shows the last-known status in the meantime.
+            pollTimersRef.current.set(id, window.setTimeout(tick, TICKET_POLL_MS));
+          });
+      };
+      pollTimersRef.current.set(id, window.setTimeout(tick, TICKET_POLL_MS));
+    },
+    [beginFetch, client, clearPoll, patchRecord]
+  );
+
+  // Load this profile's persisted downloads and resume anything that was
+  // mid-flight (queued/processing ticket polling, or a partially-fetched
+  // file) when the tab was last closed.
+  useEffect(() => {
+    if (!userId) {
+      downloadsRef.current = [];
+      setDownloads([]);
+      return;
+    }
+    const scope = `${apiBaseUrl}::${userId}`;
+    if (loadedScopeRef.current === scope) return;
+    loadedScopeRef.current = scope;
+
+    let cancelled = false;
+    void listDownloadRows(userId).then((rows) => {
+      if (cancelled) return;
+      const scoped = rows.filter((row) => row.serverUrl === apiBaseUrl);
+      downloadsRef.current = scoped;
+      setDownloads(scoped);
+      for (const record of scoped) {
+        if (record.status === "queued" || record.status === "processing") {
+          pollTicket(record.id);
+        } else if (record.status === "downloading") {
+          pendingQueueRef.current.push(record.id);
+        }
+      }
+      scheduleNext();
+    });
+
+    refreshStorageUsage();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally scoped by `apiBaseUrl`/`userId` only; `pollTicket`/`scheduleNext` are stable-enough callbacks re-created per render but not meaningful re-run triggers here.
+  }, [apiBaseUrl, userId]);
+
+  useEffect(
+    () => () => {
+      for (const timer of pollTimersRef.current.values()) window.clearTimeout(timer);
+      pollTimersRef.current.clear();
+      for (const url of blobUrlCacheRef.current.values()) URL.revokeObjectURL(url.blobUrl);
+      blobUrlCacheRef.current.clear();
+    },
+    []
+  );
+
+  const enqueue = useCallback(
+    async (params: EnqueueDownloadParams): Promise<DownloadRecord> => {
+      if (!userId) throw new Error(t("lib.downloads.signInRequired"));
+      const ticket = await client.createDownload({
+        media_file_id: params.mediaFileId,
+        quality_id: params.qualityId,
+      });
+      const record: DownloadRecord = {
+        id: ticket.id,
+        workId: params.workId,
+        mediaFileId: params.mediaFileId,
+        userId,
+        serverUrl: apiBaseUrl,
+        title: params.title,
+        subtitle: params.subtitle ?? null,
+        qualityId: ticket.quality_id,
+        qualityLabel: params.qualityLabel,
+        container: ticket.container,
+        totalBytes: ticket.size_bytes,
+        bytesDownloaded: 0,
+        lastCompletedByteOffset: 0,
+        status: ticketToLocalStatus(ticket),
+        keepUntil: params.keepUntil,
+        watchedAt: null,
+        errorMessage: ticket.error_message,
+        requestedAt: ticket.requested_at,
+        readyAt: null,
+        storage: null,
+        runtimeMs: params.runtimeMs,
+        mimeType: mimeTypeForContainer(ticket.container),
+      };
+      upsertRecord(record);
+      if (ticket.status === "ready") {
+        beginFetch(record.id);
+      } else if (ticket.status === "queued" || ticket.status === "processing") {
+        pollTicket(record.id);
+      }
+      return record;
+    },
+    [apiBaseUrl, beginFetch, client, pollTicket, t, upsertRecord, userId]
+  );
+
+  const cancel = useCallback(
+    async (id: string) => {
+      clearPoll(id);
+      abortDownload(id);
+      pendingQueueRef.current = pendingQueueRef.current.filter((candidate) => candidate !== id);
+      const record = downloadsRef.current.find((candidate) => candidate.id === id);
+      if (record) await deleteStoredBytes(record).catch(() => undefined);
+      await client.cancelDownload(id).catch(() => undefined);
+      patchRecord(id, {
+        status: "canceled",
+        bytesDownloaded: 0,
+        lastCompletedByteOffset: 0,
+        storage: null,
+      });
+    },
+    [clearPoll, client, patchRecord]
+  );
+
+  const remove = useCallback(
+    async (id: string) => {
+      clearPoll(id);
+      abortDownload(id);
+      pendingQueueRef.current = pendingQueueRef.current.filter((candidate) => candidate !== id);
+      const record = downloadsRef.current.find((candidate) => candidate.id === id);
+      if (record) await deleteStoredBytes(record).catch(() => undefined);
+      await client.cancelDownload(id).catch(() => undefined);
+      await deleteDownloadRow(id);
+      const cached = blobUrlCacheRef.current.get(id);
+      if (cached) {
+        URL.revokeObjectURL(cached.blobUrl);
+        blobUrlCacheRef.current.delete(id);
+      }
+      downloadsRef.current = downloadsRef.current.filter((candidate) => candidate.id !== id);
+      setDownloads(downloadsRef.current);
+      refreshStorageUsage();
+    },
+    [clearPoll, client, refreshStorageUsage]
+  );
+
+  const retry = useCallback(
+    async (id: string) => {
+      const record = downloadsRef.current.find((candidate) => candidate.id === id);
+      if (!record) return;
+      await remove(id);
+      await enqueue({
+        workId: record.workId,
+        mediaFileId: record.mediaFileId,
+        title: record.title,
+        subtitle: record.subtitle,
+        runtimeMs: record.runtimeMs,
+        qualityId: record.qualityId,
+        qualityLabel: record.qualityLabel,
+        keepUntil: record.keepUntil,
+      });
+    },
+    [enqueue, remove]
+  );
+
+  const getLocalPlaybackSource = useCallback(
+    async (mediaFileId: string): Promise<LocalPlaybackSource | null> => {
+      const record = downloadsRef.current.find(
+        (candidate) => candidate.mediaFileId === mediaFileId && candidate.status === "ready"
+      );
+      if (!record) return null;
+      const cached = blobUrlCacheRef.current.get(record.id);
+      if (cached) return cached;
+      const blob = await getPlaybackBlob(record);
+      if (!blob) return null;
+      const source: LocalPlaybackSource = {
+        blobUrl: URL.createObjectURL(blob),
+        mimeType: record.mimeType,
+        durationSeconds: record.runtimeMs / 1000,
+      };
+      blobUrlCacheRef.current.set(record.id, source);
+      return source;
+    },
+    []
+  );
+
+  const queueWatchMutation = useCallback(
+    async (params: {
+      mediaFileId: string;
+      positionMs: number;
+      durationMs: number;
+      completed?: boolean;
+    }) => {
+      if (!userId) return;
+      const mutation: QueuedWatchMutation = {
+        id: `${params.mediaFileId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+        userId,
+        serverUrl: apiBaseUrl,
+        mediaFileId: params.mediaFileId,
+        positionMs: params.positionMs,
+        durationMs: params.durationMs,
+        completed: params.completed,
+        occurredAt: new Date().toISOString(),
+      };
+      await putQueuedWatchMutation(mutation);
+    },
+    [apiBaseUrl, userId]
+  );
+
+  // Flushes offline-buffered watch-progress mutations (`queueWatchMutation`)
+  // through the normal API client once back online. Gated on `!authFailed`
+  // like every other protected call -- flushing into a session that's
+  // already known to have nothing left to fall back on would just queue
+  // the same failure over and over.
+  useEffect(() => {
+    if (!userId || !online || authFailed) return;
+    let cancelled = false;
+
+    const flush = async () => {
+      const mutations = await listQueuedWatchMutations(userId);
+      for (const mutation of mutations) {
+        if (cancelled || mutation.serverUrl !== apiBaseUrl) continue;
+        try {
+          await client.updateWatchProgress(mutation.mediaFileId, {
+            positionMs: mutation.positionMs,
+            durationMs: mutation.durationMs,
+            completed: mutation.completed,
+            occurredAt: mutation.occurredAt,
+          });
+          await deleteQueuedWatchMutation(mutation.id);
+        } catch {
+          // Still offline in practice, or a transient server error -- left
+          // queued for the next flush attempt.
+        }
+      }
+    };
+
+    void flush();
+    const interval = window.setInterval(() => void flush(), 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [apiBaseUrl, authFailed, client, online, userId]);
+
+  // Keep-until expiry sweep. Runs on its own interval: it needs the latest
+  // known watched state to resolve an "after-watched" policy, which is
+  // exactly what the flush loop above keeps current server-side (a queued
+  // offline "mark watched" already counts locally before it's reached the
+  // server, via `queuedMutations` below).
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+
+    const sweep = async () => {
+      const [queuedMutations, serverProgress] = await Promise.all([
+        listQueuedWatchMutations(userId),
+        online ? client.listWatchProgress().catch(() => []) : Promise.resolve([]),
+      ]);
+      if (cancelled) return;
+      const watchedMediaFileIds = new Set<string>();
+      for (const progress of serverProgress) {
+        if (progress.state === "watched") watchedMediaFileIds.add(progress.media_file_id);
+      }
+      for (const mutation of queuedMutations) {
+        if (mutation.completed) watchedMediaFileIds.add(mutation.mediaFileId);
+      }
+
+      const now = Date.now();
+      for (const record of downloadsRef.current) {
+        if (
+          record.watchedAt === null &&
+          record.keepUntil.type === "after-watched" &&
+          watchedMediaFileIds.has(record.mediaFileId)
+        ) {
+          patchRecord(record.id, { watchedAt: new Date().toISOString() });
+        }
+      }
+      for (const record of downloadsRef.current) {
+        if (record.status !== "ready") continue;
+        const expiresAt = expiryTimeMs(record);
+        if (expiresAt === null || now < expiresAt) continue;
+        await deleteStoredBytes(record).catch(() => undefined);
+        await client.cancelDownload(record.id).catch(() => undefined);
+        await deleteDownloadRow(record.id);
+        downloadsRef.current = downloadsRef.current.filter(
+          (candidate) => candidate.id !== record.id
+        );
+        setDownloads(downloadsRef.current);
+        showToast(t("lib.downloads.expiredToast", { title: record.title }));
+      }
+      refreshStorageUsage();
+    };
+
+    void sweep();
+    const interval = window.setInterval(() => void sweep(), EXPIRY_SWEEP_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [client, online, patchRecord, refreshStorageUsage, showToast, t, userId]);
+
+  const activeSummary = useMemo(() => activeSummaryFor(downloads), [downloads]);
+
+  const value = useMemo<DownloadsContextValue>(
+    () => ({
+      downloads,
+      activeSummary,
+      storageUsage,
+      storageSupported,
+      enqueue,
+      cancel,
+      retry,
+      remove,
+      getLocalPlaybackSource,
+      queueWatchMutation,
+    }),
+    [
+      activeSummary,
+      cancel,
+      downloads,
+      enqueue,
+      getLocalPlaybackSource,
+      queueWatchMutation,
+      remove,
+      retry,
+      storageSupported,
+      storageUsage,
+    ]
+  );
+
+  return <DownloadsContext.Provider value={value}>{children}</DownloadsContext.Provider>;
+}
+
+export function useDownloads(): DownloadsContextValue {
+  const value = useContext(DownloadsContext);
+  if (!value) {
+    throw new Error("useDownloads() must be called within a <DownloadsProvider>.");
+  }
+  return value;
+}

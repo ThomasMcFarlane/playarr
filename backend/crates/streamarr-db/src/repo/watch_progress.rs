@@ -118,13 +118,23 @@ impl WatchProgressRepo for SqlxWatchProgressRepo {
     async fn upsert(&self, user_id: Uuid, progress: &WatchProgress) -> Result<(), DbError> {
         let updated_at = progress.updated_at.unwrap_or_else(chrono::Utc::now);
         let sql = match self.backend {
+            // The trailing `WHERE excluded.updated_at > watch_progress.updated_at`
+            // guard is what makes this upsert safe against out-of-order
+            // writes -- an offline-buffered client replaying a stale update
+            // (see `UpdateWatchProgressRequest::occurred_at`'s doc comment)
+            // after a newer update from another device already landed must
+            // not regress the row back to an older position. A conflicting
+            // row with no matching `WHERE` match is simply left untouched
+            // (`ON CONFLICT ... DO UPDATE ... WHERE` is a real no-op, not an
+            // error, in both SQLite and Postgres when the predicate fails).
             Backend::Sqlite => {
                 "INSERT INTO watch_progress \
                  (user_id, media_file_id, position_ms, duration_ms, state, updated_at) \
                  VALUES (?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (user_id, media_file_id) DO UPDATE SET \
                  position_ms = excluded.position_ms, duration_ms = excluded.duration_ms, \
-                 state = excluded.state, updated_at = excluded.updated_at"
+                 state = excluded.state, updated_at = excluded.updated_at \
+                 WHERE excluded.updated_at > watch_progress.updated_at"
             }
             Backend::Postgres => {
                 "INSERT INTO watch_progress \
@@ -132,7 +142,8 @@ impl WatchProgressRepo for SqlxWatchProgressRepo {
                  VALUES ($1, $2, $3, $4, $5, $6) \
                  ON CONFLICT (user_id, media_file_id) DO UPDATE SET \
                  position_ms = EXCLUDED.position_ms, duration_ms = EXCLUDED.duration_ms, \
-                 state = EXCLUDED.state, updated_at = EXCLUDED.updated_at"
+                 state = EXCLUDED.state, updated_at = EXCLUDED.updated_at \
+                 WHERE EXCLUDED.updated_at > watch_progress.updated_at"
             }
         };
         sqlx::query(sql)

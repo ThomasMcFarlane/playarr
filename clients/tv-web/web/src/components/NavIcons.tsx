@@ -91,6 +91,16 @@ export function MusicIcon({ className }: IconProps) {
   );
 }
 
+export function DownloadsIcon({ className }: IconProps) {
+  return (
+    <svg {...ICON_PROPS} className={className}>
+      <path d="M12 3v12" />
+      <path d="m7 10.5 5 4.5 5-4.5" />
+      <path d="M4.5 18.5v1.5a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-1.5" />
+    </svg>
+  );
+}
+
 export function PlaylistsIcon({ className }: IconProps) {
   return (
     <svg {...ICON_PROPS} className={className}>

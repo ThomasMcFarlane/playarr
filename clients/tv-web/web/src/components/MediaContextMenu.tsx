@@ -16,15 +16,22 @@ import {
   type WorkDetail,
 } from "@streamarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
+import { useDownloads } from "../lib/DownloadsProvider";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
 import { captureNavigationLayer } from "../lib/navigationLayer";
 import { useToast } from "../lib/toast";
+import {
+  DownloadQualityDrawer,
+  type DownloadQualitySelection,
+} from "./DownloadQualityDrawer";
 import { TvEmptyState } from "./tv/TvEmptyState";
 
 const LONG_PRESS_MS = 650;
+/** Download enqueue calls are heavier than a watch-progress PUT (each creates a server-side download ticket) -- a smaller batch than `setWatched`'s. */
+const DOWNLOAD_BATCH_SIZE = 4;
 
-type ContextView = "actions" | "playlists" | "playlist-destinations";
+type ContextView = "actions" | "playlists" | "playlist-destinations" | "download";
 type PlaylistPickerState =
   | { status: "idle" }
   | { status: "loading" }
@@ -82,6 +89,8 @@ export interface MediaContextItem {
   preferredEpisodeId?: string | null;
   /** Exact leaf or leaves represented by this UI item. */
   leaves?: PlayableLeaf[];
+  /** A whole playlist represented by this UI item -- the Download action fans this out via `listPlaylistItems` + per-item detail resolution. */
+  playlistId?: string;
   /** Preserve a surface's specialised short action, e.g. chapter offset or playlist selection. */
   onPlay?: () => void;
   activateOrigin?: boolean;
@@ -186,6 +195,8 @@ export interface PlayableLeaf {
   seriesTitle?: string;
   seasonNumber?: number;
   episodeNumber?: number;
+  /** The work this leaf belongs to -- only set where it can differ per-leaf (a Playlist fans out across many works); a single-work container resolves it once from the outer item instead. */
+  workId?: string;
 }
 
 interface MediaContextMenuOptions {
@@ -265,6 +276,67 @@ function playableLeaves(
 }
 
 /**
+ * Resolves every leaf a playlist's items expand to -- an audio item's
+ * `track_id` picks the one matching track out of its artist work's albums
+ * (same lookup `pages/Playlists.tsx`'s local `resolveAudioTrack` does); a
+ * video item has no `track_id` (Playarr playlists only ever add movies to a
+ * video playlist, never a whole series), so it resolves via `playableLeaves`
+ * on that work directly. Used by the Download action's Playlist container
+ * fan-out (`playlistId` on a `MediaContextItem`) -- `listPlaylistItems` plus
+ * one `getWork` per distinct work id referenced, same batching shape
+ * `Playlists.tsx`'s own directory load already uses.
+ */
+async function resolvePlaylistLeaves(
+  client: ReturnType<typeof useApiClient>,
+  playlistId: string,
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string
+): Promise<PlayableLeaf[]> {
+  const items = await client.listPlaylistItems(playlistId);
+  const workIds = [...new Set(items.map((item) => item.work_id))];
+  const details = await Promise.all(
+    workIds.map(async (workId): Promise<WorkDetail | null> => {
+      try {
+        return await client.getWork(workId);
+      } catch {
+        return null;
+      }
+    })
+  );
+  const detailByWorkId = new Map(
+    details.filter((detail): detail is WorkDetail => detail !== null).map((detail) => [detail.work.id, detail])
+  );
+  return items.flatMap((item) => {
+    const detail = detailByWorkId.get(item.work_id);
+    if (!detail) return [];
+    if (!item.track_id) {
+      return playableLeaves(detail, t).map((leaf) => ({ ...leaf, workId: detail.work.id }));
+    }
+    const trackLeaves = playableLeaves(detail, t);
+    // `playableLeaves` doesn't retain a track's id, so match by walking the
+    // artist's albums directly for this one track id instead.
+    if (typeof detail.children !== "object" || detail.children === null || !("Artist" in detail.children)) {
+      return [];
+    }
+    for (const album of detail.children.Artist) {
+      const track = album.tracks.find((candidate) => candidate.track.id === item.track_id);
+      if (track?.media_file_id) {
+        return [
+          {
+            mediaFileId: track.media_file_id,
+            runtimeMs: track.runtime_ms ?? (track.track.duration_seconds ?? 0) * 1_000,
+            title: track.track.title,
+            workId: detail.work.id,
+          },
+        ];
+      }
+    }
+    return trackLeaves.length === 1
+      ? trackLeaves.map((leaf) => ({ ...leaf, workId: detail.work.id }))
+      : [];
+  });
+}
+
+/**
  * Reusable TV media-item actions. A short Enter remains the element's
  * normal click, while holding Enter or using the browser context-menu
  * gesture opens a remote-friendly action drawer.
@@ -273,6 +345,7 @@ export function useMediaContextMenu({
   onProgressChanged,
 }: MediaContextMenuOptions = {}) {
   const client = useApiClient();
+  const downloads = useDownloads();
   const location = useLocation();
   const navigate = useNavigate();
   const { t } = useLanguage();
@@ -286,6 +359,8 @@ export function useMediaContextMenu({
   });
   const [selectedPlaylist, setSelectedPlaylist] =
     useState<PlaylistResponse | null>(null);
+  const [downloadLeaves, setDownloadLeaves] = useState<PlayableLeaf[]>([]);
+  const [downloadBusy, setDownloadBusy] = useState(false);
   const originRef = useRef<HTMLElement | null>(null);
   const firstActionRef = useRef<HTMLButtonElement>(null);
   const addToPlaylistRef = useRef<HTMLButtonElement>(null);
@@ -347,6 +422,8 @@ export function useMediaContextMenu({
     setContextView("actions");
     setPlaylistPicker({ status: "idle" });
     setSelectedPlaylist(null);
+    setDownloadLeaves([]);
+    setDownloadBusy(false);
     playlistActionInFlightRef.current = false;
     setActiveItem(item);
   }, [clearLongPress]);
@@ -359,6 +436,8 @@ export function useMediaContextMenu({
     setContextView("actions");
     setPlaylistPicker({ status: "idle" });
     setSelectedPlaylist(null);
+    setDownloadLeaves([]);
+    setDownloadBusy(false);
     playlistActionInFlightRef.current = false;
     window.requestAnimationFrame(() => originRef.current?.focus({ preventScroll: true }));
   }, [clearLongPress]);
@@ -520,10 +599,95 @@ export function useMediaContextMenu({
     [activeItem, busyAction, client, close, getDetail, onProgressChanged, showToast, t]
   );
 
+  /**
+   * Resolves this item's leaf/leaves and opens the quality/keep-until
+   * picker (`contextView: "download"`) -- fans out exactly like `play`/
+   * `setWatched` for a Series/Artist/Site/Album (`activeItem.leaves` when
+   * explicit, else `playableLeaves` off the resolved work detail), plus a
+   * Playlist container via `activeItem.playlistId` (`resolvePlaylistLeaves`).
+   * The actual enqueue happens in `confirmDownload` once the drawer
+   * resolves a quality + keep-until choice.
+   */
+  const download = useCallback(async () => {
+    if (!activeItem || busyAction) return;
+    setBusyAction("download");
+    setError(null);
+    try {
+      let leaves = activeItem.leaves;
+      if (!leaves) {
+        if (activeItem.playlistId) {
+          leaves = await resolvePlaylistLeaves(client, activeItem.playlistId, t);
+        } else {
+          const workId = activeItem.work?.id ?? activeItem.workId;
+          leaves = workId ? playableLeaves(await getDetail(workId), t) : [];
+        }
+      }
+      if (leaves.length === 0) {
+        throw new Error(t("components.mediaContextMenu.noPlayableMedia"));
+      }
+      setDownloadLeaves(leaves);
+      setContextView("download");
+      setBusyAction(null);
+    } catch (caught) {
+      setBusyAction(null);
+      setError(
+        caught instanceof Error ? caught.message : describeApiError(caught)
+      );
+    }
+  }, [activeItem, busyAction, client, getDetail, t]);
+
+  const confirmDownload = useCallback(
+    async (selection: DownloadQualitySelection) => {
+      if (downloadBusy || downloadLeaves.length === 0) return;
+      setDownloadBusy(true);
+      setError(null);
+      try {
+        const fallbackWorkId = activeItem?.work?.id ?? activeItem?.workId ?? "";
+        for (let index = 0; index < downloadLeaves.length; index += DOWNLOAD_BATCH_SIZE) {
+          const batch = downloadLeaves.slice(index, index + DOWNLOAD_BATCH_SIZE);
+          await Promise.all(
+            batch.map((leaf) =>
+              downloads.enqueue({
+                workId: leaf.workId ?? fallbackWorkId,
+                mediaFileId: leaf.mediaFileId,
+                title: leaf.title,
+                subtitle: leaf.seriesTitle,
+                runtimeMs: leaf.runtimeMs,
+                qualityId: selection.qualityId,
+                qualityLabel: selection.qualityLabel,
+                keepUntil: selection.keepUntil,
+              })
+            )
+          );
+        }
+        const title =
+          activeItem?.title ??
+          activeItem?.work?.title ??
+          t("components.mediaContextMenu.genericTitle");
+        close();
+        showToast(
+          downloadLeaves.length === 1
+            ? t("components.mediaContextMenu.downloadStarted", { title })
+            : t("components.mediaContextMenu.downloadsStarted", {
+                count: downloadLeaves.length,
+              })
+        );
+      } catch (caught) {
+        setDownloadBusy(false);
+        setError(
+          caught instanceof Error ? caught.message : describeApiError(caught)
+        );
+      }
+    },
+    [activeItem, close, downloadBusy, downloadLeaves, downloads, showToast, t]
+  );
+
   const returnToActions = useCallback(() => {
     setContextView("actions");
     setError(null);
     setBusyAction(null);
+    setDownloadLeaves([]);
+    setDownloadBusy(false);
     window.requestAnimationFrame(() =>
       addToPlaylistRef.current?.focus({ preventScroll: true })
     );
@@ -870,6 +1034,26 @@ export function useMediaContextMenu({
         if (event.target === event.currentTarget) close();
       }}
     >
+      {contextView === "download" ? (
+        <DownloadQualityDrawer
+          title={
+            activeItem.title ??
+            activeItem.work?.title ??
+            t("components.mediaContextMenu.genericTitle")
+          }
+          leaves={downloadLeaves}
+          busy={downloadBusy}
+          onClose={returnToActions}
+          onConfirm={(selection) => void confirmDownload(selection)}
+          confirmLabel={
+            downloadLeaves.length > 1
+              ? t("components.mediaContextMenu.downloadCount", {
+                  count: downloadLeaves.length,
+                })
+              : undefined
+          }
+        />
+      ) : (
       <aside
         className="media-context-drawer"
         role="dialog"
@@ -962,6 +1146,18 @@ export function useMediaContextMenu({
                   {busyAction === "play"
                     ? t("components.mediaContextMenu.opening")
                     : t("components.mediaContextMenu.play")}
+                </strong>
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(busyAction)}
+                onClick={() => void download()}
+              >
+                <span aria-hidden="true">⇩</span>
+                <strong>
+                  {busyAction === "download"
+                    ? t("components.mediaContextMenu.opening")
+                    : t("components.mediaContextMenu.download")}
                 </strong>
               </button>
               {isPlaylistItem ? (
@@ -1205,6 +1401,7 @@ export function useMediaContextMenu({
         )}
         {error ? <p className="media-context-error" role="alert">{error}</p> : null}
       </aside>
+      )}
     </div>
   ) : null;
 

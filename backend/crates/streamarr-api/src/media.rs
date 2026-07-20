@@ -56,7 +56,9 @@ use tower_http::services::ServeFile;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::auth_extractor::{ensure_library_allowed, OptionalStreamingUser, StreamingUser};
+use crate::auth_extractor::{
+    ensure_can_download, ensure_library_allowed, OptionalStreamingUser, StreamingUser,
+};
 use crate::error::ApiError;
 use crate::playback::{
     playback_quality_options, playback_subtitle_options, PlaybackAudioTrackOption,
@@ -78,6 +80,31 @@ pub struct MediaChapter {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct MediaMetadata {
     pub duration_ms: u64,
+}
+
+/// One quality `GET /api/v1/media/{media_file_id}/download-options` offers
+/// -- the same `id`/`label`/`profile`/`height` shape
+/// [`crate::playback::PlaybackQualityOption`] already exposes for playback,
+/// plus a download-specific size estimate. `"original"` is always exact
+/// (`size_is_estimate: false`, `estimated_size_bytes` is the real
+/// `MediaFile::size_bytes`); every named transcode profile is a rough
+/// `video_bitrate_bps * duration_ms / 8000` estimate (`size_is_estimate:
+/// true`) since nothing has actually encoded it yet.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct DownloadQualityOption {
+    pub id: String,
+    pub label: String,
+    pub profile: Option<String>,
+    pub height: Option<u16>,
+    pub estimated_size_bytes: Option<u64>,
+    pub size_is_estimate: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct DownloadOptionsResponse {
+    pub media_file_id: Uuid,
+    pub container: String,
+    pub options: Vec<DownloadQualityOption>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -1032,7 +1059,7 @@ fn validate_segment_file_name(name: &str) -> Result<(), ApiError> {
 /// error. That response's body (`UnsyncBoxBody<Bytes, io::Error>`) is
 /// re-wrapped into `axum::body::Body` so this can return a plain
 /// `axum::response::Response`.
-async fn serve_file(path: &std::path::Path, request: Request) -> Result<Response, ApiError> {
+pub(crate) async fn serve_file(path: &std::path::Path, request: Request) -> Result<Response, ApiError> {
     let service = ServeFile::new(path);
     let response = match service.oneshot(request).await {
         Ok(response) => response,
@@ -1249,6 +1276,108 @@ pub async fn media_metadata_handler(
     };
 
     Ok(Json(MediaMetadata { duration_ms }))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/media/{media_file_id}/download-options",
+    tag = "downloads",
+    params(("media_file_id" = Uuid, Path, description = "MediaFile id")),
+    responses(
+        (status = 200, description = "Download qualities this server can produce for this media file", body = DownloadOptionsResponse, example = json!({
+            "media_file_id": "3f9c1e2d-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+            "container": "mkv",
+            "options": [
+                {
+                    "id": "original",
+                    "label": "Original",
+                    "profile": null,
+                    "height": null,
+                    "estimated_size_bytes": 4_000_000_000_u64,
+                    "size_is_estimate": false
+                },
+                {
+                    "id": "h264-1080p-8mbps",
+                    "label": "1080p",
+                    "profile": "h264-1080p-8mbps",
+                    "height": 1080,
+                    "estimated_size_bytes": 1_200_000_000_u64,
+                    "size_is_estimate": true
+                }
+            ]
+        })),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Caller lacks Playarr streaming access, download access, or access to this library"),
+        (status = 404, description = "Unknown media_file_id"),
+        (status = 500, description = "The source file could not be probed for its duration")
+    )
+)]
+pub async fn media_download_options_handler(
+    State(state): State<AppState>,
+    streaming: StreamingUser,
+    Path(media_file_id): Path<Uuid>,
+) -> Result<Json<DownloadOptionsResponse>, ApiError> {
+    let media_file = state
+        .media_files
+        .get(media_file_id)
+        .await
+        .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
+    ensure_library_allowed(
+        media_file.source_instance_id,
+        streaming.allowed_libraries().as_deref(),
+    )?;
+    ensure_can_download(&streaming.policy)?;
+
+    // Same lazy-probe-and-cache pattern `media_metadata_handler` above
+    // uses: an accurate size estimate for a non-Original quality needs a
+    // real fixed duration, and older catalogue rows may not have one
+    // persisted yet.
+    let duration_ms = match media_file.duration_ms.filter(|duration| *duration > 0) {
+        Some(duration_ms) => duration_ms,
+        None => {
+            let resolved_path = streamarr_model::resolve_media_path(&media_file.path);
+            let duration_ms = probe_media_duration_ms(&resolved_path).await?;
+            state
+                .catalog
+                .cache_media_file_duration(media_file.id, media_file.work_id, duration_ms)
+                .await?;
+            duration_ms
+        }
+    };
+
+    let options = playback_quality_options(media_file.bitrate)
+        .into_iter()
+        .map(|option| {
+            if option.id == "original" {
+                DownloadQualityOption {
+                    id: option.id,
+                    label: option.label,
+                    profile: option.profile,
+                    height: option.height,
+                    estimated_size_bytes: Some(media_file.size_bytes),
+                    size_is_estimate: false,
+                }
+            } else {
+                let estimated_size_bytes = option
+                    .video_bitrate_bps
+                    .map(|video_bitrate_bps| video_bitrate_bps.saturating_mul(duration_ms) / 8000);
+                DownloadQualityOption {
+                    id: option.id,
+                    label: option.label,
+                    profile: option.profile,
+                    height: option.height,
+                    estimated_size_bytes,
+                    size_is_estimate: true,
+                }
+            }
+        })
+        .collect();
+
+    Ok(Json(DownloadOptionsResponse {
+        media_file_id,
+        container: media_file.container.clone(),
+        options,
+    }))
 }
 
 async fn media_playback_options(
@@ -1784,6 +1913,90 @@ mod tests {
             source_instance_id: Uuid::new_v4(),
             source_file_id: Some("1".to_string()),
         }
+    }
+
+    #[tokio::test]
+    async fn download_options_mark_original_exact_and_profiles_as_estimated() {
+        let (router, state) = test_state().await;
+        let mut file = media_file_at(write_temp_file(b"source"));
+        // Explicit, non-zero duration avoids this handler's lazy ffprobe
+        // fallback (`probe_media_duration_ms`), which would otherwise try
+        // to spawn a real `ffprobe` binary this test environment may not
+        // have.
+        file.duration_ms = Some(3_600_000);
+        file.bitrate = Some(8_000_000);
+        file.size_bytes = 5_000_000_000;
+        let id = file.id;
+        let source_instance_id = file.source_instance_id;
+        state.media_files.insert(file);
+        let user_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user_id, vec![source_instance_id]).await;
+        let token = mint_access_token(&state, user_id);
+
+        let response = router
+            .oneshot(
+                HttpRequest::builder()
+                    .uri(format!("/api/v1/media/{id}/download-options"))
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let options: DownloadOptionsResponse = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(options.media_file_id, id);
+
+        let original = options
+            .options
+            .iter()
+            .find(|option| option.id == "original")
+            .expect("original option present");
+        assert!(!original.size_is_estimate);
+        assert_eq!(original.estimated_size_bytes, Some(5_000_000_000));
+
+        let profile = options
+            .options
+            .iter()
+            .find(|option| option.id == "h264-1080p-8mbps")
+            .expect("1080p profile option present");
+        assert!(profile.size_is_estimate);
+        // 8_000_000 bps video bitrate * 3_600_000 ms / 8000 = 3_600_000_000
+        // bytes -- see `media_download_options_handler`'s own estimate math.
+        assert_eq!(profile.estimated_size_bytes, Some(3_600_000_000));
+    }
+
+    #[tokio::test]
+    async fn download_options_requires_can_download_policy() {
+        let (router, state) = test_state().await;
+        let mut file = media_file_at(write_temp_file(b"source"));
+        file.duration_ms = Some(3_600_000);
+        let id = file.id;
+        let source_instance_id = file.source_instance_id;
+        state.media_files.insert(file);
+        let user_id = Uuid::new_v4();
+        crate::test_support::seed_streaming_user_without_download_access(
+            &state,
+            user_id,
+            vec![source_instance_id],
+        )
+        .await;
+        let token = mint_access_token(&state, user_id);
+
+        let response = router
+            .oneshot(
+                HttpRequest::builder()
+                    .uri(format!("/api/v1/media/{id}/download-options"))
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
 
     #[test]

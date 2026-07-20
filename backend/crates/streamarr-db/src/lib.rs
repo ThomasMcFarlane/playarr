@@ -15,11 +15,12 @@ pub mod repo;
 pub use error::DbError;
 pub use pool::{connect, run_migrations, DbPool, POSTGRES_MIGRATIONS, SQLITE_MIGRATIONS};
 pub use repo::{
-    CreditRepo, DeviceRepo, EmbeddingRepo, InMemoryRefreshTokenStore, LibraryViewRepo,
-    MediaFileRepo, PlaylistRepo, PolicyRepo, ProfilePinRepo, PushRegistrationRepo,
-    RefreshTokenRepo, RenditionRepo, SourceInstanceRepo, SqlxCreditRepo, SqlxEmbeddingRepo,
-    SqlxLibraryViewRepo, SqlxPlaylistRepo, SqlxProfilePinRepo, SqlxPushRegistrationRepo,
-    SqlxRefreshTokenRepo, SqlxSystemSettingsRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo,
-    SqlxUserInviteRequestRepo, SqlxWatchProgressRepo, SystemSettingsRepo, TdarrConnectionRepo,
-    UserInviteRepo, UserInviteRequestRepo, UserRepo, WatchProgressRepo, WorkRepo,
+    CreditRepo, DeviceRepo, DownloadTicketRepo, EmbeddingRepo, InMemoryRefreshTokenStore,
+    LibraryViewRepo, MediaFileRepo, PlaylistRepo, PolicyRepo, ProfilePinRepo,
+    PushRegistrationRepo, RefreshTokenRepo, RenditionRepo, SourceInstanceRepo, SqlxCreditRepo,
+    SqlxDownloadTicketRepo, SqlxEmbeddingRepo, SqlxLibraryViewRepo, SqlxPlaylistRepo,
+    SqlxProfilePinRepo, SqlxPushRegistrationRepo, SqlxRefreshTokenRepo, SqlxSystemSettingsRepo,
+    SqlxTdarrConnectionRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxWatchProgressRepo,
+    SystemSettingsRepo, TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo,
+    WatchProgressRepo, WorkRepo,
 };

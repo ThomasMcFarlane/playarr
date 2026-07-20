@@ -19,17 +19,17 @@ use streamarr_cache::{CacheAndPubSub, InMemory};
 use streamarr_catalog::CatalogService;
 use streamarr_db::analytics::{AnalyticsStore, SqlxAnalyticsStore};
 use streamarr_db::repo::{
-    seed_default_views, PlaylistRepo, SqlxCreditRepo, SqlxDeviceRepo, SqlxLibraryViewRepo,
-    SqlxMediaFileRepo, SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo,
+    seed_default_views, PlaylistRepo, SqlxCreditRepo, SqlxDeviceRepo, SqlxDownloadTicketRepo,
+    SqlxLibraryViewRepo, SqlxMediaFileRepo, SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo,
     SqlxPushRegistrationRepo, SqlxRenditionRepo, SqlxSourceInstanceRepo, SqlxSystemSettingsRepo,
     SqlxTdarrConnectionRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxUserRepo,
     SqlxWatchProgressRepo, SqlxWorkRepo,
 };
 use streamarr_db::{
-    CreditRepo, DbPool, DeviceRepo, LibraryViewRepo, MediaFileRepo, PolicyRepo, ProfilePinRepo,
-    PushRegistrationRepo, RenditionRepo, SourceInstanceRepo, SystemSettingsRepo,
-    TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo, WatchProgressRepo,
-    WorkRepo,
+    CreditRepo, DbPool, DeviceRepo, DownloadTicketRepo, LibraryViewRepo, MediaFileRepo,
+    PolicyRepo, ProfilePinRepo, PushRegistrationRepo, RenditionRepo, SourceInstanceRepo,
+    SystemSettingsRepo, TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo,
+    WatchProgressRepo, WorkRepo,
 };
 use streamarr_model::{Availability, Policy, Sensitive, User, Work, WorkKind};
 use streamarr_telemetry::analytics::{
@@ -286,6 +286,58 @@ pub async fn seed_streaming_user_with_library_allow(
         .expect("seed restricted streaming test user");
 }
 
+/// Like [`seed_streaming_user_with_library_allow`] but with
+/// `Policy::can_download` deliberately left `false` -- the fixture
+/// `downloads.rs`'s tests need to prove `ensure_can_download` actually
+/// gates every download endpoint even for a caller who otherwise has full
+/// Playarr streaming + library access.
+pub async fn seed_streaming_user_without_download_access(
+    state: &TestState,
+    user_id: Uuid,
+    library_allow: Vec<Uuid>,
+) {
+    let policy = Policy {
+        id: Uuid::new_v4(),
+        name: format!("test-no-download-policy-{user_id}"),
+        library_allow,
+        blocked_folders: Vec::new(),
+        max_rating: None,
+        blocked_tags: Vec::new(),
+        allowed_tags: Vec::new(),
+        can_transcode: true,
+        can_download: false,
+        can_delete: false,
+        can_share_public: false,
+        device_allow: Vec::new(),
+        max_concurrent_sessions: None,
+        access_schedule: None,
+        can_stream: true,
+        is_admin: false,
+    };
+    state
+        .policy_repo
+        .upsert(&policy)
+        .await
+        .expect("seed no-download test policy");
+
+    let user = User {
+        id: user_id,
+        username: format!("test-no-download-{user_id}"),
+        display_name: "Test No-Download User".to_string(),
+        email: None,
+        password_hash: Sensitive::new(streamarr_auth::login::hash_password("test-only-password")),
+        policy_id: policy.id,
+        created_at: Utc::now(),
+        disabled: false,
+        preferred_audio_language: streamarr_model::DEFAULT_PREFERRED_AUDIO_LANGUAGE.to_string(),
+    };
+    state
+        .user_repo
+        .upsert(&user)
+        .await
+        .expect("seed no-download test user");
+}
+
 fn test_version_gate() -> VersionGateLayer {
     VersionGateLayer::new(
         ClientCompatibilityTable::from_toml_str(
@@ -342,6 +394,8 @@ pub async fn test_state() -> (Router, TestState) {
     let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
     let watch_progress: Arc<dyn WatchProgressRepo> =
         Arc::new(SqlxWatchProgressRepo::new(pool.clone()));
+    let download_tickets: Arc<dyn DownloadTicketRepo> =
+        Arc::new(SqlxDownloadTicketRepo::new(pool.clone()));
     let library_view_repo: Arc<dyn LibraryViewRepo> =
         Arc::new(SqlxLibraryViewRepo::new(pool.clone()));
     let playlist_repo: Arc<dyn PlaylistRepo> = Arc::new(SqlxPlaylistRepo::new(pool.clone()));
@@ -508,6 +562,7 @@ pub async fn test_state() -> (Router, TestState) {
         system_settings_repo,
         media_files: media_files.clone() as Arc<dyn MediaFileLookup>,
         watch_progress,
+        download_tickets,
         jwt,
         admin_registry: admin_registry.clone(),
         auth_mode,
@@ -600,4 +655,38 @@ pub async fn seed_media_file(
     let id = file.id;
     state.media_file_repo.create(&file).await.unwrap();
     id
+}
+
+/// Like [`seed_media_file`], but also inserts into `state.media_files` (the
+/// in-memory [`crate::playback::MediaFileLookup`] every handler actually
+/// reads via `AppState::media_files`) and returns the full
+/// [`streamarr_model::MediaFile`], not just its id. `downloads.rs`'s tests
+/// need both: `state.download_tickets` is a real, `SqlxDownloadTicketRepo`-
+/// backed repo whose `download_tickets.media_file_id` is a real `REFERENCES
+/// media_files (id)` foreign key (so a bare in-memory-only insert would
+/// fail `insert`/`find_active` with a real FK violation), while every
+/// handler's own `MediaFile` lookup goes through the in-memory
+/// `MediaFileLookup`, not `media_file_repo`, directly (so a
+/// real-repo-only insert would 404 in the handler itself).
+pub async fn seed_downloadable_media_file(
+    state: &TestState,
+    work_id: Uuid,
+    source_instance_id: Uuid,
+) -> streamarr_model::MediaFile {
+    let file = streamarr_model::MediaFile {
+        id: Uuid::new_v4(),
+        work_id,
+        leaf_ref: streamarr_model::media::LeafRef::Work,
+        path: std::path::PathBuf::from("/media/movies/Sample.mkv"),
+        container: "mkv".to_string(),
+        codec: "h264".to_string(),
+        bitrate: Some(8_000_000),
+        duration_ms: Some(3_600_000),
+        size_bytes: 4_000_000_000,
+        source_instance_id,
+        source_file_id: Some("1".to_string()),
+    };
+    state.media_file_repo.create(&file).await.unwrap();
+    state.media_files.insert(file.clone());
+    file
 }

@@ -2417,6 +2417,13 @@ export interface components {
             completed?: boolean;
             /** Format: int64 */
             duration_ms: number;
+            /**
+             * Format: date-time
+             * @description When this update actually happened (RFC3339), for an offline-buffered
+             *     watch-progress update replayed after reconnecting. Omitted/absent for a
+             *     normal live update -- the server falls back to `now()`.
+             */
+            occurred_at?: string | null;
             /** Format: int64 */
             position_ms: number;
         };

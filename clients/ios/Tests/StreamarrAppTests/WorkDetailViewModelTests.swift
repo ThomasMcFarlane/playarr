@@ -147,7 +147,8 @@ final class PlayerViewModelLifecycleTests: XCTestCase {
             recorder: recorder
         )
         let engine = PlayerEngineSpy(duration: 120)
-        let viewModel = PlayerViewModel(engine: engine, apiClient: apiClient)
+        let downloadRepository = DownloadRepository(apiClient: apiClient)
+        let viewModel = PlayerViewModel(engine: engine, apiClient: apiClient, downloadRepository: downloadRepository)
 
         await viewModel.play(mediaFileID: mediaFileID, title: "Test Film")
 

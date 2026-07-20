@@ -25,6 +25,8 @@ enum HomeLayout {
 struct HomeView: View {
     let viewModel: HomeViewModel
     let apiClient: StreamarrAPIClient
+    let downloadRepository: DownloadRepository
+    @State private var downloadTarget: Work?
 
     var body: some View {
         Group {
@@ -38,6 +40,9 @@ struct HomeView: View {
             case .loaded:
                 loadedContent
             }
+        }
+        .sheet(item: $downloadTarget) { work in
+            WorkDownloadSheet(work: work, apiClient: apiClient, downloadRepository: downloadRepository)
         }
         .task {
             if case .idle = viewModel.loadState { await viewModel.load() }
@@ -115,7 +120,8 @@ struct HomeView: View {
         NavigationLink {
             WorkDetailView(
                 viewModel: WorkDetailViewModel(apiClient: apiClient, workID: work.id),
-                apiClient: apiClient
+                apiClient: apiClient,
+                downloadRepository: downloadRepository
             )
         } label: {
             VStack(alignment: .leading, spacing: 13) {
@@ -142,6 +148,9 @@ struct HomeView: View {
             }
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button("Download", systemImage: "arrow.down.circle") { downloadTarget = work }
+        }
     }
 
     private func rails(phone: Bool, width: CGFloat, height: CGFloat) -> some View {
@@ -225,18 +234,26 @@ struct HomeView: View {
         NavigationLink {
             WorkDetailView(
                 viewModel: WorkDetailViewModel(apiClient: apiClient, workID: work.id),
-                apiClient: apiClient
+                apiClient: apiClient,
+                downloadRepository: downloadRepository
             )
         } label: {
             content()
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button("Download", systemImage: "arrow.down.circle") { downloadTarget = work }
+        }
     }
 }
 
 #Preview {
     let apiClient = PreviewAPIClient()
     NavigationStack {
-        HomeView(viewModel: HomeViewModel(apiClient: apiClient), apiClient: apiClient)
+        HomeView(
+            viewModel: HomeViewModel(apiClient: apiClient),
+            apiClient: apiClient,
+            downloadRepository: DownloadRepository(apiClient: apiClient)
+        )
     }
 }
