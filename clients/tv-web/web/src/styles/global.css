@@ -10704,15 +10704,24 @@ html[data-platform="android-tv"] .player-quality-option {
   justify-content: space-between;
   gap: 1rem;
   padding: clamp(14px, 1.4vw, 20px);
-  border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--surface-strong) 60%, transparent);
+  background: color-mix(in srgb, var(--surface-soft) 45%, transparent);
+  transition: background 180ms ease;
+}
+
+.tv-download-row:hover,
+.tv-download-row:focus-within {
+  background: color-mix(in srgb, var(--surface-soft) 72%, transparent);
 }
 
 .tv-download-row-copy {
   display: grid;
   gap: 0.3rem;
   min-width: 0;
+}
+
+.tv-download-row-copy:focus-visible {
+  outline: 0;
 }
 
 .tv-download-row-copy strong {
