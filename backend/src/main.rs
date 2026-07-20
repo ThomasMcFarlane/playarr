@@ -803,6 +803,7 @@ fn generate_bootstrap_password() -> String {
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn boot_api(
     config: &Config,
     pool: DbPool,
@@ -1251,7 +1252,6 @@ async fn serve_application_router(
 /// loop below (which spawns pollers for instances registered *after*
 /// startup) share exactly one construction path.
 #[allow(clippy::too_many_arguments)]
-#[allow(clippy::too_many_arguments)]
 fn spawn_poller_for(
     instance: &streamarr_model::SourceInstance,
     source_instances: &Arc<streamarr_api::SourceInstanceRegistry>,
@@ -1321,6 +1321,7 @@ fn spawn_poller_for(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn boot_worker(
     pool: DbPool,
     coordinator: Arc<dyn streamarr_coordination::ClusterCoordinator>,
@@ -1768,6 +1769,11 @@ enum UpdateCheckOutcome {
     UpToDate {
         current_version: String,
     },
+    /// Never constructed yet -- `check_for_update`'s network call is still
+    /// stubbed (see its doc comment), so this variant has no producer until
+    /// that follow-up lands. The `update` match arm that consumes it is
+    /// real and already correct.
+    #[allow(dead_code)]
     UpdateAvailable {
         current_version: String,
         latest_version: String,

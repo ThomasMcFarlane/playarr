@@ -226,7 +226,26 @@ async fn enrich_history(state: &AppState, session: PlaybackSession) -> SessionHi
     path = "/api/v1/admin/playback/sessions/active",
     tag = "admin",
     responses(
-        (status = 200, description = "Every currently-active playback session", body = Vec<ActiveSessionView>),
+        (status = 200, description = "Every currently-active playback session", body = Vec<ActiveSessionView>, example = json!([
+            {
+                "session_id": "b3f1c2a4-6e8d-4a3b-9c1e-2f5d7a9b0c1d",
+                "user_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                "user_display_name": "Jane Doe",
+                "device_id": "d290f1ee-6c54-4b01-90e6-d701748f0851",
+                "media_file_id": "9c858901-8a57-4791-81fe-4c455b099bc9",
+                "work_id": "a7793a62-995b-42bd-aa93-ed3cd76f941e",
+                "media_title": "Sample Movie Kilo",
+                "play_method": "direct_play",
+                "target_codec": "h264",
+                "target_container": "mp4",
+                "client_platform": "web",
+                "client_version": "1.4.2",
+                "started_at": "2026-07-20T18:42:00Z",
+                "bytes_streamed": 104857600,
+                "buffering_events": 0,
+                "buffering_ms_total": 0
+            }
+        ])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin")
     )
@@ -272,7 +291,35 @@ pub struct SessionHistoryQuery {
     tag = "admin",
     params(SessionHistoryQuery),
     responses(
-        (status = 200, description = "Filtered, paginated playback session history, newest first", body = Vec<SessionHistoryView>),
+        (status = 200, description = "Filtered, paginated playback session history, newest first", body = Vec<SessionHistoryView>, example = json!([
+            {
+                "id": "b3f1c2a4-6e8d-4a3b-9c1e-2f5d7a9b0c1d",
+                "user_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                "user_display_name": "Jane Doe",
+                "device_id": "d290f1ee-6c54-4b01-90e6-d701748f0851",
+                "media_file_id": "9c858901-8a57-4791-81fe-4c455b099bc9",
+                "work_id": "a7793a62-995b-42bd-aa93-ed3cd76f941e",
+                "media_title": "Sample Movie Kilo",
+                "rendition_id": "6c9a5e2b-3d4f-4a8c-8e1b-7f2c9d3a5b6e",
+                "started_at": "2026-07-20T18:42:00Z",
+                "ended_at": "2026-07-20T20:19:12Z",
+                "play_method": "transcode",
+                "transcode_reason": "video_codec_not_supported",
+                "source_codec": "hevc",
+                "source_container": "mkv",
+                "source_bitrate": 20000000,
+                "target_codec": "h264",
+                "target_container": "mp4",
+                "target_bitrate": 4000000,
+                "client_platform": "android-tv",
+                "client_version": "2.1.0",
+                "ip_address": "192.168.1.42",
+                "bytes_streamed": 734003200,
+                "buffering_events": 2,
+                "buffering_ms_total": 1500,
+                "stop_reason": "completed"
+            }
+        ])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin")
     )

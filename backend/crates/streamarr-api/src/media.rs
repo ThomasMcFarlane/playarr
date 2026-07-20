@@ -1167,7 +1167,20 @@ pub async fn stream_media_handler(
     tag = "playback",
     params(("media_file_id" = Uuid, Path, description = "MediaFile id")),
     responses(
-        (status = 200, description = "Real chapters embedded in the source media container", body = Vec<MediaChapter>),
+        (status = 200, description = "Real chapters embedded in the source media container", body = Vec<MediaChapter>, example = json!([
+            {
+                "index": 0,
+                "title": "Opening Titles",
+                "start_ms": 0,
+                "end_ms": 65432
+            },
+            {
+                "index": 1,
+                "title": null,
+                "start_ms": 65432,
+                "end_ms": 620000
+            }
+        ])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller does not have Playarr streaming access"),
         (status = 404, description = "Unknown media_file_id"),
@@ -1198,7 +1211,9 @@ pub async fn media_chapters_handler(
     tag = "playback",
     params(("media_file_id" = Uuid, Path, description = "MediaFile id")),
     responses(
-        (status = 200, description = "Persisted fixed source-container metadata", body = MediaMetadata),
+        (status = 200, description = "Persisted fixed source-container metadata", body = MediaMetadata, example = json!({
+            "duration_ms": 3643424
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller does not have Playarr streaming access"),
         (status = 404, description = "Unknown media_file_id"),
@@ -1330,7 +1345,59 @@ async fn media_playback_options(
     tag = "playback",
     params(("media_file_id" = Uuid, Path, description = "MediaFile id")),
     responses(
-        (status = 200, description = "Playback choices and this viewer's remembered selections", body = MediaPlaybackOptionsResponse),
+        (status = 200, description = "Playback choices and this viewer's remembered selections", body = MediaPlaybackOptionsResponse, example = json!({
+            "quality_options": [
+                {
+                    "id": "original",
+                    "label": "Original",
+                    "profile": null,
+                    "height": null,
+                    "video_bitrate_bps": 8500000
+                },
+                {
+                    "id": "h264-1080p-8mbps",
+                    "label": "1080p",
+                    "profile": "h264-1080p-8mbps",
+                    "height": 1080,
+                    "video_bitrate_bps": 8000000
+                },
+                {
+                    "id": "h264-720p-4mbps",
+                    "label": "720p",
+                    "profile": "h264-720p-4mbps",
+                    "height": 720,
+                    "video_bitrate_bps": 4000000
+                }
+            ],
+            "audio_tracks": [
+                {
+                    "id": "source-audio-1",
+                    "stream_index": 1,
+                    "label": "English Stereo",
+                    "language": "eng",
+                    "codec": "aac",
+                    "channels": 2,
+                    "is_default": true
+                }
+            ],
+            "subtitle_tracks": [
+                {
+                    "id": "source-subtitle-3",
+                    "stream_index": 3,
+                    "label": "English SDH",
+                    "language": "eng",
+                    "codec": "subrip",
+                    "is_default": true,
+                    "forced": false,
+                    "url": "/api/v1/media/8f14e45f-ceea-467e-bd42-9f7f6a0e6f8f/subtitles/3?source_offset_ms=0"
+                }
+            ],
+            "preferences": {
+                "quality_id": "original",
+                "audio_track_id": "source-audio-1",
+                "subtitle_track_id": "source-subtitle-3"
+            }
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller does not have Playarr streaming access"),
         (status = 404, description = "Unknown media_file_id")
@@ -1353,9 +1420,65 @@ pub async fn media_playback_options_handler(
     path = "/api/v1/media/{media_file_id}/playback-options",
     tag = "playback",
     params(("media_file_id" = Uuid, Path, description = "MediaFile id")),
-    request_body = UpdateMediaPlaybackPreferencesRequest,
+    request_body(content = UpdateMediaPlaybackPreferencesRequest, example = json!({
+        "quality_id": "h264-1080p-8mbps",
+        "audio_track_id": "source-audio-1",
+        "subtitle_track_id": "source-subtitle-3"
+    })),
     responses(
-        (status = 200, description = "Remembered selections updated", body = MediaPlaybackOptionsResponse),
+        (status = 200, description = "Remembered selections updated", body = MediaPlaybackOptionsResponse, example = json!({
+            "quality_options": [
+                {
+                    "id": "original",
+                    "label": "Original",
+                    "profile": null,
+                    "height": null,
+                    "video_bitrate_bps": 8500000
+                },
+                {
+                    "id": "h264-1080p-8mbps",
+                    "label": "1080p",
+                    "profile": "h264-1080p-8mbps",
+                    "height": 1080,
+                    "video_bitrate_bps": 8000000
+                },
+                {
+                    "id": "h264-720p-4mbps",
+                    "label": "720p",
+                    "profile": "h264-720p-4mbps",
+                    "height": 720,
+                    "video_bitrate_bps": 4000000
+                }
+            ],
+            "audio_tracks": [
+                {
+                    "id": "source-audio-1",
+                    "stream_index": 1,
+                    "label": "English Stereo",
+                    "language": "eng",
+                    "codec": "aac",
+                    "channels": 2,
+                    "is_default": true
+                }
+            ],
+            "subtitle_tracks": [
+                {
+                    "id": "source-subtitle-3",
+                    "stream_index": 3,
+                    "label": "English SDH",
+                    "language": "eng",
+                    "codec": "subrip",
+                    "is_default": true,
+                    "forced": false,
+                    "url": "/api/v1/media/8f14e45f-ceea-467e-bd42-9f7f6a0e6f8f/subtitles/3?source_offset_ms=0"
+                }
+            ],
+            "preferences": {
+                "quality_id": "h264-1080p-8mbps",
+                "audio_track_id": "source-audio-1",
+                "subtitle_track_id": "source-subtitle-3"
+            }
+        })),
         (status = 400, description = "A requested option is not available for this media file"),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller does not have Playarr streaming access"),

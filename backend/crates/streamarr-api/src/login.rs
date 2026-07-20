@@ -78,9 +78,24 @@ pub struct LoginResponse {
     post,
     path = "/api/v1/auth/login",
     tag = "auth",
-    request_body = LoginRequest,
+    request_body(content = LoginRequest, example = json!({
+        "username": "jsmith",
+        "password": "correct-horse-battery-staple",
+        "profile_user_id": null,
+        "pin": null,
+        "device_id": "b3f2c9a4-6e1d-4f8a-9c2b-1a7e5d3f6b90",
+        "device_name": "Thomas's iPhone",
+        "client_platform": "ios",
+        "client_version": "1.4.2"
+    })),
     responses(
-        (status = 200, description = "Access + refresh token pair", body = LoginResponse),
+        (status = 200, description = "Access + refresh token pair", body = LoginResponse, example = json!({
+            "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5ZjhkN2E2Yi0xMjM0LTQ1NjctODlhYi1jZGVmMDEyMzQ1NjciLCJkZXZpY2VfaWQiOiJiM2YyYzlhNC02ZTFkLTRmOGEtOWMyYi0xYTdlNWQzZjZiOTAiLCJzZXNzaW9uX2lkIjoiN2E5ZDNlMWYtOGI0Yy00ZDJhLTliM2UtNWY2YTdiOGM5ZDBlIiwiaXNzIjoic3RyZWFtYXJyIiwiaWF0IjoxNzE2MjM5MDIyLCJleHAiOjE3MTYyNDI2MjJ9.dGhpcyBpcyBhIGZha2Ugc2lnbmF0dXJl",
+            "refresh_token": "rt_9f8d7a6b1234456789abcdef01234567",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+            "user_id": "9f8d7a6b-1234-4567-89ab-cdef01234567"
+        })),
         (status = 400, description = "credentials_required | pin_required"),
         (status = 401, description = "untrusted_network | invalid_credentials | invalid_pin | account_disabled"),
         (status = 403, description = "authenticated, but this account has no Playarr streaming access")

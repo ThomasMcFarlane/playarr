@@ -19,7 +19,28 @@ pub struct VersionState {
     path = "/api/system/version",
     tag = "system",
     responses(
-        (status = 200, description = "Server version and client compatibility table", body = VersionEnvelope)
+        (status = 200, description = "Server version and client compatibility table", body = VersionEnvelope, example = json!({
+            "instance_name": "Streamarr",
+            "server_version": "1.4.2",
+            "api_version": "1.4",
+            "build_sha": "9f3a1c2",
+            "compatibility": [
+                {
+                    "platform": "web",
+                    "latest_version": "1.4.2",
+                    "min_supported_version": "1.2.0",
+                    "deprecated_below": "1.3.0",
+                    "sunset": "2026-09-01T00:00:00Z"
+                },
+                {
+                    "platform": "android-tv",
+                    "latest_version": "1.4.0",
+                    "min_supported_version": "1.1.0",
+                    "deprecated_below": null,
+                    "sunset": null
+                }
+            ]
+        }))
     )
 )]
 pub async fn version_handler(

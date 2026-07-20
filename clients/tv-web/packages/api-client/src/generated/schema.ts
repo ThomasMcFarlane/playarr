@@ -394,6 +394,33 @@ export interface paths {
         patch: operations["update_user_handler"];
         trace?: never;
     };
+    "/api/v1/admin/users/{user_id}/impersonate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mints a short-lived access token for `user_id`, letting an admin act as
+         *     that user (e.g. to reproduce a user-reported bug from their exact
+         *     account state). Deliberately stateless and non-refreshable: no
+         *     `Session`/`Device` row is persisted for this token, unlike a real login
+         *     -- it simply expires with the normal access-token TTL and cannot be
+         *     renewed, which bounds the blast radius of a leaked or misused
+         *     impersonation token to that TTL with no separate revocation path
+         *     required. Every issuance is logged at `warn` (not `info`) since this is
+         *     a security-sensitive action operators should see by default.
+         */
+        post: operations["impersonate_user_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/views": {
         parameters: {
             query?: never;
@@ -634,7 +661,9 @@ export interface paths {
          *     hasn't been embedded yet (not yet synced, or this deployment hasn't
          *     configured embedding generation) -- `streamarr_catalog::CatalogService::
          *     similar`'s doc comment covers why those collapse to one status here
-         *     rather than a distinct "not available" shape.
+         *     rather than a distinct "not available" shape. Like `search`, a
+         *     restricted caller's results silently omit works outside their
+         *     `CatalogViewer::allowed_libraries` rather than surfacing them.
          */
         get: operations["similar_works_handler"];
         put?: never;
@@ -843,6 +872,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/openapi.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The live OpenAPI 3.x spec for this server, as JSON. */
+        get: operations["openapi_json_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/people/{id}": {
         parameters: {
             query?: never;
@@ -1028,7 +1074,11 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Replaces the full item ordering of a playlist. */
+        /**
+         * Replaces the full item ordering of a playlist. The returned item list is
+         *     filtered by the caller's `Policy::library_allow` exactly like
+         *     [`list_playlist_items_handler`] -- see that handler's doc comment.
+         */
         put: operations["reorder_playlist_items_handler"];
         post?: never;
         delete?: never;
@@ -1606,6 +1656,23 @@ export interface components {
         };
         /** @enum {string} */
         ImageKind: "poster" | "backdrop" | "banner" | "logo" | "thumb";
+        /**
+         * @description Response body for [`impersonate_user_handler`] -- mirrors
+         *     [`crate::login::LoginResponse`]'s shape but deliberately has no
+         *     `refresh_token`: impersonation mints a single stateless access token (no
+         *     persisted `Session`/`Device` row backs it -- see the handler's doc
+         *     comment), so there is nothing to refresh.
+         */
+        ImpersonationResponse: {
+            access_token: string;
+            /** Format: int64 */
+            expires_in: number;
+            /** Format: uuid */
+            impersonated_by: string;
+            token_type: string;
+            /** Format: uuid */
+            user_id: string;
+        };
         /**
          * @description Request body for both create (`POST /api/v1/admin/views`) and update
          *     (`PUT /api/v1/admin/views/{id}`). Structurally has no `is_default`/
@@ -2639,6 +2706,30 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "api_version": "1.4",
+                     *       "build_sha": "9f3a1c2",
+                     *       "compatibility": [
+                     *         {
+                     *           "deprecated_below": "1.3.0",
+                     *           "latest_version": "1.4.2",
+                     *           "min_supported_version": "1.2.0",
+                     *           "platform": "web",
+                     *           "sunset": "2026-09-01T00:00:00Z"
+                     *         },
+                     *         {
+                     *           "deprecated_below": null,
+                     *           "latest_version": "1.4.0",
+                     *           "min_supported_version": "1.1.0",
+                     *           "platform": "android-tv",
+                     *           "sunset": null
+                     *         }
+                     *       ],
+                     *       "instance_name": "Streamarr",
+                     *       "server_version": "1.4.2"
+                     *     }
+                     */
                     "application/json": components["schemas"]["VersionEnvelope"];
                 };
             };
@@ -2659,6 +2750,28 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "buffering_events": 0,
+                     *         "buffering_ms_total": 0,
+                     *         "bytes_streamed": 104857600,
+                     *         "client_platform": "web",
+                     *         "client_version": "1.4.2",
+                     *         "device_id": "d290f1ee-6c54-4b01-90e6-d701748f0851",
+                     *         "media_file_id": "9c858901-8a57-4791-81fe-4c455b099bc9",
+                     *         "media_title": "Sample Movie Kilo",
+                     *         "play_method": "direct_play",
+                     *         "session_id": "b3f1c2a4-6e8d-4a3b-9c1e-2f5d7a9b0c1d",
+                     *         "started_at": "2026-07-20T18:42:00Z",
+                     *         "target_codec": "h264",
+                     *         "target_container": "mp4",
+                     *         "user_display_name": "Jane Doe",
+                     *         "user_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                     *         "work_id": "a7793a62-995b-42bd-aa93-ed3cd76f941e"
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["ActiveSessionView"][];
                 };
             };
@@ -2699,6 +2812,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "buffering_events": 2,
+                     *         "buffering_ms_total": 1500,
+                     *         "bytes_streamed": 734003200,
+                     *         "client_platform": "android-tv",
+                     *         "client_version": "2.1.0",
+                     *         "device_id": "d290f1ee-6c54-4b01-90e6-d701748f0851",
+                     *         "ended_at": "2026-07-20T20:19:12Z",
+                     *         "id": "b3f1c2a4-6e8d-4a3b-9c1e-2f5d7a9b0c1d",
+                     *         "ip_address": "192.168.1.42",
+                     *         "media_file_id": "9c858901-8a57-4791-81fe-4c455b099bc9",
+                     *         "media_title": "Sample Movie Kilo",
+                     *         "play_method": "transcode",
+                     *         "rendition_id": "6c9a5e2b-3d4f-4a8c-8e1b-7f2c9d3a5b6e",
+                     *         "source_bitrate": 20000000,
+                     *         "source_codec": "hevc",
+                     *         "source_container": "mkv",
+                     *         "started_at": "2026-07-20T18:42:00Z",
+                     *         "stop_reason": "completed",
+                     *         "target_bitrate": 4000000,
+                     *         "target_codec": "h264",
+                     *         "target_container": "mp4",
+                     *         "transcode_reason": "video_codec_not_supported",
+                     *         "user_display_name": "Jane Doe",
+                     *         "user_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                     *         "work_id": "a7793a62-995b-42bd-aa93-ed3cd76f941e"
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["SessionHistoryView"][];
                 };
             };
@@ -2768,6 +2912,30 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "created_at": "2026-01-10T09:00:00Z",
+                     *         "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+                     *         "is_system": true,
+                     *         "media_type": "video",
+                     *         "name": "Staff Picks",
+                     *         "owner_user_id": null,
+                     *         "parent_playlist_id": null,
+                     *         "updated_at": "2026-01-10T09:00:00Z"
+                     *       },
+                     *       {
+                     *         "created_at": "2026-01-15T10:30:00Z",
+                     *         "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                     *         "is_system": false,
+                     *         "media_type": "video",
+                     *         "name": "Sample Cinematic Universe",
+                     *         "owner_user_id": "9d3b3f8a-6b34-4b1e-8a4a-2e6f6b1a9c11",
+                     *         "parent_playlist_id": null,
+                     *         "updated_at": "2026-01-16T08:45:00Z"
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["PlaylistResponse"][];
                 };
             };
@@ -2802,6 +2970,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "base_url": "http://radarr.local:7878",
+                     *         "best_effort": false,
+                     *         "default_quality_profile_id": 4,
+                     *         "default_root_folder_id": "/movies-4k",
+                     *         "id": "9c858901-8a57-4791-81fe-4c455b099bc9",
+                     *         "kind": "radarr",
+                     *         "name": "Radarr (4K)",
+                     *         "priority": 0
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["SourceInstanceResponse"][];
                 };
             };
@@ -2830,6 +3012,18 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "api_key": "s3cr3t-api-key",
+                 *       "base_url": "http://radarr.local:7878",
+                 *       "best_effort": false,
+                 *       "default_quality_profile_id": 4,
+                 *       "default_root_folder_id": "/movies-4k",
+                 *       "kind": "radarr",
+                 *       "name": "Radarr (4K)",
+                 *       "priority": 0
+                 *     }
+                 */
                 "application/json": components["schemas"]["SourceInstanceRequest"];
             };
         };
@@ -2840,6 +3034,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "base_url": "http://radarr.local:7878",
+                     *       "best_effort": false,
+                     *       "default_quality_profile_id": 4,
+                     *       "default_root_folder_id": "/movies-4k",
+                     *       "id": "9c858901-8a57-4791-81fe-4c455b099bc9",
+                     *       "kind": "radarr",
+                     *       "name": "Radarr (4K)",
+                     *       "priority": 0
+                     *     }
+                     */
                     "application/json": components["schemas"]["SourceInstanceResponse"];
                 };
             };
@@ -2881,6 +3087,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "detail": null,
+                     *         "error": null,
+                     *         "finished_at": "2026-07-20T18:40:12Z",
+                     *         "kind": "radarr",
+                     *         "name": "Radarr (4K)",
+                     *         "source_instance_id": "9c858901-8a57-4791-81fe-4c455b099bc9",
+                     *         "started_at": "2026-07-20T18:40:00Z",
+                     *         "status": "succeeded"
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["SourceInstanceSyncStatusResponse"][];
                 };
             };
@@ -2999,6 +3219,11 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "instance_name": "Streamarr"
+                     *     }
+                     */
                     "application/json": components["schemas"]["SystemSettings"];
                 };
             };
@@ -3027,6 +3252,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "instance_name": "REGION-A Cinema"
+                 *     }
+                 */
                 "application/json": components["schemas"]["UpdateSystemSettingsRequest"];
             };
         };
@@ -3037,6 +3267,11 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "instance_name": "REGION-A Cinema"
+                     *     }
+                     */
                     "application/json": components["schemas"]["SystemSettings"];
                 };
             };
@@ -3078,6 +3313,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "active_session_threshold": 2,
+                     *       "base_url": "http://tdarr.local:8265",
+                     *       "default_profile": "h264-720p-4mbps",
+                     *       "default_worker_limit": 2,
+                     *       "tdarr_db_id": "streamarr",
+                     *       "throttle_check_interval_secs": 30,
+                     *       "throttled_worker_limit": 0,
+                     *       "updated_at": "2025-01-15T12:00:00Z",
+                     *       "worker_process": "transcodecpu"
+                     *     }
+                     */
                     "application/json": components["schemas"]["TdarrConnectionResponse"];
                 };
             };
@@ -3113,6 +3361,19 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "active_session_threshold": 2,
+                 *       "api_key": "s3cr3t-api-key",
+                 *       "base_url": "http://tdarr.local:8265",
+                 *       "default_profile": "h264-720p-4mbps",
+                 *       "default_worker_limit": 2,
+                 *       "tdarr_db_id": "streamarr",
+                 *       "throttle_check_interval_secs": 30,
+                 *       "throttled_worker_limit": 0,
+                 *       "worker_process": "transcodecpu"
+                 *     }
+                 */
                 "application/json": components["schemas"]["TdarrConnectionRequest"];
             };
         };
@@ -3123,6 +3384,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "active_session_threshold": 2,
+                     *       "base_url": "http://tdarr.local:8265",
+                     *       "default_profile": "h264-720p-4mbps",
+                     *       "default_worker_limit": 2,
+                     *       "tdarr_db_id": "streamarr",
+                     *       "throttle_check_interval_secs": 30,
+                     *       "throttled_worker_limit": 0,
+                     *       "updated_at": "2025-01-15T12:00:00Z",
+                     *       "worker_process": "transcodecpu"
+                     *     }
+                     */
                     "application/json": components["schemas"]["TdarrConnectionResponse"];
                 };
             };
@@ -3196,6 +3470,23 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "can_stream": true,
+                     *         "display_name": "Alice Nguyen",
+                     *         "generated_at": null,
+                     *         "id": "33333333-3333-4333-8333-333333333333",
+                     *         "library_allow": [],
+                     *         "message": "Can I invite my roommate?",
+                     *         "requested_at": "2026-07-20T12:00:00Z",
+                     *         "reviewed_at": null,
+                     *         "status": "pending",
+                     *         "user_id": "22222222-2222-4222-8222-222222222222",
+                     *         "username": "alice"
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["UserInviteRequestResponse"][];
                 };
             };
@@ -3227,6 +3518,15 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "approved": true,
+                 *       "can_stream": true,
+                 *       "library_allow": [
+                 *         "11111111-1111-4111-8111-111111111111"
+                 *       ]
+                 *     }
+                 */
                 "application/json": components["schemas"]["ReviewUserInviteRequest"];
             };
         };
@@ -3237,6 +3537,23 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "can_stream": true,
+                     *       "display_name": "Alice Nguyen",
+                     *       "generated_at": null,
+                     *       "id": "33333333-3333-4333-8333-333333333333",
+                     *       "library_allow": [
+                     *         "11111111-1111-4111-8111-111111111111"
+                     *       ],
+                     *       "message": "Can I invite my roommate?",
+                     *       "requested_at": "2026-07-20T12:00:00Z",
+                     *       "reviewed_at": "2026-07-20T13:00:00Z",
+                     *       "status": "approved",
+                     *       "user_id": "22222222-2222-4222-8222-222222222222",
+                     *       "username": "alice"
+                     *     }
+                     */
                     "application/json": components["schemas"]["UserInviteRequestResponse"];
                 };
             };
@@ -3279,6 +3596,14 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "can_stream": true,
+                 *       "library_allow": [
+                 *         "11111111-1111-4111-8111-111111111111"
+                 *       ]
+                 *     }
+                 */
                 "application/json": components["schemas"]["CreateUserInvite"];
             };
         };
@@ -3289,6 +3614,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "expires_at": "2026-07-21T12:00:00Z",
+                     *       "invite_token": "5f8a1c2e9b3d4f6a8c1e2b3d4f6a8c1e"
+                     *     }
+                     */
                     "application/json": components["schemas"]["UserInviteResponse"];
                 };
             };
@@ -3323,6 +3654,24 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "can_stream": true,
+                     *         "created_at": "2026-07-20T12:00:00Z",
+                     *         "disabled": false,
+                     *         "display_name": "Alice Nguyen",
+                     *         "email": "alice@example.com",
+                     *         "id": "22222222-2222-4222-8222-222222222222",
+                     *         "is_admin": false,
+                     *         "library_allow": [
+                     *           "11111111-1111-4111-8111-111111111111"
+                     *         ],
+                     *         "preferred_audio_language": "en",
+                     *         "username": "alice"
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["UserResponse"][];
                 };
             };
@@ -3351,6 +3700,19 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "can_stream": true,
+                 *       "display_name": "Alice Nguyen",
+                 *       "email": "alice@example.com",
+                 *       "is_admin": false,
+                 *       "library_allow": [
+                 *         "11111111-1111-4111-8111-111111111111"
+                 *       ],
+                 *       "password": "correct horse battery staple",
+                 *       "username": "alice"
+                 *     }
+                 */
                 "application/json": components["schemas"]["CreateUserRequest"];
             };
         };
@@ -3361,6 +3723,22 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "can_stream": true,
+                     *       "created_at": "2026-07-20T12:00:00Z",
+                     *       "disabled": false,
+                     *       "display_name": "Alice Nguyen",
+                     *       "email": "alice@example.com",
+                     *       "id": "22222222-2222-4222-8222-222222222222",
+                     *       "is_admin": false,
+                     *       "library_allow": [
+                     *         "11111111-1111-4111-8111-111111111111"
+                     *       ],
+                     *       "preferred_audio_language": "en",
+                     *       "username": "alice"
+                     *     }
+                     */
                     "application/json": components["schemas"]["UserResponse"];
                 };
             };
@@ -3434,6 +3812,16 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "can_stream": true,
+                 *       "display_name": "Alice N.",
+                 *       "email": "alice.n@example.com",
+                 *       "library_allow": [
+                 *         "11111111-1111-4111-8111-111111111111"
+                 *       ]
+                 *     }
+                 */
                 "application/json": components["schemas"]["UpdateUserRequest"];
             };
         };
@@ -3444,8 +3832,84 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "can_stream": true,
+                     *       "created_at": "2026-07-20T12:00:00Z",
+                     *       "disabled": false,
+                     *       "display_name": "Alice N.",
+                     *       "email": "alice.n@example.com",
+                     *       "id": "22222222-2222-4222-8222-222222222222",
+                     *       "is_admin": false,
+                     *       "library_allow": [
+                     *         "11111111-1111-4111-8111-111111111111"
+                     *       ],
+                     *       "preferred_audio_language": "en",
+                     *       "username": "alice"
+                     *     }
+                     */
                     "application/json": components["schemas"]["UserResponse"];
                 };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No user with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    impersonate_user_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The user to impersonate */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Short-lived, non-refreshable access token minted for the target user */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5Yzg1ODkwMS04YTU3LTQ3OTEtODFmZS00YzQ1NWIwOTliYzkifQ.dQw4w9WgXcQ",
+                     *       "expires_in": 900,
+                     *       "impersonated_by": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                     *       "token_type": "Bearer",
+                     *       "user_id": "9c858901-8a57-4791-81fe-4c455b099bc9"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ImpersonationResponse"];
+                };
+            };
+            /** @description Cannot impersonate yourself, or the target account is disabled */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Missing or invalid access token */
             401: {
@@ -3485,6 +3949,48 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "created_at": "2026-01-01T00:00:00Z",
+                     *         "criteria": {
+                     *           "available_only": true,
+                     *           "genre": null,
+                     *           "kind": null,
+                     *           "release_window_days": null,
+                     *           "source_instance_id": null,
+                     *           "tag": null
+                     *         },
+                     *         "default_order": 0,
+                     *         "id": "8f14e45f-ceea-467e-adc0-8b95e6b0a0f1",
+                     *         "is_default": true,
+                     *         "name": "Newly Added",
+                     *         "sort": [
+                     *           "recent"
+                     *         ],
+                     *         "updated_at": "2026-01-01T00:00:00Z"
+                     *       },
+                     *       {
+                     *         "created_at": "2026-01-15T12:00:00Z",
+                     *         "criteria": {
+                     *           "available_only": true,
+                     *           "genre": "Action",
+                     *           "kind": "movie",
+                     *           "release_window_days": 30,
+                     *           "source_instance_id": null,
+                     *           "tag": null
+                     *         },
+                     *         "default_order": null,
+                     *         "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                     *         "is_default": false,
+                     *         "name": "Newly Added Action",
+                     *         "sort": [
+                     *           "recent"
+                     *         ],
+                     *         "updated_at": "2026-01-15T12:00:00Z"
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["LibraryViewResponse"][];
                 };
             };
@@ -3513,6 +4019,22 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "criteria": {
+                 *         "available_only": true,
+                 *         "genre": "Action",
+                 *         "kind": "movie",
+                 *         "release_window_days": 30,
+                 *         "source_instance_id": null,
+                 *         "tag": null
+                 *       },
+                 *       "name": "Newly Added Action",
+                 *       "sort": [
+                 *         "recent"
+                 *       ]
+                 *     }
+                 */
                 "application/json": components["schemas"]["LibraryViewRequest"];
             };
         };
@@ -3523,6 +4045,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "created_at": "2026-01-15T12:00:00Z",
+                     *       "criteria": {
+                     *         "available_only": true,
+                     *         "genre": "Action",
+                     *         "kind": "movie",
+                     *         "release_window_days": 30,
+                     *         "source_instance_id": null,
+                     *         "tag": null
+                     *       },
+                     *       "default_order": null,
+                     *       "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                     *       "is_default": false,
+                     *       "name": "Newly Added Action",
+                     *       "sort": [
+                     *         "recent"
+                     *       ],
+                     *       "updated_at": "2026-01-15T12:00:00Z"
+                     *     }
+                     */
                     "application/json": components["schemas"]["LibraryViewResponse"];
                 };
             };
@@ -3554,6 +4097,22 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "criteria": {
+                 *         "available_only": true,
+                 *         "genre": "Comedy",
+                 *         "kind": "movie",
+                 *         "release_window_days": null,
+                 *         "source_instance_id": null,
+                 *         "tag": null
+                 *       },
+                 *       "name": "Renamed View",
+                 *       "sort": [
+                 *         "title"
+                 *       ]
+                 *     }
+                 */
                 "application/json": components["schemas"]["LibraryViewRequest"];
             };
         };
@@ -3564,6 +4123,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "created_at": "2026-01-15T12:00:00Z",
+                     *       "criteria": {
+                     *         "available_only": true,
+                     *         "genre": "Comedy",
+                     *         "kind": "movie",
+                     *         "release_window_days": null,
+                     *         "source_instance_id": null,
+                     *         "tag": null
+                     *       },
+                     *       "default_order": null,
+                     *       "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                     *       "is_default": false,
+                     *       "name": "Renamed View",
+                     *       "sort": [
+                     *         "title"
+                     *       ],
+                     *       "updated_at": "2026-01-20T09:45:00Z"
+                     *     }
+                     */
                     "application/json": components["schemas"]["LibraryViewResponse"];
                 };
             };
@@ -3784,6 +4364,18 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "client_platform": "ios",
+                 *       "client_version": "1.4.2",
+                 *       "device_id": "b3f2c9a4-6e1d-4f8a-9c2b-1a7e5d3f6b90",
+                 *       "device_name": "Thomas's iPhone",
+                 *       "password": "correct-horse-battery-staple",
+                 *       "pin": null,
+                 *       "profile_user_id": null,
+                 *       "username": "jsmith"
+                 *     }
+                 */
                 "application/json": components["schemas"]["LoginRequest"];
             };
         };
@@ -3794,6 +4386,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5ZjhkN2E2Yi0xMjM0LTQ1NjctODlhYi1jZGVmMDEyMzQ1NjciLCJkZXZpY2VfaWQiOiJiM2YyYzlhNC02ZTFkLTRmOGEtOWMyYi0xYTdlNWQzZjZiOTAiLCJzZXNzaW9uX2lkIjoiN2E5ZDNlMWYtOGI0Yy00ZDJhLTliM2UtNWY2YTdiOGM5ZDBlIiwiaXNzIjoic3RyZWFtYXJyIiwiaWF0IjoxNzE2MjM5MDIyLCJleHAiOjE3MTYyNDI2MjJ9.dGhpcyBpcyBhIGZha2Ugc2lnbmF0dXJl",
+                     *       "expires_in": 3600,
+                     *       "refresh_token": "rt_9f8d7a6b1234456789abcdef01234567",
+                     *       "token_type": "Bearer",
+                     *       "user_id": "9f8d7a6b-1234-4567-89ab-cdef01234567"
+                     *     }
+                     */
                     "application/json": components["schemas"]["LoginResponse"];
                 };
             };
@@ -3829,6 +4430,12 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "device_id": "8f14e45f-ceea-467e-adde-3fb5c8f88e4b",
+                 *       "refresh_token": "rt_9f8c2e1a4b3d4c5e8f9a0b1c2d3e4f5a"
+                 *     }
+                 */
                 "application/json": components["schemas"]["RefreshRequest"];
             };
         };
@@ -3839,6 +4446,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1ZjNjZjk2YS0xZjI0LTQ4ZTQtOWJkNC0zZTg5N2VlYjY0YTgiLCJkZXZpY2VfaWQiOiI4ZjE0ZTQ1Zi1jZWVhLTQ2N2UtYWRkZS0zZmI1YzhmODhlNGIiLCJzZXNzaW9uX2lkIjoiZDJiOWYwYTQtNzY1Yy00ZjNlLWFjOTQtN2NmMDQ1YjBkOTFlIiwiaXNzIjoic3RyZWFtYXJyIiwiaWF0IjoxNzE4ODAwMDAwLCJleHAiOjE3MTg4MDA5MDB9.dGhpc19pc19hX2Zha2Vfc2lnbmF0dXJl",
+                     *       "expires_in": 900,
+                     *       "refresh_token": "rt_1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+                     *       "token_type": "Bearer",
+                     *       "user_id": "5f3cf96a-1f24-48e4-9bd4-3e897eeb64a8"
+                     *     }
+                     */
                     "application/json": components["schemas"]["RefreshResponse"];
                 };
             };
@@ -3860,6 +4476,15 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "display_name": "Bob Martinez",
+                 *       "email": "bob@example.com",
+                 *       "invite_token": "5f8a1c2e9b3d4f6a8c1e2b3d4f6a8c1e",
+                 *       "password": "another secure passphrase",
+                 *       "username": "bob"
+                 *     }
+                 */
                 "application/json": components["schemas"]["SignupRequest"];
             };
         };
@@ -3870,6 +4495,22 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "can_stream": true,
+                     *       "created_at": "2026-07-20T12:05:00Z",
+                     *       "disabled": false,
+                     *       "display_name": "Bob Martinez",
+                     *       "email": "bob@example.com",
+                     *       "id": "44444444-4444-4444-8444-444444444444",
+                     *       "is_admin": false,
+                     *       "library_allow": [
+                     *         "11111111-1111-4111-8111-111111111111"
+                     *       ],
+                     *       "preferred_audio_language": "en",
+                     *       "username": "bob"
+                     *     }
+                     */
                     "application/json": components["schemas"]["UserResponse"];
                 };
             };
@@ -3931,6 +4572,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "items": [
+                     *         {
+                     *           "added_at": "2024-01-15T10:30:00Z",
+                     *           "availability": "available",
+                     *           "external_refs": [
+                     *             {
+                     *               "external_id": "155",
+                     *               "provider": "tmdb"
+                     *             }
+                     *           ],
+                     *           "genres": [
+                     *             "Action",
+                     *             "Crime",
+                     *             "Drama"
+                     *           ],
+                     *           "id": "4c9e2a1b-7f3d-4e6a-9b2c-8d5f1e3a7c90",
+                     *           "images": [
+                     *             {
+                     *               "height": 3000,
+                     *               "kind": "poster",
+                     *               "url": "https://image.tmdb.org/t/p/original/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
+                     *               "width": 2000
+                     *             }
+                     *           ],
+                     *           "kind": "movie",
+                     *           "monitored": true,
+                     *           "overview": "Sample Vigilante raises the stakes in his war on crime with the help of Lt. Jim Gordon and District Attorney Harvey Dent.",
+                     *           "release_date": "2008-07-16T00:00:00Z",
+                     *           "sort_title": "Test Film, The",
+                     *           "tags": [],
+                     *           "title": "The Test Film"
+                     *         }
+                     *       ],
+                     *       "total": 1
+                     *     }
+                     */
                     "application/json": components["schemas"]["CatalogPageSchema"];
                 };
             };
@@ -3965,6 +4644,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       "movie",
+                     *       "series"
+                     *     ]
+                     */
                     "application/json": components["schemas"]["WorkKind"][];
                 };
             };
@@ -4002,6 +4687,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "added_at": "2024-01-15T10:30:00Z",
+                     *         "availability": "available",
+                     *         "external_refs": [
+                     *           {
+                     *             "external_id": "155",
+                     *             "provider": "tmdb"
+                     *           }
+                     *         ],
+                     *         "genres": [
+                     *           "Action",
+                     *           "Crime",
+                     *           "Drama"
+                     *         ],
+                     *         "id": "4c9e2a1b-7f3d-4e6a-9b2c-8d5f1e3a7c90",
+                     *         "images": [
+                     *           {
+                     *             "height": 3000,
+                     *             "kind": "poster",
+                     *             "url": "https://image.tmdb.org/t/p/original/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
+                     *             "width": 2000
+                     *           }
+                     *         ],
+                     *         "kind": "movie",
+                     *         "monitored": true,
+                     *         "overview": "Sample Vigilante raises the stakes in his war on crime with the help of Lt. Jim Gordon and District Attorney Harvey Dent.",
+                     *         "release_date": "2008-07-16T00:00:00Z",
+                     *         "sort_title": "Test Film, The",
+                     *         "tags": [],
+                     *         "title": "The Test Film"
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["Work"][];
                 };
             };
@@ -4039,6 +4759,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "children": "Movie",
+                     *       "media_file_id": "5d8f2a91-3c7e-4b6a-8f1d-2e9c4a7b3f60",
+                     *       "runtime_ms": 9120000,
+                     *       "work": {
+                     *         "added_at": "2024-01-15T10:30:00Z",
+                     *         "availability": "available",
+                     *         "external_refs": [
+                     *           {
+                     *             "external_id": "155",
+                     *             "provider": "tmdb"
+                     *           }
+                     *         ],
+                     *         "genres": [
+                     *           "Action",
+                     *           "Crime",
+                     *           "Drama"
+                     *         ],
+                     *         "id": "4c9e2a1b-7f3d-4e6a-9b2c-8d5f1e3a7c90",
+                     *         "images": [
+                     *           {
+                     *             "height": 3000,
+                     *             "kind": "poster",
+                     *             "url": "https://image.tmdb.org/t/p/original/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
+                     *             "width": 2000
+                     *           }
+                     *         ],
+                     *         "kind": "movie",
+                     *         "monitored": true,
+                     *         "overview": "Sample Vigilante raises the stakes in his war on crime with the help of Lt. Jim Gordon and District Attorney Harvey Dent.",
+                     *         "release_date": "2008-07-16T00:00:00Z",
+                     *         "sort_title": "Test Film, The",
+                     *         "tags": [],
+                     *         "title": "The Test Film"
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["WorkDetailSchema"];
                 };
             };
@@ -4083,6 +4841,36 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "cast": [
+                     *         {
+                     *           "character": "Sample Character / Sample Vigilante",
+                     *           "department": null,
+                     *           "id": "7c3a9e21-4f8d-4b6a-9c1e-2d5f8a3b7c90",
+                     *           "job": null,
+                     *           "person": {
+                     *             "headshot_url": "https://image.tmdb.org/t/p/original/qCpZn2e4ZTe8YHBaJcs4gEqvhX8.jpg",
+                     *             "id": "1a2b3c4d-5e6f-4890-abcd-ef1234567890",
+                     *             "name": "Sample Actor"
+                     *           }
+                     *         }
+                     *       ],
+                     *       "crew": [
+                     *         {
+                     *           "character": null,
+                     *           "department": "Directing",
+                     *           "id": "8d4b1f32-5e9c-4a7b-8d2f-3e6a9c4b8d10",
+                     *           "job": "Director",
+                     *           "person": {
+                     *             "headshot_url": "https://image.tmdb.org/t/p/original/xuAIuYSmsUzKlUMBFGVZaWsY3DZ.jpg",
+                     *             "id": "2b3c4d5e-6f70-4901-bcde-f01234567891",
+                     *             "name": "Sample Director"
+                     *           }
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": components["schemas"]["WorkCreditsResponse"];
                 };
             };
@@ -4122,6 +4910,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "added_at": "2024-01-10T08:15:00Z",
+                     *         "availability": "available",
+                     *         "external_refs": [
+                     *           {
+                     *             "external_id": "272",
+                     *             "provider": "tmdb"
+                     *           }
+                     *         ],
+                     *         "genres": [
+                     *           "Action",
+                     *           "Crime",
+                     *           "Drama"
+                     *         ],
+                     *         "id": "6b1e4f83-2a9c-4d7e-8b3f-1c6a9e2d4b70",
+                     *         "images": [
+                     *           {
+                     *             "height": 3000,
+                     *             "kind": "poster",
+                     *             "url": "https://image.tmdb.org/t/p/original/dr6x4GyyESClpG4RG3aSVSXVMlv.jpg",
+                     *             "width": 2000
+                     *           }
+                     *         ],
+                     *         "kind": "movie",
+                     *         "monitored": true,
+                     *         "overview": "After training with his mentor, Sample Vigilante begins his fight to free crime-ridden Gotham City from corruption.",
+                     *         "release_date": "2005-06-15T00:00:00Z",
+                     *         "sort_title": "Sample Movie Hotel",
+                     *         "tags": [],
+                     *         "title": "Sample Movie Hotel"
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["Work"][];
                 };
             };
@@ -4282,6 +5105,22 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "end_ms": 65432,
+                     *         "index": 0,
+                     *         "start_ms": 0,
+                     *         "title": "Opening Titles"
+                     *       },
+                     *       {
+                     *         "end_ms": 620000,
+                     *         "index": 1,
+                     *         "start_ms": 65432,
+                     *         "title": null
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["MediaChapter"][];
                 };
             };
@@ -4333,6 +5172,11 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "duration_ms": 3643424
+                     *     }
+                     */
                     "application/json": components["schemas"]["MediaMetadata"];
                 };
             };
@@ -4384,6 +5228,61 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "audio_tracks": [
+                     *         {
+                     *           "channels": 2,
+                     *           "codec": "aac",
+                     *           "id": "source-audio-1",
+                     *           "is_default": true,
+                     *           "label": "English Stereo",
+                     *           "language": "eng",
+                     *           "stream_index": 1
+                     *         }
+                     *       ],
+                     *       "preferences": {
+                     *         "audio_track_id": "source-audio-1",
+                     *         "quality_id": "original",
+                     *         "subtitle_track_id": "source-subtitle-3"
+                     *       },
+                     *       "quality_options": [
+                     *         {
+                     *           "height": null,
+                     *           "id": "original",
+                     *           "label": "Original",
+                     *           "profile": null,
+                     *           "video_bitrate_bps": 8500000
+                     *         },
+                     *         {
+                     *           "height": 1080,
+                     *           "id": "h264-1080p-8mbps",
+                     *           "label": "1080p",
+                     *           "profile": "h264-1080p-8mbps",
+                     *           "video_bitrate_bps": 8000000
+                     *         },
+                     *         {
+                     *           "height": 720,
+                     *           "id": "h264-720p-4mbps",
+                     *           "label": "720p",
+                     *           "profile": "h264-720p-4mbps",
+                     *           "video_bitrate_bps": 4000000
+                     *         }
+                     *       ],
+                     *       "subtitle_tracks": [
+                     *         {
+                     *           "codec": "subrip",
+                     *           "forced": false,
+                     *           "id": "source-subtitle-3",
+                     *           "is_default": true,
+                     *           "label": "English SDH",
+                     *           "language": "eng",
+                     *           "stream_index": 3,
+                     *           "url": "/api/v1/media/8f14e45f-ceea-467e-bd42-9f7f6a0e6f8f/subtitles/3?source_offset_ms=0"
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": components["schemas"]["MediaPlaybackOptionsResponse"];
                 };
             };
@@ -4422,6 +5321,13 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "audio_track_id": "source-audio-1",
+                 *       "quality_id": "h264-1080p-8mbps",
+                 *       "subtitle_track_id": "source-subtitle-3"
+                 *     }
+                 */
                 "application/json": components["schemas"]["UpdateMediaPlaybackPreferencesRequest"];
             };
         };
@@ -4432,6 +5338,61 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "audio_tracks": [
+                     *         {
+                     *           "channels": 2,
+                     *           "codec": "aac",
+                     *           "id": "source-audio-1",
+                     *           "is_default": true,
+                     *           "label": "English Stereo",
+                     *           "language": "eng",
+                     *           "stream_index": 1
+                     *         }
+                     *       ],
+                     *       "preferences": {
+                     *         "audio_track_id": "source-audio-1",
+                     *         "quality_id": "h264-1080p-8mbps",
+                     *         "subtitle_track_id": "source-subtitle-3"
+                     *       },
+                     *       "quality_options": [
+                     *         {
+                     *           "height": null,
+                     *           "id": "original",
+                     *           "label": "Original",
+                     *           "profile": null,
+                     *           "video_bitrate_bps": 8500000
+                     *         },
+                     *         {
+                     *           "height": 1080,
+                     *           "id": "h264-1080p-8mbps",
+                     *           "label": "1080p",
+                     *           "profile": "h264-1080p-8mbps",
+                     *           "video_bitrate_bps": 8000000
+                     *         },
+                     *         {
+                     *           "height": 720,
+                     *           "id": "h264-720p-4mbps",
+                     *           "label": "720p",
+                     *           "profile": "h264-720p-4mbps",
+                     *           "video_bitrate_bps": 4000000
+                     *         }
+                     *       ],
+                     *       "subtitle_tracks": [
+                     *         {
+                     *           "codec": "subrip",
+                     *           "forced": false,
+                     *           "id": "source-subtitle-3",
+                     *           "is_default": true,
+                     *           "label": "English SDH",
+                     *           "language": "eng",
+                     *           "stream_index": 3,
+                     *           "url": "/api/v1/media/8f14e45f-ceea-467e-bd42-9f7f6a0e6f8f/subtitles/3?source_offset_ms=0"
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": components["schemas"]["MediaPlaybackOptionsResponse"];
                 };
             };
@@ -4652,6 +5613,17 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "api_key": "AIzaSyD-example1234567890abcdefghijklmno",
+                     *       "app_id": "1:000000000000:web:9f2a3b7c1d4e5f6a7b8c9d",
+                     *       "auth_domain": "streamarr-prod.firebaseapp.com",
+                     *       "messaging_sender_id": "000000000000",
+                     *       "project_id": "streamarr-prod",
+                     *       "storage_bucket": "streamarr-prod.appspot.com",
+                     *       "vapid_public_key": "BEl62iUYgUivxIkv69yViEuiBIa40HI8YlOm5EF7Wv3-VBs9aLLpFBc5eDo8mV5yYBQNe4x7l9mLKQ3sXk9ZgYo"
+                     *     }
+                     */
                     "application/json": components["schemas"]["FirebaseWebConfig"];
                 };
             };
@@ -4680,6 +5652,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "user_code": "ABCD-2345"
+                 *     }
+                 */
                 "application/json": components["schemas"]["DeviceAuthorizationRequest"];
             };
         };
@@ -4729,6 +5706,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "client_platform": "tv-webos"
+                 *     }
+                 */
                 "application/json": components["schemas"]["DeviceCodeRequest"];
             };
         };
@@ -4739,6 +5721,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "device_code": "3c8f1e2a-9b7d-4e21-8a6f-5d0c1b2e4f3a",
+                     *       "expires_in": 600,
+                     *       "interval": 5,
+                     *       "user_code": "ABCD-2345",
+                     *       "verification_uri": "https://playarr.example/link",
+                     *       "verification_uri_complete": "https://playarr.example/link?user_code=ABCD-2345"
+                     *     }
+                     */
                     "application/json": components["schemas"]["DeviceCodeResponseSchema"];
                 };
             };
@@ -4753,6 +5745,12 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "device_code": "3c8f1e2a-9b7d-4e21-8a6f-5d0c1b2e4f3a",
+                 *       "grant_type": "urn:ietf:params:oauth:grant-type:device_code"
+                 *     }
+                 */
                 "application/json": components["schemas"]["DeviceTokenRequest"];
             };
         };
@@ -4763,6 +5761,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5ZjYyYzY3OS0wNGVhLTRhOTQtYjM5NS0yYjNjZWU4YjIzYzMifQ.signature",
+                     *       "expires_in": 3600,
+                     *       "refresh_token": "8f0a5c1e-2b6d-4f3a-9e7c-1d4b5a6c7e8f",
+                     *       "token_type": "Bearer"
+                     *     }
+                     */
                     "application/json": components["schemas"]["TokenResponseSchema"];
                 };
             };
@@ -4774,6 +5780,38 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["OAuthErrorBody"];
                 };
+            };
+        };
+    };
+    openapi_json_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The live OpenAPI 3.x specification for this server */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -4795,6 +5833,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "headshot_url": "https://image.tmdb.org/t/p/original/qCpZn2e4ZTe8YHBaJcs4gEqvhX8.jpg",
+                     *       "id": "1a2b3c4d-5e6f-4890-abcd-ef1234567890",
+                     *       "name": "Sample Actor"
+                     *     }
+                     */
                     "application/json": components["schemas"]["PersonResponse"];
                 };
             };
@@ -4839,6 +5884,72 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "added_at": "2024-01-10T08:15:00Z",
+                     *         "availability": "available",
+                     *         "external_refs": [
+                     *           {
+                     *             "external_id": "272",
+                     *             "provider": "tmdb"
+                     *           }
+                     *         ],
+                     *         "genres": [
+                     *           "Action",
+                     *           "Crime",
+                     *           "Drama"
+                     *         ],
+                     *         "id": "6b1e4f83-2a9c-4d7e-8b3f-1c6a9e2d4b70",
+                     *         "images": [
+                     *           {
+                     *             "height": 3000,
+                     *             "kind": "poster",
+                     *             "url": "https://image.tmdb.org/t/p/original/dr6x4GyyESClpG4RG3aSVSXVMlv.jpg",
+                     *             "width": 2000
+                     *           }
+                     *         ],
+                     *         "kind": "movie",
+                     *         "monitored": true,
+                     *         "overview": "After training with his mentor, Sample Vigilante begins his fight to free crime-ridden Gotham City from corruption.",
+                     *         "release_date": "2005-06-15T00:00:00Z",
+                     *         "sort_title": "Sample Movie Hotel",
+                     *         "tags": [],
+                     *         "title": "Sample Movie Hotel"
+                     *       },
+                     *       {
+                     *         "added_at": "2024-01-15T10:30:00Z",
+                     *         "availability": "available",
+                     *         "external_refs": [
+                     *           {
+                     *             "external_id": "155",
+                     *             "provider": "tmdb"
+                     *           }
+                     *         ],
+                     *         "genres": [
+                     *           "Action",
+                     *           "Crime",
+                     *           "Drama"
+                     *         ],
+                     *         "id": "4c9e2a1b-7f3d-4e6a-9b2c-8d5f1e3a7c90",
+                     *         "images": [
+                     *           {
+                     *             "height": 3000,
+                     *             "kind": "poster",
+                     *             "url": "https://image.tmdb.org/t/p/original/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
+                     *             "width": 2000
+                     *           }
+                     *         ],
+                     *         "kind": "movie",
+                     *         "monitored": true,
+                     *         "overview": "Sample Vigilante raises the stakes in his war on crime with the help of Lt. Jim Gordon and District Attorney Harvey Dent.",
+                     *         "release_date": "2008-07-16T00:00:00Z",
+                     *         "sort_title": "Test Film, The",
+                     *         "tags": [],
+                     *         "title": "The Test Film"
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["Work"][];
                 };
             };
@@ -4880,6 +5991,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "duration_ms": 5400000,
+                     *         "media_file_id": "3f9c1e2d-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+                     *         "position_ms": 1530000,
+                     *         "state": "part_watched",
+                     *         "updated_at": "2026-07-18T21:04:12Z",
+                     *         "work_id": "7a9d3e1f-8b4c-4d2a-9b3e-5f6a7b8c9d0e"
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["WatchProgress"][];
                 };
             };
@@ -4911,6 +6034,13 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "bytes_streamed_total": 52428800,
+                 *       "kind": "heartbeat",
+                 *       "position_ms": 125000
+                 *     }
+                 */
                 "application/json": components["schemas"]["PlaybackEventKind"];
             };
         };
@@ -5003,6 +6133,58 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "audio_tracks": [
+                     *         {
+                     *           "channels": 6,
+                     *           "codec": "aac",
+                     *           "id": "source-audio-1",
+                     *           "is_default": true,
+                     *           "label": "English (AAC 5.1)",
+                     *           "language": "eng",
+                     *           "stream_index": 1
+                     *         }
+                     *       ],
+                     *       "duration_ms": 5400000,
+                     *       "mime_type": "application/x-mpegURL",
+                     *       "mode": "hls",
+                     *       "quality_options": [
+                     *         {
+                     *           "height": null,
+                     *           "id": "original",
+                     *           "label": "Original",
+                     *           "profile": null,
+                     *           "video_bitrate_bps": 15000000
+                     *         },
+                     *         {
+                     *           "height": 720,
+                     *           "id": "h264-720p-4mbps",
+                     *           "label": "720p",
+                     *           "profile": "h264-720p-4mbps",
+                     *           "video_bitrate_bps": 4000000
+                     *         }
+                     *       ],
+                     *       "selected_audio_track_id": "source-audio-1",
+                     *       "selected_quality_id": "h264-720p-4mbps",
+                     *       "selected_subtitle_track_id": null,
+                     *       "session_id": "9c8b7a6f-5e4d-3c2b-1a0f-9e8d7c6b5a4f",
+                     *       "source_offset_ms": 0,
+                     *       "subtitle_tracks": [
+                     *         {
+                     *           "codec": "subrip",
+                     *           "forced": false,
+                     *           "id": "source-subtitle-2",
+                     *           "is_default": false,
+                     *           "label": "English",
+                     *           "language": "eng",
+                     *           "stream_index": 2,
+                     *           "url": "/api/v1/media/3f9c1e2d-5a6b-4c7d-8e9f-0a1b2c3d4e5f/subtitles/2?source_offset_ms=0"
+                     *         }
+                     *       ],
+                     *       "url": "/api/v1/media/sessions/6a5e2c3e-2b9a-4b3e-9b7a-8e2f1c3d4a5b/playlist.m3u8"
+                     *     }
+                     */
                     "application/json": components["schemas"]["PlaybackInfoResponse"];
                 };
             };
@@ -5054,6 +6236,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "duration_ms": 5400000,
+                     *       "media_file_id": "3f9c1e2d-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+                     *       "position_ms": 1530000,
+                     *       "state": "part_watched",
+                     *       "updated_at": "2026-07-18T21:04:12Z",
+                     *       "work_id": "7a9d3e1f-8b4c-4d2a-9b3e-5f6a7b8c9d0e"
+                     *     }
+                     */
                     "application/json": components["schemas"]["WatchProgress"];
                 };
             };
@@ -5092,6 +6284,13 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "completed": false,
+                 *       "duration_ms": 5400000,
+                 *       "position_ms": 1530000
+                 *     }
+                 */
                 "application/json": components["schemas"]["UpdateWatchProgressRequest"];
             };
         };
@@ -5102,6 +6301,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "duration_ms": 5400000,
+                     *       "media_file_id": "3f9c1e2d-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+                     *       "position_ms": 1530000,
+                     *       "state": "part_watched",
+                     *       "updated_at": "2026-07-20T14:22:05Z",
+                     *       "work_id": "7a9d3e1f-8b4c-4d2a-9b3e-5f6a7b8c9d0e"
+                     *     }
+                     */
                     "application/json": components["schemas"]["WatchProgress"];
                 };
             };
@@ -5143,6 +6352,30 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "created_at": "2026-01-15T10:30:00Z",
+                     *         "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                     *         "is_system": false,
+                     *         "media_type": "video",
+                     *         "name": "Sample Cinematic Universe",
+                     *         "owner_user_id": "9d3b3f8a-6b34-4b1e-8a4a-2e6f6b1a9c11",
+                     *         "parent_playlist_id": null,
+                     *         "updated_at": "2026-01-16T08:45:00Z"
+                     *       },
+                     *       {
+                     *         "created_at": "2026-01-10T09:00:00Z",
+                     *         "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+                     *         "is_system": true,
+                     *         "media_type": "video",
+                     *         "name": "Staff Picks",
+                     *         "owner_user_id": null,
+                     *         "parent_playlist_id": null,
+                     *         "updated_at": "2026-01-10T09:00:00Z"
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["PlaylistResponse"][];
                 };
             };
@@ -5171,6 +6404,14 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "is_system": false,
+                 *       "media_type": "video",
+                 *       "name": "Sample Movie Golf",
+                 *       "parent_playlist_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                 *     }
+                 */
                 "application/json": components["schemas"]["CreatePlaylistRequest"];
             };
         };
@@ -5181,6 +6422,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "created_at": "2026-01-15T10:30:00Z",
+                     *       "id": "1b2c3d4e-5f60-4a7b-8c9d-0e1f2a3b4c5d",
+                     *       "is_system": false,
+                     *       "media_type": "video",
+                     *       "name": "Sample Movie Golf",
+                     *       "owner_user_id": "9d3b3f8a-6b34-4b1e-8a4a-2e6f6b1a9c11",
+                     *       "parent_playlist_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                     *       "updated_at": "2026-01-15T10:30:00Z"
+                     *     }
+                     */
                     "application/json": components["schemas"]["PlaylistResponse"];
                 };
             };
@@ -5225,6 +6478,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "created_at": "2026-01-15T10:30:00Z",
+                     *       "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                     *       "is_system": false,
+                     *       "media_type": "video",
+                     *       "name": "Sample Cinematic Universe",
+                     *       "owner_user_id": "9d3b3f8a-6b34-4b1e-8a4a-2e6f6b1a9c11",
+                     *       "parent_playlist_id": null,
+                     *       "updated_at": "2026-01-16T08:45:00Z"
+                     *     }
+                     */
                     "application/json": components["schemas"]["PlaylistResponse"];
                 };
             };
@@ -5256,6 +6521,12 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "name": "Sample Cinematic Universe",
+                 *       "parent_playlist_id": null
+                 *     }
+                 */
                 "application/json": components["schemas"]["UpdatePlaylistRequest"];
             };
         };
@@ -5266,6 +6537,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "created_at": "2026-01-15T10:30:00Z",
+                     *       "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                     *       "is_system": false,
+                     *       "media_type": "video",
+                     *       "name": "Sample Cinematic Universe",
+                     *       "owner_user_id": "9d3b3f8a-6b34-4b1e-8a4a-2e6f6b1a9c11",
+                     *       "parent_playlist_id": null,
+                     *       "updated_at": "2026-01-16T08:45:00Z"
+                     *     }
+                     */
                     "application/json": components["schemas"]["PlaylistResponse"];
                 };
             };
@@ -5352,6 +6635,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "added_at": "2026-01-15T10:31:00Z",
+                     *         "id": "e8b3a0c4-1d5f-4061-8c3d-4e5f6a7b8c9d",
+                     *         "playlist_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                     *         "position": 0,
+                     *         "track_id": null,
+                     *         "work_id": "c6f1e8a2-9b3d-4e5f-8a1b-2c3d4e5f6a7b"
+                     *       },
+                     *       {
+                     *         "added_at": "2026-01-15T10:32:00Z",
+                     *         "id": "f9c4b1d5-2e60-4172-9d4e-5f6a7b8c9d0e",
+                     *         "playlist_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                     *         "position": 1,
+                     *         "track_id": null,
+                     *         "work_id": "b5e0d7f1-8a2c-4d3e-9f0a-1b2c3d4e5f6a"
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["PlaylistItemResponse"][];
                 };
             };
@@ -5383,6 +6686,12 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "track_id": null,
+                 *       "work_id": "c6f1e8a2-9b3d-4e5f-8a1b-2c3d4e5f6a7b"
+                 *     }
+                 */
                 "application/json": components["schemas"]["AddPlaylistItemRequest"];
             };
         };
@@ -5393,6 +6702,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "added_at": "2026-01-15T10:31:00Z",
+                     *       "id": "e8b3a0c4-1d5f-4061-8c3d-4e5f6a7b8c9d",
+                     *       "playlist_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                     *       "position": 0,
+                     *       "track_id": null,
+                     *       "work_id": "c6f1e8a2-9b3d-4e5f-8a1b-2c3d4e5f6a7b"
+                     *     }
+                     */
                     "application/json": components["schemas"]["PlaylistItemResponse"];
                 };
             };
@@ -5410,7 +6729,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description No such playlist, or not visible to the caller */
+            /** @description No such playlist (or not visible to the caller), or the referenced work is outside the caller's allowed libraries */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5431,6 +6750,14 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "item_ids": [
+                 *         "f9c4b1d5-2e60-4172-9d4e-5f6a7b8c9d0e",
+                 *         "e8b3a0c4-1d5f-4061-8c3d-4e5f6a7b8c9d"
+                 *       ]
+                 *     }
+                 */
                 "application/json": components["schemas"]["ReorderPlaylistItemsRequest"];
             };
         };
@@ -5441,6 +6768,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "added_at": "2026-01-15T10:32:00Z",
+                     *         "id": "f9c4b1d5-2e60-4172-9d4e-5f6a7b8c9d0e",
+                     *         "playlist_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                     *         "position": 0,
+                     *         "track_id": null,
+                     *         "work_id": "b5e0d7f1-8a2c-4d3e-9f0a-1b2c3d4e5f6a"
+                     *       },
+                     *       {
+                     *         "added_at": "2026-01-15T10:31:00Z",
+                     *         "id": "e8b3a0c4-1d5f-4061-8c3d-4e5f6a7b8c9d",
+                     *         "playlist_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                     *         "position": 1,
+                     *         "track_id": null,
+                     *         "work_id": "c6f1e8a2-9b3d-4e5f-8a1b-2c3d4e5f6a7b"
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["PlaylistItemResponse"][];
                 };
             };
@@ -5526,6 +6873,11 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "preferred_audio_language": "en"
+                     *     }
+                     */
                     "application/json": components["schemas"]["PlayerPreferencesResponse"];
                 };
             };
@@ -5554,6 +6906,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "preferred_audio_language": "es"
+                 *     }
+                 */
                 "application/json": components["schemas"]["UpdatePlayerPreferencesRequest"];
             };
         };
@@ -5564,6 +6921,11 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "preferred_audio_language": "es"
+                     *     }
+                     */
                     "application/json": components["schemas"]["PlayerPreferencesResponse"];
                 };
             };
@@ -5605,6 +6967,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "preference": {
+                     *         "kind": "preset",
+                     *         "value": "astronaut"
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["ProfileAvatarSettingResponse"];
                 };
             };
@@ -5633,6 +7003,14 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "preference": {
+                 *         "kind": "preset",
+                 *         "value": "astronaut"
+                 *       }
+                 *     }
+                 */
                 "application/json": components["schemas"]["UpdateProfileAvatarRequest"];
             };
         };
@@ -5643,6 +7021,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "preference": {
+                     *         "kind": "preset",
+                     *         "value": "astronaut"
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["ProfileAvatarSettingResponse"];
                 };
             };
@@ -5684,6 +7070,11 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "pin_locked": true
+                     *     }
+                     */
                     "application/json": components["schemas"]["ProfilePinSettingResponse"];
                 };
             };
@@ -5705,6 +7096,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "pin": "4821"
+                 *     }
+                 */
                 "application/json": components["schemas"]["UpdateProfilePinRequest"];
             };
         };
@@ -5715,6 +7111,11 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "pin_locked": true
+                     *     }
+                     */
                     "application/json": components["schemas"]["ProfilePinSettingResponse"];
                 };
             };
@@ -5750,6 +7151,12 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "platform": "web",
+                 *       "token": "firebase-installation-id"
+                 *     }
+                 */
                 "application/json": components["schemas"]["RegisterPushRequest"];
             };
         };
@@ -5799,6 +7206,23 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "can_stream": true,
+                     *       "display_name": "Alice Nguyen",
+                     *       "generated_at": null,
+                     *       "id": "33333333-3333-4333-8333-333333333333",
+                     *       "library_allow": [
+                     *         "11111111-1111-4111-8111-111111111111"
+                     *       ],
+                     *       "message": "Can I invite my roommate?",
+                     *       "requested_at": "2026-07-20T12:00:00Z",
+                     *       "reviewed_at": "2026-07-20T13:00:00Z",
+                     *       "status": "approved",
+                     *       "user_id": "22222222-2222-4222-8222-222222222222",
+                     *       "username": "alice"
+                     *     }
+                     */
                     "application/json": null | components["schemas"]["UserInviteRequestResponse"];
                 };
             };
@@ -5827,6 +7251,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "message": "Can I invite my roommate?"
+                 *     }
+                 */
                 "application/json": components["schemas"]["CreateUserInviteRequest"];
             };
         };
@@ -5837,6 +7266,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "can_stream": true,
+                     *       "display_name": "Alice Nguyen",
+                     *       "generated_at": null,
+                     *       "id": "33333333-3333-4333-8333-333333333333",
+                     *       "library_allow": [],
+                     *       "message": "Can I invite my roommate?",
+                     *       "requested_at": "2026-07-20T12:00:00Z",
+                     *       "reviewed_at": null,
+                     *       "status": "pending",
+                     *       "user_id": "22222222-2222-4222-8222-222222222222",
+                     *       "username": "alice"
+                     *     }
+                     */
                     "application/json": components["schemas"]["UserInviteRequestResponse"];
                 };
             };
@@ -5871,6 +7315,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "expires_at": "2026-07-21T13:00:00Z",
+                     *       "invite_token": "9c1e2b3d4f6a8c1e2b3d4f6a8c1e2b3d"
+                     *     }
+                     */
                     "application/json": components["schemas"]["UserInviteResponse"];
                 };
             };
@@ -5912,6 +7362,17 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "display_name": "Alice Nguyen",
+                     *         "id": "22222222-2222-4222-8222-222222222222",
+                     *         "is_current": true,
+                     *         "pin_locked": false,
+                     *         "username": "alice"
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["AvailableProfileResponse"][];
                 };
             };
@@ -5943,6 +7404,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "pin": "4821"
+                 *     }
+                 */
                 "application/json": components["schemas"]["VerifyProfilePinRequest"];
             };
         };
@@ -5953,6 +7419,11 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "verified": true
+                     *     }
+                     */
                     "application/json": components["schemas"]["VerifyProfilePinResponse"];
                 };
             };
@@ -5987,6 +7458,28 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "default_order": 0,
+                     *         "id": "8f14e45f-ceea-467e-adc0-8b95e6b0a0f1",
+                     *         "is_default": true,
+                     *         "name": "Newly Added"
+                     *       },
+                     *       {
+                     *         "default_order": 1,
+                     *         "id": "0c85e0f1-9c6e-4b3a-9a6b-4a1f2e9c7d3b",
+                     *         "is_default": true,
+                     *         "name": "Newly Released"
+                     *       },
+                     *       {
+                     *         "default_order": null,
+                     *         "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                     *         "is_default": false,
+                     *         "name": "Newly Added Action"
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["ViewSummary"][];
                 };
             };
@@ -6027,6 +7520,43 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "items": [
+                     *         {
+                     *           "added_at": "2026-01-10T08:30:00Z",
+                     *           "availability": "available",
+                     *           "external_refs": [
+                     *             {
+                     *               "external_id": "603",
+                     *               "provider": "tmdb"
+                     *             }
+                     *           ],
+                     *           "genres": [
+                     *             "Action",
+                     *             "Science Fiction"
+                     *           ],
+                     *           "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                     *           "images": [
+                     *             {
+                     *               "height": 750,
+                     *               "kind": "poster",
+                     *               "url": "https://image.tmdb.org/t/p/original/poster.jpg",
+                     *               "width": 500
+                     *             }
+                     *           ],
+                     *           "kind": "movie",
+                     *           "monitored": true,
+                     *           "overview": "A computer hacker learns about the true nature of reality.",
+                     *           "release_date": "1999-03-31T00:00:00Z",
+                     *           "sort_title": "Matrix, The",
+                     *           "tags": [],
+                     *           "title": "Sample Movie Kilo"
+                     *         }
+                     *       ],
+                     *       "total": 1
+                     *     }
+                     */
                     "application/json": components["schemas"]["CatalogPageSchema"];
                 };
             };
@@ -6065,6 +7595,16 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "eventType": "SeriesAdd",
+                 *       "series": {
+                 *         "id": 42,
+                 *         "title": "Test Series T",
+                 *         "tvdbId": 275908
+                 *       }
+                 *     }
+                 */
                 "application/json": unknown;
             };
         };

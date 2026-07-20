@@ -742,6 +742,7 @@ impl MediaSync {
     /// exists, or inserting a fresh one (marked `available`, since this is
     /// only ever called for an episode a file was just matched against) if
     /// not.
+    #[allow(clippy::too_many_arguments)]
     async fn find_or_upsert_episode(
         &self,
         season_id: Uuid,

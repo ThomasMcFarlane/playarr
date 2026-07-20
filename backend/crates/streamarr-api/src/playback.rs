@@ -372,7 +372,16 @@ pub struct UpdateWatchProgressRequest {
     path = "/api/v1/playback/progress",
     tag = "playback",
     responses(
-        (status = 200, description = "Durable progress rows for the signed-in viewer, restricted to this account's allowed libraries", body = [WatchProgress]),
+        (status = 200, description = "Durable progress rows for the signed-in viewer, restricted to this account's allowed libraries", body = [WatchProgress], example = json!([
+            {
+                "media_file_id": "3f9c1e2d-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+                "work_id": "7a9d3e1f-8b4c-4d2a-9b3e-5f6a7b8c9d0e",
+                "position_ms": 1_530_000,
+                "duration_ms": 5_400_000,
+                "state": "part_watched",
+                "updated_at": "2026-07-18T21:04:12Z"
+            }
+        ])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller does not have Playarr streaming access")
     )
@@ -416,7 +425,14 @@ pub async fn list_watch_progress_handler(
     tag = "playback",
     params(("media_file_id" = Uuid, Path, description = "MediaFile id")),
     responses(
-        (status = 200, description = "Viewer progress, including a synthetic unseen state when no row exists", body = WatchProgress),
+        (status = 200, description = "Viewer progress, including a synthetic unseen state when no row exists", body = WatchProgress, example = json!({
+            "media_file_id": "3f9c1e2d-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+            "work_id": "7a9d3e1f-8b4c-4d2a-9b3e-5f6a7b8c9d0e",
+            "position_ms": 1_530_000,
+            "duration_ms": 5_400_000,
+            "state": "part_watched",
+            "updated_at": "2026-07-18T21:04:12Z"
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller does not have Playarr streaming access"),
         (status = 404, description = "Unknown media_file_id")
@@ -456,9 +472,20 @@ pub async fn get_watch_progress_handler(
     path = "/api/v1/playback/{media_file_id}/progress",
     tag = "playback",
     params(("media_file_id" = Uuid, Path, description = "MediaFile id")),
-    request_body = UpdateWatchProgressRequest,
+    request_body(content = UpdateWatchProgressRequest, example = json!({
+        "position_ms": 1_530_000,
+        "duration_ms": 5_400_000,
+        "completed": false
+    })),
     responses(
-        (status = 200, description = "Persisted viewer progress", body = WatchProgress),
+        (status = 200, description = "Persisted viewer progress", body = WatchProgress, example = json!({
+            "media_file_id": "3f9c1e2d-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+            "work_id": "7a9d3e1f-8b4c-4d2a-9b3e-5f6a7b8c9d0e",
+            "position_ms": 1_530_000,
+            "duration_ms": 5_400_000,
+            "state": "part_watched",
+            "updated_at": "2026-07-20T14:22:05Z"
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller does not have Playarr streaming access"),
         (status = 404, description = "Unknown media_file_id")
@@ -656,7 +683,56 @@ async fn start_analytics_session(state: &AppState, session: PlaybackSession) -> 
         PlaybackQuery
     ),
     responses(
-        (status = 200, description = "Direct-play URL or HLS manifest URL, plus the new PlaybackSession id", body = PlaybackInfoResponse),
+        (status = 200, description = "Direct-play URL or HLS manifest URL, plus the new PlaybackSession id", body = PlaybackInfoResponse, example = json!({
+            "mode": "hls",
+            "url": "/api/v1/media/sessions/6a5e2c3e-2b9a-4b3e-9b7a-8e2f1c3d4a5b/playlist.m3u8",
+            "mime_type": "application/x-mpegURL",
+            "duration_ms": 5_400_000,
+            "source_offset_ms": 0,
+            "audio_tracks": [
+                {
+                    "id": "source-audio-1",
+                    "stream_index": 1,
+                    "label": "English (AAC 5.1)",
+                    "language": "eng",
+                    "codec": "aac",
+                    "channels": 6,
+                    "is_default": true
+                }
+            ],
+            "selected_audio_track_id": "source-audio-1",
+            "subtitle_tracks": [
+                {
+                    "id": "source-subtitle-2",
+                    "stream_index": 2,
+                    "label": "English",
+                    "language": "eng",
+                    "codec": "subrip",
+                    "is_default": false,
+                    "forced": false,
+                    "url": "/api/v1/media/3f9c1e2d-5a6b-4c7d-8e9f-0a1b2c3d4e5f/subtitles/2?source_offset_ms=0"
+                }
+            ],
+            "selected_subtitle_track_id": null,
+            "quality_options": [
+                {
+                    "id": "original",
+                    "label": "Original",
+                    "profile": null,
+                    "height": null,
+                    "video_bitrate_bps": 15_000_000
+                },
+                {
+                    "id": "h264-720p-4mbps",
+                    "label": "720p",
+                    "profile": "h264-720p-4mbps",
+                    "height": 720,
+                    "video_bitrate_bps": 4_000_000
+                }
+            ],
+            "selected_quality_id": "h264-720p-4mbps",
+            "session_id": "9c8b7a6f-5e4d-3c2b-1a0f-9e8d7c6b5a4f"
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller does not have Playarr streaming access"),
         (status = 404, description = "Unknown media_file_id"),
@@ -1039,7 +1115,11 @@ pub async fn playback_info_handler(
     path = "/api/v1/playback/sessions/{session_id}/events",
     tag = "playback",
     params(("session_id" = Uuid, Path, description = "PlaybackSession id, from PlaybackInfoResponse.session_id")),
-    request_body = PlaybackEventKind,
+    request_body(content = PlaybackEventKind, example = json!({
+        "kind": "heartbeat",
+        "position_ms": 125_000,
+        "bytes_streamed_total": 52_428_800
+    })),
     responses(
         (status = 204, description = "Event recorded"),
         (status = 401, description = "Missing or invalid access token"),

@@ -87,9 +87,18 @@ fn token_error_response(err: TokenError) -> Response {
     post,
     path = "/api/v1/oauth/device/code",
     tag = "oauth",
-    request_body = DeviceCodeRequest,
+    request_body(content = DeviceCodeRequest, example = json!({
+        "client_platform": "tv-webos"
+    })),
     responses(
-        (status = 200, description = "Device/user code pair issued", body = DeviceCodeResponseSchema)
+        (status = 200, description = "Device/user code pair issued", body = DeviceCodeResponseSchema, example = json!({
+            "device_code": "3c8f1e2a-9b7d-4e21-8a6f-5d0c1b2e4f3a",
+            "user_code": "ABCD-2345",
+            "verification_uri": "https://playarr.example/link",
+            "verification_uri_complete": "https://playarr.example/link?user_code=ABCD-2345",
+            "expires_in": 600,
+            "interval": 5
+        }))
     )
 )]
 pub async fn device_code_handler(
@@ -136,7 +145,9 @@ fn request_verification_uri(headers: &HeaderMap, path: &str) -> String {
     post,
     path = "/api/v1/oauth/device/authorize",
     tag = "oauth",
-    request_body = DeviceAuthorizationRequest,
+    request_body(content = DeviceAuthorizationRequest, example = json!({
+        "user_code": "ABCD-2345"
+    })),
     responses(
         (status = 204, description = "Device approved"),
         (status = 401, description = "Missing or invalid bearer token", body = crate::ErrorBody),
@@ -173,9 +184,17 @@ fn normalise_user_code(value: &str) -> String {
     post,
     path = "/api/v1/oauth/token",
     tag = "oauth",
-    request_body = DeviceTokenRequest,
+    request_body(content = DeviceTokenRequest, example = json!({
+        "grant_type": DEVICE_CODE_GRANT_TYPE,
+        "device_code": "3c8f1e2a-9b7d-4e21-8a6f-5d0c1b2e4f3a"
+    })),
     responses(
-        (status = 200, description = "Access/refresh token pair", body = TokenResponseSchema),
+        (status = 200, description = "Access/refresh token pair", body = TokenResponseSchema, example = json!({
+            "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5ZjYyYzY3OS0wNGVhLTRhOTQtYjM5NS0yYjNjZWU4YjIzYzMifQ.signature",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+            "refresh_token": "8f0a5c1e-2b6d-4f3a-9e7c-1d4b5a6c7e8f"
+        })),
         (status = 400, description = "authorization_pending | slow_down | expired_token | access_denied | unsupported_grant_type", body = OAuthErrorBody)
     )
 )]

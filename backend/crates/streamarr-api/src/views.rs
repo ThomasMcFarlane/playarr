@@ -226,9 +226,36 @@ pub struct CatalogPageSchema {
     post,
     path = "/api/v1/admin/views",
     tag = "views",
-    request_body = LibraryViewRequest,
+    request_body(content = LibraryViewRequest, example = json!({
+        "name": "Newly Added Action",
+        "criteria": {
+            "kind": "movie",
+            "source_instance_id": null,
+            "genre": "Action",
+            "tag": null,
+            "available_only": true,
+            "release_window_days": 30
+        },
+        "sort": ["recent"]
+    })),
     responses(
-        (status = 200, description = "The created view", body = LibraryViewResponse),
+        (status = 200, description = "The created view", body = LibraryViewResponse, example = json!({
+            "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "name": "Newly Added Action",
+            "criteria": {
+                "kind": "movie",
+                "source_instance_id": null,
+                "genre": "Action",
+                "tag": null,
+                "available_only": true,
+                "release_window_days": 30
+            },
+            "sort": ["recent"],
+            "is_default": false,
+            "default_order": null,
+            "created_at": "2026-01-15T12:00:00Z",
+            "updated_at": "2026-01-15T12:00:00Z"
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin")
     )
@@ -260,7 +287,42 @@ pub async fn create_view_handler(
     path = "/api/v1/admin/views",
     tag = "views",
     responses(
-        (status = 200, description = "Every view, full projection, in display order", body = Vec<LibraryViewResponse>),
+        (status = 200, description = "Every view, full projection, in display order", body = Vec<LibraryViewResponse>, example = json!([
+            {
+                "id": "8f14e45f-ceea-467e-adc0-8b95e6b0a0f1",
+                "name": "Newly Added",
+                "criteria": {
+                    "kind": null,
+                    "source_instance_id": null,
+                    "genre": null,
+                    "tag": null,
+                    "available_only": true,
+                    "release_window_days": null
+                },
+                "sort": ["recent"],
+                "is_default": true,
+                "default_order": 0,
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-01T00:00:00Z"
+            },
+            {
+                "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                "name": "Newly Added Action",
+                "criteria": {
+                    "kind": "movie",
+                    "source_instance_id": null,
+                    "genre": "Action",
+                    "tag": null,
+                    "available_only": true,
+                    "release_window_days": 30
+                },
+                "sort": ["recent"],
+                "is_default": false,
+                "default_order": null,
+                "created_at": "2026-01-15T12:00:00Z",
+                "updated_at": "2026-01-15T12:00:00Z"
+            }
+        ])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin")
     )
@@ -288,9 +350,36 @@ pub async fn list_admin_views_handler(
     path = "/api/v1/admin/views/{id}",
     tag = "views",
     params(("id" = Uuid, Path, description = "View id")),
-    request_body = LibraryViewRequest,
+    request_body(content = LibraryViewRequest, example = json!({
+        "name": "Renamed View",
+        "criteria": {
+            "kind": "movie",
+            "source_instance_id": null,
+            "genre": "Comedy",
+            "tag": null,
+            "available_only": true,
+            "release_window_days": null
+        },
+        "sort": ["title"]
+    })),
     responses(
-        (status = 200, description = "The updated view", body = LibraryViewResponse),
+        (status = 200, description = "The updated view", body = LibraryViewResponse, example = json!({
+            "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "name": "Renamed View",
+            "criteria": {
+                "kind": "movie",
+                "source_instance_id": null,
+                "genre": "Comedy",
+                "tag": null,
+                "available_only": true,
+                "release_window_days": null
+            },
+            "sort": ["title"],
+            "is_default": false,
+            "default_order": null,
+            "created_at": "2026-01-15T12:00:00Z",
+            "updated_at": "2026-01-20T09:45:00Z"
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin"),
         (status = 404, description = "No view with this id")
@@ -355,7 +444,26 @@ pub async fn delete_view_handler(
     path = "/api/v1/views",
     tag = "views",
     responses(
-        (status = 200, description = "Every view, minimal projection, in display order", body = Vec<ViewSummary>),
+        (status = 200, description = "Every view, minimal projection, in display order", body = Vec<ViewSummary>, example = json!([
+            {
+                "id": "8f14e45f-ceea-467e-adc0-8b95e6b0a0f1",
+                "name": "Newly Added",
+                "is_default": true,
+                "default_order": 0
+            },
+            {
+                "id": "0c85e0f1-9c6e-4b3a-9a6b-4a1f2e9c7d3b",
+                "name": "Newly Released",
+                "is_default": true,
+                "default_order": 1
+            },
+            {
+                "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                "name": "Newly Added Action",
+                "is_default": false,
+                "default_order": null
+            }
+        ])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller has neither Playarr streaming access nor admin access")
     )
@@ -387,7 +495,35 @@ pub async fn list_views_handler(
     tag = "views",
     params(("id" = Uuid, Path, description = "View id"), ResolveViewQueryParams),
     responses(
-        (status = 200, description = "A page of catalog works matching this view", body = CatalogPageSchema),
+        (status = 200, description = "A page of catalog works matching this view", body = CatalogPageSchema, example = json!({
+            "items": [
+                {
+                    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                    "kind": "movie",
+                    "external_refs": [
+                        { "provider": "tmdb", "external_id": "603" }
+                    ],
+                    "title": "Sample Movie Kilo",
+                    "sort_title": "Matrix, The",
+                    "overview": "A computer hacker learns about the true nature of reality.",
+                    "images": [
+                        {
+                            "kind": "poster",
+                            "url": "https://image.tmdb.org/t/p/original/poster.jpg",
+                            "width": 500,
+                            "height": 750
+                        }
+                    ],
+                    "genres": ["Action", "Science Fiction"],
+                    "tags": [],
+                    "added_at": "2026-01-10T08:30:00Z",
+                    "release_date": "1999-03-31T00:00:00Z",
+                    "monitored": true,
+                    "availability": "available"
+                }
+            ],
+            "total": 1
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller has neither Playarr streaming access nor admin access"),
         (status = 404, description = "No view with this id")

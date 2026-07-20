@@ -84,16 +84,46 @@ async fn resolve_credit(state: &AppState, credit: Credit) -> Result<CreditRespon
     tag = "credits",
     params(("id" = Uuid, Path, description = "Work id")),
     responses(
-        (status = 200, description = "This work's cast and crew", body = WorkCreditsResponse),
+        (status = 200, description = "This work's cast and crew", body = WorkCreditsResponse, example = json!({
+            "cast": [{
+                "id": "7c3a9e21-4f8d-4b6a-9c1e-2d5f8a3b7c90",
+                "person": {
+                    "id": "1a2b3c4d-5e6f-4890-abcd-ef1234567890",
+                    "name": "Sample Actor",
+                    "headshot_url": "https://image.tmdb.org/t/p/original/qCpZn2e4ZTe8YHBaJcs4gEqvhX8.jpg"
+                },
+                "character": "Sample Character / Sample Vigilante",
+                "department": null,
+                "job": null
+            }],
+            "crew": [{
+                "id": "8d4b1f32-5e9c-4a7b-8d2f-3e6a9c4b8d10",
+                "person": {
+                    "id": "2b3c4d5e-6f70-4901-bcde-f01234567891",
+                    "name": "Sample Director",
+                    "headshot_url": "https://image.tmdb.org/t/p/original/xuAIuYSmsUzKlUMBFGVZaWsY3DZ.jpg"
+                },
+                "character": null,
+                "department": "Directing",
+                "job": "Director"
+            }]
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller has neither Playarr streaming access nor admin access")
     )
 )]
 pub async fn work_credits_handler(
     State(state): State<AppState>,
-    _viewer: CatalogViewer,
+    viewer: CatalogViewer,
     Path(id): Path<Uuid>,
 ) -> Result<Json<WorkCreditsResponse>, ApiError> {
+    // Same visibility gate `get_work_handler` applies -- 404s (not 403s)
+    // for a work outside the caller's allowed libraries, indistinguishably
+    // from a genuinely nonexistent one, before this endpoint leaks any
+    // cast/crew detail for it.
+    let allowed = viewer.allowed_libraries();
+    state.catalog.get_by_id(id, allowed.as_deref()).await?;
+
     let credits = state.credit_repo.list_for_work(id).await?;
     let mut cast = Vec::new();
     let mut crew = Vec::new();
@@ -116,7 +146,11 @@ pub async fn work_credits_handler(
     tag = "credits",
     params(("id" = Uuid, Path, description = "Person id")),
     responses(
-        (status = 200, description = "The person", body = PersonResponse),
+        (status = 200, description = "The person", body = PersonResponse, example = json!({
+            "id": "1a2b3c4d-5e6f-4890-abcd-ef1234567890",
+            "name": "Sample Actor",
+            "headshot_url": "https://image.tmdb.org/t/p/original/qCpZn2e4ZTe8YHBaJcs4gEqvhX8.jpg"
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller has neither Playarr streaming access nor admin access"),
         (status = 404, description = "No person with this id")
@@ -124,10 +158,21 @@ pub async fn work_credits_handler(
 )]
 pub async fn get_person_handler(
     State(state): State<AppState>,
-    _viewer: CatalogViewer,
+    viewer: CatalogViewer,
     Path(id): Path<Uuid>,
 ) -> Result<Json<PersonResponse>, ApiError> {
     let person = state.credit_repo.get_person(id).await?;
+
+    // A person is only exposed if at least one of their credited works is
+    // visible to this caller -- otherwise their existence (and identity)
+    // would leak through a library a restricted caller has no grant for.
+    // 404, not 403, matching `get_work_handler`'s visibility-miss posture.
+    let allowed = viewer.allowed_libraries();
+    let visible_works = visible_works_for_person(&state, id, allowed.as_deref()).await?;
+    if visible_works.is_empty() {
+        return Err(ApiError::not_found("person not found"));
+    }
+
     Ok(Json(person.into()))
 }
 
@@ -141,7 +186,45 @@ pub async fn get_person_handler(
     tag = "credits",
     params(("id" = Uuid, Path, description = "Person id")),
     responses(
-        (status = 200, description = "Every work this person has a credit on", body = Vec<Work>),
+        (status = 200, description = "Every work this person has a credit on", body = Vec<Work>, example = json!([{
+            "id": "6b1e4f83-2a9c-4d7e-8b3f-1c6a9e2d4b70",
+            "kind": "movie",
+            "external_refs": [{"provider": "tmdb", "external_id": "272"}],
+            "title": "Sample Movie Hotel",
+            "sort_title": "Sample Movie Hotel",
+            "overview": "After training with his mentor, Sample Vigilante begins his fight to free crime-ridden Gotham City from corruption.",
+            "images": [{
+                "kind": "poster",
+                "url": "https://image.tmdb.org/t/p/original/dr6x4GyyESClpG4RG3aSVSXVMlv.jpg",
+                "width": 2000,
+                "height": 3000
+            }],
+            "genres": ["Action", "Crime", "Drama"],
+            "tags": [],
+            "added_at": "2024-01-10T08:15:00Z",
+            "release_date": "2005-06-15T00:00:00Z",
+            "monitored": true,
+            "availability": "available"
+        }, {
+            "id": "4c9e2a1b-7f3d-4e6a-9b2c-8d5f1e3a7c90",
+            "kind": "movie",
+            "external_refs": [{"provider": "tmdb", "external_id": "155"}],
+            "title": "The Test Film",
+            "sort_title": "Test Film, The",
+            "overview": "Sample Vigilante raises the stakes in his war on crime with the help of Lt. Jim Gordon and District Attorney Harvey Dent.",
+            "images": [{
+                "kind": "poster",
+                "url": "https://image.tmdb.org/t/p/original/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
+                "width": 2000,
+                "height": 3000
+            }],
+            "genres": ["Action", "Crime", "Drama"],
+            "tags": [],
+            "added_at": "2024-01-15T10:30:00Z",
+            "release_date": "2008-07-16T00:00:00Z",
+            "monitored": true,
+            "availability": "available"
+        }])),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller has neither Playarr streaming access nor admin access"),
         (status = 404, description = "No person with this id")
@@ -149,7 +232,7 @@ pub async fn get_person_handler(
 )]
 pub async fn person_works_handler(
     State(state): State<AppState>,
-    _viewer: CatalogViewer,
+    viewer: CatalogViewer,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<Work>>, ApiError> {
     // 404s if the person doesn't exist, rather than silently returning an
@@ -157,27 +240,53 @@ pub async fn person_works_handler(
     // from "this id was never a real person" (404).
     state.credit_repo.get_person(id).await?;
 
-    let work_ids = state.credit_repo.list_work_ids_for_person(id).await?;
-    let mut works = Vec::with_capacity(work_ids.len());
-    for work_id in work_ids {
-        match state.work_repo.get(work_id).await {
-            Ok(work) => works.push(work),
-            Err(streamarr_db::DbError::NotFound) => continue,
-            Err(err) => return Err(err.into()),
-        }
-    }
+    let allowed = viewer.allowed_libraries();
+    let mut works = visible_works_for_person(&state, id, allowed.as_deref()).await?;
     works.sort_by(|a, b| a.sort_title.cmp(&b.sort_title));
     Ok(Json(works))
+}
+
+/// Every [`Work`] `person_id` has a credit on that both still exists (a
+/// work id whose row was since removed, e.g. the source deleted the movie,
+/// is silently skipped) and is visible under `allowed` -- the same
+/// allow-list semantics as `streamarr_catalog::CatalogService::
+/// is_work_visible`, applied per-work since this list can span multiple
+/// source instances. Shared by [`person_works_handler`] (the full filtered
+/// list) and [`get_person_handler`] (existence-of-at-least-one gate) so
+/// both apply identical visibility rules.
+async fn visible_works_for_person(
+    state: &AppState,
+    person_id: Uuid,
+    allowed: Option<&[Uuid]>,
+) -> Result<Vec<Work>, ApiError> {
+    let work_ids = state
+        .credit_repo
+        .list_work_ids_for_person(person_id)
+        .await?;
+    let mut works = Vec::with_capacity(work_ids.len());
+    for work_id in work_ids {
+        let work = match state.work_repo.get(work_id).await {
+            Ok(work) => work,
+            Err(streamarr_db::DbError::NotFound) => continue,
+            Err(err) => return Err(err.into()),
+        };
+        if state.catalog.is_work_visible(work.id, allowed).await? {
+            works.push(work);
+        }
+    }
+    Ok(works)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_support::{
-        bearer_header, mint_access_token, seed_movie, seed_streaming_user, test_state,
+        bearer_header, mint_access_token, seed_admin_user, seed_media_file, seed_movie,
+        seed_streaming_user, seed_streaming_user_with_library_allow, test_state,
     };
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
+    use streamarr_model::media::LeafRef;
     use tower::ServiceExt;
 
     async fn json_body<T: serde::de::DeserializeOwned>(response: axum::response::Response) -> T {
@@ -255,7 +364,11 @@ mod tests {
         .await;
 
         let user_id = Uuid::new_v4();
-        seed_streaming_user(&state, user_id).await;
+        // Admin, not a plain streaming user, so this test exercises credit
+        // resolution rather than tripping the (empty-by-default, deny-all)
+        // `library_allow` visibility gate -- that gate has its own
+        // dedicated tests below.
+        seed_admin_user(&state, user_id).await;
         let token = mint_access_token(&state, user_id);
 
         let response = router
@@ -284,7 +397,7 @@ mod tests {
         let (router, state) = test_state().await;
         let movie_id = seed_movie(&state, "No Credits Yet").await;
         let user_id = Uuid::new_v4();
-        seed_streaming_user(&state, user_id).await;
+        seed_admin_user(&state, user_id).await;
         let token = mint_access_token(&state, user_id);
 
         let response = router
@@ -342,7 +455,9 @@ mod tests {
         let _ = unrelated_movie;
 
         let user_id = Uuid::new_v4();
-        seed_streaming_user(&state, user_id).await;
+        // Admin, not a plain streaming user -- see the comment on
+        // `work_credits_splits_cast_and_crew` above for why.
+        seed_admin_user(&state, user_id).await;
         let token = mint_access_token(&state, user_id);
 
         let response = router
@@ -414,5 +529,149 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    /// A work outside the caller's `library_allow` 404s on `GET
+    /// /api/v1/catalog/{id}/credits`, indistinguishably from a nonexistent
+    /// work id -- same posture as `catalog::get_work_outside_allowed_
+    /// libraries_is_404`, proving this endpoint doesn't leak cast/crew for
+    /// a work the caller has no library grant for.
+    #[tokio::test]
+    async fn work_credits_outside_allowed_libraries_is_404() {
+        let (router, state) = test_state().await;
+        let allowed_instance = Uuid::new_v4();
+        let other_instance = Uuid::new_v4();
+
+        let other_movie = seed_movie(&state, "Other Library Movie").await;
+        seed_media_file(&state, other_movie, LeafRef::Work, other_instance).await;
+        seed_credit(
+            &state,
+            other_movie,
+            "Hidden Actor",
+            CreditRole::Cast {
+                character: "Someone".to_string(),
+            },
+            0,
+        )
+        .await;
+
+        let user_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user_id, vec![allowed_instance]).await;
+        let token = mint_access_token(&state, user_id);
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/v1/catalog/{other_movie}/credits"))
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// `GET /api/v1/people/{id}/works` filters out a work outside the
+    /// caller's `library_allow` while still returning one that's allowed --
+    /// a person credited on both an in-library and an out-of-library work
+    /// must not leak the latter's existence to a restricted caller.
+    #[tokio::test]
+    async fn person_works_filters_out_works_outside_allowed_libraries() {
+        let (router, state) = test_state().await;
+        let allowed_instance = Uuid::new_v4();
+        let other_instance = Uuid::new_v4();
+
+        let allowed_movie = seed_movie(&state, "Allowed Movie").await;
+        seed_media_file(&state, allowed_movie, LeafRef::Work, allowed_instance).await;
+        let other_movie = seed_movie(&state, "Other Movie").await;
+        seed_media_file(&state, other_movie, LeafRef::Work, other_instance).await;
+
+        let person_id = seed_credit(
+            &state,
+            allowed_movie,
+            "Cross-Library Actor",
+            CreditRole::Cast {
+                character: "Role A".to_string(),
+            },
+            0,
+        )
+        .await;
+        state
+            .app
+            .credit_repo
+            .replace_credits_for_work(
+                other_movie,
+                &[Credit {
+                    id: Uuid::new_v4(),
+                    work_id: other_movie,
+                    person_id,
+                    role: CreditRole::Cast {
+                        character: "Role B".to_string(),
+                    },
+                    order: 0,
+                }],
+            )
+            .await
+            .unwrap();
+
+        let user_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user_id, vec![allowed_instance]).await;
+        let token = mint_access_token(&state, user_id);
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/v1/people/{person_id}/works"))
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let works: Vec<Work> = json_body(response).await;
+        let titles: Vec<&str> = works.iter().map(|w| w.title.as_str()).collect();
+        assert_eq!(titles, vec!["Allowed Movie"]);
+    }
+
+    /// `GET /api/v1/people/{id}` 404s for a person whose only credited
+    /// work lies outside the caller's `library_allow` -- the person's
+    /// existence must not be inferable through a library the caller has no
+    /// grant for, matching `get_work_handler`'s 404-not-403 posture.
+    #[tokio::test]
+    async fn get_person_with_no_visible_credited_work_is_404() {
+        let (router, state) = test_state().await;
+        let allowed_instance = Uuid::new_v4();
+        let other_instance = Uuid::new_v4();
+
+        let other_movie = seed_movie(&state, "Only Other Movie").await;
+        seed_media_file(&state, other_movie, LeafRef::Work, other_instance).await;
+        let person_id = seed_credit(
+            &state,
+            other_movie,
+            "Fully Hidden Actor",
+            CreditRole::Cast {
+                character: "Role".to_string(),
+            },
+            0,
+        )
+        .await;
+
+        let user_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user_id, vec![allowed_instance]).await;
+        let token = mint_access_token(&state, user_id);
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/v1/people/{person_id}"))
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 }
