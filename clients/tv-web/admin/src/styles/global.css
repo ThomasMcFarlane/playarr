@@ -401,6 +401,37 @@ button {
   border-bottom: 1px solid rgba(133, 133, 133, 0.15);
 }
 
+/* A second, page-specific nav bar directly below .app-header -- currently
+   only used by the API Explorer's impersonation control. See
+   ApiExplorerToolbar's doc comment for why this lives here (a fixed
+   chrome row) rather than inside the scrollable page content. */
+.api-explorer-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.65rem 1.5rem;
+  background: var(--color-bg-toolbar);
+  border-bottom: 1px solid rgba(133, 133, 133, 0.15);
+}
+
+.api-explorer-toolbar-form,
+.api-explorer-toolbar-impersonating {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.api-explorer-toolbar-form select.input {
+  width: auto;
+  min-width: 220px;
+}
+
+.api-explorer-toolbar-impersonating {
+  color: var(--color-text-primary);
+}
+
 .app-logo {
   display: flex;
   align-items: center;

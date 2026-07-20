@@ -15,7 +15,11 @@ import { PlaylistsPage } from "./pages/PlaylistsPage";
 import { PlaylistEditPage } from "./pages/PlaylistEditPage";
 import { LoginPage } from "./pages/Login";
 import { useEnsureSignedIn } from "./lib/ApiClientProvider";
+import { ApiExplorerProvider } from "./lib/ApiExplorerContext";
 import { TopNav } from "./components/TopNav";
+import { ChevronIcon } from "./components/ChevronIcon";
+import { ApiExplorerNavSection } from "./components/ApiExplorerNav";
+import { ApiExplorerToolbar } from "./components/ApiExplorerToolbar";
 
 /**
  * Lazy-loaded: swagger-ui-react (and its swagger-client/apidom dependency
@@ -44,7 +48,6 @@ const SYSTEM_NAV_LINKS = [
   { to: "/settings", label: "Settings", end: false },
   { to: "/tasks", label: "Tasks", end: false },
   { to: "/activity", label: "Activity", end: false },
-  { to: "/api-explorer", label: "API Explorer", end: false },
 ] as const;
 
 /**
@@ -100,30 +103,6 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
   return <>{children}</>;
-}
-
-/** Small rotating chevron marking a `.sidebar-section-toggle`'s open/closed state. */
-function ChevronIcon({ open }: { open: boolean }) {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      style={{
-        marginLeft: "auto",
-        transform: open ? "rotate(90deg)" : "none",
-        transition: "transform 0.15s ease",
-      }}
-    >
-      <polyline points="9 6 15 12 9 18" />
-    </svg>
-  );
 }
 
 /**
@@ -215,63 +194,69 @@ export function App() {
         path="/*"
         element={
           <RequireAuth>
-            <div className="app-shell">
-              <aside className="sidebar">
-                <div className="sidebar-header">
-                  <span className="app-logo">
-                    <img className="app-logo-icon" src="/streamarr-icon.svg" alt="" />
-                    <span className="app-logo-accent">Stream</span>arr
-                  </span>
-                </div>
-                <nav className="sidebar-nav">
-                  {NAV_LINKS.map(({ to, label, end }) => (
-                    <NavLink
-                      key={to}
-                      to={to}
-                      end={end}
-                      className={({ isActive }) => `sidebar-link${isActive ? " is-active" : ""}`}
-                    >
-                      {label}
-                    </NavLink>
-                  ))}
-                  <LibraryNavSection />
-                  <SystemNavSection />
-                </nav>
-              </aside>
+            <ApiExplorerProvider>
+              <div className="app-shell">
+                <aside className="sidebar">
+                  <div className="sidebar-header">
+                    <span className="app-logo">
+                      <img className="app-logo-icon" src="/streamarr-icon.svg" alt="" />
+                      <span className="app-logo-accent">Stream</span>arr
+                    </span>
+                  </div>
+                  <nav className="sidebar-nav">
+                    {NAV_LINKS.map(({ to, label, end }) => (
+                      <NavLink
+                        key={to}
+                        to={to}
+                        end={end}
+                        className={({ isActive }) => `sidebar-link${isActive ? " is-active" : ""}`}
+                      >
+                        {label}
+                      </NavLink>
+                    ))}
+                    <LibraryNavSection />
+                    <SystemNavSection />
+                    <ApiExplorerNavSection />
+                  </nav>
+                </aside>
 
-              <div className="app-content">
-                <header className="app-header">
-                  <TopNav />
-                </header>
-                <main
-                  className={`app-main${location.pathname.startsWith("/library") ? " app-main--library" : ""}`}
-                >
-                  <Routes>
-                    <Route path="/" element={<SourceInstancesPage />} />
-                    <Route path="/library" element={<LibraryPage />} />
-                    <Route path="/library/:id" element={<WorkDetailPage />} />
-                    <Route path="/users" element={<UsersPage />} />
-                    <Route path="/users/:id" element={<UserSettingsPage />} />
-                    <Route path="/tasks" element={<TasksPage />} />
-                    <Route path="/activity" element={<ActivityPage />} />
-                    <Route path="/settings" element={<SystemSettingsPage />} />
-                    <Route
-                      path="/api-explorer"
-                      element={
-                        <Suspense fallback={<div className="muted" style={{ padding: "2rem" }}>Loading API Explorer…</div>}>
-                          <ApiExplorerPage />
-                        </Suspense>
-                      }
-                    />
-                    <Route path="/views" element={<ViewsPage />} />
-                    <Route path="/views/new" element={<ViewEditPage />} />
-                    <Route path="/views/:id" element={<ViewEditPage />} />
-                    <Route path="/playlists" element={<PlaylistsPage />} />
-                    <Route path="/playlists/:id" element={<PlaylistEditPage />} />
-                  </Routes>
-                </main>
+                <div className="app-content">
+                  <header className="app-header">
+                    <TopNav />
+                  </header>
+                  {location.pathname.startsWith("/api-explorer") && <ApiExplorerToolbar />}
+                  <main
+                    className={`app-main${location.pathname.startsWith("/library") ? " app-main--library" : ""}`}
+                  >
+                    <Routes>
+                      <Route path="/" element={<SourceInstancesPage />} />
+                      <Route path="/library" element={<LibraryPage />} />
+                      <Route path="/library/:id" element={<WorkDetailPage />} />
+                      <Route path="/users" element={<UsersPage />} />
+                      <Route path="/users/:id" element={<UserSettingsPage />} />
+                      <Route path="/tasks" element={<TasksPage />} />
+                      <Route path="/activity" element={<ActivityPage />} />
+                      <Route path="/settings" element={<SystemSettingsPage />} />
+                      <Route
+                        path="/api-explorer"
+                        element={
+                          <Suspense
+                            fallback={<div className="muted" style={{ padding: "2rem" }}>Loading API Explorer…</div>}
+                          >
+                            <ApiExplorerPage />
+                          </Suspense>
+                        }
+                      />
+                      <Route path="/views" element={<ViewsPage />} />
+                      <Route path="/views/new" element={<ViewEditPage />} />
+                      <Route path="/views/:id" element={<ViewEditPage />} />
+                      <Route path="/playlists" element={<PlaylistsPage />} />
+                      <Route path="/playlists/:id" element={<PlaylistEditPage />} />
+                    </Routes>
+                  </main>
+                </div>
               </div>
-            </div>
+            </ApiExplorerProvider>
           </RequireAuth>
         }
       />
