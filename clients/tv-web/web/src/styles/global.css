@@ -10658,6 +10658,19 @@ html[data-platform="android-tv"] .player-quality-option {
 
 /* Downloads page */
 
+/**
+ * `.tv-library-grid-panel` (shared with Library's and Playlists' own
+ * content-mode rail panels) cancels `.tv-rail-panel`'s floating-glass-card
+ * look (border-radius, inset box-shadow border, backdrop-filter blur) in
+ * favour of the app's actual edge-to-edge gradient wash -- and zeroes that
+ * panel's own padding along with it, since Library moves padding onto its
+ * inner scrollable grid instead. Downloads has no such inner-content-vs-
+ * sidebar split, so the padding it needs belongs back on the panel itself.
+ */
+.tv-downloads-panel {
+  padding: clamp(24px, 3vw, 58px);
+}
+
 .tv-downloads-offline-badge {
   padding: 0.2rem 0.6rem;
   border-radius: 999px;

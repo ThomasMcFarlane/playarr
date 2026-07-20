@@ -420,7 +420,11 @@ export function DownloadsPage() {
         </aside>
       ) : null}
 
-      <TvRailSurface className="tv-rail-panel tv-downloads-panel" mode="content" ariaLabel={t("pages.downloads.title")}>
+      <TvRailSurface
+        className="tv-rail-panel tv-library-grid-panel tv-downloads-panel"
+        mode="content"
+        ariaLabel={t("pages.downloads.title")}
+      >
         {storageSupported && storageUsage ? (
           <div className="tv-downloads-storage-panel">
             <span>
