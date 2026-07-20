@@ -889,6 +889,13 @@ export const ja: Translations = {
   "pages.downloads.cancel": "キャンセル",
   "pages.downloads.retry": "再試行",
   "pages.downloads.delete": "削除",
+  "pages.downloads.edit": "編集",
+  "pages.downloads.save": "保存",
+  "pages.downloads.editKeepUntilDialogLabel": "{{title}} の保存期限を編集",
+  "pages.downloads.typeMovie": "映画",
+  "pages.downloads.typeEpisode": "エピソード",
+  "pages.downloads.typeVideo": "動画",
+  "pages.downloads.typeTrack": "トラック",
   "pages.downloads.storageUsed": "この端末で {{quota}} 中 {{used}} を使用",
 
   "lib.downloads.signInRequired": "ダウンロードする前にサインインしてください。",

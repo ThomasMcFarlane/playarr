@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import type { DownloadRecord } from "../lib/downloadsDb";
+import type { DownloadKeepUntilPolicy, DownloadRecord } from "../lib/downloadsDb";
 import { useDownloads } from "../lib/DownloadsProvider";
 import { formatBytes } from "../lib/formatBytes";
 import { useApiClient } from "../lib/ApiClientProvider";
@@ -9,6 +9,7 @@ import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useOnlineStatus } from "../lib/useOnlineStatus";
+import { EditKeepUntilDrawer } from "../components/EditKeepUntilDrawer";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
 import { NotFoundPage } from "./NotFound";
@@ -49,6 +50,26 @@ function statusLabel(record: DownloadRecord, t: TFunc): string {
     default:
       return record.status;
   }
+}
+
+function recordTypeLabel(record: DownloadRecord, t: TFunc): string | null {
+  switch (record.workKind) {
+    case "movie":
+      return t("pages.downloads.typeMovie");
+    case "series":
+      return t("pages.downloads.typeEpisode");
+    case "site":
+      return t("pages.downloads.typeVideo");
+    case "artist":
+      return t("pages.downloads.typeTrack");
+    default:
+      return null;
+  }
+}
+
+/** `/music/:id` for a track (its `workId` is the artist work); `/library/:id` (the generic detail route) for everything else. */
+function recordDetailRoute(record: DownloadRecord): string {
+  return record.workKind === "artist" ? `/music/${record.workId}` : `/library/${record.workId}`;
 }
 
 function keepUntilLabel(record: DownloadRecord, t: TFunc): string {
@@ -106,21 +127,22 @@ function findFocusedEpisode(detail: WorkDetail, mediaFileId: string): FocusedEpi
 function DownloadRow({
   record,
   t,
-  onCancel,
   onRetry,
   onRemove,
+  onEdit,
   onFocusRow,
 }: {
   record: DownloadRecord;
   t: TFunc;
-  onCancel: (id: string) => void;
   onRetry: (id: string) => void;
   onRemove: (id: string) => void;
+  onEdit: (record: DownloadRecord) => void;
   onFocusRow: (id: string) => void;
 }) {
   const isActive =
     record.status === "queued" || record.status === "processing" || record.status === "downloading";
   const canRetry = record.status === "failed" || record.status === "canceled" || record.status === "expired";
+  const typeLabel = recordTypeLabel(record, t);
   const progressPercent =
     record.totalBytes && record.totalBytes > 0
       ? Math.min(100, Math.round((record.bytesDownloaded / record.totalBytes) * 100))
@@ -132,10 +154,16 @@ function DownloadRow({
       data-navigation-focus-key={`downloads:${record.id}`}
       onFocus={() => onFocusRow(record.id)}
     >
-      <div className="tv-download-row-copy">
+      <Link to={recordDetailRoute(record)} className="tv-download-row-copy">
         <strong>{record.title}</strong>
         {record.subtitle ? <small>{record.subtitle}</small> : null}
         <span className="tv-download-row-meta">
+          {typeLabel ? (
+            <>
+              <span>{typeLabel}</span>
+              <i aria-hidden="true" />
+            </>
+          ) : null}
           <span>{record.qualityLabel}</span>
           <i aria-hidden="true" />
           <span>{statusLabel(record, t)}</span>
@@ -171,20 +199,18 @@ function DownloadRow({
             {record.errorMessage}
           </span>
         ) : null}
-      </div>
+      </Link>
       <div className="tv-download-row-actions">
-        {isActive ? (
-          <button type="button" onClick={() => onCancel(record.id)}>
-            {t("pages.downloads.cancel")}
-          </button>
-        ) : null}
+        <button type="button" onClick={() => onEdit(record)}>
+          {t("pages.downloads.edit")}
+        </button>
         {canRetry ? (
           <button type="button" onClick={() => onRetry(record.id)}>
             {t("pages.downloads.retry")}
           </button>
         ) : null}
         <button type="button" className="tv-download-row-remove" onClick={() => onRemove(record.id)}>
-          {t("pages.downloads.delete")}
+          {isActive ? t("pages.downloads.cancel") : t("pages.downloads.delete")}
         </button>
       </div>
     </li>
@@ -208,12 +234,23 @@ export function DownloadsPage() {
   const { t } = useLanguage();
   const online = useOnlineStatus();
   const client = useApiClient();
-  const { downloads, storageUsage, storageSupported, cancel, retry, remove, canDownload } =
+  const { downloads, storageUsage, storageSupported, retry, remove, updateKeepUntil, canDownload } =
     useDownloads();
   useDocumentTitle(t("pages.downloads.title"));
 
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [focusedDetail, setFocusedDetail] = useState<WorkDetail | null>(null);
+  const [editingRecord, setEditingRecord] = useState<DownloadRecord | null>(null);
+  const [editingBusy, setEditingBusy] = useState(false);
+
+  const confirmEditKeepUntil = (keepUntil: DownloadKeepUntilPolicy) => {
+    if (!editingRecord) return;
+    setEditingBusy(true);
+    void updateKeepUntil(editingRecord.id, keepUntil).finally(() => {
+      setEditingBusy(false);
+      setEditingRecord(null);
+    });
+  };
 
   const active = downloads.filter(
     (record) =>
@@ -424,9 +461,9 @@ export function DownloadsPage() {
                         key={record.id}
                         record={record}
                         t={t}
-                        onCancel={cancel}
                         onRetry={retry}
                         onRemove={remove}
+                        onEdit={setEditingRecord}
                         onFocusRow={setFocusedId}
                       />
                     ))}
@@ -443,9 +480,9 @@ export function DownloadsPage() {
                         key={record.id}
                         record={record}
                         t={t}
-                        onCancel={cancel}
                         onRetry={retry}
                         onRemove={remove}
+                        onEdit={setEditingRecord}
                         onFocusRow={setFocusedId}
                       />
                     ))}
@@ -462,9 +499,9 @@ export function DownloadsPage() {
                         key={record.id}
                         record={record}
                         t={t}
-                        onCancel={cancel}
                         onRetry={retry}
                         onRemove={remove}
+                        onEdit={setEditingRecord}
                         onFocusRow={setFocusedId}
                       />
                     ))}
@@ -477,6 +514,16 @@ export function DownloadsPage() {
           )}
         </div>
       </TvRailSurface>
+
+      {editingRecord ? (
+        <EditKeepUntilDrawer
+          title={editingRecord.title}
+          keepUntil={editingRecord.keepUntil}
+          busy={editingBusy}
+          onClose={() => setEditingRecord(null)}
+          onConfirm={confirmEditKeepUntil}
+        />
+      ) : null}
     </TvStageShell>
   );
 }

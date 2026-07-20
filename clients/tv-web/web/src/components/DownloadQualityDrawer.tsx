@@ -6,24 +6,22 @@ import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { DownloadKeepUntilPolicy } from "../lib/downloadsDb";
 import { TvEmptyState } from "./tv/TvEmptyState";
 import type { PlayableLeaf } from "./MediaContextMenu";
+import {
+  defaultKeepUntilDate,
+  KeepUntilPicker,
+  keepUntilPolicyFromState,
+  type KeepUntilState,
+} from "./KeepUntilPicker";
 
 type OptionsState =
   | { status: "loading" }
   | { status: "ready"; options: DownloadOptionsResponse }
   | { status: "error"; message: string };
 
-type KeepUntilKind = DownloadKeepUntilPolicy["type"];
-
 export interface DownloadQualitySelection {
   qualityId: string;
   qualityLabel: string;
   keepUntil: DownloadKeepUntilPolicy;
-}
-
-function defaultKeepUntilDate(): string {
-  const date = new Date();
-  date.setDate(date.getDate() + 30);
-  return date.toISOString().slice(0, 10);
 }
 
 /**
@@ -62,10 +60,12 @@ export function DownloadQualityDrawer({
   const closeRef = useRef<HTMLButtonElement>(null);
   const [state, setState] = useState<OptionsState>({ status: "loading" });
   const [qualityId, setQualityId] = useState("original");
-  const [keepUntilKind, setKeepUntilKind] = useState<KeepUntilKind>("forever");
-  const [keepUntilDate, setKeepUntilDate] = useState(defaultKeepUntilDate);
-  const [afterWatchedAmount, setAfterWatchedAmount] = useState(30);
-  const [afterWatchedUnit, setAfterWatchedUnit] = useState<"days" | "weeks">("days");
+  const [keepUntil, setKeepUntil] = useState<KeepUntilState>({
+    kind: "forever",
+    date: defaultKeepUntilDate(),
+    amount: 30,
+    unit: "days",
+  });
 
   const firstLeaf = leaves[0];
 
@@ -118,17 +118,11 @@ export function DownloadQualityDrawer({
 
   function confirm() {
     if (!selectedOption) return;
-    const keepUntil: DownloadKeepUntilPolicy =
-      keepUntilKind === "forever"
-        ? { type: "forever" }
-        : keepUntilKind === "date"
-          ? { type: "date", date: new Date(keepUntilDate).toISOString() }
-          : {
-              type: "after-watched",
-              amount: Math.max(1, Math.round(afterWatchedAmount)),
-              unit: afterWatchedUnit,
-            };
-    onConfirm({ qualityId: selectedOption.id, qualityLabel: selectedOption.label, keepUntil });
+    onConfirm({
+      qualityId: selectedOption.id,
+      qualityLabel: selectedOption.label,
+      keepUntil: keepUntilPolicyFromState(keepUntil),
+    });
   }
 
   return (
@@ -203,85 +197,7 @@ export function DownloadQualityDrawer({
             </div>
           </section>
 
-          <section>
-            <h3>{t("components.downloadQualityDrawer.keepUntilHeading")}</h3>
-            <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
-              <button
-                type="button"
-                className={keepUntilKind === "forever" ? "is-active" : ""}
-                aria-pressed={keepUntilKind === "forever"}
-                onClick={() => setKeepUntilKind("forever")}
-              >
-                {t("components.downloadQualityDrawer.keepForever")}
-              </button>
-              <button
-                type="button"
-                className={keepUntilKind === "date" ? "is-active" : ""}
-                aria-pressed={keepUntilKind === "date"}
-                onClick={() => setKeepUntilKind("date")}
-              >
-                {t("components.downloadQualityDrawer.keepUntilDate")}
-              </button>
-              <button
-                type="button"
-                className={keepUntilKind === "after-watched" ? "is-active" : ""}
-                aria-pressed={keepUntilKind === "after-watched"}
-                onClick={() => setKeepUntilKind("after-watched")}
-              >
-                {t("components.downloadQualityDrawer.keepUntilAfterWatched")}
-              </button>
-            </div>
-
-            {keepUntilKind === "date" ? (
-              <label className="download-quality-drawer-field">
-                <span>{t("components.downloadQualityDrawer.dateLabel")}</span>
-                <input
-                  type="date"
-                  value={keepUntilDate}
-                  min={new Date().toISOString().slice(0, 10)}
-                  onChange={(event) => setKeepUntilDate(event.target.value)}
-                />
-              </label>
-            ) : null}
-
-            {keepUntilKind === "after-watched" ? (
-              <div className="download-quality-drawer-field download-quality-drawer-after-watched">
-                <label>
-                  <span>{t("components.downloadQualityDrawer.amountLabel")}</span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    value={afterWatchedAmount}
-                    onChange={(event) =>
-                      setAfterWatchedAmount(Number(event.target.value) || 1)
-                    }
-                  />
-                </label>
-                <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
-                  <button
-                    type="button"
-                    className={afterWatchedUnit === "days" ? "is-active" : ""}
-                    aria-pressed={afterWatchedUnit === "days"}
-                    onClick={() => setAfterWatchedUnit("days")}
-                  >
-                    {t("components.downloadQualityDrawer.unitDays")}
-                  </button>
-                  <button
-                    type="button"
-                    className={afterWatchedUnit === "weeks" ? "is-active" : ""}
-                    aria-pressed={afterWatchedUnit === "weeks"}
-                    onClick={() => setAfterWatchedUnit("weeks")}
-                  >
-                    {t("components.downloadQualityDrawer.unitWeeks")}
-                  </button>
-                </div>
-                <p className="download-quality-drawer-hint">
-                  {t("components.downloadQualityDrawer.afterWatchedHint")}
-                </p>
-              </div>
-            ) : null}
-          </section>
+          <KeepUntilPicker state={keepUntil} onChange={setKeepUntil} />
 
           <div className="tv-playback-settings-actions">
             <button type="button" onClick={onClose} disabled={busy}>

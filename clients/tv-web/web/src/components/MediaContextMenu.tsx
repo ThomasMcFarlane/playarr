@@ -14,6 +14,7 @@ import {
   type WatchProgress,
   type Work,
   type WorkDetail,
+  type WorkKind,
 } from "@streamarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDownloads } from "../lib/DownloadsProvider";
@@ -195,8 +196,24 @@ export interface PlayableLeaf {
   seriesTitle?: string;
   seasonNumber?: number;
   episodeNumber?: number;
+  albumTitle?: string;
+  /** The catalog kind of the work this leaf belongs to -- lets a download row know whether it's an episode, a track, a movie, etc. */
+  workKind?: WorkKind;
   /** The work this leaf belongs to -- only set where it can differ per-leaf (a Playlist fans out across many works); a single-work container resolves it once from the outer item instead. */
   workId?: string;
+}
+
+/** Builds a "series/episode" or "artist/album" subtitle for a download row from whatever a leaf actually carries -- richer than just `seriesTitle` alone. */
+function leafSubtitle(leaf: PlayableLeaf): string | undefined {
+  if (leaf.seriesTitle && leaf.seasonNumber !== undefined && leaf.episodeNumber !== undefined) {
+    const season = String(leaf.seasonNumber).padStart(2, "0");
+    const episode = String(leaf.episodeNumber).padStart(2, "0");
+    return `${leaf.seriesTitle} · S${season} · E${episode}`;
+  }
+  if (leaf.seriesTitle && leaf.albumTitle) {
+    return `${leaf.seriesTitle} · ${leaf.albumTitle}`;
+  }
+  return leaf.seriesTitle ?? leaf.albumTitle;
 }
 
 interface MediaContextMenuOptions {
@@ -216,6 +233,7 @@ function playableLeaves(
         mediaFileId: detail.media_file_id,
         runtimeMs: detail.runtime_ms ?? 0,
         title: detail.work.title,
+        workKind: detail.work.kind,
       },
     ];
   }
@@ -248,6 +266,7 @@ function playableLeaves(
                     seriesTitle: detail.work.title,
                     seasonNumber: season.season.season_number,
                     episodeNumber: episode.episode.episode_number,
+                    workKind: detail.work.kind,
                   },
                 ]
               : []
@@ -265,6 +284,9 @@ function playableLeaves(
                 runtimeMs:
                   track.runtime_ms ?? (track.track.duration_seconds ?? 0) * 1_000,
                 title: track.track.title,
+                seriesTitle: detail.work.title,
+                albumTitle: album.album.title,
+                workKind: detail.work.kind,
               },
             ]
           : []
@@ -325,6 +347,9 @@ async function resolvePlaylistLeaves(
             mediaFileId: track.media_file_id,
             runtimeMs: track.runtime_ms ?? (track.track.duration_seconds ?? 0) * 1_000,
             title: track.track.title,
+            seriesTitle: detail.work.title,
+            albumTitle: album.album.title,
+            workKind: detail.work.kind,
             workId: detail.work.id,
           },
         ];
@@ -649,9 +674,10 @@ export function useMediaContextMenu({
             batch.map((leaf) =>
               downloads.enqueue({
                 workId: leaf.workId ?? fallbackWorkId,
+                workKind: leaf.workKind ?? activeItem?.work?.kind,
                 mediaFileId: leaf.mediaFileId,
                 title: leaf.title,
-                subtitle: leaf.seriesTitle,
+                subtitle: leafSubtitle(leaf),
                 runtimeMs: leaf.runtimeMs,
                 qualityId: selection.qualityId,
                 qualityLabel: selection.qualityLabel,

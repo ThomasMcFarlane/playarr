@@ -84,6 +84,7 @@ function ticketToLocalStatus(ticket: DownloadTicket): DownloadRecordStatus {
 
 export interface DownloadLeafInput {
   workId: string;
+  workKind?: DownloadRecord["workKind"];
   mediaFileId: string;
   title: string;
   subtitle?: string | null;
@@ -120,9 +121,10 @@ interface DownloadsContextValue {
   storageUsage: DownloadsStorageUsage | null;
   storageSupported: boolean | null;
   enqueue: (params: EnqueueDownloadParams) => Promise<DownloadRecord>;
-  cancel: (id: string) => Promise<void>;
   retry: (id: string) => Promise<void>;
+  /** Cancels an in-progress download or deletes a finished one -- full cleanup either way. */
   remove: (id: string) => Promise<void>;
+  updateKeepUntil: (id: string, keepUntil: DownloadKeepUntilPolicy) => Promise<void>;
   /**
    * A completed local download's playable source, as a `blob:` URL --
    * `usePlaybackEngine` builds a `"direct"` `NegotiationState` from this
@@ -226,11 +228,23 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
   const blobUrlCacheRef = useRef(new Map<string, LocalPlaybackSource>());
   const loadedScopeRef = useRef<string | null>(null);
 
+  // Preserves the existing array position on update -- appending on every
+  // call (the old behaviour) meant a record jumped to the end of the list
+  // on every single progress tick, since `onProgress` fires many times a
+  // second during an active download. Only a genuinely new id is appended;
+  // an update to an id already present is spliced in place, so the list
+  // stays ordered by when each item was first added, not by which one most
+  // recently changed.
   const upsertRecord = useCallback((record: DownloadRecord) => {
-    downloadsRef.current = [
-      ...downloadsRef.current.filter((existing) => existing.id !== record.id),
-      record,
-    ];
+    const existingIndex = downloadsRef.current.findIndex(
+      (existing) => existing.id === record.id
+    );
+    downloadsRef.current =
+      existingIndex === -1
+        ? [...downloadsRef.current, record]
+        : downloadsRef.current.map((existing, index) =>
+            index === existingIndex ? record : existing
+          );
     setDownloads(downloadsRef.current);
     void putDownload(record);
   }, []);
@@ -400,7 +414,11 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     void listDownloadRows(userId).then((rows) => {
       if (cancelled) return;
-      const scoped = rows.filter((row) => row.serverUrl === apiBaseUrl);
+      const scoped = rows
+        .filter((row) => row.serverUrl === apiBaseUrl)
+        .sort(
+          (a, b) => new Date(a.requestedAt).getTime() - new Date(b.requestedAt).getTime()
+        );
       downloadsRef.current = scoped;
       setDownloads(scoped);
       for (const record of scoped) {
@@ -482,6 +500,7 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
       const record: DownloadRecord = {
         id: ticket.id,
         workId: params.workId,
+        workKind: params.workKind,
         mediaFileId: params.mediaFileId,
         userId,
         serverUrl: apiBaseUrl,
@@ -514,24 +533,11 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
     [apiBaseUrl, beginFetch, client, pollTicket, t, upsertRecord, userId]
   );
 
-  const cancel = useCallback(
-    async (id: string) => {
-      clearPoll(id);
-      abortDownload(id);
-      pendingQueueRef.current = pendingQueueRef.current.filter((candidate) => candidate !== id);
-      const record = downloadsRef.current.find((candidate) => candidate.id === id);
-      if (record) await deleteStoredBytes(record).catch(() => undefined);
-      await client.cancelDownload(id).catch(() => undefined);
-      patchRecord(id, {
-        status: "canceled",
-        bytesDownloaded: 0,
-        lastCompletedByteOffset: 0,
-        storage: null,
-      });
-    },
-    [clearPoll, client, patchRecord]
-  );
-
+  // Cancelling an in-progress download and deleting a finished one are the
+  // same operation from the user's point of view -- there is nothing useful
+  // left behind by a cancel, so it performs full cleanup (bytes, server
+  // ticket, IndexedDB record, list entry) rather than leaving a "canceled"
+  // row that then needs a second, separate delete action.
   const remove = useCallback(
     async (id: string) => {
       clearPoll(id);
@@ -560,6 +566,7 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
       await remove(id);
       await enqueue({
         workId: record.workId,
+        workKind: record.workKind,
         mediaFileId: record.mediaFileId,
         title: record.title,
         subtitle: record.subtitle,
@@ -570,6 +577,13 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
       });
     },
     [enqueue, remove]
+  );
+
+  const updateKeepUntil = useCallback(
+    async (id: string, keepUntil: DownloadKeepUntilPolicy) => {
+      patchRecord(id, { keepUntil });
+    },
+    [patchRecord]
   );
 
   const getLocalPlaybackSource = useCallback(
@@ -718,16 +732,15 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
       storageUsage,
       storageSupported,
       enqueue,
-      cancel,
       retry,
       remove,
+      updateKeepUntil,
       getLocalPlaybackSource,
       queueWatchMutation,
       canDownload,
     }),
     [
       activeSummary,
-      cancel,
       canDownload,
       downloads,
       enqueue,
@@ -737,6 +750,7 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
       retry,
       storageSupported,
       storageUsage,
+      updateKeepUntil,
     ]
   );
 

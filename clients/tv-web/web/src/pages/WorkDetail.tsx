@@ -1953,6 +1953,7 @@ export function WorkDetailPage() {
             void downloads
               .enqueue({
                 workId: work.id,
+                workKind: work.kind,
                 mediaFileId: playMediaFileId,
                 title: work.title,
                 runtimeMs: runtimeMs ?? 0,

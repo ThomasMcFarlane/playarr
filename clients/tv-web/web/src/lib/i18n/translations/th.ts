@@ -893,6 +893,13 @@ export const th: Translations = {
   "pages.downloads.cancel": "ยกเลิก",
   "pages.downloads.retry": "ลองใหม่",
   "pages.downloads.delete": "ลบ",
+  "pages.downloads.edit": "แก้ไข",
+  "pages.downloads.save": "บันทึก",
+  "pages.downloads.editKeepUntilDialogLabel": "แก้ไขระยะเวลาเก็บของ {{title}}",
+  "pages.downloads.typeMovie": "ภาพยนตร์",
+  "pages.downloads.typeEpisode": "ตอน",
+  "pages.downloads.typeVideo": "วิดีโอ",
+  "pages.downloads.typeTrack": "เพลง",
   "pages.downloads.storageUsed": "ใช้ไป {{used}} จาก {{quota}} บนอุปกรณ์นี้",
 
   "lib.downloads.signInRequired": "กรุณาเข้าสู่ระบบก่อนดาวน์โหลด",

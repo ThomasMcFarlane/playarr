@@ -52,6 +52,8 @@ export interface DownloadRecord {
   /** The server `DownloadTicket.id` -- this record only exists once that ticket does. */
   id: string;
   workId: string;
+  /** The `workId`'s catalog kind, so the Downloads page can route "open this item" to the right detail route (`/music/:id` for an artist, `/library/:id` otherwise). `undefined` for records written before this field existed -- treated as the `/library/:id` fallback. */
+  workKind?: "movie" | "series" | "site" | "artist" | "author";
   mediaFileId: string;
   /** Scopes a record to one signed-in profile on one server -- see `recordScope`. */
   userId: string;
