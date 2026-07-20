@@ -47,7 +47,7 @@ describe("ClientsPage", () => {
     expect(markup).not.toContain("The complete Playarr experience, ready now");
     expect(markup).not.toContain("The hosted TV app is available now");
     expect(markup).not.toContain("Fire TV");
-    expect(markup.match(/Coming soon/g)).toHaveLength(3);
+    expect(markup).not.toContain("Coming soon");
     expect(markup).toContain('data-client-icon="android"');
     expect(markup).toContain('data-client-icon="apple"');
     expect(markup).toContain('data-client-icon="lg"');
@@ -55,16 +55,16 @@ describe("ClientsPage", () => {
     expect(markup).toContain('data-client-icon="roku"');
     expect(markup).toContain('id="client-vidaa"');
     expect(markup).toContain('id="client-roku"');
-    expect(markup.match(/data-tv-edge-stop-left="true"/g)).toHaveLength(2);
-    expect(markup.match(/data-tv-edge-stop-right="true"/g)).toHaveLength(2);
+    expect(markup.match(/data-tv-edge-stop-left="true"/g)).toHaveLength(1);
+    expect(markup.match(/data-tv-edge-stop-right="true"/g)).toHaveLength(1);
     expect(markup).toContain("Apple TV");
     expect(markup).toContain("iPhone, iPad and Apple TV");
     expect(markup).toContain('id="client-apple"');
     expect(markup).not.toContain('id="client-apple-tv"');
     expect(markup).toContain("Roku TV");
-    expect(markup).toContain('id="client-android-action"');
-    expect(markup).toContain("Download APK");
-    expect(markup.match(/Download app/g)).toHaveLength(1);
+    expect(markup).not.toContain('id="client-android-action"');
+    expect(markup).not.toContain("Download APK");
+    expect(markup).not.toContain("Download app");
     for (const client of ["vidaa", "android", "apple", "webos", "tizen", "roku"]) {
       expect(markup).toContain(`href="/clients/${client}"`);
     }
@@ -95,7 +95,7 @@ describe("ClientsPage", () => {
         new RegExp(`id="client-${client}"[^>]*data-tv-focus-default="true"`)
       );
       expect(markup).toMatch(
-        new RegExp(`id="client-${client}-action"[^>]*aria-current="page"`)
+        new RegExp(`id="client-${client}"[^>]*aria-current="page"`)
       );
     }
   });
@@ -109,7 +109,7 @@ describe("ClientsPage", () => {
       /class="client-choice is-available is-android is-active"/
     );
     expect(markup).toMatch(
-      /id="client-android-action"[^>]*aria-current="page"/
+      /id="client-android"[^>]*aria-current="page"/
     );
     expect(markup).toContain(
       'href="/downloads/android/releases/0.2.7/playarr-android.apk"'

@@ -22,7 +22,6 @@ interface PlayarrClient {
   platformKey: TranslationKey;
   descriptionKey?: TranslationKey;
   status: ClientStatus;
-  action?: "android" | "vidaa";
   downloadFile?: string;
   icon: ClientIcon;
 }
@@ -36,7 +35,6 @@ const PLAYARR_CLIENTS: readonly PlayarrClient[] = [
     nameKey: "pages.clients.vidaa.name",
     platformKey: "pages.clients.vidaa.platform",
     status: "experimental",
-    action: "vidaa",
     icon: "vidaa",
   },
   {
@@ -44,7 +42,6 @@ const PLAYARR_CLIENTS: readonly PlayarrClient[] = [
     nameKey: "pages.clients.android.name",
     platformKey: "pages.clients.android.platform",
     status: "available",
-    action: "android",
     icon: "android",
   },
   {
@@ -166,12 +163,12 @@ function ClientsSelector({ activeClientId }: { activeClientId?: string }) {
               className={`client-choice is-${client.status} is-${client.icon}${isActive ? " is-active" : ""}`}
               key={client.id}
             >
-              <div
+              <Link
                 id={`client-${client.id}`}
                 className="client-platform"
-                role="group"
+                to={`/clients/${client.id}`}
                 aria-label={`${t(client.nameKey)} — ${t(client.platformKey)}`}
-                tabIndex={0}
+                aria-current={isActive ? "page" : undefined}
                 data-tv-focus-default={
                   isActive || (!activeClientId && index === 0) ? true : undefined
                 }
@@ -188,7 +185,6 @@ function ClientsSelector({ activeClientId }: { activeClientId?: string }) {
                     ? `#client-${PLAYARR_CLIENTS[index + 1]?.id}`
                     : undefined
                 }
-                data-tv-edge-target-down={`#client-${client.id}-action`}
               >
                 <span
                   className="client-platform-icon"
@@ -197,41 +193,9 @@ function ClientsSelector({ activeClientId }: { activeClientId?: string }) {
                 >
                   <ClientPlatformIcon icon={client.icon} />
                 </span>
-                <strong>{t(client.nameKey)}</strong>
-                <small>{t(client.platformKey)}</small>
-              </div>
-              <Link
-                id={`client-${client.id}-action`}
-                className="profile-action-button client-choice-action"
-                to={`/clients/${client.id}`}
-                aria-current={isActive ? "page" : undefined}
-                data-navigation-focus-key={`clients:${client.id}:details`}
-                data-tv-edge-stop-left={index === 0 ? true : undefined}
-                data-tv-edge-stop-right={
-                  index === PLAYARR_CLIENTS.length - 1 ? true : undefined
-                }
-                data-tv-edge-target-up={`#client-${client.id}`}
-                data-tv-edge-target-left={
-                  index > 0
-                    ? `#client-${PLAYARR_CLIENTS[index - 1]?.id}-action`
-                    : undefined
-                }
-                data-tv-edge-target-right={
-                  index < PLAYARR_CLIENTS.length - 1
-                    ? `#client-${PLAYARR_CLIENTS[index + 1]?.id}-action`
-                    : undefined
-                }
-              >
-                <strong>
-                  {client.action === "vidaa"
-                    ? t("pages.clients.vidaaSetup")
-                    : client.action === "android"
-                      ? t("pages.clients.downloadApk")
-                      : client.downloadFile
-                        ? t("pages.clients.downloadApp")
-                        : t("pages.clients.status.soon")}
-                </strong>
               </Link>
+              <strong>{t(client.nameKey)}</strong>
+              <small>{t(client.platformKey)}</small>
             </article>
           );
         })}
