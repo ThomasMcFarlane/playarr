@@ -182,17 +182,6 @@
   text-transform: uppercase;
 }
 
-.client-choice-action.is-unavailable {
-  cursor: default;
-  opacity: 0.62;
-}
-
-.client-choice-action.is-unavailable:hover,
-.client-choice-action.is-unavailable:focus-visible {
-  background: color-mix(in srgb, var(--surface-strong) 64%, transparent);
-  color: var(--ink);
-}
-
 .clients-footer {
   margin: 1rem auto 0;
   color: var(--ink-soft);
@@ -209,10 +198,6 @@
   text-align: center;
 }
 
-.client-inline-details {
-  margin-top: clamp(54px, calc(8 * var(--viewport-unit)), 96px);
-}
-
 .android-inline-details {
   width: min(100%, 760px);
   margin-inline: auto;
@@ -225,6 +210,7 @@
   backdrop-filter: blur(18px);
 }
 
+.android-inline-details h1,
 .android-inline-details h2 {
   margin-top: 0.45rem;
   font-size: clamp(2rem, 3.6vw, 4rem);
@@ -239,6 +225,49 @@
   color: var(--ink-soft);
   font-size: 0.86rem;
   line-height: 1.6;
+}
+
+.client-details-icon {
+  width: clamp(112px, 16vw, 184px);
+  margin: 0 auto 1.5rem;
+}
+
+.client-details-summary.is-vidaa .client-details-icon {
+  color: #cf3157;
+}
+
+.client-details-summary.is-vidaa .client-details-icon svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.client-details-summary.is-apple .client-details-icon {
+  color: var(--ink);
+}
+
+.client-details-summary.is-lg .client-details-icon {
+  color: #a50034;
+}
+
+.client-details-summary.is-samsung .client-details-icon {
+  color: #1428a0;
+}
+
+.client-details-summary.is-roku .client-details-icon {
+  color: #662d91;
+}
+
+.client-details-status {
+  display: inline-block;
+  margin-top: 1.25rem;
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+  font-weight: 780;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .android-download-actions,

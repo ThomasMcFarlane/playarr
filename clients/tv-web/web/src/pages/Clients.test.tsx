@@ -1,8 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { LanguageProvider } from "../lib/i18n/LanguageProvider";
-import { AndroidDownloadDetails, ClientsPage, VidaaClientsPage } from "./Clients";
+import { ClientDetailsPage, ClientsPage } from "./Clients";
 
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
@@ -21,6 +21,15 @@ function renderPage(page: React.ReactNode, path: string): string {
     <LanguageProvider>
       <MemoryRouter initialEntries={[path]}>{page}</MemoryRouter>
     </LanguageProvider>
+  );
+}
+
+function renderClientRoute(path: string): string {
+  return renderPage(
+    <Routes>
+      <Route path="/clients/:clientId" element={<ClientDetailsPage />} />
+    </Routes>,
+    path
   );
 }
 
@@ -53,29 +62,33 @@ describe("ClientsPage", () => {
     expect(markup).toContain('id="client-apple"');
     expect(markup).not.toContain('id="client-apple-tv"');
     expect(markup).toContain("Roku TV");
-    expect(markup).toContain('aria-controls="vidaa-install-details"');
-    expect(markup).toContain('aria-controls="android-install-details"');
-    expect(markup).toContain('aria-expanded="false"');
     expect(markup).toContain('id="client-android-action"');
     expect(markup).toContain("Download APK");
     expect(markup.match(/Download app/g)).toHaveLength(1);
-    expect(markup).toContain(
-      "releases/download/clients-v0.1.0-preview.1/playarr-roku.zip"
-    );
+    for (const client of ["vidaa", "android", "apple", "webos", "tizen", "roku"]) {
+      expect(markup).toContain(`href="/clients/${client}"`);
+    }
+    expect(markup).not.toContain("playarr-roku.zip");
     expect(markup).not.toContain("playarr-ios-source.zip");
     expect(markup).not.toContain("playarr-apple-tv-source.zip");
     expect(markup).not.toContain("playarr-webos-developer-bundle.zip");
     expect(markup).not.toContain("playarr-tizen-developer-bundle.zip");
     expect(markup).toContain("Only installable app packages are offered for download");
-    expect(markup.match(/aria-disabled="true"/g)).toHaveLength(3);
-    expect(markup).not.toContain('href="/clients/vidaa"');
+    expect(markup).not.toContain('aria-disabled="true"');
+    expect(markup).not.toMatch(
+      /id="client-(?:vidaa|android)-action"[^>]*aria-expanded=/
+    );
+    expect(markup).not.toContain('aria-controls="');
+    expect(markup).not.toContain('id="android-install-details"');
+    expect(markup).not.toContain('id="vidaa-install-details"');
     expect(markup).not.toContain("app-shell");
     expect(markup).not.toContain("clients-header");
   });
 
-  it("renders one responsive APK for mobile and TV", () => {
-    const markup = renderPage(<AndroidDownloadDetails />, "/clients");
+  it("renders one responsive APK for mobile and TV on the Android URL", () => {
+    const markup = renderClientRoute("/clients/android");
 
+    expect(markup).toContain('data-navigation-scroll-key="clients:android"');
     expect(markup).toContain(
       'href="/downloads/android/releases/0.2.7/playarr-android.apk"'
     );
@@ -84,11 +97,11 @@ describe("ClientsPage", () => {
     expect(markup).not.toContain('download=');
     expect(markup).not.toContain("playarr-android-mobile.apk");
     expect(markup).not.toContain("playarr-android-tv.apk");
-    expect(markup).toContain('data-tv-edge-target-up="#client-android-action"');
+    expect(markup).toContain('data-tv-focus-default="true"');
   });
 
   it("renders the VIDAA custom store without claiming to operate DNS", () => {
-    const markup = renderPage(<VidaaClientsPage />, "/clients/vidaa");
+    const markup = renderClientRoute("/clients/vidaa");
 
     expect(markup).toContain('data-navigation-scroll-key="clients:vidaa"');
     expect(markup).toContain('aria-label="All clients"');
@@ -99,5 +112,19 @@ describe("ClientsPage", () => {
     expect(markup).toContain("Restore automatic DNS after installation.");
     expect(markup).not.toMatch(/\b(?:\d{1,3}\.){3}\d{1,3}\b/);
     expect(markup).not.toContain("Activate installer");
+  });
+
+  it("moves Roku downloads and coming-soon details onto their own URLs", () => {
+    const rokuMarkup = renderClientRoute("/clients/roku");
+    const appleMarkup = renderClientRoute("/clients/apple");
+
+    expect(rokuMarkup).toContain('data-navigation-scroll-key="clients:roku"');
+    expect(rokuMarkup).toContain(
+      "releases/download/clients-v0.1.0-preview.1/playarr-roku.zip"
+    );
+    expect(rokuMarkup).toContain("Available · Experimental install");
+    expect(appleMarkup).toContain('data-navigation-scroll-key="clients:apple"');
+    expect(appleMarkup).toContain("Coming soon");
+    expect(appleMarkup).toContain("The native Apple client is coming soon");
   });
 });

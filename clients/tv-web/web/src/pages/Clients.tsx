@@ -1,5 +1,11 @@
-import { useState, type ReactNode } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import type { ReactNode } from "react";
+import {
+  Link,
+  Navigate,
+  useLocation,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 import { TvStageChrome } from "../components/tv/TvStage";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
@@ -14,6 +20,7 @@ interface PlayarrClient {
   id: string;
   nameKey: TranslationKey;
   platformKey: TranslationKey;
+  descriptionKey?: TranslationKey;
   status: ClientStatus;
   action?: "android" | "vidaa";
   downloadFile?: string;
@@ -44,6 +51,7 @@ const PLAYARR_CLIENTS: readonly PlayarrClient[] = [
     id: "apple",
     nameKey: "pages.clients.apple.name",
     platformKey: "pages.clients.apple.platform",
+    descriptionKey: "pages.clients.ios.description",
     status: "soon",
     icon: "apple",
   },
@@ -51,6 +59,7 @@ const PLAYARR_CLIENTS: readonly PlayarrClient[] = [
     id: "webos",
     nameKey: "pages.clients.webos.name",
     platformKey: "pages.clients.webos.platform",
+    descriptionKey: "pages.clients.webos.description",
     status: "soon",
     icon: "lg",
   },
@@ -58,6 +67,7 @@ const PLAYARR_CLIENTS: readonly PlayarrClient[] = [
     id: "tizen",
     nameKey: "pages.clients.tizen.name",
     platformKey: "pages.clients.tizen.platform",
+    descriptionKey: "pages.clients.tizen.description",
     status: "soon",
     icon: "samsung",
   },
@@ -65,6 +75,7 @@ const PLAYARR_CLIENTS: readonly PlayarrClient[] = [
     id: "roku",
     nameKey: "pages.clients.roku.name",
     platformKey: "pages.clients.roku.platform",
+    descriptionKey: "pages.clients.downloadNote",
     status: "experimental",
     downloadFile: "playarr-roku.zip",
     icon: "roku",
@@ -137,8 +148,6 @@ function PublicClientsLayout({
 
 export function ClientsPage() {
   const { t } = useLanguage();
-  const [androidExpanded, setAndroidExpanded] = useState(false);
-  const [vidaaExpanded, setVidaaExpanded] = useState(false);
   useDocumentTitle(t("pages.clients.documentTitle"));
 
   return (
@@ -195,118 +204,41 @@ export function ClientsPage() {
                 <strong>{t(client.nameKey)}</strong>
                 <small>{t(client.platformKey)}</small>
               </div>
-              {client.action ? (
-                <button
-                  id={`client-${client.id}-action`}
-                  type="button"
-                  className="profile-action-button client-choice-action"
-                  data-navigation-focus-key={`clients:${client.id}:action`}
-                  data-tv-edge-stop-left={index === 0 ? true : undefined}
-                  data-tv-edge-stop-right={
-                    index === PLAYARR_CLIENTS.length - 1 ? true : undefined
-                  }
-                  data-tv-edge-target-up={`#client-${client.id}`}
-                  data-tv-edge-target-down={
-                    client.action === "vidaa" && vidaaExpanded
-                      ? "#vidaa-store-open"
-                      : client.action === "android" && androidExpanded
-                        ? "#android-download"
-                        : undefined
-                  }
-                  data-tv-edge-target-left={
-                    index > 0
-                      ? `#client-${PLAYARR_CLIENTS[index - 1]?.id}-action`
-                      : undefined
-                  }
-                  data-tv-edge-target-right={
-                    index < PLAYARR_CLIENTS.length - 1
-                      ? `#client-${PLAYARR_CLIENTS[index + 1]?.id}-action`
-                      : undefined
-                  }
-                  aria-expanded={
-                    client.action === "vidaa" ? vidaaExpanded : androidExpanded
-                  }
-                  aria-controls={`${client.id}-install-details`}
-                  onClick={() => {
-                    if (client.action === "vidaa") {
-                      setVidaaExpanded((expanded) => !expanded);
-                    } else {
-                      setAndroidExpanded((expanded) => !expanded);
-                    }
-                  }}
-                >
-                  <strong>
-                    {client.action === "vidaa"
-                      ? t("pages.clients.vidaaSetup")
-                      : t("pages.clients.downloadApk")}
-                  </strong>
-                </button>
-              ) : client.downloadFile ? (
-                <a
-                  id={`client-${client.id}-action`}
-                  className="profile-action-button client-choice-action"
-                  href={`${CLIENT_PREVIEW_RELEASE_BASE}/${client.downloadFile}`}
-                  download
-                  data-navigation-focus-key={`clients:${client.id}:download`}
-                  data-tv-edge-stop-left={index === 0 ? true : undefined}
-                  data-tv-edge-stop-right={
-                    index === PLAYARR_CLIENTS.length - 1 ? true : undefined
-                  }
-                  data-tv-edge-target-up={`#client-${client.id}`}
-                  data-tv-edge-target-left={
-                    index > 0
-                      ? `#client-${PLAYARR_CLIENTS[index - 1]?.id}-action`
-                      : undefined
-                  }
-                  data-tv-edge-target-right={
-                    index < PLAYARR_CLIENTS.length - 1
-                      ? `#client-${PLAYARR_CLIENTS[index + 1]?.id}-action`
-                      : undefined
-                  }
-                >
-                  <strong>{t("pages.clients.downloadApp")}</strong>
-                </a>
-              ) : (
-                <button
-                  id={`client-${client.id}-action`}
-                  type="button"
-                  className="profile-action-button client-choice-action is-unavailable"
-                  aria-disabled="true"
-                  data-navigation-focus-key={`clients:${client.id}:soon`}
-                  data-tv-edge-stop-left={index === 0 ? true : undefined}
-                  data-tv-edge-stop-right={
-                    index === PLAYARR_CLIENTS.length - 1 ? true : undefined
-                  }
-                  data-tv-edge-target-up={`#client-${client.id}`}
-                  data-tv-edge-target-left={
-                    index > 0
-                      ? `#client-${PLAYARR_CLIENTS[index - 1]?.id}-action`
-                      : undefined
-                  }
-                  data-tv-edge-target-right={
-                    index < PLAYARR_CLIENTS.length - 1
-                      ? `#client-${PLAYARR_CLIENTS[index + 1]?.id}-action`
-                      : undefined
-                  }
-                >
-                  <strong>{t("pages.clients.status.soon")}</strong>
-                </button>
-              )}
+              <Link
+                id={`client-${client.id}-action`}
+                className="profile-action-button client-choice-action"
+                to={`/clients/${client.id}`}
+                data-navigation-focus-key={`clients:${client.id}:details`}
+                data-tv-edge-stop-left={index === 0 ? true : undefined}
+                data-tv-edge-stop-right={
+                  index === PLAYARR_CLIENTS.length - 1 ? true : undefined
+                }
+                data-tv-edge-target-up={`#client-${client.id}`}
+                data-tv-edge-target-left={
+                  index > 0
+                    ? `#client-${PLAYARR_CLIENTS[index - 1]?.id}-action`
+                    : undefined
+                }
+                data-tv-edge-target-right={
+                  index < PLAYARR_CLIENTS.length - 1
+                    ? `#client-${PLAYARR_CLIENTS[index + 1]?.id}-action`
+                    : undefined
+                }
+              >
+                <strong>
+                  {client.action === "vidaa"
+                    ? t("pages.clients.vidaaSetup")
+                    : client.action === "android"
+                      ? t("pages.clients.downloadApk")
+                      : client.downloadFile
+                        ? t("pages.clients.downloadApp")
+                        : t("pages.clients.status.soon")}
+                </strong>
+              </Link>
             </article>
           ))}
         </div>
       </section>
-
-      {androidExpanded ? <AndroidDownloadDetails /> : null}
-
-      {vidaaExpanded ? (
-        <div
-          className="vidaa-inline-details client-inline-details"
-          id="vidaa-install-details"
-        >
-          <VidaaInstallDetails embedded />
-        </div>
-      ) : null}
 
       <p className="clients-preview-note">{t("pages.clients.downloadNote")}</p>
       <p className="clients-footer">{t("pages.clients.footer")}</p>
@@ -319,12 +251,12 @@ export function AndroidDownloadDetails() {
 
   return (
     <section
-      className="android-inline-details client-inline-details"
+      className="android-inline-details"
       id="android-install-details"
       aria-labelledby="android-download-title"
     >
       <p className="page-kicker">{t("pages.clients.androidPage.kicker")}</p>
-      <h2 id="android-download-title">{t("pages.clients.androidPage.title")}</h2>
+      <h1 id="android-download-title">{t("pages.clients.androidPage.title")}</h1>
       <p>{t("pages.clients.androidPage.description")}</p>
       <div className="android-download-actions">
         <a
@@ -334,7 +266,7 @@ export function AndroidDownloadDetails() {
           target="_blank"
           rel="noopener noreferrer"
           data-navigation-focus-key="clients:android:download"
-          data-tv-edge-target-up="#client-android-action"
+          data-tv-focus-default
         >
           <strong>{t("pages.clients.androidPage.download")}</strong>
         </a>
@@ -343,18 +275,17 @@ export function AndroidDownloadDetails() {
   );
 }
 
-function VidaaInstallDetails({ embedded = false }: { embedded?: boolean }) {
+function VidaaInstallDetails() {
   const { t } = useLanguage();
-  const Title = embedded ? "h2" : "h1";
 
   return (
     <>
       <section className="vidaa-hero" aria-labelledby="vidaa-title">
         <div>
           <p className="page-kicker">{t("pages.clients.vidaaPage.kicker")}</p>
-          <Title className="auth-title" id="vidaa-title">
+          <h1 className="auth-title" id="vidaa-title">
             {t("pages.clients.vidaaPage.title")}
-          </Title>
+          </h1>
           <p className="muted auth-description vidaa-lead">
             {t("pages.clients.vidaaPage.description")}
           </p>
@@ -384,7 +315,7 @@ function VidaaInstallDetails({ embedded = false }: { embedded?: boolean }) {
             className="profile-action-button"
             href="/vidaa-store/"
             data-navigation-focus-key="clients:vidaa:store"
-            data-tv-edge-target-up={embedded ? "#client-vidaa-action" : undefined}
+            data-tv-focus-default
           >
             <strong>{t("pages.clients.vidaaPage.openStore")}</strong>
           </a>
@@ -422,13 +353,71 @@ function VidaaInstallDetails({ embedded = false }: { embedded?: boolean }) {
   );
 }
 
-export function VidaaClientsPage() {
+function ClientOverviewDetails({ client }: { client: PlayarrClient }) {
   const { t } = useLanguage();
-  useDocumentTitle(t("pages.clients.vidaaPage.documentTitle"));
 
   return (
-    <PublicClientsLayout backTo="/clients" scrollKey="clients:vidaa">
-      <VidaaInstallDetails />
+    <section
+      className={`android-inline-details client-details-summary is-${client.icon}`}
+      aria-labelledby="client-details-title"
+    >
+      <span
+        className="client-platform-icon client-details-icon"
+        data-client-icon={client.icon}
+        aria-hidden="true"
+      >
+        <ClientPlatformIcon icon={client.icon} />
+      </span>
+      <p className="page-kicker">{t(client.platformKey)}</p>
+      <h1 id="client-details-title">{t(client.nameKey)}</h1>
+      <p>
+        {client.descriptionKey
+          ? t(client.descriptionKey)
+          : t("pages.clients.notYetPublished")}
+      </p>
+      <span className="client-details-status">
+        {t(`pages.clients.status.${client.status}`)}
+      </span>
+      {client.downloadFile ? (
+        <div className="android-download-actions">
+          <a
+            className="profile-action-button"
+            href={`${CLIENT_PREVIEW_RELEASE_BASE}/${client.downloadFile}`}
+            download
+            data-navigation-focus-key={`clients:${client.id}:download`}
+            data-tv-focus-default
+          >
+            <strong>{t("pages.clients.downloadApp")}</strong>
+          </a>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+export function ClientDetailsPage() {
+  const { clientId } = useParams<{ clientId: string }>();
+  const { t } = useLanguage();
+  const client = PLAYARR_CLIENTS.find(({ id }) => id === clientId);
+  useDocumentTitle(
+    client?.id === "vidaa"
+      ? t("pages.clients.vidaaPage.documentTitle")
+      : client
+        ? t(client.nameKey)
+        : t("pages.clients.documentTitle")
+  );
+
+  if (!client) return <Navigate to="/clients" replace />;
+
+  return (
+    <PublicClientsLayout backTo="/clients" scrollKey={`clients:${client.id}`}>
+      {client.id === "vidaa" ? (
+        <VidaaInstallDetails />
+      ) : client.id === "android" ? (
+        <AndroidDownloadDetails />
+      ) : (
+        <ClientOverviewDetails client={client} />
+      )}
     </PublicClientsLayout>
   );
 }

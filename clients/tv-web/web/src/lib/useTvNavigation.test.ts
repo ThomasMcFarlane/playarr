@@ -69,8 +69,9 @@ describe("directional page fallback", () => {
     ).toBe(0);
   });
 
-  it("returns VIDAA clients to the clients hub on remote Back", () => {
+  it("returns client detail pages to the clients hub on remote Back", () => {
     expect(parentRoute("/clients/vidaa")).toBe("/clients");
+    expect(parentRoute("/clients/android")).toBe("/clients");
     expect(parentRoute("/clients")).toBe("/");
     expect(parentRoute("/clients", "/profiles")).toBe("/profiles");
   });

@@ -492,7 +492,7 @@ export function parentRoute(pathname: string, requestedBackTo?: string): string 
   if (/^\/music\/[^/]+$/.test(pathname)) return "/music";
   if (/^\/playlists\/[^/]+$/.test(pathname)) return "/playlists";
   if (/^\/settings\/[^/]+$/.test(pathname)) return "/settings";
-  if (pathname === "/clients/vidaa") return "/clients";
+  if (/^\/clients\/[^/]+$/.test(pathname)) return "/clients";
   if (
     pathname === "/search" ||
     pathname === "/series" ||
