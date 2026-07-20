@@ -30,6 +30,7 @@ import {
   type QueuedWatchMutation,
 } from "./downloadsDb";
 import { useLanguage } from "./i18n/LanguageProvider";
+import { leafSubtitle, playableLeaves } from "./playableLeaves";
 import { useOnlineStatus } from "./useOnlineStatus";
 import { useToast } from "./toast";
 
@@ -429,6 +430,37 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
         }
       }
       scheduleNext();
+
+      // Records created before `workKind`/a richer `subtitle` existed on
+      // this schema (or that were enqueued from a call site that hadn't
+      // been enriched yet) are stuck with whatever flat title/subtitle they
+      // were written with -- that value is set once at enqueue time and
+      // never recomputed on its own. Repair them in the background here by
+      // re-resolving each stale record's leaf from the server, once per
+      // load, instead of leaving the list permanently missing series/
+      // season/episode/artist/album context until the user re-downloads.
+      if (online) {
+        const stale = scoped.filter((record) => record.workKind === undefined);
+        void (async () => {
+          for (const record of stale) {
+            if (cancelled) return;
+            try {
+              const detail = await client.getWork(record.workId);
+              const leaf = playableLeaves(detail, t).find(
+                (candidate) => candidate.mediaFileId === record.mediaFileId
+              );
+              if (!leaf) continue;
+              const patch: Partial<DownloadRecord> = { workKind: leaf.workKind ?? "movie" };
+              const subtitle = leafSubtitle(leaf);
+              if (subtitle) patch.subtitle = subtitle;
+              patchRecord(record.id, patch);
+            } catch {
+              // Offline mid-pass, or the work was removed from the catalog
+              // -- leave it as-is; the next load retries.
+            }
+          }
+        })();
+      }
     });
 
     refreshStorageUsage();

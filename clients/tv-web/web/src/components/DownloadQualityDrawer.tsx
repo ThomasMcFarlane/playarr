@@ -5,7 +5,7 @@ import { formatBytes, formatEstimatedBytes } from "../lib/formatBytes";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { DownloadKeepUntilPolicy } from "../lib/downloadsDb";
 import { TvEmptyState } from "./tv/TvEmptyState";
-import type { PlayableLeaf } from "./MediaContextMenu";
+import type { PlayableLeaf } from "../lib/playableLeaves";
 import {
   defaultKeepUntilDate,
   KeepUntilPicker,
