@@ -203,6 +203,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Restore the native iOS Home page to Playarr Web's full-width phone viewport so rail headings
+  and both leading carousel cards launch visibly beneath the safe area instead of off-screen.
 - Fix native iOS Home, navigation, avatar, media-track, playlist, and playback parity: use the
   mobile Web composition on landscape phones, progressively load playable Home rails, cache
   authenticated artwork, preserve AVPlayer ownership, and render series, music, and playlist

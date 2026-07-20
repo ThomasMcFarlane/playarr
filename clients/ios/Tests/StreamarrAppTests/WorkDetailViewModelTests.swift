@@ -76,6 +76,14 @@ final class HomeParityTests: XCTestCase {
     func testPhoneHomeUsesBoundedWebCarouselAndArtworkGeometry() {
         XCTAssertEqual(HomeLayout.backdropHeight(viewportHeight: 800, phone: true), 440, accuracy: 0.001)
         XCTAssertEqual(HomeLayout.carouselHeight(cardWidth: 184, phone: true), 155.5, accuracy: 0.001)
+        XCTAssertEqual(HomeLayout.railWidth(viewportWidth: 402, phone: true), 402, accuracy: 0.001)
+        XCTAssertEqual(HomeLayout.cardWidth(viewportWidth: 402, phone: true), 184.92, accuracy: 0.001)
+        XCTAssertEqual(HomeLayout.phoneGutter, 16, accuracy: 0.001)
+        XCTAssertEqual(HomeLayout.phoneTopOffset, 78, accuracy: 0.001)
+        XCTAssertLessThanOrEqual(
+            HomeLayout.phoneGutter + HomeLayout.cardWidth(viewportWidth: 402, phone: true) * 2 + 12,
+            402
+        )
         XCTAssertEqual(HomeLayout.backdropHeight(viewportHeight: 800, phone: false), 800, accuracy: 0.001)
     }
 
