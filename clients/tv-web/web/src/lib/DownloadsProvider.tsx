@@ -36,6 +36,7 @@ import { useToast } from "./toast";
 const MAX_CONCURRENT_DOWNLOADS = 2;
 const TICKET_POLL_MS = 4_000;
 const EXPIRY_SWEEP_MS = 5 * 60_000;
+const CAPABILITIES_POLL_MS = 60_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function mimeTypeForContainer(container: string): string {
@@ -425,6 +426,12 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
   // one, instead of only having the underlying request 403 once clicked.
   // Reset to `null` (not `false`) on sign-out/server-change so a brief gap
   // before the next fetch resolves never renders as "confirmed no access".
+  // Polls rather than fetching once: an admin can revoke or grant this
+  // mid-session (see Users.tsx's toggle), and the nav item/buttons should
+  // reflect that within a bounded window without requiring a reload --
+  // this is the same "shared, kept-fresh" treatment the requirement asked
+  // for; a push mechanism (SSE) would close the gap further but this repo
+  // has no SSE infrastructure yet, so polling is the immediate fix.
   useEffect(() => {
     if (!userId) {
       setCanDownload(null);
@@ -432,19 +439,26 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
     }
     let cancelled = false;
     setCanDownload(null);
-    void client
-      .getSelfCapabilities()
-      .then((capabilities) => {
-        if (!cancelled) setCanDownload(capabilities.can_download);
-      })
-      .catch(() => {
-        // Transient network/server hiccup, or the account genuinely can't
-        // stream (StreamingUser extraction itself 403s) -- either way,
-        // fail closed rather than showing download UI on an error.
-        if (!cancelled) setCanDownload(false);
-      });
+
+    const fetchCapabilities = () => {
+      void client
+        .getSelfCapabilities()
+        .then((capabilities) => {
+          if (!cancelled) setCanDownload(capabilities.can_download);
+        })
+        .catch(() => {
+          // Transient network/server hiccup, or the account genuinely can't
+          // stream (StreamingUser extraction itself 403s) -- either way,
+          // fail closed rather than showing download UI on an error.
+          if (!cancelled) setCanDownload(false);
+        });
+    };
+
+    fetchCapabilities();
+    const interval = window.setInterval(fetchCapabilities, CAPABILITIES_POLL_MS);
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
     };
   }, [apiBaseUrl, client, userId]);
 

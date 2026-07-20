@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import type { DownloadRecord } from "../lib/downloadsDb";
 import { useDownloads } from "../lib/DownloadsProvider";
 import { formatBytes } from "../lib/formatBytes";
@@ -11,6 +11,7 @@ import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useOnlineStatus } from "../lib/useOnlineStatus";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
+import { NotFoundPage } from "./NotFound";
 import type { Work, WorkDetail } from "@streamarr-tv/api-client";
 
 type TFunc = (key: TranslationKey, params?: Record<string, string | number>) => string;
@@ -211,16 +212,6 @@ export function DownloadsPage() {
     useDownloads();
   useDocumentTitle(t("pages.downloads.title"));
 
-  // Defense in depth: the nav item is already hidden without this grant,
-  // but a direct navigation (bookmark, typed URL) should still bounce
-  // rather than render a page whose every action would 403 anyway. `null`
-  // (not yet resolved) intentionally renders nothing below rather than
-  // redirecting -- redirecting on a transient loading state would kick out
-  // a user who does have the grant, just before it's confirmed.
-  if (canDownload === false) {
-    return <Navigate to="/" replace />;
-  }
-
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [focusedDetail, setFocusedDetail] = useState<WorkDetail | null>(null);
 
@@ -276,6 +267,18 @@ export function DownloadsPage() {
         return { detail, episode };
       })()
     : null;
+
+  // Defense in depth: the nav item is already hidden without this grant,
+  // but a direct navigation (bookmark, typed URL) should still land on the
+  // same 404 an address that never existed would -- not a redirect (which
+  // would confirm "this route exists, you're just not allowed"), and never
+  // the real content, not even briefly. `null` (not yet resolved) renders
+  // the same 404 as `false` rather than the real page: showing real
+  // content first and then yanking it away once the check resolves false
+  // would itself be the flash-of-content bug this is guarding against.
+  if (canDownload !== true) {
+    return <NotFoundPage />;
+  }
 
   return (
     <TvStageShell

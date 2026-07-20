@@ -349,6 +349,7 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/admin/users/{id}", method: "DELETE" },
   { schemaPath: "/api/v1/users/me/player-preferences", method: "GET" },
   { schemaPath: "/api/v1/users/me/player-preferences", method: "PATCH" },
+  { schemaPath: "/api/v1/users/me/capabilities", method: "GET" },
   { schemaPath: "/api/v1/users/me/profile-avatar", method: "GET" },
   { schemaPath: "/api/v1/users/me/profile-avatar", method: "PUT" },
   { schemaPath: "/api/v1/users/me/profile-pin", method: "GET" },

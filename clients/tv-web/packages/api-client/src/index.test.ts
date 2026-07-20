@@ -883,6 +883,24 @@ describe("ApiClient", () => {
     expect(requests).toHaveLength(2);
   });
 
+  it("fetches the signed-in user's own capability grants with viewer authentication", async () => {
+    const requests: Request[] = [];
+    const fetchImpl = mockFetch(async (request) => {
+      requests.push(request);
+      expect(new URL(request.url).pathname).toBe("/api/v1/users/me/capabilities");
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+      return jsonResponse(200, { can_download: true });
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "viewer-token",
+    });
+
+    expect(await client.getSelfCapabilities()).toEqual({ can_download: true });
+    expect(requests).toHaveLength(1);
+  });
+
   it("lists profiles and manages profile PIN locks with viewer authentication", async () => {
     const requests: Request[] = [];
     const fetchImpl = mockFetch(async (request) => {
