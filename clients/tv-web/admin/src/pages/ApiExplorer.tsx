@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import SwaggerUI from "swagger-ui-react";
-import "swagger-ui-react/swagger-ui.css";
-import "./ApiExplorer.css";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ApiReferenceReact } from "@scalar/api-reference-react";
+import "@scalar/api-reference-react/style.css";
 import { ApiError, describeApiError, type UserResponse } from "@streamarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
@@ -21,18 +20,6 @@ interface ImpersonationState {
 }
 
 /**
- * The plain, mutable object `swagger-ui-react`'s `requestInterceptor`
- * receives for every outgoing "Try it out" call -- *not* a Fetch API
- * `Request` despite the name; `@types/swagger-ui-react` types it as
- * `{ [k: string]: any }`. `headers` is a plain string-keyed bag, not a
- * `Headers` instance.
- */
-interface SwaggerUIRequest {
-  headers?: Record<string, unknown>;
-  [key: string]: unknown;
-}
-
-/**
  * Turns a failed `client.raw` call into the same human-readable message
  * `describeApiError` gives `ApiClient`'s own wrapped methods -- `raw` calls
  * don't throw `ApiError` themselves (that's `ApiClient.unwrap`'s job), so
@@ -44,28 +31,31 @@ function describeRawFailure(response: Response, error: unknown): string {
 
 /**
  * Admin-only interactive API explorer. Renders this server's own live
- * OpenAPI document (`GET /api/v1/openapi.json`) via `swagger-ui-react`, so
- * every "Try it out" call made from the UI hits this real Streamarr
- * instance.
+ * OpenAPI document (`GET /api/v1/openapi.json`) via Scalar's API Reference
+ * component, so every "Test Request" call made from the UI hits this real
+ * Streamarr instance. Scalar (not swagger-ui-react) specifically because it
+ * has real, built-in dark mode -- this app has no light theme at all, and
+ * swagger-ui-react's light-only stylesheet needed extensive, fragile CSS
+ * overrides to stay readable (see git history for that attempt).
  *
- * The "Impersonate a user" control above the Swagger panel mints a short-
+ * The "Impersonate a user" control above the reference panel mints a short-
  * lived, non-refreshable access token for a chosen account (`POST
  * /api/v1/admin/users/{user_id}/impersonate`) and, while active, routes
- * every Swagger UI request through that user's token instead of the
- * signed-in admin's own -- see `requestInterceptor` below. That makes this
- * page a direct, hands-on way to see exactly what a given user's library-
- * ACL grants let them do, without needing a second browser session or
- * their password. The enforcement itself lives entirely on the backend;
- * this page is only a lens onto it -- same as every other admin page here,
- * there is no client-side admin gate, only `RequireAuth`'s signed-in check.
- * A non-admin who reaches this route simply sees 403s from both calls
- * below, which is acceptable and consistent with the rest of this app.
+ * every outgoing request through that user's token instead of the signed-in
+ * admin's own -- see `handleRequestBuilt` below. That makes this page a
+ * direct, hands-on way to see exactly what a given user's library-ACL
+ * grants let them do, without needing a second browser session or their
+ * password. The enforcement itself lives entirely on the backend; this page
+ * is only a lens onto it -- same as every other admin page here, there is
+ * no client-side admin gate, only `RequireAuth`'s signed-in check. A non-
+ * admin who reaches this route simply sees 403s from both calls below,
+ * which is acceptable and consistent with the rest of this app.
  */
 export function ApiExplorerPage() {
   useDocumentTitle("API Explorer");
   const client = useApiClient();
 
-  const [spec, setSpec] = useState<object | null>(null);
+  const [spec, setSpec] = useState<Record<string, unknown> | null>(null);
   const [specLoading, setSpecLoading] = useState(true);
   const [specError, setSpecError] = useState<string | null>(null);
 
@@ -78,25 +68,25 @@ export function ApiExplorerPage() {
   const [impersonateError, setImpersonateError] = useState<string | null>(null);
 
   /**
-   * The signed-in admin's own current access token. `requestInterceptor`
-   * below must stay synchronous (swagger-ui-react calls it inline for
-   * every outgoing request), but `client.getAccessToken()` is async -- so
-   * this ref is kept fresh by the effect further down instead, and the
-   * interceptor just reads it directly.
+   * The signed-in admin's own current access token. `handleRequestBuilt`
+   * below must stay synchronous (it's called inline for every outgoing
+   * request), but `client.getAccessToken()` is async -- so this ref is kept
+   * fresh by the effect further down instead, and the hook reads it
+   * directly.
    */
   const adminTokenRef = useRef<string | undefined>(undefined);
 
   /**
-   * Mirrors `impersonating` state. `swagger-ui-react` only reads its
-   * `requestInterceptor` prop once, at initial mount, into the underlying
-   * (non-React) Swagger UI system -- it does not re-apply the prop on
-   * later re-renders, a known limitation of the wrapper. So a closure that
-   * reads `impersonating` directly would forever see whatever it was at
-   * mount time (`null`), never a later impersonation. Keeping a ref in
-   * sync instead means `requestInterceptor` -- itself kept referentially
-   * stable below via `useCallback` -- always reads the *current* value
-   * when swagger-ui-react invokes it, regardless of when that one
-   * reference was captured.
+   * Mirrors `impersonating` state via a ref, not a closure over the state
+   * value directly. Learned the hard way from the swagger-ui-react version
+   * of this page: that library only read its request-interceptor prop once,
+   * at initial mount, and never re-applied it on later re-renders -- a
+   * closure over `impersonating` would have forever seen whatever it was at
+   * mount time (`null`). Scalar's `configuration` prop may or may not be
+   * fully reactive after mount either; keeping a ref in sync and reading
+   * `.current` inside a referentially-stable callback sidesteps the
+   * question entirely -- it's correct regardless of when Scalar captured
+   * the callback.
    */
   const impersonatingRef = useRef<ImpersonationState | null>(null);
   impersonatingRef.current = impersonating;
@@ -119,7 +109,7 @@ export function ApiExplorerPage() {
         // request time), so the real JSON object openapi-fetch already
         // parsed comes through typed as `undefined` here -- cast through
         // `unknown` to what it actually is at runtime.
-        setSpec((result.data as unknown as object | undefined) ?? {});
+        setSpec((result.data as unknown as Record<string, unknown> | undefined) ?? {});
       })
       .catch((err: unknown) => {
         if (!cancelled) setSpecError(describeApiError(err));
@@ -149,8 +139,8 @@ export function ApiExplorerPage() {
   }, [client]);
 
   // Keeps `adminTokenRef` current -- on mount, and again whenever
-  // impersonation is cleared, so the interceptor falls back to a valid
-  // (not stale) admin token the moment "Stop impersonating" is clicked.
+  // impersonation is cleared, so requests fall back to a valid (not stale)
+  // admin token the moment "Stop impersonating" is clicked.
   useEffect(() => {
     if (impersonating) return;
     let cancelled = false;
@@ -197,24 +187,49 @@ export function ApiExplorerPage() {
   }
 
   /**
-   * The single source of truth for the `Authorization` header on every
-   * Swagger UI "Try it out" request. This app doesn't use Swagger UI's own
-   * "Authorize" dialog, so any header it might have stashed there is
-   * stripped and replaced here instead, every time -- either the current
-   * impersonation token, or (the normal case) the signed-in admin's own,
-   * read straight from `adminTokenRef` so this can stay synchronous.
+   * Defense-in-depth backstop, not the primary mechanism: verified (see
+   * commit history) that Scalar's "Test Request" panel actually sources its
+   * Authorization header from `configuration.authentication.securitySchemes
+   * .bearer_auth.token` -- unlike swagger-ui-react, it *does* react to that
+   * value changing on a later render, so `configuration` below is
+   * deliberately rebuilt on every `impersonating` change rather than frozen
+   * after first load. This hook covers any request path that bypasses that
+   * resolution (Scalar exposes several ways to fire a request); it reads
+   * only refs, never React state, so it stays correct regardless of when
+   * Scalar captured this particular function reference.
    */
-  const requestInterceptor = useCallback((req: SwaggerUIRequest): SwaggerUIRequest => {
-    const headers: Record<string, unknown> = { ...req.headers };
-    delete headers.Authorization;
-    delete headers.authorization;
+  const handleRequestBuilt = useCallback(({ request }: { request: Request }) => {
     const active = impersonatingRef.current;
     const token = active ? active.accessToken : adminTokenRef.current;
     if (token) {
-      headers.Authorization = `Bearer ${token}`;
+      request.headers.set("Authorization", `Bearer ${token}`);
     }
-    return { ...req, headers };
   }, []);
+
+  // Rebuilt whenever `impersonating` changes -- confirmed (unlike
+  // swagger-ui-react) that Scalar actually re-reads
+  // `authentication.securitySchemes.bearer_auth.token` on a `configuration`
+  // prop change, both for the field it displays and the header it actually
+  // sends. `handleRequestBuilt` above is kept as a backstop regardless.
+  const configuration = useMemo(() => {
+    if (!spec) return null;
+    return {
+      content: spec,
+      darkMode: true,
+      forceDarkModeState: "dark" as const,
+      hideDarkModeToggle: true,
+      authentication: {
+        preferredSecurityScheme: "bearer_auth",
+        securitySchemes: {
+          bearer_auth: {
+            token: (impersonating ? impersonating.accessToken : adminTokenRef.current) ?? "",
+          },
+        },
+      },
+      onRequestBuilt: handleRequestBuilt,
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    };
+  }, [spec, impersonating]);
 
   return (
     <div className="page">
@@ -254,7 +269,7 @@ export function ApiExplorerPage() {
         ) : (
           <>
             <p className="muted" style={{ marginTop: 0 }}>
-              Mints a short-lived token for the selected account -- every "Try it out" request
+              Mints a short-lived token for the selected account -- every "Test Request" call
               below is then sent as that user, until you stop impersonating.
             </p>
             <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
@@ -297,9 +312,9 @@ export function ApiExplorerPage() {
 
       {specLoading && <p className="muted">Loading API specification...</p>}
       {specError && <p className="error-text">{specError}</p>}
-      {spec && (
+      {configuration && (
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          <SwaggerUI spec={spec} requestInterceptor={requestInterceptor} />
+          <ApiReferenceReact configuration={configuration} />
         </div>
       )}
     </div>

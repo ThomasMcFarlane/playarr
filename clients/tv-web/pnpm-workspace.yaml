@@ -6,22 +6,14 @@ packages:
 
 allowBuilds:
   '@firebase/util': true
-  # Transitively pulled in by swagger-ui-react (via swagger-client's
-  # apidom spec-resolution stack) for the admin API Explorer page.
-  # Declined, not approved: apidom's tree-sitter-based multi-file/$ref
-  # resolution is a code path this app never exercises (we always pass
-  # SwaggerUI an already-fetched, inline spec object, never a "url" for
-  # it to resolve itself), and @scarf/scarf is purely a telemetry
-  # install-ping with no functional effect either way. Declining means
-  # none of these scripts run at all -- confirmed the admin app still
-  # builds and typechecks clean with all five declined.
-  '@scarf/scarf': false
-  '@tree-sitter-grammars/tree-sitter-yaml': false
-  core-js-pure: false
   esbuild: true
   protobufjs: true
-  tree-sitter: false
-  tree-sitter-json: false
+  # Pulled in by @scalar/api-reference-react (its underlying renderer is a
+  # Vue web component under a React wrapper). Unlike the swagger-ui-react
+  # entries above, this one is approved: vue-demi's install script picks
+  # the correct Vue 2/3 API shim to symlink, which the component actually
+  # needs at runtime to render at all -- not an optional/telemetry script.
+  vue-demi: true
 
 # Single default catalog so every package in the workspace (libraries, TV app
 # shells, and the standalone web app) shares one resolved version of core
