@@ -1699,6 +1699,154 @@ paths:
           description: No work with this id, or it has no cached embedding yet
       security:
       - bearer_auth: []
+  /api/v1/downloads:
+    get:
+      tags:
+      - downloads
+      operationId: list_download_tickets_handler
+      responses:
+        '200':
+          description: Every download ticket for the caller, restricted to this account's currently allowed libraries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DownloadTicketResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller lacks Playarr streaming access or download access
+      security:
+      - bearer_auth: []
+    post:
+      tags:
+      - downloads
+      operationId: create_download_ticket_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDownloadTicketRequest'
+            example:
+              media_file_id: 3f9c1e2d-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+              quality_id: original
+        required: true
+      responses:
+        '200':
+          description: An existing queued/processing/ready ticket for this exact media file + quality already existed; returned instead of creating a duplicate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadTicketResponse'
+        '201':
+          description: A new download ticket was created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadTicketResponse'
+              example:
+                container: mkv
+                error_message: null
+                expires_at: null
+                id: 6a5e2c3e-2b9a-4b3e-9b7a-8e2f1c3d4a5b
+                media_file_id: 3f9c1e2d-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+                quality_id: original
+                ready_at: 2026-07-20T14:22:05Z
+                requested_at: 2026-07-20T14:22:05Z
+                size_bytes: 4000000000
+                status: ready
+        '400':
+          description: Unknown quality_id
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller lacks Playarr streaming access, download access, or access to this media file's library
+        '404':
+          description: Unknown media_file_id
+      security:
+      - bearer_auth: []
+  /api/v1/downloads/{id}:
+    get:
+      tags:
+      - downloads
+      operationId: get_download_ticket_handler
+      parameters:
+      - name: id
+        in: path
+        description: DownloadTicket id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The ticket's current state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadTicketResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller lacks Playarr streaming access, download access, or access to this media file's library
+        '404':
+          description: Unknown ticket id, or it does not belong to the caller
+      security:
+      - bearer_auth: []
+    delete:
+      tags:
+      - downloads
+      operationId: cancel_download_ticket_handler
+      parameters:
+      - name: id
+        in: path
+        description: DownloadTicket id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: 'Ticket canceled (soft: marked Canceled, not deleted -- see this module''s doc comment)'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller lacks Playarr streaming access, download access, or access to this media file's library
+        '404':
+          description: Unknown ticket id, or it does not belong to the caller
+      security:
+      - bearer_auth: []
+  /api/v1/downloads/{id}/file:
+    get:
+      tags:
+      - downloads
+      operationId: download_ticket_file_handler
+      parameters:
+      - name: id
+        in: path
+        description: DownloadTicket id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: 'Full file content, Content-Disposition: attachment'
+        '206':
+          description: Partial content for a `Range` request
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller lacks Playarr streaming access, download access, or access to this media file's library
+        '404':
+          description: Unknown ticket id, or it does not belong to the caller
+        '409':
+          description: The ticket has not finished processing yet (queued/processing/failed)
+        '410':
+          description: The ticket expired or was canceled
+      security:
+      - bearer_auth: []
   /api/v1/media/renditions/{rendition_id}/{file_name}:
     get:
       tags:
@@ -1806,6 +1954,52 @@ paths:
           description: Unknown media_file_id
         '500':
           description: The source file could not be probed
+      security:
+      - bearer_auth: []
+  /api/v1/media/{media_file_id}/download-options:
+    get:
+      tags:
+      - downloads
+      operationId: media_download_options_handler
+      parameters:
+      - name: media_file_id
+        in: path
+        description: MediaFile id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Download qualities this server can produce for this media file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadOptionsResponse'
+              example:
+                container: mkv
+                media_file_id: 3f9c1e2d-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+                options:
+                - estimated_size_bytes: 4000000000
+                  height: null
+                  id: original
+                  label: Original
+                  profile: null
+                  size_is_estimate: false
+                - estimated_size_bytes: 1200000000
+                  height: 1080
+                  id: h264-1080p-8mbps
+                  label: 1080p
+                  profile: h264-1080p-8mbps
+                  size_is_estimate: true
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller lacks Playarr streaming access, download access, or access to this library
+        '404':
+          description: Unknown media_file_id
+        '500':
+          description: The source file could not be probed for its duration
       security:
       - bearer_auth: []
   /api/v1/media/{media_file_id}/metadata:
@@ -3818,6 +4012,20 @@ components:
             RFC 3339 timestamp after which `min_supported_version` will be
             ratcheted up; surfaced to clients so they can warn users ahead of
             time rather than being cut off with no notice.
+    CreateDownloadTicketRequest:
+      type: object
+      required:
+      - media_file_id
+      - quality_id
+      properties:
+        media_file_id:
+          type: string
+          format: uuid
+        quality_id:
+          type: string
+          description: |-
+            `"original"`, or a transcode profile name from
+            `GET /api/v1/media/{media_file_id}/download-options`.
     CreatePlaylistRequest:
       type: object
       required:
@@ -3995,6 +4203,123 @@ components:
             Must be [`DEVICE_CODE_GRANT_TYPE`] -- any other value is rejected
             with `unsupported_grant_type` before the device code is even looked
             up, per RFC 6749 §5.2.
+    DownloadOptionsResponse:
+      type: object
+      required:
+      - media_file_id
+      - container
+      - options
+      properties:
+        container:
+          type: string
+        media_file_id:
+          type: string
+          format: uuid
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/DownloadQualityOption'
+    DownloadQualityOption:
+      type: object
+      description: |-
+        One quality `GET /api/v1/media/{media_file_id}/download-options` offers
+        -- the same `id`/`label`/`profile`/`height` shape
+        [`crate::playback::PlaybackQualityOption`] already exposes for playback,
+        plus a download-specific size estimate. `"original"` is always exact
+        (`size_is_estimate: false`, `estimated_size_bytes` is the real
+        `MediaFile::size_bytes`); every named transcode profile is a rough
+        `video_bitrate_bps * duration_ms / 8000` estimate (`size_is_estimate:
+        true`) since nothing has actually encoded it yet.
+      required:
+      - id
+      - label
+      - size_is_estimate
+      properties:
+        estimated_size_bytes:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        height:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+        id:
+          type: string
+        label:
+          type: string
+        profile:
+          type:
+          - string
+          - 'null'
+        size_is_estimate:
+          type: boolean
+    DownloadStatus:
+      type: string
+      enum:
+      - queued
+      - processing
+      - ready
+      - failed
+      - expired
+      - canceled
+    DownloadTicketResponse:
+      type: object
+      description: |-
+        Wire projection of [`DownloadTicket`] -- not the model type directly,
+        same reasoning as `MediaFile`/`Rendition`'s own DTOs elsewhere in this
+        crate: `DownloadTicket::output_path` is a `PathBuf` (no `ToSchema`
+        mapping, and not something a caller should see the server's real
+        filesystem layout through anyway). `profile` is deliberately omitted --
+        it's an internal detail of how a `Ready` ticket got produced, not part
+        of the documented response contract; `quality_id` is what callers key
+        off of.
+      required:
+      - id
+      - media_file_id
+      - quality_id
+      - status
+      - container
+      - requested_at
+      properties:
+        container:
+          type: string
+        error_message:
+          type:
+          - string
+          - 'null'
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        media_file_id:
+          type: string
+          format: uuid
+        quality_id:
+          type: string
+        ready_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        requested_at:
+          type: string
+          format: date-time
+        size_bytes:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        status:
+          $ref: '#/components/schemas/DownloadStatus'
     Episode:
       type: object
       required:
@@ -5773,6 +6098,18 @@ components:
           type: integer
           format: int64
           minimum: 0
+        occurred_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: |-
+            When this progress update actually happened, RFC3339. Optional and
+            additive -- lets an offline-buffered client (one that kept recording
+            progress while disconnected and is only now replaying it) timestamp
+            the update for when it occurred rather than when it's replayed after
+            reconnecting. Omitted by every existing caller, who get the prior
+            behaviour unchanged: the server falls back to `Utc::now()`.
         position_ms:
           type: integer
           format: int64
@@ -6233,3 +6570,5 @@ tags:
   description: User + System playlists -- named, ordered, optionally-nested lists of video works or audio tracks
 - name: credits
   description: Cast/crew for a work, and every work a given person is credited on
+- name: downloads
+  description: Server-staged, quality-selectable, resumable downloads of media the caller already has playback access to

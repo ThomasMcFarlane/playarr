@@ -18,13 +18,11 @@
     "@streamarr-tv/domain": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "react-router-dom": "^6.28.0",
-    "swagger-ui-react": "^5.32.9"
+    "react-router-dom": "^6.28.0"
   },
   "devDependencies": {
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "@types/swagger-ui-react": "^5.18.0",
     "@vitejs/plugin-react": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:"
