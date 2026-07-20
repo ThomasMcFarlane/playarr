@@ -44,6 +44,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Language
@@ -122,6 +123,9 @@ import io.streamarr.shared.domain.usecase.GetPlaybackInfoUseCase
 import io.streamarr.shared.domain.usecase.GetWorkDetailsUseCase
 import io.streamarr.shared.domain.usecase.ListCatalogKindsUseCase
 import io.streamarr.shared.domain.usecase.SearchCatalogUseCase
+import io.streamarr.shared.download.DownloadCandidate
+import io.streamarr.shared.download.DownloadRepository
+import io.streamarr.shared.download.OfflineProgressRepository
 import io.streamarr.shared.player.StreamFormat
 import io.streamarr.shared.player.StreamarrPlayer
 import java.net.URI
@@ -347,6 +351,11 @@ private val experienceDestinations = listOf(
     ExperienceDestination("sites", "Sites", Icons.Outlined.Language, WorkKind.Site),
     ExperienceDestination("music", "Music", Icons.Outlined.MusicNote, WorkKind.Artist),
     ExperienceDestination("playlists", "Playlists", Icons.Outlined.PlaylistPlay),
+    // kind = null: shown unconditionally, like "playlists" above, not
+    // filtered by which catalog kinds this server currently has -- every
+    // catalog entity kind this client supports can be downloaded (see
+    // PlayarrDownloads.kt), so there's no library-kind gate to apply here.
+    ExperienceDestination("downloads", "Downloads", Icons.Outlined.Download),
 )
 
 @Composable
@@ -635,6 +644,7 @@ private fun ExperienceNavHost(
             )
         }
         composable("settings") { ExperienceParitySettingsScreen(serverUrl, isTelevision) }
+        composable("downloads") { ExperienceDownloadsScreen(serverUrl, accessToken, isTelevision) }
     }
 }
 
@@ -1261,14 +1271,38 @@ private fun ExperienceSearchScreen(
     }
 }
 
+@HiltViewModel
+internal class MediaContextDownloadViewModel @Inject constructor(
+    private val getWorkDetails: GetWorkDetailsUseCase,
+) : ViewModel() {
+    /**
+     * Resolves the full [WorkDetail] for [work] on demand -- a bare [Work]
+     * (all this dialog otherwise has) doesn't carry any `mediaFileId`, so a
+     * movie needs this resolved just as much as a series/artist/author
+     * container does to fan out to every child leaf.
+     */
+    fun resolveDownloadCandidates(work: Work, onResolved: (List<DownloadCandidate>) -> Unit) {
+        viewModelScope.launch {
+            val candidates = when (val result = getWorkDetails(work.id)) {
+                is StreamarrResult.Success -> result.value.toDownloadCandidates()
+                is StreamarrResult.Failure -> emptyList()
+            }
+            onResolved(candidates)
+        }
+    }
+}
+
 @Composable
 private fun MediaContextDialog(
     work: Work,
     onDismiss: () -> Unit,
     onOpen: () -> Unit,
     onMark: (Boolean) -> Unit,
+    viewModel: MediaContextDownloadViewModel = hiltViewModel(),
 ) {
     var addToPlaylist by remember(work.id) { mutableStateOf(false) }
+    var resolvingDownload by remember(work.id) { mutableStateOf(false) }
+    var downloadCandidates by remember(work.id) { mutableStateOf<List<DownloadCandidate>?>(null) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(work.title) },
@@ -1276,6 +1310,17 @@ private fun MediaContextDialog(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onOpen, modifier = Modifier.fillMaxWidth()) { Text("Open") }
                 OutlinedButton(onClick = { addToPlaylist = true }, modifier = Modifier.fillMaxWidth()) { Text("Add to playlist") }
+                OutlinedButton(
+                    onClick = {
+                        resolvingDownload = true
+                        viewModel.resolveDownloadCandidates(work) { candidates ->
+                            resolvingDownload = false
+                            downloadCandidates = candidates
+                        }
+                    },
+                    enabled = !resolvingDownload,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(if (resolvingDownload) "Resolving…" else "Download") }
                 OutlinedButton(onClick = { onMark(true) }, modifier = Modifier.fillMaxWidth()) { Text("Mark as watched") }
                 OutlinedButton(onClick = { onMark(false) }, modifier = Modifier.fillMaxWidth()) { Text("Mark as unwatched") }
             }
@@ -1289,6 +1334,30 @@ private fun MediaContextDialog(
             mediaType = if (work.kind == WorkKind.Artist) io.streamarr.shared.data.model.PlaylistMediaType.Audio else io.streamarr.shared.data.model.PlaylistMediaType.Video,
             onDismiss = { addToPlaylist = false; onDismiss() },
         )
+    }
+    downloadCandidates?.let { candidates ->
+        DownloadOptionsSheet(candidates = candidates, onDismiss = { downloadCandidates = null; onDismiss() })
+    }
+}
+
+/** Every playable leaf under [WorkDetail.children], mapped to what [DownloadRepository.enqueue] needs -- shared by [MediaContextDialog]'s fan-out and `DetailChildren`'s per-row/"download all" actions. */
+private fun WorkDetail.toDownloadCandidates(): List<DownloadCandidate> {
+    val posterUrl = work.images.firstOrNull { it.kind == ImageKind.Poster }?.url
+    return when (val tree = children) {
+        WorkChildren.Movie -> listOfNotNull(
+            mediaFileId?.let { DownloadCandidate(it, work.id, work.title, work.title, posterUrl, "movie") },
+        )
+        is WorkChildren.Series -> tree.seasons.flatMap { it.episodes }.mapNotNull { episode ->
+            episode.mediaFileId?.let {
+                DownloadCandidate(it, work.id, episode.episode.title ?: "Episode ${episode.episode.episodeNumber}", work.title, posterUrl, "episode")
+            }
+        }
+        is WorkChildren.Artist -> tree.albums.flatMap { it.tracks }.mapNotNull { track ->
+            track.mediaFileId?.let { DownloadCandidate(it, work.id, track.track.title, work.title, posterUrl, "track") }
+        }
+        is WorkChildren.Author -> tree.books.mapNotNull { book ->
+            book.mediaFileId?.let { DownloadCandidate(it, work.id, book.book.title, work.title, posterUrl, "book") }
+        }
     }
 }
 
@@ -1336,6 +1405,7 @@ private fun ExperienceDetailScreen(
             val detail = current.value
             var pendingPlaylistTrackId by remember(detail.work.id) { mutableStateOf<String?>(null) }
             var addWorkToPlaylist by remember(detail.work.id) { mutableStateOf(false) }
+            var pendingDownloadCandidates by remember(detail.work.id) { mutableStateOf<List<DownloadCandidate>?>(null) }
             Box(Modifier.fillMaxSize().background(WebSurface)) {
                 AuthenticatedArtwork(
                     work = detail.work,
@@ -1362,13 +1432,25 @@ private fun ExperienceDetailScreen(
                         color = WebSurfaceStrong.copy(alpha = 0.88f),
                         shape = RoundedCornerShape(2.dp),
                     ) {
-                        DetailChildren(detail, onPlay, { trackId -> pendingPlaylistTrackId = trackId; addWorkToPlaylist = true }, PaddingValues(30.dp), scrollable = true)
+                        DetailChildren(
+                            detail, onPlay,
+                            { trackId -> pendingPlaylistTrackId = trackId; addWorkToPlaylist = true },
+                            { candidates -> pendingDownloadCandidates = candidates },
+                            PaddingValues(30.dp), scrollable = true,
+                        )
                     }
                 } else {
                     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 250.dp, bottom = 108.dp)) {
                         item { FeatureCopy(detail.work) }
                         item { Spacer(Modifier.height(22.dp)) }
-                        item { DetailChildren(detail, onPlay, { trackId -> pendingPlaylistTrackId = trackId; addWorkToPlaylist = true }, PaddingValues(0.dp), scrollable = false) }
+                        item {
+                            DetailChildren(
+                                detail, onPlay,
+                                { trackId -> pendingPlaylistTrackId = trackId; addWorkToPlaylist = true },
+                                { candidates -> pendingDownloadCandidates = candidates },
+                                PaddingValues(0.dp), scrollable = false,
+                            )
+                        }
                     }
                 }
             }
@@ -1380,6 +1462,9 @@ private fun ExperienceDetailScreen(
                     onDismiss = { addWorkToPlaylist = false },
                 )
             }
+            pendingDownloadCandidates?.let { candidates ->
+                DownloadOptionsSheet(candidates = candidates, onDismiss = { pendingDownloadCandidates = null })
+            }
         }
     }
 }
@@ -1389,9 +1474,11 @@ private fun DetailChildren(
     detail: WorkDetail,
     onPlay: (String) -> Unit,
     onAddToPlaylist: (String?) -> Unit,
+    onDownload: (List<DownloadCandidate>) -> Unit,
     padding: PaddingValues,
     scrollable: Boolean,
 ) {
+    val posterUrl = remember(detail.work.id) { detail.work.images.firstOrNull { it.kind == ImageKind.Poster }?.url }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1401,25 +1488,97 @@ private fun DetailChildren(
     ) {
         when (val children = detail.children) {
             WorkChildren.Movie -> detail.mediaFileId?.let { id ->
-                PlayRow("Play ${detail.work.title}", true, { onAddToPlaylist(null) }) { onPlay(id) }
+                PlayRow(
+                    title = "Play ${detail.work.title}",
+                    available = true,
+                    onAddToPlaylist = { onAddToPlaylist(null) },
+                    onDownload = {
+                        onDownload(listOf(DownloadCandidate(id, detail.work.id, detail.work.title, detail.work.title, posterUrl, "movie")))
+                    },
+                ) { onPlay(id) }
             } ?: Text("This title is not available to play.", color = WebInkMuted)
             is WorkChildren.Series -> children.seasons.forEach { season ->
-                Text("Season ${season.season.seasonNumber}", color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+                val seasonCandidates = season.episodes.mapNotNull { episode ->
+                    episode.mediaFileId?.let {
+                        DownloadCandidate(it, detail.work.id, episode.episode.title ?: "Episode ${episode.episode.episodeNumber}", detail.work.title, posterUrl, "episode")
+                    }
+                }
+                SectionHeaderRow("Season ${season.season.seasonNumber}", seasonCandidates) { onDownload(it) }
                 season.episodes.forEach { episode ->
-                    PlayRow(episode.episode.title ?: "Episode ${episode.episode.episodeNumber}", episode.mediaFileId != null, { onAddToPlaylist(episode.episode.id) }) { episode.mediaFileId?.let(onPlay) }
+                    PlayRow(
+                        title = episode.episode.title ?: "Episode ${episode.episode.episodeNumber}",
+                        available = episode.mediaFileId != null,
+                        onAddToPlaylist = { onAddToPlaylist(episode.episode.id) },
+                        onDownload = episode.mediaFileId?.let { id ->
+                            {
+                                onDownload(
+                                    listOf(
+                                        DownloadCandidate(
+                                            id, detail.work.id,
+                                            episode.episode.title ?: "Episode ${episode.episode.episodeNumber}",
+                                            detail.work.title, posterUrl, "episode",
+                                        ),
+                                    ),
+                                )
+                            }
+                        },
+                    ) { episode.mediaFileId?.let(onPlay) }
                 }
             }
             is WorkChildren.Artist -> children.albums.forEach { album ->
-                Text(album.album.title, color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
-                album.tracks.forEach { track -> PlayRow(track.track.title, track.mediaFileId != null, { onAddToPlaylist(track.track.id) }) { track.mediaFileId?.let(onPlay) } }
+                val albumCandidates = album.tracks.mapNotNull { track ->
+                    track.mediaFileId?.let { DownloadCandidate(it, detail.work.id, track.track.title, detail.work.title, posterUrl, "track") }
+                }
+                SectionHeaderRow(album.album.title, albumCandidates) { onDownload(it) }
+                album.tracks.forEach { track ->
+                    PlayRow(
+                        title = track.track.title,
+                        available = track.mediaFileId != null,
+                        onAddToPlaylist = { onAddToPlaylist(track.track.id) },
+                        onDownload = track.mediaFileId?.let { id ->
+                            { onDownload(listOf(DownloadCandidate(id, detail.work.id, track.track.title, detail.work.title, posterUrl, "track"))) }
+                        },
+                    ) { track.mediaFileId?.let(onPlay) }
+                }
             }
-            is WorkChildren.Author -> children.books.forEach { book -> PlayRow(book.book.title, book.mediaFileId != null, { onAddToPlaylist(book.book.id) }) { book.mediaFileId?.let(onPlay) } }
+            is WorkChildren.Author -> children.books.forEach { book ->
+                PlayRow(
+                    title = book.book.title,
+                    available = book.mediaFileId != null,
+                    onAddToPlaylist = { onAddToPlaylist(book.book.id) },
+                    onDownload = book.mediaFileId?.let { id ->
+                        { onDownload(listOf(DownloadCandidate(id, detail.work.id, book.book.title, detail.work.title, posterUrl, "book"))) }
+                    },
+                ) { book.mediaFileId?.let(onPlay) }
+            }
+        }
+    }
+}
+
+/** Season/album header, with a "download all" action when at least one child has a resolved `mediaFileId`. */
+@Composable
+private fun SectionHeaderRow(title: String, candidates: List<DownloadCandidate>, onDownloadAll: (List<DownloadCandidate>) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        if (candidates.isNotEmpty()) {
+            IconButton(onClick = { onDownloadAll(candidates) }) {
+                Icon(Icons.Outlined.Download, contentDescription = "Download all", tint = WebInkMuted)
+            }
         }
     }
 }
 
 @Composable
-private fun PlayRow(title: String, available: Boolean, onAddToPlaylist: (() -> Unit)? = null, onClick: () -> Unit) {
+private fun PlayRow(
+    title: String,
+    available: Boolean,
+    onAddToPlaylist: (() -> Unit)? = null,
+    onDownload: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
     Surface(
         onClick = onClick,
         enabled = available,
@@ -1433,6 +1592,9 @@ private fun PlayRow(title: String, available: Boolean, onAddToPlaylist: (() -> U
             onAddToPlaylist?.let { add ->
                 IconButton(onClick = add) { Icon(Icons.Outlined.Add, contentDescription = "Add to playlist", tint = WebInkMuted) }
             }
+            onDownload?.let { download ->
+                IconButton(onClick = download) { Icon(Icons.Outlined.Download, contentDescription = "Download", tint = WebInkMuted) }
+            }
             Icon(Icons.Outlined.PlayArrow, contentDescription = if (available) "Play" else "Unavailable", tint = if (available) WebPink else WebInkMuted)
         }
     }
@@ -1443,6 +1605,8 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     val player: StreamarrPlayer,
     private val getPlaybackInfo: GetPlaybackInfoUseCase,
     private val api: StreamarrApi,
+    private val downloadRepository: DownloadRepository,
+    private val offlineProgressRepository: OfflineProgressRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow<ExperienceLoad<Unit>>(ExperienceLoad.Loading)
     val state = _state.asStateFlow()
@@ -1457,6 +1621,19 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                 ?.takeIf { it.state == WatchState.PartWatched }
                 ?.positionMs
                 ?: 0L
+
+            // Local-download short-circuit: a completed, contiguously-cached
+            // download plays straight from disk without ever touching
+            // GetPlaybackInfoUseCase/the network -- the whole point of
+            // downloading being able to watch fully offline.
+            val localFile = runCatching { downloadRepository.localFile(mediaFileId) }.getOrNull()
+            if (localFile != null) {
+                player.prepare(Uri.fromFile(localFile).toString(), StreamFormat.Direct, resumePosition)
+                player.play()
+                _state.value = ExperienceLoad.Ready(Unit)
+                return@launch
+            }
+
             _state.value = when (val result = getPlaybackInfo(mediaFileId)) {
                 is StreamarrResult.Success -> {
                     player.prepare(
@@ -1478,12 +1655,11 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         val duration = player.rawPlayer.duration.coerceAtLeast(0L)
         if (duration <= 0L) return
         viewModelScope.launch {
-            runCatching {
-                api.updateWatchProgress(
-                    mediaFileId,
-                    UpdateWatchProgressRequest(position, duration, completed || position >= duration - 5_000L),
-                )
-            }
+            // Buffers locally (see OfflineProgressRepository) rather than
+            // silently dropping the update when this device has no
+            // network right now -- the expected case while watching a
+            // downloaded file offline.
+            offlineProgressRepository.record(mediaFileId, position, duration, completed || position >= duration - 5_000L)
         }
     }
 
@@ -1616,8 +1792,9 @@ internal fun resolveArtworkUrl(serverUrl: String, artworkUrl: String): String = 
     else URI("${serverUrl.trimEnd('/')}/").resolve(value.trimStart('/')).toString()
 }.getOrDefault(artworkUrl)
 
+/** `internal` (not `private`): reused by `PlayarrDownloads.kt`'s Downloads screen -- Kotlin's `private` on a top-level declaration is file-scoped, not package-scoped. */
 @Composable
-private fun ExperienceLoading(label: String) {
+internal fun ExperienceLoading(label: String) {
     Box(Modifier.fillMaxSize().background(WebSurface), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
             PlayarrLogo()
@@ -1628,7 +1805,7 @@ private fun ExperienceLoading(label: String) {
 }
 
 @Composable
-private fun ExperienceFailure(message: String, retry: () -> Unit) {
+internal fun ExperienceFailure(message: String, retry: () -> Unit) {
     Box(Modifier.fillMaxSize().background(WebSurface), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(32.dp)) {
             Text(message, color = MaterialTheme.colorScheme.error)
@@ -1638,7 +1815,7 @@ private fun ExperienceFailure(message: String, retry: () -> Unit) {
 }
 
 @Composable
-private fun ExperienceEmpty(message: String) {
+internal fun ExperienceEmpty(message: String) {
     Box(Modifier.fillMaxSize().background(WebSurface), contentAlignment = Alignment.Center) {
         Text(message, color = WebInkMuted, modifier = Modifier.padding(32.dp))
     }

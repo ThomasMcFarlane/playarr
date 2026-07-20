@@ -107,6 +107,7 @@ dependencies {
     implementation(project(":core-auth"))
     implementation(project(":core-player"))
     implementation(project(":core-update"))
+    implementation(project(":core-download"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
@@ -129,6 +130,23 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
     implementation(libs.hilt.navigation.compose)
+
+    // Offline downloads: Media3's own SimpleCache/StandaloneDatabaseProvider/
+    // authenticated OkHttpDataSource/DownloadManager are wired in
+    // di/DownloadModule.kt; androidx.media3.exoplayer(-offline) itself comes
+    // in transitively via core-player's `api(libs.bundles.media3)`.
+    implementation(libs.androidx.media3.database)
+    implementation(libs.androidx.media3.datasource.okhttp)
+
+    // Room: constructs StreamarrDownloadDatabase in di/DownloadModule.kt.
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+
+    // WorkManager: KeepUntilSweepWorker's periodic Keep-until expiry sweep only.
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
 
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)

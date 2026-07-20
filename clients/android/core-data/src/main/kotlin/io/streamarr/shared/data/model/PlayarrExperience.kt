@@ -37,6 +37,16 @@ data class UpdateWatchProgressRequest(
     @SerialName("position_ms") val positionMs: Long,
     @SerialName("duration_ms") val durationMs: Long,
     val completed: Boolean = false,
+    /**
+     * When this update actually happened, ISO-8601/RFC3339 (e.g.
+     * `"2026-07-20T14:22:05Z"`). Additive/optional server-side; omit for a
+     * live update (the server stamps `Utc::now()`) and set it when
+     * replaying a progress update that was buffered while this device was
+     * offline (see `core-download`'s `OfflineProgressRepository`), so the
+     * server records when the watch actually happened rather than when the
+     * replay call landed.
+     */
+    @SerialName("occurred_at") val occurredAt: String? = null,
 )
 
 @Serializable
