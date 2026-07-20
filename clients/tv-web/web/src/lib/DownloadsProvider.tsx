@@ -399,6 +399,40 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
     [beginFetch, client, clearPoll, patchRecord]
   );
 
+  // Keeps each download's series/season/episode/artist/album/type context
+  // in sync with the catalog -- a genuine cache (refreshed opportunistically
+  // whenever there's a connection), not a value captured once at enqueue
+  // time and left to rot. Runs over every currently-loaded record (not just
+  // ones flagged as missing data), grouped by `workId` so a series with ten
+  // downloaded episodes costs one request, not ten. Called on initial load
+  // and again whenever the app regains connectivity (see the `online`
+  // effect below) so a long-lived tab that was offline for a while still
+  // catches up once it can. Silently skipped per-work on any fetch error
+  // (offline mid-pass, or the work was removed from the catalog) -- the
+  // last-known-good cached value stays in place either way.
+  const refreshDownloadContext = useCallback(async () => {
+    if (!navigator.onLine) return;
+    const distinctWorkIds = [...new Set(downloadsRef.current.map((record) => record.workId))];
+    for (const workId of distinctWorkIds) {
+      try {
+        const detail = await client.getWork(workId);
+        const leaves = playableLeaves(detail, t);
+        for (const record of downloadsRef.current) {
+          if (record.workId !== workId) continue;
+          const leaf = leaves.find((candidate) => candidate.mediaFileId === record.mediaFileId);
+          if (!leaf) continue;
+          const workKind = leaf.workKind ?? "movie";
+          const subtitle = leafSubtitle(leaf) ?? record.subtitle;
+          if (record.workKind === workKind && record.subtitle === subtitle) continue;
+          patchRecord(record.id, { workKind, subtitle });
+        }
+      } catch {
+        // Offline mid-pass, or the work was removed from the catalog --
+        // the existing cached value stays as the last-known-good copy.
+      }
+    }
+  }, [client, patchRecord, t]);
+
   // Load this profile's persisted downloads and resume anything that was
   // mid-flight (queued/processing ticket polling, or a partially-fetched
   // file) when the tab was last closed.
@@ -430,37 +464,7 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
         }
       }
       scheduleNext();
-
-      // Records created before `workKind`/a richer `subtitle` existed on
-      // this schema (or that were enqueued from a call site that hadn't
-      // been enriched yet) are stuck with whatever flat title/subtitle they
-      // were written with -- that value is set once at enqueue time and
-      // never recomputed on its own. Repair them in the background here by
-      // re-resolving each stale record's leaf from the server, once per
-      // load, instead of leaving the list permanently missing series/
-      // season/episode/artist/album context until the user re-downloads.
-      if (online) {
-        const stale = scoped.filter((record) => record.workKind === undefined);
-        void (async () => {
-          for (const record of stale) {
-            if (cancelled) return;
-            try {
-              const detail = await client.getWork(record.workId);
-              const leaf = playableLeaves(detail, t).find(
-                (candidate) => candidate.mediaFileId === record.mediaFileId
-              );
-              if (!leaf) continue;
-              const patch: Partial<DownloadRecord> = { workKind: leaf.workKind ?? "movie" };
-              const subtitle = leafSubtitle(leaf);
-              if (subtitle) patch.subtitle = subtitle;
-              patchRecord(record.id, patch);
-            } catch {
-              // Offline mid-pass, or the work was removed from the catalog
-              // -- leave it as-is; the next load retries.
-            }
-          }
-        })();
-      }
+      void refreshDownloadContext();
     });
 
     refreshStorageUsage();
@@ -470,6 +474,14 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally scoped by `apiBaseUrl`/`userId` only; `pollTicket`/`scheduleNext` are stable-enough callbacks re-created per render but not meaningful re-run triggers here.
   }, [apiBaseUrl, userId]);
+
+  // Catches a long-lived tab back up once it regains connectivity, instead
+  // of only ever refreshing the context cache at initial page load.
+  const wasOnlineRef = useRef(online);
+  useEffect(() => {
+    if (online && !wasOnlineRef.current) void refreshDownloadContext();
+    wasOnlineRef.current = online;
+  }, [online, refreshDownloadContext]);
 
   // Resolves the signed-in user's own `can_download` grant so the UI can
   // actually hide download affordances for an account that doesn't have
