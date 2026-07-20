@@ -10814,21 +10814,24 @@ html[data-platform="android-tv"] .player-quality-option {
 }
 
 /*
- * A real right-anchored panel, deliberately NOT `.tv-library-preview`:
- * that class (shared with `.tv-home-feature`/`.tv-detail-copy`) is
- * `position: absolute; left: clamp(102px, 8vw, 160px)` -- it's this
- * app's left-side text-over-backdrop convention, not a right column.
- * Mirrors that same rule's vertical position and edge inset, just
- * flipped to `right`, so the two panels read as a symmetric pair.
+ * Deliberately a normal-flow child inside `.tv-rail-panel` (the "right
+ * side" of this page -- the download-list card itself), not a separately
+ * absolutely-positioned sibling: `.tv-rail-panel` already occupies
+ * `position: absolute; top: 24%; right: 3.8%; width: 45%; z-index: 8`
+ * with its own blurred, semi-opaque background -- there is no second
+ * empty "right column" alongside it to anchor a sibling panel to. An
+ * earlier version of this rule tried exactly that (`position: absolute;
+ * right: ...; z-index: 7`) and was invisible, entirely hidden behind
+ * `.tv-rail-panel`'s higher z-index and backdrop-filter blur. Rendering
+ * inside the panel instead means it inherits that already-correct
+ * positioning/stacking for free.
  */
 .tv-downloads-storage-panel {
-  position: absolute;
-  z-index: 7;
-  top: 24%;
-  right: clamp(102px, 8vw, 160px);
-  width: min(20vw, 340px);
   display: grid;
   gap: 0.5rem;
+  padding-bottom: clamp(14px, 1.6vw, 22px);
+  margin-bottom: clamp(14px, 1.6vw, 22px);
+  border-bottom: 1px solid var(--line);
   color: var(--ink-muted);
   font-size: clamp(0.5rem, 0.58vw, 0.68rem);
 }

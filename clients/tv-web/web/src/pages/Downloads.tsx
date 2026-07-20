@@ -330,31 +330,6 @@ export function DownloadsPage() {
         {!online ? <span className="tv-downloads-offline-badge">{t("pages.downloads.offline")}</span> : null}
       </header>
 
-      {storageSupported && storageUsage ? (
-        <aside className="tv-downloads-storage-panel" aria-label={t("pages.downloads.storageUsed", {
-          used: formatBytes(storageUsage.usageBytes),
-          quota: formatBytes(storageUsage.quotaBytes),
-        })}>
-          <span>
-            {t("pages.downloads.storageUsed", {
-              used: formatBytes(storageUsage.usageBytes),
-              quota: formatBytes(storageUsage.quotaBytes),
-            })}
-          </span>
-          {storagePercent !== null ? (
-            <div
-              className="tv-download-progress tv-downloads-storage-bar"
-              role="progressbar"
-              aria-valuenow={storagePercent}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            >
-              <span className="tv-download-progress-fill" style={{ width: `${storagePercent}%` }} />
-            </div>
-          ) : null}
-        </aside>
-      ) : null}
-
       {focused ? (
         <aside className="tv-library-preview tv-downloads-preview" key={`preview-${focused.id}`}>
           {focusedPreview?.detail ? (
@@ -409,6 +384,27 @@ export function DownloadsPage() {
       ) : null}
 
       <TvRailSurface className="tv-rail-panel tv-downloads-panel" mode="content" ariaLabel={t("pages.downloads.title")}>
+        {storageSupported && storageUsage ? (
+          <div className="tv-downloads-storage-panel">
+            <span>
+              {t("pages.downloads.storageUsed", {
+                used: formatBytes(storageUsage.usageBytes),
+                quota: formatBytes(storageUsage.quotaBytes),
+              })}
+            </span>
+            {storagePercent !== null ? (
+              <div
+                className="tv-download-progress tv-downloads-storage-bar"
+                role="progressbar"
+                aria-valuenow={storagePercent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
+                <span className="tv-download-progress-fill" style={{ width: `${storagePercent}%` }} />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <div className="tv-downloads-content" data-tv-scroll-container data-tv-scroll-axis="vertical" data-navigation-scroll-key="downloads:list">
           {downloads.length === 0 ? (
             <TvEmptyState
