@@ -365,6 +365,14 @@ pub struct UpdateWatchProgressRequest {
     pub duration_ms: u64,
     #[serde(default)]
     pub completed: bool,
+    /// When this progress update actually happened, RFC3339. Optional and
+    /// additive -- lets an offline-buffered client (one that kept recording
+    /// progress while disconnected and is only now replaying it) timestamp
+    /// the update for when it occurred rather than when it's replayed after
+    /// reconnecting. Omitted by every existing caller, who get the prior
+    /// behaviour unchanged: the server falls back to `Utc::now()`.
+    #[serde(default)]
+    pub occurred_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[utoipa::path(
@@ -521,7 +529,7 @@ pub async fn update_watch_progress_handler(
             body.duration_ms,
             body.completed,
         ),
-        updated_at: Some(chrono::Utc::now()),
+        updated_at: Some(body.occurred_at.unwrap_or_else(chrono::Utc::now)),
     };
     state
         .watch_progress

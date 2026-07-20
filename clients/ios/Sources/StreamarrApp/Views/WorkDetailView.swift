@@ -4,14 +4,30 @@ import SwiftUI
 struct WorkDetailView: View {
     @State private var viewModel: WorkDetailViewModel
     let apiClient: StreamarrAPIClient
+    let downloadRepository: DownloadRepository
     @Environment(\.dismiss) private var dismiss
     @State private var playlists: [Playlist] = []
     @State private var playlistMessage: String?
     @State private var selectedAlbumID: UUID?
 
-    init(viewModel: WorkDetailViewModel, apiClient: StreamarrAPIClient) {
+    init(viewModel: WorkDetailViewModel, apiClient: StreamarrAPIClient, downloadRepository: DownloadRepository) {
         _viewModel = State(initialValue: viewModel)
         self.apiClient = apiClient
+        self.downloadRepository = downloadRepository
+    }
+
+    /// Builds the `DownloadCandidate` `DownloadOptionsSheet`/
+    /// `DownloadRepository.enqueue` need for one playable leaf under this
+    /// work — every row builder below funnels through this rather than
+    /// constructing `DownloadCandidate` inline.
+    private func candidate(mediaFileID: UUID, title: String, subtitle: String?) -> DownloadCandidate {
+        DownloadCandidate(
+            mediaFileID: mediaFileID,
+            workID: viewModel.workID,
+            title: title,
+            subtitle: subtitle,
+            posterURLString: viewModel.detail?.work.images.first(where: { $0.kind == .poster })?.url
+        )
     }
 
     var body: some View {
@@ -163,7 +179,8 @@ struct WorkDetailView: View {
                             NavigationLink {
                                 WorkDetailView(
                                     viewModel: WorkDetailViewModel(apiClient: apiClient, workID: work.id),
-                                    apiClient: apiClient
+                                    apiClient: apiClient,
+                                    downloadRepository: downloadRepository
                                 )
                             } label: {
                                 PlayarrMediaCard(work: work, apiClient: apiClient, width: 126)
@@ -250,6 +267,7 @@ struct WorkDetailView: View {
                     NavigationLink {
                         PlayerView(
                             apiClient: apiClient,
+                            downloadRepository: downloadRepository,
                             initialMediaFileID: mediaFileID.uuidString,
                             initialTitle: detail.work.title
                         )
@@ -257,6 +275,16 @@ struct WorkDetailView: View {
                         Label("Play", systemImage: "play.fill").frame(minWidth: 112)
                     }
                     .buttonStyle(PlayarrPrimaryButtonStyle())
+
+                    DownloadTriggerButton(
+                        candidates: [candidate(mediaFileID: mediaFileID, title: detail.work.title, subtitle: nil)],
+                        apiClient: apiClient,
+                        downloadRepository: downloadRepository
+                    )
+                    .frame(width: 46, height: 46)
+                    .foregroundStyle(PlayarrStyle.ink)
+                    .background(PlayarrStyle.surfaceStrong.opacity(0.82), in: Circle())
+                    .overlay { Circle().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
 
                     if !writablePlaylists(for: detail.work).isEmpty {
                         Menu {
@@ -382,12 +410,21 @@ struct WorkDetailView: View {
                         NavigationLink {
                             PlayerView(
                                 apiClient: apiClient,
+                                downloadRepository: downloadRepository,
                                 initialMediaFileID: mediaFileID.uuidString,
                                 initialTitle: first.track.title
                             )
                         } label: { Label("Play", systemImage: "play.fill") }
                             .buttonStyle(PlayarrPrimaryButtonStyle())
                     }
+                    DownloadTriggerButton(
+                        candidates: selected.tracks.compactMap { track in
+                            track.mediaFileID.map { candidate(mediaFileID: $0, title: track.track.title, subtitle: selected.album.title) }
+                        },
+                        apiClient: apiClient,
+                        downloadRepository: downloadRepository
+                    )
+                    .accessibilityLabel("Download all tracks in this album")
                 }
                 .foregroundStyle(PlayarrStyle.ink)
 
@@ -416,6 +453,21 @@ struct WorkDetailView: View {
                 Text("\(season.episodes.count) episodes")
                     .font(.custom("Avenir Next", fixedSize: 10).weight(.semibold))
                     .foregroundStyle(PlayarrStyle.muted)
+                DownloadTriggerButton(
+                    candidates: season.episodes.compactMap { episode in
+                        episode.mediaFileID.map {
+                            candidate(
+                                mediaFileID: $0,
+                                title: episode.episode.title ?? "Episode \(episode.episode.episodeNumber)",
+                                subtitle: season.season.title ?? "Season \(season.season.seasonNumber)"
+                            )
+                        }
+                    },
+                    apiClient: apiClient,
+                    downloadRepository: downloadRepository
+                )
+                .foregroundStyle(PlayarrStyle.muted)
+                .accessibilityLabel("Download all episodes in this season")
             }
 
             ScrollView(.horizontal) {
@@ -439,11 +491,25 @@ struct WorkDetailView: View {
         Group {
             if let mediaFileID = detail.mediaFileID {
                 NavigationLink {
-                    PlayerView(apiClient: apiClient, initialMediaFileID: mediaFileID.uuidString, initialTitle: title)
+                    PlayerView(
+                        apiClient: apiClient,
+                        downloadRepository: downloadRepository,
+                        initialMediaFileID: mediaFileID.uuidString,
+                        initialTitle: title
+                    )
                 } label: {
                     episodeCardLabel(title: title, label: label, playable: true)
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    Button("Download", systemImage: "arrow.down.circle") {
+                        downloadRepository.enqueue(
+                            candidates: [candidate(mediaFileID: mediaFileID, title: title, subtitle: label)],
+                            profile: nil,
+                            keepUntil: .forever
+                        )
+                    }
+                }
             } else {
                 episodeCardLabel(title: title, label: label, playable: false)
             }
@@ -491,7 +557,12 @@ struct WorkDetailView: View {
     private func musicTrackRow(_ detail: TrackDetail) -> some View {
         if let mediaFileID = detail.mediaFileID {
             NavigationLink {
-                PlayerView(apiClient: apiClient, initialMediaFileID: mediaFileID.uuidString, initialTitle: detail.track.title)
+                PlayerView(
+                    apiClient: apiClient,
+                    downloadRepository: downloadRepository,
+                    initialMediaFileID: mediaFileID.uuidString,
+                    initialTitle: detail.track.title
+                )
             } label: {
                 HStack(spacing: 14) {
                     Text(String(format: "%02d", detail.track.trackNumber))
@@ -518,6 +589,15 @@ struct WorkDetailView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .contextMenu {
+                Button("Download", systemImage: "arrow.down.circle") {
+                    downloadRepository.enqueue(
+                        candidates: [candidate(mediaFileID: mediaFileID, title: detail.track.title, subtitle: nil)],
+                        profile: nil,
+                        keepUntil: .forever
+                    )
+                }
+            }
         }
     }
 
@@ -531,6 +611,7 @@ struct WorkDetailView: View {
             NavigationLink {
                 PlayerView(
                     apiClient: apiClient,
+                    downloadRepository: downloadRepository,
                     initialMediaFileID: mediaFileID.uuidString,
                     initialTitle: title
                 )
@@ -538,6 +619,15 @@ struct WorkDetailView: View {
                 rowLabel(title: title, subtitle: subtitle, playable: true)
             }
             .buttonStyle(.plain)
+            .contextMenu {
+                Button("Download", systemImage: "arrow.down.circle") {
+                    downloadRepository.enqueue(
+                        candidates: [candidate(mediaFileID: mediaFileID, title: title, subtitle: subtitle)],
+                        profile: nil,
+                        keepUntil: .forever
+                    )
+                }
+            }
         } else {
             rowLabel(title: title, subtitle: subtitle, playable: false)
         }
@@ -578,7 +668,8 @@ struct WorkDetailView: View {
     NavigationStack {
         WorkDetailView(
             viewModel: WorkDetailViewModel(apiClient: apiClient, workID: UUID()),
-            apiClient: apiClient
+            apiClient: apiClient,
+            downloadRepository: DownloadRepository(apiClient: apiClient)
         )
     }
 }

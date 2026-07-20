@@ -17,6 +17,7 @@ import { describeApiError } from "@streamarr-tv/api-client";
 import { useWorkDetail } from "@streamarr-tv/api-client/react";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { CachedArtworkImage, useCachedArtwork } from "../lib/artwork";
+import { useDownloads } from "../lib/DownloadsProvider";
 import type { PlaybackLaunchSettings } from "../lib/usePlaybackEngine";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useToast } from "../lib/toast";
@@ -36,6 +37,10 @@ import { MediaThumbnailArtwork } from "../components/MediaThumbnailArtwork";
 import { ServerChoiceModal } from "../components/ServerChoiceModal";
 import { WatchStateOverlay } from "../components/WatchStateOverlay";
 import { useMediaContextMenu } from "../components/MediaContextMenu";
+import {
+  DownloadQualityDrawer,
+  type DownloadQualitySelection,
+} from "../components/DownloadQualityDrawer";
 import type { PlayerPlaylistItem } from "../components/player/PlayerSurface";
 import type { PlayerLocationState } from "./Player";
 import {
@@ -817,6 +822,29 @@ function SeasonEpisodeTrack({
   const seasonLabel =
     season.season.title ?? t("pages.workDetail.seasonNumber", { number: seasonNumber });
   const mediaContext = useMediaContextMenu({ onProgressChanged });
+  // A separate `useMediaContextMenu()` instance (per this component, not
+  // shared with the per-episode one above) so the season-header download
+  // affordance opens its own drawer/portal, fanned out over episodes
+  // already resolved in memory -- zero extra fetch.
+  const seasonDownloadContext = useMediaContextMenu();
+  const seasonLeaves = episodes.flatMap((episode) =>
+    episode.media_file_id
+      ? [
+          {
+            mediaFileId: episode.media_file_id,
+            runtimeMs:
+              episode.runtime_ms ?? (episode.episode.runtime_minutes ?? 0) * 60_000,
+            episodeId: episode.episode.id,
+            title:
+              episode.episode.title ??
+              t("pages.workDetail.episodeNumber", { number: episode.episode.episode_number }),
+            seriesTitle,
+            seasonNumber,
+            episodeNumber: episode.episode.episode_number,
+          },
+        ]
+      : []
+  );
 
   function revealSeasonTrack(card: HTMLElement) {
     if (isNavigationLayerRestoring()) return;
@@ -826,13 +854,37 @@ function SeasonEpisodeTrack({
 
   return (
     <TvMediaTrack
-      title={seasonLabel}
+      title={
+        <span className="tv-season-heading">
+          <span>{seasonLabel}</span>
+          <button
+            type="button"
+            className="tv-season-download-button"
+            aria-label={t("pages.workDetail.downloadSeason", { season: seasonLabel })}
+            data-navigation-focus-key={`detail:${workId}:season:${seasonNumber}:download`}
+            {...seasonDownloadContext.itemProps({
+              workId,
+              title: seasonLabel,
+              detailRoute,
+              parentRoute: detailParentBackTo,
+              leaves: seasonLeaves,
+            })}
+          >
+            <span aria-hidden="true">⇩</span>
+          </button>
+        </span>
+      }
       meta={t("pages.workDetail.episodesCount", { count: episodes.length })}
       ariaLabel={seasonLabel}
       scrollKey={`detail:${workId}:season:${seasonNumber}`}
       itemsKey={episodes.map((episode) => episode.episode.id).join(":")}
       dataTrackId={`season:${seasonNumber}`}
-      overlay={mediaContext.contextMenu}
+      overlay={
+        <>
+          {mediaContext.contextMenu}
+          {seasonDownloadContext.contextMenu}
+        </>
+      }
     >
       {episodes.map((episode) => {
             const mediaFileId = episode.media_file_id;
@@ -953,6 +1005,7 @@ export function WorkDetailPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const client = useApiClient();
+  const downloads = useDownloads();
   const state = useWorkDetail(client, workId);
   const [selectedSeasonNumber, setSelectedSeasonNumber] = useState<number | null>(null);
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(null);
@@ -972,8 +1025,11 @@ export function WorkDetailPage() {
   const [moviePlaybackSettingsOpen, setMoviePlaybackSettingsOpen] = useState(false);
   const [moviePlaybackSettingsSaving, setMoviePlaybackSettingsSaving] =
     useState(false);
+  const [movieDownloadOpen, setMovieDownloadOpen] = useState(false);
+  const [movieDownloadBusy, setMovieDownloadBusy] = useState(false);
   const seriesBrowserRef = useRef<HTMLDivElement>(null);
   const moviePlaybackSettingsButtonRef = useRef<HTMLButtonElement>(null);
+  const movieDownloadButtonRef = useRef<HTMLButtonElement>(null);
   const runtimeRequestsRef = useRef<Set<string>>(new Set());
   const handleProgressChanged = useCallback(
     (_workId: string, updated: WatchProgress[]) => {
@@ -1693,6 +1749,19 @@ export function WorkDetailPage() {
         {work.kind === "movie" && playMediaFileId ? (
           <div className="tv-detail-actions">
             <button
+              ref={movieDownloadButtonRef}
+              type="button"
+              className="tv-detail-download"
+              aria-label={t("pages.workDetail.downloadTitle", { title: work.title })}
+              aria-haspopup="dialog"
+              aria-expanded={movieDownloadOpen}
+              data-navigation-focus-key={`detail:${work.id}:download`}
+              onClick={() => setMovieDownloadOpen(true)}
+            >
+              <span aria-hidden="true">⇩</span>
+              <strong>{t("pages.workDetail.downloadButtonLabel")}</strong>
+            </button>
+            <button
               ref={moviePlaybackSettingsButtonRef}
               type="button"
               className="tv-detail-playback-settings"
@@ -1915,6 +1984,37 @@ export function WorkDetailPage() {
           onChange={setMoviePlaybackDraft}
           onSave={saveMoviePlaybackSettings}
           onClose={closeMoviePlaybackSettings}
+        />
+      ) : null}
+
+      {work.kind === "movie" && movieDownloadOpen && playMediaFileId ? (
+        <DownloadQualityDrawer
+          title={work.title}
+          leaves={[{ mediaFileId: playMediaFileId, runtimeMs: runtimeMs ?? 0, title: work.title }]}
+          busy={movieDownloadBusy}
+          onClose={() => setMovieDownloadOpen(false)}
+          onConfirm={(selection: DownloadQualitySelection) => {
+            setMovieDownloadBusy(true);
+            void downloads
+              .enqueue({
+                workId: work.id,
+                mediaFileId: playMediaFileId,
+                title: work.title,
+                runtimeMs: runtimeMs ?? 0,
+                qualityId: selection.qualityId,
+                qualityLabel: selection.qualityLabel,
+                keepUntil: selection.keepUntil,
+              })
+              .then(() => {
+                setMovieDownloadBusy(false);
+                setMovieDownloadOpen(false);
+                showToast(t("pages.workDetail.downloadStarted", { title: work.title }));
+              })
+              .catch((caught: unknown) => {
+                setMovieDownloadBusy(false);
+                showToast(describeApiError(caught));
+              });
+          }}
         />
       ) : null}
 

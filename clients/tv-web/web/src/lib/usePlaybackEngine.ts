@@ -29,6 +29,11 @@ import {
   readPlayerDefaults,
   selectDefaultSubtitleTrackId,
 } from "./playerDefaults";
+import { useDownloads, type LocalPlaybackSource } from "./DownloadsProvider";
+import { useOnlineStatus } from "./useOnlineStatus";
+
+/** Selector id for the synthetic "Downloaded" quality option a completed local copy adds to `qualityOptions` -- never a real server rendition profile. */
+export const DOWNLOADED_QUALITY_ID = "downloaded";
 
 const initialNegotiations = new WeakMap<
   ApiClient,
@@ -215,6 +220,9 @@ export function usePlaybackEngine(
 ): PlaybackEngineController {
   const client = useServerClient(serverUrl);
   const getAccessToken = useServerAccessToken(serverUrl);
+  const downloads = useDownloads();
+  const online = useOnlineStatus();
+  const [localSource, setLocalSource] = useState<LocalPlaybackSource | null>(null);
   const playerDefaults = useMemo(() => readPlayerDefaults(), [mediaFileId]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const engineRef = useRef<ShakaPlaybackEngine | null>(null);
@@ -265,6 +273,53 @@ export function usePlaybackEngine(
   const [sourceSubtitleTracks, setSourceSubtitleTracks] = useState<PlaybackSubtitleTrack[]>([]);
   const [subtitleSwitching, setSubtitleSwitching] = useState(false);
   const [subtitleError, setSubtitleError] = useState<string | undefined>();
+
+  // Resolves (or clears) this media file's completed local download, if
+  // any. Mirrored into `localSourceRef` so the offline branch of the
+  // negotiation effect below can read the latest value without depending
+  // on `localSource` itself -- resolving a local copy *while already
+  // playing online* must not tear down and restart the live session just
+  // to add a quality option (the separate effect further down handles
+  // that merge without touching negotiation at all).
+  const localSourceRef = useRef<LocalPlaybackSource | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    localSourceRef.current = null;
+    setLocalSource(null);
+    if (!mediaFileId) return;
+    void downloads.getLocalPlaybackSource(mediaFileId).then((source) => {
+      if (cancelled) return;
+      localSourceRef.current = source;
+      setLocalSource(source);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [downloads, mediaFileId]);
+
+  // Appends the synthetic "Downloaded" quality option once a local copy
+  // resolves for an already-negotiated (online) source, without
+  // restarting negotiation -- see the ref comment above.
+  const readyNegotiationMode = negotiation.kind === "ready" ? negotiation.mode : undefined;
+  useEffect(() => {
+    if (!localSource || readyNegotiationMode === undefined || readyNegotiationMode === "direct") {
+      return;
+    }
+    setQualityOptions((current) =>
+      current.some((option) => option.id === DOWNLOADED_QUALITY_ID)
+        ? current
+        : [
+            ...current,
+            {
+              id: DOWNLOADED_QUALITY_ID,
+              label: "Downloaded",
+              profile: null,
+              height: null,
+              video_bitrate_bps: null,
+            },
+          ]
+    );
+  }, [localSource, readyNegotiationMode]);
 
   const clearSourceSubtitleBlobs = useCallback(() => {
     subtitleSelectionRequestRef.current += 1;
@@ -484,8 +539,45 @@ export function usePlaybackEngine(
 
   // Negotiate playback. Re-runs whenever `mediaFileId` changes or
   // `retryNegotiation` is called.
+  //
+  // Offline + a completed local copy: skip network negotiation entirely
+  // and build a "direct" `NegotiationState` straight from the downloaded
+  // file's `blob:` URL -- `ShakaPlaybackEngine`'s direct mode is literally
+  // `mediaElement.src = url; mediaElement.load()`, so this needs no
+  // player-engine changes at all. Offline with no local copy fails fast
+  // with a clear message instead of waiting out a network timeout.
   useEffect(() => {
     if (!mediaFileId) return;
+    if (!online) {
+      const source = localSourceRef.current;
+      if (source) {
+        setQualityOptions([
+          {
+            id: DOWNLOADED_QUALITY_ID,
+            label: "Downloaded",
+            profile: null,
+            height: null,
+            video_bitrate_bps: null,
+          },
+        ]);
+        setActiveQualityId(DOWNLOADED_QUALITY_ID);
+        setNegotiation({
+          kind: "ready",
+          mode: "direct",
+          url: source.blobUrl,
+          mimeType: source.mimeType,
+          durationSeconds: source.durationSeconds,
+          sourceOffsetSeconds: 0,
+        });
+      } else {
+        setNegotiation({
+          kind: "error",
+          forbidden: false,
+          message: "You're offline and this title hasn't been downloaded.",
+        });
+      }
+      return;
+    }
     let cancelled = false;
     setNegotiation({ kind: "loading" });
 
@@ -538,6 +630,10 @@ export function usePlaybackEngine(
           });
         }
         engineRef.current?.resetBytesReceived();
+        // A completed local copy (if any) is merged into `qualityOptions`
+        // by the dedicated effect above instead of here -- that keeps
+        // resolving it (an async OPFS/IndexedDB read) from ever forcing
+        // this whole negotiation to re-run.
         setQualityOptions(info.quality_options);
         setActiveQualityId(info.selected_quality_id);
         applySourceTracks(info);
@@ -567,6 +663,7 @@ export function usePlaybackEngine(
     client,
     closeSession,
     mediaFileId,
+    online,
     retryCount,
     startPositionSeconds,
   ]);
@@ -774,6 +871,19 @@ export function usePlaybackEngine(
       const { positionMs, durationMs } = latestPlaybackRef.current;
       if (positionMs <= 0 && !completed) return;
       lastProgressWriteAtRef.current = Date.now();
+      // Offline (a downloaded item keeps playing): buffer this update in
+      // IndexedDB instead of a doomed network call -- `DownloadsProvider`'s
+      // flush loop replays it once back online, timestamped via
+      // `occurred_at` for when it actually happened.
+      if (!online) {
+        void downloads
+          .queueWatchMutation({ mediaFileId, positionMs, durationMs, completed })
+          .catch(() => {
+            // Best-effort -- a lost buffered update is no worse than the
+            // pre-offline-support behaviour of not persisting it at all.
+          });
+        return;
+      }
       void client
         .updateWatchProgress(mediaFileId, {
           positionMs,
@@ -785,7 +895,7 @@ export function usePlaybackEngine(
           // state transition retries with the latest position.
         });
     },
-    [client, mediaFileId]
+    [client, downloads, mediaFileId, online]
   );
 
   const fixedDurationSeconds =
@@ -1104,6 +1214,37 @@ export function usePlaybackEngine(
       const option = qualityOptions.find((quality) => quality.id === qualityId);
       if (!option) return;
 
+      if (qualityId === DOWNLOADED_QUALITY_ID && localSource) {
+        // The local copy needs no network negotiation at all -- switch the
+        // engine straight to its `blob:` URL, same "direct" shape the
+        // offline negotiation branch above builds.
+        const current = engineRef.current?.getState() ?? engineState;
+        const absolutePositionSeconds =
+          current.currentTimeSeconds + sourceOffsetSecondsRef.current;
+        const shouldPlay = current.state === "playing" || current.state === "buffering";
+        pendingQualitySwitchRef.current = {
+          positionSeconds: absolutePositionSeconds,
+          shouldPlay,
+        };
+        qualitySwitchRequestRef.current += 1;
+        setQualitySwitching(true);
+        setQualityError(undefined);
+        loadedForUrl.current = null;
+        setActiveQualityId(DOWNLOADED_QUALITY_ID);
+        sourceOffsetSecondsRef.current = 0;
+        onDemandTranscodeRef.current = false;
+        void stopActiveSession("user_stopped");
+        setNegotiation({
+          kind: "ready",
+          mode: "direct",
+          url: localSource.blobUrl,
+          mimeType: localSource.mimeType,
+          durationSeconds: localSource.durationSeconds,
+          sourceOffsetSeconds: 0,
+        });
+        return;
+      }
+
       const current = engineRef.current?.getState() ?? engineState;
       const absolutePositionSeconds =
         current.currentTimeSeconds + sourceOffsetSecondsRef.current;
@@ -1204,6 +1345,7 @@ export function usePlaybackEngine(
       mediaFileId,
       qualityOptions,
       qualitySwitching,
+      localSource,
       recordTerminalEvent,
       selectedSourceAudioTrackId,
       stopActiveSession,

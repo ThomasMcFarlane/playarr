@@ -10519,3 +10519,274 @@ html[data-platform="android-tv"] .player-quality-button,
 html[data-platform="android-tv"] .player-quality-option {
   transition-duration: 150ms;
 }
+
+/* -----------------------------------------------------------------------
+ * Downloads feature: WorkDetail's action-row/season Download buttons, the
+ * DownloadQualityDrawer, the /downloads page, and the offline empty-state.
+ * Reuses this file's existing tokens (--ink/--bg/--surface-strong/--line
+ * etc., already theme-aware via :root[data-theme]) and the established
+ * .tv-detail-*/.tv-filter-drawer/.tv-filter-choice-grid/.media-context-*
+ * visual language rather than inventing a new one.
+ * --------------------------------------------------------------------- */
+
+.tv-detail-download {
+  min-width: clamp(104px, 7.6vw, 142px);
+  height: clamp(44px, 4.2vw, 64px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0 1rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  color: var(--ink);
+  box-shadow: 0 14px 38px rgba(56, 38, 33, 0.12);
+  backdrop-filter: blur(22px) saturate(120%);
+  cursor: pointer;
+  font-size: clamp(0.5rem, 0.58vw, 0.72rem);
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    transform 220ms ease;
+}
+
+.tv-detail-download > span:first-child {
+  color: #cf3157;
+  font-size: 1.15em;
+}
+
+.tv-detail-download:hover,
+.tv-detail-download:focus-visible,
+.tv-detail-download[aria-expanded="true"] {
+  outline: 0;
+  background: color-mix(in srgb, var(--ink) 88%, transparent);
+  color: var(--bg);
+  transform: scale(1.06);
+}
+
+.tv-season-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.tv-season-download-button {
+  width: clamp(26px, 2vw, 34px);
+  height: clamp(26px, 2vw, 34px);
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--surface-soft);
+  color: var(--ink-muted);
+  font-size: 0.85em;
+  cursor: pointer;
+  transition:
+    background 180ms ease,
+    color 180ms ease;
+}
+
+.tv-season-download-button:hover,
+.tv-season-download-button:focus-visible {
+  outline: 0;
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.download-quality-drawer-field {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  color: var(--ink-muted);
+  font-size: clamp(0.5rem, 0.58vw, 0.72rem);
+}
+
+.download-quality-drawer-field input[type="date"],
+.download-quality-drawer-field input[type="number"] {
+  height: clamp(40px, 3.4vw, 52px);
+  padding: 0 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-size: clamp(0.6rem, 0.68vw, 0.85rem);
+}
+
+.download-quality-drawer-after-watched {
+  gap: 0.75rem;
+}
+
+.download-quality-drawer-hint {
+  color: var(--ink-muted);
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
+/* Downloads page */
+
+.tv-downloads-offline-badge {
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, #cf3157 22%, transparent);
+  color: #cf3157;
+  font-size: clamp(0.42rem, 0.48vw, 0.58rem);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tv-downloads-content {
+  display: grid;
+  gap: clamp(20px, 2.4vw, 36px);
+  padding: clamp(18px, 2vw, 32px) 0;
+}
+
+.tv-downloads-section {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.tv-downloads-section h2 {
+  color: var(--ink-muted);
+  font-size: clamp(0.5rem, 0.58vw, 0.68rem);
+  font-weight: 720;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.tv-downloads-section ul {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.tv-downloads-section-empty {
+  color: var(--ink-muted);
+  font-size: clamp(0.55rem, 0.6vw, 0.75rem);
+}
+
+.tv-download-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: clamp(14px, 1.4vw, 20px);
+  border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-strong) 60%, transparent);
+}
+
+.tv-download-row-copy {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.tv-download-row-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(0.68rem, 0.85vw, 0.95rem);
+}
+
+.tv-download-row-copy small {
+  color: var(--ink-muted);
+}
+
+.tv-download-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ink-muted);
+  font-size: 0.82em;
+}
+
+.tv-download-row-meta i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+}
+
+.tv-download-row-size {
+  color: var(--ink-muted);
+  font-size: 0.82em;
+}
+
+.tv-download-row-error {
+  color: #cf3157;
+  font-size: 0.82em;
+}
+
+.tv-download-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.tv-download-row-actions button {
+  height: clamp(34px, 2.8vw, 44px);
+  padding: 0 0.9rem;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-size: clamp(0.48rem, 0.55vw, 0.65rem);
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease;
+}
+
+.tv-download-row-actions button:hover,
+.tv-download-row-actions button:focus-visible {
+  outline: 0;
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.tv-download-row-actions .tv-download-row-remove:hover,
+.tv-download-row-actions .tv-download-row-remove:focus-visible {
+  background: #cf3157;
+  color: #fff;
+}
+
+.tv-download-progress {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  overflow: hidden;
+}
+
+.tv-download-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #cf3157;
+  transition: width 260ms ease;
+}
+
+.tv-download-progress-fill[data-indeterminate="true"] {
+  width: 35%;
+  animation: tv-download-progress-indeterminate 1.4s ease-in-out infinite;
+}
+
+@keyframes tv-download-progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(280%);
+  }
+}
+
+.tv-downloads-storage-footer {
+  display: grid;
+  gap: 0.5rem;
+  padding: clamp(14px, 1.6vw, 22px) 0 0;
+  color: var(--ink-muted);
+  font-size: clamp(0.5rem, 0.58vw, 0.68rem);
+}
+
+.tv-downloads-storage-bar {
+  height: 4px;
+}

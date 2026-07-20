@@ -36,6 +36,11 @@ public final class AppEnvironment {
 
     public private(set) var apiClient: StreamarrAPIClient
     public private(set) var deviceFlowClient: DeviceFlowClient
+    /// Owns the download-tickets API glue, the on-device SwiftData store,
+    /// and the background `URLSession` transfer engine for the "media
+    /// downloads" feature — constructed once here alongside every other
+    /// shared service, per this type's own composition-root role.
+    public private(set) var downloadRepository: DownloadRepository
     public private(set) var isSignedIn = false
     public private(set) var sessionState: SessionState = .restoring
     public private(set) var currentUserName: String?
@@ -92,7 +97,7 @@ public final class AppEnvironment {
         )
         self.tokenStore = tokenStore
 
-        self.apiClient = APIClient(
+        let resolvedAPIClient: StreamarrAPIClient = APIClient(
             configuration: APIClientConfiguration(
                 baseURL: resolvedURL,
                 clientVersion: InstalledAppVersion.current,
@@ -101,13 +106,22 @@ public final class AppEnvironment {
             ),
             tokenProvider: tokenStore
         )
+        self.apiClient = resolvedAPIClient
         self.deviceFlowClient = DeviceFlowClient(
             configuration: DeviceFlowConfiguration(baseURL: resolvedURL)
         )
+        // Reads the local `resolvedAPIClient`, not `self.apiClient` — under
+        // `@Observable`'s macro expansion, reading a just-assigned property
+        // back off `self` here would count as "using self" before every
+        // stored property (including `downloadRepository` itself, still
+        // mid-assignment on the very next line) is initialized.
+        self.downloadRepository = DownloadRepository(apiClient: resolvedAPIClient)
         self.currentUserName = userDefaults.string(forKey: Self.userNameDefaultsKey(for: resolvedURL))
 
         if demoMode {
-            self.apiClient = PreviewAPIClient()
+            let previewAPIClient = PreviewAPIClient()
+            self.apiClient = previewAPIClient
+            self.downloadRepository.updateAPIClient(previewAPIClient)
             self.currentUserName = "Thomas"
             self.isSignedIn = true
             self.sessionState = .signedIn
@@ -249,6 +263,7 @@ public final class AppEnvironment {
         deviceFlowClient = DeviceFlowClient(
             configuration: DeviceFlowConfiguration(baseURL: serverBaseURL)
         )
+        downloadRepository.updateAPIClient(apiClient)
         isSignedIn = false
         currentUserID = nil
         currentAvatar = nil

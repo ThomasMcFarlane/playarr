@@ -826,15 +826,16 @@ async fn boot_api(
         UserDirectory,
     };
     use streamarr_db::repo::{
-        seed_default_views, SqlxCreditRepo, SqlxDeviceRepo, SqlxLibraryViewRepo, SqlxMediaFileRepo,
-        SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo, SqlxPushRegistrationRepo,
-        SqlxRefreshTokenRepo, SqlxRenditionRepo, SqlxSourceInstanceRepo, SqlxSystemSettingsRepo,
-        SqlxTdarrConnectionRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxUserRepo,
-        SqlxWatchProgressRepo, SqlxWorkRepo,
+        seed_default_views, SqlxCreditRepo, SqlxDeviceRepo, SqlxDownloadTicketRepo,
+        SqlxLibraryViewRepo, SqlxMediaFileRepo, SqlxPlaylistRepo, SqlxPolicyRepo,
+        SqlxProfilePinRepo, SqlxPushRegistrationRepo, SqlxRefreshTokenRepo, SqlxRenditionRepo,
+        SqlxSourceInstanceRepo, SqlxSystemSettingsRepo, SqlxTdarrConnectionRepo,
+        SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxUserRepo, SqlxWatchProgressRepo,
+        SqlxWorkRepo,
     };
     use streamarr_db::{
-        CreditRepo, DeviceRepo, LibraryViewRepo, MediaFileRepo, PlaylistRepo, PolicyRepo,
-        ProfilePinRepo, PushRegistrationRepo, RenditionRepo, SourceInstanceRepo,
+        CreditRepo, DeviceRepo, DownloadTicketRepo, LibraryViewRepo, MediaFileRepo, PlaylistRepo,
+        PolicyRepo, ProfilePinRepo, PushRegistrationRepo, RenditionRepo, SourceInstanceRepo,
         SystemSettingsRepo, TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo,
         WatchProgressRepo, WorkRepo,
     };
@@ -888,6 +889,8 @@ async fn boot_api(
     let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
     let watch_progress: Arc<dyn WatchProgressRepo> =
         Arc::new(SqlxWatchProgressRepo::new(pool.clone()));
+    let download_tickets: Arc<dyn DownloadTicketRepo> =
+        Arc::new(SqlxDownloadTicketRepo::new(pool.clone()));
     let library_view_repo: Arc<dyn LibraryViewRepo> =
         Arc::new(SqlxLibraryViewRepo::new(pool.clone()));
     // Idempotent -- inserts "Newly Added"/"Newly Released" only if their
@@ -1055,6 +1058,7 @@ async fn boot_api(
         system_settings_repo,
         media_files,
         watch_progress,
+        download_tickets,
         jwt,
         admin_registry,
         auth_mode,

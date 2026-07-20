@@ -4,14 +4,21 @@ import SwiftUI
 
 struct PlayerView: View {
     let apiClient: StreamarrAPIClient
+    let downloadRepository: DownloadRepository
     let mediaFileID: UUID?
     let title: String
 
     @State private var viewModel: PlayerViewModel?
     @State private var controlsVisible = true
 
-    init(apiClient: StreamarrAPIClient, initialMediaFileID: String = "", initialTitle: String = "") {
+    init(
+        apiClient: StreamarrAPIClient,
+        downloadRepository: DownloadRepository,
+        initialMediaFileID: String = "",
+        initialTitle: String = ""
+    ) {
         self.apiClient = apiClient
+        self.downloadRepository = downloadRepository
         self.mediaFileID = UUID(uuidString: initialMediaFileID)
         self.title = initialTitle
     }
@@ -65,7 +72,7 @@ struct PlayerView: View {
         .playarrChromeHidden()
         .task {
             if viewModel == nil {
-                viewModel = PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient)
+                viewModel = PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient, downloadRepository: downloadRepository)
             }
             if case .idle = viewModel?.loadState { startPlayback() }
         }

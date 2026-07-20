@@ -18,6 +18,7 @@ import {
 import { LibraryPage } from "./pages/Library";
 import { HomePage } from "./pages/Home";
 import { WorkDetailPage } from "./pages/WorkDetail";
+import { DownloadsPage } from "./pages/Downloads";
 import {
   PlayerPage,
   type PlayerLocationState,
@@ -41,8 +42,10 @@ import { NotFoundPage } from "./pages/NotFound";
 import { ClientsPage, VidaaClientsPage } from "./pages/Clients";
 import { UpdateToast } from "./components/UpdateToast";
 import { PageScrollRoot } from "./components/PageScrollRoot";
+import { TvEmptyState } from "./components/tv/TvEmptyState";
 import { ProfileAvatar, useStoredProfileAvatar } from "./components/ProfileAvatar";
 import {
+  DownloadsIcon,
   HomeIcon,
   MusicIcon,
   MoviesIcon,
@@ -66,6 +69,7 @@ import {
   type ActivePlayerSession,
 } from "./lib/playerSession";
 import { useTvNavigation } from "./lib/useTvNavigation";
+import { useOnlineStatus } from "./lib/useOnlineStatus";
 import { PLAYARR_CLIENT_PLATFORM } from "./lib/clientPlatform";
 import { useLanguage } from "./lib/i18n/LanguageProvider";
 import type { TranslationKey } from "./lib/i18n/translations";
@@ -105,6 +109,7 @@ const NAV_GROUPS: ReadonlyArray<NavGroup> = [
   {
     id: "search",
     items: [
+      { to: "/downloads", labelKey: "shell.nav.downloads", end: false, Icon: DownloadsIcon },
       { to: "/search", labelKey: "shell.nav.search", end: false, Icon: SearchIcon },
     ],
   },
@@ -211,9 +216,16 @@ function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const now = useMinuteClock();
+  const online = useOnlineStatus();
   const playerRouteMatch = matchPath("/player/:mediaFileId", location.pathname);
   const routeMediaFileId = playerRouteMatch?.params.mediaFileId;
   const isPlayerRoute = routeMediaFileId !== undefined;
+  // Downloads (and playback of an already-downloaded item, handled by
+  // `isPlayerRoute` below) are the two surfaces designed to keep working
+  // fully offline -- everything else this shell routes to needs the
+  // network it was already built around, so it shows a plain offline
+  // empty-state instead of a half-broken screen full of failed requests.
+  const isOfflineGated = !online && !isPlayerRoute && location.pathname !== "/downloads";
   const routePlayerState = isPlayerRoute
     ? (location.state as PlayerLocationState | null)
     : null;
@@ -374,15 +386,26 @@ function AppShell() {
         </header>
       )}
 
-      <PageScrollRoot scrollKey={`page:${location.pathname}`}>
-        <Outlet
-          context={{
-            availableWorkKinds,
-            activePlayerSession,
-            startPlayerSession,
-          } satisfies AppShellOutletContext}
-        />
-      </PageScrollRoot>
+      {isOfflineGated ? (
+        <div className="page tv-state-page">
+          <TvEmptyState
+            graphic="details"
+            variant="page"
+            title={t("shell.offline.title")}
+            description={t("shell.offline.description")}
+          />
+        </div>
+      ) : (
+        <PageScrollRoot scrollKey={`page:${location.pathname}`}>
+          <Outlet
+            context={{
+              availableWorkKinds,
+              activePlayerSession,
+              startPlayerSession,
+            } satisfies AppShellOutletContext}
+          />
+        </PageScrollRoot>
+      )}
 
       {activePlayerSession && (
         <PlayerPage
@@ -548,6 +571,7 @@ export function App() {
       <Route path="/install" element={<Navigate to="/clients" replace />} />
       <Route element={<AppShell />}>
         <Route path="/" element={<HomePage />} />
+        <Route path="/downloads" element={<DownloadsPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/search/:workId" element={<WorkDetailPage />} />
         <Route path="/library" element={<Navigate to="/series" replace />} />

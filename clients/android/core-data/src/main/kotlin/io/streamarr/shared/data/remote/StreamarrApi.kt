@@ -4,7 +4,12 @@ import io.streamarr.shared.data.model.CatalogPage
 import io.streamarr.shared.data.model.AddPlaylistItemRequest
 import io.streamarr.shared.data.model.AvailableProfile
 import io.streamarr.shared.data.model.CreatePlaylistRequest
+import io.streamarr.shared.data.model.CreateDownloadTicketRequest
 import io.streamarr.shared.data.model.CreateUserInviteRequest
+import io.streamarr.shared.data.model.DownloadOptionsResponse
+import io.streamarr.shared.data.model.DownloadQualityOption
+import io.streamarr.shared.data.model.DownloadStatus
+import io.streamarr.shared.data.model.DownloadTicketResponse
 import io.streamarr.shared.data.model.PlayerPreferences
 import io.streamarr.shared.data.model.OptionalUserInviteRequest
 import io.streamarr.shared.data.model.Playlist
@@ -157,6 +162,48 @@ interface StreamarrApi {
         @Path("media_file_id") mediaFileId: String,
         @Body request: UpdateWatchProgressRequest,
     ): WatchProgress
+
+    // ---- downloads -----------------------------------------------------------
+
+    /**
+     * `GET /api/v1/media/{media_file_id}/download-options` -- the download
+     * qualities this server can produce for this media file (`"original"`
+     * plus every supported transcode profile). See [DownloadQualityOption]'s
+     * KDoc for the size-estimate semantics.
+     */
+    @GET("api/v1/media/{media_file_id}/download-options")
+    suspend fun getDownloadOptions(@Path("media_file_id") mediaFileId: String): DownloadOptionsResponse
+
+    /**
+     * `POST /api/v1/downloads` -- stages a new download ticket, or returns
+     * an existing queued/processing/ready ticket for the same
+     * `(media_file_id, quality_id)` pair (200) instead of creating a
+     * duplicate (201). `"original"` resolves `Ready` immediately;
+     * see [DownloadStatus]'s KDoc for why a named profile currently never
+     * leaves `Queued`.
+     */
+    @POST("api/v1/downloads")
+    suspend fun createDownloadTicket(@Body request: CreateDownloadTicketRequest): DownloadTicketResponse
+
+    @GET("api/v1/downloads")
+    suspend fun listDownloadTickets(): List<DownloadTicketResponse>
+
+    /** `GET /api/v1/downloads/{id}` -- poll a ticket's current state. */
+    @GET("api/v1/downloads/{id}")
+    suspend fun getDownloadTicket(@Path("id") id: String): DownloadTicketResponse
+
+    /**
+     * `DELETE /api/v1/downloads/{id}` -- soft-cancels the ticket (marked
+     * `Canceled`, not deleted). Note: the actual byte-serving
+     * `GET /api/v1/downloads/{id}/file` endpoint is deliberately *not*
+     * modeled here -- Media3's `DownloadManager`/offline `DownloadService`
+     * fetches those bytes directly via its own authenticated
+     * `OkHttpDataSource` (see `core-download`'s `DefaultDownloadRepository`
+     * and the app module's `DownloadModule`), not through this Retrofit
+     * client.
+     */
+    @DELETE("api/v1/downloads/{id}")
+    suspend fun cancelDownloadTicket(@Path("id") id: String): Response<ResponseBody>
 
     // ---- Playarr profiles and preferences ---------------------------------
 

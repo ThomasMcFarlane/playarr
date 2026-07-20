@@ -199,6 +199,65 @@ export interface WatchProgressUpdate {
   positionMs: number;
   durationMs: number;
   completed?: boolean;
+  /**
+   * ISO 8601/RFC3339 timestamp for when this update actually happened, for
+   * an offline-buffered update replayed after reconnecting. Omit for a
+   * normal live update -- the server falls back to `now()`.
+   */
+  occurredAt?: string;
+}
+
+// ---------------------------------------------------------------------------
+// downloads -- offline media downloads. Hand-authored (not sourced from
+// `components["schemas"]`): `backend/openapi/streamarr.yaml` doesn't carry
+// these operations yet at the time this client-side work was written, so
+// these types/methods are typed directly off the agreed contract instead of
+// waiting on a `pnpm run generate` refresh. Once the spec and generated
+// schema catch up, these can be re-pointed at `components["schemas"]` with
+// no call-site changes -- the shapes below are written to match exactly.
+// ---------------------------------------------------------------------------
+
+export type DownloadStatus =
+  | "queued"
+  | "processing"
+  | "ready"
+  | "failed"
+  | "expired"
+  | "canceled";
+
+export interface DownloadOption {
+  id: string;
+  label: string;
+  profile: string | null;
+  height: number | null;
+  /** `null` only ever alongside `size_is_estimate: false` when the source's own `size_bytes` isn't known yet. */
+  estimated_size_bytes: number | null;
+  /** `false` for `"original"` (a real byte count from `MediaFile.size_bytes`); `true` for a named transcode profile estimated from bitrate * duration. */
+  size_is_estimate: boolean;
+}
+
+export interface DownloadOptionsResponse {
+  media_file_id: string;
+  container: string;
+  options: DownloadOption[];
+}
+
+export interface DownloadTicket {
+  id: string;
+  media_file_id: string;
+  quality_id: string;
+  status: DownloadStatus;
+  container: string;
+  size_bytes: number | null;
+  requested_at: string;
+  ready_at: string | null;
+  expires_at: string | null;
+  error_message: string | null;
+}
+
+export interface CreateDownloadRequest {
+  media_file_id: string;
+  quality_id: string;
 }
 
 export interface SessionHistoryParams {
@@ -388,10 +447,12 @@ export class ApiClient {
   readonly raw: Client<paths>;
   private readonly baseUrl: string;
   private readonly accessTokenProvider: ApiClientConfig["getAccessToken"];
+  private readonly rawFetch: (input: Request) => Promise<Response>;
 
   constructor(config: ApiClientConfig) {
     this.baseUrl = config.baseUrl;
     this.accessTokenProvider = config.getAccessToken;
+    this.rawFetch = config.fetchImpl ?? ((input: Request) => fetch(input));
     this.raw = createFetchClient<paths>({
       baseUrl: config.baseUrl,
       fetch: config.fetchImpl,
@@ -434,6 +495,42 @@ export class ApiClient {
   private unwrap<T, E>(result: { data?: T; error?: E; response: Response }): T {
     this.assertOk(result);
     return result.data as T;
+  }
+
+  /**
+   * Manual typed-JSON request for an operation not (yet) present in the
+   * generated `paths` type -- see the `downloads` section below. Attaches
+   * the same bearer-token auth every `PROTECTED_OPERATIONS` request gets
+   * from `authMiddleware`, just without going through `openapi-fetch`'s
+   * `paths`-typed `raw` client.
+   */
+  private async requestJson<T>(
+    method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
+    path: string,
+    body?: unknown
+  ): Promise<T> {
+    const token = await this.getAccessToken();
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+    const request = new Request(this.resolveUrl(path), {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    const response = await this.rawFetch(request);
+    if (!response.ok) {
+      let errorBody: unknown;
+      try {
+        errorBody = await response.json();
+      } catch {
+        errorBody = undefined;
+      }
+      throw new ApiError(response.status, response.statusText, errorBody);
+    }
+    if (response.status === 204) return undefined as T;
+    const text = await response.text();
+    return (text ? JSON.parse(text) : undefined) as T;
   }
 
   // ---------------------------------------------------------------------
@@ -1133,8 +1230,68 @@ export class ApiClient {
           position_ms: update.positionMs,
           duration_ms: update.durationMs,
           completed: update.completed,
+          occurred_at: update.occurredAt,
         },
       })
     );
+  }
+
+  // ---------------------------------------------------------------------
+  // downloads -- offline media downloads. Same bearer-token gate as every
+  // other protected operation, plus `Policy.can_download` and the normal
+  // per-item library-ACL check on the underlying `media_file_id` -- 403 if
+  // either is missing, 404 (not 403) for an unknown/inaccessible id. See
+  // this file's "downloads" types section above for why these go through
+  // `requestJson` instead of the generated `paths`-typed `raw` client.
+  // ---------------------------------------------------------------------
+
+  /**
+   * Downloadable quality choices for one media file. The `"original"`
+   * option always has `size_is_estimate: false` and a real byte count;
+   * every named transcode profile is `size_is_estimate: true`, estimated
+   * from bitrate * duration.
+   */
+  async getDownloadOptions(mediaFileId: string): Promise<DownloadOptionsResponse> {
+    return this.requestJson(
+      "GET",
+      `/api/v1/media/${encodeURIComponent(mediaFileId)}/download-options`
+    );
+  }
+
+  /**
+   * Creates a download ticket. `quality_id: "original"` comes back
+   * immediately `"ready"`; a named profile comes back `"queued"` and
+   * transitions to `"ready"` asynchronously -- poll `getDownload`.
+   */
+  async createDownload(body: CreateDownloadRequest): Promise<DownloadTicket> {
+    return this.requestJson("POST", "/api/v1/downloads", body);
+  }
+
+  /** Every download ticket belonging to the caller. */
+  async listDownloads(): Promise<DownloadTicket[]> {
+    return this.requestJson("GET", "/api/v1/downloads");
+  }
+
+  /** Polls one download ticket's current status. */
+  async getDownload(id: string): Promise<DownloadTicket> {
+    return this.requestJson("GET", `/api/v1/downloads/${encodeURIComponent(id)}`);
+  }
+
+  /** Cancels/deletes a download ticket (and its stored file, server-side). */
+  async cancelDownload(id: string): Promise<void> {
+    await this.requestJson("DELETE", `/api/v1/downloads/${encodeURIComponent(id)}`);
+  }
+
+  /**
+   * Base-URL-qualified URL for the range-resumable authenticated file
+   * download (`Content-Disposition: attachment`; 206 on a `Range` request;
+   * 409 not ready, 410 expired/canceled). Returned as a URL rather than a
+   * convenience method because the real download engine (`lib/downloadEngine.ts`)
+   * needs raw, streamed, `Range`-chunked `Response` bodies -- not a fully
+   * buffered `Blob` -- so it issues these `fetch()` calls itself, attaching
+   * `Authorization` via `getAccessToken()` the same way this client does.
+   */
+  downloadFileUrl(id: string): string {
+    return this.resolveUrl(`/api/v1/downloads/${encodeURIComponent(id)}/file`);
   }
 }

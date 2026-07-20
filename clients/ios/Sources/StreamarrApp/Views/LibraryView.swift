@@ -4,21 +4,25 @@ import SwiftUI
 struct LibraryView: View {
     @State private var viewModel: LibraryViewModel
     let apiClient: StreamarrAPIClient
+    let downloadRepository: DownloadRepository
     let title: String
     @State private var showingFilters = false
+    @State private var downloadTarget: Work?
 
-    init(kind: WorkKind?, apiClient: StreamarrAPIClient, title: String? = nil) {
+    init(kind: WorkKind?, apiClient: StreamarrAPIClient, downloadRepository: DownloadRepository, title: String? = nil) {
         let viewModel = LibraryViewModel(apiClient: apiClient)
         viewModel.selectedKind = kind
         viewModel.isSearchMode = kind == nil
         _viewModel = State(initialValue: viewModel)
         self.apiClient = apiClient
+        self.downloadRepository = downloadRepository
         self.title = title ?? kind?.displayName ?? "Search"
     }
 
-    init(viewModel: LibraryViewModel, apiClient: StreamarrAPIClient) {
+    init(viewModel: LibraryViewModel, apiClient: StreamarrAPIClient, downloadRepository: DownloadRepository) {
         _viewModel = State(initialValue: viewModel)
         self.apiClient = apiClient
+        self.downloadRepository = downloadRepository
         self.title = viewModel.selectedKind?.displayName ?? "Library"
     }
 
@@ -42,6 +46,9 @@ struct LibraryView: View {
         }
         .navigationBarHidden(true)
         .sheet(isPresented: $showingFilters) { filterSheet }
+        .sheet(item: $downloadTarget) { work in
+            WorkDownloadSheet(work: work, apiClient: apiClient, downloadRepository: downloadRepository)
+        }
     }
 
     private func stage<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some View {
@@ -94,7 +101,8 @@ struct LibraryView: View {
                                 NavigationLink {
                                     WorkDetailView(
                                         viewModel: WorkDetailViewModel(apiClient: apiClient, workID: work.id),
-                                        apiClient: apiClient
+                                        apiClient: apiClient,
+                                        downloadRepository: downloadRepository
                                     )
                                 } label: {
                                     PlayarrArtwork(work: work, kind: .poster, apiClient: apiClient)
@@ -111,6 +119,9 @@ struct LibraryView: View {
                                         .shadow(color: .black.opacity(0.34), radius: 18, y: 10)
                                 }
                                 .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button("Download", systemImage: "arrow.down.circle") { downloadTarget = work }
+                                }
                                 .task { if work.id == viewModel.works.last?.id { await viewModel.loadMore() } }
                             }
                         }
@@ -129,7 +140,7 @@ struct LibraryView: View {
                         ) {
                     ForEach(viewModel.playlists) { playlist in
                         NavigationLink {
-                            PlaylistDetailView(playlist: playlist, apiClient: apiClient)
+                            PlaylistDetailView(playlist: playlist, apiClient: apiClient, downloadRepository: downloadRepository)
                         } label: {
                             playlistSearchCard(playlist, width: cardWidth)
                         }
@@ -139,7 +150,8 @@ struct LibraryView: View {
                         NavigationLink {
                             WorkDetailView(
                                 viewModel: WorkDetailViewModel(apiClient: apiClient, workID: work.id),
-                                apiClient: apiClient
+                                apiClient: apiClient,
+                                downloadRepository: downloadRepository
                             )
                         } label: {
                             if viewModel.viewMode == .list {
@@ -149,6 +161,9 @@ struct LibraryView: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("Download", systemImage: "arrow.down.circle") { downloadTarget = work }
+                        }
                         .task {
                             if work.id == viewModel.works.last?.id { await viewModel.loadMore() }
                         }
@@ -385,5 +400,7 @@ struct LibraryView: View {
 
 #Preview {
     let apiClient = PreviewAPIClient()
-    NavigationStack { LibraryView(kind: .movie, apiClient: apiClient) }
+    NavigationStack {
+        LibraryView(kind: .movie, apiClient: apiClient, downloadRepository: DownloadRepository(apiClient: apiClient))
+    }
 }

@@ -6,6 +6,15 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- StreamarrDownloadService: Media3's own DownloadService promotes
+         itself to a foreground service while any download is active, so it
+         can keep running (and show real progress) while the app isn't in
+         the foreground. These two permissions are required for that
+         "dataSync" foreground service type from API 28 / API 34 onward
+         respectively. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
     <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="false" />
@@ -50,6 +59,27 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/update_file_paths" />
         </provider>
+
+        <!-- Disables WorkManager's default androidx.startup initializer:
+             StreamarrMobileApp implements Configuration.Provider (a Hilt-
+             aware WorkerFactory for KeepUntilSweepWorker's @HiltWorker
+             constructor), which only takes effect if WorkManager's own
+             automatic, non-Hilt-aware initialization is turned off here. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
+        <service
+            android:name=".download.StreamarrDownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <activity
             android:name=".MainActivity"

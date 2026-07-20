@@ -44,6 +44,7 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
             Task { await updateViewModel.checkForUpdate() }
+            environment.downloadRepository.sweepExpiredDownloads()
         }
         .onChange(of: environment.serverBaseURL) { _, _ in
             updateViewModel = UpdateViewModel(apiClient: environment.apiClient)
@@ -61,6 +62,7 @@ struct RootView: View {
 
 private struct AuthenticatedPlayarrShell: View {
     enum Destination: Hashable {
+        case downloads
         case search
         case home
         case library(WorkKind)
@@ -73,6 +75,7 @@ private struct AuthenticatedPlayarrShell: View {
 
         var title: String {
             switch self {
+            case .downloads: "Downloads"
             case .search: "Search"
             case .home: "Home"
             case .library(let kind): kind.displayName
@@ -87,6 +90,7 @@ private struct AuthenticatedPlayarrShell: View {
 
         var icon: String {
             switch self {
+            case .downloads: "arrow.down.circle"
             case .search: "magnifyingglass"
             case .home: "house"
             case .library(let kind): kind.symbolName
@@ -152,21 +156,25 @@ private struct AuthenticatedPlayarrShell: View {
     @ViewBuilder
     private var selectedContent: some View {
         switch selected {
+        case .downloads:
+            NavigationStack {
+                DownloadsView(repository: environment.downloadRepository, apiClient: environment.apiClient)
+            }
         case .home:
             NavigationStack {
-                HomeView(viewModel: homeViewModel, apiClient: environment.apiClient)
+                HomeView(viewModel: homeViewModel, apiClient: environment.apiClient, downloadRepository: environment.downloadRepository)
             }
         case .search:
             NavigationStack {
-                LibraryView(kind: nil, apiClient: environment.apiClient, title: "Search")
+                LibraryView(kind: nil, apiClient: environment.apiClient, downloadRepository: environment.downloadRepository, title: "Search")
             }
         case .library(let kind):
             NavigationStack {
-                LibraryView(kind: kind, apiClient: environment.apiClient)
+                LibraryView(kind: kind, apiClient: environment.apiClient, downloadRepository: environment.downloadRepository)
             }
         case .playlists:
             NavigationStack {
-                PlaylistsView(apiClient: environment.apiClient)
+                PlaylistsView(apiClient: environment.apiClient, downloadRepository: environment.downloadRepository)
             }
         case .profiles:
             NavigationStack {
@@ -185,7 +193,8 @@ private struct AuthenticatedPlayarrShell: View {
             NavigationStack {
                 WorkDetailView(
                     viewModel: demoDetailViewModel,
-                    apiClient: environment.apiClient
+                    apiClient: environment.apiClient,
+                    downloadRepository: environment.downloadRepository
                 )
             }
         #endif
@@ -360,7 +369,7 @@ private struct AuthenticatedPlayarrShell: View {
     }
 
     private var destinations: [Destination] {
-        var result: [Destination] = [.search, .home]
+        var result: [Destination] = [.downloads, .search, .home]
         for kind in [WorkKind.series, .movie, .site, .artist] where availableKinds.contains(kind) {
             result.append(.library(kind))
         }
