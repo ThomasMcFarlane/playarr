@@ -268,15 +268,33 @@ export function DownloadsPage() {
       })()
     : null;
 
+  // `null` (not yet resolved) is a genuinely distinct state from `false`
+  // (confirmed no access): show a loading state, not the 404, while it's
+  // still in flight -- mirrors the exact tv-compact-loading pattern
+  // Home.tsx/Library.tsx/Playlists.tsx already use for their own initial
+  // loads. Never the real content during this window either.
+  if (canDownload === null) {
+    return (
+      <div
+        className="tv-library tv-compact-loading"
+        aria-label={t("pages.downloads.loadingLabel")}
+        role="status"
+      >
+        <div className="tv-orbit-loader" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </div>
+        <p>{t("pages.downloads.preparingLabel")}</p>
+      </div>
+    );
+  }
+
   // Defense in depth: the nav item is already hidden without this grant,
   // but a direct navigation (bookmark, typed URL) should still land on the
   // same 404 an address that never existed would -- not a redirect (which
-  // would confirm "this route exists, you're just not allowed"), and never
-  // the real content, not even briefly. `null` (not yet resolved) renders
-  // the same 404 as `false` rather than the real page: showing real
-  // content first and then yanking it away once the check resolves false
-  // would itself be the flash-of-content bug this is guarding against.
-  if (canDownload !== true) {
+  // would confirm "this route exists, you're just not allowed").
+  if (canDownload === false) {
     return <NotFoundPage />;
   }
 
@@ -312,30 +330,33 @@ export function DownloadsPage() {
         {!online ? <span className="tv-downloads-offline-badge">{t("pages.downloads.offline")}</span> : null}
       </header>
 
-      {focused ? (
-        <aside className="tv-library-preview tv-downloads-preview" key={`preview-${focused.id}`}>
-          {storageSupported && storageUsage ? (
-            <div className="tv-downloads-preview-storage">
-              <span>
-                {t("pages.downloads.storageUsed", {
-                  used: formatBytes(storageUsage.usageBytes),
-                  quota: formatBytes(storageUsage.quotaBytes),
-                })}
-              </span>
-              {storagePercent !== null ? (
-                <div
-                  className="tv-download-progress tv-downloads-storage-bar"
-                  role="progressbar"
-                  aria-valuenow={storagePercent}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                >
-                  <span className="tv-download-progress-fill" style={{ width: `${storagePercent}%` }} />
-                </div>
-              ) : null}
+      {storageSupported && storageUsage ? (
+        <aside className="tv-downloads-storage-panel" aria-label={t("pages.downloads.storageUsed", {
+          used: formatBytes(storageUsage.usageBytes),
+          quota: formatBytes(storageUsage.quotaBytes),
+        })}>
+          <span>
+            {t("pages.downloads.storageUsed", {
+              used: formatBytes(storageUsage.usageBytes),
+              quota: formatBytes(storageUsage.quotaBytes),
+            })}
+          </span>
+          {storagePercent !== null ? (
+            <div
+              className="tv-download-progress tv-downloads-storage-bar"
+              role="progressbar"
+              aria-valuenow={storagePercent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <span className="tv-download-progress-fill" style={{ width: `${storagePercent}%` }} />
             </div>
           ) : null}
+        </aside>
+      ) : null}
 
+      {focused ? (
+        <aside className="tv-library-preview tv-downloads-preview" key={`preview-${focused.id}`}>
           {focusedPreview?.detail ? (
             <>
               <p className="tv-provider">

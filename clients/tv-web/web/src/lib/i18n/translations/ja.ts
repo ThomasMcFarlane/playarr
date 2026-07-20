@@ -879,6 +879,8 @@ export const ja: Translations = {
   "pages.downloads.statusExpired": "期限切れ",
   "pages.downloads.keepForever": "無期限で保存",
   "pages.downloads.keepUntilDate": "{{date}} まで保存",
+  "pages.downloads.loadingLabel": "ダウンロードを読み込み中",
+  "pages.downloads.preparingLabel": "ダウンロードを準備中",
   "pages.downloads.keepUntilAfterWatchedDays": "視聴後 {{count}} 日間保存",
   "pages.downloads.keepUntilAfterWatchedWeeks": "視聴後 {{count}} 週間保存",
   "pages.downloads.progressAriaLabel": "{{title}} をダウンロード中",

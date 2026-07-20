@@ -883,6 +883,8 @@ export const th: Translations = {
   "pages.downloads.statusExpired": "หมดอายุ",
   "pages.downloads.keepForever": "เก็บไว้ตลอดไป",
   "pages.downloads.keepUntilDate": "เก็บไว้ถึง {{date}}",
+  "pages.downloads.loadingLabel": "กำลังโหลดรายการดาวน์โหลด",
+  "pages.downloads.preparingLabel": "กำลังเตรียมรายการดาวน์โหลด",
   "pages.downloads.keepUntilAfterWatchedDays": "เก็บไว้ {{count}} วันหลังดูแล้ว",
   "pages.downloads.keepUntilAfterWatchedWeeks": "เก็บไว้ {{count}} สัปดาห์หลังดูแล้ว",
   "pages.downloads.progressAriaLabel": "กำลังดาวน์โหลด {{title}}",

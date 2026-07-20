@@ -10813,10 +10813,22 @@ html[data-platform="android-tv"] .player-quality-option {
   }
 }
 
-.tv-downloads-preview-storage {
+/*
+ * A real right-anchored panel, deliberately NOT `.tv-library-preview`:
+ * that class (shared with `.tv-home-feature`/`.tv-detail-copy`) is
+ * `position: absolute; left: clamp(102px, 8vw, 160px)` -- it's this
+ * app's left-side text-over-backdrop convention, not a right column.
+ * Mirrors that same rule's vertical position and edge inset, just
+ * flipped to `right`, so the two panels read as a symmetric pair.
+ */
+.tv-downloads-storage-panel {
+  position: absolute;
+  z-index: 7;
+  top: 24%;
+  right: clamp(102px, 8vw, 160px);
+  width: min(20vw, 340px);
   display: grid;
   gap: 0.5rem;
-  margin-bottom: clamp(14px, 1.6vw, 22px);
   color: var(--ink-muted);
   font-size: clamp(0.5rem, 0.58vw, 0.68rem);
 }
