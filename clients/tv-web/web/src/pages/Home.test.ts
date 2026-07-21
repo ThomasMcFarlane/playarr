@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("Home layout", () => {
-  it("supports raised media cards, portrait covers, and a short left track fade", () => {
+  it("supports raised media cards, portrait covers, and an outward left track fade", () => {
     const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
 
     expect(css).toMatch(
@@ -12,7 +12,13 @@ describe("Home layout", () => {
       /\.tv-home-card:hover \.tv-home-card-art,[\s\S]*?\{[^}]*0 26px 52px[^}]*transform:\s*scale\(1\.025\)/s
     );
     expect(css).toMatch(
-      /\.tv-media-track-window\.can-scroll-left \.tv-media-track-scroll\s*\{[^}]*--tv-track-left-fade:\s*clamp\(22px, 2\.2vw, 38px\)[^}]*mask-image:\s*linear-gradient/s
+      /\.tv-media-track\s*\{[^}]*--tv-track-left-fade:\s*clamp\(88px, 8\.8vw, 152px\)[^}]*padding-left:\s*var\(--tv-track-left-fade\)/s
+    );
+    expect(css).toMatch(
+      /\.tv-media-track-window\s*\{[^}]*width:\s*calc\(100% \+ var\(--tv-track-left-fade\)\)[^}]*margin-left:\s*calc\(-1 \* var\(--tv-track-left-fade\)\)/s
+    );
+    expect(css).toMatch(
+      /\.tv-media-track-window\.can-scroll-left \.tv-media-track-scroll\s*\{[^}]*mask-image:\s*linear-gradient\([^}]*var\(--tv-track-left-fade\)/s
     );
   });
 

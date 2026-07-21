@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  centredVerticalTrackScrollTop,
   directionalVerticalScrollTop,
   horizontalRevealDelta,
   parentRoute,
@@ -50,6 +51,39 @@ describe("shouldAutoFocusViewDefault", () => {
 });
 
 describe("directional page fallback", () => {
+  it("centres boundary tracks without scrolling beyond the surface", () => {
+    expect(
+      centredVerticalTrackScrollTop({
+        clientHeight: 500,
+        containerTop: 100,
+        scrollHeight: 1_600,
+        scrollTop: 700,
+        trackHeight: 180,
+        trackTop: 420,
+      })
+    ).toBe(860);
+    expect(
+      centredVerticalTrackScrollTop({
+        clientHeight: 500,
+        containerTop: 100,
+        scrollHeight: 1_600,
+        scrollTop: 1_050,
+        trackHeight: 180,
+        trackTop: 520,
+      })
+    ).toBe(1_100);
+    expect(
+      centredVerticalTrackScrollTop({
+        clientHeight: 500,
+        containerTop: 100,
+        scrollHeight: 1_600,
+        scrollTop: 40,
+        trackHeight: 180,
+        trackTop: -180,
+      })
+    ).toBe(0);
+  });
+
   it("pages a native vertical viewport when focus has no next target", () => {
     expect(
       directionalVerticalScrollTop({

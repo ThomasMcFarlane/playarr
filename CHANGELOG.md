@@ -226,6 +226,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Let scrolled media cards travel into a longer fade outside the shared track's left edge, and
+  keep vertical remote navigation snapped to the first and last populated rails.
 - Restore the native iOS Home page to Playarr Web's full-width phone viewport so rail headings
   and both leading carousel cards launch visibly beneath the safe area instead of off-screen.
 - Fix native iOS Home, navigation, avatar, media-track, playlist, and playback parity: use the

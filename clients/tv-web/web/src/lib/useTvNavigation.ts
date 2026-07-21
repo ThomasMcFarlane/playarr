@@ -159,11 +159,17 @@ function focusWithinScrollContainer(
   return true;
 }
 
-function closestItemInAdjacentTrack(
+interface VerticalTrackNavigation {
+  currentTrack: HTMLElement;
+  surface: HTMLElement;
+  target?: HTMLElement;
+}
+
+function navigationWithinVerticalTracks(
   current: HTMLElement,
   direction: Direction,
   nodes: HTMLElement[]
-): HTMLElement | undefined {
+): VerticalTrackNavigation | undefined {
   if (direction !== "up" && direction !== "down") return undefined;
 
   const currentTrack = current.closest<HTMLElement>(".tv-media-track");
@@ -188,12 +194,56 @@ function closestItemInAdjacentTrack(
       }))
   );
 
-  return findClosestItemInNextTrack(
-    itemsByTrack,
-    currentTrackIndex,
-    centre(current.getBoundingClientRect()).x,
-    direction
-  );
+  return {
+    currentTrack,
+    surface,
+    target: findClosestItemInNextTrack(
+      itemsByTrack,
+      currentTrackIndex,
+      centre(current.getBoundingClientRect()).x,
+      direction
+    ),
+  };
+}
+
+export function centredVerticalTrackScrollTop({
+  clientHeight,
+  containerTop,
+  scrollHeight,
+  scrollTop,
+  trackHeight,
+  trackTop,
+}: {
+  clientHeight: number;
+  containerTop: number;
+  scrollHeight: number;
+  scrollTop: number;
+  trackHeight: number;
+  trackTop: number;
+}): number {
+  const maximum = Math.max(0, scrollHeight - clientHeight);
+  const target =
+    scrollTop + trackTop + trackHeight / 2 - (containerTop + clientHeight / 2);
+  return Math.max(0, Math.min(maximum, target));
+}
+
+function snapToVerticalTrackBoundary({
+  currentTrack,
+  surface,
+}: VerticalTrackNavigation): void {
+  const surfaceRect = surface.getBoundingClientRect();
+  const trackRect = currentTrack.getBoundingClientRect();
+  surface.scrollTo({
+    top: centredVerticalTrackScrollTop({
+      clientHeight: surface.clientHeight,
+      containerTop: surfaceRect.top,
+      scrollHeight: surface.scrollHeight,
+      scrollTop: surface.scrollTop,
+      trackHeight: trackRect.height,
+      trackTop: trackRect.top,
+    }),
+    behavior: "smooth",
+  });
 }
 
 function focusExplicitEdgeTarget(
@@ -405,8 +455,17 @@ function moveFocus(direction: Direction): void {
 
   const currentRect = current.getBoundingClientRect();
   const candidates = nodes.filter((node) => !node.closest(".app-user-identity"));
+  const verticalTrackNavigation = navigationWithinVerticalTracks(
+    current,
+    direction,
+    candidates
+  );
+  if (verticalTrackNavigation && !verticalTrackNavigation.target) {
+    snapToVerticalTrackBoundary(verticalTrackNavigation);
+    return;
+  }
   const next =
-    closestItemInAdjacentTrack(current, direction, candidates) ??
+    verticalTrackNavigation?.target ??
     candidates
       .filter((node) => node !== current && visibleOnPerpendicularAxis(node, direction))
       .map((node) => ({

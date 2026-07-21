@@ -37,4 +37,15 @@ describe("findClosestItemInNextTrack", () => {
 
     expect(target).toBe("right");
   });
+
+  it("stops at the first and last populated tracks", () => {
+    const tracks = [
+      [{ value: "first", centreX: 140 }],
+      [],
+      [{ value: "last", centreX: 570 }],
+    ];
+
+    expect(findClosestItemInNextTrack(tracks, 0, 140, "up")).toBeUndefined();
+    expect(findClosestItemInNextTrack(tracks, 2, 570, "down")).toBeUndefined();
+  });
 });
