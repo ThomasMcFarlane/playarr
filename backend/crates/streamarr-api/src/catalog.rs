@@ -16,13 +16,14 @@
 //! allowed set, and `get_work_handler` 404s (not 403s) for a work outside
 //! it, indistinguishable from a genuinely nonexistent work.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use axum::extract::{Path, Query, State};
 use axum::Json;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use streamarr_catalog::{BrowseQuery, BrowseSort, WorkDetail};
-use streamarr_model::{Album, Book, Episode, Season, Track, Work, WorkKind};
+use streamarr_model::{Album, Availability, Book, Episode, ExternalProvider, Season, Track, Work, WorkKind};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -77,6 +78,11 @@ impl From<BrowseQueryParams> for BrowseQuery {
             // `CatalogService::resolve_view` sets this today, from a saved
             // `LibraryView`'s `ViewCriteria::release_window_days`.
             release_window_days: defaults.release_window_days,
+            // Not (yet) exposed as its own HTTP query param either -- same
+            // placeholder treatment as `release_window_days` above, pending
+            // whichever pass wires a `GroupLibrary`-aware browse filter
+            // through to this DTO.
+            group_library_ids: defaults.group_library_ids,
             sort,
             limit: params.limit.unwrap_or(defaults.limit),
             offset: params.offset.unwrap_or(defaults.offset),
@@ -96,6 +102,64 @@ pub struct SearchQueryParams {
     pub limit: Option<i64>,
 }
 
+/// One peer's reported availability for a `Work`, per
+/// `docs/architecture/peer-groups.md` §4.3's Rust sketch. Mirrors
+/// [`streamarr_catalog::AvailabilityBadge`] field-for-field: that type
+/// can't implement `ToSchema` itself (`streamarr-catalog` deliberately
+/// doesn't depend on `utoipa`, same as every other type this file mirrors
+/// for OpenAPI purposes), and [`SearchResponse`] below needs a real,
+/// `ToSchema`-implementing type to actually return -- so, unlike
+/// `CatalogPageSchema`/`WorkDetailSchema`'s purely-decorative mirrors, this
+/// one is genuinely constructed (via the `From` impl below), not just
+/// `#[allow(dead_code)]` documentation. Named without the `Schema` suffix
+/// those use, matching the design doc's own naming for this DTO exactly.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AvailabilityBadge {
+    pub peer_node_id: Uuid,
+    pub peer_name: String,
+    pub availability: Availability,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<streamarr_catalog::AvailabilityBadge> for AvailabilityBadge {
+    fn from(badge: streamarr_catalog::AvailabilityBadge) -> Self {
+        Self {
+            peer_node_id: badge.peer_node_id,
+            peer_name: badge.peer_name,
+            availability: badge.availability,
+            updated_at: badge.updated_at,
+        }
+    }
+}
+
+/// A title a full peer reports but this node has zero local record of at
+/// all -- the partial-cache-node case (§4.3). Mirrors
+/// [`streamarr_catalog::RemoteOnlyWork`]; see [`AvailabilityBadge`]'s doc
+/// comment for why this exists as a real, separately-constructed type
+/// rather than a purely decorative mirror.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct RemoteOnlyWork {
+    pub provider: ExternalProvider,
+    pub external_id: String,
+    pub title: String,
+    pub kind: WorkKind,
+    pub release_date: Option<String>,
+    pub available_on: Vec<AvailabilityBadge>,
+}
+
+impl From<streamarr_catalog::RemoteOnlyWork> for RemoteOnlyWork {
+    fn from(work: streamarr_catalog::RemoteOnlyWork) -> Self {
+        Self {
+            provider: work.provider,
+            external_id: work.external_id,
+            title: work.title,
+            kind: work.kind,
+            release_date: work.release_date,
+            available_on: work.available_on.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
 /// Doc-only mirror of [`streamarr_catalog::CatalogPage`] -- the real type
 /// already derives `Serialize` (and is what handlers actually return), it
 /// just has no `ToSchema` (`streamarr-catalog` doesn't depend on `utoipa`).
@@ -104,6 +168,29 @@ pub struct SearchQueryParams {
 pub struct CatalogPageSchema {
     pub items: Vec<Work>,
     pub total: Option<i64>,
+    /// Cross-peer availability for each work in `items`, keyed by `Work::id`
+    /// (§4.3) -- empty for a deployment not part of a peer group.
+    pub available_on: HashMap<Uuid, Vec<AvailabilityBadge>>,
+    /// Titles a full peer reports but this node has zero local record of
+    /// (§4.3's partial-cache-node case) -- empty unless the caller has a
+    /// `Policy::group_library_allow` grant.
+    pub remote_only: Vec<RemoteOnlyWork>,
+}
+
+/// `GET /api/v1/catalog/search`'s real response shape: locally-known
+/// matches (`items`, from `CatalogService::search`, unchanged) plus the
+/// partial-cache-node `remote_only` union (§4.3, from `CatalogService::
+/// search_remote_only`) -- see [`search_catalog_handler`]. Unlike
+/// `CatalogPageSchema`/`WorkDetailSchema` above, this genuinely is the real
+/// wire type (not just a doc-only mirror): `CatalogService::search` itself
+/// deliberately keeps returning a bare `Vec<Work>` (every existing caller/
+/// test is unaffected), so combining it with `remote_only` for the HTTP
+/// response has to happen here, in the API layer, rather than in
+/// `streamarr-catalog`.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct SearchResponse {
+    pub items: Vec<Work>,
+    pub remote_only: Vec<RemoteOnlyWork>,
 }
 
 /// Doc-only mirror of `streamarr_catalog::EpisodeDetail` -- the resolved
@@ -173,6 +260,9 @@ pub struct WorkDetailSchema {
     /// Fixed source-container runtime for a movie. Series runtimes are
     /// exposed on each `EpisodeDetailSchema`.
     pub runtime_ms: Option<u64>,
+    /// Cross-peer availability for `work` (§4.3) -- empty for a deployment
+    /// not part of a peer group.
+    pub available_on: Vec<AvailabilityBadge>,
 }
 
 #[utoipa::path(
@@ -216,6 +306,14 @@ pub async fn browse_catalog_handler(
     let allowed = viewer.allowed_libraries();
     let mut query: BrowseQuery = params.into();
     query.allowed_source_instance_ids = allowed;
+    // §4.3's partial-cache-node union: which `GroupLibrary`s this caller's
+    // own `Policy::group_library_allow` grants -- an admin's `Vec::new()`
+    // default union in nothing extra here, same conservative "no automatic
+    // everything" choice `CatalogViewer::allowed_libraries` does NOT make
+    // for `library_allow` (that one bypasses for `is_admin`); unlike that
+    // check, this is choosing what to *additionally show*, not what to
+    // *gate*, so there's no access-control reason to special-case admins.
+    query.group_library_ids = viewer.policy.group_library_allow.clone();
     let page = state.catalog.browse(query).await?;
     Ok(Json(page))
 }
@@ -308,32 +406,39 @@ pub async fn get_work_handler(
     Ok(Json(detail))
 }
 
+/// Also unions in the partial-cache-node [`RemoteOnlyWork`] case (§4.3):
+/// titles a full peer reports but this node has zero local record of,
+/// scoped to the caller's own `Policy::group_library_allow` -- see
+/// `streamarr_catalog::CatalogService::search_remote_only`'s doc comment.
 #[utoipa::path(
     get,
     path = "/api/v1/catalog/search",
     tag = "catalog",
     params(SearchQueryParams),
     responses(
-        (status = 200, description = "Matching works", body = Vec<Work>, example = json!([{
-            "id": "4c9e2a1b-7f3d-4e6a-9b2c-8d5f1e3a7c90",
-            "kind": "movie",
-            "external_refs": [{"provider": "tmdb", "external_id": "155"}],
-            "title": "The Test Film",
-            "sort_title": "Test Film, The",
-            "overview": "Sample Vigilante raises the stakes in his war on crime with the help of Lt. Jim Gordon and District Attorney Harvey Dent.",
-            "images": [{
-                "kind": "poster",
-                "url": "https://image.tmdb.org/t/p/original/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
-                "width": 2000,
-                "height": 3000
+        (status = 200, description = "Matching works, plus any partial-cache-node remote-only titles", body = SearchResponse, example = json!({
+            "items": [{
+                "id": "4c9e2a1b-7f3d-4e6a-9b2c-8d5f1e3a7c90",
+                "kind": "movie",
+                "external_refs": [{"provider": "tmdb", "external_id": "155"}],
+                "title": "The Test Film",
+                "sort_title": "Test Film, The",
+                "overview": "Sample Vigilante raises the stakes in his war on crime with the help of Lt. Jim Gordon and District Attorney Harvey Dent.",
+                "images": [{
+                    "kind": "poster",
+                    "url": "https://image.tmdb.org/t/p/original/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
+                    "width": 2000,
+                    "height": 3000
+                }],
+                "genres": ["Action", "Crime", "Drama"],
+                "tags": [],
+                "added_at": "2024-01-15T10:30:00Z",
+                "release_date": "2008-07-16T00:00:00Z",
+                "monitored": true,
+                "availability": "available"
             }],
-            "genres": ["Action", "Crime", "Drama"],
-            "tags": [],
-            "added_at": "2024-01-15T10:30:00Z",
-            "release_date": "2008-07-16T00:00:00Z",
-            "monitored": true,
-            "availability": "available"
-        }])),
+            "remote_only": []
+        })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller has neither Playarr streaming access nor admin access")
     )
@@ -342,13 +447,21 @@ pub async fn search_catalog_handler(
     State(state): State<AppState>,
     viewer: CatalogViewer,
     Query(params): Query<SearchQueryParams>,
-) -> Result<Json<Vec<Work>>, ApiError> {
+) -> Result<Json<SearchResponse>, ApiError> {
     let allowed = viewer.allowed_libraries();
-    let results = state
+    let limit = params.limit.unwrap_or(25);
+    let items = state
         .catalog
-        .search(&params.q, params.limit.unwrap_or(25), allowed.as_deref())
+        .search(&params.q, limit, allowed.as_deref())
         .await?;
-    Ok(Json(results))
+    let remote_only = state
+        .catalog
+        .search_remote_only(&params.q, &viewer.policy.group_library_allow)
+        .await?
+        .into_iter()
+        .map(RemoteOnlyWork::from)
+        .collect();
+    Ok(Json(SearchResponse { items, remote_only }))
 }
 
 #[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
@@ -433,6 +546,7 @@ mod tests {
             default_root_folder_id: None,
             default_quality_profile_id: None,
             best_effort: false,
+            group_library_id: None,
         }
     }
 
@@ -543,8 +657,9 @@ mod tests {
         let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .unwrap();
-        let results: Vec<Work> = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(results.len(), 1);
+        let results: SearchResponse = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(results.items.len(), 1);
+        assert!(results.remote_only.is_empty());
     }
 
     #[tokio::test]
@@ -753,6 +868,54 @@ mod tests {
         assert_eq!(page.items.len(), 1);
     }
 
+    /// Per `docs/architecture/peer-groups.md` §5.1: a caller whose `Policy::
+    /// group_library_allow` names a `GroupLibrary` this node's own
+    /// `SourceInstance` is mapped onto (via `SourceInstance::
+    /// group_library_id`) sees that library's content -- even with an
+    /// entirely empty `library_allow`, proving the group-library grant
+    /// alone (resolved through `SourceInstanceRegistry::
+    /// source_instance_ids_for_group_libraries`) is sufficient, not merely
+    /// additive on top of a `library_allow` grant.
+    #[tokio::test]
+    async fn browse_allows_a_caller_via_group_library_allow_alone() {
+        let (router, state) = test_state().await;
+        let source_instance_id = Uuid::new_v4();
+        let group_library_id = Uuid::new_v4();
+        let mut instance = source_instance(source_instance_id, SourceKind::Radarr);
+        instance.group_library_id = Some(group_library_id);
+        state.source_instances.upsert(instance);
+
+        let movie_id = seed_movie(&state, "Group Library Movie").await;
+        seed_media_file(&state, movie_id, LeafRef::Work, source_instance_id).await;
+
+        let user_id = Uuid::new_v4();
+        crate::test_support::seed_streaming_user_with_group_library_allow(
+            &state,
+            user_id,
+            vec![group_library_id],
+        )
+        .await;
+        let token = mint_access_token(&state, user_id);
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/catalog")
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let page: streamarr_catalog::CatalogPage = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(page.items.len(), 1);
+        assert_eq!(page.items[0].id, movie_id);
+    }
+
     /// Same enforcement as `browse_restricts_to_the_callers_allowed_libraries`,
     /// through `GET /api/v1/catalog/search` instead of browse.
     #[tokio::test]
@@ -784,9 +947,9 @@ mod tests {
         let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .unwrap();
-        let results: Vec<Work> = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].id, allowed_movie);
+        let results: SearchResponse = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(results.items.len(), 1);
+        assert_eq!(results.items[0].id, allowed_movie);
     }
 
     /// Same enforcement as the browse/search tests above, through `GET

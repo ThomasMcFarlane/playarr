@@ -6,11 +6,13 @@ use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use streamarr_auth::device_flow::{DeviceCodeResponse, TokenError, TokenResponse};
 use streamarr_model::ClientPlatform;
 use utoipa::ToSchema;
 
+use crate::admin_peer::{peer_address_bundle, PeerAddressEntry};
 use crate::auth_extractor::StreamingUser;
 use crate::AppState;
 
@@ -112,8 +114,17 @@ pub async fn device_code_handler(
         .await?;
     if response.verification_uri.starts_with('/') {
         let verification_uri = request_verification_uri(&headers, &response.verification_uri);
-        response.verification_uri_complete =
-            format!("{verification_uri}?user_code={}", response.user_code);
+        // `verification_uri` (the short form, meant for on-screen display
+        // or manual typing) stays a plain URL, unchanged -- only the
+        // QR-encoded `_complete` form below carries the address bundle.
+        // `docs/architecture/peer-groups.md` §6.3, mirroring §6.1's
+        // `server=`-vs-`servers=` split exactly.
+        let bundle = peer_address_bundle(&state).await?;
+        response.verification_uri_complete = format!(
+            "{verification_uri}?user_code={}&servers={}",
+            response.user_code,
+            encode_servers_param(&bundle.addresses)
+        );
         response.verification_uri = verification_uri;
     }
     Ok(Json(response))
@@ -135,6 +146,35 @@ fn request_verification_uri(headers: &HeaderMap, path: &str) -> String {
         .or_else(|| forwarded_value("host"))
         .unwrap_or("localhost");
     format!("{scheme}://{host}{path}")
+}
+
+/// Encodes a [`crate::admin_peer::PeerAddressBundle`]'s `addresses` for the
+/// `servers=` query param embedded in `verification_uri_complete` --
+/// `docs/architecture/peer-groups.md` §6.3, reusing the identical
+/// `servers=` convention §6.1's invite links already use (`signupInvite.ts`'s
+/// own doc comment: `base64url(JSON string[])`) -- now carrying
+/// `{peer_node_id, url}` objects instead of bare strings, so a client can
+/// tell which node each address belongs to (see [`PeerAddressEntry`]'s own
+/// doc comment for why that attribution matters). Exact wire format: the
+/// entry list is JSON-array-encoded, then base64url-encoded with
+/// `URL_SAFE_NO_PAD` -- unpadded, so the value never contains a `=` that
+/// would need percent-encoding inside a query string, the same convention
+/// `streamarr_auth::jwt::encode_eddsa` already uses for the identical
+/// reason. The client-side decoder (this same phase's `device-auth`
+/// client changes, and §6.1's `signupInvite.ts`) must decode with the
+/// exact inverse: base64url-decode (`URL_SAFE_NO_PAD`), then `JSON.parse`
+/// the resulting UTF-8 bytes as an array of `{peer_node_id, url}` objects.
+/// For a standalone node `bundle.addresses` is a one-element (or, before
+/// any address has ever been configured, empty) list -- still encoded the
+/// same way: one code path, never a grouped/ungrouped branch here either
+/// (§6.1's own invariant). A client that doesn't yet understand `servers=`
+/// simply ignores the extra query param and keeps working off
+/// `verification_uri_complete` exactly as before -- zero behavior change
+/// for it.
+fn encode_servers_param(addresses: &[PeerAddressEntry]) -> String {
+    let json =
+        serde_json::to_string(addresses).expect("Vec<PeerAddressEntry> always serializes to JSON");
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(json)
 }
 
 /// Completes the human side of the device flow. The streaming-policy
@@ -220,11 +260,65 @@ pub async fn device_token_handler(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::test_support::{bearer_header, mint_access_token, seed_streaming_user, test_state};
+    use std::sync::Arc;
+
     use axum::body::Body;
     use axum::http::Request;
+    use axum::Router;
+    use streamarr_auth::device_flow::{
+        DashMapDeviceFlowHandler, DeviceFlowConfig, InMemoryDeviceAuthorizationStore,
+    };
     use tower::ServiceExt;
+
+    use super::*;
+    use crate::test_support::{bearer_header, mint_access_token, seed_streaming_user, test_state};
+    use crate::version_gate::{ClientCompatibilityTable, VersionGateLayer};
+
+    /// Same minimal table `test_support::test_state`'s router is built
+    /// with -- duplicated here (rather than made `pub(crate)` there),
+    /// matching `login.rs`'s own identical duplication for the identical
+    /// reason: this is the only test module that needs a *second*,
+    /// differently-configured router built from a mutated clone of
+    /// `TestState::app`.
+    fn test_version_gate() -> VersionGateLayer {
+        VersionGateLayer::new(
+            ClientCompatibilityTable::from_toml_str(
+                r#"
+[server]
+version = "0.1.0"
+apiVersion = "1"
+"#,
+            )
+            .unwrap(),
+        )
+    }
+
+    /// Rebuilds a router from `state.app`, swapping in a
+    /// [`DashMapDeviceFlowHandler`] whose `verification_base_uri` is
+    /// relative (`"/link"`) -- `test_support::test_state`'s default config
+    /// uses an already-absolute URL (`"https://streamarr.test/link"`),
+    /// which never exercises `device_code_handler`'s `starts_with('/')`
+    /// branch (the one that builds `verification_uri`/
+    /// `verification_uri_complete` off the request's forwarded-Host
+    /// headers, and -- as of this phase -- appends `servers=`). A real
+    /// deployment defaults to exactly this relative form
+    /// (`backend/src/main.rs`'s `STREAMARR_DEVICE_VERIFICATION_URI`
+    /// fallback), so this mirrors production, not a test-only shortcut.
+    fn router_with_relative_verification_uri(app: AppState) -> Router {
+        let mut app = app;
+        app.device_flow = Arc::new(DashMapDeviceFlowHandler::new(
+            Arc::new(InMemoryDeviceAuthorizationStore::new()),
+            app.sessions.clone(),
+            DeviceFlowConfig {
+                code_ttl: chrono::Duration::minutes(10),
+                polling_interval: chrono::Duration::zero(),
+                verification_base_uri: "/link".to_string(),
+                refresh_ttl: chrono::Duration::days(30),
+            },
+        ));
+        let (router, _api) = crate::build_router(app, test_version_gate(), None);
+        router
+    }
 
     #[tokio::test]
     async fn full_device_flow_start_approve_poll() {
@@ -310,6 +404,7 @@ mod tests {
             .app
             .jwt
             .verify_access_token(&tokens.access_token)
+            .await
             .unwrap();
         assert_eq!(claims.sub, user_id);
     }
@@ -373,5 +468,152 @@ mod tests {
             .unwrap();
         let error: OAuthErrorBody = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(error.error, "unsupported_grant_type");
+    }
+
+    /// Decodes the exact inverse of [`encode_servers_param`] -- what a
+    /// real client-side decoder must do too (see that function's own doc
+    /// comment for the wire format this asserts on).
+    fn decode_servers_param(value: &str) -> Vec<PeerAddressEntry> {
+        let json = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(value)
+            .expect("servers= must be valid base64url");
+        serde_json::from_slice(&json)
+            .expect("decoded servers= must be a JSON array of {peer_node_id, url} objects")
+    }
+
+    /// Plain `&`/`=` splitting, not a full query-string parser: sufficient
+    /// because `URL_SAFE_NO_PAD` base64url never contains `&`, `=`, or any
+    /// other character that would need percent-decoding (its alphabet is
+    /// `[A-Za-z0-9\-_]`, deliberately -- see [`encode_servers_param`]'s own
+    /// doc comment for why that encoding was chosen).
+    fn servers_param(verification_uri_complete: &str) -> String {
+        let (_, query) = verification_uri_complete
+            .split_once('?')
+            .expect("verification_uri_complete must have a query string");
+        query
+            .split('&')
+            .find_map(|pair| pair.strip_prefix("servers="))
+            .expect("verification_uri_complete must carry a servers= param")
+            .to_string()
+    }
+
+    /// `docs/architecture/peer-groups.md` §6.3: `verification_uri` (the
+    /// short form) never carries the bundle; only `verification_uri_complete`
+    /// does. For a standalone node that has never configured any address,
+    /// the embedded bundle is an empty list -- present, not absent, and
+    /// never an error (§6.1's "one code path" invariant, exercised here
+    /// through the real `POST /api/v1/oauth/device/code` route).
+    #[tokio::test]
+    async fn device_code_embeds_an_empty_bundle_in_verification_uri_complete_for_a_standalone_node() {
+        let (_router, state) = test_state().await;
+        let router = router_with_relative_verification_uri(state.app.clone());
+        let start_body = serde_json::json!({ "client_platform": "tv-webos" });
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/oauth/device/code")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&start_body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let code: DeviceCodeResponse = serde_json::from_slice(&bytes).unwrap();
+
+        assert!(
+            !code.verification_uri.contains("servers="),
+            "the short verification_uri must stay a plain URL"
+        );
+        let addresses = decode_servers_param(&servers_param(&code.verification_uri_complete));
+        assert!(addresses.is_empty());
+    }
+
+    /// The grouped counterpart: `verification_uri_complete`'s `servers=`
+    /// param decodes to this node's real, current address bundle.
+    #[tokio::test]
+    async fn device_code_embeds_the_real_address_bundle_once_grouped() {
+        let (_router, state) = test_state().await;
+        let router = router_with_relative_verification_uri(state.app.clone());
+
+        let group_id = uuid::Uuid::new_v4();
+        state
+            .app
+            .peer_group_repo
+            .create(&streamarr_model::PeerGroup {
+                id: group_id,
+                name: "Home Group".to_string(),
+                created_at: chrono::Utc::now(),
+            })
+            .await
+            .unwrap();
+        let peer_id = uuid::Uuid::new_v4();
+        state
+            .app
+            .node_identity_repo
+            .put(&streamarr_model::NodeIdentity {
+                peer_id,
+                private_key: streamarr_model::Sensitive::new("unused-in-this-test".to_string()),
+                group_id: Some(group_id),
+                created_at: chrono::Utc::now(),
+            })
+            .await
+            .unwrap();
+        let now = chrono::Utc::now();
+        state
+            .app
+            .peer_node_repo
+            .upsert(&streamarr_model::PeerNode {
+                id: peer_id,
+                group_id,
+                name: "home".to_string(),
+                addresses: vec![streamarr_model::PeerAddress {
+                    url: "https://home.example.com".to_string(),
+                    priority: 0,
+                    label: "wan".to_string(),
+                    client_reachable: true,
+                }],
+                public_key: "home-pubkey".to_string(),
+                is_self: true,
+                status: streamarr_model::PeerNodeStatus::Active,
+                last_seen_at: Some(now),
+                last_sync_error: None,
+                joined_at: now,
+                updated_at: now,
+            })
+            .await
+            .unwrap();
+
+        let start_body = serde_json::json!({ "client_platform": "tv-webos" });
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/oauth/device/code")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&start_body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let code: DeviceCodeResponse = serde_json::from_slice(&bytes).unwrap();
+
+        assert!(!code.verification_uri.contains("servers="));
+        let addresses = decode_servers_param(&servers_param(&code.verification_uri_complete));
+        assert_eq!(
+            addresses,
+            vec![PeerAddressEntry {
+                peer_node_id: peer_id,
+                url: "https://home.example.com".to_string(),
+            }]
+        );
     }
 }

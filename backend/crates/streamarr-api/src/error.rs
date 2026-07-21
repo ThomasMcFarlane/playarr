@@ -60,6 +60,21 @@ impl ApiError {
             message,
         )
     }
+
+    /// §5.2 step 5 (`docs/architecture/peer-groups.md`): every explicitly
+    /// preferred peer, the entry node itself, and every other known active
+    /// peer all failed to report this leaf available. Deliberately a
+    /// distinct code/status from [`Self::not_found`] -- the content isn't
+    /// unknown to the group, it's just not reachable *right now* on any
+    /// member, which a client should render as "not currently available on
+    /// any server" rather than a confusing not-found.
+    pub fn no_peer_available(message: impl Into<String>) -> Self {
+        Self::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "no_peer_available",
+            message,
+        )
+    }
 }
 
 impl IntoResponse for ApiError {

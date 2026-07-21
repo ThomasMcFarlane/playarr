@@ -140,6 +140,11 @@ pub async fn create_source_instance_handler(
         default_root_folder_id: body.default_root_folder_id,
         default_quality_profile_id: body.default_quality_profile_id,
         best_effort: body.best_effort,
+        // Not yet settable through this endpoint's request body -- mapping
+        // a `SourceInstance` onto a `GroupLibrary` (§2.3/§5.1) has no admin
+        // UI/API surface yet, so every create/update through here leaves it
+        // unset.
+        group_library_id: None,
     };
 
     let client = ArrClient::from_source_instance(&instance);
@@ -561,6 +566,7 @@ mod tests {
             default_root_folder_id: None,
             default_quality_profile_id: None,
             best_effort: false,
+            group_library_id: None,
         };
         state.app.source_instances.upsert(instance.clone());
 
@@ -638,6 +644,7 @@ mod tests {
             default_root_folder_id: None,
             default_quality_profile_id: None,
             best_effort: false,
+            group_library_id: None,
         };
         state.app.source_instances.upsert(instance.clone());
 
@@ -735,7 +742,12 @@ mod tests {
         // security-relevant behavior, verified the same way any other
         // caller of this token would: through `AppState::jwt`.
         let access_token = json["access_token"].as_str().unwrap();
-        let claims = state.app.jwt.verify_access_token(access_token).unwrap();
+        let claims = state
+            .app
+            .jwt
+            .verify_access_token(access_token)
+            .await
+            .unwrap();
         assert_eq!(claims.sub, target_id);
         assert_eq!(claims.impersonated_by, Some(admin_id));
     }

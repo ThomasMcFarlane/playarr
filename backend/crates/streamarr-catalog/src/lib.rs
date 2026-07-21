@@ -21,15 +21,23 @@
 
 mod codec;
 
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use streamarr_cache::CacheAndPubSub;
-use streamarr_db::{DbError, DbPool, MediaFileRepo, WatchProgressRepo, WorkRepo};
+use streamarr_db::{
+    DbError, DbPool, MediaFileRepo, PeerLeafAvailabilityRepo, PeerNodeRepo, WatchProgressRepo,
+    WorkRepo,
+};
 use streamarr_model::media::LeafRef;
-use streamarr_model::{Album, Book, Episode, ImageAsset, Season, Track, Work, WorkKind};
+use streamarr_model::{
+    Album, Availability, Book, Episode, ExternalProvider, ImageAsset, Season, Track, Work,
+    WorkKind,
+};
 use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]
@@ -114,6 +122,16 @@ pub struct BrowseQuery {
     ///
     /// [`MediaFile`]: streamarr_model::MediaFile
     pub allowed_source_instance_ids: Option<Vec<Uuid>>,
+    /// `GroupLibrary` ids (`docs/architecture/peer-groups.md` §2.3/§5.1)
+    /// whose partial-cache-node [`RemoteOnlyWork`] entries (`peer_leaf_
+    /// availability` rows with `local_work_id IS NULL`) this browse should
+    /// union in -- resolved by the API layer from the caller's own
+    /// `Policy::group_library_allow`, the same way [`Self::
+    /// allowed_source_instance_ids`] is resolved from `library_allow`.
+    /// Empty (the default) unions in nothing, so this is byte-for-byte
+    /// inert for a caller/deployment with no group-library grants -- see
+    /// [`CatalogService::browse`]'s doc comment.
+    pub group_library_ids: Vec<Uuid>,
 }
 
 impl Default for BrowseQuery {
@@ -132,8 +150,47 @@ impl Default for BrowseQuery {
             // set explicitly by the API layer from a resolved `Policy`, not
             // implied by merely constructing a query.
             allowed_source_instance_ids: None,
+            group_library_ids: Vec::new(),
         }
     }
+}
+
+/// One peer's reported availability for a `Work` -- resolved, display-ready
+/// shape [`CatalogService::browse`]/[`CatalogService::get_by_id`]'s
+/// hydration step produces via an index-backed join of `peer_leaf_
+/// availability` against already-fetched work ids (never a live fan-out to
+/// peers per request), with each row's `peer_node_id` resolved to a display
+/// name through `PeerNodeRepo`. See `docs/architecture/peer-groups.md`
+/// §4.3. `streamarr-api::catalog::AvailabilityBadge` mirrors this shape
+/// exactly for the HTTP response's OpenAPI schema -- it can't be the same
+/// type, since `streamarr-api` depends on this crate and not the other way
+/// around, but the wire JSON is identical either way.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AvailabilityBadge {
+    pub peer_node_id: Uuid,
+    pub peer_name: String,
+    pub availability: Availability,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// A title a full peer reports having but this node has zero local record
+/// of at all -- the partial-cache-node case (§4.3). Deliberately not a
+/// fabricated local `Work.id`: nothing here can key a normal `media_file_
+/// id`-based playback request, so a client that wants to play one of these
+/// has to go through a dedicated by-external-ref entry point instead
+/// (Phase 3, §5.2) -- this type only carries what browse/search need to
+/// *display* the title.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RemoteOnlyWork {
+    pub provider: ExternalProvider,
+    pub external_id: String,
+    pub title: String,
+    pub kind: WorkKind,
+    /// RFC 3339 -- there is no local `Work` row to carry this as a real
+    /// `DateTime` field on, so it's carried exactly as the reporting peer's
+    /// own `PeerLeafAvailability::release_date` formats to.
+    pub release_date: Option<String>,
+    pub available_on: Vec<AvailabilityBadge>,
 }
 
 /// A page of [`BrowseQuery`]/[`CatalogService::search`] results, with
@@ -144,6 +201,23 @@ impl Default for BrowseQuery {
 pub struct CatalogPage {
     pub items: Vec<Work>,
     pub total: Option<i64>,
+    /// Cross-peer availability for each work in [`Self::items`], keyed by
+    /// `Work::id` -- §4.3's hydration step, populated only for the works on
+    /// this exact page (never the full pre-pagination candidate set). A
+    /// work with no entry here simply has no peer availability data yet
+    /// (including every entry when this deployment isn't part of a peer
+    /// group at all, or hasn't wired `CatalogService::
+    /// with_peer_leaf_availability`) -- not a signal that it's unavailable
+    /// everywhere else.
+    #[serde(default)]
+    pub available_on: HashMap<Uuid, Vec<AvailabilityBadge>>,
+    /// Titles a full peer reports but this node has zero local record of at
+    /// all (§4.3's partial-cache-node case) -- populated only when
+    /// [`BrowseQuery::group_library_ids`] is non-empty; `Vec::new()` for
+    /// every other caller/deployment, including every existing caller from
+    /// before this field existed.
+    #[serde(default)]
+    pub remote_only: Vec<RemoteOnlyWork>,
 }
 
 /// An [`Episode`] plus the resolved id of the [`streamarr_model::MediaFile`]
@@ -222,6 +296,13 @@ pub struct WorkDetail {
     /// Fixed source-container runtime for a movie's own playable file.
     /// Series runtimes live on each [`EpisodeDetail`].
     pub runtime_ms: Option<u64>,
+    /// Cross-peer availability for [`Self::work`] -- §4.3's hydration step,
+    /// same shape/source as [`CatalogPage::available_on`]'s per-work entry.
+    /// Empty when this deployment isn't part of a peer group, hasn't wired
+    /// `CatalogService::with_peer_leaf_availability`, or genuinely has no
+    /// peer reporting this title.
+    #[serde(default)]
+    pub available_on: Vec<AvailabilityBadge>,
 }
 
 /// Upper bound on how many rows [`CatalogService::browse`]/`search` scan
@@ -249,10 +330,13 @@ const ALL_KINDS: [WorkKind; 5] = [
 /// the second caller has no `Policy::library_allow` grant to see. Formatted
 /// via `{:?}` on the `Option<Vec<Uuid>>` directly, same as every other
 /// field here -- two different allowed-sets (including `None` vs. `Some`)
-/// always produce two different keys.
+/// always produce two different keys. Also includes [`BrowseQuery::
+/// group_library_ids`] for the identical reason applied to
+/// [`CatalogPage::remote_only`]: two different group-library grants must
+/// never share a cached page.
 fn browse_cache_key(query: &BrowseQuery) -> String {
     format!(
-        "catalog:browse:{:?}:{}:{:?}:{:?}:{:?}:{:?}:{:?}:{}:{}:{:?}",
+        "catalog:browse:{:?}:{}:{:?}:{:?}:{:?}:{:?}:{:?}:{}:{}:{:?}:{:?}",
         query.kind,
         query.available_only,
         query.source_instance_id,
@@ -263,6 +347,7 @@ fn browse_cache_key(query: &BrowseQuery) -> String {
         query.limit,
         query.offset,
         query.allowed_source_instance_ids,
+        query.group_library_ids,
     )
 }
 
@@ -384,6 +469,30 @@ pub struct CatalogService {
     /// simply has `similar` report `CatalogError::NotFound` rather than
     /// every other constructor call site needing a repo it doesn't have.
     embedding_repo: Option<Arc<dyn streamarr_db::EmbeddingRepo>>,
+    /// Backs [`Self::browse`]/[`Self::get_by_id`]'s [`AvailabilityBadge`]
+    /// hydration and [`Self::browse`]/[`Self::search_remote_only`]'s
+    /// [`RemoteOnlyWork`] union (§4.3). `None` by default (builder opt-in
+    /// via [`Self::with_peer_leaf_availability`], same "a deployment that
+    /// hasn't wired peer groups gets a no-op rather than every constructor
+    /// call site needing repos it doesn't have" shape as `embedding_repo`
+    /// above) -- every method that would use this instead returns empty
+    /// availability/remote-only data, byte-for-byte inert for a single,
+    /// ungrouped node.
+    peer_availability: Option<PeerAvailabilitySources>,
+}
+
+/// [`CatalogService::with_peer_leaf_availability`]'s two dependencies,
+/// grouped so [`CatalogService::peer_availability`] is a single `Option`
+/// rather than two independently-`None`-able fields that would need to
+/// agree with each other.
+struct PeerAvailabilitySources {
+    availability_repo: Arc<dyn PeerLeafAvailabilityRepo>,
+    /// Resolves each [`AvailabilityBadge::peer_node_id`] to a display
+    /// [`AvailabilityBadge::peer_name`] -- `peer_leaf_availability` itself
+    /// only ever stores the id (§2.3's schema), never a denormalized copy
+    /// of the peer's name, which could drift the moment an admin renames a
+    /// peer.
+    peer_node_repo: Arc<dyn PeerNodeRepo>,
 }
 
 impl CatalogService {
@@ -401,6 +510,7 @@ impl CatalogService {
             pool,
             watch_progress_repo,
             embedding_repo: None,
+            peer_availability: None,
         }
     }
 
@@ -412,6 +522,205 @@ impl CatalogService {
     ) -> Self {
         self.embedding_repo = Some(embedding_repo);
         self
+    }
+
+    /// Opts this service's [`Self::browse`]/[`Self::get_by_id`]/[`Self::
+    /// search_remote_only`] into real cross-peer availability data -- see
+    /// the `peer_availability` field's doc comment.
+    pub fn with_peer_leaf_availability(
+        mut self,
+        availability_repo: Arc<dyn PeerLeafAvailabilityRepo>,
+        peer_node_repo: Arc<dyn PeerNodeRepo>,
+    ) -> Self {
+        self.peer_availability = Some(PeerAvailabilitySources {
+            availability_repo,
+            peer_node_repo,
+        });
+        self
+    }
+
+    /// Resolves `peer_node_id` to a display name via `PeerNodeRepo`,
+    /// memoized in `cache` for the lifetime of one hydration pass -- a
+    /// single browse/search page can carry many rows from the same handful
+    /// of peers, and a peer's own `PeerNode` row never changes mid-request,
+    /// so re-fetching it per row would be pure waste. Falls back to the raw
+    /// id formatted as a string on an unknown/removed peer (a row that
+    /// hasn't been cleaned up yet after that peer left the group) rather
+    /// than failing the whole hydration over one stale reference.
+    async fn resolve_peer_name(
+        sources: &PeerAvailabilitySources,
+        peer_node_id: Uuid,
+        cache: &mut HashMap<Uuid, String>,
+    ) -> Result<String, CatalogError> {
+        if let Some(name) = cache.get(&peer_node_id) {
+            return Ok(name.clone());
+        }
+        let name = sources
+            .peer_node_repo
+            .get(peer_node_id)
+            .await?
+            .map(|node| node.name)
+            .unwrap_or_else(|| peer_node_id.to_string());
+        cache.insert(peer_node_id, name.clone());
+        Ok(name)
+    }
+
+    /// [`AvailabilityBadge`] hydration (§4.3): an index-backed join of
+    /// `peer_leaf_availability` against `work_ids` via `PeerLeafAvailabilityRepo::
+    /// list_by_local_work_ids` -- deliberately never a live fan-out to peers
+    /// per request, which would not survive a slow or partitioned peer
+    /// gracefully. Returns `Ok(HashMap::new())` without querying anything
+    /// when this service has no [`Self::with_peer_leaf_availability`]
+    /// wiring or `work_ids` is empty.
+    async fn hydrate_availability(
+        &self,
+        work_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Vec<AvailabilityBadge>>, CatalogError> {
+        let Some(sources) = &self.peer_availability else {
+            return Ok(HashMap::new());
+        };
+        if work_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let rows = sources.availability_repo.list_by_local_work_ids(work_ids).await?;
+
+        let mut peer_names: HashMap<Uuid, String> = HashMap::new();
+        let mut badges: HashMap<Uuid, Vec<AvailabilityBadge>> = HashMap::new();
+        for row in rows {
+            // `list_by_local_work_ids` only ever matches rows with a
+            // non-`NULL` `local_work_id` (see that method's own doc
+            // comment), but this guards the invariant explicitly rather
+            // than indexing into an `Option` blindly.
+            let Some(work_id) = row.local_work_id else {
+                continue;
+            };
+            let peer_name = Self::resolve_peer_name(sources, row.peer_node_id, &mut peer_names).await?;
+            badges.entry(work_id).or_default().push(AvailabilityBadge {
+                peer_node_id: row.peer_node_id,
+                peer_name,
+                availability: row.availability,
+                updated_at: row.updated_at,
+            });
+        }
+        Ok(badges)
+    }
+
+    /// The partial-cache-node [`RemoteOnlyWork`] union (§4.3): every
+    /// `peer_leaf_availability` row with `local_work_id IS NULL` across
+    /// `group_library_ids`, via `PeerLeafAvailabilityRepo::
+    /// list_unmatched_for_group`, merged so the same `(provider,
+    /// external_id)` reported by more than one peer becomes one
+    /// `RemoteOnlyWork` with multiple `available_on` badges rather than one
+    /// duplicate entry per peer. Returns `Ok(Vec::new())` without querying
+    /// anything when this service has no [`Self::with_peer_leaf_availability`]
+    /// wiring or `group_library_ids` is empty -- the common case for a
+    /// caller with no group-library grants, or a single, ungrouped node.
+    async fn remote_only_works(
+        &self,
+        group_library_ids: &[Uuid],
+    ) -> Result<Vec<RemoteOnlyWork>, CatalogError> {
+        let Some(sources) = &self.peer_availability else {
+            return Ok(Vec::new());
+        };
+        if group_library_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut peer_names: HashMap<Uuid, String> = HashMap::new();
+        let mut merged: HashMap<(ExternalProvider, String), RemoteOnlyWork> = HashMap::new();
+        // De-duplicate the caller-supplied list so an overlapping set of
+        // group libraries never double-fetches (or double-counts a badge
+        // for) the same underlying rows.
+        let mut seen_groups: HashSet<Uuid> = HashSet::new();
+        for group_id in group_library_ids {
+            if !seen_groups.insert(*group_id) {
+                continue;
+            }
+            let rows = sources.availability_repo.list_unmatched_for_group(*group_id).await?;
+            for row in rows {
+                let peer_name =
+                    Self::resolve_peer_name(sources, row.peer_node_id, &mut peer_names).await?;
+                let badge = AvailabilityBadge {
+                    peer_node_id: row.peer_node_id,
+                    peer_name,
+                    availability: row.availability,
+                    updated_at: row.updated_at,
+                };
+                let key = (row.provider.clone(), row.external_id.clone());
+                merged
+                    .entry(key)
+                    .or_insert_with(|| RemoteOnlyWork {
+                        provider: row.provider.clone(),
+                        external_id: row.external_id.clone(),
+                        title: row.title.clone(),
+                        kind: row.kind,
+                        release_date: row.release_date.map(|date| date.to_rfc3339()),
+                        available_on: Vec::new(),
+                    })
+                    .available_on
+                    .push(badge);
+            }
+        }
+
+        let mut works: Vec<RemoteOnlyWork> = merged.into_values().collect();
+        works.sort_by(|a, b| a.title.cmp(&b.title));
+        Ok(works)
+    }
+
+    /// Free-text search over [`Self::remote_only_works`]'s candidates --
+    /// the `search_catalog_handler` counterpart to [`Self::search`] for the
+    /// partial-cache-node case (§4.3): `search` itself only ever scans
+    /// locally-known `Work`s, so a title this node has zero local record of
+    /// needs its own matching pass over the (already peer-name-resolved)
+    /// `RemoteOnlyWork` candidates instead. Reuses the exact same [`fold_locale`]/
+    /// substring-then-fuzzy scheme [`Self::search`] uses, scored on `title`
+    /// alone (there is no `overview` field to also check here).
+    pub async fn search_remote_only(
+        &self,
+        query: &str,
+        group_library_ids: &[Uuid],
+    ) -> Result<Vec<RemoteOnlyWork>, CatalogError> {
+        let raw_needle = query.trim();
+        if raw_needle.is_empty() {
+            return Ok(Vec::new());
+        }
+        let needle = fold_locale(raw_needle);
+
+        let candidates = self.remote_only_works(group_library_ids).await?;
+        let mut scored: Vec<(RemoteOnlyWork, MatchTier, f64)> = Vec::new();
+        for work in candidates {
+            let folded_title = fold_locale(&work.title);
+            if folded_title.contains(&needle) {
+                scored.push((work, MatchTier::Exact, 1.0));
+                continue;
+            }
+            let query_words: Vec<&str> = needle.split_whitespace().collect();
+            let title_words: Vec<&str> = folded_title.split_whitespace().collect();
+            if query_words.is_empty() || title_words.is_empty() {
+                continue;
+            }
+            let mean_score: f64 = query_words
+                .iter()
+                .map(|query_word| best_word_score(query_word, &title_words))
+                .sum::<f64>()
+                / query_words.len() as f64;
+            if mean_score >= FUZZY_MATCH_THRESHOLD {
+                scored.push((work, MatchTier::Fuzzy, mean_score));
+            }
+        }
+
+        scored.sort_by(|(work_a, tier_a, score_a), (work_b, tier_b, score_b)| {
+            tier_a
+                .cmp(tier_b)
+                .then_with(|| {
+                    score_b
+                        .partial_cmp(score_a)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .then_with(|| work_a.title.cmp(&work_b.title))
+        });
+
+        Ok(scored.into_iter().map(|(work, _, _)| work).collect())
     }
 
     /// Filtered, sorted, paginated listing — the query backing library
@@ -529,9 +838,21 @@ impl CatalogService {
         let limit = query.limit.max(0) as usize;
         let items: Vec<Work> = candidates.into_iter().skip(offset).take(limit).collect();
 
+        // Hydration (§4.3) is deliberately scoped to just this page's item
+        // ids, not the full pre-pagination candidate set -- an
+        // index-backed join against already-fetched work ids, same
+        // "bounded by what's actually being returned" cost model
+        // `source_instance_id`/`allowed_source_instance_ids` filtering
+        // above already applies.
+        let item_ids: Vec<Uuid> = items.iter().map(|work| work.id).collect();
+        let available_on = self.hydrate_availability(&item_ids).await?;
+        let remote_only = self.remote_only_works(&query.group_library_ids).await?;
+
         let page = CatalogPage {
             items,
             total: Some(total),
+            available_on,
+            remote_only,
         };
 
         if let Ok(bytes) = serde_json::to_vec(&page) {
@@ -587,6 +908,13 @@ impl CatalogService {
                 limit: SCAN_LIMIT,
                 offset: 0,
                 allowed_source_instance_ids,
+                // The `RemoteOnlyWork` union is `browse_catalog_handler`/
+                // `search_catalog_handler`'s concern (§4.3), not a saved
+                // view's -- a `LibraryView` resolves to real local `Work`
+                // rows by definition (see this method's own doc comment),
+                // so there is nothing here for a group-library grant to
+                // union in.
+                group_library_ids: Vec::new(),
             })
             .await?;
 
@@ -667,6 +995,16 @@ impl CatalogService {
         let limit = limit.max(0) as usize;
         page.items = page.items.into_iter().skip(offset).take(limit).collect();
         page.total = Some(total);
+
+        // The inner `browse` call above hydrated `available_on` for its
+        // entire (up to `SCAN_LIMIT`) pre-sort/pre-paginate candidate set,
+        // most of which this method's own re-sort + re-pagination above
+        // just sliced away -- re-hydrate for exactly the final, trimmed
+        // `page.items` instead of shipping availability data for works that
+        // are no longer even in the response.
+        let final_ids: Vec<Uuid> = page.items.iter().map(|work| work.id).collect();
+        page.available_on = self.hydrate_availability(&final_ids).await?;
+
         Ok(page)
     }
 
@@ -918,11 +1256,18 @@ impl CatalogService {
             WorkKind::Author => WorkChildren::Author(self.books_for_author(work.id).await?),
         };
 
+        let available_on = self
+            .hydrate_availability(std::slice::from_ref(&work.id))
+            .await?
+            .remove(&work.id)
+            .unwrap_or_default();
+
         let detail = WorkDetail {
             work,
             children,
             media_file_id,
             runtime_ms,
+            available_on,
         };
 
         if let Ok(bytes) = serde_json::to_vec(&detail) {
@@ -1239,9 +1584,12 @@ mod tests {
     use chrono::{Duration as ChronoDuration, Utc};
     use std::path::PathBuf;
     use streamarr_cache::InMemory;
-    use streamarr_db::repo::{SqlxMediaFileRepo, SqlxWatchProgressRepo};
+    use streamarr_db::repo::{
+        SqlxMediaFileRepo, SqlxPeerLeafAvailabilityRepo, SqlxPeerNodeRepo, SqlxWatchProgressRepo,
+    };
     use streamarr_model::{
-        Availability, ExternalProvider, ExternalRef, ImageAsset, ImageKind, MediaFile, WorkKind,
+        Availability, ExternalProvider, ExternalRef, ImageAsset, ImageKind, LeafSelector,
+        MediaFile, PeerAddress, PeerNode, PeerNodeStatus, WorkKind,
     };
 
     use super::*;
@@ -2758,6 +3106,316 @@ mod tests {
             1,
             "expected the cached page, not a fresh (now-empty) query"
         );
+    }
+
+    // ---- §4.3 peer availability hydration / RemoteOnlyWork union ----
+
+    /// Like [`service`] but also wired with real, SQL-backed
+    /// `PeerLeafAvailabilityRepo`/`PeerNodeRepo`s (`with_peer_leaf_availability`)
+    /// against the same pool -- the tables both repos need
+    /// (`peer_leaf_availability`, `peer_nodes`, `peer_groups`) are part of
+    /// this crate's own embedded migration set (see `test_pool`'s doc
+    /// comment), same as every other table these tests already exercise.
+    fn service_with_peer_availability(pool: DbPool, repo: Arc<dyn WorkRepo>) -> CatalogService {
+        let watch_progress_repo = Arc::new(SqlxWatchProgressRepo::new(pool.clone()));
+        let availability_repo = Arc::new(SqlxPeerLeafAvailabilityRepo::new(pool.clone()));
+        let peer_node_repo = Arc::new(SqlxPeerNodeRepo::new(pool.clone()));
+        CatalogService::new(
+            repo,
+            media_file_repo(pool.clone()),
+            Arc::new(InMemory::new()),
+            pool,
+            watch_progress_repo,
+        )
+        .with_peer_leaf_availability(availability_repo, peer_node_repo)
+    }
+
+    /// `peer_nodes.group_id` is a real `REFERENCES peer_groups (id)` foreign
+    /// key -- same bypass-the-sibling-repo direct-insert pattern
+    /// `streamarr-db::repo::peer_node`'s own tests use for the identical
+    /// constraint.
+    async fn seed_peer_group(pool: &DbPool) -> Uuid {
+        let group_id = Uuid::new_v4();
+        sqlx::query("INSERT INTO peer_groups (id, name, created_at) VALUES (?, ?, ?)")
+            .bind(group_id.to_string())
+            .bind("test group")
+            .bind(codec::format_datetime(Utc::now()))
+            .execute(pool)
+            .await
+            .expect("seed peer_groups row");
+        group_id
+    }
+
+    async fn seed_peer_node(pool: &DbPool, group_id: Uuid, name: &str) -> Uuid {
+        let repo = SqlxPeerNodeRepo::new(pool.clone());
+        let now = Utc::now();
+        let node = PeerNode {
+            id: Uuid::new_v4(),
+            group_id,
+            name: name.to_string(),
+            addresses: vec![PeerAddress {
+                url: format!("https://{name}.example.com"),
+                priority: 0,
+                label: "wan".to_string(),
+                client_reachable: true,
+            }],
+            public_key: "base64-ed25519-public-key".to_string(),
+            is_self: false,
+            status: PeerNodeStatus::Active,
+            last_seen_at: Some(now),
+            last_sync_error: None,
+            joined_at: now,
+            updated_at: now,
+        };
+        repo.upsert(&node).await.expect("seed peer node");
+        node.id
+    }
+
+    fn sample_availability(
+        peer_node_id: Uuid,
+        provider: ExternalProvider,
+        external_id: &str,
+        local_work_id: Option<Uuid>,
+        group_library_id: Option<Uuid>,
+    ) -> streamarr_model::PeerLeafAvailability {
+        streamarr_model::PeerLeafAvailability {
+            peer_node_id,
+            provider,
+            external_id: external_id.to_string(),
+            leaf_selector: LeafSelector::Movie,
+            group_library_id,
+            availability: Availability::Available,
+            container: Some("mkv".to_string()),
+            codec: Some("h264".to_string()),
+            bitrate: Some(8_000_000),
+            size_bytes: Some(4_000_000_000),
+            duration_ms: Some(7_200_000),
+            local_work_id,
+            title: "Remote Title".to_string(),
+            kind: WorkKind::Movie,
+            release_date: Some(Utc::now() - ChronoDuration::days(400)),
+            updated_at: Utc::now(),
+        }
+    }
+
+    #[tokio::test]
+    async fn browse_hydrates_available_on_badges_for_matched_works() {
+        let pool = test_pool().await;
+        let repo = work_repo(pool.clone());
+        let svc = service_with_peer_availability(pool.clone(), repo.clone());
+
+        let work = movie("Hydration Movie", "Hydration Movie", &["drama"], 0);
+        repo.upsert(&work).await.unwrap();
+
+        let group_id = seed_peer_group(&pool).await;
+        let peer_id = seed_peer_node(&pool, group_id, "east").await;
+        let availability_repo = SqlxPeerLeafAvailabilityRepo::new(pool.clone());
+        availability_repo
+            .upsert(&sample_availability(
+                peer_id,
+                work.external_refs[0].provider.clone(),
+                &work.external_refs[0].external_id,
+                Some(work.id),
+                None,
+            ))
+            .await
+            .unwrap();
+
+        let page = svc.browse(BrowseQuery::default()).await.unwrap();
+        let badges = page.available_on.get(&work.id).expect("badges for work");
+        assert_eq!(badges.len(), 1);
+        assert_eq!(badges[0].peer_node_id, peer_id);
+        assert_eq!(badges[0].peer_name, "east");
+        assert_eq!(badges[0].availability, Availability::Available);
+    }
+
+    #[tokio::test]
+    async fn get_by_id_hydrates_available_on_badges() {
+        let pool = test_pool().await;
+        let repo = work_repo(pool.clone());
+        let svc = service_with_peer_availability(pool.clone(), repo.clone());
+
+        let work = movie("Hydration Movie", "Hydration Movie", &["drama"], 0);
+        repo.upsert(&work).await.unwrap();
+
+        let group_id = seed_peer_group(&pool).await;
+        let peer_id = seed_peer_node(&pool, group_id, "west").await;
+        let availability_repo = SqlxPeerLeafAvailabilityRepo::new(pool.clone());
+        availability_repo
+            .upsert(&sample_availability(
+                peer_id,
+                work.external_refs[0].provider.clone(),
+                &work.external_refs[0].external_id,
+                Some(work.id),
+                None,
+            ))
+            .await
+            .unwrap();
+
+        let detail = svc.get_by_id(work.id, None).await.unwrap();
+        assert_eq!(detail.available_on.len(), 1);
+        assert_eq!(detail.available_on[0].peer_node_id, peer_id);
+        assert_eq!(detail.available_on[0].peer_name, "west");
+    }
+
+    /// A deployment with no `with_peer_leaf_availability` wiring at all
+    /// (the default, byte-for-byte-inert-for-a-single-node case) gets empty
+    /// availability data rather than an error -- confirms [`service`] (no
+    /// peer wiring) still browses/get_by_ids successfully.
+    #[tokio::test]
+    async fn browse_and_get_by_id_are_inert_without_peer_leaf_availability_wiring() {
+        let pool = test_pool().await;
+        let repo = work_repo(pool.clone());
+        let svc = service(pool.clone(), repo.clone());
+
+        let work = movie("Hydration Movie", "Hydration Movie", &["drama"], 0);
+        repo.upsert(&work).await.unwrap();
+
+        let page = svc.browse(BrowseQuery::default()).await.unwrap();
+        assert!(page.available_on.is_empty());
+        assert!(page.remote_only.is_empty());
+
+        let detail = svc.get_by_id(work.id, None).await.unwrap();
+        assert!(detail.available_on.is_empty());
+    }
+
+    #[tokio::test]
+    async fn browse_unions_remote_only_works_for_requested_group_libraries() {
+        let pool = test_pool().await;
+        let repo = work_repo(pool.clone());
+        let svc = service_with_peer_availability(pool.clone(), repo.clone());
+
+        let group_id = seed_peer_group(&pool).await;
+        let peer_id = seed_peer_node(&pool, group_id, "north").await;
+        let target_group_library = Uuid::new_v4();
+        let other_group_library = Uuid::new_v4();
+        let availability_repo = SqlxPeerLeafAvailabilityRepo::new(pool.clone());
+
+        let mut unmatched = sample_availability(
+            peer_id,
+            ExternalProvider::Tmdb,
+            "603",
+            None,
+            Some(target_group_library),
+        );
+        unmatched.title = "Sample Movie Kilo".to_string();
+        availability_repo.upsert(&unmatched).await.unwrap();
+
+        // A row scoped to a DIFFERENT group library must not leak in.
+        let mut other = sample_availability(
+            peer_id,
+            ExternalProvider::Tmdb,
+            "999",
+            None,
+            Some(other_group_library),
+        );
+        other.title = "Not This Library".to_string();
+        availability_repo.upsert(&other).await.unwrap();
+
+        let page = svc
+            .browse(BrowseQuery {
+                group_library_ids: vec![target_group_library],
+                ..BrowseQuery::default()
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(page.remote_only.len(), 1);
+        assert_eq!(page.remote_only[0].title, "Sample Movie Kilo");
+        assert_eq!(page.remote_only[0].external_id, "603");
+        assert_eq!(page.remote_only[0].available_on.len(), 1);
+        assert_eq!(page.remote_only[0].available_on[0].peer_node_id, peer_id);
+    }
+
+    /// Two peers reporting the same unmatched `(provider, external_id)`
+    /// merge into one `RemoteOnlyWork` with two `available_on` badges,
+    /// rather than two duplicate entries.
+    #[tokio::test]
+    async fn remote_only_works_merge_multiple_peers_reporting_the_same_title() {
+        let pool = test_pool().await;
+        let repo = work_repo(pool.clone());
+        let svc = service_with_peer_availability(pool.clone(), repo.clone());
+
+        let group_id = seed_peer_group(&pool).await;
+        let peer_a = seed_peer_node(&pool, group_id, "peer-a").await;
+        let peer_b = seed_peer_node(&pool, group_id, "peer-b").await;
+        let group_library_id = Uuid::new_v4();
+        let availability_repo = SqlxPeerLeafAvailabilityRepo::new(pool.clone());
+
+        for peer_id in [peer_a, peer_b] {
+            availability_repo
+                .upsert(&sample_availability(
+                    peer_id,
+                    ExternalProvider::Tmdb,
+                    "603",
+                    None,
+                    Some(group_library_id),
+                ))
+                .await
+                .unwrap();
+        }
+
+        let page = svc
+            .browse(BrowseQuery {
+                group_library_ids: vec![group_library_id],
+                ..BrowseQuery::default()
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(page.remote_only.len(), 1);
+        assert_eq!(page.remote_only[0].available_on.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn search_remote_only_matches_unmatched_titles_by_fuzzy_title() {
+        let pool = test_pool().await;
+        let repo = work_repo(pool.clone());
+        let svc = service_with_peer_availability(pool.clone(), repo.clone());
+
+        let group_id = seed_peer_group(&pool).await;
+        let peer_id = seed_peer_node(&pool, group_id, "east").await;
+        let group_library_id = Uuid::new_v4();
+        let availability_repo = SqlxPeerLeafAvailabilityRepo::new(pool.clone());
+        let mut unmatched = sample_availability(
+            peer_id,
+            ExternalProvider::Tmdb,
+            "603",
+            None,
+            Some(group_library_id),
+        );
+        unmatched.title = "Brambleford".to_string();
+        availability_repo.upsert(&unmatched).await.unwrap();
+
+        let exact = svc
+            .search_remote_only("brambleford", &[group_library_id])
+            .await
+            .unwrap();
+        assert_eq!(exact.len(), 1);
+        assert_eq!(exact[0].title, "Brambleford");
+
+        // Fuzzy match, same tolerance `search`'s own title matching uses.
+        let fuzzy = svc
+            .search_remote_only("Bramblefrod", &[group_library_id])
+            .await
+            .unwrap();
+        assert_eq!(fuzzy.len(), 1);
+
+        let no_match = svc
+            .search_remote_only("completely unrelated", &[group_library_id])
+            .await
+            .unwrap();
+        assert!(no_match.is_empty());
+    }
+
+    #[tokio::test]
+    async fn search_remote_only_empty_group_library_ids_returns_nothing() {
+        let pool = test_pool().await;
+        let repo = work_repo(pool.clone());
+        let svc = service_with_peer_availability(pool.clone(), repo.clone());
+
+        let results = svc.search_remote_only("anything", &[]).await.unwrap();
+        assert!(results.is_empty());
     }
 }
 

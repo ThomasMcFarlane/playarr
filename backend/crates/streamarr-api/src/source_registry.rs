@@ -151,6 +151,63 @@ impl SourceInstanceRegistry {
             })
             .collect()
     }
+
+    /// Every local [`SourceInstance`] id whose `group_library_id` is one of
+    /// `group_library_ids` -- resolves a `Policy::group_library_allow` grant
+    /// (a group-wide, portable identity minted once across a whole peer
+    /// group, `docs/architecture/peer-groups.md` §5.1) down to the
+    /// node-local `SourceInstance` ids it actually maps to on *this* node,
+    /// the same currency `Policy::library_allow`/`ensure_library_allowed`
+    /// already enforce access in. An instance with no `group_library_id`
+    /// set (not part of any cross-node grouping) never matches. `Vec::new()`
+    /// without scanning the registry when `group_library_ids` is empty --
+    /// the common case for a single, ungrouped node.
+    pub fn source_instance_ids_for_group_libraries(&self, group_library_ids: &[Uuid]) -> Vec<Uuid> {
+        if group_library_ids.is_empty() {
+            return Vec::new();
+        }
+        self.by_id
+            .iter()
+            .filter(|entry| {
+                entry
+                    .value()
+                    .group_library_id
+                    .is_some_and(|id| group_library_ids.contains(&id))
+            })
+            .map(|entry| *entry.key())
+            .collect()
+    }
+
+    /// The forward direction of [`Self::source_instance_ids_for_group_libraries`]
+    /// above (that resolves a *portable* `GroupLibrary` grant down to the
+    /// local `SourceInstance` ids it maps to on this node; this resolves a
+    /// *local* `SourceInstance` selection up to the portable `GroupLibrary`
+    /// ids it maps to) -- every distinct `group_library_id` among
+    /// `source_instance_ids`. Used at invite-issuance time
+    /// (`docs/architecture/peer-groups.md` §2.5/§6.2) to derive
+    /// `UserInvite::group_library_allow`/`UserInviteRequest::
+    /// group_library_allow` from the same admin-selected `library_allow`
+    /// set, so an invite issued against a grouped library still grants
+    /// correctly on whichever peer redeems it. An id with no locally
+    /// registered `SourceInstance`, or a registered one with no
+    /// `group_library_id` set (not part of any cross-node grouping), simply
+    /// contributes nothing. `Vec::new()` without scanning the registry when
+    /// `source_instance_ids` is empty -- the common case for a single,
+    /// ungrouped node.
+    pub fn group_library_ids_for_source_instances(&self, source_instance_ids: &[Uuid]) -> Vec<Uuid> {
+        if source_instance_ids.is_empty() {
+            return Vec::new();
+        }
+        let mut group_library_ids: Vec<Uuid> = self
+            .by_id
+            .iter()
+            .filter(|entry| source_instance_ids.contains(entry.key()))
+            .filter_map(|entry| entry.value().group_library_id)
+            .collect();
+        group_library_ids.sort();
+        group_library_ids.dedup();
+        group_library_ids
+    }
 }
 
 impl SyncStatusReporter for SourceInstanceRegistry {
@@ -177,6 +234,7 @@ mod tests {
             default_root_folder_id: Some("/data".to_string()),
             default_quality_profile_id: Some(1),
             best_effort: false,
+            group_library_id: None,
         }
     }
 
@@ -243,5 +301,92 @@ mod tests {
         registry.upsert(instance.clone());
         assert_eq!(registry.get(instance.id).map(|i| i.id), Some(instance.id));
         assert_eq!(registry.get(Uuid::new_v4()), None);
+    }
+
+    #[test]
+    fn source_instance_ids_for_group_libraries_matches_only_mapped_instances() {
+        let registry = SourceInstanceRegistry::new();
+        let group_a = Uuid::new_v4();
+        let group_b = Uuid::new_v4();
+
+        let mut in_group_a = instance(SourceKind::Radarr);
+        in_group_a.group_library_id = Some(group_a);
+        let mut in_group_b = instance(SourceKind::Sonarr);
+        in_group_b.group_library_id = Some(group_b);
+        let ungrouped = instance(SourceKind::Lidarr);
+
+        registry.upsert(in_group_a.clone());
+        registry.upsert(in_group_b.clone());
+        registry.upsert(ungrouped.clone());
+
+        let matched = registry.source_instance_ids_for_group_libraries(&[group_a]);
+        assert_eq!(matched, vec![in_group_a.id]);
+    }
+
+    #[test]
+    fn source_instance_ids_for_group_libraries_empty_input_returns_empty_without_scanning() {
+        let registry = SourceInstanceRegistry::new();
+        let mut mapped = instance(SourceKind::Radarr);
+        mapped.group_library_id = Some(Uuid::new_v4());
+        registry.upsert(mapped);
+
+        assert!(registry
+            .source_instance_ids_for_group_libraries(&[])
+            .is_empty());
+    }
+
+    #[test]
+    fn group_library_ids_for_source_instances_matches_only_selected_instances() {
+        let registry = SourceInstanceRegistry::new();
+        let group_a = Uuid::new_v4();
+        let group_b = Uuid::new_v4();
+
+        let mut in_group_a = instance(SourceKind::Radarr);
+        in_group_a.group_library_id = Some(group_a);
+        let mut in_group_b = instance(SourceKind::Sonarr);
+        in_group_b.group_library_id = Some(group_b);
+        let ungrouped = instance(SourceKind::Lidarr);
+
+        registry.upsert(in_group_a.clone());
+        registry.upsert(in_group_b.clone());
+        registry.upsert(ungrouped.clone());
+
+        // Only `in_group_a` is in the selection, and only its
+        // `group_library_id` should come back -- `in_group_b`'s is a real
+        // grant, but it wasn't among the admin-selected `library_allow`
+        // ids, and `ungrouped` has no `group_library_id` to contribute
+        // regardless.
+        let matched =
+            registry.group_library_ids_for_source_instances(&[in_group_a.id, ungrouped.id]);
+        assert_eq!(matched, vec![group_a]);
+    }
+
+    #[test]
+    fn group_library_ids_for_source_instances_dedupes_a_shared_group() {
+        let registry = SourceInstanceRegistry::new();
+        let shared_group = Uuid::new_v4();
+
+        let mut first = instance(SourceKind::Radarr);
+        first.group_library_id = Some(shared_group);
+        let mut second = instance(SourceKind::Sonarr);
+        second.group_library_id = Some(shared_group);
+
+        registry.upsert(first.clone());
+        registry.upsert(second.clone());
+
+        let matched = registry.group_library_ids_for_source_instances(&[first.id, second.id]);
+        assert_eq!(matched, vec![shared_group]);
+    }
+
+    #[test]
+    fn group_library_ids_for_source_instances_empty_input_returns_empty_without_scanning() {
+        let registry = SourceInstanceRegistry::new();
+        let mut mapped = instance(SourceKind::Radarr);
+        mapped.group_library_id = Some(Uuid::new_v4());
+        registry.upsert(mapped);
+
+        assert!(registry
+            .group_library_ids_for_source_instances(&[])
+            .is_empty());
     }
 }

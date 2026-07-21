@@ -20,16 +20,19 @@ use streamarr_catalog::CatalogService;
 use streamarr_db::analytics::{AnalyticsStore, SqlxAnalyticsStore};
 use streamarr_db::repo::{
     seed_default_views, PlaylistRepo, SqlxCreditRepo, SqlxDeviceRepo, SqlxDownloadTicketRepo,
-    SqlxLibraryViewRepo, SqlxMediaFileRepo, SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo,
-    SqlxPushRegistrationRepo, SqlxRenditionRepo, SqlxSourceInstanceRepo, SqlxSystemSettingsRepo,
+    SqlxGroupLibraryRepo, SqlxLibraryViewRepo, SqlxMediaFileRepo, SqlxNodeIdentityRepo,
+    SqlxPeerGroupRepo, SqlxPeerJoinTokenRepo, SqlxPeerLeafAvailabilityRepo, SqlxPeerNodeRepo,
+    SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo, SqlxPushRegistrationRepo,
+    SqlxRenditionRepo, SqlxRoutingRuleRepo, SqlxSourceInstanceRepo, SqlxSystemSettingsRepo,
     SqlxTdarrConnectionRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxUserRepo,
     SqlxWatchProgressRepo, SqlxWorkRepo,
 };
 use streamarr_db::{
-    CreditRepo, DbPool, DeviceRepo, DownloadTicketRepo, LibraryViewRepo, MediaFileRepo,
-    PolicyRepo, ProfilePinRepo, PushRegistrationRepo, RenditionRepo, SourceInstanceRepo,
-    SystemSettingsRepo, TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo,
-    WatchProgressRepo, WorkRepo,
+    CreditRepo, DbPool, DeviceRepo, DownloadTicketRepo, GroupLibraryRepo, LibraryViewRepo,
+    MediaFileRepo, NodeIdentityRepo, PeerGroupRepo, PeerJoinTokenRepo, PeerLeafAvailabilityRepo,
+    PeerNodeRepo, PolicyRepo, ProfilePinRepo, PushRegistrationRepo, RenditionRepo, RoutingRuleRepo,
+    SourceInstanceRepo, SystemSettingsRepo, TdarrConnectionRepo, UserInviteRepo,
+    UserInviteRequestRepo, UserRepo, WatchProgressRepo, WorkRepo,
 };
 use streamarr_model::{Availability, Policy, Sensitive, User, Work, WorkKind};
 use streamarr_telemetry::analytics::{
@@ -97,6 +100,13 @@ pub struct TestState {
     /// Real, `SqlxPolicyRepo`-backed persistence for the same in-memory
     /// SQLite pool `app` is built against.
     pub policy_repo: Arc<dyn PolicyRepo>,
+    /// The same in-memory SQLite pool every repo above is built against --
+    /// exposed here so tests can assert on columns no repo trait reads back
+    /// (e.g. `users.origin_peer_id`/`policies.origin_peer_id`, deliberately
+    /// not part of `streamarr_model::{User, Policy}` -- see
+    /// `streamarr-db::repo::user`'s own doc comment), the same rationale
+    /// `embedding_repo`/`rendition_repo` above already document.
+    pub pool: DbPool,
     pub push_notifications: Arc<RecordingPushNotifier>,
     /// The id of the one `User` seeded into `app.user_directory` and bound
     /// to `app.auth_mode`'s trusted-network auto-login -- what
@@ -141,6 +151,7 @@ pub async fn seed_admin_user(state: &TestState, user_id: Uuid) {
         id: Uuid::new_v4(),
         name: format!("test-admin-policy-{user_id}"),
         library_allow: Vec::new(),
+        group_library_allow: Vec::new(),
         blocked_folders: Vec::new(),
         max_rating: None,
         blocked_tags: Vec::new(),
@@ -195,6 +206,7 @@ pub async fn seed_streaming_user(state: &TestState, user_id: Uuid) {
         id: Uuid::new_v4(),
         name: format!("test-streaming-policy-{user_id}"),
         library_allow: Vec::new(),
+        group_library_allow: Vec::new(),
         blocked_folders: Vec::new(),
         max_rating: None,
         blocked_tags: Vec::new(),
@@ -248,6 +260,7 @@ pub async fn seed_streaming_user_with_library_allow(
         id: Uuid::new_v4(),
         name: format!("test-restricted-streaming-policy-{user_id}"),
         library_allow,
+        group_library_allow: Vec::new(),
         blocked_folders: Vec::new(),
         max_rating: None,
         blocked_tags: Vec::new(),
@@ -286,6 +299,60 @@ pub async fn seed_streaming_user_with_library_allow(
         .expect("seed restricted streaming test user");
 }
 
+/// Like [`seed_streaming_user_with_library_allow`] but the grant is a
+/// `Policy::group_library_allow` (portable `GroupLibrary` ids, §5.1)
+/// instead of a raw `SourceInstance` id -- `library_allow` is left empty, so
+/// a test using this helper proves the group-library grant *alone* is
+/// enough, not merely that it's additive on top of an existing
+/// `library_allow` grant.
+pub async fn seed_streaming_user_with_group_library_allow(
+    state: &TestState,
+    user_id: Uuid,
+    group_library_allow: Vec<Uuid>,
+) {
+    let policy = Policy {
+        id: Uuid::new_v4(),
+        name: format!("test-group-library-streaming-policy-{user_id}"),
+        library_allow: Vec::new(),
+        group_library_allow,
+        blocked_folders: Vec::new(),
+        max_rating: None,
+        blocked_tags: Vec::new(),
+        allowed_tags: Vec::new(),
+        can_transcode: true,
+        can_download: true,
+        can_delete: false,
+        can_share_public: false,
+        device_allow: Vec::new(),
+        max_concurrent_sessions: None,
+        access_schedule: None,
+        can_stream: true,
+        is_admin: false,
+    };
+    state
+        .policy_repo
+        .upsert(&policy)
+        .await
+        .expect("seed group-library streaming test policy");
+
+    let user = User {
+        id: user_id,
+        username: format!("test-group-library-streaming-{user_id}"),
+        display_name: "Test Group Library Streaming User".to_string(),
+        email: None,
+        password_hash: Sensitive::new(streamarr_auth::login::hash_password("test-only-password")),
+        policy_id: policy.id,
+        created_at: Utc::now(),
+        disabled: false,
+        preferred_audio_language: streamarr_model::DEFAULT_PREFERRED_AUDIO_LANGUAGE.to_string(),
+    };
+    state
+        .user_repo
+        .upsert(&user)
+        .await
+        .expect("seed group-library streaming test user");
+}
+
 /// Like [`seed_streaming_user_with_library_allow`] but with
 /// `Policy::can_download` deliberately left `false` -- the fixture
 /// `downloads.rs`'s tests need to prove `ensure_can_download` actually
@@ -300,6 +367,7 @@ pub async fn seed_streaming_user_without_download_access(
         id: Uuid::new_v4(),
         name: format!("test-no-download-policy-{user_id}"),
         library_allow,
+        group_library_allow: Vec::new(),
         blocked_folders: Vec::new(),
         max_rating: None,
         blocked_tags: Vec::new(),
@@ -404,6 +472,18 @@ pub async fn test_state() -> (Router, TestState) {
         Arc::new(SqlxTdarrConnectionRepo::new(pool.clone()));
     let system_settings_repo: Arc<dyn SystemSettingsRepo> =
         Arc::new(SqlxSystemSettingsRepo::new(pool.clone()));
+    let node_identity_repo: Arc<dyn NodeIdentityRepo> =
+        Arc::new(SqlxNodeIdentityRepo::new(pool.clone()));
+    let peer_group_repo: Arc<dyn PeerGroupRepo> = Arc::new(SqlxPeerGroupRepo::new(pool.clone()));
+    let peer_node_repo: Arc<dyn PeerNodeRepo> = Arc::new(SqlxPeerNodeRepo::new(pool.clone()));
+    let peer_join_token_repo: Arc<dyn PeerJoinTokenRepo> =
+        Arc::new(SqlxPeerJoinTokenRepo::new(pool.clone()));
+    let group_library_repo: Arc<dyn GroupLibraryRepo> =
+        Arc::new(SqlxGroupLibraryRepo::new(pool.clone()));
+    let routing_rule_repo: Arc<dyn RoutingRuleRepo> =
+        Arc::new(SqlxRoutingRuleRepo::new(pool.clone()));
+    let peer_leaf_availability_repo: Arc<dyn PeerLeafAvailabilityRepo> =
+        Arc::new(SqlxPeerLeafAvailabilityRepo::new(pool.clone()));
     // Real boot parity -- production's `boot_api` seeds the two default
     // views right after migrations run, and test callers that assert on
     // `GET /api/v1/views` (e.g. confirming "Newly Added"/"Newly Released"
@@ -428,7 +508,7 @@ pub async fn test_state() -> (Router, TestState) {
             work_repo.clone(),
             media_file_repo.clone(),
             cache.clone(),
-            pool,
+            pool.clone(),
             watch_progress.clone(),
         )
         .with_embedding_repo(embedding_repo.clone()),
@@ -481,6 +561,7 @@ pub async fn test_state() -> (Router, TestState) {
         id: default_policy_id,
         name: "test-default-policy".to_string(),
         library_allow: Vec::new(),
+        group_library_allow: Vec::new(),
         blocked_folders: Vec::new(),
         max_rating: None,
         blocked_tags: Vec::new(),
@@ -581,6 +662,16 @@ pub async fn test_state() -> (Router, TestState) {
         analytics_store,
         session_registry,
         analytics,
+        node_identity_repo,
+        peer_group_repo,
+        peer_node_repo,
+        peer_join_token_repo,
+        pending_self_peer_profile: Arc::new(std::sync::Mutex::new(None)),
+        group_library_repo,
+        media_file_repo: media_file_repo.clone(),
+        routing_rule_repo,
+        peer_leaf_availability_repo,
+        peer_http: reqwest::Client::new(),
     };
 
     let (router, _api) = build_router(app.clone(), test_version_gate(), None);
@@ -594,6 +685,7 @@ pub async fn test_state() -> (Router, TestState) {
             admin_registry,
             user_repo,
             policy_repo,
+            pool,
             push_notifications,
             default_user_id,
             device_flow,

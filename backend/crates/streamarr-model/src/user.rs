@@ -70,6 +70,27 @@ pub struct UserInvite {
     pub can_stream: bool,
     /// Source-instance ids the new account may browse and stream.
     pub library_allow: Vec<Uuid>,
+    /// Portable, group-wide library grants (`GroupLibrary` ids, §5.1) this
+    /// invite additionally carries alongside `library_allow` -- see
+    /// `docs/architecture/peer-groups.md` §2.5/§6.2. Populated at issuance
+    /// from the same admin-selected `library_allow` set, mapped through any
+    /// granted `SourceInstance`'s `group_library_id`; resolved back down to
+    /// node-local `SourceInstance` ids on whichever peer redeems the
+    /// invite, the same way `Policy::group_library_allow` already is.
+    pub group_library_allow: Vec<Uuid>,
+    /// Set once this invite has been redeemed; `None` means still valid
+    /// (subject to `expires_at`). A soft marker on a surviving row rather
+    /// than the hard delete redemption used before -- see
+    /// `docs/architecture/peer-groups.md` §3.5's "`UserInvite`
+    /// double-redemption" for why: it lets a redemption propagate through
+    /// the same cross-node gossip every other synced table uses, instead of
+    /// only ever being visible on whichever single peer served it.
+    pub consumed_at: Option<DateTime<Utc>>,
+    /// The account this invite's redemption created.
+    pub consumed_by_user_id: Option<Uuid>,
+    /// The peer that served the redemption -- this node's own
+    /// `NodeIdentity::peer_id` when redeemed locally.
+    pub consumed_by_peer_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -99,6 +120,10 @@ pub struct UserInviteRequest {
     /// Grants chosen by the administrator when approving the request.
     pub can_stream: bool,
     pub library_allow: Vec<Uuid>,
+    /// Portable sibling of `library_allow` -- same rationale as
+    /// `UserInvite::group_library_allow`, carried over onto the final
+    /// `UserInvite` when the requester generates it.
+    pub group_library_allow: Vec<Uuid>,
 }
 
 /// One Firebase Cloud Messaging registration belonging to a signed-in

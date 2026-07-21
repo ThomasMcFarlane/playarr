@@ -8,6 +8,7 @@ members = [
     "crates/streamarr-cache",
     "crates/streamarr-arr-client",
     "crates/streamarr-arr-sync",
+    "crates/streamarr-peer-sync",
     "crates/streamarr-catalog",
     "crates/streamarr-embeddings",
     "crates/streamarr-artwork",
@@ -46,6 +47,7 @@ streamarr-catalog = { path = "crates/streamarr-catalog" }
 streamarr-transcode = { path = "crates/streamarr-transcode" }
 streamarr-auth = { path = "crates/streamarr-auth" }
 streamarr-arr-sync = { path = "crates/streamarr-arr-sync" }
+streamarr-peer-sync = { path = "crates/streamarr-peer-sync" }
 streamarr-embeddings = { path = "crates/streamarr-embeddings" }
 streamarr-artwork = { path = "crates/streamarr-artwork" }
 streamarr-tdarr-client = { path = "crates/streamarr-tdarr-client" }
@@ -66,6 +68,7 @@ anyhow = { workspace = true }
 sqlx = { workspace = true, features = ["postgres"] }
 uuid = { workspace = true }
 chrono = { workspace = true }
+reqwest = { workspace = true }
 
 [workspace.package]
 version = "0.1.0"
@@ -92,7 +95,10 @@ thiserror = "1"
 anyhow = "1"
 
 # --- http client / server ---
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+# "stream" is needed by `streamarr-api::media::proxy_response_from`
+# (`docs/architecture/peer-groups.md` §5.3's `DeliveryMode::Proxy`
+# passthrough): `reqwest::Response::bytes_stream()` is gated behind it.
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"], default-features = false }
 axum = "0.8"
 axum-server = { version = "0.8", features = ["tls-rustls-no-provider"] }
 tower = "0.5"

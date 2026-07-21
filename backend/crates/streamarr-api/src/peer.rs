@@ -1,0 +1,1834 @@
+//! Inbound node-to-node endpoints -- `docs/architecture/peer-groups.md`
+//! §3.4/§3.6. [`enroll_handler`] (`POST /api/v1/peer/enroll`) is the join
+//! handshake: bearer-authed by the one-shot join token carried in the
+//! request body itself, not by [`crate::peer_extractor::PeerSignedRequest`]
+//! -- there is no `peer_nodes` row for the caller to sign against yet,
+//! since a successful call to this endpoint is exactly what creates one.
+//!
+//! Every other `/api/v1/peer/*` sync endpoint the design doc's §3.6 table
+//! lists -- [`nodes_handler`] (`GET .../nodes`), [`accounts_handler`]
+//! (`GET .../accounts?since=`), [`invites_handler`] (`GET .../invites?since=`),
+//! [`libraries_handler`] (`GET .../libraries?since=`),
+//! [`availability_handler`] (`GET .../availability?since=`), and
+//! [`routing_rules_handler`] (`GET .../routing-rules?since=`) -- is
+//! [`crate::peer_extractor::PeerSignedRequest`]-gated and is what
+//! `streamarr_peer_sync::PeerSyncPoller` (`streamarr-peer-sync`, §2.6)
+//! actually calls on its polling cadence.
+//!
+//! **Wire-shape discipline.** Every response type below is a deliberate,
+//! field-for-field mirror of the shape `streamarr_peer_sync`'s own
+//! consumer (`account_sync.rs`/`availability_sync.rs`/`membership_sync.rs`/
+//! `routing_sync.rs`) already deserializes and is tested against -- never
+//! that crate's own wire types reused directly (same reason
+//! `admin_peer::join_peer_group_handler`'s doc comment gives for
+//! `EnrollResponse`: this crate needs `utoipa::ToSchema` for OpenAPI docs,
+//! that crate doesn't depend on `utoipa` at all). Where the domain type
+//! itself is already `ToSchema` and carries no secret (`PeerNode`,
+//! `Policy`, `GroupLibrary`, `RoutingRule`, `Availability`/
+//! `ExternalProvider`/`LeafSelector`/`WorkKind`), the response type reuses
+//! it directly -- zero risk of the two shapes drifting apart, because
+//! there is only one type. Only `streamarr_model::User` (carries
+//! `password_hash`) and `UserInvite`/`UserInviteRequest` (mirrored here
+//! rather than given `ToSchema` upstream, matching `users.rs`'s own
+//! established `UserInviteResponse`/`UserInviteRequestResponse`
+//! precedent) are hand-mirrored field-by-field.
+
+use std::collections::HashMap;
+
+use axum::extract::{Query, State};
+use axum::http::StatusCode;
+use axum::Json;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use streamarr_catalog::WorkChildren;
+use streamarr_db::SyncMetadata;
+use streamarr_model::{
+    Availability, ExternalProvider, GroupLibrary, LeafSelector, PeerAddress, PeerGroup, PeerNode,
+    PeerNodeStatus, Policy, RoutingRule, SourceKind, User, UserInvite, UserInviteRequest,
+    UserInviteRequestStatus, WorkKind,
+};
+use utoipa::ToSchema;
+use uuid::Uuid;
+
+use crate::error::ApiError;
+use crate::peer_extractor::PeerSignedRequest;
+use crate::AppState;
+
+/// Request body for [`enroll_handler`] -- exactly `docs/architecture/
+/// peer-groups.md` §3.4 step 3's `{join_token, peer_id, name, addresses,
+/// public_key}`. `admin_peer::join_peer_group_handler` builds and sends
+/// this same shape when it drives the client side of this handshake.
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+pub struct EnrollRequest {
+    /// The raw, one-time token an admin on this (the founding/receiving)
+    /// node issued via `POST /api/v1/admin/peer-groups/join-tokens`.
+    pub join_token: String,
+    /// The joining node's own durable `node_identity.peer_id`.
+    pub peer_id: Uuid,
+    pub name: String,
+    #[serde(default)]
+    pub addresses: Vec<PeerAddress>,
+    /// The joining node's Ed25519 public key, base64.
+    pub public_key: String,
+}
+
+/// Response body for [`enroll_handler`] -- exactly §3.4 step 4's
+/// `{group, members}`, where `members` is this node's **full** current
+/// membership (including this node's own `is_self = true` row and the
+/// row just inserted for the caller), so the joining node doesn't have to
+/// wait for its first sync pass to learn about any third peer that
+/// already joined. Reused as-is by `admin_peer::join_peer_group_handler`
+/// to deserialize this same shape on the joining node's side, rather than
+/// hand-duplicating an identical struct there.
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+pub struct EnrollResponse {
+    pub group: PeerGroup,
+    pub members: Vec<PeerNode>,
+}
+
+fn invalid_join_token() -> ApiError {
+    ApiError::new(
+        StatusCode::GONE,
+        "invalid_join_token",
+        "this join token is invalid, expired, or has already been used",
+    )
+}
+
+/// Join handshake, called by a joining node's own admin-triggered
+/// `POST /api/v1/admin/peer-groups/join` (never called directly by a
+/// browser/admin console). Validates the one-shot join token (unexpired,
+/// unused, hash match) and name uniqueness within the group, marks the
+/// token redeemed, inserts the caller's row into `peer_nodes`, and replies
+/// with the full current membership -- `docs/architecture/peer-groups.md`
+/// §3.4 steps 3-4.
+#[utoipa::path(
+    post,
+    path = "/api/v1/peer/enroll",
+    tag = "peer-groups",
+    request_body(content = EnrollRequest, example = json!({
+        "join_token": "5f8a1c2e9b3d4f6a8c1e2b3d4f6a8c1e",
+        "peer_id": "22222222-2222-4222-8222-222222222222",
+        "name": "east",
+        "addresses": [
+            {"url": "https://east.example.com", "priority": 0, "label": "wan", "client_reachable": true}
+        ],
+        "public_key": "MCowBQYDK2VwAyEA...base64..."
+    })),
+    responses(
+        (status = 200, description = "Enrolled -- full current group membership returned", body = EnrollResponse),
+        (status = 409, description = "A peer with this name already exists in the group"),
+        (status = 410, description = "Join token is invalid, expired, or already used")
+    )
+)]
+pub async fn enroll_handler(
+    State(state): State<AppState>,
+    Json(body): Json<EnrollRequest>,
+) -> Result<Json<EnrollResponse>, ApiError> {
+    let token_hash = streamarr_auth::secret::hash_token(&body.join_token);
+    let now = Utc::now();
+
+    let token = state
+        .peer_join_token_repo
+        .find_valid(&token_hash, now)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to validate join token: {err}")))?
+        .ok_or_else(invalid_join_token)?;
+
+    // Name uniqueness within the group -- checked (and rejected) before
+    // consuming the token, so a colliding name doesn't burn the caller's
+    // one shot at it. `peer_nodes` also has a real `UNIQUE (group_id,
+    // name)` index (see the migration) as a backstop, but that would
+    // surface as an opaque `DbError::Backend` rather than this clear 409.
+    let existing = state
+        .peer_node_repo
+        .list_all()
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to list peer nodes: {err}")))?;
+    if existing
+        .iter()
+        .any(|node| node.group_id == token.group_id && node.name == body.name)
+    {
+        return Err(ApiError::conflict(format!(
+            "a peer named '{}' already exists in this group",
+            body.name
+        )));
+    }
+
+    // `peer_id` uniqueness, checked the same deliberate way: `upsert` is
+    // insert-OR-UPDATE keyed by id, and every peer's id is visible to every
+    // other member (returned in `EnrollResponse::members`) -- without this
+    // check, a holder of *any* valid join token could claim an
+    // already-enrolled peer's `peer_id` with a public key they control,
+    // silently overwriting that peer's signing identity for every future
+    // `PeerSignedRequest` verification. A colliding id is rejected exactly
+    // like a colliding name: before the token is consumed, so it doesn't
+    // burn the caller's one shot at a legitimate retry with their own id.
+    if existing.iter().any(|node| node.id == body.peer_id) {
+        return Err(ApiError::conflict(format!(
+            "a peer with id '{}' already exists in this group",
+            body.peer_id
+        )));
+    }
+
+    let consumed = state
+        .peer_join_token_repo
+        .consume(&token_hash, now, body.peer_id)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to redeem join token: {err}")))?;
+    if !consumed {
+        // Raced against another redemption of the same token between the
+        // `find_valid` check above and here -- same non-leaking contract
+        // `users::signup_handler` already relies on for `UserInvite`.
+        return Err(invalid_join_token());
+    }
+
+    let group = state
+        .peer_group_repo
+        .get(token.group_id)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to load peer group: {err}")))?
+        .ok_or_else(|| {
+            ApiError::internal(format!(
+                "join token referenced missing peer group {}",
+                token.group_id
+            ))
+        })?;
+
+    let joining_node = PeerNode {
+        id: body.peer_id,
+        group_id: token.group_id,
+        name: body.name.clone(),
+        addresses: body.addresses,
+        public_key: body.public_key,
+        // `is_self` is per-database, never taken from the caller's own
+        // claim: this row is *this* node's record of the OTHER node that
+        // just joined, so it is never this node's own self row.
+        is_self: false,
+        status: PeerNodeStatus::Active,
+        last_seen_at: Some(now),
+        last_sync_error: None,
+        joined_at: now,
+        updated_at: now,
+    };
+    state
+        .peer_node_repo
+        .upsert(&joining_node)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to persist joining peer: {err}")))?;
+
+    let members = state
+        .peer_node_repo
+        .list_all()
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to list peer nodes: {err}")))?;
+
+    tracing::info!(
+        peer_id = %body.peer_id,
+        peer_name = %body.name,
+        group_id = %token.group_id,
+        "peer enrolled into group"
+    );
+
+    Ok(Json(EnrollResponse { group, members }))
+}
+
+// ---------------------------------------------------------------------
+// Shared `?since=` cursor handling
+// ---------------------------------------------------------------------
+
+/// Query params shared by every `?since=`-cursored sync endpoint (§3.6's
+/// table). `since` is the opaque `server_time` a previous response
+/// returned, echoed back verbatim; omitted (or absent) means "every row."
+#[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
+pub struct SinceQueryParams {
+    pub since: Option<String>,
+}
+
+/// Parses `since` as Unix-epoch milliseconds. Deliberately not RFC 3339:
+/// [`cursor`] below builds the `since=` value the caller echoes back via a
+/// plain, unescaped `format!("...?since={cursor}")` (see
+/// `streamarr_peer_sync::account_sync`/`availability_sync`'s own `sync_*`
+/// functions) -- an RFC 3339 UTC offset's `+` would be silently
+/// misinterpreted as an encoded space the moment it round-trips through
+/// standard `application/x-www-form-urlencoded` query decoding (which is
+/// exactly what `axum::extract::Query` uses). A plain decimal integer has
+/// no such character to misinterpret.
+fn parse_since(raw: Option<&str>) -> Result<Option<DateTime<Utc>>, ApiError> {
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+    let millis: i64 = raw
+        .parse()
+        .map_err(|_| ApiError::bad_request("since must be a Unix-epoch-milliseconds integer"))?;
+    DateTime::<Utc>::from_timestamp_millis(millis)
+        .map(Some)
+        .ok_or_else(|| ApiError::bad_request("since is out of range"))
+}
+
+/// Builds the `server_time` cursor for a response captured at `now`
+/// (captured once, before any repository read, at the top of each
+/// handler): every row this handler could possibly return has an
+/// `updated_at`/`created_at`/`requested_at` stamped from the server clock
+/// no later than the moment its write committed, which is necessarily
+/// before `now` was captured here -- so a next call's `since=<this cursor>`
+/// is guaranteed not to skip anything that existed at the time of this
+/// response, matching the safety `UserRepo::list_updated_since`'s own doc
+/// comment describes ("resume from last row's updated_at").
+fn cursor(now: DateTime<Utc>) -> String {
+    now.timestamp_millis().to_string()
+}
+
+/// This node's own peer group id, from `node_identity.group_id`. Every
+/// handler below is [`PeerSignedRequest`]-gated, which already guarantees
+/// a `peer_nodes` row exists for the caller -- and `peer_nodes.group_id`
+/// is `NOT NULL` -- so this node necessarily has a group by the time any
+/// of these handlers run; `internal` (not a 4xx) is the honest response if
+/// that invariant is somehow violated.
+async fn this_node_group_id(state: &AppState) -> Result<Uuid, ApiError> {
+    state
+        .node_identity_repo
+        .get()
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to load node identity: {err}")))?
+        .and_then(|identity| identity.group_id)
+        .ok_or_else(|| {
+            ApiError::internal(
+                "this node has no peer group, but received a validly peer-signed request",
+            )
+        })
+}
+
+// ---------------------------------------------------------------------
+// GET /api/v1/peer/nodes
+// ---------------------------------------------------------------------
+
+/// Response body for [`nodes_handler`] -- `docs/architecture/peer-groups.md`
+/// §3.6: "full `peer_nodes` (small; always full-refresh gossip)". No
+/// `since`/`server_time` -- `streamarr_peer_sync::membership_sync`'s own
+/// `NodesResponse` doc comment explains why membership has no
+/// corresponding `peer_sync_state.entity` cursor to persist.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct NodesResponse {
+    pub rows: Vec<PeerNode>,
+}
+
+/// Full current `peer_nodes` membership (including this node's own
+/// `is_self = true` row) -- always a full refresh, never filtered. This is
+/// how a third node's membership (learned via a *different* peer's
+/// `enroll` call) eventually converges everywhere without a fresh `enroll`
+/// round trip (§3.4 step 6).
+#[utoipa::path(
+    get,
+    path = "/api/v1/peer/nodes",
+    tag = "peer-groups",
+    responses(
+        (status = 200, description = "Full current peer_nodes membership, including self", body = NodesResponse),
+        (status = 401, description = "Missing/invalid peer signature, or an unknown/left peer")
+    )
+)]
+pub async fn nodes_handler(
+    State(state): State<AppState>,
+    _peer: PeerSignedRequest,
+) -> Result<Json<NodesResponse>, ApiError> {
+    let rows = state
+        .peer_node_repo
+        .list_all()
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to list peer nodes: {err}")))?;
+    Ok(Json(NodesResponse { rows }))
+}
+
+// ---------------------------------------------------------------------
+// GET /api/v1/peer/accounts?since=
+// ---------------------------------------------------------------------
+
+/// Wire shape of one `users` row on `GET /api/v1/peer/accounts` --
+/// field-for-field identical to `streamarr_peer_sync::account_sync::
+/// UserSyncRow`'s flattened wire shape (`streamarr_model::User`'s own
+/// fields plus the three sync-only columns). Not `User` itself flattened
+/// via `#[serde(flatten)]`: `User` is deliberately not `ToSchema`-derived
+/// (it carries `password_hash` -- see that type's own doc comment); this
+/// is the one narrow, deliberate exception to "never on an HTTP response"
+/// that field's doc comment warns about -- the design doc's §3.1 table
+/// explicitly lists `password_hash` as one of the few fields that DOES
+/// sync between group peers ("already a hash, replicating it is exactly
+/// what makes a password valid on every node"), and this type is never
+/// reachable from any browser-facing route, only from a
+/// [`PeerSignedRequest`]-gated node-to-node call.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct PeerUserRow {
+    pub id: Uuid,
+    pub username: String,
+    pub display_name: String,
+    pub email: Option<String>,
+    pub password_hash: String,
+    pub policy_id: Uuid,
+    pub created_at: DateTime<Utc>,
+    pub disabled: bool,
+    pub preferred_audio_language: String,
+    pub updated_at: DateTime<Utc>,
+    pub origin_peer_id: Option<Uuid>,
+    pub deleted_at: Option<DateTime<Utc>>,
+}
+
+impl PeerUserRow {
+    fn new(user: User, meta: SyncMetadata) -> Self {
+        Self {
+            id: user.id,
+            username: user.username,
+            display_name: user.display_name,
+            email: user.email,
+            password_hash: user.password_hash.into_inner(),
+            policy_id: user.policy_id,
+            created_at: user.created_at,
+            disabled: user.disabled,
+            preferred_audio_language: user.preferred_audio_language,
+            updated_at: meta.updated_at,
+            origin_peer_id: meta.origin_peer_id,
+            deleted_at: meta.deleted_at,
+        }
+    }
+}
+
+/// Wire shape of one `policies` row on `GET /api/v1/peer/accounts` --
+/// field-for-field identical to `streamarr_peer_sync::account_sync::
+/// PolicySyncRow`. `Policy` carries no secret, so (unlike [`PeerUserRow`])
+/// this flattens the real `streamarr_model::Policy` directly: one type,
+/// zero risk of the two shapes drifting apart.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct PeerPolicyRow {
+    #[serde(flatten)]
+    pub policy: Policy,
+    pub updated_at: DateTime<Utc>,
+    pub origin_peer_id: Option<Uuid>,
+    pub deleted_at: Option<DateTime<Utc>>,
+}
+
+/// Response body for [`accounts_handler`] -- `docs/architecture/
+/// peer-groups.md` §3.6: `{users, policies}` upserts/tombstones.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AccountsResponse {
+    pub users: Vec<PeerUserRow>,
+    pub policies: Vec<PeerPolicyRow>,
+    pub server_time: String,
+}
+
+/// `users`/`policies` upserted or soft-deleted since `since` (every row,
+/// oldest first, when omitted) -- the read behind
+/// `streamarr_peer_sync::account_sync::sync_accounts`. Tombstoned rows are
+/// included (`deleted_at` set), never filtered out: see
+/// `UserRepo::list_updated_since`'s own doc comment for why a lagging peer
+/// must never see a delete as mere absence.
+#[utoipa::path(
+    get,
+    path = "/api/v1/peer/accounts",
+    tag = "peer-groups",
+    params(SinceQueryParams),
+    responses(
+        (status = 200, description = "users/policies upserted or tombstoned since the given cursor", body = AccountsResponse),
+        (status = 400, description = "Malformed since cursor"),
+        (status = 401, description = "Missing/invalid peer signature, or an unknown/left peer")
+    )
+)]
+pub async fn accounts_handler(
+    State(state): State<AppState>,
+    Query(params): Query<SinceQueryParams>,
+    _peer: PeerSignedRequest,
+) -> Result<Json<AccountsResponse>, ApiError> {
+    let since = parse_since(params.since.as_deref())?;
+    let now = Utc::now();
+
+    let users = state
+        .user_repo
+        .list_updated_since(since)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to list users for peer sync: {err}")))?
+        .into_iter()
+        .map(|(user, meta)| PeerUserRow::new(user, meta))
+        .collect();
+
+    let policies = state
+        .policy_repo
+        .list_updated_since(since)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to list policies for peer sync: {err}")))?
+        .into_iter()
+        .map(|(policy, meta)| PeerPolicyRow {
+            policy,
+            updated_at: meta.updated_at,
+            origin_peer_id: meta.origin_peer_id,
+            deleted_at: meta.deleted_at,
+        })
+        .collect();
+
+    Ok(Json(AccountsResponse {
+        users,
+        policies,
+        server_time: cursor(now),
+    }))
+}
+
+// ---------------------------------------------------------------------
+// GET /api/v1/peer/invites?since=
+// ---------------------------------------------------------------------
+
+/// Wire shape of one `user_invites` row on `GET /api/v1/peer/invites` --
+/// field-for-field identical to `streamarr_model::UserInvite`'s own
+/// `Serialize` output (which is exactly what `streamarr_peer_sync::
+/// account_sync::InvitesResponse` consumes -- that type uses `UserInvite`
+/// directly, not a wrapper). Mirrored here rather than adding `ToSchema`
+/// to `UserInvite` itself, matching `users.rs`'s own established
+/// `UserInviteResponse`/`UserInviteRequestResponse` precedent of never
+/// deriving a schema straight off these domain types.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct PeerInviteRow {
+    pub token_hash: String,
+    pub created_by: Uuid,
+    pub created_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+    pub can_stream: bool,
+    pub library_allow: Vec<Uuid>,
+    pub group_library_allow: Vec<Uuid>,
+    pub consumed_at: Option<DateTime<Utc>>,
+    pub consumed_by_user_id: Option<Uuid>,
+    pub consumed_by_peer_id: Option<Uuid>,
+}
+
+impl From<UserInvite> for PeerInviteRow {
+    fn from(invite: UserInvite) -> Self {
+        Self {
+            token_hash: invite.token_hash,
+            created_by: invite.created_by,
+            created_at: invite.created_at,
+            expires_at: invite.expires_at,
+            can_stream: invite.can_stream,
+            library_allow: invite.library_allow,
+            group_library_allow: invite.group_library_allow,
+            consumed_at: invite.consumed_at,
+            consumed_by_user_id: invite.consumed_by_user_id,
+            consumed_by_peer_id: invite.consumed_by_peer_id,
+        }
+    }
+}
+
+/// Wire shape of one `user_invite_requests` row -- mirrors
+/// `streamarr_model::UserInviteRequest`, same rationale as
+/// [`PeerInviteRow`].
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct PeerInviteRequestRow {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub message: Option<String>,
+    pub status: UserInviteRequestStatus,
+    pub requested_at: DateTime<Utc>,
+    pub reviewed_by: Option<Uuid>,
+    pub reviewed_at: Option<DateTime<Utc>>,
+    pub generated_at: Option<DateTime<Utc>>,
+    pub can_stream: bool,
+    pub library_allow: Vec<Uuid>,
+    pub group_library_allow: Vec<Uuid>,
+}
+
+impl From<UserInviteRequest> for PeerInviteRequestRow {
+    fn from(request: UserInviteRequest) -> Self {
+        Self {
+            id: request.id,
+            user_id: request.user_id,
+            message: request.message,
+            status: request.status,
+            requested_at: request.requested_at,
+            reviewed_by: request.reviewed_by,
+            reviewed_at: request.reviewed_at,
+            generated_at: request.generated_at,
+            can_stream: request.can_stream,
+            library_allow: request.library_allow,
+            group_library_allow: request.group_library_allow,
+        }
+    }
+}
+
+/// Response body for [`invites_handler`] -- `docs/architecture/
+/// peer-groups.md` §3.6: `user_invites`/`user_invite_requests` rows.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct InvitesResponse {
+    pub invites: Vec<PeerInviteRow>,
+    pub invite_requests: Vec<PeerInviteRequestRow>,
+    pub server_time: String,
+}
+
+/// `user_invites`/`user_invite_requests` rows created/requested/consumed
+/// since `since` -- the read behind `streamarr_peer_sync::account_sync::
+/// sync_invites`. `user_invites` cursors on `updated_at` (creation *or*
+/// consumption -- see `UserInviteRepo::list_updated_since`'s doc comment);
+/// `user_invite_requests` still has no `updated_at` and cursors on
+/// `requested_at` only (see `UserInviteRequestRepo::list_requested_since`'s
+/// doc comment). The consumer side (`sync_invites`) applies both plain
+/// append/forward-apply, not full last-writer-wins -- see that function's
+/// own doc comment.
+#[utoipa::path(
+    get,
+    path = "/api/v1/peer/invites",
+    tag = "peer-groups",
+    params(SinceQueryParams),
+    responses(
+        (status = 200, description = "user_invites/user_invite_requests rows created/requested/consumed since the given cursor", body = InvitesResponse),
+        (status = 400, description = "Malformed since cursor"),
+        (status = 401, description = "Missing/invalid peer signature, or an unknown/left peer")
+    )
+)]
+pub async fn invites_handler(
+    State(state): State<AppState>,
+    Query(params): Query<SinceQueryParams>,
+    _peer: PeerSignedRequest,
+) -> Result<Json<InvitesResponse>, ApiError> {
+    let since = parse_since(params.since.as_deref())?;
+    let now = Utc::now();
+
+    let invites = state
+        .user_invite_repo
+        .list_updated_since(since)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to list invites for peer sync: {err}")))?
+        .into_iter()
+        .map(PeerInviteRow::from)
+        .collect();
+
+    let invite_requests = state
+        .user_invite_request_repo
+        .list_requested_since(since)
+        .await
+        .map_err(|err| {
+            ApiError::internal(format!("failed to list invite requests for peer sync: {err}"))
+        })?
+        .into_iter()
+        .map(PeerInviteRequestRow::from)
+        .collect();
+
+    Ok(Json(InvitesResponse {
+        invites,
+        invite_requests,
+        server_time: cursor(now),
+    }))
+}
+
+// ---------------------------------------------------------------------
+// GET /api/v1/peer/libraries?since=
+// ---------------------------------------------------------------------
+
+/// Identity-only projection of this node's own `SourceInstance` rows --
+/// `docs/architecture/peer-groups.md` §3.1's table: "`source_instances`
+/// identity only (id, kind, name, priority, `group_library_id`) ... never
+/// `api_key_encrypted`." Also never `base_url`: an *arr base URL is
+/// exactly as node-local/credential-adjacent as the API key that
+/// authenticates against it -- see `SourceInstanceRepo::list_updated_since`'s
+/// own doc comment, which explicitly leaves stripping non-identity fields
+/// to the calling endpoint handler (this one).
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SourceInstanceIdentity {
+    pub id: Uuid,
+    pub kind: SourceKind,
+    pub name: String,
+    pub priority: i32,
+    pub group_library_id: Option<Uuid>,
+}
+
+impl From<streamarr_model::SourceInstance> for SourceInstanceIdentity {
+    fn from(instance: streamarr_model::SourceInstance) -> Self {
+        Self {
+            id: instance.id,
+            kind: instance.kind,
+            name: instance.name,
+            priority: instance.priority,
+            group_library_id: instance.group_library_id,
+        }
+    }
+}
+
+/// Response body for [`libraries_handler`] -- `docs/architecture/
+/// peer-groups.md` §3.6: `source_instances` identity-only rows (no
+/// `api_key_encrypted`) + `group_libraries`. `streamarr_peer_sync::
+/// account_sync::LibrariesResponse` only deserializes `group_libraries`/
+/// `server_time` (its own doc comment explains why: no local sink table
+/// for another peer's `SourceInstance` identity exists yet) -- the extra
+/// `source_instances` field here is additive and simply ignored by that
+/// consumer's `serde_json::from_slice`, not a byte-for-byte mismatch: a
+/// consumer with no `deny_unknown_fields` tolerates unrecognized top-level
+/// fields by design.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct LibrariesResponse {
+    pub source_instances: Vec<SourceInstanceIdentity>,
+    pub group_libraries: Vec<GroupLibrary>,
+    pub server_time: String,
+}
+
+/// This node's own `source_instances` (identity only) + this group's
+/// `group_libraries`, both updated since `since` -- the read behind
+/// `streamarr_peer_sync::account_sync::sync_libraries` (which only
+/// consumes the `group_libraries` half -- see [`LibrariesResponse`]'s doc
+/// comment).
+#[utoipa::path(
+    get,
+    path = "/api/v1/peer/libraries",
+    tag = "peer-groups",
+    params(SinceQueryParams),
+    responses(
+        (status = 200, description = "source_instances identity rows + group_libraries updated since the given cursor", body = LibrariesResponse),
+        (status = 400, description = "Malformed since cursor"),
+        (status = 401, description = "Missing/invalid peer signature, or an unknown/left peer")
+    )
+)]
+pub async fn libraries_handler(
+    State(state): State<AppState>,
+    Query(params): Query<SinceQueryParams>,
+    _peer: PeerSignedRequest,
+) -> Result<Json<LibrariesResponse>, ApiError> {
+    let since = parse_since(params.since.as_deref())?;
+    let now = Utc::now();
+
+    let source_instances = state
+        .source_instance_repo
+        .list_updated_since(since)
+        .await
+        .map_err(|err| {
+            ApiError::internal(format!("failed to list source instances for peer sync: {err}"))
+        })?
+        .into_iter()
+        .map(SourceInstanceIdentity::from)
+        .collect();
+
+    let group_id = this_node_group_id(&state).await?;
+    let group_libraries = state
+        .group_library_repo
+        .list_updated_since(group_id, since)
+        .await
+        .map_err(|err| {
+            ApiError::internal(format!("failed to list group libraries for peer sync: {err}"))
+        })?;
+
+    Ok(Json(LibrariesResponse {
+        source_instances,
+        group_libraries,
+        server_time: cursor(now),
+    }))
+}
+
+// ---------------------------------------------------------------------
+// GET /api/v1/peer/availability?since=
+// ---------------------------------------------------------------------
+
+/// Wire shape of one derived leaf-availability row -- field-for-field
+/// identical to `streamarr_peer_sync::availability_sync::AvailabilityRow`.
+/// Reuses `streamarr_model::{ExternalProvider, Availability, LeafSelector,
+/// WorkKind}` directly (all `ToSchema`, none secret): one shared type on
+/// both ends for each of those fields, so there is nothing for this DTO's
+/// definition to drift out of sync with.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct PeerAvailabilityRow {
+    pub provider: ExternalProvider,
+    pub external_id: String,
+    pub leaf_selector: LeafSelector,
+    pub group_library_id: Option<Uuid>,
+    pub availability: Availability,
+    pub container: Option<String>,
+    pub codec: Option<String>,
+    pub bitrate: Option<u64>,
+    pub size_bytes: Option<u64>,
+    pub duration_ms: Option<u64>,
+    pub updated_at: DateTime<Utc>,
+    pub title: String,
+    pub kind: WorkKind,
+    pub release_date: Option<DateTime<Utc>>,
+}
+
+/// Response body for [`availability_handler`].
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AvailabilityResponse {
+    pub rows: Vec<PeerAvailabilityRow>,
+    pub server_time: String,
+}
+
+/// Derives this node's own `peer_leaf_availability`-shaped rows, live, from
+/// its own `WorkRepo`/`MediaFileRepo`/`SourceInstanceRepo` (joined to
+/// `group_library_id` via `source_instances.group_library_id`) --
+/// `docs/architecture/peer-groups.md` §3.6's table entry for this
+/// endpoint. This is deliberately **not** a read of the local
+/// `peer_leaf_availability` table: that table only ever stores what OTHER
+/// peers report (see `streamarr_db::repo::peer_leaf_availability`'s own
+/// module doc comment: "Never written for `peer_node_id` = self"). `since`
+/// has no meaning here and is ignored (see [`availability_handler`]'s own
+/// doc comment) -- every call recomputes the full, current set.
+///
+/// Per-leaf tree shape (season/episode numbers, disc/track numbers, a
+/// book's ordinal position) comes from `AppState::catalog`
+/// (`CatalogService::get_by_id`), the same already-tested "full kind-
+/// specific tree" read `catalog.rs`'s own `get_work_handler` uses --
+/// deliberately reused rather than re-querying `seasons`/`episodes`/
+/// `albums`/`tracks`/`books` directly from this crate, which has never
+/// touched a raw `DbPool` in a production handler (see this crate's own
+/// `repo/mod.rs`-equivalent discipline: depend on repository/service
+/// traits, not `sqlx`, outside `streamarr-db` itself). Container/codec/
+/// bitrate/size/duration and `source_instance_id` (for the
+/// `group_library_id` join) come from the underlying `MediaFile` row
+/// itself, via `MediaFileRepo::get_by_id`, since `CatalogService`'s tree
+/// doesn't carry those fields.
+///
+/// Only works carrying at least one `ExternalRef` are represented (§4.2:
+/// the external ref is the only thing portable across peers at all -- a
+/// work with zero refs has nothing to key a wire row on). Of a work's
+/// (possibly several) external refs, only the first (stored
+/// provider-sorted -- see `SqlxWorkRepo::load_external_refs`) is used per
+/// leaf: a deliberate simplification over emitting one row per
+/// `(leaf, ref)` pair, kept fully deterministic by that same stored
+/// ordering.
+///
+/// One work/leaf that fails to resolve (e.g. deleted between the initial
+/// `list_work_ids` scan and this read) is logged and skipped, never fails
+/// the whole response -- the same best-effort philosophy `arr-sync`'s own
+/// `best_effort` flag already encodes.
+/// The `(media_file_id, LeafSelector)` pair for every playable leaf in
+/// `detail`'s kind-specific tree -- the exact per-kind walk
+/// [`derive_own_availability`] needs for every work in the whole catalog,
+/// factored out so a *single*-work caller (`playback::resolve_leaf_identity`,
+/// Phase 3's routing-context gathering, and `playback::
+/// resolve_local_media_file_for_leaf`, the `RemoteOnlyWork` lookup direction)
+/// can reuse the identical mapping instead of re-deriving it -- one algorithm
+/// for "what `LeafSelector` does this `media_file_id` have" in both
+/// directions, never two independently maintained ones. Pure, no I/O of its
+/// own: `detail` is already fully resolved by the caller.
+pub(crate) fn leaf_selectors_for(detail: &streamarr_catalog::WorkDetail) -> Vec<(Uuid, LeafSelector)> {
+    let mut leaves: Vec<(Uuid, LeafSelector)> = Vec::new();
+    match &detail.children {
+        WorkChildren::Movie => {
+            if let Some(media_file_id) = detail.media_file_id {
+                leaves.push((media_file_id, LeafSelector::Movie));
+            }
+        }
+        WorkChildren::Series(seasons) => {
+            for season_detail in seasons {
+                let Ok(season_number) = u32::try_from(season_detail.season.season_number) else {
+                    continue;
+                };
+                for episode_detail in &season_detail.episodes {
+                    let Some(media_file_id) = episode_detail.media_file_id else {
+                        continue;
+                    };
+                    let Ok(episode_number) = u32::try_from(episode_detail.episode.episode_number)
+                    else {
+                        continue;
+                    };
+                    leaves.push((
+                        media_file_id,
+                        LeafSelector::Episode {
+                            season: season_number,
+                            episode: episode_number,
+                        },
+                    ));
+                }
+            }
+        }
+        WorkChildren::Artist(albums) => {
+            for album_detail in albums {
+                for track_detail in &album_detail.tracks {
+                    let Some(media_file_id) = track_detail.media_file_id else {
+                        continue;
+                    };
+                    leaves.push((
+                        media_file_id,
+                        LeafSelector::Track {
+                            disc: Some(track_detail.track.disc_number),
+                            track: track_detail.track.track_number,
+                        },
+                    ));
+                }
+            }
+        }
+        WorkChildren::Author(books) => {
+            for (index, book_detail) in books.iter().enumerate() {
+                let Some(media_file_id) = book_detail.media_file_id else {
+                    continue;
+                };
+                leaves.push((media_file_id, LeafSelector::Book { index: index as u32 }));
+            }
+        }
+    }
+    leaves
+}
+
+async fn derive_own_availability(
+    state: &AppState,
+    now: DateTime<Utc>,
+) -> Result<Vec<PeerAvailabilityRow>, ApiError> {
+    let group_library_by_source: HashMap<Uuid, Option<Uuid>> = state
+        .source_instance_repo
+        .list_all()
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to list source instances: {err}")))?
+        .into_iter()
+        .map(|instance| (instance.id, instance.group_library_id))
+        .collect();
+
+    let work_ids = state
+        .media_file_repo
+        .list_work_ids()
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to list media file work ids: {err}")))?;
+
+    let mut rows = Vec::new();
+    for work_id in work_ids {
+        let work = match state.work_repo.get(work_id).await {
+            Ok(work) => work,
+            Err(err) => {
+                tracing::warn!(%work_id, error = %err, "skipping work while deriving live peer availability");
+                continue;
+            }
+        };
+        let Some(external_ref) = work.external_refs.first() else {
+            continue;
+        };
+
+        let detail = match state.catalog.get_by_id(work_id, None).await {
+            Ok(detail) => detail,
+            Err(err) => {
+                tracing::warn!(%work_id, error = %err, "skipping work while deriving live peer availability");
+                continue;
+            }
+        };
+
+        let leaves = leaf_selectors_for(&detail);
+
+        for (media_file_id, leaf_selector) in leaves {
+            let media_file = match state.media_file_repo.get_by_id(media_file_id).await {
+                Ok(file) => file,
+                Err(err) => {
+                    tracing::warn!(%media_file_id, error = %err, "skipping leaf while deriving live peer availability");
+                    continue;
+                }
+            };
+            let group_library_id = group_library_by_source
+                .get(&media_file.source_instance_id)
+                .copied()
+                .flatten();
+
+            rows.push(PeerAvailabilityRow {
+                provider: external_ref.provider.clone(),
+                external_id: external_ref.external_id.clone(),
+                leaf_selector,
+                group_library_id,
+                // A row is only ever emitted for a leaf this node already
+                // has a synced `MediaFile` for -- leaf-granularity
+                // availability, so "we have this leaf" is unconditionally
+                // `Available` (the design's `PartiallyAvailable` concept
+                // lives one level up, at the aggregate `Work`, not here).
+                availability: Availability::Available,
+                container: Some(media_file.container.clone()),
+                codec: Some(media_file.codec.clone()),
+                bitrate: media_file.bitrate,
+                size_bytes: Some(media_file.size_bytes),
+                duration_ms: media_file.duration_ms,
+                updated_at: now,
+                title: work.title.clone(),
+                kind: work.kind,
+                release_date: work.release_date,
+            });
+        }
+    }
+
+    Ok(rows)
+}
+
+/// This peer's own leaf availability, derived live -- see
+/// [`derive_own_availability`]'s doc comment. `since` is accepted (for
+/// wire compatibility with every other `?since=` endpoint the poller
+/// calls identically) but ignored: there is no per-leaf `updated_at` to
+/// filter on, so every call is already a full, safe-to-reapply refresh,
+/// the same full-refresh strategy §3.6 uses for `GET /api/v1/peer/nodes`.
+#[utoipa::path(
+    get,
+    path = "/api/v1/peer/availability",
+    tag = "peer-groups",
+    params(SinceQueryParams),
+    responses(
+        (status = 200, description = "This peer's own leaf-level availability, derived live from its own MediaFileRepo", body = AvailabilityResponse),
+        (status = 401, description = "Missing/invalid peer signature, or an unknown/left peer")
+    )
+)]
+pub async fn availability_handler(
+    State(state): State<AppState>,
+    Query(_params): Query<SinceQueryParams>,
+    _peer: PeerSignedRequest,
+) -> Result<Json<AvailabilityResponse>, ApiError> {
+    let now = Utc::now();
+    let rows = derive_own_availability(&state, now).await?;
+    Ok(Json(AvailabilityResponse {
+        rows,
+        server_time: cursor(now),
+    }))
+}
+
+// ---------------------------------------------------------------------
+// GET /api/v1/peer/routing-rules?since=
+// ---------------------------------------------------------------------
+
+/// Response body for [`routing_rules_handler`] -- `docs/architecture/
+/// peer-groups.md` §3.6: `routing_rules` rows. `RoutingRule` is reused
+/// directly (see this module's own "wire-shape discipline" doc comment):
+/// it carries no secret and already stamps its own `created_at`/
+/// `updated_at`, so there is no separate sync-metadata envelope to define
+/// here the way [`PeerUserRow`]/[`PeerPolicyRow`] need for `User`/`Policy`.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct RoutingRulesResponse {
+    pub rows: Vec<RoutingRule>,
+    pub server_time: String,
+}
+
+/// This group's `routing_rules` updated since `since` (every row, oldest
+/// first, when omitted) -- the read behind `streamarr_peer_sync::
+/// routing_sync::sync_routing_rules`. Plain last-writer-wins by
+/// `updated_at` on the consumer side, no origin-gating: see that module's
+/// own doc comment for why a routing preference isn't a privilege-bearing
+/// field the way `Policy`'s `is_admin`/`can_stream`/... are.
+#[utoipa::path(
+    get,
+    path = "/api/v1/peer/routing-rules",
+    tag = "peer-groups",
+    params(SinceQueryParams),
+    responses(
+        (status = 200, description = "routing_rules rows updated since the given cursor", body = RoutingRulesResponse),
+        (status = 400, description = "Malformed since cursor"),
+        (status = 401, description = "Missing/invalid peer signature, or an unknown/left peer")
+    )
+)]
+pub async fn routing_rules_handler(
+    State(state): State<AppState>,
+    Query(params): Query<SinceQueryParams>,
+    _peer: PeerSignedRequest,
+) -> Result<Json<RoutingRulesResponse>, ApiError> {
+    let since = parse_since(params.since.as_deref())?;
+    let now = Utc::now();
+
+    let group_id = this_node_group_id(&state).await?;
+    let rows = state
+        .routing_rule_repo
+        .list_updated_since(group_id, since)
+        .await
+        .map_err(|err| {
+            ApiError::internal(format!("failed to list routing rules for peer sync: {err}"))
+        })?;
+
+    Ok(Json(RoutingRulesResponse {
+        rows,
+        server_time: cursor(now),
+    }))
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::body::Body;
+    use axum::http::Request;
+    use tower::ServiceExt;
+
+    use super::*;
+    use crate::test_support::test_state;
+
+    async fn seed_group_and_token(
+        state: &crate::test_support::TestState,
+        admin_id: Uuid,
+    ) -> (Uuid, String) {
+        let group = PeerGroup {
+            id: Uuid::new_v4(),
+            name: "Home Group".to_string(),
+            created_at: Utc::now(),
+        };
+        state.app.peer_group_repo.create(&group).await.unwrap();
+
+        let raw_token = "test-join-token";
+        state
+            .app
+            .peer_join_token_repo
+            .create(&streamarr_db::PeerJoinToken {
+                token_hash: streamarr_auth::secret::hash_token(raw_token),
+                group_id: group.id,
+                created_by: admin_id,
+                created_at: Utc::now(),
+                expires_at: Utc::now() + chrono::Duration::minutes(15),
+                redeemed_by_peer_id: None,
+            })
+            .await
+            .unwrap();
+
+        (group.id, raw_token.to_string())
+    }
+
+    fn enroll_request(body: &EnrollRequest) -> Request<Body> {
+        Request::builder()
+            .method("POST")
+            .uri("/api/v1/peer/enroll")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(body).unwrap()))
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn enroll_persists_the_joining_peer_and_returns_full_membership() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        crate::test_support::seed_admin_user(&state, admin_id).await;
+        let (group_id, raw_token) = seed_group_and_token(&state, admin_id).await;
+
+        // A self row, as if this node had already founded the group.
+        let self_id = Uuid::new_v4();
+        let now = Utc::now();
+        state
+            .app
+            .peer_node_repo
+            .upsert(&PeerNode {
+                id: self_id,
+                group_id,
+                name: "home".to_string(),
+                addresses: vec![],
+                public_key: "self-pubkey".to_string(),
+                is_self: true,
+                status: PeerNodeStatus::Active,
+                last_seen_at: Some(now),
+                last_sync_error: None,
+                joined_at: now,
+                updated_at: now,
+            })
+            .await
+            .unwrap();
+
+        let joining_peer_id = Uuid::new_v4();
+        let response = router
+            .oneshot(enroll_request(&EnrollRequest {
+                join_token: raw_token,
+                peer_id: joining_peer_id,
+                name: "east".to_string(),
+                addresses: vec![],
+                public_key: "east-pubkey".to_string(),
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: EnrollResponse = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body.group.id, group_id);
+        assert_eq!(body.members.len(), 2);
+        assert!(body.members.iter().any(|m| m.id == self_id && m.is_self));
+        assert!(body
+            .members
+            .iter()
+            .any(|m| m.id == joining_peer_id && !m.is_self));
+
+        let persisted = state
+            .app
+            .peer_join_token_repo
+            .find_valid(
+                &streamarr_auth::secret::hash_token("test-join-token"),
+                Utc::now(),
+            )
+            .await
+            .unwrap();
+        assert!(persisted.is_none(), "token must be consumed, not reusable");
+    }
+
+    #[tokio::test]
+    async fn enroll_rejects_an_unknown_token() {
+        let (router, _state) = test_state().await;
+        let response = router
+            .oneshot(enroll_request(&EnrollRequest {
+                join_token: "does-not-exist".to_string(),
+                peer_id: Uuid::new_v4(),
+                name: "east".to_string(),
+                addresses: vec![],
+                public_key: "east-pubkey".to_string(),
+            }))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::GONE);
+    }
+
+    #[tokio::test]
+    async fn enroll_rejects_a_colliding_peer_id_without_burning_the_token_or_overwriting_the_key() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        crate::test_support::seed_admin_user(&state, admin_id).await;
+        let (group_id, raw_token) = seed_group_and_token(&state, admin_id).await;
+
+        let victim_id = Uuid::new_v4();
+        let now = Utc::now();
+        state
+            .app
+            .peer_node_repo
+            .upsert(&PeerNode {
+                id: victim_id,
+                group_id,
+                name: "east".to_string(),
+                addresses: vec![],
+                public_key: "legitimate-pubkey".to_string(),
+                is_self: false,
+                status: PeerNodeStatus::Active,
+                last_seen_at: Some(now),
+                last_sync_error: None,
+                joined_at: now,
+                updated_at: now,
+            })
+            .await
+            .unwrap();
+
+        // An attacker holding a valid (but unrelated) join token tries to
+        // re-enroll under the victim's already-taken peer_id, with a public
+        // key they control.
+        let response = router
+            .oneshot(enroll_request(&EnrollRequest {
+                join_token: raw_token.clone(),
+                peer_id: victim_id,
+                name: "east-impostor".to_string(),
+                addresses: vec![],
+                public_key: "attacker-controlled-pubkey".to_string(),
+            }))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+
+        let unchanged = state
+            .app
+            .peer_node_repo
+            .get(victim_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            unchanged.public_key, "legitimate-pubkey",
+            "the victim's real public key must not be overwritten"
+        );
+
+        let still_valid = state
+            .app
+            .peer_join_token_repo
+            .find_valid(&streamarr_auth::secret::hash_token(&raw_token), Utc::now())
+            .await
+            .unwrap();
+        assert!(still_valid.is_some(), "the token must not be burned by a rejected enroll");
+    }
+
+    #[tokio::test]
+    async fn enroll_rejects_a_colliding_name_without_burning_the_token() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        crate::test_support::seed_admin_user(&state, admin_id).await;
+        let (group_id, raw_token) = seed_group_and_token(&state, admin_id).await;
+
+        let now = Utc::now();
+        state
+            .app
+            .peer_node_repo
+            .upsert(&PeerNode {
+                id: Uuid::new_v4(),
+                group_id,
+                name: "east".to_string(),
+                addresses: vec![],
+                public_key: "existing-pubkey".to_string(),
+                is_self: false,
+                status: PeerNodeStatus::Active,
+                last_seen_at: Some(now),
+                last_sync_error: None,
+                joined_at: now,
+                updated_at: now,
+            })
+            .await
+            .unwrap();
+
+        let response = router
+            .oneshot(enroll_request(&EnrollRequest {
+                join_token: raw_token.clone(),
+                peer_id: Uuid::new_v4(),
+                name: "east".to_string(),
+                addresses: vec![],
+                public_key: "new-pubkey".to_string(),
+            }))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+
+        // The token must still be valid -- the collision was rejected
+        // before consuming it.
+        let still_valid = state
+            .app
+            .peer_join_token_repo
+            .find_valid(&streamarr_auth::secret::hash_token(&raw_token), Utc::now())
+            .await
+            .unwrap();
+        assert!(still_valid.is_some());
+    }
+}
+
+#[cfg(test)]
+mod sync_endpoint_tests {
+    use axum::body::Body;
+    use axum::http::Request;
+    use base64::Engine;
+    use chrono::Duration;
+    use ed25519_dalek::{Signer, SigningKey};
+    use sha2::{Digest, Sha256};
+    use streamarr_model::media::LeafRef;
+    use streamarr_model::{
+        ClientPlatform, ExternalRef, NodeIdentity, Sensitive, SourceInstance, Work,
+    };
+    use tower::ServiceExt;
+
+    use super::*;
+    use crate::peer_extractor::{NONCE_HEADER, PEER_ID_HEADER, SIGNATURE_HEADER, TIMESTAMP_HEADER};
+    use crate::test_support::{seed_media_file, test_state, TestState};
+
+    fn signing_key() -> SigningKey {
+        SigningKey::from_bytes(&[42u8; 32])
+    }
+
+    /// Seeds a `peer_groups` row, an active `peer_nodes` row for `peer_id`
+    /// (signed with `key`), and this node's own `node_identity` pointed at
+    /// that same group -- everything [`PeerSignedRequest`] plus
+    /// `this_node_group_id` need. Deliberately not shared with
+    /// `peer_extractor.rs`'s own private `seed_peer` test helper: that
+    /// helper is intentionally module-private (same reasoning
+    /// `admin_peer.rs`'s doc comment gives for `EnrollResponse` not being
+    /// shared 1:1 with `streamarr_peer_sync::EnrollResponse` -- distinct
+    /// types/helpers per module, identical shape).
+    async fn seed_group_and_signed_peer(state: &TestState, peer_id: Uuid, key: &SigningKey) -> Uuid {
+        let group_id = Uuid::new_v4();
+        state
+            .app
+            .peer_group_repo
+            .create(&PeerGroup {
+                id: group_id,
+                name: "test group".to_string(),
+                created_at: Utc::now(),
+            })
+            .await
+            .unwrap();
+
+        let now = Utc::now();
+        state
+            .app
+            .peer_node_repo
+            .upsert(&PeerNode {
+                id: peer_id,
+                group_id,
+                name: "east".to_string(),
+                addresses: vec![PeerAddress {
+                    url: "https://east.example.com".to_string(),
+                    priority: 0,
+                    label: "wan".to_string(),
+                    client_reachable: true,
+                }],
+                public_key: base64::engine::general_purpose::STANDARD
+                    .encode(key.verifying_key().to_bytes()),
+                is_self: false,
+                status: PeerNodeStatus::Active,
+                last_seen_at: Some(now),
+                last_sync_error: None,
+                joined_at: now,
+                updated_at: now,
+            })
+            .await
+            .unwrap();
+
+        state
+            .app
+            .node_identity_repo
+            .put(&NodeIdentity {
+                peer_id: Uuid::new_v4(),
+                private_key: Sensitive::new("unused-in-these-tests".to_string()),
+                group_id: Some(group_id),
+                created_at: now,
+            })
+            .await
+            .unwrap();
+
+        group_id
+    }
+
+    /// Builds a validly-signed `GET` request -- same canonical string
+    /// (`method|path|sha256(body)|timestamp|nonce`) `peer_extractor.rs`'s
+    /// own (module-private) test helper signs, reimplemented here rather
+    /// than reused across the module boundary.
+    fn signed_get(path: &str, peer_id: Uuid, key: &SigningKey) -> Request<Body> {
+        let body_hash = hex::encode(Sha256::digest(b""));
+        let timestamp = Utc::now().timestamp().to_string();
+        let nonce = "test-nonce";
+        let signed = format!("GET|{path}|{body_hash}|{timestamp}|{nonce}");
+        let signature = key.sign(signed.as_bytes());
+
+        Request::builder()
+            .method("GET")
+            .uri(path)
+            .header(PEER_ID_HEADER, peer_id.to_string())
+            .header(
+                SIGNATURE_HEADER,
+                base64::engine::general_purpose::STANDARD.encode(signature.to_bytes()),
+            )
+            .header(TIMESTAMP_HEADER, timestamp)
+            .header(NONCE_HEADER, nonce)
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    async fn body_json(response: axum::response::Response) -> serde_json::Value {
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        serde_json::from_slice(&bytes).unwrap()
+    }
+
+    #[tokio::test]
+    async fn every_sync_endpoint_rejects_an_unsigned_request() {
+        let (router, _state) = test_state().await;
+        for path in [
+            "/api/v1/peer/nodes",
+            "/api/v1/peer/accounts",
+            "/api/v1/peer/invites",
+            "/api/v1/peer/libraries",
+            "/api/v1/peer/availability",
+            "/api/v1/peer/routing-rules",
+        ] {
+            let response = router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri(path)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                response.status(),
+                StatusCode::UNAUTHORIZED,
+                "expected {path} to reject an unsigned request"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn nodes_handler_returns_full_membership_including_self() {
+        let (router, state) = test_state().await;
+        let peer_id = Uuid::new_v4();
+        let key = signing_key();
+        let group_id = seed_group_and_signed_peer(&state, peer_id, &key).await;
+
+        let self_id = Uuid::new_v4();
+        let now = Utc::now();
+        state
+            .app
+            .peer_node_repo
+            .upsert(&PeerNode {
+                id: self_id,
+                group_id,
+                name: "home".to_string(),
+                addresses: vec![],
+                public_key: "self-pubkey".to_string(),
+                is_self: true,
+                status: PeerNodeStatus::Active,
+                last_seen_at: Some(now),
+                last_sync_error: None,
+                joined_at: now,
+                updated_at: now,
+            })
+            .await
+            .unwrap();
+
+        let response = router
+            .oneshot(signed_get("/api/v1/peer/nodes", peer_id, &key))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body_json(response).await;
+        let rows = body["rows"].as_array().unwrap();
+        assert_eq!(rows.len(), 2);
+        let ids: Vec<String> = rows.iter().map(|r| r["id"].as_str().unwrap().to_string()).collect();
+        assert!(ids.contains(&self_id.to_string()));
+        assert!(ids.contains(&peer_id.to_string()));
+    }
+
+    fn sample_policy(id: Uuid) -> Policy {
+        Policy {
+            id,
+            name: "Policy".to_string(),
+            library_allow: vec![],
+            group_library_allow: vec![],
+            blocked_folders: vec![],
+            max_rating: None,
+            blocked_tags: vec![],
+            allowed_tags: vec![],
+            can_transcode: true,
+            can_download: false,
+            can_delete: false,
+            can_share_public: false,
+            device_allow: vec![ClientPlatform::Web],
+            max_concurrent_sessions: None,
+            access_schedule: None,
+            can_stream: true,
+            is_admin: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn accounts_handler_returns_users_and_policies_with_sync_metadata_and_respects_since() {
+        let (router, state) = test_state().await;
+        let peer_id = Uuid::new_v4();
+        let key = signing_key();
+        seed_group_and_signed_peer(&state, peer_id, &key).await;
+
+        let policy_id = Uuid::new_v4();
+        state.app.policy_repo.upsert(&sample_policy(policy_id)).await.unwrap();
+        let user = User {
+            id: Uuid::new_v4(),
+            username: "sync-user".to_string(),
+            display_name: "Sync User".to_string(),
+            email: None,
+            password_hash: Sensitive::new("argon2-hash-value".to_string()),
+            policy_id,
+            created_at: Utc::now(),
+            disabled: false,
+            preferred_audio_language: "en".to_string(),
+        };
+        state.app.user_repo.upsert(&user).await.unwrap();
+
+        let response = router
+            .clone()
+            .oneshot(signed_get("/api/v1/peer/accounts", peer_id, &key))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body_json(response).await;
+        let users = body["users"].as_array().unwrap();
+        let synced_user = users.iter().find(|u| u["id"] == user.id.to_string()).unwrap();
+        // The wire shape is `User`'s own fields flattened alongside the
+        // sync-only ones -- exactly what `streamarr_peer_sync::account_sync
+        // ::UserSyncRow`'s `#[serde(flatten)]` deserializes.
+        assert_eq!(synced_user["username"], "sync-user");
+        assert_eq!(synced_user["password_hash"], "argon2-hash-value");
+        assert!(synced_user["updated_at"].is_string());
+        assert!(synced_user["deleted_at"].is_null());
+
+        let policies = body["policies"].as_array().unwrap();
+        let synced_policy = policies.iter().find(|p| p["id"] == policy_id.to_string()).unwrap();
+        assert_eq!(synced_policy["name"], "Policy");
+        assert!(synced_policy["updated_at"].is_string());
+
+        let server_time = body["server_time"].as_str().unwrap().to_string();
+        assert!(server_time.parse::<i64>().is_ok(), "server_time must be a plain integer cursor");
+
+        // A second pass using the returned cursor must not re-report
+        // either row -- proves `since` is actually applied, not ignored.
+        let second_path = format!("/api/v1/peer/accounts?since={server_time}");
+        let response = router
+            .oneshot(signed_get(&second_path, peer_id, &key))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body_json(response).await;
+        assert!(body["users"].as_array().unwrap().is_empty());
+        assert!(body["policies"].as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn invites_handler_returns_invites_and_invite_requests() {
+        let (router, state) = test_state().await;
+        let peer_id = Uuid::new_v4();
+        let key = signing_key();
+        seed_group_and_signed_peer(&state, peer_id, &key).await;
+
+        let policy_id = Uuid::new_v4();
+        state.app.policy_repo.upsert(&sample_policy(policy_id)).await.unwrap();
+        let admin = User {
+            id: Uuid::new_v4(),
+            username: "invite-admin".to_string(),
+            display_name: "Invite Admin".to_string(),
+            email: None,
+            password_hash: Sensitive::new("hash".to_string()),
+            policy_id,
+            created_at: Utc::now(),
+            disabled: false,
+            preferred_audio_language: "en".to_string(),
+        };
+        state.app.user_repo.upsert(&admin).await.unwrap();
+
+        let group_library_id = Uuid::new_v4();
+        let invite = UserInvite {
+            token_hash: "a-token-hash".to_string(),
+            created_by: admin.id,
+            created_at: Utc::now(),
+            expires_at: Utc::now() + Duration::hours(24),
+            can_stream: true,
+            library_allow: vec![],
+            group_library_allow: vec![group_library_id],
+            consumed_at: None,
+            consumed_by_user_id: None,
+            consumed_by_peer_id: None,
+        };
+        state.app.user_invite_repo.create(&invite).await.unwrap();
+
+        let request = UserInviteRequest {
+            id: Uuid::new_v4(),
+            user_id: admin.id,
+            message: Some("please".to_string()),
+            status: UserInviteRequestStatus::Pending,
+            requested_at: Utc::now(),
+            reviewed_by: None,
+            reviewed_at: None,
+            generated_at: None,
+            can_stream: false,
+            library_allow: vec![],
+            group_library_allow: vec![],
+        };
+        state.app.user_invite_request_repo.create(&request).await.unwrap();
+
+        let response = router
+            .clone()
+            .oneshot(signed_get("/api/v1/peer/invites", peer_id, &key))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body_json(response).await;
+        let invites = body["invites"].as_array().unwrap();
+        let synced_invite = invites
+            .iter()
+            .find(|i| i["token_hash"] == "a-token-hash")
+            .expect("the invite should be reported");
+        // `group_library_allow`/`consumed_at`/`consumed_by_*` round-trip on
+        // the wire -- the whole point of `PeerInviteRow` being field-for-
+        // field identical to `UserInvite`'s own `Serialize` output (this
+        // type's own doc comment): `streamarr_peer_sync::account_sync::
+        // InvitesResponse` deserializes straight into `UserInvite`, so a
+        // field missing here would fail that deserialization outright, not
+        // just silently drop the value.
+        assert_eq!(
+            synced_invite["group_library_allow"],
+            serde_json::json!([group_library_id])
+        );
+        assert!(synced_invite["consumed_at"].is_null());
+        let invite_requests = body["invite_requests"].as_array().unwrap();
+        assert!(invite_requests.iter().any(|r| r["id"] == request.id.to_string()));
+
+        let server_time = body["server_time"].as_str().unwrap().to_string();
+
+        // Consuming the invite after this cursor was taken must re-surface
+        // it on the next pass -- proves the handler now cursors `user_
+        // invites` on `updated_at` (creation *or* consumption), not just
+        // `created_at` (`UserInviteRepo::list_updated_since`'s own doc
+        // comment).
+        let redeemer_id = Uuid::new_v4();
+        assert!(state
+            .app
+            .user_invite_repo
+            .consume(&invite.token_hash, Utc::now(), redeemer_id, None)
+            .await
+            .unwrap());
+
+        let second_path = format!("/api/v1/peer/invites?since={server_time}");
+        let response = router
+            .oneshot(signed_get(&second_path, peer_id, &key))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body_json(response).await;
+        let invites = body["invites"].as_array().unwrap();
+        let reconsumed = invites
+            .iter()
+            .find(|i| i["token_hash"] == "a-token-hash")
+            .expect("the now-consumed invite must be re-reported past the earlier cursor");
+        assert_eq!(
+            reconsumed["consumed_by_user_id"],
+            redeemer_id.to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn libraries_handler_returns_identity_only_source_instances_and_group_libraries() {
+        let (router, state) = test_state().await;
+        let peer_id = Uuid::new_v4();
+        let key = signing_key();
+        let group_id = seed_group_and_signed_peer(&state, peer_id, &key).await;
+
+        let group_library_id = Uuid::new_v4();
+        state
+            .app
+            .group_library_repo
+            .upsert(&GroupLibrary {
+                id: group_library_id,
+                group_id,
+                name: "Movies".to_string(),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            })
+            .await
+            .unwrap();
+
+        let source_instance = SourceInstance {
+            id: Uuid::new_v4(),
+            kind: streamarr_model::SourceKind::Radarr,
+            name: "Main Radarr".to_string(),
+            base_url: "https://radarr.internal.example".to_string(),
+            api_key_encrypted: Sensitive::new("super-secret-api-key".to_string()),
+            priority: 3,
+            default_root_folder_id: None,
+            default_quality_profile_id: None,
+            best_effort: false,
+            group_library_id: Some(group_library_id),
+        };
+        state.app.source_instance_repo.upsert(&source_instance).await.unwrap();
+
+        let response = router
+            .oneshot(signed_get("/api/v1/peer/libraries", peer_id, &key))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let raw = String::from_utf8(bytes.to_vec()).unwrap();
+        assert!(
+            !raw.contains("super-secret-api-key") && !raw.contains("radarr.internal.example"),
+            "api_key_encrypted/base_url must never appear on the wire: {raw}"
+        );
+
+        let body: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        let instances = body["source_instances"].as_array().unwrap();
+        let wire_instance = instances
+            .iter()
+            .find(|i| i["id"] == source_instance.id.to_string())
+            .unwrap();
+        assert_eq!(wire_instance["name"], "Main Radarr");
+        assert_eq!(wire_instance["priority"], 3);
+        assert_eq!(wire_instance["group_library_id"], group_library_id.to_string());
+        assert!(wire_instance.get("base_url").is_none());
+        assert!(wire_instance.get("api_key_encrypted").is_none());
+
+        let libraries = body["group_libraries"].as_array().unwrap();
+        assert!(libraries.iter().any(|l| l["id"] == group_library_id.to_string()));
+    }
+
+    #[tokio::test]
+    async fn availability_handler_derives_rows_live_from_this_nodes_own_media_files() {
+        let (router, state) = test_state().await;
+        let peer_id = Uuid::new_v4();
+        let key = signing_key();
+        seed_group_and_signed_peer(&state, peer_id, &key).await;
+
+        let group_library_id = Uuid::new_v4();
+        let source_instance_id = Uuid::new_v4();
+        state
+            .app
+            .source_instance_repo
+            .upsert(&SourceInstance {
+                id: source_instance_id,
+                kind: streamarr_model::SourceKind::Radarr,
+                name: "Radarr".to_string(),
+                base_url: "https://radarr.example.com".to_string(),
+                api_key_encrypted: Sensitive::new("key".to_string()),
+                priority: 0,
+                default_root_folder_id: None,
+                default_quality_profile_id: None,
+                best_effort: false,
+                group_library_id: Some(group_library_id),
+            })
+            .await
+            .unwrap();
+
+        let work_id = Uuid::new_v4();
+        let work = Work {
+            id: work_id,
+            kind: WorkKind::Movie,
+            external_refs: vec![ExternalRef {
+                provider: ExternalProvider::Tmdb,
+                external_id: "603".to_string(),
+            }],
+            title: "Sample Movie Kilo".to_string(),
+            sort_title: "matrix, the".to_string(),
+            overview: None,
+            images: vec![],
+            genres: vec![],
+            tags: vec![],
+            added_at: Utc::now(),
+            release_date: Some("1999-03-31T00:00:00Z".parse().unwrap()),
+            monitored: true,
+            availability: Availability::Available,
+        };
+        state.app.work_repo.upsert(&work).await.unwrap();
+        seed_media_file(&state, work_id, LeafRef::Work, source_instance_id).await;
+
+        let response = router
+            .oneshot(signed_get("/api/v1/peer/availability", peer_id, &key))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body_json(response).await;
+        let rows = body["rows"].as_array().unwrap();
+        assert_eq!(rows.len(), 1, "expected exactly one derived leaf row: {rows:?}");
+        let row = &rows[0];
+        assert_eq!(row["provider"], "tmdb");
+        assert_eq!(row["external_id"], "603");
+        assert_eq!(row["leaf_selector"], "movie");
+        assert_eq!(row["group_library_id"], group_library_id.to_string());
+        assert_eq!(row["availability"], "available");
+        assert_eq!(row["container"], "mkv");
+        assert_eq!(row["codec"], "h264");
+        assert_eq!(row["title"], "Sample Movie Kilo");
+        assert_eq!(row["kind"], "movie");
+        assert!(body["server_time"].as_str().unwrap().parse::<i64>().is_ok());
+    }
+
+    #[tokio::test]
+    async fn routing_rules_handler_returns_this_groups_rules_and_respects_since() {
+        let (router, state) = test_state().await;
+        let peer_id = Uuid::new_v4();
+        let key = signing_key();
+        let group_id = seed_group_and_signed_peer(&state, peer_id, &key).await;
+
+        let rule = streamarr_model::RoutingRule {
+            id: Uuid::new_v4(),
+            group_id,
+            group_library_id: None,
+            user_id: None,
+            priority: 5,
+            preferred_nodes: vec![peer_id],
+            delivery_mode: streamarr_model::DeliveryMode::Redirect,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        state.app.routing_rule_repo.create(&rule).await.unwrap();
+
+        let response = router
+            .clone()
+            .oneshot(signed_get("/api/v1/peer/routing-rules", peer_id, &key))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body_json(response).await;
+        let rows = body["rows"].as_array().unwrap();
+        let synced_rule = rows.iter().find(|r| r["id"] == rule.id.to_string()).unwrap();
+        assert_eq!(synced_rule["priority"], 5);
+        assert_eq!(synced_rule["delivery_mode"], "redirect");
+        assert_eq!(
+            synced_rule["preferred_nodes"].as_array().unwrap(),
+            &[serde_json::Value::String(peer_id.to_string())]
+        );
+
+        let server_time = body["server_time"].as_str().unwrap().to_string();
+        assert!(server_time.parse::<i64>().is_ok(), "server_time must be a plain integer cursor");
+
+        // A second pass using the returned cursor must not re-report the
+        // already-seen row -- proves `since` is actually applied.
+        let second_path = format!("/api/v1/peer/routing-rules?since={server_time}");
+        let response = router
+            .oneshot(signed_get(&second_path, peer_id, &key))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body_json(response).await;
+        assert!(body["rows"].as_array().unwrap().is_empty());
+    }
+}

@@ -31,15 +31,19 @@ use chrono::Utc;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use streamarr_model::{
-    ClientPlatform, MediaFile, PlayMethod, PlaybackEvent, PlaybackEventKind, PlaybackSession,
-    TranscodeReason, WatchProgress,
+    ClientPlatform, DeliveryMode, ExternalProvider, LeafSelector, MediaFile, PeerNode, PlayMethod,
+    PlaybackEvent, PlaybackEventKind, PlaybackSession, TranscodeReason, WatchProgress,
 };
 use streamarr_transcode::ClientCapabilities;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::auth_extractor::{ensure_library_allowed, forbidden, StreamingUser};
+use crate::auth_extractor::{
+    ensure_library_allowed, forbidden, resolve_streaming_access, StreamingUser,
+};
 use crate::error::ApiError;
+use crate::peer_extractor::PeerSignedRequest;
+use crate::routing;
 use crate::version_gate::{CLIENT_PLATFORM_HEADER, CLIENT_VERSION_HEADER};
 use crate::AppState;
 
@@ -113,7 +117,7 @@ impl MediaFileLookup for RepoBackedMediaFileLookup {
     }
 }
 
-#[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema, utoipa::IntoParams)]
 pub struct PlaybackQuery {
     /// Comma-separated container names the client can play, e.g. `"mp4"`.
     #[serde(default)]
@@ -764,6 +768,97 @@ pub async fn playback_info_handler(
         media_file.source_instance_id,
         streaming.allowed_libraries().as_deref(),
     )?;
+
+    // Clients already send these on every request -- see
+    // `crate::version_gate`'s own doc comment -- so deriving session
+    // metadata from them is zero extra client work. Computed here, ahead of
+    // the routing step immediately below, since a delegated request needs
+    // to forward the same values.
+    let client_platform = headers
+        .get(CLIENT_PLATFORM_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(ClientPlatform::from_wire_name)
+        .unwrap_or(ClientPlatform::Web);
+    let client_version = headers
+        .get(CLIENT_VERSION_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string();
+
+    // §5.2 (`docs/architecture/peer-groups.md`): immediately after the
+    // library-access check above and before any of the direct-play/
+    // rendition/on-demand-transcode negotiation below -- this ordering is
+    // load-bearing, not stylistic (see this module's own doc comment on
+    // `negotiate_playback`). Byte-for-byte today's existing behavior
+    // (`LocalRouteOutcome::ServeLocally`, falling straight through to the
+    // unchanged negotiation logic below) for a single, ungrouped node, or a
+    // grouped node with no matching rule.
+    match resolve_route_for_local_media_file(&state, &media_file, streaming.user_id).await? {
+        LocalRouteOutcome::ServeLocally => {}
+        LocalRouteOutcome::Delegate {
+            peer_node_id,
+            delivery,
+            target,
+        } => {
+            return forward_negotiation_to_peer(
+                &state,
+                peer_node_id,
+                delivery,
+                target,
+                streaming.user_id,
+                streaming.claims.device_id,
+                client_platform,
+                client_version,
+                &query,
+            )
+            .await;
+        }
+        LocalRouteOutcome::Unavailable => {
+            return Err(ApiError::no_peer_available(format!(
+                "media file {media_file_id} is not currently available on any peer"
+            )));
+        }
+    }
+
+    Ok(Json(
+        negotiate_playback(
+            &state,
+            media_file,
+            streaming.user_id,
+            streaming.claims.device_id,
+            client_platform,
+            client_version,
+            Some(remote_addr.ip().to_string()),
+            &query,
+            streaming.policy.can_transcode,
+        )
+        .await?,
+    ))
+}
+
+/// §5.2's "the whole negotiation must move, not just the URL" logic:
+/// `TranscodeOrchestrator`'s documented decision order (`can_direct_play` ->
+/// `find_existing_rendition` -> `spawn_on_demand_transcode`) against
+/// `media_file`, which must already be local to `state` -- this function
+/// never resolves routing itself. [`playback_info_handler`] calls this for
+/// a local (`RoutingDecision::ServeLocally`) request; [`peer_playback_info_handler`]
+/// calls it after independently re-authorizing a peer-forwarded one (§5.3) --
+/// same logic either way, just fed real `StreamingUser`/`ConnectInfo`/
+/// `HeaderMap`-derived values on the local path and
+/// [`PeerPlaybackInfoRequest`]-derived ones on the forwarded path.
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn negotiate_playback(
+    state: &AppState,
+    media_file: MediaFile,
+    user_id: Uuid,
+    device_id: Uuid,
+    client_platform: ClientPlatform,
+    client_version: String,
+    ip_address: Option<String>,
+    query: &PlaybackQuery,
+    can_transcode: bool,
+) -> Result<PlaybackInfoResponse, ApiError> {
+    let media_file_id = media_file.id;
     // Sonarr/Radarr may report a path from a remote host. Probe the same
     // locally-resolved source path that direct serving and transcoding use.
     let resolved_media_path = streamarr_model::resolve_media_path(&media_file.path);
@@ -823,7 +918,7 @@ pub async fn playback_info_handler(
     } else {
         state
             .user_repo
-            .get_media_playback_preferences(streaming.user_id, media_file_id)
+            .get_media_playback_preferences(user_id, media_file_id)
             .await
             .map_err(|error| {
                 ApiError::internal(format!(
@@ -839,7 +934,7 @@ pub async fn playback_info_handler(
     let preferred_audio_language = if query.audio_stream_index.is_none() {
         state
             .user_repo
-            .find_by_id(streaming.user_id)
+            .find_by_id(user_id)
             .await
             .ok()
             .flatten()
@@ -907,7 +1002,7 @@ pub async fn playback_info_handler(
         })
         .cloned();
 
-    let capabilities: ClientCapabilities = (&query).into();
+    let capabilities: ClientCapabilities = query.into();
     let persisted_quality_id = persisted_preferences
         .as_ref()
         .map(|preferences| preferences.quality_id.as_str())
@@ -933,29 +1028,13 @@ pub async fn playback_info_handler(
         "original".to_string()
     };
 
-    // Clients already send these on every request -- see
-    // `crate::version_gate`'s own doc comment -- so deriving session
-    // metadata from them is zero extra client work.
-    let client_platform = headers
-        .get(CLIENT_PLATFORM_HEADER)
-        .and_then(|value| value.to_str().ok())
-        .and_then(ClientPlatform::from_wire_name)
-        .unwrap_or(ClientPlatform::Web);
-    let client_version = headers
-        .get(CLIENT_VERSION_HEADER)
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("unknown")
-        .to_string();
-
     let seed = SessionSeed {
-        user_id: streaming.user_id,
-        // Already present on every access token -- see
-        // `AccessTokenClaims::device_id`'s doc comment.
-        device_id: streaming.claims.device_id,
+        user_id,
+        device_id,
         media_file_id,
         client_platform,
         client_version,
-        ip_address: Some(remote_addr.ip().to_string()),
+        ip_address,
         source_codec: media_file.codec.clone(),
         source_container: media_file.container.clone(),
         source_bitrate: media_file.bitrate,
@@ -977,9 +1056,9 @@ pub async fn playback_info_handler(
             media_file.container.clone(),
             media_file.bitrate,
         );
-        let session_id = start_analytics_session(&state, session).await;
+        let session_id = start_analytics_session(state, session).await;
         state.transcode.expire_playback_session(session_id).await?;
-        return Ok(Json(PlaybackInfoResponse {
+        return Ok(PlaybackInfoResponse {
             mode: PlaybackMode::Direct,
             // Native progressive media loading (`<audio>/<video src>`) cannot
             // attach Shaka's bearer request filter. The active, random
@@ -997,15 +1076,16 @@ pub async fn playback_info_handler(
             quality_options: playback_quality_options(media_file.bitrate),
             selected_quality_id,
             session_id,
-        }));
+        });
     }
 
-    // `streaming.policy` is the exact same `Policy` a second
-    // `resolve_policy("transcode", ...)` round trip used to fetch here --
-    // `StreamingUser` already resolved and carries it (see
-    // `auth_extractor::StreamingUser`'s doc comment), so reading the field
-    // directly is zero extra database work instead of one.
-    if !streaming.policy.can_transcode {
+    // Mirrors the inline `if !streaming.policy.can_transcode` check this
+    // negotiation used to run directly against a live `StreamingUser` --
+    // `can_transcode` is that exact same `Policy` field, just passed in by
+    // the caller (either read straight off `StreamingUser` locally, or
+    // independently re-resolved from this node's own synced `Policy` for a
+    // peer-forwarded request -- see `peer_playback_info_handler`).
+    if !can_transcode {
         return Err(crate::auth_extractor::forbidden(
             "this account does not have transcoding access",
         ));
@@ -1038,9 +1118,9 @@ pub async fn playback_info_handler(
             rendition.container.clone(),
             rendition.bitrate,
         );
-        let session_id = start_analytics_session(&state, session).await;
+        let session_id = start_analytics_session(state, session).await;
         state.transcode.expire_playback_session(session_id).await?;
-        return Ok(Json(PlaybackInfoResponse {
+        return Ok(PlaybackInfoResponse {
             mode: PlaybackMode::Hls,
             url: format!("/api/v1/media/renditions/{}/playlist.m3u8", rendition.id),
             mime_type: "application/x-mpegURL".to_string(),
@@ -1053,7 +1133,7 @@ pub async fn playback_info_handler(
             quality_options: playback_quality_options(media_file.bitrate),
             selected_quality_id,
             session_id,
-        }));
+        });
     }
 
     // Step 3, last resort: spawn a new on-demand transcode.
@@ -1089,13 +1169,13 @@ pub async fn playback_info_handler(
             .video_bitrate_kbps
             .map(|kbps| kbps as u64 * 1000),
     );
-    let session_id = start_analytics_session(&state, session).await;
+    let session_id = start_analytics_session(state, session).await;
     state
         .transcode
         .associate_playback_session(session_id, transcode_session.id)
         .await?;
 
-    Ok(Json(PlaybackInfoResponse {
+    Ok(PlaybackInfoResponse {
         mode: PlaybackMode::Hls,
         url: format!(
             "/api/v1/media/sessions/{}/playlist.m3u8",
@@ -1115,7 +1195,544 @@ pub async fn playback_info_handler(
         quality_options: playback_quality_options(media_file.bitrate),
         selected_quality_id,
         session_id,
+    })
+}
+
+// ---------------------------------------------------------------------
+// §5.2/§5.3 (`docs/architecture/peer-groups.md`): routing-context
+// gathering, node-to-node negotiation forwarding, and the `by-external-ref`
+// entry point.
+// ---------------------------------------------------------------------
+
+/// [`resolve_route_for_local_media_file`]'s result -- deliberately its own
+/// type rather than [`routing::RoutingDecision`] directly: `Delegate` here
+/// additionally carries the [`PeerPlaybackTarget`] to forward, always the
+/// *portable* [`PeerPlaybackTarget::ExternalRef`] form (never
+/// `MediaFile { media_file_id }`) -- a local `media_file_id` is only ever
+/// meaningful on the node that minted it (§4.1/§4.2), so forwarding this
+/// node's own id to a *different* node would resolve to nothing there.
+/// Computed once by [`resolve_route_for_local_media_file`] (it already has
+/// to resolve the leaf's portable identity to run [`routing::resolve_route`]
+/// at all) rather than re-derived a second time by its caller.
+enum LocalRouteOutcome {
+    ServeLocally,
+    Delegate {
+        peer_node_id: Uuid,
+        delivery: DeliveryMode,
+        target: PeerPlaybackTarget,
+    },
+    Unavailable,
+}
+
+/// §5.2's routing step for a request that already resolved a *local*
+/// `MediaFile` (`playback_info_handler`'s own entry point). This node is
+/// trivially `self_available` by construction here -- `media_file` only
+/// exists at all because `state.media_files.get(media_file_id)` already
+/// found it locally. A single, ungrouped node (no `node_identity` row, or
+/// one with `group_id: None`) short-circuits to
+/// [`LocalRouteOutcome::ServeLocally`] before touching
+/// `routing_rule_repo`/`peer_node_repo`/`peer_leaf_availability_repo` at
+/// all, and a grouped node with no matching rule (or a matching rule with
+/// an empty `preferred_nodes`) short-circuits the same way before paying
+/// for the external-ref/`LeafSelector` lookup below -- both cases are
+/// byte-for-byte as cheap as today's existing behavior.
+async fn resolve_route_for_local_media_file(
+    state: &AppState,
+    media_file: &MediaFile,
+    user_id: Uuid,
+) -> Result<LocalRouteOutcome, ApiError> {
+    let Some(identity) = state.node_identity_repo.get().await? else {
+        return Ok(LocalRouteOutcome::ServeLocally);
+    };
+    let Some(group_id) = identity.group_id else {
+        return Ok(LocalRouteOutcome::ServeLocally);
+    };
+
+    let rules = state.routing_rule_repo.list_for_group(group_id).await?;
+    let group_library_id = state
+        .source_instances
+        .get(media_file.source_instance_id)
+        .and_then(|instance| instance.group_library_id);
+    // Cheap pre-check before paying for the external-ref/leaf-selector
+    // lookup below: if no rule would even match, there is no point
+    // deriving a `RoutingContext` at all.
+    let Some(rule) = routing::select_most_specific_rule(&rules, group_library_id, user_id) else {
+        return Ok(LocalRouteOutcome::ServeLocally);
+    };
+    if rule.preferred_nodes.is_empty() {
+        return Ok(LocalRouteOutcome::ServeLocally);
+    }
+
+    let Some((provider, external_id, leaf_selector)) =
+        resolve_leaf_identity(state, media_file).await?
+    else {
+        tracing::warn!(
+            media_file_id = %media_file.id,
+            "a routing rule matched but this leaf has no portable external ref/leaf selector \
+             yet; serving locally rather than failing playback"
+        );
+        return Ok(LocalRouteOutcome::ServeLocally);
+    };
+    let ctx = routing::RoutingContext {
+        group_library_id,
+        user_id,
+        provider: provider.clone(),
+        external_id: external_id.clone(),
+        leaf_selector: leaf_selector.clone(),
+    };
+    let peers = state.peer_node_repo.list_all().await?;
+    let availability = state
+        .peer_leaf_availability_repo
+        .list_by_local_work_ids(&[media_file.work_id])
+        .await?;
+    Ok(
+        match routing::resolve_route(&ctx, &rules, identity.peer_id, true, &peers, &availability) {
+            routing::RoutingDecision::ServeLocally => LocalRouteOutcome::ServeLocally,
+            routing::RoutingDecision::Unavailable => LocalRouteOutcome::Unavailable,
+            routing::RoutingDecision::Delegate {
+                peer_node_id,
+                delivery,
+            } => LocalRouteOutcome::Delegate {
+                peer_node_id,
+                delivery,
+                target: PeerPlaybackTarget::ExternalRef {
+                    provider,
+                    external_id,
+                    leaf_selector,
+                },
+            },
+        },
+    )
+}
+
+/// Resolves `media_file`'s portable `(ExternalProvider, external_id,
+/// LeafSelector)` identity (§4.2) -- `None` when the underlying `Work` has
+/// no external ref yet (nothing portable to route on), or this specific
+/// leaf isn't found in its own work's resolved tree (shouldn't happen for a
+/// `media_file` that resolved locally at all, but degrades to "can't route"
+/// rather than panicking).
+async fn resolve_leaf_identity(
+    state: &AppState,
+    media_file: &MediaFile,
+) -> Result<Option<(ExternalProvider, String, LeafSelector)>, ApiError> {
+    let work = state.work_repo.get(media_file.work_id).await?;
+    let Some(external_ref) = work.external_refs.first() else {
+        return Ok(None);
+    };
+    let detail = state.catalog.get_by_id(media_file.work_id, None).await?;
+    let leaf_selector = crate::peer::leaf_selectors_for(&detail)
+        .into_iter()
+        .find(|(id, _)| *id == media_file.id)
+        .map(|(_, selector)| selector);
+    Ok(leaf_selector.map(|selector| {
+        (
+            external_ref.provider.clone(),
+            external_ref.external_id.clone(),
+            selector,
+        )
     }))
+}
+
+/// Request/response DTOs and the receiving-side handler for §5.2's "the
+/// entire negotiation request is forwarded" mechanism, and §5.3's "defense
+/// in depth": [`PeerSignedRequest`]-gated (proves the *calling node* is a
+/// legitimate, still-active member of this group) but deliberately carries
+/// `user_id`/`device_id` explicitly rather than a bearer token -- the
+/// receiving (owning) peer independently resolves *that* user's `Policy`
+/// from its own synced state ([`resolve_streaming_access`]) before running
+/// negotiation, rather than trusting the forwarding peer's assertion of
+/// what its caller is allowed.
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+pub struct PeerPlaybackInfoRequest {
+    pub user_id: Uuid,
+    pub device_id: Uuid,
+    pub client_platform: ClientPlatform,
+    pub client_version: String,
+    pub target: PeerPlaybackTarget,
+    pub query: PlaybackQuery,
+}
+
+/// Which leaf to negotiate playback for, on the peer actually holding it.
+/// `ExternalRef` -- `(provider, external_id, LeafSelector)`, §4.2's
+/// portability layer -- is the only variant either of this crate's own
+/// callers ([`forward_negotiation_to_peer`], reached from both
+/// `playback_info_handler`'s locally-resolved path and
+/// [`by_external_ref_playback_info_handler`]'s §4.3 `RemoteOnlyWork` path)
+/// ever actually sends: a local `media_file_id` is only ever meaningful on
+/// the node that minted it (§4.1), so forwarding one to a *different* node
+/// would resolve to nothing there -- see [`LocalRouteOutcome`]'s own doc
+/// comment. `MediaFile` is still accepted on the receiving side
+/// ([`peer_playback_info_handler`]) for a caller that, unlike this crate's
+/// own, already knows it's addressing a media file id meaningful on the
+/// *receiving* peer specifically (kept as a documented, valid wire shape
+/// rather than removed, even though nothing in this codebase constructs it
+/// today).
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PeerPlaybackTarget {
+    MediaFile {
+        media_file_id: Uuid,
+    },
+    ExternalRef {
+        provider: ExternalProvider,
+        external_id: String,
+        leaf_selector: LeafSelector,
+    },
+}
+
+/// `POST /api/v1/peer/playback-info` -- the receiving side of §5.2's
+/// negotiation forward: [`PeerSignedRequest`]-gated (only a known, active
+/// peer in this group may call this), runs the *exact same*
+/// [`negotiate_playback`] this node's own [`playback_info_handler`] runs
+/// for a local caller, just fed from [`PeerPlaybackInfoRequest`] instead of
+/// a `StreamingUser`/`ConnectInfo`/`HeaderMap`. See this module's own
+/// `PeerPlaybackInfoRequest` doc comment for the defense-in-depth reasoning
+/// behind resolving the acting user's grant independently here rather than
+/// trusting the caller's forwarded claim.
+#[utoipa::path(
+    post,
+    path = "/api/v1/peer/playback-info",
+    tag = "peer-groups",
+    request_body(content = PeerPlaybackInfoRequest, example = json!({
+        "user_id": "3f9c1e2d-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+        "device_id": "7a9d3e1f-8b4c-4d2a-9b3e-5f6a7b8c9d0e",
+        "client_platform": "web",
+        "client_version": "1.0.0",
+        "target": {"kind": "media_file", "media_file_id": "9c8b7a6f-5e4d-3c2b-1a0f-9e8d7c6b5a4f"},
+        "query": {"containers": "mp4", "video_codecs": "h264", "audio_codecs": "aac"}
+    })),
+    responses(
+        (status = 200, description = "Playback negotiation resolved against this (the owning) peer's own local media file", body = PlaybackInfoResponse),
+        (status = 401, description = "Missing/invalid peer signature, or an unknown/left peer"),
+        (status = 403, description = "The forwarded user does not have Playarr streaming access on this peer's own policy, or is outside its own library grant"),
+        (status = 404, description = "Unknown media file, or no local leaf resolves the given external ref")
+    )
+)]
+pub async fn peer_playback_info_handler(
+    State(state): State<AppState>,
+    peer_signed: PeerSignedRequest,
+) -> Result<Json<PlaybackInfoResponse>, ApiError> {
+    let body: PeerPlaybackInfoRequest = serde_json::from_slice(&peer_signed.body).map_err(|err| {
+        ApiError::bad_request(format!("invalid peer playback-info request body: {err}"))
+    })?;
+
+    // Defense in depth (§5.3): resolve the acting user's policy/allowed
+    // libraries from THIS peer's own synced state, never the caller's
+    // forwarded assertion of who the user is or what they're allowed.
+    let (policy, allowed_libraries) = resolve_streaming_access(&state, body.user_id).await?;
+
+    let media_file = match body.target {
+        PeerPlaybackTarget::MediaFile { media_file_id } => state
+            .media_files
+            .get(media_file_id)
+            .await
+            .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?,
+        PeerPlaybackTarget::ExternalRef {
+            provider,
+            external_id,
+            leaf_selector,
+        } => resolve_local_media_file_for_leaf(&state, &provider, &external_id, &leaf_selector)
+            .await?
+            .ok_or_else(|| {
+                ApiError::not_found(format!(
+                    "no local media file resolves external ref {provider:?}:{external_id}"
+                ))
+            })?,
+    };
+    ensure_library_allowed(media_file.source_instance_id, allowed_libraries.as_deref())?;
+
+    let response = negotiate_playback(
+        &state,
+        media_file,
+        body.user_id,
+        body.device_id,
+        body.client_platform,
+        body.client_version,
+        None,
+        &body.query,
+        policy.can_transcode,
+    )
+    .await?;
+    Ok(Json(response))
+}
+
+/// The `RemoteOnlyWork` direction of §4.2's portability matching: given an
+/// external ref + `LeafSelector` a peer forwarded, finds the local
+/// `media_file_id` (if any) that resolves it, by resolving the local `Work`
+/// first (`WorkRepo::find_by_external_ref`) and then walking its tree the
+/// same way [`resolve_leaf_identity`] does in the opposite direction --
+/// [`crate::peer::leaf_selectors_for`] is the single shared algorithm both
+/// directions use.
+async fn resolve_local_media_file_for_leaf(
+    state: &AppState,
+    provider: &ExternalProvider,
+    external_id: &str,
+    leaf_selector: &LeafSelector,
+) -> Result<Option<MediaFile>, ApiError> {
+    let Some(work) = state
+        .work_repo
+        .find_by_external_ref(provider, external_id)
+        .await?
+    else {
+        return Ok(None);
+    };
+    let detail = state.catalog.get_by_id(work.id, None).await?;
+    let Some((media_file_id, _)) = crate::peer::leaf_selectors_for(&detail)
+        .into_iter()
+        .find(|(_, selector)| selector == leaf_selector)
+    else {
+        return Ok(None);
+    };
+    Ok(state.media_files.get(media_file_id).await)
+}
+
+/// §5.2/§5.3: forwards the ENTIRE negotiation to `peer_node_id` via a
+/// signed `POST /api/v1/peer/playback-info` call (never just swapping the
+/// final URL -- see this module's own doc comment on why), then rewrites
+/// the peer's response `url` for the resolved `delivery` mode (§5.3).
+#[allow(clippy::too_many_arguments)]
+async fn forward_negotiation_to_peer(
+    state: &AppState,
+    peer_node_id: Uuid,
+    delivery: DeliveryMode,
+    target: PeerPlaybackTarget,
+    user_id: Uuid,
+    device_id: Uuid,
+    client_platform: ClientPlatform,
+    client_version: String,
+    query: &PlaybackQuery,
+) -> Result<Json<PlaybackInfoResponse>, ApiError> {
+    let peer = state.peer_node_repo.get(peer_node_id).await?.ok_or_else(|| {
+        ApiError::no_peer_available(format!("peer {peer_node_id} is no longer known"))
+    })?;
+    let identity = crate::admin_peer::own_peer_identity(state).await?;
+    let client = streamarr_peer_sync::PeerClient::new(state.peer_http.clone(), identity);
+
+    let body = PeerPlaybackInfoRequest {
+        user_id,
+        device_id,
+        client_platform,
+        client_version,
+        target,
+        query: query.clone(),
+    };
+
+    let addresses = streamarr_peer_sync::peer_client::addresses_by_priority(&peer.addresses);
+    if addresses.is_empty() {
+        return Err(ApiError::no_peer_available(format!(
+            "peer {peer_node_id} has no known address"
+        )));
+    }
+    let mut last_error = None;
+    for base_url in addresses {
+        match client
+            .signed_post::<_, PlaybackInfoResponse>(base_url, "/api/v1/peer/playback-info", &body)
+            .await
+        {
+            Ok(response) => return Ok(Json(rewrite_for_delivery(response, &peer, delivery)?)),
+            Err(err) => {
+                tracing::warn!(
+                    peer_node_id = %peer_node_id,
+                    %base_url,
+                    error = %err,
+                    "peer playback negotiation forward failed; trying next known address"
+                );
+                last_error = Some(err.to_string());
+            }
+        }
+    }
+    Err(ApiError::no_peer_available(format!(
+        "could not reach peer {peer_node_id} for playback negotiation: {}",
+        last_error.unwrap_or_default()
+    )))
+}
+
+/// §5.3: rewrites a peer's own `PlaybackInfoResponse.url` (a path relative
+/// to *that* peer's own API) into what THIS (the entry) node's client
+/// should actually call. `Redirect` becomes an absolute URL at one of
+/// `peer`'s own `client_reachable` addresses (falling back to any known
+/// address if an explicit rule override chose `Redirect` despite none
+/// being marked reachable -- `compute_delivery_mode` only ever *computes*
+/// `Redirect` when one exists, but an operator's explicit override can
+/// still name it regardless). `Proxy` becomes this node's own
+/// `/api/v1/media/proxy/{peer_node_id}/...` passthrough path
+/// (`media::proxy_stream_media_handler`) so the client never needs to
+/// reach `peer` directly.
+fn rewrite_for_delivery(
+    mut response: PlaybackInfoResponse,
+    peer: &PeerNode,
+    delivery: DeliveryMode,
+) -> Result<PlaybackInfoResponse, ApiError> {
+    match delivery {
+        DeliveryMode::Redirect => {
+            let mut reachable: Vec<&streamarr_model::PeerAddress> = peer
+                .addresses
+                .iter()
+                .filter(|address| address.client_reachable)
+                .collect();
+            reachable.sort_by_key(|address| address.priority);
+            let base = reachable
+                .first()
+                .map(|address| address.url.as_str())
+                .or_else(|| {
+                    streamarr_peer_sync::peer_client::addresses_by_priority(&peer.addresses)
+                        .into_iter()
+                        .next()
+                })
+                .ok_or_else(|| {
+                    ApiError::no_peer_available(format!(
+                        "peer {} has no address to redirect playback to",
+                        peer.id
+                    ))
+                })?;
+            response.url = format!("{}{}", base.trim_end_matches('/'), response.url);
+            Ok(response)
+        }
+        DeliveryMode::Proxy => {
+            if let Some(rest) = response.url.strip_prefix("/api/v1/media/") {
+                response.url = format!("/api/v1/media/proxy/{}/{}", peer.id, rest);
+            } else {
+                tracing::warn!(
+                    peer_id = %peer.id,
+                    url = %response.url,
+                    "peer playback response url did not have the expected /api/v1/media/ \
+                     prefix; proxy passthrough rewrite skipped, url left as-is"
+                );
+            }
+            Ok(response)
+        }
+        // `resolve_route`/`compute_delivery_mode` never hand `Delegate` back
+        // with `delivery: DeliveryMode::Auto` itself (see
+        // `RoutingDecision::Delegate`'s own doc comment) -- kept exhaustive
+        // rather than `unreachable!()` so this stays a plain, panic-free
+        // fallback if that guarantee is ever loosened.
+        DeliveryMode::Auto => Ok(response),
+    }
+}
+
+/// Request body for [`by_external_ref_playback_info_handler`] -- §4.3/§5.2:
+/// the `RemoteOnlyWork` entry point, used when the client's starting point
+/// was a title it can browse (via cross-peer availability, §4.3) but has no
+/// local `media_file_id` to call [`playback_info_handler`] with at all.
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct PlaybackByExternalRefRequest {
+    pub provider: ExternalProvider,
+    pub external_id: String,
+    pub leaf_selector: LeafSelector,
+    pub group_library_id: Option<Uuid>,
+}
+
+/// `POST /api/v1/playback/by-external-ref` -- §4.3/§5.2's dedicated entry
+/// point for a `RemoteOnlyWork` with no local `media_file_id`: runs the
+/// identical routing evaluation [`playback_info_handler`] does, from a
+/// [`routing::RoutingContext`] built directly from the request body instead
+/// of a resolved local `MediaFile`. Negotiation capabilities
+/// (`containers`/`video_codecs`/...) are accepted the same way
+/// `playback_info_handler`'s own `GET` does, as a [`PlaybackQuery`] query
+/// string -- they don't fit naturally into a JSON body alongside a nested
+/// `LeafSelector`, and reusing the identical query-parameter convention
+/// keeps this endpoint's negotiation inputs consistent with the one it
+/// mirrors rather than introducing a second shape for the same thing.
+///
+/// This node's own copy is deliberately never consulted for
+/// `self_available` (`resolve_route` is always called with
+/// `self_available = false`): a caller only ever reaches for this endpoint
+/// because it has zero local record of the title, so this always resolves
+/// to [`routing::RoutingDecision::Delegate`] or
+/// [`routing::RoutingDecision::Unavailable`], never `ServeLocally` -- see
+/// `docs/architecture/peer-groups.md` §5.2's own note on this.
+#[utoipa::path(
+    post,
+    path = "/api/v1/playback/by-external-ref",
+    tag = "playback",
+    params(PlaybackQuery),
+    request_body(content = PlaybackByExternalRefRequest, example = json!({
+        "provider": "tmdb",
+        "external_id": "603",
+        "leaf_selector": {"kind": "movie"},
+        "group_library_id": "b6a1c2d3-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+    })),
+    responses(
+        (status = 200, description = "Playback negotiation resolved on the peer that actually holds this title", body = PlaybackInfoResponse),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Caller does not have Playarr streaming access"),
+        (status = 503, description = "No peer in the group currently reports this title available")
+    )
+)]
+pub async fn by_external_ref_playback_info_handler(
+    State(state): State<AppState>,
+    streaming: StreamingUser,
+    Query(query): Query<PlaybackQuery>,
+    headers: HeaderMap,
+    Json(body): Json<PlaybackByExternalRefRequest>,
+) -> Result<Json<PlaybackInfoResponse>, ApiError> {
+    let client_platform = headers
+        .get(CLIENT_PLATFORM_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(ClientPlatform::from_wire_name)
+        .unwrap_or(ClientPlatform::Web);
+    let client_version = headers
+        .get(CLIENT_VERSION_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string();
+
+    let self_context = state.node_identity_repo.get().await?.and_then(|identity| {
+        identity
+            .group_id
+            .map(|group_id| (identity.peer_id, group_id))
+    });
+    let Some((self_peer_id, group_id)) = self_context else {
+        return Err(ApiError::no_peer_available(
+            "this node is not part of any peer group",
+        ));
+    };
+
+    let rules = state.routing_rule_repo.list_for_group(group_id).await?;
+    let ctx = routing::RoutingContext {
+        group_library_id: body.group_library_id,
+        user_id: streaming.user_id,
+        provider: body.provider,
+        external_id: body.external_id,
+        leaf_selector: body.leaf_selector,
+    };
+    let peers = state.peer_node_repo.list_all().await?;
+    let availability = state
+        .peer_leaf_availability_repo
+        .list_for_leaf(&ctx.provider, &ctx.external_id, &ctx.leaf_selector)
+        .await?;
+
+    match routing::resolve_route(&ctx, &rules, self_peer_id, false, &peers, &availability) {
+        routing::RoutingDecision::Delegate {
+            peer_node_id,
+            delivery,
+        } => {
+            forward_negotiation_to_peer(
+                &state,
+                peer_node_id,
+                delivery,
+                PeerPlaybackTarget::ExternalRef {
+                    provider: ctx.provider,
+                    external_id: ctx.external_id,
+                    leaf_selector: ctx.leaf_selector,
+                },
+                streaming.user_id,
+                streaming.claims.device_id,
+                client_platform,
+                client_version,
+                &query,
+            )
+            .await
+        }
+        // A node with zero local record of this title can never serve it
+        // itself -- `ServeLocally` (no matching rule, or one with an empty
+        // `preferred_nodes`) collapses to the same "nowhere to send this"
+        // outcome as `Unavailable` here, see this handler's own doc
+        // comment.
+        routing::RoutingDecision::ServeLocally | routing::RoutingDecision::Unavailable => Err(
+            ApiError::no_peer_available("no peer in this group currently reports this title available"),
+        ),
+    }
 }
 
 #[utoipa::path(

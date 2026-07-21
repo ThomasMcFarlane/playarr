@@ -44,7 +44,7 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use axum::extract::{Path, Query, Request, State};
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::Json;
 use dashmap::DashMap;
 use futures::StreamExt;
@@ -57,9 +57,11 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::auth_extractor::{
-    ensure_can_download, ensure_library_allowed, OptionalStreamingUser, StreamingUser,
+    ensure_can_download, ensure_library_allowed, resolve_streaming_access, OptionalStreamingUser,
+    StreamingUser,
 };
 use crate::error::ApiError;
+use crate::peer_extractor::PeerSignedRequest;
 use crate::playback::{
     playback_quality_options, playback_subtitle_options, PlaybackAudioTrackOption,
     PlaybackQualityOption, PlaybackSubtitleTrackOption,
@@ -1186,6 +1188,276 @@ pub async fn stream_media_handler(
         }
         None => response,
     })
+}
+
+// ---------------------------------------------------------------------
+// §5.3 (`docs/architecture/peer-groups.md`): `DeliveryMode::Proxy`
+// passthrough. [`proxy_stream_media_handler`] is what THIS (the entry)
+// node's client actually calls -- `playback::rewrite_for_delivery` rewrites
+// a delegated `PlaybackInfoResponse.url` into this route's shape.
+// [`peer_stream_media_handler`] is the OWNING peer's own side: `Peer
+// SignedRequest`-gated, so only a legitimate, still-active member of this
+// group may call it, and it independently re-derives the acting user's
+// grant from `playback_session_id` (its OWN `session_registry`, populated
+// only by its OWN negotiation -- never anything the calling node asserts)
+// before serving a single byte -- see that handler's own doc comment for
+// the full "defense in depth" reasoning.
+//
+// Scope note, stated plainly rather than left implicit: this pass only
+// proxies the direct-play stream endpoint (this module's own
+// `stream_media_handler`), not `serve_rendition_file_handler`/
+// `serve_session_file_handler`'s HLS playlist/segment files. A delegated
+// negotiation that resolves to an HLS URL under `Proxy` delivery is a known
+// gap this leaves for a later pass, not silently mishandled --
+// `playback::rewrite_for_delivery` still rewrites *any* `/api/v1/media/...`
+// response `url` onto this node's own `/api/v1/media/proxy/{peer_node_id}/
+// ...` prefix, but only the `.../stream` shape has a matching handler
+// registered on the OWNING peer's side (`peer_stream_media_handler`) today.
+// ---------------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProxyStreamQuery {
+    playback_session_id: Uuid,
+}
+
+/// Copies just the response-shape headers a byte-range file response
+/// actually needs (`Content-Type`/`-Length`/`-Range`, `Accept-Ranges`,
+/// caching validators) from `upstream` onto the response this node hands
+/// its own client, and pipes the body straight through
+/// (`axum::body::Body::from_stream`) rather than buffering it -- the
+/// `Range`-preserving, streamed-not-buffered passthrough §5.3 flags as this
+/// whole design's highest-risk new runtime behavior.
+fn proxy_response_from(upstream: reqwest::Response) -> Response {
+    let status = upstream.status();
+    let mut builder = Response::builder().status(status);
+    for name in [
+        axum::http::header::CONTENT_TYPE,
+        axum::http::header::CONTENT_LENGTH,
+        axum::http::header::CONTENT_RANGE,
+        axum::http::header::ACCEPT_RANGES,
+        axum::http::header::ETAG,
+        axum::http::header::LAST_MODIFIED,
+    ] {
+        if let Some(value) = upstream.headers().get(&name) {
+            builder = builder.header(name, value.clone());
+        }
+    }
+    let stream = upstream
+        .bytes_stream()
+        .map(|chunk| chunk.map_err(std::io::Error::other));
+    match builder.body(axum::body::Body::from_stream(stream)) {
+        Ok(response) => response,
+        Err(err) => ApiError::internal(format!("failed to build proxied response: {err}"))
+            .into_response(),
+    }
+}
+
+/// `GET /api/v1/media/proxy/{peer_node_id}/{media_file_id}/stream` -- this
+/// node's own client hits exactly this shape for a `DeliveryMode::Proxy`
+/// delegated stream (`playback::rewrite_for_delivery` rewrote the owning
+/// peer's own `.../{media_file_id}/stream` response `url` into this one).
+/// `media_file_id` is the OWNING peer's own local id -- meaningless on this
+/// node, only ever used to build the outbound request path. This node signs
+/// its OWN outbound request with its own peer identity (proving to the
+/// owning peer "a legitimate member of this group is asking"), and forwards
+/// `playback_session_id` unvalidated: this node has no way to check it (that
+/// session lives on the owning peer, not here) -- the owning peer's own
+/// `peer_stream_media_handler` is the real authorization boundary, exactly
+/// per §5.3's "defense in depth" -- never trusting this node's mere say-so.
+#[utoipa::path(
+    get,
+    path = "/api/v1/media/proxy/{peer_node_id}/{media_file_id}/stream",
+    tag = "playback",
+    params(
+        ("peer_node_id" = Uuid, Path, description = "The PeerNode a routing decision resolved to"),
+        ("media_file_id" = Uuid, Path, description = "The OWNING peer's own local MediaFile id (meaningless on this node)"),
+        ("playback_session_id" = Uuid, Query, description = "The owning peer's own PlaybackSession id, from its PlaybackInfoResponse")
+    ),
+    responses(
+        (status = 200, description = "Full file content, proxied from the owning peer"),
+        (status = 206, description = "Partial content for a Range request, proxied from the owning peer"),
+        (status = 502, description = "The owning peer could not be reached, or refused the request"),
+        (status = 503, description = "peer_node_id is not currently a known, active peer")
+    )
+)]
+pub async fn proxy_stream_media_handler(
+    State(state): State<AppState>,
+    Path((peer_node_id, media_file_id)): Path<(Uuid, Uuid)>,
+    Query(query): Query<ProxyStreamQuery>,
+    headers: axum::http::HeaderMap,
+) -> Result<Response, ApiError> {
+    let peer = state
+        .peer_node_repo
+        .get(peer_node_id)
+        .await?
+        .filter(|peer| peer.status == streamarr_model::PeerNodeStatus::Active)
+        .ok_or_else(|| {
+            ApiError::no_peer_available(format!(
+                "peer {peer_node_id} is not currently a known, active peer"
+            ))
+        })?;
+    let identity = crate::admin_peer::own_peer_identity(&state).await?;
+
+    let addresses = streamarr_peer_sync::peer_client::addresses_by_priority(&peer.addresses);
+    if addresses.is_empty() {
+        return Err(ApiError::no_peer_available(format!(
+            "peer {peer_node_id} has no known address"
+        )));
+    }
+
+    let range = headers.get(axum::http::header::RANGE).cloned();
+    let path = format!(
+        "/api/v1/peer/stream/{media_file_id}?playback_session_id={}",
+        query.playback_session_id
+    );
+
+    let mut last_error = None;
+    for base_url in addresses {
+        let signed = identity.sign_request("GET", &path, &[]);
+        let mut request = state
+            .peer_http
+            .get(format!("{}{path}", base_url.trim_end_matches('/')))
+            .header(
+                streamarr_peer_sync::peer_client::PEER_ID_HEADER,
+                signed.peer_id.to_string(),
+            )
+            .header(
+                streamarr_peer_sync::peer_client::SIGNATURE_HEADER,
+                signed.signature_b64,
+            )
+            .header(
+                streamarr_peer_sync::peer_client::TIMESTAMP_HEADER,
+                signed.timestamp.to_string(),
+            )
+            .header(streamarr_peer_sync::peer_client::NONCE_HEADER, signed.nonce);
+        if let Some(range) = &range {
+            request = request.header(axum::http::header::RANGE, range.clone());
+        }
+
+        match request.send().await {
+            Ok(upstream) if upstream.status().is_success() => {
+                return Ok(proxy_response_from(upstream));
+            }
+            Ok(upstream) => {
+                let status = upstream.status();
+                let body = upstream.text().await.unwrap_or_default();
+                tracing::warn!(
+                    peer_node_id = %peer_node_id,
+                    %base_url,
+                    %status,
+                    %body,
+                    "owning peer refused a proxied stream request"
+                );
+                last_error = Some(format!("{status}: {body}"));
+            }
+            Err(err) => {
+                tracing::warn!(
+                    peer_node_id = %peer_node_id,
+                    %base_url,
+                    error = %err,
+                    "proxied stream fetch failed; trying next known address"
+                );
+                last_error = Some(err.to_string());
+            }
+        }
+    }
+    Err(ApiError::bad_gateway(format!(
+        "could not reach peer {peer_node_id} to proxy a stream: {}",
+        last_error.unwrap_or_default()
+    )))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PeerStreamQuery {
+    playback_session_id: Uuid,
+}
+
+/// `GET /api/v1/peer/stream/{media_file_id}` -- the OWNING peer's side of
+/// `Proxy` delivery (§5.3). [`PeerSignedRequest`]-gated (only a known,
+/// active peer may call this at all), but the *real* authorization check is
+/// independent of that signature: `playback_session_id` must resolve to a
+/// still-open [`streamarr_model::PlaybackSession`] in THIS node's own
+/// `session_registry` -- populated only by THIS node's own
+/// [`crate::playback::negotiate_playback`] run (either for a local caller,
+/// or for a request this same node received via `peer_playback_info_handler`)
+/// and never by anything the calling node merely asserts. This mirrors
+/// `stream_media_handler`'s own established anonymous-capability trust
+/// model exactly (a live `session_registry` entry, minted only after a real
+/// negotiation-time grant check, is itself sufficient authorization for the
+/// byte-range reads that follow) -- just checked here against THIS peer's
+/// own authoritative session data instead of a forwarding node's say-so.
+/// Additionally re-resolves the session owner's *current* `Policy` (never
+/// merely trusting that the session still reflects it): a policy change
+/// after negotiation (e.g. an admin revoking a library grant mid-stream)
+/// takes effect on the very next byte request, not just the next
+/// negotiation.
+#[utoipa::path(
+    get,
+    path = "/api/v1/peer/stream/{media_file_id}",
+    tag = "peer-groups",
+    params(
+        ("media_file_id" = Uuid, Path, description = "This peer's own local MediaFile id"),
+        ("playback_session_id" = Uuid, Query, description = "This peer's own PlaybackSession id, minted by its own prior negotiation")
+    ),
+    responses(
+        (status = 200, description = "Full file content"),
+        (status = 206, description = "Partial content for a Range request"),
+        (status = 401, description = "Missing/invalid peer signature, an unknown/left peer, or an unknown/expired playback session"),
+        (status = 403, description = "The session owner's current policy no longer grants access to this library"),
+        (status = 404, description = "Unknown media_file_id, or the file no longer exists on disk")
+    )
+)]
+pub async fn peer_stream_media_handler(
+    State(state): State<AppState>,
+    Path(media_file_id): Path<Uuid>,
+    Query(query): Query<PeerStreamQuery>,
+    headers: axum::http::HeaderMap,
+    _peer: PeerSignedRequest,
+) -> Result<Response, ApiError> {
+    let session = state
+        .session_registry
+        .get(query.playback_session_id)
+        .ok_or_else(|| {
+            ApiError::new(
+                axum::http::StatusCode::UNAUTHORIZED,
+                "unauthorized",
+                "unknown or expired playback session",
+            )
+        })?;
+    if session.media_file_id != media_file_id {
+        return Err(ApiError::new(
+            axum::http::StatusCode::UNAUTHORIZED,
+            "unauthorized",
+            "playback session does not authorise this media file",
+        ));
+    }
+
+    // Defense in depth (§5.3): re-check the session owner's CURRENT policy
+    // against this peer's own state, not just trust that a session existing
+    // is still sufficient on its own.
+    let media_file = state
+        .media_files
+        .get(media_file_id)
+        .await
+        .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
+    let (_, allowed_libraries) = resolve_streaming_access(&state, session.user_id).await?;
+    ensure_library_allowed(media_file.source_instance_id, allowed_libraries.as_deref())?;
+
+    let resolved_path = streamarr_model::resolve_media_path(&media_file.path);
+    let mut synthetic_request = Request::builder().method(axum::http::Method::GET).uri("/proxied-stream");
+    if let Some(range) = headers.get(axum::http::header::RANGE) {
+        synthetic_request = synthetic_request.header(axum::http::header::RANGE, range.clone());
+    }
+    let synthetic_request = synthetic_request
+        .body(axum::body::Body::empty())
+        .map_err(|err| ApiError::internal(format!("failed to build proxied file request: {err}")))?;
+
+    let response = serve_file(&resolved_path, synthetic_request).await?;
+    Ok(track_streamed_bytes(
+        response,
+        state.session_registry.clone(),
+        session.id,
+    ))
 }
 
 #[utoipa::path(

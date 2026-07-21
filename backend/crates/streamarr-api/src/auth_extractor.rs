@@ -90,6 +90,7 @@ impl FromRequestParts<AppState> for AuthUser {
         let claims = state
             .jwt
             .verify_access_token(token)
+            .await
             .map_err(|_| unauthorized("invalid or expired access token"))?;
         Ok(AuthUser {
             user_id: claims.sub,
@@ -132,6 +133,17 @@ pub(crate) fn forbidden(message: impl Into<String>) -> ApiError {
 /// caller) always passes. This is the cheapest and most security-critical
 /// enforcement point in the whole read path, since it gates actual content
 /// delivery rather than just metadata visibility.
+///
+/// Per `docs/architecture/peer-groups.md` §5.1, `allowed` here is already
+/// `policy.library_allow` unioned with `policy.group_library_allow` resolved
+/// to local `SourceInstance` ids -- see [`StreamingUser::allowed_libraries`]/
+/// [`CatalogViewer::allowed_libraries`], the only producers of this
+/// parameter, both of which do that resolution once at extraction time
+/// (`SourceInstanceRegistry::source_instance_ids_for_group_libraries`
+/// needs `AppState`, which this free function deliberately doesn't take, to
+/// keep this comparison itself a pure, zero-I/O check). The comparison
+/// below is therefore unchanged by that addition: it only ever needed to
+/// know the caller's *final* allowed set, not how that set was assembled.
 pub(crate) fn ensure_library_allowed(
     source_instance_id: Uuid,
     allowed: Option<&[Uuid]>,
@@ -142,6 +154,23 @@ pub(crate) fn ensure_library_allowed(
         )),
         _ => Ok(()),
     }
+}
+
+/// `a` deduplicated against `b`'s ids appended -- the shared union
+/// [`StreamingUser::allowed_libraries`]/[`CatalogViewer::allowed_libraries`]
+/// both use to combine `Policy::library_allow` with `Policy::
+/// group_library_allow` resolved to local `SourceInstance` ids (§5.1). Not
+/// `HashSet`-based: these lists are always small (a handful of libraries per
+/// policy), and preserving `a`'s original order keeps `allowed_libraries()`
+/// deterministic for callers/tests that compare the returned `Vec` directly.
+fn union_library_ids(a: &[Uuid], b: &[Uuid]) -> Vec<Uuid> {
+    let mut ids = a.to_vec();
+    for id in b {
+        if !ids.contains(id) {
+            ids.push(*id);
+        }
+    }
+    ids
 }
 
 /// Mirrors the `if !streaming.policy.can_transcode` inline check in
@@ -200,6 +229,43 @@ pub(crate) async fn resolve_policy(
         .ok_or(deny)
 }
 
+/// Resolves `user_id`'s `Policy` and effective `allowed_libraries()` set
+/// (same shape [`StreamingUser::allowed_libraries`] returns), independent
+/// of any bearer token. Factored out of [`StreamingUser::from_request_parts`]
+/// so a peer-forwarded playback negotiation
+/// (`playback::peer_playback_info_handler`) can independently re-derive the
+/// *same* grant from this node's own synced `Policy`/`User` state rather
+/// than trusting the forwarding peer's assertion of what its caller is
+/// allowed -- see `docs/architecture/peer-groups.md` §5.3's "defense in
+/// depth" paragraph. `StreamingUser` itself is deliberately left untouched
+/// by this addition (it still resolves everything inline) to avoid any risk
+/// of changing its already-tested bearer-token behavior.
+pub(crate) async fn resolve_streaming_access(
+    state: &AppState,
+    user_id: Uuid,
+) -> Result<(Policy, Option<Vec<Uuid>>), ApiError> {
+    let policy = resolve_policy(
+        state,
+        user_id,
+        "streaming",
+        forbidden("this account does not have Playarr streaming access"),
+    )
+    .await?;
+
+    if !policy.can_stream {
+        return Err(forbidden(
+            "this account does not have Playarr streaming access",
+        ));
+    }
+
+    let resolved_group_library_allow = state
+        .source_instances
+        .source_instance_ids_for_group_libraries(&policy.group_library_allow);
+    let allowed_libraries = (!policy.is_admin)
+        .then(|| union_library_ids(&policy.library_allow, &resolved_group_library_allow));
+    Ok((policy, allowed_libraries))
+}
+
 impl FromRequestParts<AppState> for AdminUser {
     type Rejection = ApiError;
 
@@ -234,6 +300,17 @@ impl FromRequestParts<AppState> for AdminUser {
 pub struct StreamingUser {
     pub user: AuthUser,
     pub policy: Policy,
+    /// `policy.group_library_allow` (portable, group-wide `GroupLibrary`
+    /// ids, `docs/architecture/peer-groups.md` §5.1) resolved down to this
+    /// node's own local `SourceInstance` ids via
+    /// `SourceInstanceRegistry::source_instance_ids_for_group_libraries`, at
+    /// extraction time -- resolved exactly once here rather than on every
+    /// [`Self::allowed_libraries`] call, since that resolution needs the
+    /// registry `AppState` holds and this type no longer has access to
+    /// after construction. [`Self::allowed_libraries`] unions this into
+    /// `policy.library_allow`, the same currency `ensure_library_allowed`
+    /// already compares a `MediaFile::source_instance_id` against.
+    resolved_group_library_allow: Vec<Uuid>,
 }
 
 impl std::ops::Deref for StreamingUser {
@@ -253,9 +330,13 @@ impl StreamingUser {
     /// (an admin account that also has `can_stream` -- unusual, since
     /// `is_admin` doesn't imply `can_stream` -- still sees every library
     /// once past that gate, same as every other `Policy` check `is_admin`
-    /// bypasses).
+    /// bypasses). The returned set is `policy.library_allow` unioned with
+    /// [`Self::resolved_group_library_allow`] (§5.1) -- a caller granted
+    /// access via either mechanism is allowed.
     pub fn allowed_libraries(&self) -> Option<Vec<Uuid>> {
-        (!self.policy.is_admin).then(|| self.policy.library_allow.clone())
+        (!self.policy.is_admin).then(|| {
+            union_library_ids(&self.policy.library_allow, &self.resolved_group_library_allow)
+        })
     }
 }
 
@@ -279,7 +360,14 @@ impl FromRequestParts<AppState> for StreamingUser {
         // bypass this, unlike every other gate on `Policy`. See
         // `streamarr_model::Policy::can_stream`'s doc comment.
         if policy.can_stream {
-            Ok(StreamingUser { user, policy })
+            let resolved_group_library_allow = state
+                .source_instances
+                .source_instance_ids_for_group_libraries(&policy.group_library_allow);
+            Ok(StreamingUser {
+                user,
+                policy,
+                resolved_group_library_allow,
+            })
         } else {
             Err(forbidden(
                 "this account does not have Playarr streaming access",
@@ -328,6 +416,10 @@ impl FromRequestParts<AppState> for OptionalStreamingUser {
 pub struct CatalogViewer {
     pub user: AuthUser,
     pub policy: Policy,
+    /// See `StreamingUser::resolved_group_library_allow`'s doc comment --
+    /// identical purpose and resolution point, for the catalog-viewing
+    /// gate rather than the streaming one.
+    resolved_group_library_allow: Vec<Uuid>,
 }
 
 impl std::ops::Deref for CatalogViewer {
@@ -344,9 +436,13 @@ impl CatalogViewer {
     /// exactly the source-instance ids in that set -- mirrors
     /// `Policy::library_allow`'s own empty-means-deny-all semantics and
     /// `Policy::is_admin`'s bypass-everything-except-`can_stream` semantics.
-    /// See [`StreamingUser::allowed_libraries`], which this mirrors exactly.
+    /// See [`StreamingUser::allowed_libraries`], which this mirrors exactly,
+    /// including unioning in `policy.group_library_allow` resolved to local
+    /// `SourceInstance` ids (§5.1).
     pub fn allowed_libraries(&self) -> Option<Vec<Uuid>> {
-        (!self.policy.is_admin).then(|| self.policy.library_allow.clone())
+        (!self.policy.is_admin).then(|| {
+            union_library_ids(&self.policy.library_allow, &self.resolved_group_library_allow)
+        })
     }
 }
 
@@ -367,7 +463,14 @@ impl FromRequestParts<AppState> for CatalogViewer {
         .await?;
 
         if policy.can_stream || policy.is_admin {
-            Ok(CatalogViewer { user, policy })
+            let resolved_group_library_allow = state
+                .source_instances
+                .source_instance_ids_for_group_libraries(&policy.group_library_allow);
+            Ok(CatalogViewer {
+                user,
+                policy,
+                resolved_group_library_allow,
+            })
         } else {
             Err(forbidden("this account may not view the catalog"))
         }
@@ -422,6 +525,7 @@ mod tests {
             id: Uuid::new_v4(),
             name: "test-policy".to_string(),
             library_allow,
+            group_library_allow: Vec::new(),
             blocked_folders: Vec::new(),
             max_rating: None,
             blocked_tags: Vec::new(),
@@ -459,6 +563,7 @@ mod tests {
         let viewer = CatalogViewer {
             user: test_auth_user(),
             policy: test_policy(true, vec![Uuid::new_v4()]),
+            resolved_group_library_allow: Vec::new(),
         };
         assert_eq!(viewer.allowed_libraries(), None);
     }
@@ -469,6 +574,7 @@ mod tests {
         let streaming = StreamingUser {
             user: test_auth_user(),
             policy: test_policy(false, vec![library_id]),
+            resolved_group_library_allow: Vec::new(),
         };
         assert_eq!(streaming.allowed_libraries(), Some(vec![library_id]));
     }
@@ -478,8 +584,44 @@ mod tests {
         let streaming = StreamingUser {
             user: test_auth_user(),
             policy: test_policy(false, Vec::new()),
+            resolved_group_library_allow: Vec::new(),
         };
         assert_eq!(streaming.allowed_libraries(), Some(Vec::new()));
+    }
+
+    /// Per §5.1: a `Policy::group_library_allow` grant, already resolved to
+    /// local `SourceInstance` ids at extraction time, is unioned into
+    /// `allowed_libraries()` alongside `library_allow` -- a caller with only
+    /// a group-library grant (empty `library_allow`) still sees the
+    /// resolved instance, and a duplicate between the two lists doesn't
+    /// produce a repeated entry.
+    #[test]
+    fn allowed_libraries_unions_resolved_group_library_allow() {
+        let library_id = Uuid::new_v4();
+        let group_resolved_id = Uuid::new_v4();
+        let streaming = StreamingUser {
+            user: test_auth_user(),
+            policy: test_policy(false, vec![library_id]),
+            resolved_group_library_allow: vec![group_resolved_id, library_id],
+        };
+        let mut allowed = streaming.allowed_libraries().unwrap();
+        allowed.sort();
+        let mut expected = vec![library_id, group_resolved_id];
+        expected.sort();
+        assert_eq!(allowed, expected);
+    }
+
+    /// Same union behavior as `allowed_libraries_unions_resolved_group_library_allow`,
+    /// through `CatalogViewer` instead of `StreamingUser`.
+    #[test]
+    fn catalog_viewer_allowed_libraries_unions_resolved_group_library_allow() {
+        let group_resolved_id = Uuid::new_v4();
+        let viewer = CatalogViewer {
+            user: test_auth_user(),
+            policy: test_policy(false, Vec::new()),
+            resolved_group_library_allow: vec![group_resolved_id],
+        };
+        assert_eq!(viewer.allowed_libraries(), Some(vec![group_resolved_id]));
     }
 
     #[test]

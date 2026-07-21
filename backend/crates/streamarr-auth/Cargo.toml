@@ -24,6 +24,23 @@ ipnet = "2"
 # slow, salted Argon2id used for password/PIN verification below.
 sha2 = "0.10"
 hex = "0.4"
+# `jwt`'s EdDSA mode (`docs/architecture/peer-groups.md` §5.4): a grouped
+# node signs access tokens with its own Ed25519 `node_identity` keypair
+# instead of the HS256 shared secret. Same version pin `streamarr-api::
+# peer_extractor`/`admin_peer` and `streamarr-peer-sync::signing` already
+# use for the identical keypair. This crate cannot depend on either of
+# those (both already depend on `streamarr-auth`, and `streamarr-peer-sync`
+# says as much in its own module doc comment), so the small seed-decode
+# helper is deliberately duplicated here rather than shared -- same
+# reasoning `streamarr-peer-sync::signing`'s own doc comment gives for not
+# sharing its `canonical_string` with `streamarr-api::peer_extractor`.
+ed25519-dalek = "2"
+# Ed25519 keys/signatures on the wire, and this module's own manual EdDSA
+# JWT encoding (`jsonwebtoken`'s `encode` requires a PKCS8-DER-wrapped key
+# for EdDSA, which `node_identity.private_key` -- a raw 32-byte seed --
+# is not; see `jwt.rs`'s `encode_eddsa` doc comment). Same version pin
+# `streamarr-api`'s own `Cargo.toml` uses.
+base64 = "0.22.1"
 # Password/PIN verification for the `login` module's tiers 2 and 3.
 argon2 = "0.5"
 # `argon2`/`password-hash` re-export `rand_core::OsRng` but don't turn on

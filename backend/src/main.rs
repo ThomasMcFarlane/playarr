@@ -13,11 +13,14 @@
 //!   `default_admin_user_id_from_env` below resolve this deployment's login
 //!   trust tier and default admin identity.
 //! - `worker`/`all`: spawns the arr-sync reconciliation pollers (one per
-//!   configured `SourceInstance`) and the Tdarr background dispatch loop
-//!   (gated by [`streamarr_coordination::ClusterCoordinator`] leader
-//!   election, so only one node runs it in a multi-node deployment) as
-//!   background tasks. `worker`-only additionally serves a minimal
-//!   `/healthz` listener, since it runs no public API router.
+//!   configured `SourceInstance`), the peer-sync pollers (one per non-self
+//!   `peer_nodes` row -- see `docs/architecture/peer-groups.md` §3.6; zero
+//!   for an ungrouped node), and the Tdarr background dispatch loop (each
+//!   gated by [`streamarr_coordination::ClusterCoordinator`] leader
+//!   election or a per-peer lock, so only one node runs/polls a given one
+//!   in a multi-node deployment) as background tasks. `worker`-only
+//!   additionally serves a minimal `/healthz` listener, since it runs no
+//!   public API router.
 //!
 //! `update` is a separate maintenance subcommand for checking/applying
 //! binary updates out-of-band from a running server.
@@ -420,6 +423,57 @@ fn transcode_session_idle_ttl_from_env() -> std::time::Duration {
     }
 }
 
+/// How often each `PeerSyncPoller` (`docs/architecture/peer-groups.md`
+/// §3.6) runs a full sync cycle against its one peer.
+/// `STREAMARR_PEER_SYNC_INTERVAL_SECS`, defaulting to
+/// [`streamarr_peer_sync::DEFAULT_PEER_SYNC_INTERVAL_SECS`] (60s) -- read
+/// here, at the boot boundary, rather than inside `streamarr-peer-sync`
+/// itself, matching every other `STREAMARR_*_SECS` var in this codebase
+/// (e.g. [`transcode_session_idle_ttl_from_env`] just above) and
+/// `PeerSyncPoller::new`'s own doc comment, which explains why it takes an
+/// already-resolved `Duration` rather than reading the env var itself.
+fn peer_sync_interval_secs_from_env() -> Duration {
+    let default_secs = streamarr_peer_sync::DEFAULT_PEER_SYNC_INTERVAL_SECS;
+    match std::env::var("STREAMARR_PEER_SYNC_INTERVAL_SECS") {
+        Ok(raw) => match raw.parse::<u64>() {
+            Ok(secs) if secs > 0 => Duration::from_secs(secs),
+            _ => {
+                tracing::warn!(
+                    value = %raw,
+                    "STREAMARR_PEER_SYNC_INTERVAL_SECS is not a positive integer; falling back \
+                     to the default of {default_secs}s"
+                );
+                Duration::from_secs(default_secs)
+            }
+        },
+        Err(_) => Duration::from_secs(default_secs),
+    }
+}
+
+/// How many consecutive full-cycle failures a `PeerSyncPoller` tolerates
+/// before flipping its peer's `peer_nodes.status` to `Unreachable`
+/// (§3.6). `STREAMARR_PEER_UNREACHABLE_THRESHOLD`, defaulting to
+/// [`streamarr_peer_sync::DEFAULT_PEER_UNREACHABLE_THRESHOLD`] (3) -- same
+/// "read at the boot boundary" convention as
+/// [`peer_sync_interval_secs_from_env`] just above.
+fn peer_sync_unreachable_threshold_from_env() -> u32 {
+    let default_threshold = streamarr_peer_sync::DEFAULT_PEER_UNREACHABLE_THRESHOLD;
+    match std::env::var("STREAMARR_PEER_UNREACHABLE_THRESHOLD") {
+        Ok(raw) => match raw.parse::<u32>() {
+            Ok(threshold) if threshold > 0 => threshold,
+            _ => {
+                tracing::warn!(
+                    value = %raw,
+                    "STREAMARR_PEER_UNREACHABLE_THRESHOLD is not a positive integer; falling \
+                     back to the default of {default_threshold}"
+                );
+                default_threshold
+            }
+        },
+        Err(_) => default_threshold,
+    }
+}
+
 fn generated_dev_jwt_secret() -> String {
     format!(
         "{}{}",
@@ -735,6 +789,7 @@ async fn bootstrap_admin_with(
         id: uuid::Uuid::new_v4(),
         name: "Bootstrap Admin".to_string(),
         library_allow: Vec::new(),
+        group_library_allow: Vec::new(),
         blocked_folders: Vec::new(),
         max_rating: None,
         blocked_tags: Vec::new(),
@@ -817,7 +872,7 @@ async fn boot_api(
 ) -> anyhow::Result<()> {
     use streamarr_api::user_directory::RepoBackedUserDirectory;
     use streamarr_api::{
-        build_router, AppState, ClientCompatibilityTable, ReadinessState,
+        admin_peer, build_router, AppState, ClientCompatibilityTable, ReadinessState,
         RepoBackedMediaFileLookup, VersionGateLayer, VersionState,
     };
     use streamarr_auth::{
@@ -827,15 +882,18 @@ async fn boot_api(
     };
     use streamarr_db::repo::{
         seed_default_views, SqlxCreditRepo, SqlxDeviceRepo, SqlxDownloadTicketRepo,
-        SqlxLibraryViewRepo, SqlxMediaFileRepo, SqlxPlaylistRepo, SqlxPolicyRepo,
-        SqlxProfilePinRepo, SqlxPushRegistrationRepo, SqlxRefreshTokenRepo, SqlxRenditionRepo,
-        SqlxSourceInstanceRepo, SqlxSystemSettingsRepo, SqlxTdarrConnectionRepo,
-        SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxUserRepo, SqlxWatchProgressRepo,
-        SqlxWorkRepo,
+        SqlxGroupLibraryRepo, SqlxLibraryViewRepo, SqlxMediaFileRepo, SqlxNodeIdentityRepo,
+        SqlxPeerGroupRepo, SqlxPeerJoinTokenRepo, SqlxPeerLeafAvailabilityRepo, SqlxPeerNodeRepo,
+        SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo, SqlxPushRegistrationRepo,
+        SqlxRefreshTokenRepo, SqlxRenditionRepo, SqlxRoutingRuleRepo, SqlxSourceInstanceRepo,
+        SqlxSystemSettingsRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo,
+        SqlxUserInviteRequestRepo, SqlxUserRepo, SqlxWatchProgressRepo, SqlxWorkRepo,
     };
     use streamarr_db::{
-        CreditRepo, DeviceRepo, DownloadTicketRepo, LibraryViewRepo, MediaFileRepo, PlaylistRepo,
-        PolicyRepo, ProfilePinRepo, PushRegistrationRepo, RenditionRepo, SourceInstanceRepo,
+        CreditRepo, DeviceRepo, DownloadTicketRepo, GroupLibraryRepo, LibraryViewRepo,
+        MediaFileRepo, NodeIdentityRepo, PeerGroupRepo, PeerJoinTokenRepo,
+        PeerLeafAvailabilityRepo, PeerNodeRepo, PlaylistRepo, PolicyRepo, ProfilePinRepo,
+        PushRegistrationRepo, RenditionRepo, RoutingRuleRepo, SourceInstanceRepo,
         SystemSettingsRepo, TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo,
         WatchProgressRepo, WorkRepo,
     };
@@ -910,6 +968,71 @@ async fn boot_api(
         Arc::new(SqlxTdarrConnectionRepo::new(pool.clone()));
     let system_settings_repo: Arc<dyn SystemSettingsRepo> =
         Arc::new(SqlxSystemSettingsRepo::new(pool.clone()));
+    // Phase 1 of `docs/architecture/peer-groups.md` -- byte-for-byte inert
+    // for a single, ungrouped node (every table nullable/empty until an
+    // admin actually founds or joins a group via `streamarr_api::admin_peer`).
+    let node_identity_repo: Arc<dyn NodeIdentityRepo> =
+        Arc::new(SqlxNodeIdentityRepo::new(pool.clone()));
+    let peer_group_repo: Arc<dyn PeerGroupRepo> = Arc::new(SqlxPeerGroupRepo::new(pool.clone()));
+    let peer_node_repo: Arc<dyn PeerNodeRepo> = Arc::new(SqlxPeerNodeRepo::new(pool.clone()));
+    let peer_join_token_repo: Arc<dyn PeerJoinTokenRepo> =
+        Arc::new(SqlxPeerJoinTokenRepo::new(pool.clone()));
+    let group_library_repo: Arc<dyn GroupLibraryRepo> =
+        Arc::new(SqlxGroupLibraryRepo::new(pool.clone()));
+    // Operator-configured routing policy (`docs/architecture/
+    // peer-groups.md` §2.4) -- `peer::routing_rules_handler`'s own read,
+    // `routing_sync.rs` (`streamarr-peer-sync`, wired below in
+    // `boot_worker`) is the other side's writer.
+    let routing_rule_repo: Arc<dyn RoutingRuleRepo> =
+        Arc::new(SqlxRoutingRuleRepo::new(pool.clone()));
+    // Read-only, per-peer leaf availability cache (`docs/architecture/
+    // peer-groups.md` §2.3/§4.3) -- `availability_sync.rs`
+    // (`streamarr-peer-sync`) is its only writer; the API role only ever
+    // reads it, both via `CatalogService`'s browse/get_by_id hydration
+    // below and, directly off `AppState` (Phase 3), Playarr's own routing-
+    // context gathering (`streamarr_api::playback::
+    // resolve_route_for_local_media_file`/`by_external_ref_playback_info_handler`,
+    // §5.2) -- hence the clone before this `Arc` is moved into `catalog`.
+    let peer_leaf_availability_repo: Arc<dyn PeerLeafAvailabilityRepo> =
+        Arc::new(SqlxPeerLeafAvailabilityRepo::new(pool.clone()));
+    let peer_leaf_availability_repo_for_state = peer_leaf_availability_repo.clone();
+    // Mint (or load) this installation's own durable Ed25519 identity
+    // before `state` (and therefore the router) is ever constructed -- the
+    // same "guarantee it exists before serving traffic" treatment
+    // `bootstrap_admin_if_needed` gives the bootstrap admin account below.
+    // `ensure_node_identity` only ever mints a fresh `peer_id`/keypair when
+    // no row exists yet; an existing row (including its `group_id`) is
+    // always loaded as-is, never regenerated or overwritten -- a redeploy
+    // must not desync group state. See `docs/architecture/peer-groups.md`
+    // §2.1.
+    let node_identity = admin_peer::ensure_node_identity(&node_identity_repo)
+        .await
+        .map_err(|err| anyhow::anyhow!("failed to ensure node identity: {}", err.body.message))?;
+    tracing::info!(
+        peer_id = %node_identity.peer_id,
+        grouped = node_identity.group_id.is_some(),
+        "node identity ready"
+    );
+    // Optional operator convenience: pre-fill `PUT /api/v1/admin/
+    // peer-nodes/self`'s in-memory staging cell from `STREAMARR_NODE_NAME`
+    // so a fresh install doesn't have to retype its own name before
+    // founding/joining a group. Never written to `node_identity` itself
+    // (that table has no name column -- see §2.1's schema) and never
+    // consulted once this node is actually grouped (a real, persisted self
+    // `PeerNode` row exists by then -- see `PendingSelfPeerProfile`'s doc
+    // comment). Purely additive: unset (the default), this is exactly
+    // `None`, identical to today's behavior.
+    let pending_self_peer_profile = if node_identity.group_id.is_none() {
+        std::env::var("STREAMARR_NODE_NAME")
+            .ok()
+            .filter(|name| !name.is_empty())
+            .map(|name| admin_peer::PendingSelfPeerProfile {
+                name,
+                addresses: Vec::new(),
+            })
+    } else {
+        None
+    };
     // Durable, not `InMemoryRefreshTokenStore` -- see
     // `streamarr_db::repo::refresh_token`'s doc comment: without this, a
     // process restart silently invalidated every refresh token, forcing a
@@ -972,12 +1095,13 @@ async fn boot_api(
     let catalog = Arc::new(
         streamarr_catalog::CatalogService::new(
             work_repo.clone(),
-            media_file_repo,
+            media_file_repo.clone(),
             cache.clone(),
             pool,
             watch_progress.clone(),
         )
-        .with_embedding_repo(embedding_repo),
+        .with_embedding_repo(embedding_repo)
+        .with_peer_leaf_availability(peer_leaf_availability_repo, peer_node_repo.clone()),
     );
 
     let transcode = Arc::new(
@@ -988,11 +1112,19 @@ async fn boot_api(
     );
 
     let jwt_secret = jwt_secret_from_env();
-    let jwt = Arc::new(JwtIssuer::new(
-        jwt_secret.as_bytes(),
-        "streamarr",
-        chrono::Duration::minutes(15),
-    ));
+    // `with_group_identity` (`docs/architecture/peer-groups.md` §5.4):
+    // switches this node's own access-token issuance to EdDSA (signed with
+    // its `node_identity` Ed25519 keypair, `iss` = its own `peer_id`) once
+    // `node_identity.group_id.is_some()`, and always wires `peer_node_repo`
+    // so `verify_access_token` can resolve *other* peers' public keys for
+    // tokens minted elsewhere in the group. Called unconditionally -- for
+    // an ungrouped node this is a no-op for issuance (HS256 stays the
+    // default, byte-for-byte today's behavior) and only pre-wires the repo
+    // in case this node joins a group later without a restart.
+    let jwt = Arc::new(
+        JwtIssuer::new(jwt_secret.as_bytes(), "streamarr", chrono::Duration::minutes(15))
+            .with_group_identity(&node_identity, peer_node_repo.clone()),
+    );
     let refresh = Arc::new(RefreshTokenService::new(
         refresh_store,
         device_repo,
@@ -1039,6 +1171,20 @@ async fn boot_api(
     let (webhook_tx, _webhook_rx) = tokio::sync::mpsc::channel(256);
     let webhook = Arc::new(streamarr_arr_sync::WebhookReceiver::new(webhook_tx));
 
+    // Phase 3 (`docs/architecture/peer-groups.md` §5.2/§5.3): one shared,
+    // pooled `reqwest::Client` for every outbound node-to-node call this
+    // process's *own request handlers* make directly (`playback::
+    // forward_negotiation_to_peer`'s signed negotiation forward,
+    // `media::proxy_stream_media_handler`'s signed `Range`-preserving byte
+    // stream) -- constructed once here, not per request, same "construct
+    // once, `Arc`-cheap-clone everywhere" treatment `boot_worker`'s own
+    // `peer_http_client` already gets for its background `PeerSyncPoller`s.
+    // Deliberately a *separate* `reqwest::Client` instance from that one:
+    // this is the API role's own client, `boot_worker`'s is the worker
+    // role's -- the same two-roles-can-run-in-different-processes split
+    // `STREAMARR_ROLE=api`/`worker` already makes everywhere else.
+    let peer_http = reqwest::Client::new();
+
     let state = AppState {
         readiness: readiness.clone(),
         version: VersionState {
@@ -1077,6 +1223,16 @@ async fn boot_api(
         analytics_store: analytics_store.clone(),
         session_registry,
         analytics,
+        node_identity_repo,
+        peer_group_repo,
+        peer_node_repo,
+        peer_join_token_repo,
+        pending_self_peer_profile: Arc::new(std::sync::Mutex::new(pending_self_peer_profile)),
+        group_library_repo,
+        media_file_repo,
+        routing_rule_repo,
+        peer_leaf_availability_repo: peer_leaf_availability_repo_for_state,
+        peer_http,
     };
     let version_gate = VersionGateLayer::new(compatibility_table);
 
@@ -1325,6 +1481,93 @@ fn spawn_poller_for(
     })
 }
 
+/// Filters `peers` down to the ones not already present in
+/// `spawned_peer_node_ids`, inserting each returned peer's id into that set
+/// as it's kept -- the exact "newly discovered since the last check" rule
+/// `boot_worker`'s peer-sync spawn loop applies on every tick, factored out
+/// so that rule (in particular: an empty `peers` list must yield zero
+/// results, so an ungrouped node's `peer_node_repo.list_others()` spawns
+/// zero `PeerSyncPoller` tasks) is independently unit-testable without
+/// booting the rest of `boot_worker`. See `docs/architecture/
+/// peer-groups.md` §3.6.
+fn newly_discovered_peers(
+    peers: Vec<streamarr_model::PeerNode>,
+    spawned_peer_node_ids: &mut std::collections::HashSet<uuid::Uuid>,
+) -> Vec<streamarr_model::PeerNode> {
+    peers
+        .into_iter()
+        .filter(|peer| spawned_peer_node_ids.insert(peer.id))
+        .collect()
+}
+
+/// Spawns one [`streamarr_peer_sync::PeerSyncPoller`] for `peer` -- the
+/// `PeerSyncPoller` counterpart to [`spawn_poller_for`] above, same
+/// "construct once per row, hand it its own clone of every shared repo,
+/// spawn a traced detached task running `.run()` forever" shape. Each
+/// poller internally wraps its own cycle in `coordinator.try_lock("peer-
+/// sync:<peer_node_id>", ..)` (see that type's own doc comment) -- exactly
+/// the same per-key coordination lock `ReconciliationPoller` already takes
+/// for `"arr-sync:<source_instance_id>"`, so this function, unlike
+/// [`spawn_poller_for`], does not need to wrap the spawned task in
+/// `run_while_leader` itself.
+#[allow(clippy::too_many_arguments)]
+fn spawn_peer_sync_poller_for(
+    peer: &streamarr_model::PeerNode,
+    self_identity: &streamarr_peer_sync::PeerIdentity,
+    http_client: reqwest::Client,
+    poll_interval: Duration,
+    unreachable_threshold: u32,
+    coordinator: Arc<dyn streamarr_coordination::ClusterCoordinator>,
+    peer_node_repo: Arc<dyn streamarr_db::PeerNodeRepo>,
+    user_repo: Arc<dyn streamarr_db::UserRepo>,
+    policy_repo: Arc<dyn streamarr_db::PolicyRepo>,
+    group_library_repo: Arc<dyn streamarr_db::GroupLibraryRepo>,
+    user_invite_repo: Arc<dyn streamarr_db::UserInviteRepo>,
+    user_invite_request_repo: Arc<dyn streamarr_db::UserInviteRequestRepo>,
+    work_repo: Arc<dyn streamarr_db::WorkRepo>,
+    availability_repo: Arc<dyn streamarr_db::PeerLeafAvailabilityRepo>,
+    routing_rule_repo: Arc<dyn streamarr_db::RoutingRuleRepo>,
+    sync_state_repo: Arc<dyn streamarr_db::PeerSyncStateRepo>,
+    conflict_log_repo: Arc<dyn streamarr_db::SyncConflictLogRepo>,
+) -> tokio::task::JoinHandle<()> {
+    use streamarr_peer_sync::{PeerClient, PeerSyncPoller};
+    use streamarr_telemetry::correlation::spawn::spawn_traced;
+
+    let peer_client = PeerClient::new(http_client, self_identity.clone());
+    let poller = PeerSyncPoller::new(
+        self_identity.peer_id,
+        peer.id,
+        peer_client,
+        poll_interval,
+        unreachable_threshold,
+        coordinator,
+        peer_node_repo,
+        user_repo,
+        policy_repo,
+        group_library_repo,
+        user_invite_repo,
+        user_invite_request_repo,
+        work_repo,
+        availability_repo,
+        routing_rule_repo,
+        sync_state_repo,
+        conflict_log_repo,
+    );
+    // TODO: wire a real `SyncStatusReporter` through here (`.with_status_
+    // reporter(...)`) once one backs `GET /api/v1/admin/peer-nodes/{id}/
+    // sync-status` -- `admin_peer::PeerSyncStatusResponse::status`'s own
+    // doc comment already flags this exact handler as the place that stub
+    // gets replaced; not this change's scope.
+    let span = tracing::info_span!(
+        "peer_sync_poller",
+        peer_node_id = %peer.id,
+        peer_name = %peer.name,
+    );
+    spawn_traced(span, async move {
+        poller.run().await;
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn boot_worker(
     pool: DbPool,
@@ -1338,14 +1581,59 @@ async fn boot_worker(
 ) -> anyhow::Result<Vec<tokio::task::JoinHandle<()>>> {
     use std::collections::HashSet;
 
-    use streamarr_db::repo::{SqlxCreditRepo, SqlxEmbeddingRepo, SqlxMediaFileRepo, SqlxWorkRepo};
-    use streamarr_db::{CreditRepo, EmbeddingRepo, MediaFileRepo, WorkRepo};
+    use streamarr_db::repo::{
+        SqlxCreditRepo, SqlxEmbeddingRepo, SqlxGroupLibraryRepo, SqlxMediaFileRepo,
+        SqlxNodeIdentityRepo, SqlxPeerLeafAvailabilityRepo, SqlxPeerNodeRepo,
+        SqlxPeerSyncStateRepo, SqlxPolicyRepo, SqlxRoutingRuleRepo, SqlxSourceInstanceRepo,
+        SqlxSyncConflictLogRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxUserRepo,
+        SqlxWorkRepo,
+    };
+    use streamarr_db::{
+        CreditRepo, EmbeddingRepo, GroupLibraryRepo, MediaFileRepo, NodeIdentityRepo,
+        PeerLeafAvailabilityRepo, PeerNodeRepo, PeerSyncStateRepo, PolicyRepo, RoutingRuleRepo,
+        SourceInstanceRepo, SyncConflictLogRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo,
+        WorkRepo,
+    };
 
     let mut handles = Vec::new();
 
     let work_repo: Arc<dyn WorkRepo> = Arc::new(SqlxWorkRepo::new(pool.clone()));
     let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(SqlxMediaFileRepo::new(pool.clone()));
     let credit_repo: Arc<dyn CreditRepo> = Arc::new(SqlxCreditRepo::new(pool.clone()));
+    // §9.1/§3.6 (`docs/architecture/peer-groups.md`): this function's own
+    // 10s supervisor loop below is the sole spawn point for both
+    // `SourceInstanceRepo`/`PeerNodeRepo` hydration and `PeerSyncPoller`
+    // construction in a split api/worker deployment -- see that loop's own
+    // comment for why these repos are constructed here rather than passed
+    // in (mirrors every other repo on this function already doing the
+    // same).
+    let source_instance_repo: Arc<dyn SourceInstanceRepo> =
+        Arc::new(SqlxSourceInstanceRepo::new(pool.clone()));
+    let node_identity_repo: Arc<dyn NodeIdentityRepo> =
+        Arc::new(SqlxNodeIdentityRepo::new(pool.clone()));
+    let peer_node_repo: Arc<dyn PeerNodeRepo> = Arc::new(SqlxPeerNodeRepo::new(pool.clone()));
+    let user_repo: Arc<dyn UserRepo> = Arc::new(SqlxUserRepo::new(pool.clone()));
+    let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
+    let group_library_repo: Arc<dyn GroupLibraryRepo> =
+        Arc::new(SqlxGroupLibraryRepo::new(pool.clone()));
+    let routing_rule_repo: Arc<dyn RoutingRuleRepo> =
+        Arc::new(SqlxRoutingRuleRepo::new(pool.clone()));
+    let user_invite_repo: Arc<dyn UserInviteRepo> = Arc::new(SqlxUserInviteRepo::new(pool.clone()));
+    let user_invite_request_repo: Arc<dyn UserInviteRequestRepo> =
+        Arc::new(SqlxUserInviteRequestRepo::new(pool.clone()));
+    let peer_leaf_availability_repo: Arc<dyn PeerLeafAvailabilityRepo> =
+        Arc::new(SqlxPeerLeafAvailabilityRepo::new(pool.clone()));
+    let peer_sync_state_repo: Arc<dyn PeerSyncStateRepo> =
+        Arc::new(SqlxPeerSyncStateRepo::new(pool.clone()));
+    let sync_conflict_log_repo: Arc<dyn SyncConflictLogRepo> =
+        Arc::new(SqlxSyncConflictLogRepo::new(pool.clone()));
+    // One shared `reqwest::Client` (an `Arc`-backed connection pool
+    // internally) reused across every `PeerSyncPoller` this process spawns,
+    // rather than one per poller -- same "share, don't reconstruct per
+    // task" reasoning as every other pooled resource in this function.
+    let peer_http_client = reqwest::Client::new();
+    let peer_sync_interval = peer_sync_interval_secs_from_env();
+    let peer_sync_unreachable_threshold = peer_sync_unreachable_threshold_from_env();
 
     // Proactive artwork cache warming (see `streamarr_arr_sync::
     // artwork_prewarm`'s doc comment) -- unconditional, no fallible setup,
@@ -1417,19 +1705,23 @@ async fn boot_worker(
     // is a cheap in-memory `DashMap` read, not a network/DB call, so a 10s
     // poll interval is negligible overhead.
     //
-    // NOTE: this only closes the gap for `STREAMARR_ROLE=all` (this
-    // worker and the `api` role sharing one `Arc<SourceInstanceRegistry>`
-    // in the same process, e.g. `docker-compose.standalone.yml`). Split
-    // `api`/`worker`-role deployments (Postgres tiers 2/3) run this
-    // function in a *different* process than the one serving the admin
-    // endpoint, each with its own registry -- and unlike `boot_api`
-    // (which hydrates its registry from `SourceInstanceRepo` before
-    // serving), this function does not hydrate its own from the database
-    // at all yet, even though the repo/persistence now exists. A
-    // worker-only process's registry stays empty (so it spawns no
-    // pollers) until this loop is also wired to read from the repo -- a
-    // smaller follow-up now that persistence exists, not the bigger
-    // "no persistence exists anywhere" gap this note used to describe.
+    // Also the sole spawn point for `PeerSyncPoller` (`docs/architecture/
+    // peer-groups.md` §3.6) -- one per non-self row `peer_node_repo.
+    // list_others()` returns, discovered/spawned by this same loop for
+    // exactly the same "don't require a restart" reason `SourceInstance`
+    // registration already gets.
+    //
+    // §9.1: this closes the gap that used to exist for split `api`/`worker`
+    // deployments (Postgres tiers 2/3), which run this function in a
+    // *different* process than the one serving the admin endpoints, each
+    // with its own empty `SourceInstanceRegistry` and (for peer-sync) no
+    // in-memory registry at all. The first tick below hydrates straight
+    // from `SourceInstanceRepo`/`PeerNodeRepo` -- the same durable source
+    // `boot_api` already hydrates its own registry from before serving --
+    // instead of assuming the snapshot this loop started with (empty, for
+    // a worker-only process) was complete. `STREAMARR_ROLE=all` (worker and
+    // api sharing one process/registry, e.g. `docker-compose.standalone.
+    // yml`) just re-upserts what's already there, which is harmless.
     {
         let source_instances = source_instances.clone();
         let work_repo = work_repo.clone();
@@ -1439,9 +1731,49 @@ async fn boot_worker(
         let embedding_sync = embedding_sync.clone();
         let pool = pool.clone();
         let coordinator = coordinator.clone();
+        let source_instance_repo = source_instance_repo.clone();
+        let node_identity_repo = node_identity_repo.clone();
+        let peer_node_repo = peer_node_repo.clone();
+        let user_repo = user_repo.clone();
+        let policy_repo = policy_repo.clone();
+        let group_library_repo = group_library_repo.clone();
+        let routing_rule_repo = routing_rule_repo.clone();
+        let user_invite_repo = user_invite_repo.clone();
+        let user_invite_request_repo = user_invite_request_repo.clone();
+        let peer_leaf_availability_repo = peer_leaf_availability_repo.clone();
+        let peer_sync_state_repo = peer_sync_state_repo.clone();
+        let sync_conflict_log_repo = sync_conflict_log_repo.clone();
+        let peer_http_client = peer_http_client.clone();
+        let mut spawned_peer_node_ids: HashSet<uuid::Uuid> = HashSet::new();
+        // Resolved lazily (below) and cached once found -- this node's own
+        // signing identity may not exist yet the very first time a fresh,
+        // worker-only process runs this loop (it's only ever minted by
+        // `admin_peer::ensure_node_identity`, called from the API role's
+        // boot path, see that function's doc comment). Same "keep checking
+        // until it appears" shape this function's own Tdarr
+        // connection-watch loop below already uses for a comparable
+        // "not configured yet" gap.
+        let mut self_peer_identity: Option<streamarr_peer_sync::PeerIdentity> = None;
         handles.push(tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(10));
-            interval.tick().await; // first tick fires immediately; the snapshot above already covers "now"
+            interval.tick().await; // first tick fires immediately; hydrate from the DB below before the loop starts reacting to changes
+
+            match source_instance_repo.list_all().await {
+                Ok(instances) => {
+                    for instance in instances {
+                        source_instances.upsert(instance);
+                    }
+                }
+                Err(err) => {
+                    tracing::error!(
+                        %err,
+                        "failed to hydrate SourceInstanceRegistry from the database in the \
+                         worker role; this process's registry may stay empty (spawning no \
+                         reconciliation pollers) until a later restart succeeds"
+                    );
+                }
+            }
+
             loop {
                 interval.tick().await;
                 for instance in source_instances.all() {
@@ -1462,6 +1794,82 @@ async fn boot_worker(
                             pool.clone(),
                             coordinator.clone(),
                         );
+                    }
+                }
+
+                if self_peer_identity.is_none() {
+                    match node_identity_repo.get().await {
+                        Ok(Some(identity)) => {
+                            match streamarr_peer_sync::PeerIdentity::from_seed_b64(
+                                identity.peer_id,
+                                identity.private_key.expose_secret(),
+                            ) {
+                                Ok(identity) => self_peer_identity = Some(identity),
+                                Err(err) => tracing::error!(
+                                    %err,
+                                    "this node's persisted Ed25519 identity is corrupt; \
+                                     peer-sync cannot start until this is investigated"
+                                ),
+                            }
+                        }
+                        // Byte-for-byte inert for a fresh, ungrouped node
+                        // (`ensure_node_identity`'s own doc comment) -- not
+                        // logged every 10s, that would be pure noise for
+                        // the common case of a node that simply hasn't
+                        // joined a group yet.
+                        Ok(None) => {}
+                        Err(err) => tracing::error!(
+                            %err,
+                            "failed to load this node's identity from the database; peer-sync \
+                             stays inert until this is investigated"
+                        ),
+                    }
+                }
+
+                if let Some(self_identity) = &self_peer_identity {
+                    match peer_node_repo.list_others().await {
+                        Ok(peers) => {
+                            let newly_discovered =
+                                newly_discovered_peers(peers, &mut spawned_peer_node_ids);
+                            if newly_discovered.is_empty() && spawned_peer_node_ids.is_empty() {
+                                tracing::debug!(
+                                    "no other peer nodes are known yet; PeerSyncPoller has \
+                                     nothing to spawn (checked again every 10s, so joining a \
+                                     group later doesn't need a process restart)"
+                                );
+                            }
+                            for peer in newly_discovered {
+                                tracing::info!(
+                                    peer_node_id = %peer.id,
+                                    peer_name = %peer.name,
+                                    "peer node known; spawning its PeerSyncPoller now"
+                                );
+                                spawn_peer_sync_poller_for(
+                                    &peer,
+                                    self_identity,
+                                    peer_http_client.clone(),
+                                    peer_sync_interval,
+                                    peer_sync_unreachable_threshold,
+                                    coordinator.clone(),
+                                    peer_node_repo.clone(),
+                                    user_repo.clone(),
+                                    policy_repo.clone(),
+                                    group_library_repo.clone(),
+                                    user_invite_repo.clone(),
+                                    user_invite_request_repo.clone(),
+                                    work_repo.clone(),
+                                    peer_leaf_availability_repo.clone(),
+                                    routing_rule_repo.clone(),
+                                    peer_sync_state_repo.clone(),
+                                    sync_conflict_log_repo.clone(),
+                                );
+                            }
+                        }
+                        Err(err) => tracing::error!(
+                            %err,
+                            "failed to list peer nodes from the database; peer-sync spawning \
+                             skipped this tick"
+                        ),
                     }
                 }
             }
@@ -1981,6 +2389,69 @@ mod bootstrap_tests {
         let b = generate_bootstrap_password();
         assert_ne!(a, b, "must never generate the same password twice");
         assert!(a.len() >= 20, "must be comfortably longer than 20 chars");
+    }
+
+    fn test_peer_node(id: uuid::Uuid) -> streamarr_model::PeerNode {
+        let now = chrono::Utc::now();
+        streamarr_model::PeerNode {
+            id,
+            group_id: uuid::Uuid::new_v4(),
+            name: format!("peer-{id}"),
+            addresses: Vec::new(),
+            public_key: "test-pubkey".to_string(),
+            is_self: false,
+            status: streamarr_model::PeerNodeStatus::Active,
+            last_seen_at: None,
+            last_sync_error: None,
+            joined_at: now,
+            updated_at: now,
+        }
+    }
+
+    /// The exact invariant §3.6/§9.1 requires and that a live boot must
+    /// also demonstrate: an ungrouped node's `peer_node_repo.list_others()`
+    /// is empty, and `boot_worker`'s peer-sync spawn loop must turn that
+    /// into zero `PeerSyncPoller` tasks -- not "argued to be zero" but
+    /// actually exercised here against `newly_discovered_peers`, the exact
+    /// function that loop calls on every tick to decide what to spawn.
+    #[test]
+    fn an_empty_peer_list_yields_zero_newly_discovered_peers() {
+        let mut spawned = std::collections::HashSet::new();
+        let discovered = newly_discovered_peers(Vec::new(), &mut spawned);
+        assert!(
+            discovered.is_empty(),
+            "an ungrouped node's empty peer_node_repo.list_others() must spawn zero PeerSyncPollers"
+        );
+        assert!(spawned.is_empty());
+    }
+
+    /// A peer already spawned on a previous tick must not be spawned again
+    /// -- `boot_worker`'s loop re-lists `peer_node_repo.list_others()`
+    /// every 10s (to pick up peers that join the group later, without a
+    /// restart), so this filter is what keeps that idempotent rather than
+    /// spawning a duplicate poller for the same peer on every tick.
+    #[test]
+    fn newly_discovered_peers_only_returns_each_peer_once_across_calls() {
+        let mut spawned = std::collections::HashSet::new();
+        let peer_a = test_peer_node(uuid::Uuid::new_v4());
+        let peer_b = test_peer_node(uuid::Uuid::new_v4());
+
+        let first_tick = newly_discovered_peers(vec![peer_a.clone(), peer_b.clone()], &mut spawned);
+        assert_eq!(first_tick.len(), 2, "both peers are new on the first tick");
+
+        let second_tick = newly_discovered_peers(vec![peer_a, peer_b], &mut spawned);
+        assert!(
+            second_tick.is_empty(),
+            "already-spawned peers must not be returned again on a later tick"
+        );
+
+        let peer_c = test_peer_node(uuid::Uuid::new_v4());
+        let third_tick = newly_discovered_peers(vec![peer_c.clone()], &mut spawned);
+        assert_eq!(
+            third_tick,
+            vec![peer_c],
+            "a peer that joins the group later is still picked up on a subsequent tick"
+        );
     }
 
     #[test]

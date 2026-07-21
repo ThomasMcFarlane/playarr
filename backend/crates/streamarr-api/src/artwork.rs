@@ -497,6 +497,7 @@ mod tests {
             default_root_folder_id: None,
             default_quality_profile_id: None,
             best_effort: false,
+            group_library_id: None,
         });
         let mut work = state.work_repo.get(work_id).await.unwrap();
         work.images = vec![ImageAsset {

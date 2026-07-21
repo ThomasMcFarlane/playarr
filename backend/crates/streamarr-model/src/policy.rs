@@ -55,6 +55,17 @@ pub struct Policy {
     /// default, not all-allow) — pair with `is_admin` for the superuser
     /// bypass.
     pub library_allow: Vec<Uuid>,
+    /// Additive, portable sibling to [`Self::library_allow`] (which stays
+    /// exactly as-is: still "this specific local `SourceInstance` id, on
+    /// whichever node evaluates this policy") -- `crate::GroupLibrary` ids
+    /// (`docs/architecture/peer-groups.md` §2.3/§5.1), meaningful regardless
+    /// of which group node evaluates the policy. Resolved to local
+    /// `SourceInstance` ids at the API layer (`streamarr-api::
+    /// auth_extractor`'s `StreamingUser`/`CatalogViewer::allowed_libraries`)
+    /// and unioned with `library_allow` there -- an empty list here grants
+    /// nothing extra, it does not widen access, matching `library_allow`'s
+    /// own deny-by-default semantics.
+    pub group_library_allow: Vec<Uuid>,
     /// Absolute or root-relative folder paths that are hidden regardless of
     /// `library_allow` (e.g. a folder with pre-release content).
     pub blocked_folders: Vec<String>,

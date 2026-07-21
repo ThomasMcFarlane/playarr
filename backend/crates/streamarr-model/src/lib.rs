@@ -13,16 +13,19 @@
 
 pub mod download;
 pub mod embedding;
+pub mod group_library;
 pub mod library_view;
 pub mod media;
 pub mod media_path;
 pub mod music;
+pub mod peer;
 pub mod person;
 pub mod platform;
 pub mod playback;
 pub mod playlist;
 pub mod policy;
 pub mod publishing;
+pub mod routing;
 pub mod sensitive;
 pub mod series;
 pub mod source;
@@ -33,10 +36,12 @@ pub mod work;
 
 pub use download::{DownloadStatus, DownloadTicket};
 pub use embedding::WorkEmbedding;
+pub use group_library::{GroupLibrary, LeafSelector, PeerLeafAvailability};
 pub use library_view::{LibraryView, ViewCriteria, ViewSort};
 pub use media::{MediaFile, ProducedBy, Rendition, RenditionStatus};
 pub use media_path::resolve_media_path;
 pub use music::{Album, AlbumType, Artist, Track};
+pub use peer::{NodeIdentity, PeerAddress, PeerGroup, PeerNode, PeerNodeStatus};
 pub use person::{Credit, CreditRole, Person};
 pub use platform::{ClientPlatform, CompatibilityEntry, VersionEnvelope};
 pub use playback::{
@@ -46,6 +51,7 @@ pub use playback::{
 pub use playlist::{Playlist, PlaylistItem, PlaylistMediaType};
 pub use policy::{AccessWindow, Policy, TimeRange, Weekday};
 pub use publishing::{Author, Book};
+pub use routing::{DeliveryMode, RoutingRule};
 pub use sensitive::Sensitive;
 pub use series::{Episode, Season, Series};
 pub use source::{SourceInstance, SourceKind};

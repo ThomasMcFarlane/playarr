@@ -4,8 +4,8 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
-use streamarr_db::{DbError, DeviceRepo};
-use streamarr_model::{Device, User};
+use streamarr_db::{DbError, DeviceRepo, PeerNodeRepo};
+use streamarr_model::{Device, PeerNode, User};
 use uuid::Uuid;
 
 use crate::login::{LoginError, UserDirectory};
@@ -53,6 +53,45 @@ impl DeviceRepo for FakeDeviceRepo {
             }
             None => Err(DbError::NotFound),
         }
+    }
+}
+
+/// In-memory [`PeerNodeRepo`] double: real `async_trait` semantics, no
+/// database -- used by `jwt.rs`'s own tests to exercise EdDSA verification
+/// (§5.4) without pulling a real `sqlx` pool into this crate's unit tests.
+#[derive(Default)]
+pub(crate) struct FakePeerNodeRepo {
+    nodes: DashMap<Uuid, PeerNode>,
+}
+
+impl FakePeerNodeRepo {
+    pub(crate) fn insert(&self, node: PeerNode) {
+        self.nodes.insert(node.id, node);
+    }
+}
+
+#[async_trait]
+impl PeerNodeRepo for FakePeerNodeRepo {
+    async fn upsert(&self, node: &PeerNode) -> Result<(), DbError> {
+        self.nodes.insert(node.id, node.clone());
+        Ok(())
+    }
+
+    async fn get(&self, id: Uuid) -> Result<Option<PeerNode>, DbError> {
+        Ok(self.nodes.get(&id).map(|entry| entry.clone()))
+    }
+
+    async fn list_all(&self) -> Result<Vec<PeerNode>, DbError> {
+        Ok(self.nodes.iter().map(|entry| entry.clone()).collect())
+    }
+
+    async fn list_others(&self) -> Result<Vec<PeerNode>, DbError> {
+        Ok(self
+            .nodes
+            .iter()
+            .filter(|entry| !entry.is_self)
+            .map(|entry| entry.clone())
+            .collect())
     }
 }
 

@@ -169,6 +169,7 @@ mod tests {
             id: Uuid::nil(),
             name: "test".to_string(),
             library_allow: vec![],
+            group_library_allow: vec![],
             blocked_folders: vec![],
             max_rating: None,
             blocked_tags: vec![],

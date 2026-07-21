@@ -43,6 +43,7 @@ use streamarr_model::{ClientPlatform, Device};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use crate::admin_peer::{peer_addresses_for_response, PeerAddressBundle};
 use crate::auth_extractor::{forbidden, resolve_policy};
 use crate::error::ApiError;
 use crate::AppState;
@@ -72,6 +73,14 @@ pub struct LoginResponse {
     pub token_type: String,
     pub expires_in: i64,
     pub user_id: Uuid,
+    /// `docs/architecture/peer-groups.md` §7.1's self-healing address
+    /// book: this node's current [`PeerAddressBundle`], so the client can
+    /// pick up newly added/removed peers without a separate round trip.
+    /// `null`/absent for a standalone (never grouped) node -- see
+    /// `admin_peer::peer_addresses_for_response`'s doc comment for why
+    /// that lookup is skipped rather than always attached.
+    #[serde(default)]
+    pub peer_addresses: Option<PeerAddressBundle>,
 }
 
 #[utoipa::path(
@@ -94,7 +103,8 @@ pub struct LoginResponse {
             "refresh_token": "rt_9f8d7a6b1234456789abcdef01234567",
             "token_type": "Bearer",
             "expires_in": 3600,
-            "user_id": "9f8d7a6b-1234-4567-89ab-cdef01234567"
+            "user_id": "9f8d7a6b-1234-4567-89ab-cdef01234567",
+            "peer_addresses": null
         })),
         (status = 400, description = "credentials_required | pin_required"),
         (status = 401, description = "untrusted_network | invalid_credentials | invalid_pin | account_disabled"),
@@ -170,12 +180,15 @@ pub async fn login_handler(
         }
     }
 
+    let peer_addresses = peer_addresses_for_response(&state).await?;
+
     Ok(Json(LoginResponse {
         access_token: outcome.access_token,
         refresh_token: outcome.session.refresh_token.expose_secret().clone(),
         token_type: "Bearer".to_string(),
         expires_in: state.jwt.access_ttl().num_seconds(),
         user_id: outcome.user.id,
+        peer_addresses,
     }))
 }
 
@@ -242,6 +255,10 @@ apiVersion = "1"
         assert!(!login.access_token.is_empty());
         assert!(!login.refresh_token.is_empty());
         assert_eq!(login.token_type, "Bearer");
+        // A standalone (never grouped) node's login response carries no
+        // address bundle -- see `peer_addresses_for_response`'s doc
+        // comment for why.
+        assert!(login.peer_addresses.is_none());
 
         // The issued access token is real -- it verifies and carries the
         // same user id straight through `AppState::jwt`.
@@ -249,8 +266,93 @@ apiVersion = "1"
             .app
             .jwt
             .verify_access_token(&login.access_token)
+            .await
             .unwrap();
         assert_eq!(claims.sub, state.default_user_id);
+    }
+
+    /// `docs/architecture/peer-groups.md` §7.1's self-healing: once this
+    /// node has founded/joined a group, every login response carries the
+    /// current [`crate::admin_peer::PeerAddressBundle`].
+    #[tokio::test]
+    async fn login_response_carries_the_address_bundle_once_grouped() {
+        let (router, state) = test_state().await;
+
+        let group_id = Uuid::new_v4();
+        state
+            .app
+            .peer_group_repo
+            .create(&streamarr_model::PeerGroup {
+                id: group_id,
+                name: "Home Group".to_string(),
+                created_at: Utc::now(),
+            })
+            .await
+            .unwrap();
+        let peer_id = Uuid::new_v4();
+        state
+            .app
+            .node_identity_repo
+            .put(&streamarr_model::NodeIdentity {
+                peer_id,
+                private_key: streamarr_model::Sensitive::new("unused-in-this-test".to_string()),
+                group_id: Some(group_id),
+                created_at: Utc::now(),
+            })
+            .await
+            .unwrap();
+        let now = Utc::now();
+        state
+            .app
+            .peer_node_repo
+            .upsert(&streamarr_model::PeerNode {
+                id: peer_id,
+                group_id,
+                name: "home".to_string(),
+                addresses: vec![streamarr_model::PeerAddress {
+                    url: "https://home.example.com".to_string(),
+                    priority: 0,
+                    label: "wan".to_string(),
+                    client_reachable: true,
+                }],
+                public_key: "home-pubkey".to_string(),
+                is_self: true,
+                status: streamarr_model::PeerNodeStatus::Active,
+                last_seen_at: Some(now),
+                last_sync_error: None,
+                joined_at: now,
+                updated_at: now,
+            })
+            .await
+            .unwrap();
+
+        let body = serde_json::json!({
+            "device_id": Uuid::new_v4(),
+            "device_name": "test browser",
+            "client_platform": "web",
+            "client_version": "1.0.0",
+        });
+        let response = router
+            .oneshot(request_from(
+                SocketAddr::from(([127, 0, 0, 1], 51234)),
+                body,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let login: LoginResponse = serde_json::from_slice(&bytes).unwrap();
+        let bundle = login.peer_addresses.expect("grouped node must carry a bundle");
+        assert_eq!(bundle.group_id, Some(group_id));
+        assert_eq!(
+            bundle.addresses,
+            vec![crate::admin_peer::PeerAddressEntry {
+                peer_node_id: peer_id,
+                url: "https://home.example.com".to_string(),
+            }]
+        );
     }
 
     #[tokio::test]

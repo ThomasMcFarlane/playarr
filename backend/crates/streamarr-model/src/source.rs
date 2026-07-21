@@ -50,4 +50,13 @@ pub struct SourceInstance {
     /// skipped rather than failing the overall reconciliation pass — for
     /// instances the operator has marked as non-critical/flaky.
     pub best_effort: bool,
+    /// Maps this node's own instance onto a group-wide
+    /// [`crate::GroupLibrary`] (`docs/architecture/peer-groups.md` §2.3/
+    /// §5.1) -- `None` (the default) for an instance not part of any
+    /// cross-node grouping, fully backward compatible. `SourceInstance::id`
+    /// itself is minted independently per node and is never portable across
+    /// peers; this field is the operator-asserted, stable, group-wide
+    /// substitute a `RoutingRule`/`Policy::group_library_allow` can actually
+    /// reference.
+    pub group_library_id: Option<Uuid>,
 }

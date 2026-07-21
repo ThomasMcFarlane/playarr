@@ -23,6 +23,7 @@
 //! to confirm the checked-in file still matches.
 
 pub mod admin;
+pub mod admin_peer;
 pub mod admin_playback;
 pub mod artwork;
 pub mod auth_extractor;
@@ -36,10 +37,13 @@ pub mod media;
 pub mod notifications;
 pub mod oauth;
 pub mod openapi_docs;
+pub mod peer;
+pub mod peer_extractor;
 pub mod playback;
 pub mod playlists;
 pub mod readiness;
 pub mod refresh;
+pub mod routing;
 pub mod source_registry;
 pub mod system_settings;
 pub mod tdarr;
@@ -52,6 +56,10 @@ pub mod webhooks;
 
 #[cfg(test)]
 pub mod test_support;
+#[cfg(test)]
+mod peer_group_e2e_test;
+#[cfg(test)]
+mod routing_e2e_test;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -105,6 +113,10 @@ const PUBLIC_OPENAPI_PATHS: &[&str] = &[
     "/api/v1/oauth/device/code",
     "/api/v1/oauth/token",
     "/webhooks/{instance_id}",
+    // Bearer-authed by the one-shot join token carried in the request
+    // body itself (`peer::EnrollRequest::join_token`), not a JWT -- see
+    // `peer.rs`'s module doc comment.
+    "/api/v1/peer/enroll",
 ];
 
 impl Modify for SecurityAddon {
@@ -165,7 +177,8 @@ impl Modify for SecurityAddon {
         (name = "views", description = "Saved catalog filter presets ('Views') -- admin-managed, surfaced to Playarr as browsable shelves"),
         (name = "playlists", description = "User + System playlists -- named, ordered, optionally-nested lists of video works or audio tracks"),
         (name = "credits", description = "Cast/crew for a work, and every work a given person is credited on"),
-        (name = "downloads", description = "Server-staged, quality-selectable, resumable downloads of media the caller already has playback access to")
+        (name = "downloads", description = "Server-staged, quality-selectable, resumable downloads of media the caller already has playback access to"),
+        (name = "peer-groups", description = "Multi-node peer group identity, founding, and join flow (see docs/architecture/peer-groups.md)")
     )
 )]
 pub struct ApiDoc;
@@ -201,6 +214,8 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(artwork::work_artwork_handler))
         .routes(routes!(artwork::album_artwork_handler))
         .routes(routes!(playback::playback_info_handler))
+        .routes(routes!(playback::by_external_ref_playback_info_handler))
+        .routes(routes!(playback::peer_playback_info_handler))
         .routes(routes!(playback::record_playback_event_handler))
         .routes(routes!(playback::list_watch_progress_handler))
         .routes(routes!(
@@ -211,6 +226,8 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(admin_playback::list_session_history_handler))
         .routes(routes!(admin_playback::stop_session_handler))
         .routes(routes!(media::stream_media_handler))
+        .routes(routes!(media::proxy_stream_media_handler))
+        .routes(routes!(media::peer_stream_media_handler))
         .routes(routes!(media::media_metadata_handler))
         .routes(routes!(
             media::media_playback_options_handler,
@@ -306,6 +323,20 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(credits::work_credits_handler))
         .routes(routes!(credits::get_person_handler))
         .routes(routes!(credits::person_works_handler))
+        .routes(routes!(admin_peer::update_self_peer_node_handler))
+        .routes(routes!(admin_peer::found_peer_group_handler))
+        .routes(routes!(admin_peer::create_peer_join_token_handler))
+        .routes(routes!(admin_peer::join_peer_group_handler))
+        .routes(routes!(admin_peer::list_peer_nodes_handler))
+        .routes(routes!(admin_peer::peer_node_sync_status_handler))
+        .routes(routes!(admin_peer::address_bundle_handler))
+        .routes(routes!(peer::enroll_handler))
+        .routes(routes!(peer::nodes_handler))
+        .routes(routes!(peer::accounts_handler))
+        .routes(routes!(peer::invites_handler))
+        .routes(routes!(peer::libraries_handler))
+        .routes(routes!(peer::availability_handler))
+        .routes(routes!(peer::routing_rules_handler))
 }
 
 pub fn openapi_spec() -> utoipa::openapi::OpenApi {
@@ -484,6 +515,74 @@ pub struct AppState {
     /// `streamarr_telemetry::analytics::collector`'s doc comment for the
     /// synchronous-registry / batched-durable-write split this owns.
     pub analytics: Arc<streamarr_telemetry::analytics::AnalyticsCollector>,
+    /// This installation's own durable Ed25519 identity -- singleton,
+    /// minted (if it doesn't already exist) at process boot by
+    /// `backend/src/main.rs::boot_api` via `admin_peer::ensure_node_identity`,
+    /// so a row always exists by the time this repo is ever read. Byte-for-
+    /// byte inert for a single, ungrouped node: nothing reads this outside
+    /// `admin_peer.rs`/`peer_extractor.rs`. See
+    /// `docs/architecture/peer-groups.md` §2.1/§3.3.
+    pub node_identity_repo: Arc<dyn streamarr_db::NodeIdentityRepo>,
+    /// The peer group this node has founded or joined, if any -- in
+    /// practice at most one row (`node_identity.group_id`), but keyed on
+    /// `PeerGroup::id` rather than assumed-singleton (see that repo
+    /// trait's own doc comment).
+    pub peer_group_repo: Arc<dyn streamarr_db::PeerGroupRepo>,
+    /// Every known member of this node's peer group, including a row for
+    /// this node itself (`is_self = true`) -- backs `admin_peer.rs`'s
+    /// list/self-profile endpoints and `peer_extractor.rs`'s signature
+    /// verification (looks up the claimed signer's `public_key` here).
+    pub peer_node_repo: Arc<dyn streamarr_db::PeerNodeRepo>,
+    /// Single-use, short-TTL, admin-issued group join tokens -- backs
+    /// `admin_peer.rs`'s `POST .../join-tokens` and `peer.rs`'s
+    /// `POST /api/v1/peer/enroll`.
+    pub peer_join_token_repo: Arc<dyn streamarr_db::PeerJoinTokenRepo>,
+    /// In-memory staging area for `PUT /api/v1/admin/peer-nodes/self`,
+    /// consulted by `admin_peer::found_peer_group_handler`/
+    /// `join_peer_group_handler` while this node has no persisted self
+    /// `PeerNode` row yet to write through to -- see
+    /// `admin_peer::PendingSelfPeerProfile`'s doc comment for why this is
+    /// deliberately not a new migration column. `boot_api` optionally seeds
+    /// this from `STREAMARR_NODE_NAME` at boot (ungrouped nodes only) as a
+    /// pure UX convenience -- see that function's own comment; it never
+    /// substitutes for actually calling this route.
+    pub pending_self_peer_profile: Arc<std::sync::Mutex<Option<admin_peer::PendingSelfPeerProfile>>>,
+    /// Group-wide library registry (`docs/architecture/peer-groups.md`
+    /// §2.3) -- backs `peer::libraries_handler`'s `group_libraries` half.
+    pub group_library_repo: Arc<dyn streamarr_db::GroupLibraryRepo>,
+    /// The real, durable persistence layer for `streamarr_model::MediaFile`
+    /// -- backs `peer::availability_handler`'s live derivation of this
+    /// node's own leaf availability (`list_work_ids`/`get_by_id`), joined
+    /// to `source_instance_repo` for `group_library_id`. Distinct from
+    /// `media_files` above (`Arc<dyn MediaFileLookup>`, a single-id lookup
+    /// only): this field is the full repository surface, the same one
+    /// `AppState::catalog` is itself built against.
+    pub media_file_repo: Arc<dyn streamarr_db::MediaFileRepo>,
+    /// Operator-configured routing policy (`docs/architecture/
+    /// peer-groups.md` §2.4) -- backs `peer::routing_rules_handler`.
+    pub routing_rule_repo: Arc<dyn streamarr_db::RoutingRuleRepo>,
+    /// Read-only, per-peer leaf availability cache (`docs/architecture/
+    /// peer-groups.md` §2.3/§4) -- `availability_sync.rs`
+    /// (`streamarr-peer-sync`) is its only writer; this crate only ever
+    /// reads it, both for `CatalogService`'s browse/get_by_id hydration
+    /// (wired separately, straight into `catalog` at construction) and for
+    /// Phase 3's routing-context gathering (`playback::
+    /// resolve_route_for_local_media_file`), which needs the raw rows
+    /// `CatalogService` doesn't expose back out.
+    pub peer_leaf_availability_repo: Arc<dyn streamarr_db::PeerLeafAvailabilityRepo>,
+    /// Shared `reqwest::Client` (its own internal connection pool) for
+    /// every Phase 3 outbound node-to-node call this crate's request
+    /// handlers make directly -- `playback::forward_negotiation_to_peer`'s
+    /// signed negotiation forward and `media::proxy_stream_media_handler`'s
+    /// signed `Range`-preserving byte stream (`docs/architecture/
+    /// peer-groups.md` §5.2/§5.3). Constructed once in `backend/src/
+    /// main.rs`'s `boot_api` and reused across every request, the same
+    /// "construct once, clone (cheaply, it's `Arc`-backed internally)
+    /// everywhere" treatment `boot_worker`'s own `peer_http_client` already
+    /// gets for its background `PeerSyncPoller`s -- this is a *separate*
+    /// instance from that one (a different role/process in a split Tier-2/3
+    /// deployment), not a duplicate of the same resource.
+    pub peer_http: reqwest::Client,
 }
 
 impl FromRef<AppState> for ReadinessState {

@@ -89,12 +89,13 @@ mod tests {
     use crate::repo::{PolicyRepo, SqlxPolicyRepo, SqlxUserRepo, UserRepo};
 
     #[tokio::test]
-    async fn pin_hash_round_trips_updates_and_cascades_with_user() {
+    async fn pin_hash_round_trips_and_updates() {
         let pool = test_sqlite_pool().await;
         let policy = Policy {
             id: Uuid::new_v4(),
             name: "PIN test".to_string(),
             library_allow: vec![],
+            group_library_allow: vec![],
             blocked_folders: vec![],
             max_rating: None,
             blocked_tags: vec![],
@@ -138,8 +139,81 @@ mod tests {
             repo.find_hash(user.id).await.unwrap().as_deref(),
             Some("hash-two")
         );
+    }
 
-        SqlxUserRepo::new(pool).delete(user.id).await.unwrap();
-        assert_eq!(repo.find_hash(user.id).await.unwrap(), None);
+    // `SqlxUserRepo::delete` used to be a hard `DELETE`, which the schema's
+    // `profile_pins.user_id ... REFERENCES users (id) ON DELETE CASCADE`
+    // rode along with for free -- this test used to be named
+    // `..._and_cascades_with_user` and asserted the PIN hash vanished
+    // alongside the user. `docs/architecture/peer-groups.md` §2.2 requires
+    // `UserRepo::delete` to become a soft delete instead (the row must
+    // survive, with `deleted_at` set, so it can propagate as a tombstone
+    // rather than a peer merely lagging on sync looking like a delete) --
+    // and a row that's never actually removed cannot fire an `ON DELETE`
+    // trigger. This is a deliberate, accepted consequence of that change,
+    // not a bug: `find_hash` takes a bare `user_id` and was never wired
+    // through `UserRepo::find_by_id`'s `deleted_at IS NULL` filter, so
+    // this row simply becomes unreachable through every normal lookup
+    // path the moment its owning user is soft-deleted, exactly like every
+    // other table that used to cascade off `users` (see this crate's
+    // migrations for the full list) -- reconciling all of them with
+    // `deleted_at` is out of this change's scope.
+    #[tokio::test]
+    async fn pin_hash_survives_a_soft_deleted_user() {
+        let pool = test_sqlite_pool().await;
+        let policy = Policy {
+            id: Uuid::new_v4(),
+            name: "PIN test".to_string(),
+            library_allow: vec![],
+            group_library_allow: vec![],
+            blocked_folders: vec![],
+            max_rating: None,
+            blocked_tags: vec![],
+            allowed_tags: vec![],
+            can_transcode: true,
+            can_download: false,
+            can_delete: false,
+            can_share_public: false,
+            device_allow: vec![],
+            max_concurrent_sessions: None,
+            access_schedule: None,
+            can_stream: true,
+            is_admin: false,
+        };
+        SqlxPolicyRepo::new(pool.clone())
+            .upsert(&policy)
+            .await
+            .unwrap();
+        let user = User {
+            id: Uuid::new_v4(),
+            username: "pin-user-2".to_string(),
+            display_name: "PIN User 2".to_string(),
+            email: None,
+            password_hash: Sensitive::new("password-hash".to_string()),
+            policy_id: policy.id,
+            created_at: Utc::now(),
+            disabled: false,
+            preferred_audio_language: streamarr_model::DEFAULT_PREFERRED_AUDIO_LANGUAGE.to_string(),
+        };
+        SqlxUserRepo::new(pool.clone()).upsert(&user).await.unwrap();
+
+        let repo = SqlxProfilePinRepo::new(pool.clone());
+        repo.upsert_hash(user.id, "hash-one").await.unwrap();
+
+        SqlxUserRepo::new(pool.clone())
+            .delete(user.id)
+            .await
+            .unwrap();
+
+        // The user itself is gone through every normal repo lookup ...
+        assert_eq!(
+            SqlxUserRepo::new(pool).find_by_id(user.id).await.unwrap(),
+            None
+        );
+        // ... but the PIN row underneath it was never actually removed.
+        assert_eq!(
+            repo.find_hash(user.id).await.unwrap().as_deref(),
+            Some("hash-one")
+        );
     }
 }

@@ -455,13 +455,14 @@ fn invalid_pin() -> ApiError {
 
 /// A sensible, permissive-but-not-dangerous default `Policy` for a newly
 /// provisioned user: can stream and transcode, can't delete library
-/// content or share publicly, `library_allow` set from the caller's
-/// request (empty by default -- an admin still has to grant access
-/// explicitly, "no access" not "all access"), no device/session/schedule
-/// restrictions. `can_download` follows the same least-privilege-by-default
-/// philosophy as `can_stream`/`library_allow`: set from the caller's
-/// request, `false` unless explicitly granted -- being able to stream a
-/// library does not imply being allowed to copy it off the server.
+/// content or share publicly, `library_allow`/`group_library_allow` set
+/// from the caller's request (empty by default -- an admin still has to
+/// grant access explicitly, "no access" not "all access"), no
+/// device/session/schedule restrictions. `can_download` follows the same
+/// least-privilege-by-default philosophy as `can_stream`/`library_allow`:
+/// set from the caller's request, `false` unless explicitly granted --
+/// being able to stream a library does not imply being allowed to copy it
+/// off the server.
 fn default_policy(
     id: Uuid,
     username: &str,
@@ -469,11 +470,13 @@ fn default_policy(
     can_stream: bool,
     can_download: bool,
     library_allow: Vec<Uuid>,
+    group_library_allow: Vec<Uuid>,
 ) -> Policy {
     Policy {
         id,
         name: format!("{username}'s policy"),
         library_allow,
+        group_library_allow,
         blocked_folders: Vec::new(),
         max_rating: None,
         blocked_tags: Vec::new(),
@@ -510,7 +513,9 @@ async fn ensure_username_available(state: &AppState, username: &str) -> Result<(
 
 async fn persist_new_user(
     state: &AppState,
+    user_id: Uuid,
     body: CreateUserRequest,
+    group_library_allow: Vec<Uuid>,
 ) -> Result<UserResponse, ApiError> {
     let policy = default_policy(
         Uuid::new_v4(),
@@ -519,9 +524,10 @@ async fn persist_new_user(
         body.can_stream,
         body.can_download,
         body.library_allow,
+        group_library_allow,
     );
     let user = User {
-        id: Uuid::new_v4(),
+        id: user_id,
         username: body.username,
         display_name: body.display_name,
         email: body.email,
@@ -546,6 +552,37 @@ async fn persist_new_user(
             user.username
         ))
     })?;
+
+    // Every locally-created account defaults `origin_peer_id` to this
+    // node's own identity -- see docs/architecture/peer-groups.md §2.2's
+    // scope note. Deliberately best-effort: the user and policy rows above
+    // are already durably persisted by this point, so a hiccup here
+    // (`ensure_node_identity` is already called once at boot in
+    // `backend/src/main.rs`, so this is normally a no-op read) must not
+    // turn an account that was actually created into a reported failure --
+    // it just leaves `origin_peer_id` `NULL`, the same value every
+    // pre-existing row already has.
+    match crate::admin_peer::ensure_node_identity(&state.node_identity_repo).await {
+        Ok(identity) => {
+            if let Err(err) = state
+                .policy_repo
+                .set_origin_peer_id_if_unset(policy.id, identity.peer_id)
+                .await
+            {
+                tracing::warn!(policy_id = %policy.id, %err, "failed to default origin_peer_id for new policy");
+            }
+            if let Err(err) = state
+                .user_repo
+                .set_origin_peer_id_if_unset(user.id, identity.peer_id)
+                .await
+            {
+                tracing::warn!(user_id = %user.id, %err, "failed to default origin_peer_id for new user");
+            }
+        }
+        Err(err) => {
+            tracing::warn!(?err, "failed to load node identity; new user/policy rows keep a NULL origin_peer_id");
+        }
+    }
 
     tracing::info!(user_id = %user.id, username = %user.username, is_admin = policy.is_admin, can_stream = policy.can_stream, "created user account");
 
@@ -600,7 +637,12 @@ pub async fn create_user_handler(
     Json(body): Json<CreateUserRequest>,
 ) -> Result<Json<UserResponse>, ApiError> {
     ensure_username_available(&state, &body.username).await?;
-    Ok(Json(persist_new_user(&state, body).await?))
+    // No direct group-library grant surface exists for admin-created
+    // accounts -- only invite redemption populates `group_library_allow`
+    // (`docs/architecture/peer-groups.md` §2.5/§6.2; see `signup_handler`).
+    Ok(Json(
+        persist_new_user(&state, Uuid::new_v4(), body, Vec::new()).await?,
+    ))
 }
 
 /// Issues a 24-hour, one-use bearer invitation. The administrator console
@@ -631,6 +673,12 @@ pub async fn create_user_invite_handler(
     let invite_token = streamarr_auth::secret::opaque_token();
     let now = Utc::now();
     let expires_at = now + USER_INVITE_TTL;
+    // Same admin-selected grant set that populates `library_allow`, mapped
+    // through any granted `SourceInstance`'s `group_library_id` -- see
+    // `docs/architecture/peer-groups.md` §2.5/§6.2.
+    let group_library_allow = state
+        .source_instances
+        .group_library_ids_for_source_instances(&body.library_allow);
     state
         .user_invite_repo
         .create(&UserInvite {
@@ -640,6 +688,10 @@ pub async fn create_user_invite_handler(
             expires_at,
             can_stream: body.can_stream,
             library_allow: body.library_allow,
+            group_library_allow,
+            consumed_at: None,
+            consumed_by_user_id: None,
+            consumed_by_peer_id: None,
         })
         .await
         .map_err(|err| ApiError::internal(format!("failed to persist user invitation: {err}")))?;
@@ -709,6 +761,11 @@ pub async fn create_user_invite_request_handler(
         generated_at: None,
         can_stream: true,
         library_allow: Vec::new(),
+        // Nothing chosen yet -- an admin hasn't reviewed this request, so
+        // there's nothing to map through `SourceInstance.group_library_id`
+        // (see `review_user_invite_request_handler`, where this is
+        // actually populated).
+        group_library_allow: Vec::new(),
     };
     state
         .user_invite_request_repo
@@ -803,6 +860,10 @@ pub async fn generate_user_invite_handler(
                 expires_at,
                 can_stream: request.can_stream,
                 library_allow: request.library_allow.clone(),
+                group_library_allow: request.group_library_allow.clone(),
+                consumed_at: None,
+                consumed_by_user_id: None,
+                consumed_by_peer_id: None,
             },
         )
         .await
@@ -915,6 +976,18 @@ pub async fn review_user_invite_request_handler(
     } else {
         UserInviteRequestStatus::Denied
     };
+    // Same admin-selected grant set that populates `library_allow`, mapped
+    // through any granted `SourceInstance`'s `group_library_id` -- see
+    // `docs/architecture/peer-groups.md` §2.5/§6.2. Carried over onto the
+    // final `UserInvite` when the requester generates it
+    // (`generate_user_invite_handler`).
+    let group_library_allow = if body.approved {
+        state
+            .source_instances
+            .group_library_ids_for_source_instances(&body.library_allow)
+    } else {
+        Vec::new()
+    };
     let reviewed = state
         .user_invite_request_repo
         .review(
@@ -928,6 +1001,7 @@ pub async fn review_user_invite_request_handler(
             } else {
                 &[]
             },
+            &group_library_allow,
         )
         .await
         .map_err(|err| ApiError::internal(format!("failed to review invitation request: {err}")))?;
@@ -994,9 +1068,31 @@ pub async fn signup_handler(
     let invite = invite.ok_or_else(invalid_invite)?;
 
     ensure_username_available(&state, &body.username).await?;
+
+    // Generated up front (rather than inside `persist_new_user`) so the
+    // very same id can be recorded as `consumed_by_user_id` on the invite
+    // row atomically with consumption itself -- see `docs/architecture/
+    // peer-groups.md` §3.5's "UserInvite double-redemption" for why that
+    // linkage matters (it's what a future reconciliation pass would use to
+    // find and disable the losing side's account).
+    let new_user_id = Uuid::new_v4();
+    // Best-effort, same tolerance `persist_new_user`'s own `origin_peer_id`
+    // defaulting already applies: redemption itself must never depend on
+    // this node's identity being resolvable.
+    let consumed_by_peer_id =
+        match crate::admin_peer::ensure_node_identity(&state.node_identity_repo).await {
+            Ok(identity) => Some(identity.peer_id),
+            Err(err) => {
+                tracing::warn!(
+                    ?err,
+                    "failed to load node identity; redeemed invite keeps a NULL consumed_by_peer_id"
+                );
+                None
+            }
+        };
     let consumed = state
         .user_invite_repo
-        .consume(&token_hash, now)
+        .consume(&token_hash, now, new_user_id, consumed_by_peer_id)
         .await
         .map_err(|err| ApiError::internal(format!("failed to redeem user invitation: {err}")))?;
     if !consumed {
@@ -1006,6 +1102,7 @@ pub async fn signup_handler(
     let username = body.username.clone();
     let user = persist_new_user(
         &state,
+        new_user_id,
         CreateUserRequest {
             username: body.username,
             display_name: body.display_name,
@@ -1020,6 +1117,7 @@ pub async fn signup_handler(
             // it afterward via `PATCH /api/v1/admin/users/{id}`.
             can_download: false,
         },
+        invite.group_library_allow,
     )
     .await?;
     tracing::info!(user_id = %user.id, %username, "redeemed user invitation");
@@ -1838,6 +1936,115 @@ mod tests {
         assert_eq!(response.status(), StatusCode::GONE);
     }
 
+    /// `docs/architecture/peer-groups.md` §2.5/§6.2 end to end: an invite
+    /// issued with `library_allow` naming a `SourceInstance` that maps onto
+    /// a `GroupLibrary` carries that grant through as `group_library_allow`
+    /// (§6.2), and redemption both applies it to the new account's `Policy`
+    /// and records who/which peer redeemed it (§3.5's "UserInvite
+    /// double-redemption" bookkeeping) on the invite row itself.
+    #[tokio::test]
+    async fn invite_redemption_grants_group_library_allow_and_records_who_redeemed_it() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+        let admin_token = mint_access_token(&state, admin_id);
+
+        let source_instance_id = Uuid::new_v4();
+        let group_library_id = Uuid::new_v4();
+        state.source_instances.upsert(streamarr_model::SourceInstance {
+            id: source_instance_id,
+            kind: streamarr_model::SourceKind::Radarr,
+            name: "Grouped Radarr".to_string(),
+            base_url: "http://localhost".to_string(),
+            api_key_encrypted: streamarr_model::Sensitive::new("key".to_string()),
+            priority: 0,
+            default_root_folder_id: None,
+            default_quality_profile_id: None,
+            best_effort: false,
+            group_library_id: Some(group_library_id),
+        });
+
+        let invite_body = serde_json::json!({
+            "can_stream": true,
+            "library_allow": [source_instance_id],
+        });
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/admin/user-invites")
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&admin_token))
+                    .body(Body::from(invite_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let issued: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let invite_token = issued["invite_token"].as_str().unwrap().to_string();
+
+        let signup_body = serde_json::json!({
+            "invite_token": invite_token,
+            "username": "grouped-invitee",
+            "display_name": "Grouped Invitee",
+            "password": "correct horse battery staple",
+        });
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/auth/signup")
+                    .header("content-type", "application/json")
+                    .body(Body::from(signup_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let created: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let user_id: Uuid = created["id"].as_str().unwrap().parse().unwrap();
+
+        let user = state.user_repo.find_by_id(user_id).await.unwrap().unwrap();
+        let policy = state
+            .policy_repo
+            .find_by_id(user.policy_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            policy.group_library_allow,
+            vec![group_library_id],
+            "the redeemed account's policy must carry the invite's group_library_allow"
+        );
+
+        let identity = state
+            .app
+            .node_identity_repo
+            .get()
+            .await
+            .unwrap()
+            .expect("signup mints this node's identity if it didn't exist yet");
+        let token_hash = streamarr_auth::secret::hash_token(&invite_token);
+        let (consumed_by_user_id, consumed_by_peer_id): (Option<String>, Option<String>) =
+            sqlx::query_as(
+                "SELECT consumed_by_user_id, consumed_by_peer_id FROM user_invites WHERE token_hash = ?",
+            )
+            .bind(&token_hash)
+            .fetch_one(&state.pool)
+            .await
+            .unwrap();
+        assert_eq!(consumed_by_user_id, Some(user_id.to_string()));
+        assert_eq!(consumed_by_peer_id, Some(identity.peer_id.to_string()));
+    }
+
     #[tokio::test]
     async fn invite_issuance_requires_an_admin() {
         let (router, _) = test_state().await;
@@ -1935,6 +2142,70 @@ mod tests {
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         let users = json.as_array().unwrap();
         assert!(users.iter().any(|u| u["username"] == "alice"));
+    }
+
+    /// `docs/architecture/peer-groups.md` §2.2's scope note: every locally
+    /// created user/policy row defaults `origin_peer_id` to this node's own
+    /// identity. Neither column is part of `streamarr_model::{User,
+    /// Policy}` (see `streamarr-db::repo::user`'s own doc comment for why),
+    /// so this asserts on the raw row via `state.pool` rather than the
+    /// JSON response.
+    #[tokio::test]
+    async fn create_defaults_origin_peer_id_to_this_nodes_own_identity() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+        let token = mint_access_token(&state, admin_id);
+
+        let body = serde_json::json!({
+            "username": "erin",
+            "display_name": "Erin",
+            "password": "correct horse battery staple",
+            "is_admin": false,
+        });
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/admin/users")
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let user_id: Uuid = json["id"].as_str().unwrap().parse().unwrap();
+        let user = state.user_repo.find_by_id(user_id).await.unwrap().unwrap();
+
+        let identity = state
+            .app
+            .node_identity_repo
+            .get()
+            .await
+            .unwrap()
+            .expect("creating a user must mint this node's identity if it didn't exist yet");
+
+        let (user_origin,): (Option<String>,) =
+            sqlx::query_as("SELECT origin_peer_id FROM users WHERE id = ?")
+                .bind(user_id.to_string())
+                .fetch_one(&state.pool)
+                .await
+                .unwrap();
+        assert_eq!(user_origin, Some(identity.peer_id.to_string()));
+
+        let (policy_origin,): (Option<String>,) =
+            sqlx::query_as("SELECT origin_peer_id FROM policies WHERE id = ?")
+                .bind(user.policy_id.to_string())
+                .fetch_one(&state.pool)
+                .await
+                .unwrap();
+        assert_eq!(policy_origin, Some(identity.peer_id.to_string()));
     }
 
     /// Per-user library access control admin API round trip: create an
