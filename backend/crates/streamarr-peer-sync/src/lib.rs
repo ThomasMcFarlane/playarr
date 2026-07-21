@@ -36,6 +36,7 @@ pub mod enroll;
 pub mod membership_sync;
 pub mod peer_client;
 pub mod poller;
+pub mod push_sync;
 pub mod routing_sync;
 pub mod signing;
 
@@ -44,4 +45,5 @@ pub use peer_client::{PeerClient, PeerClientError};
 pub use poller::{
     PeerSyncPoller, PollError, DEFAULT_PEER_SYNC_INTERVAL_SECS, DEFAULT_PEER_UNREACHABLE_THRESHOLD,
 };
+pub use push_sync::{apply_push, PushSyncError, PushSyncRequest, PushSyncResponse};
 pub use signing::{PeerIdentity, SignedRequestHeaders, SigningError};

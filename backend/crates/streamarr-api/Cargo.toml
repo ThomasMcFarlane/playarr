@@ -24,6 +24,7 @@ streamarr-arr-sync = { path = "../streamarr-arr-sync" }
 # peer-groups.md` §2.6/§3.4). Correct dependency direction: `streamarr-
 # peer-sync` never depends back on `streamarr-api`.
 streamarr-peer-sync = { path = "../streamarr-peer-sync" }
+streamarr-coordination = { path = "../streamarr-coordination" }
 streamarr-arr-client = { path = "../streamarr-arr-client" }
 streamarr-tdarr-client = { path = "../streamarr-tdarr-client" }
 axum = { workspace = true }
@@ -64,10 +65,4 @@ base64 = "0.22.1"
 tower = { workspace = true, features = ["util"] }
 wiremock = "0.6"
 sqlx = { workspace = true, features = ["any", "sqlite"] }
-# Only for the two-real-node peer-sync end-to-end test
-# (`peer_group_e2e_test.rs`): a real `ClusterCoordinator` to drive an
-# actual `streamarr_peer_sync::PeerSyncPoller` cycle, the same type
-# `backend/src/main.rs`'s boot wiring uses for a genuine single-node
-# deployment.
-streamarr-coordination = { path = "../streamarr-coordination" }
 tracing-subscriber = { workspace = true }

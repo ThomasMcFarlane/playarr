@@ -1,0 +1,124 @@
+//! Signed push transport for peer sync.
+//!
+//! Pull remains the normal reconciliation path. This aggregate exchange lets
+//! a node which can make outbound requests, but cannot accept inbound ones,
+//! publish the same entity pages to a reachable peer. The receiver uses the
+//! exact same conflict resolution and cursor updates as a pulled page.
+
+use std::sync::Arc;
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use streamarr_db::{
+    GroupLibraryRepo, PeerLeafAvailabilityRepo, PeerNodeRepo, PeerSourceInstanceRepo,
+    PeerSyncStateRepo, PolicyRepo, RoutingRuleRepo, SyncConflictLogRepo, UserInviteRepo,
+    UserInviteRequestRepo, UserRepo, WorkRepo,
+};
+use uuid::Uuid;
+
+use crate::{account_sync, availability_sync, membership_sync, routing_sync};
+
+/// All entity pages published in one signed outbound request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PushSyncRequest {
+    pub membership: membership_sync::NodesResponse,
+    pub accounts: account_sync::AccountsResponse,
+    pub invites: account_sync::InvitesResponse,
+    pub libraries: account_sync::LibrariesResponse,
+    pub availability: availability_sync::AvailabilityResponse,
+    pub routing_rules: routing_sync::RoutingRulesResponse,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PushSyncResponse {
+    pub accepted_at: DateTime<Utc>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum PushSyncError {
+    #[error(transparent)]
+    Membership(#[from] crate::peer_client::PeerClientError),
+    #[error(transparent)]
+    Account(#[from] account_sync::AccountSyncError),
+    #[error(transparent)]
+    Availability(#[from] availability_sync::AvailabilitySyncError),
+    #[error(transparent)]
+    Routing(#[from] routing_sync::RoutingSyncError),
+}
+
+/// Applies a pushed exchange as if each page had been pulled from `source_peer_id`.
+#[allow(clippy::too_many_arguments)]
+pub async fn apply_push(
+    request: PushSyncRequest,
+    source_peer_id: Uuid,
+    self_peer_id: Uuid,
+    peer_node_repo: &Arc<dyn PeerNodeRepo>,
+    user_repo: &Arc<dyn UserRepo>,
+    policy_repo: &Arc<dyn PolicyRepo>,
+    group_library_repo: &Arc<dyn GroupLibraryRepo>,
+    peer_source_instance_repo: &Arc<dyn PeerSourceInstanceRepo>,
+    user_invite_repo: &Arc<dyn UserInviteRepo>,
+    user_invite_request_repo: &Arc<dyn UserInviteRequestRepo>,
+    work_repo: &Arc<dyn WorkRepo>,
+    availability_repo: &Arc<dyn PeerLeafAvailabilityRepo>,
+    routing_rule_repo: &Arc<dyn RoutingRuleRepo>,
+    sync_state_repo: &Arc<dyn PeerSyncStateRepo>,
+    conflict_log_repo: &Arc<dyn SyncConflictLogRepo>,
+) -> Result<PushSyncResponse, PushSyncError> {
+    membership_sync::apply_membership(
+        peer_node_repo,
+        self_peer_id,
+        request.membership,
+        "peer-push",
+    )
+    .await?;
+    account_sync::apply_accounts_response(
+        request.accounts,
+        source_peer_id,
+        self_peer_id,
+        user_repo,
+        policy_repo,
+        sync_state_repo,
+        conflict_log_repo,
+    )
+    .await?;
+    account_sync::apply_invites_response(
+        request.invites,
+        source_peer_id,
+        user_invite_repo,
+        user_invite_request_repo,
+        sync_state_repo,
+    )
+    .await?;
+    account_sync::apply_libraries_response(
+        request.libraries,
+        source_peer_id,
+        self_peer_id,
+        group_library_repo,
+        peer_source_instance_repo,
+        sync_state_repo,
+        conflict_log_repo,
+    )
+    .await?;
+    availability_sync::apply_availability_response(
+        request.availability,
+        source_peer_id,
+        work_repo,
+        availability_repo,
+        sync_state_repo,
+    )
+    .await?;
+    routing_sync::apply_routing_rules_response(
+        request.routing_rules,
+        source_peer_id,
+        self_peer_id,
+        routing_rule_repo,
+        sync_state_repo,
+        conflict_log_repo,
+    )
+    .await?;
+
+    Ok(PushSyncResponse {
+        accepted_at: Utc::now(),
+    })
+}

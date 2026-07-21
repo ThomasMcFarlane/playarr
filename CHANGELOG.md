@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Let peer nodes publish signed, incremental sync pages as well as pull them, so two-way
+  convergence continues when one node can make outbound requests but cannot accept inbound ones.
+- Synchronise credential-free source-instance identities and deletion tombstones across peer-group
+  nodes while keeping each node's source URLs, API keys, and reconciliation settings local.
 - Offer Low, Medium, and High playback bitrates across SD, HD, FHD, and UHD tiers in a
   three-column quality matrix shared by the live player and Player settings.
 - Let Playarr viewers switch home rails between thumbnail and cover artwork, add depth to media

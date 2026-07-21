@@ -484,6 +484,14 @@ pub async fn test_state() -> (Router, TestState) {
         Arc::new(SqlxRoutingRuleRepo::new(pool.clone()));
     let peer_leaf_availability_repo: Arc<dyn PeerLeafAvailabilityRepo> =
         Arc::new(SqlxPeerLeafAvailabilityRepo::new(pool.clone()));
+    let peer_source_instance_repo: Arc<dyn streamarr_db::PeerSourceInstanceRepo> = Arc::new(
+        streamarr_db::repo::SqlxPeerSourceInstanceRepo::new(pool.clone()),
+    );
+    let peer_sync_state_repo: Arc<dyn streamarr_db::PeerSyncStateRepo> =
+        Arc::new(streamarr_db::repo::SqlxPeerSyncStateRepo::new(pool.clone()));
+    let sync_conflict_log_repo: Arc<dyn streamarr_db::SyncConflictLogRepo> = Arc::new(
+        streamarr_db::repo::SqlxSyncConflictLogRepo::new(pool.clone()),
+    );
     // Real boot parity -- production's `boot_api` seeds the two default
     // views right after migrations run, and test callers that assert on
     // `GET /api/v1/views` (e.g. confirming "Newly Added"/"Newly Released"
@@ -671,6 +679,10 @@ pub async fn test_state() -> (Router, TestState) {
         media_file_repo: media_file_repo.clone(),
         routing_rule_repo,
         peer_leaf_availability_repo,
+        peer_source_instance_repo,
+        peer_sync_state_repo,
+        sync_conflict_log_repo,
+        coordinator: Arc::new(streamarr_coordination::SingleNodeCoordinator::new()),
         peer_http: reqwest::Client::new(),
     };
 

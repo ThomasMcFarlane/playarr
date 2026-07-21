@@ -34,6 +34,7 @@
 //! precedent) are hand-mirrored field-by-field.
 
 use std::collections::HashMap;
+use std::time::Duration;
 
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
@@ -44,8 +45,8 @@ use streamarr_catalog::WorkChildren;
 use streamarr_db::SyncMetadata;
 use streamarr_model::{
     Availability, ExternalProvider, GroupLibrary, LeafSelector, PeerAddress, PeerGroup, PeerNode,
-    PeerNodeStatus, Policy, RoutingRule, SourceKind, User, UserInvite, UserInviteRequest,
-    UserInviteRequestStatus, WorkKind,
+    PeerNodeStatus, Policy, RoutingRule, SourceInstanceIdentity, User, UserInvite,
+    UserInviteRequest, UserInviteRequestStatus, WorkKind,
 };
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -651,45 +652,9 @@ pub async fn invites_handler(
 // GET /api/v1/peer/libraries?since=
 // ---------------------------------------------------------------------
 
-/// Identity-only projection of this node's own `SourceInstance` rows --
-/// `docs/architecture/peer-groups.md` §3.1's table: "`source_instances`
-/// identity only (id, kind, name, priority, `group_library_id`) ... never
-/// `api_key_encrypted`." Also never `base_url`: an *arr base URL is
-/// exactly as node-local/credential-adjacent as the API key that
-/// authenticates against it -- see `SourceInstanceRepo::list_updated_since`'s
-/// own doc comment, which explicitly leaves stripping non-identity fields
-/// to the calling endpoint handler (this one).
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct SourceInstanceIdentity {
-    pub id: Uuid,
-    pub kind: SourceKind,
-    pub name: String,
-    pub priority: i32,
-    pub group_library_id: Option<Uuid>,
-}
-
-impl From<streamarr_model::SourceInstance> for SourceInstanceIdentity {
-    fn from(instance: streamarr_model::SourceInstance) -> Self {
-        Self {
-            id: instance.id,
-            kind: instance.kind,
-            name: instance.name,
-            priority: instance.priority,
-            group_library_id: instance.group_library_id,
-        }
-    }
-}
-
 /// Response body for [`libraries_handler`] -- `docs/architecture/
-/// peer-groups.md` §3.6: `source_instances` identity-only rows (no
-/// `api_key_encrypted`) + `group_libraries`. `streamarr_peer_sync::
-/// account_sync::LibrariesResponse` only deserializes `group_libraries`/
-/// `server_time` (its own doc comment explains why: no local sink table
-/// for another peer's `SourceInstance` identity exists yet) -- the extra
-/// `source_instances` field here is additive and simply ignored by that
-/// consumer's `serde_json::from_slice`, not a byte-for-byte mismatch: a
-/// consumer with no `deny_unknown_fields` tolerates unrecognized top-level
-/// fields by design.
+/// peer-groups.md` §3.6: credential-free `source_instances` identity rows
+/// plus `group_libraries`.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct LibrariesResponse {
     pub source_instances: Vec<SourceInstanceIdentity>,
@@ -699,9 +664,7 @@ pub struct LibrariesResponse {
 
 /// This node's own `source_instances` (identity only) + this group's
 /// `group_libraries`, both updated since `since` -- the read behind
-/// `streamarr_peer_sync::account_sync::sync_libraries` (which only
-/// consumes the `group_libraries` half -- see [`LibrariesResponse`]'s doc
-/// comment).
+/// `streamarr_peer_sync::account_sync::sync_libraries`.
 #[utoipa::path(
     get,
     path = "/api/v1/peer/libraries",
@@ -731,7 +694,15 @@ pub async fn libraries_handler(
             ))
         })?
         .into_iter()
-        .map(SourceInstanceIdentity::from)
+        .map(|(instance, metadata)| SourceInstanceIdentity {
+            id: instance.id,
+            kind: instance.kind,
+            name: instance.name,
+            priority: instance.priority,
+            group_library_id: instance.group_library_id,
+            updated_at: metadata.updated_at,
+            deleted_at: metadata.deleted_at,
+        })
         .collect();
 
     let group_id = this_node_group_id(&state).await?;
@@ -1067,6 +1038,278 @@ pub async fn routing_rules_handler(
     }))
 }
 
+// ---------------------------------------------------------------------
+// POST /api/v1/peer/sync-push
+// ---------------------------------------------------------------------
+
+/// Accepts the same signed entity pages as the pull endpoints, in one
+/// aggregate request. This is the receiving half of outbound-only node
+/// support: a node behind NAT publishes to a reachable peer, while its
+/// existing pull poller retrieves changes in the opposite direction.
+#[utoipa::path(
+    post,
+    path = "/api/v1/peer/sync-push",
+    tag = "peer-groups",
+    responses(
+        (status = 200, description = "Pushed peer sync pages accepted"),
+        (status = 400, description = "Malformed pushed sync payload"),
+        (status = 401, description = "Missing/invalid peer signature, or an unknown/left peer")
+    )
+)]
+pub async fn push_sync_handler(
+    State(state): State<AppState>,
+    peer: PeerSignedRequest,
+) -> Result<Json<streamarr_peer_sync::PushSyncResponse>, ApiError> {
+    let request: streamarr_peer_sync::PushSyncRequest = serde_json::from_slice(&peer.body)
+        .map_err(|err| ApiError::bad_request(format!("invalid peer sync push: {err}")))?;
+    let self_peer_id = state
+        .node_identity_repo
+        .get()
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to load node identity: {err}")))?
+        .ok_or_else(|| ApiError::internal("node identity is missing"))?
+        .peer_id;
+
+    let response = streamarr_peer_sync::apply_push(
+        request,
+        peer.peer.id,
+        self_peer_id,
+        &state.peer_node_repo,
+        &state.user_repo,
+        &state.policy_repo,
+        &state.group_library_repo,
+        &state.peer_source_instance_repo,
+        &state.user_invite_repo,
+        &state.user_invite_request_repo,
+        &state.work_repo,
+        &state.peer_leaf_availability_repo,
+        &state.routing_rule_repo,
+        &state.peer_sync_state_repo,
+        &state.sync_conflict_log_repo,
+    )
+    .await
+    .map_err(|err| ApiError::internal(format!("failed to apply peer sync push: {err}")))?;
+
+    Ok(Json(response))
+}
+
+async fn build_push_request(
+    state: &AppState,
+    since: Option<DateTime<Utc>>,
+) -> Result<streamarr_peer_sync::PushSyncRequest, ApiError> {
+    use streamarr_peer_sync::{account_sync, availability_sync, membership_sync, routing_sync};
+
+    let now = Utc::now();
+    let server_time = cursor(now);
+    let group_id = this_node_group_id(state).await?;
+
+    let membership = membership_sync::NodesResponse {
+        rows: state
+            .peer_node_repo
+            .list_all()
+            .await
+            .map_err(|err| ApiError::internal(format!("failed to list peer nodes: {err}")))?,
+    };
+    let accounts = account_sync::AccountsResponse {
+        users: state
+            .user_repo
+            .list_updated_since(since)
+            .await
+            .map_err(|err| ApiError::internal(format!("failed to list users: {err}")))?
+            .into_iter()
+            .map(|(user, metadata)| account_sync::UserSyncRow {
+                user,
+                updated_at: metadata.updated_at,
+                origin_peer_id: metadata.origin_peer_id,
+                deleted_at: metadata.deleted_at,
+            })
+            .collect(),
+        policies: state
+            .policy_repo
+            .list_updated_since(since)
+            .await
+            .map_err(|err| ApiError::internal(format!("failed to list policies: {err}")))?
+            .into_iter()
+            .map(|(policy, metadata)| account_sync::PolicySyncRow {
+                policy,
+                updated_at: metadata.updated_at,
+                origin_peer_id: metadata.origin_peer_id,
+                deleted_at: metadata.deleted_at,
+            })
+            .collect(),
+        server_time: server_time.clone(),
+    };
+    let invites = account_sync::InvitesResponse {
+        invites: state
+            .user_invite_repo
+            .list_updated_since(since)
+            .await
+            .map_err(|err| ApiError::internal(format!("failed to list invites: {err}")))?,
+        invite_requests: state
+            .user_invite_request_repo
+            .list_requested_since(since)
+            .await
+            .map_err(|err| ApiError::internal(format!("failed to list invite requests: {err}")))?,
+        server_time: server_time.clone(),
+    };
+    let libraries = account_sync::LibrariesResponse {
+        source_instances: state
+            .source_instance_repo
+            .list_updated_since(since)
+            .await
+            .map_err(|err| ApiError::internal(format!("failed to list source instances: {err}")))?
+            .into_iter()
+            .map(|(instance, metadata)| SourceInstanceIdentity {
+                id: instance.id,
+                kind: instance.kind,
+                name: instance.name,
+                priority: instance.priority,
+                group_library_id: instance.group_library_id,
+                updated_at: metadata.updated_at,
+                deleted_at: metadata.deleted_at,
+            })
+            .collect(),
+        group_libraries: state
+            .group_library_repo
+            .list_updated_since(group_id, since)
+            .await
+            .map_err(|err| ApiError::internal(format!("failed to list group libraries: {err}")))?,
+        server_time: server_time.clone(),
+    };
+    let availability = availability_sync::AvailabilityResponse {
+        rows: derive_own_availability(state, now)
+            .await?
+            .into_iter()
+            .map(|row| availability_sync::AvailabilityRow {
+                provider: row.provider,
+                external_id: row.external_id,
+                leaf_selector: row.leaf_selector,
+                group_library_id: row.group_library_id,
+                availability: row.availability,
+                container: row.container,
+                codec: row.codec,
+                bitrate: row.bitrate,
+                size_bytes: row.size_bytes,
+                duration_ms: row.duration_ms,
+                updated_at: row.updated_at,
+                title: row.title,
+                kind: row.kind,
+                release_date: row.release_date,
+            })
+            .collect(),
+        server_time: server_time.clone(),
+    };
+    let routing_rules = routing_sync::RoutingRulesResponse {
+        rows: state
+            .routing_rule_repo
+            .list_updated_since(group_id, since)
+            .await
+            .map_err(|err| ApiError::internal(format!("failed to list routing rules: {err}")))?,
+        server_time,
+    };
+
+    Ok(streamarr_peer_sync::PushSyncRequest {
+        membership,
+        accounts,
+        invites,
+        libraries,
+        availability,
+        routing_rules,
+    })
+}
+
+/// Continuously publishes this node's local changes to every reachable peer.
+/// Pull remains active independently, so one successful outbound direction is
+/// enough for two-way convergence when the remote node cannot dial back.
+pub async fn run_push_sync_loop(
+    state: AppState,
+    peer_client: streamarr_peer_sync::PeerClient,
+    poll_interval: Duration,
+) {
+    let mut interval = tokio::time::interval(poll_interval);
+    loop {
+        interval.tick().await;
+        let peers = match state.peer_node_repo.list_others().await {
+            Ok(peers) => peers,
+            Err(err) => {
+                tracing::warn!(error = %err, "failed to list peers for push sync");
+                continue;
+            }
+        };
+
+        for peer in peers {
+            let lock_key = format!("peer-push:{}", peer.id);
+            let _guard = match state.coordinator.try_lock(&lock_key, poll_interval).await {
+                Ok(Some(guard)) => guard,
+                Ok(None) => continue,
+                Err(err) => {
+                    tracing::warn!(peer_node_id = %peer.id, error = %err, "failed to acquire peer push lock");
+                    continue;
+                }
+            };
+            let push_cursor = match state.peer_sync_state_repo.get(peer.id, "push").await {
+                Ok(value) => value.and_then(|value| value.cursor),
+                Err(err) => {
+                    tracing::warn!(peer_node_id = %peer.id, error = %err, "failed to load push cursor");
+                    continue;
+                }
+            };
+            let since = match parse_since(push_cursor.as_deref()) {
+                Ok(since) => since,
+                Err(err) => {
+                    tracing::warn!(peer_node_id = %peer.id, error = %err.body.message, "stored push cursor is invalid");
+                    continue;
+                }
+            };
+            let request = match build_push_request(&state, since).await {
+                Ok(request) => request,
+                Err(err) => {
+                    tracing::warn!(peer_node_id = %peer.id, error = %err.body.message, "failed to build push sync payload");
+                    continue;
+                }
+            };
+            let next_cursor = request.accounts.server_time.clone();
+            let mut delivered = false;
+            for address in streamarr_peer_sync::peer_client::addresses_by_priority(&peer.addresses)
+            {
+                match peer_client
+                    .signed_post::<_, streamarr_peer_sync::PushSyncResponse>(
+                        address,
+                        "/api/v1/peer/sync-push",
+                        &request,
+                    )
+                    .await
+                {
+                    Ok(_) => {
+                        delivered = true;
+                        break;
+                    }
+                    Err(err) => tracing::warn!(
+                        peer_node_id = %peer.id,
+                        %address,
+                        error = %err,
+                        "peer push failed at this address; trying the next one"
+                    ),
+                }
+            }
+            if delivered {
+                if let Err(err) = state
+                    .peer_sync_state_repo
+                    .upsert(&streamarr_db::PeerSyncState {
+                        peer_node_id: peer.id,
+                        entity: "push".to_string(),
+                        cursor: Some(next_cursor),
+                        last_synced_at: Some(Utc::now()),
+                    })
+                    .await
+                {
+                    tracing::warn!(peer_node_id = %peer.id, error = %err, "push succeeded but its cursor could not be saved");
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use axum::body::Body;
@@ -1367,7 +1610,7 @@ mod tests {
 #[cfg(test)]
 mod sync_endpoint_tests {
     use axum::body::Body;
-    use axum::http::Request;
+    use axum::http::{Method, Request};
     use base64::Engine;
     use chrono::Duration;
     use ed25519_dalek::{Signer, SigningKey};
@@ -1478,6 +1721,34 @@ mod sync_endpoint_tests {
             .unwrap()
     }
 
+    fn signed_post<T: Serialize>(
+        path: &str,
+        payload: &T,
+        peer_id: Uuid,
+        key: &SigningKey,
+    ) -> Request<Body> {
+        let body = serde_json::to_vec(payload).unwrap();
+        let body_hash = hex::encode(Sha256::digest(&body));
+        let timestamp = Utc::now().timestamp().to_string();
+        let nonce = "test-push-nonce";
+        let signed = format!("POST|{path}|{body_hash}|{timestamp}|{nonce}");
+        let signature = key.sign(signed.as_bytes());
+
+        Request::builder()
+            .method("POST")
+            .uri(path)
+            .header(PEER_ID_HEADER, peer_id.to_string())
+            .header(
+                SIGNATURE_HEADER,
+                base64::engine::general_purpose::STANDARD.encode(signature.to_bytes()),
+            )
+            .header(TIMESTAMP_HEADER, timestamp)
+            .header(NONCE_HEADER, nonce)
+            .header("content-type", "application/json")
+            .body(Body::from(body))
+            .unwrap()
+    }
+
     async fn body_json(response: axum::response::Response) -> serde_json::Value {
         let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
@@ -1488,17 +1759,24 @@ mod sync_endpoint_tests {
     #[tokio::test]
     async fn every_sync_endpoint_rejects_an_unsigned_request() {
         let (router, _state) = test_state().await;
-        for path in [
-            "/api/v1/peer/nodes",
-            "/api/v1/peer/accounts",
-            "/api/v1/peer/invites",
-            "/api/v1/peer/libraries",
-            "/api/v1/peer/availability",
-            "/api/v1/peer/routing-rules",
+        for (method, path) in [
+            (Method::GET, "/api/v1/peer/nodes"),
+            (Method::GET, "/api/v1/peer/accounts"),
+            (Method::GET, "/api/v1/peer/invites"),
+            (Method::GET, "/api/v1/peer/libraries"),
+            (Method::GET, "/api/v1/peer/availability"),
+            (Method::GET, "/api/v1/peer/routing-rules"),
+            (Method::POST, "/api/v1/peer/sync-push"),
         ] {
             let response = router
                 .clone()
-                .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(path)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
                 .await
                 .unwrap();
             assert_eq!(
@@ -1507,6 +1785,100 @@ mod sync_endpoint_tests {
                 "expected {path} to reject an unsigned request"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn push_sync_accepts_accounts_from_an_outbound_only_peer() {
+        use streamarr_peer_sync::{account_sync, availability_sync, membership_sync, routing_sync};
+
+        let (router, state) = test_state().await;
+        let peer_id = Uuid::new_v4();
+        let key = signing_key();
+        seed_group_and_signed_peer(&state, peer_id, &key).await;
+        let policy = sample_policy(Uuid::new_v4());
+        let user = User {
+            id: Uuid::new_v4(),
+            username: format!("pushed-{}", Uuid::new_v4()),
+            display_name: "Pushed User".to_string(),
+            email: None,
+            password_hash: Sensitive::new("pushed-password-hash".to_string()),
+            policy_id: policy.id,
+            created_at: Utc::now(),
+            disabled: false,
+            preferred_audio_language: "en".to_string(),
+        };
+        let server_time = Utc::now().timestamp_millis().to_string();
+        let payload = streamarr_peer_sync::PushSyncRequest {
+            membership: membership_sync::NodesResponse {
+                rows: state.app.peer_node_repo.list_all().await.unwrap(),
+            },
+            accounts: account_sync::AccountsResponse {
+                users: vec![account_sync::UserSyncRow {
+                    user: user.clone(),
+                    updated_at: Utc::now(),
+                    origin_peer_id: Some(peer_id),
+                    deleted_at: None,
+                }],
+                policies: vec![account_sync::PolicySyncRow {
+                    policy,
+                    updated_at: Utc::now(),
+                    origin_peer_id: Some(peer_id),
+                    deleted_at: None,
+                }],
+                server_time: server_time.clone(),
+            },
+            invites: account_sync::InvitesResponse {
+                invites: vec![],
+                invite_requests: vec![],
+                server_time: server_time.clone(),
+            },
+            libraries: account_sync::LibrariesResponse {
+                source_instances: vec![],
+                group_libraries: vec![],
+                server_time: server_time.clone(),
+            },
+            availability: availability_sync::AvailabilityResponse {
+                rows: vec![],
+                server_time: server_time.clone(),
+            },
+            routing_rules: routing_sync::RoutingRulesResponse {
+                rows: vec![],
+                server_time: server_time.clone(),
+            },
+        };
+
+        let response = router
+            .oneshot(signed_post(
+                "/api/v1/peer/sync-push",
+                &payload,
+                peer_id,
+                &key,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let persisted = state
+            .app
+            .user_repo
+            .find_by_id(user.id)
+            .await
+            .unwrap()
+            .expect("pushed user must be applied");
+        assert_eq!(persisted.id, user.id);
+        assert_eq!(persisted.username, user.username);
+        assert_eq!(persisted.policy_id, user.policy_id);
+        assert_eq!(
+            state
+                .app
+                .peer_sync_state_repo
+                .get(peer_id, "accounts")
+                .await
+                .unwrap()
+                .unwrap()
+                .cursor
+                .as_deref(),
+            Some(server_time.as_str())
+        );
     }
 
     #[tokio::test]

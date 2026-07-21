@@ -1,6 +1,7 @@
 //! [`SourceInstance`]: a configured connection to one of the *arr apps
 //! Streamarr treats as a source of catalog/download truth.
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -59,4 +60,21 @@ pub struct SourceInstance {
     /// substitute a `RoutingRule`/`Policy::group_library_allow` can actually
     /// reference.
     pub group_library_id: Option<Uuid>,
+}
+
+/// Credential-free identity of one source instance as shared with peer
+/// nodes. Connection details stay local; timestamps carry updates and
+/// tombstones safely through cursor-based peer synchronisation.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct SourceInstanceIdentity {
+    pub id: Uuid,
+    pub kind: SourceKind,
+    pub name: String,
+    pub priority: i32,
+    pub group_library_id: Option<Uuid>,
+    #[serde(default)]
+    pub updated_at: DateTime<Utc>,
+    #[serde(default)]
+    pub deleted_at: Option<DateTime<Utc>>,
 }

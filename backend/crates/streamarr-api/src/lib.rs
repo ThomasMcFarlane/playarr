@@ -339,6 +339,7 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(peer::libraries_handler))
         .routes(routes!(peer::availability_handler))
         .routes(routes!(peer::routing_rules_handler))
+        .routes(routes!(peer::push_sync_handler))
 }
 
 pub fn openapi_spec() -> utoipa::openapi::OpenApi {
@@ -573,6 +574,14 @@ pub struct AppState {
     /// resolve_route_for_local_media_file`), which needs the raw rows
     /// `CatalogService` doesn't expose back out.
     pub peer_leaf_availability_repo: Arc<dyn streamarr_db::PeerLeafAvailabilityRepo>,
+    /// Credential-free source identities learned from each peer.
+    pub peer_source_instance_repo: Arc<dyn streamarr_db::PeerSourceInstanceRepo>,
+    /// Per-peer entity cursors shared by pull and pushed page ingestion.
+    pub peer_sync_state_repo: Arc<dyn streamarr_db::PeerSyncStateRepo>,
+    /// Durable record of LWW conflicts discovered while accepting a push.
+    pub sync_conflict_log_repo: Arc<dyn streamarr_db::SyncConflictLogRepo>,
+    /// Cross-replica lock provider used to elect one push loop per peer.
+    pub coordinator: Arc<dyn streamarr_coordination::ClusterCoordinator>,
     /// Shared `reqwest::Client` (its own internal connection pool) for
     /// every Phase 3 outbound node-to-node call this crate's request
     /// handlers make directly -- `playback::forward_negotiation_to_peer`'s

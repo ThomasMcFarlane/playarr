@@ -1285,9 +1285,7 @@ export interface paths {
         /**
          * This node's own `source_instances` (identity only) + this group's
          *     `group_libraries`, both updated since `since` -- the read behind
-         *     `streamarr_peer_sync::account_sync::sync_libraries` (which only
-         *     consumes the `group_libraries` half -- see [`LibrariesResponse`]'s doc
-         *     comment).
+         *     `streamarr_peer_sync::account_sync::sync_libraries`.
          */
         get: operations["libraries_handler"];
         put?: never;
@@ -1424,6 +1422,28 @@ export interface paths {
         get: operations["peer_stream_media_handler"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/peer/sync-push": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accepts the same signed entity pages as the pull endpoints, in one
+         *     aggregate request. This is the receiving half of outbound-only node
+         *     support: a node behind NAT publishes to a reachable peer, while its
+         *     existing pull poller retrieves changes in the opposite direction.
+         */
+        post: operations["push_sync_handler"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2504,15 +2524,8 @@ export interface components {
         };
         /**
          * @description Response body for [`libraries_handler`] -- `docs/architecture/
-         *     peer-groups.md` §3.6: `source_instances` identity-only rows (no
-         *     `api_key_encrypted`) + `group_libraries`. `streamarr_peer_sync::
-         *     account_sync::LibrariesResponse` only deserializes `group_libraries`/
-         *     `server_time` (its own doc comment explains why: no local sink table
-         *     for another peer's `SourceInstance` identity exists yet) -- the extra
-         *     `source_instances` field here is additive and simply ignored by that
-         *     consumer's `serde_json::from_slice`, not a byte-for-byte mismatch: a
-         *     consumer with no `deny_unknown_fields` tolerates unrecognized top-level
-         *     fields by design.
+         *     peer-groups.md` §3.6: credential-free `source_instances` identity rows
+         *     plus `group_libraries`.
          */
         LibrariesResponse: {
             group_libraries: components["schemas"]["GroupLibrary"][];
@@ -3627,16 +3640,13 @@ export interface components {
             username: string;
         };
         /**
-         * @description Identity-only projection of this node's own `SourceInstance` rows --
-         *     `docs/architecture/peer-groups.md` §3.1's table: "`source_instances`
-         *     identity only (id, kind, name, priority, `group_library_id`) ... never
-         *     `api_key_encrypted`." Also never `base_url`: an *arr base URL is
-         *     exactly as node-local/credential-adjacent as the API key that
-         *     authenticates against it -- see `SourceInstanceRepo::list_updated_since`'s
-         *     own doc comment, which explicitly leaves stripping non-identity fields
-         *     to the calling endpoint handler (this one).
+         * @description Credential-free identity of one source instance as shared with peer
+         *     nodes. Connection details stay local; timestamps carry updates and
+         *     tombstones safely through cursor-based peer synchronisation.
          */
         SourceInstanceIdentity: {
+            /** Format: date-time */
+            deleted_at?: string | null;
             /** Format: uuid */
             group_library_id?: string | null;
             /** Format: uuid */
@@ -3645,6 +3655,8 @@ export interface components {
             name: string;
             /** Format: int32 */
             priority: number;
+            /** Format: date-time */
+            updated_at?: string;
         };
         /**
          * @description Request body for registering (or re-registering, by re-POSTing with the
@@ -8478,6 +8490,38 @@ export interface operations {
             };
             /** @description Unknown media_file_id, or the file no longer exists on disk */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    push_sync_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pushed peer sync pages accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed pushed sync payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing/invalid peer signature, or an unknown/left peer */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

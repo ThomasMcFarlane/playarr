@@ -265,7 +265,7 @@ async fn serve() -> anyhow::Result<()> {
     let _worker_handles = if config.role.runs_worker() {
         boot_worker(
             pool.clone(),
-            coordinator,
+            coordinator.clone(),
             source_instances.clone(),
             active_sessions.clone(),
             tdarr_notify_rx,
@@ -290,6 +290,7 @@ async fn serve() -> anyhow::Result<()> {
                 session_registry,
                 analytics,
                 analytics_event_rx,
+                coordinator,
             )
             .await
         } else {
@@ -872,6 +873,7 @@ async fn boot_api(
     session_registry: Arc<dyn streamarr_telemetry::analytics::SessionRegistry>,
     analytics: Arc<streamarr_telemetry::analytics::AnalyticsCollector>,
     analytics_event_rx: tokio::sync::mpsc::Receiver<streamarr_model::PlaybackEvent>,
+    coordinator: Arc<dyn streamarr_coordination::ClusterCoordinator>,
 ) -> anyhow::Result<()> {
     use streamarr_api::user_directory::RepoBackedUserDirectory;
     use streamarr_api::{
@@ -887,18 +889,20 @@ async fn boot_api(
         seed_default_views, SqlxCreditRepo, SqlxDeviceRepo, SqlxDownloadTicketRepo,
         SqlxGroupLibraryRepo, SqlxLibraryViewRepo, SqlxMediaFileRepo, SqlxNodeIdentityRepo,
         SqlxPeerGroupRepo, SqlxPeerJoinTokenRepo, SqlxPeerLeafAvailabilityRepo, SqlxPeerNodeRepo,
-        SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo, SqlxPushRegistrationRepo,
-        SqlxRefreshTokenRepo, SqlxRenditionRepo, SqlxRoutingRuleRepo, SqlxSourceInstanceRepo,
+        SqlxPeerSourceInstanceRepo, SqlxPeerSyncStateRepo, SqlxPlaylistRepo, SqlxPolicyRepo,
+        SqlxProfilePinRepo, SqlxPushRegistrationRepo, SqlxRefreshTokenRepo, SqlxRenditionRepo,
+        SqlxRoutingRuleRepo, SqlxSourceInstanceRepo, SqlxSyncConflictLogRepo,
         SqlxSystemSettingsRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo,
         SqlxUserInviteRequestRepo, SqlxUserRepo, SqlxWatchProgressRepo, SqlxWorkRepo,
     };
     use streamarr_db::{
         CreditRepo, DeviceRepo, DownloadTicketRepo, GroupLibraryRepo, LibraryViewRepo,
         MediaFileRepo, NodeIdentityRepo, PeerGroupRepo, PeerJoinTokenRepo,
-        PeerLeafAvailabilityRepo, PeerNodeRepo, PlaylistRepo, PolicyRepo, ProfilePinRepo,
-        PushRegistrationRepo, RenditionRepo, RoutingRuleRepo, SourceInstanceRepo,
-        SystemSettingsRepo, TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo,
-        WatchProgressRepo, WorkRepo,
+        PeerLeafAvailabilityRepo, PeerNodeRepo, PeerSourceInstanceRepo, PeerSyncStateRepo,
+        PlaylistRepo, PolicyRepo, ProfilePinRepo, PushRegistrationRepo, RenditionRepo,
+        RoutingRuleRepo, SourceInstanceRepo, SyncConflictLogRepo, SystemSettingsRepo,
+        TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo, WatchProgressRepo,
+        WorkRepo,
     };
     use streamarr_model::{VersionEnvelope, DEFAULT_INSTANCE_NAME};
 
@@ -998,6 +1002,12 @@ async fn boot_api(
     // §5.2) -- hence the clone before this `Arc` is moved into `catalog`.
     let peer_leaf_availability_repo: Arc<dyn PeerLeafAvailabilityRepo> =
         Arc::new(SqlxPeerLeafAvailabilityRepo::new(pool.clone()));
+    let peer_source_instance_repo: Arc<dyn PeerSourceInstanceRepo> =
+        Arc::new(SqlxPeerSourceInstanceRepo::new(pool.clone()));
+    let peer_sync_state_repo: Arc<dyn PeerSyncStateRepo> =
+        Arc::new(SqlxPeerSyncStateRepo::new(pool.clone()));
+    let sync_conflict_log_repo: Arc<dyn SyncConflictLogRepo> =
+        Arc::new(SqlxSyncConflictLogRepo::new(pool.clone()));
     let peer_leaf_availability_repo_for_state = peer_leaf_availability_repo.clone();
     // Mint (or load) this installation's own durable Ed25519 identity
     // before `state` (and therefore the router) is ever constructed -- the
@@ -1239,6 +1249,10 @@ async fn boot_api(
         media_file_repo,
         routing_rule_repo,
         peer_leaf_availability_repo: peer_leaf_availability_repo_for_state,
+        peer_source_instance_repo,
+        peer_sync_state_repo,
+        sync_conflict_log_repo,
+        coordinator,
         peer_http,
     };
     let version_gate = VersionGateLayer::new(compatibility_table);
@@ -1257,6 +1271,22 @@ async fn boot_api(
         500,
     );
     tokio::spawn(analytics_flusher.run());
+
+    // Push complements the worker's normal pull pollers. Running it in the
+    // API role gives a node with outbound-only connectivity a signed path to
+    // publish its local changes to a reachable peer; that same node's worker
+    // still pulls the peer's changes in the opposite direction.
+    let push_identity = streamarr_peer_sync::PeerIdentity::from_seed_b64(
+        node_identity.peer_id,
+        node_identity.private_key.expose_secret(),
+    )
+    .map_err(|err| anyhow::anyhow!("failed to load peer identity for push sync: {err}"))?;
+    let push_client = streamarr_peer_sync::PeerClient::new(state.peer_http.clone(), push_identity);
+    tokio::spawn(streamarr_api::peer::run_push_sync_loop(
+        state.clone(),
+        push_client,
+        peer_sync_interval_secs_from_env(),
+    ));
 
     let (router, _openapi) = build_router(state, version_gate, web_assets_dir_from_env());
 
@@ -1529,6 +1559,7 @@ fn spawn_peer_sync_poller_for(
     user_repo: Arc<dyn streamarr_db::UserRepo>,
     policy_repo: Arc<dyn streamarr_db::PolicyRepo>,
     group_library_repo: Arc<dyn streamarr_db::GroupLibraryRepo>,
+    peer_source_instance_repo: Arc<dyn streamarr_db::PeerSourceInstanceRepo>,
     user_invite_repo: Arc<dyn streamarr_db::UserInviteRepo>,
     user_invite_request_repo: Arc<dyn streamarr_db::UserInviteRequestRepo>,
     work_repo: Arc<dyn streamarr_db::WorkRepo>,
@@ -1552,6 +1583,7 @@ fn spawn_peer_sync_poller_for(
         user_repo,
         policy_repo,
         group_library_repo,
+        peer_source_instance_repo,
         user_invite_repo,
         user_invite_request_repo,
         work_repo,
@@ -1591,15 +1623,15 @@ async fn boot_worker(
     use streamarr_db::repo::{
         SqlxCreditRepo, SqlxEmbeddingRepo, SqlxGroupLibraryRepo, SqlxMediaFileRepo,
         SqlxNodeIdentityRepo, SqlxPeerLeafAvailabilityRepo, SqlxPeerNodeRepo,
-        SqlxPeerSyncStateRepo, SqlxPolicyRepo, SqlxRoutingRuleRepo, SqlxSourceInstanceRepo,
-        SqlxSyncConflictLogRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxUserRepo,
-        SqlxWorkRepo,
+        SqlxPeerSourceInstanceRepo, SqlxPeerSyncStateRepo, SqlxPolicyRepo, SqlxRoutingRuleRepo,
+        SqlxSourceInstanceRepo, SqlxSyncConflictLogRepo, SqlxUserInviteRepo,
+        SqlxUserInviteRequestRepo, SqlxUserRepo, SqlxWorkRepo,
     };
     use streamarr_db::{
         CreditRepo, EmbeddingRepo, GroupLibraryRepo, MediaFileRepo, NodeIdentityRepo,
-        PeerLeafAvailabilityRepo, PeerNodeRepo, PeerSyncStateRepo, PolicyRepo, RoutingRuleRepo,
-        SourceInstanceRepo, SyncConflictLogRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo,
-        WorkRepo,
+        PeerLeafAvailabilityRepo, PeerNodeRepo, PeerSourceInstanceRepo, PeerSyncStateRepo,
+        PolicyRepo, RoutingRuleRepo, SourceInstanceRepo, SyncConflictLogRepo, UserInviteRepo,
+        UserInviteRequestRepo, UserRepo, WorkRepo,
     };
 
     let mut handles = Vec::new();
@@ -1623,6 +1655,8 @@ async fn boot_worker(
     let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
     let group_library_repo: Arc<dyn GroupLibraryRepo> =
         Arc::new(SqlxGroupLibraryRepo::new(pool.clone()));
+    let peer_source_instance_repo: Arc<dyn PeerSourceInstanceRepo> =
+        Arc::new(SqlxPeerSourceInstanceRepo::new(pool.clone()));
     let routing_rule_repo: Arc<dyn RoutingRuleRepo> =
         Arc::new(SqlxRoutingRuleRepo::new(pool.clone()));
     let user_invite_repo: Arc<dyn UserInviteRepo> = Arc::new(SqlxUserInviteRepo::new(pool.clone()));
@@ -1862,6 +1896,7 @@ async fn boot_worker(
                                     user_repo.clone(),
                                     policy_repo.clone(),
                                     group_library_repo.clone(),
+                                    peer_source_instance_repo.clone(),
                                     user_invite_repo.clone(),
                                     user_invite_request_repo.clone(),
                                     work_repo.clone(),

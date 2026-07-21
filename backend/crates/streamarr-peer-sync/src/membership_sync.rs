@@ -45,6 +45,17 @@ pub async fn sync_membership(
     let response: NodesResponse = peer_client
         .signed_get(base_url, "/api/v1/peer/nodes")
         .await?;
+    apply_membership(peer_node_repo, self_peer_id, response, base_url).await
+}
+
+/// Applies a membership page received either through the normal pull endpoint
+/// or through a peer-initiated push exchange.
+pub async fn apply_membership(
+    peer_node_repo: &Arc<dyn PeerNodeRepo>,
+    self_peer_id: Uuid,
+    response: NodesResponse,
+    source: &str,
+) -> Result<usize, PeerClientError> {
     let count = response.rows.len();
     for mut member in response.rows {
         member.is_self = member.id == self_peer_id;
@@ -52,7 +63,7 @@ pub async fn sync_membership(
             .get(member.id)
             .await
             .map_err(|err| PeerClientError::Status {
-                url: format!("{base_url}/api/v1/peer/nodes"),
+                url: format!("{source}/api/v1/peer/nodes"),
                 status: reqwest::StatusCode::INTERNAL_SERVER_ERROR,
                 body: format!("failed to load local peer node before merge: {err}"),
             })?
@@ -64,7 +75,7 @@ pub async fn sync_membership(
             .upsert(&member)
             .await
             .map_err(|err| PeerClientError::Status {
-                url: format!("{base_url}/api/v1/peer/nodes"),
+                url: format!("{source}/api/v1/peer/nodes"),
                 status: reqwest::StatusCode::INTERNAL_SERVER_ERROR,
                 body: format!("failed to persist gossiped peer node: {err}"),
             })?;

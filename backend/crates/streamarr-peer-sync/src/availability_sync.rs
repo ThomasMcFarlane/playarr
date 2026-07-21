@@ -159,6 +159,25 @@ pub async fn sync_availability(
     };
     let response: AvailabilityResponse = peer_client.signed_get(base_url, &path).await?;
 
+    apply_availability_response(
+        response,
+        peer_node_id,
+        work_repo,
+        availability_repo,
+        sync_state_repo,
+    )
+    .await
+}
+
+/// Applies an availability snapshot delivered by either pull or push transport.
+pub async fn apply_availability_response(
+    response: AvailabilityResponse,
+    peer_node_id: Uuid,
+    work_repo: &Arc<dyn WorkRepo>,
+    availability_repo: &Arc<dyn PeerLeafAvailabilityRepo>,
+    sync_state_repo: &Arc<dyn streamarr_db::PeerSyncStateRepo>,
+) -> Result<usize, AvailabilitySyncError> {
+    const ENTITY: &str = "availability";
     let mut applied = 0usize;
     for row in &response.rows {
         let local_work_id = resolve_local_work(work_repo, row).await?;

@@ -54,14 +54,13 @@ pub trait SourceInstanceRepo: Send + Sync {
     /// filtered on `deleted_at IS NULL`, unlike [`Self::list_all`] -- see
     /// `crate::repo::user::UserRepo::list_updated_since`'s doc comment for
     /// why a tombstoned row must still be reported. Returns the **full**
-    /// [`SourceInstance`], `api_key_encrypted` included: it is the calling
-    /// endpoint handler's job, not this repository's, to strip that field
-    /// (and any other node-local-only field -- see this module's own doc
-    /// comment and §3.1's table) before a row goes out over the wire.
+    /// [`SourceInstance`], `api_key_encrypted` included, paired with its
+    /// sync metadata: the calling endpoint strips node-local fields before
+    /// the row goes out over the wire.
     async fn list_updated_since(
         &self,
         since: Option<DateTime<Utc>>,
-    ) -> Result<Vec<SourceInstance>, DbError>;
+    ) -> Result<Vec<(SourceInstance, crate::repo::SyncMetadata)>, DbError>;
 }
 
 pub struct SqlxSourceInstanceRepo {
@@ -99,6 +98,29 @@ impl SqlxSourceInstanceRepo {
             best_effort: bool_from_i64(best_effort),
             group_library_id: group_library_id.as_deref().map(parse_uuid).transpose()?,
         })
+    }
+
+    fn from_row_with_metadata(
+        row: &AnyRow,
+    ) -> Result<(SourceInstance, crate::repo::SyncMetadata), DbError> {
+        let instance = Self::from_row(row)?;
+        let updated_at: Option<String> = row.try_get("updated_at")?;
+        let deleted_at: Option<String> = row.try_get("deleted_at")?;
+        Ok((
+            instance,
+            crate::repo::SyncMetadata {
+                updated_at: updated_at
+                    .as_deref()
+                    .map(crate::codec::parse_datetime)
+                    .transpose()?
+                    .unwrap_or_default(),
+                origin_peer_id: None,
+                deleted_at: deleted_at
+                    .as_deref()
+                    .map(crate::codec::parse_datetime)
+                    .transpose()?,
+            },
+        ))
     }
 }
 
@@ -178,14 +200,18 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
         // returning `NotFound` exactly like the hard delete this replaced.
         let sql = match self.backend {
             Backend::Sqlite => {
-                "UPDATE source_instances SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL"
+                "UPDATE source_instances SET updated_at = ?, deleted_at = ? \
+                 WHERE id = ? AND deleted_at IS NULL"
             }
             Backend::Postgres => {
-                "UPDATE source_instances SET deleted_at = $1 WHERE id = $2 AND deleted_at IS NULL"
+                "UPDATE source_instances SET updated_at = $1, deleted_at = $2 \
+                 WHERE id = $3 AND deleted_at IS NULL"
             }
         };
+        let deleted_at = format_datetime(chrono::Utc::now());
         let result = sqlx::query(sql)
-            .bind(format_datetime(chrono::Utc::now()))
+            .bind(&deleted_at)
+            .bind(&deleted_at)
             .bind(id.to_string())
             .execute(&self.pool)
             .await?;
@@ -198,10 +224,10 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
     async fn list_updated_since(
         &self,
         since: Option<DateTime<Utc>>,
-    ) -> Result<Vec<SourceInstance>, DbError> {
+    ) -> Result<Vec<(SourceInstance, crate::repo::SyncMetadata)>, DbError> {
         const SELECT: &str = "id, kind, name, base_url, api_key_encrypted, priority, \
                                default_root_folder_id, default_quality_profile_id, best_effort, \
-                               group_library_id";
+                               group_library_id, updated_at, deleted_at";
         // Deliberately no `WHERE deleted_at IS NULL` -- see this trait
         // method's own doc comment.
         let sql = match (self.backend, since.is_some()) {
@@ -225,7 +251,7 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
             query = query.bind(format_datetime(since));
         }
         let rows = query.fetch_all(&self.pool).await?;
-        rows.iter().map(Self::from_row).collect()
+        rows.iter().map(Self::from_row_with_metadata).collect()
     }
 }
 
@@ -432,7 +458,7 @@ mod tests {
         repo.delete(tombstoned.id).await.unwrap();
 
         let rows = repo.list_updated_since(None).await.unwrap();
-        let ids: Vec<Uuid> = rows.iter().map(|instance| instance.id).collect();
+        let ids: Vec<Uuid> = rows.iter().map(|(instance, _)| instance.id).collect();
         assert!(ids.contains(&kept.id));
         assert!(
             ids.contains(&tombstoned.id),
@@ -471,7 +497,7 @@ mod tests {
             .unwrap();
 
         let rows = repo.list_updated_since(Some(cursor)).await.unwrap();
-        let ids: Vec<Uuid> = rows.iter().map(|instance| instance.id).collect();
+        let ids: Vec<Uuid> = rows.iter().map(|(instance, _)| instance.id).collect();
         assert!(
             !ids.contains(&old.id),
             "a row at or before the cursor must not be re-reported"
@@ -504,7 +530,30 @@ mod tests {
             .unwrap();
 
         let rows = repo.list_updated_since(None).await.unwrap();
-        let position = |id: Uuid| rows.iter().position(|instance| instance.id == id).unwrap();
+        let position = |id: Uuid| {
+            rows.iter()
+                .position(|(instance, _)| instance.id == id)
+                .unwrap()
+        };
         assert!(position(older.id) < position(newer.id));
+    }
+
+    #[tokio::test]
+    async fn delete_advances_updated_at_and_reports_tombstone_after_cursor() {
+        let pool = test_sqlite_pool().await;
+        let repo = SqlxSourceInstanceRepo::new(pool);
+        let instance = sample_instance(SourceKind::Sonarr, "Deleted After Cursor");
+        repo.upsert(&instance).await.unwrap();
+        let before_delete = Utc::now().trunc_subsecs(3) - chrono::Duration::milliseconds(1);
+
+        repo.delete(instance.id).await.unwrap();
+
+        let rows = repo.list_updated_since(Some(before_delete)).await.unwrap();
+        let (_, metadata) = rows
+            .iter()
+            .find(|(row, _)| row.id == instance.id)
+            .expect("the tombstone must be visible beyond the earlier cursor");
+        assert!(metadata.deleted_at.is_some());
+        assert!(metadata.updated_at >= before_delete);
     }
 }

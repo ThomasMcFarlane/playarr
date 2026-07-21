@@ -97,8 +97,9 @@ call this document makes. Full rationale is in the referenced section.
   `LeafSelector`, §4.2) is a natural, low-risk follow-up once this lands,
   noted in §8 as future work, not built here.
 - No hosted broker/relay service is introduced. Every mechanism below is
-  either peer-to-peer or reuses the existing static `playarr.app`/hosted-
-  brand client shell, which remains stateless.
+  peer-to-peer, including the outbound push exchange used when a peer cannot
+  accept inbound connections, or reuses the existing static `playarr.app`/
+  hosted-brand client shell, which remains stateless.
 
 ---
 
@@ -608,8 +609,9 @@ one HTTP call an admin makes and watches succeed or fail.
 5. B persists `group_id` into its own `node_identity`, and upserts A plus
    every member A told it about into its own `peer_nodes`.
 6. From here, `PeerSyncPoller`'s membership sync (§3.6) converges any
-   further membership changes symmetrically. Enrollment is the **only**
-   push in the protocol; everything else is a pull.
+   further membership changes symmetrically. Every node pulls normally and
+   also publishes its locally changed pages through the signed push exchange,
+   so a node with outbound-only connectivity can still synchronise both ways.
 
 **Leaving this node**: `DELETE /api/v1/admin/peer-groups/self` notifies
 each reachable member through signed `DELETE /api/v1/peer/nodes/{id}`
@@ -632,7 +634,7 @@ leaving. Re-running a failed join is safe: it's idempotent by peer identity
 
 ### 3.5 Consistency model and conflict resolution
 
-Eventually-consistent, **pull-based**, poll-as-truth: the same spirit as
+Eventually-consistent, **push-and-pull**, poll-as-truth: the same spirit as
 `ReconciliationPoller`, generalized because (unlike arr-sync, where one
 *arr app is the single source of truth per row) **any** peer can be the
 origin of a write to `users`/`policies`/`user_invites`/`group_libraries`/
@@ -689,6 +691,14 @@ consecutive full-cycle failures, that peer's `status` flips to
 `unreachable`. Already-synced data is left as-is (stale, not discarded): the same best-effort philosophy `arr-sync`'s `best_effort` flag already
 encodes.
 
+The API role also runs one outbound push pass on the same interval. It sends
+all entity pages changed since that target peer's durable `push` cursor, plus
+full membership and availability snapshots, to the first reachable address.
+The receiver applies those pages through the same merge functions and normal
+per-entity cursors used by pull. Consequently, if node B can dial node A but A
+cannot dial B, B pulls A's changes and pushes B's changes over B-initiated
+connections; no reverse tunnel or hosted broker is required.
+
 Inbound endpoints, `streamarr-api/src/peer.rs` (new file), all
 `PeerSignedRequest`-gated except `enroll` (bearer is the one-shot join
 token instead):
@@ -702,6 +712,7 @@ token instead):
 | `GET /api/v1/peer/libraries?since=` | `source_instances` identity-only rows (no `api_key_encrypted`) + `group_libraries` |
 | `GET /api/v1/peer/availability?since=` | this peer's own `peer_leaf_availability`-shaped rows, derived live from its own `MediaFileRepo` |
 | `GET /api/v1/peer/routing-rules?since=` | `routing_rules` rows |
+| `POST /api/v1/peer/sync-push` | applies the caller's incremental entity pages through the normal pull merge rules |
 
 Each response is `{rows: [...], server_time: <next cursor>}`: a standard
 cursor-polling shape, `server_time` persisted into `peer_sync_state.cursor`

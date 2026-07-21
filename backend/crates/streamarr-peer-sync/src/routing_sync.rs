@@ -118,6 +118,27 @@ pub async fn sync_routing_rules(
     };
     let response: RoutingRulesResponse = peer_client.signed_get(base_url, &path).await?;
 
+    apply_routing_rules_response(
+        response,
+        peer_node_id,
+        self_peer_id,
+        routing_rule_repo,
+        sync_state_repo,
+        conflict_log_repo,
+    )
+    .await
+}
+
+/// Applies routing rules delivered by either pull or push transport.
+pub async fn apply_routing_rules_response(
+    response: RoutingRulesResponse,
+    peer_node_id: Uuid,
+    self_peer_id: Uuid,
+    routing_rule_repo: &Arc<dyn RoutingRuleRepo>,
+    sync_state_repo: &Arc<dyn streamarr_db::PeerSyncStateRepo>,
+    conflict_log_repo: &Arc<dyn SyncConflictLogRepo>,
+) -> Result<usize, RoutingSyncError> {
+    const ENTITY: &str = "routing_rules";
     let mut applied = 0usize;
     for rule in &response.rows {
         let existing = routing_rule_repo.get(rule.id).await?;
