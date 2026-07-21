@@ -41,7 +41,10 @@ sub init()
     m.playbackEnded = true
     m.lastVideoState = ""
     m.session = LoadSession()
-    m.serverUrl = NormaliseServerUrl(m.session.serverUrl)
+    m.serverAddresses = m.session.serverUrls
+    m.serverIndex = 0
+    m.serverUrl = ""
+    if m.serverAddresses.Count() > 0 then m.serverUrl = m.serverAddresses[0]
     m.accessToken = m.session.accessToken
     m.refreshToken = m.session.refreshToken
     m.deviceId = m.session.deviceId
@@ -52,16 +55,33 @@ sub init()
     if m.serverUrl = ""
         openServerDialog()
     else
-        showStatus("Connecting", "Checking " + m.serverUrl + "…", true)
-        sendApi("version", "GET", "/api/system/version", invalid, false)
+        connectToServer()
     end if
 end sub
+
+sub connectToServer()
+    showStatus("Connecting", "Checking " + m.serverUrl + "…", true)
+    sendApi("version", "GET", "/api/system/version", invalid, false)
+end sub
+
+' Advances to the next remembered server address and retries the
+' connectivity check against it. A simple sequential "try next on
+' failure" loop -- not a parallel fan-out. Returns false once every
+' remembered address has failed, so the caller falls through to the
+' normal failure UI instead.
+function tryNextServerAddress() as Boolean
+    if m.serverIndex + 1 >= m.serverAddresses.Count() then return false
+    m.serverIndex += 1
+    m.serverUrl = m.serverAddresses[m.serverIndex]
+    connectToServer()
+    return true
+end function
 
 sub openServerDialog()
     dialog = CreateObject("roSGNode", "StandardKeyboardDialog")
     dialog.title = "Connect to Streamarr"
-    dialog.message = "Enter the full HTTP or HTTPS server address."
-    dialog.text = m.serverUrl
+    dialog.message = "Enter the full HTTP or HTTPS server address. Separate multiple addresses with commas to add fallback servers."
+    dialog.text = joinStrings(m.serverAddresses, ", ")
     dialog.buttons = ["Connect"]
     dialog.ObserveField("buttonSelected", "onServerDialogButton")
     m.top.dialog = dialog
@@ -69,16 +89,17 @@ end sub
 
 sub onServerDialogButton(event as Object)
     if event.GetData() <> 0 then return
-    candidate = NormaliseServerUrl(m.top.dialog.text)
-    if candidate = ""
-        m.top.dialog.message = "Use a full address such as https://streamarr.example.invalid"
+    candidates = NormaliseServerUrlList(m.top.dialog.text)
+    if candidates.Count() = 0
+        m.top.dialog.message = "Use one or more full addresses such as https://streamarr.example.invalid"
         return
     end if
-    m.serverUrl = candidate
-    SaveServerUrl(candidate)
+    m.serverAddresses = candidates
+    m.serverIndex = 0
+    m.serverUrl = candidates[0]
+    SaveServerAddresses(candidates)
     m.top.dialog.close = true
-    showStatus("Connecting", "Checking " + candidate + "…", true)
-    sendApi("version", "GET", "/api/system/version", invalid, false)
+    connectToServer()
 end sub
 
 sub sendApi(action as String, method as String, path as String, body as Dynamic, authenticated = true as Boolean)
@@ -119,6 +140,9 @@ sub onApiResult(event as Object)
             m.retryRequest = request
             refreshSession()
             return
+        end if
+        if action = "version"
+            if tryNextServerAddress() then return
         end if
         handleApiFailure(action, result)
         return
@@ -307,6 +331,8 @@ sub onProfileActionSelected(event as Object)
         beginPairing()
     else if index = 1
         ClearSession(false)
+        m.serverAddresses = []
+        m.serverIndex = 0
         m.serverUrl = ""
         m.accessToken = ""
         m.refreshToken = ""

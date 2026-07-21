@@ -4,8 +4,12 @@ end function
 
 function LoadSession() as Object
     section = SessionRegistry()
+    serverAddresses = LoadServerAddresses()
+    primaryServerUrl = ""
+    if serverAddresses.Count() > 0 then primaryServerUrl = serverAddresses[0]
     return {
-        serverUrl: section.Read("server_url")
+        serverUrl: primaryServerUrl
+        serverUrls: serverAddresses
         accessToken: section.Read("access_token")
         refreshToken: section.Read("refresh_token")
         deviceId: section.Read("device_id")
@@ -13,9 +17,51 @@ function LoadSession() as Object
     }
 end function
 
-sub SaveServerUrl(serverUrl as String)
+' Returns the remembered server addresses as an ordered list, most-preferred
+' (i.e. most recently saved) first. Falls back to the legacy single
+' "server_url" value for sessions saved before the multi-address list
+' existed, so upgrading never loses a remembered server.
+function LoadServerAddresses() as Object
     section = SessionRegistry()
-    section.Write("server_url", serverUrl)
+    addresses = []
+    stored = section.Read("server_urls")
+    if stored <> ""
+        parsed = ParseJson(stored)
+        if parsed <> invalid and type(parsed) = "roArray"
+            for each address in parsed
+                if address <> "" then addresses.Push(address)
+            end for
+        end if
+    end if
+    if addresses.Count() = 0
+        legacy = section.Read("server_url")
+        if legacy <> "" then addresses.Push(legacy)
+    end if
+    return addresses
+end function
+
+' Persists an ordered list of server addresses to try, most-preferred
+' first, de-duplicated. Keeps the legacy single "server_url" key in sync
+' (the first address) so ClearSession's keepServer branch keeps working
+' unchanged.
+sub SaveServerAddresses(addresses as Object)
+    section = SessionRegistry()
+    unique = []
+    for each address in addresses
+        if address <> ""
+            isDuplicate = false
+            for each existing in unique
+                if existing = address then isDuplicate = true
+            end for
+            if not isDuplicate then unique.Push(address)
+        end if
+    end for
+    section.Write("server_urls", FormatJson(unique))
+    if unique.Count() > 0
+        section.Write("server_url", unique[0])
+    else
+        section.Write("server_url", "")
+    end if
     section.Flush()
 end sub
 
@@ -36,14 +82,17 @@ end sub
 sub ClearSession(keepServer = true as Boolean)
     section = SessionRegistry()
     serverUrl = section.Read("server_url")
+    serverUrls = section.Read("server_urls")
     section.Delete("access_token")
     section.Delete("refresh_token")
     section.Delete("device_id")
     section.Delete("profile_name")
     if not keepServer
         section.Delete("server_url")
-    else if serverUrl <> ""
-        section.Write("server_url", serverUrl)
+        section.Delete("server_urls")
+    else
+        if serverUrl <> "" then section.Write("server_url", serverUrl)
+        if serverUrls <> "" then section.Write("server_urls", serverUrls)
     end if
     section.Flush()
 end sub
