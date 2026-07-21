@@ -1,0 +1,32 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: getambassador.io/v3alpha1
+kind: Host
+metadata:
+  name: {{ include "vidaa-installer.fullname" . }}
+  labels:
+    {{- include "vidaa-installer.labels" . | nindent 4 }}
+spec:
+  hostname: "*"
+  mappingSelector:
+    matchLabels:
+      {{- include "vidaa-installer.routeLabel" . | nindent 6 }}
+  tlsSecret:
+    name: {{ .Values.ingress.tlsSecretName | quote }}
+  requestPolicy:
+    insecure:
+      action: Route
+---
+apiVersion: getambassador.io/v3alpha1
+kind: Mapping
+metadata:
+  name: {{ include "vidaa-installer.fullname" . }}
+  labels:
+    {{- include "vidaa-installer.labels" . | nindent 4 }}
+    {{- include "vidaa-installer.routeLabel" . | nindent 4 }}
+spec:
+  hostname: vidaahub.com
+  prefix: /
+  rewrite: /vidaa-store/
+  service: https://playarr.app:443
+  host_rewrite: playarr.app
+{{- end }}

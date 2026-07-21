@@ -1,0 +1,26 @@
+# This chart is intentionally inert by default. Enable the Emissary route only
+# after provisioning its TLS Secret, and enable DNS interception only for the
+# installation window.
+
+nameOverride: ""
+fullnameOverride: ""
+
+dns:
+  # -- Interception policy: disabled, allowlist, or all. Keep disabled except
+  # during an installation.
+  mode: disabled
+  # -- TTL, in seconds, for the intercepted vidaahub.com A response.
+  ttl: 30
+  # -- Source IPv4 CIDRs allowed to receive the intercepted response in
+  # allowlist mode. Entries with enabled=false are ignored.
+  clients: []
+  # - cidr: 192.0.2.10/32
+  #   enabled: true
+
+ingress:
+  # -- Render the Emissary Host and Mapping. The referenced TLS Secret must be
+  # provisioned out-of-band before this is enabled.
+  enabled: false
+  # -- Name of a kubernetes.io/tls Secret in the release namespace containing
+  # the certificate and private key accepted by the target television.
+  tlsSecretName: ""

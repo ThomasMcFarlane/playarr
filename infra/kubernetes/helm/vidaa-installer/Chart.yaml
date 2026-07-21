@@ -1,0 +1,18 @@
+apiVersion: v2
+name: vidaa-installer
+description: Opt-in VIDAA launcher DNS interception and Emissary routing for Playarr
+type: application
+version: 0.1.0
+
+keywords:
+  - playarr
+  - vidaa
+  - dns
+  - emissary
+
+home: https://github.com/streamarr/streamarr
+sources:
+  - https://github.com/streamarr/streamarr
+
+maintainers:
+  - name: Streamarr maintainers

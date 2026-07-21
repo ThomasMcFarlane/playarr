@@ -13,6 +13,12 @@ other.
    minimal (no HPA/PDB/ServiceMonitor yet) - see "kustomize skeleton" below
    for what's out of scope today.
 
+The separate **`helm/vidaa-installer/`** chart is an optional companion, not a
+third Streamarr deployment path. It supplies the app-owned DNS policy and
+Emissary route needed for an experimental VIDAA launcher installation on a
+cluster that already runs the permanent LAN resolver. It is inert by default;
+see its [operator guide](./helm/vidaa-installer/README.md).
+
 Both paths deploy the same two workloads:
 
 - **`streamarr-api`** - a Deployment running the `streamarr` binary with

@@ -39,18 +39,31 @@ Playarr does not operate a public DNS resolver.
 1. Choose a DNS, proxy, or self-hosted interception method you understand and
    trust. It must be capable of presenting the custom store as `vidaahub.com`;
    a DNS record alone cannot solve HTTPS hostname and certificate validation.
-2. Temporarily set that solution's IPv4 resolver on the TV or router. Keep every
-   other network setting unchanged.
+2. Temporarily set that solution's IPv4 resolver on the TV or router, or enable
+   its source-IP policy for this television if it is already the network's
+   permanent resolver. Keep every other network setting unchanged.
 3. Open the VIDAA store or Browser route required by that solution. Accept a
    certificate warning only when you understand and trust its certificate setup.
 4. Choose **Install Playarr**, restart the television, and confirm the tile opens.
-5. Restore automatic DNS immediately, even if installation did not succeed.
+5. Restore automatic DNS or disable the `vidaahub.com` interception immediately,
+   even if installation did not succeed. A permanent resolver may remain in use
+   when that interception policy is disabled.
 
 Firmware support varies: some televisions reject the portal certificate or do
 not expose either supported installation API. The
 installer must therefore remain labelled experimental and must not replace the
 Browser route or the official VIDAA partner distribution path. Do not use random
 service-menu codes, firmware downgrades, or third-party firmware.
+
+### Repository-managed k3s installation
+
+Operators using the example cluster LAN resolver can deploy the
+`infra/kubernetes/helm/vidaa-installer` Helm chart; its `README.md` is the
+operator guide.
+It reuses the hosted `playarr.app/vidaa-store/` portal and keeps both its DNS
+interception and Emissary route explicitly opt-in. Use its one-device
+`allowlist` mode for installation and return the mode to `disabled` afterward;
+do not commit the television address, certificate, or private key.
 
 ## Register and publish through the VIDAA App Store
 

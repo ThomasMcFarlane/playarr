@@ -1,0 +1,12 @@
+The Playarr VIDAA installer release is intentionally safe by default.
+
+DNS interception: {{ .Values.dns.mode }}
+Emissary route: {{ ternary "enabled" "disabled" .Values.ingress.enabled }}
+
+Before an installation:
+1. Provision the configured vidaahub.com TLS Secret out-of-band.
+2. Enable ingress and verify the Host and Mapping are accepted by Emissary.
+3. Use dns.mode=allowlist for the target device whenever possible.
+4. Return dns.mode to disabled as soon as installation is complete.
+
+See this chart's README.md for the resolver contract and validation commands.

@@ -1,0 +1,39 @@
+{{- $enabledCidrs := list -}}
+{{- if eq .Values.dns.mode "allowlist" -}}
+  {{- range .Values.dns.clients -}}
+    {{- if .enabled -}}
+      {{- $enabledCidrs = append $enabledCidrs .cidr -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $dnsActive := or (eq .Values.dns.mode "all") (and (eq .Values.dns.mode "allowlist") (gt (len $enabledCidrs) 0)) -}}
+{{- if $dnsActive }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vidaa-installer.fullname" . }}-dns
+  labels:
+    {{- include "vidaa-installer.labels" . | nindent 4 }}
+    lan-dns.example.com/enabled: "true"
+data:
+  vidaa.server: |
+    . {
+      import lan-dns-common
+      view {{ include "vidaa-installer.fullname" . }}-a {
+        expr class() == 'IN' && name() == 'vidaahub.com.' && type() == 'A'{{- if eq .Values.dns.mode "allowlist" }} && ({{- range $index, $cidr := $enabledCidrs }}{{ if $index }} || {{ end }}incidr(client_ip(), '{{ $cidr }}'){{- end }}){{- end }}
+      }
+      template IN A {
+        answer "vidaahub.com. {{ .Values.dns.ttl }} IN A {$LAN_DNS_TARGET_IPV4}"
+      }
+    }
+
+    . {
+      import lan-dns-common
+      view {{ include "vidaa-installer.fullname" . }}-nodata {
+        expr class() == 'IN' && name() == 'vidaahub.com.' && type() != 'A'{{- if eq .Values.dns.mode "allowlist" }} && ({{- range $index, $cidr := $enabledCidrs }}{{ if $index }} || {{ end }}incidr(client_ip(), '{{ $cidr }}'){{- end }}){{- end }}
+      }
+      template IN ANY {
+        rcode NOERROR
+      }
+    }
+{{- end }}

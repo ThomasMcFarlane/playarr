@@ -39,6 +39,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and give Playarr clients ordered failover addresses.
 - Add a dedicated Peer Groups screen to Streamarr Admin for creating or joining groups, editing
   node addresses, issuing one-use join tokens, and checking every member's current status.
+- Add an opt-in VIDAA installer Helm chart with source-IP-filtered LAN DNS policy,
+  out-of-band TLS, and an Emissary route to the fixed hosted Playarr portal.
 - Give every Playarr client its own catalogue URL, with downloads, installation guidance, and
   availability details shown on one client page at a time while keeping the platform selector
   available for direct switching and using each platform circle as its sole route control.

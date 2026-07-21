@@ -20,6 +20,13 @@ activated household temporary DNS access and serve a launcher portal at the
 intercepted `vidaahub.com` hostname. It can install only the hosted Playarr URL;
 it does not provide arbitrary URL, file, console, or script controls.
 
+For the managed k3s environment, the standalone
+`infra/kubernetes/helm/vidaa-installer/` chart replaces that temporary DNS
+process with an app-owned, source-IP-filtered fragment consumed by the
+cluster-owned LAN resolver. Its Emissary route proxies the same fixed hosted
+portal, and both DNS interception and ingress remain opt-in. The Docker Compose
+gateway remains available as the self-hosted reference implementation.
+
 ## Implementation
 
 The VIDAA surface is the production client in `clients/tv-web/web/`:
