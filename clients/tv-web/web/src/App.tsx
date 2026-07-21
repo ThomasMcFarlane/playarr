@@ -515,6 +515,9 @@ function AppShell() {
           ) : (
             <span className="app-user-avatar" aria-hidden="true" />
           )}
+          <span className="app-user-version" aria-hidden="true">
+            v{__APP_VERSION__}
+          </span>
           <span className="app-user-name">
             {currentUserName ?? t("shell.user.viewerFallback")}
           </span>

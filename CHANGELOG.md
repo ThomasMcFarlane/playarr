@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Show the running Playarr bundle version beneath the user avatar across responsive layouts.
 - Let peer nodes publish signed, incremental sync pages as well as pull them, so two-way
   convergence continues when one node can make outbound requests but cannot accept inbound ones.
 - Synchronise credential-free source-instance identities and deletion tombstones across peer-group
