@@ -49,6 +49,7 @@
   margin-right: calc(50% - 50vw);
   margin-left: calc(50% - 50vw);
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
   scroll-padding-inline: clamp(72px, 10vw, 190px);
@@ -189,7 +190,7 @@
 }
 
 .clients-footer {
-  margin: 1rem auto 0;
+  margin: clamp(46px, calc(7 * var(--viewport-unit)), 78px) auto 0;
   color: var(--ink-soft);
   font-size: 0.78rem;
   text-align: center;

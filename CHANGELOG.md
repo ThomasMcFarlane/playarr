@@ -274,6 +274,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   from a detail page, while yielding immediately to new remote, pointer, wheel, or touch input.
 - Persist profile avatar presets and resized custom photos with the signed-in account so an
   existing choice renders on other web and TV devices.
+- Let sign-in, sign-up, and the Playarr Clients page scroll on TV browsers whose cursor-edge
+  gesture only moves the document's own scroll offset, by handing those pages' real overflow to
+  the document root instead of a nested scroll panel.
 - Keep directory preview animations from narrowing the shared media-copy width and wrapping titles
   differently from their detail pages.
 - Persist the focused audio or video choice when creating a playlist instead of allowing visual
@@ -290,11 +293,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with visible loading placeholders and graceful missing-artwork fallbacks.
 - Focus Play/Pause only when moving Up from the first music track or Down from the inline scrubber,
   and scroll newly focused tracks into view immediately instead of clipping them during animation.
+- Inset visualiser bars over the full-cover gradient in Cover Flow and the mini-player, and extend
+  the desktop music track viewport to the bottom of the page; render the playing cover's bars
+  directly so they remain visible through player remounts.
 - Refresh access tokens centrally before authenticated media requests and keep playback buffered
   through the existing stream retry window instead of failing when a short-lived token expires.
-- Inset visualiser bars over the full-cover gradient in Cover Flow and the mini-player, extend the
-  desktop music track viewport to the bottom of the page, and render the playing cover's bars
-  directly so they remain visible through player remounts.
 - Replace the active-cover visualiser's black panel with a full-artwork transparent gradient and
   evenly applied blur.
 - Focus the inline music scrubber directly when pressing Down from Cover Flow.

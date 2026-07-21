@@ -10,7 +10,7 @@ import { TvStageChrome } from "../components/tv/TvStage";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
-import { useTvNavigation } from "../lib/useTvNavigation";
+import { useNativeScrollRoot, useTvNavigation } from "../lib/useTvNavigation";
 import "./Clients.css";
 
 type ClientStatus = "available" | "experimental" | "soon";
@@ -120,6 +120,7 @@ function PublicClientsLayout({
   const location = useLocation();
   const navigate = useNavigate();
   useTvNavigation(location.pathname, false, backTo);
+  useNativeScrollRoot();
 
   return (
     <div className="profiles-page profile-auth-page clients-shell">

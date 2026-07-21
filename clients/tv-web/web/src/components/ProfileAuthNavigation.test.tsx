@@ -1,11 +1,15 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { useTvDirectionalNavigation } = vi.hoisted(() => ({
+const { useNativeScrollRoot, useTvDirectionalNavigation } = vi.hoisted(() => ({
+  useNativeScrollRoot: vi.fn(),
   useTvDirectionalNavigation: vi.fn(),
 }));
 
-vi.mock("../lib/useTvNavigation", () => ({ useTvDirectionalNavigation }));
+vi.mock("../lib/useTvNavigation", () => ({
+  useNativeScrollRoot,
+  useTvDirectionalNavigation,
+}));
 vi.mock("./tv/TvStage", () => ({
   TvStageChrome: () => <header>Stage chrome</header>,
 }));

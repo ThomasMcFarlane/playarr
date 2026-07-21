@@ -305,17 +305,26 @@ function scrollVerticalContainer(
     document.querySelector<HTMLElement>(
       '[data-tv-scroll-container][data-tv-scroll-axis="vertical"]'
     );
-  if (!container) return false;
 
-  const target = directionalVerticalScrollTop({
-    clientHeight: container.clientHeight,
-    direction,
-    scrollHeight: container.scrollHeight,
-    scrollTop: container.scrollTop,
-  });
-  if (Math.abs(target - container.scrollTop) < 1) return false;
-  container.scrollTo({ top: target, behavior: "smooth" });
-  return true;
+  // A marked container that has handed its real overflow off to the document
+  // (see useNativeScrollRoot) reports no internal scroll room of its own;
+  // document.scrollingElement is where that page's actual overflow lives.
+  const candidates = [container, document.scrollingElement as HTMLElement | null].filter(
+    (element): element is HTMLElement => element !== null
+  );
+
+  for (const element of candidates) {
+    const target = directionalVerticalScrollTop({
+      clientHeight: element.clientHeight,
+      direction,
+      scrollHeight: element.scrollHeight,
+      scrollTop: element.scrollTop,
+    });
+    if (Math.abs(target - element.scrollTop) < 1) continue;
+    element.scrollTo({ top: target, behavior: "smooth" });
+    return true;
+  }
+  return false;
 }
 
 function focusActiveAlphabet(current: HTMLElement, direction: Direction): boolean {
@@ -530,6 +539,26 @@ function handleDirectionalKeyDown(event: KeyboardEvent): boolean {
   document.body.dataset.inputMode = "remote";
   moveFocus(direction);
   return true;
+}
+
+/**
+ * Some TV browsers (e.g. sideloaded Android TV cursor browsers) only know how
+ * to scroll the document itself — an edge-of-screen cursor gesture moves the
+ * WebView's own root scroll offset, not an arbitrary nested overflow div.
+ * Mount this on simple, self-contained pre-auth surfaces to hand their real
+ * overflow to `document.scrollingElement` for the surface's lifetime; see
+ * `.is-native-scroll-root` in global.css for the matching layout change.
+ */
+export function useNativeScrollRoot(): void {
+  useEffect(() => {
+    // Toggled on <html>, not <body>: document.scrollingElement is the root
+    // <html> element in standards mode, and that's what scrollVerticalContainer
+    // falls back to, so the class and the CSS it drives must live there too.
+    document.documentElement.classList.add("is-native-scroll-root");
+    return () => {
+      document.documentElement.classList.remove("is-native-scroll-root");
+    };
+  }, []);
 }
 
 /** Directional focus bridge for pre-auth surfaces without route-back handling. */

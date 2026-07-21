@@ -1,5 +1,5 @@
 import type { KeyboardEvent, ReactNode } from "react";
-import { useTvDirectionalNavigation } from "../lib/useTvNavigation";
+import { useNativeScrollRoot, useTvDirectionalNavigation } from "../lib/useTvNavigation";
 import { TvStageChrome } from "./tv/TvStage";
 
 type AuthFocusRegion = "language" | "first-field" | "other";
@@ -32,6 +32,7 @@ export function ProfileAuthLayout({
   transitionFromProfiles = false,
 }: ProfileAuthLayoutProps) {
   useTvDirectionalNavigation();
+  useNativeScrollRoot();
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const languageTrigger = event.currentTarget.querySelector<HTMLButtonElement>(
