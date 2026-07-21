@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Let administrators enrol independent Streamarr deployments into a signed peer group, synchronise
+  membership and account, library, availability, and routing metadata, route playback across nodes,
+  and give Playarr clients ordered failover addresses.
 - Give every Playarr client its own catalogue URL, with downloads, installation guidance, and
   availability details shown on one client page at a time while keeping the platform selector
   available for direct switching and using each platform circle as its sole route control.
@@ -110,6 +113,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Change the catalogue search response from a bare item array to `{ items, remote_only }` so
+  partial-cache nodes can surface titles available only from peers.
 - Format the peer-group backend sources with the repository's standard Rust style.
 - Refresh Playarr Web's generated build manifest for the latest production deployment.
 - Consolidate all universal Android sources, internal modules, build tooling, CI, release scripts,
