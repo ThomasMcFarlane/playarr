@@ -198,7 +198,11 @@ impl PeerSyncPoller {
 
     async fn reconcile_with_lock(&mut self) {
         let lock_key = format!("peer-sync:{}", self.peer_node_id);
-        let guard = match self.coordinator.try_lock(&lock_key, self.poll_interval).await {
+        let guard = match self
+            .coordinator
+            .try_lock(&lock_key, self.poll_interval)
+            .await
+        {
             Ok(Some(guard)) => guard,
             Ok(None) => {
                 tracing::debug!(
@@ -371,7 +375,11 @@ impl PeerSyncPoller {
         Ok(())
     }
 
-    async fn mark_failure(&mut self, peer: &streamarr_model::PeerNode, err: &PollError) -> Result<(), PollError> {
+    async fn mark_failure(
+        &mut self,
+        peer: &streamarr_model::PeerNode,
+        err: &PollError,
+    ) -> Result<(), PollError> {
         self.consecutive_failures += 1;
         if self.consecutive_failures >= self.unreachable_threshold {
             let mut updated = peer.clone();
@@ -425,13 +433,17 @@ mod tests {
             peer_node_repo: Arc::new(streamarr_db::repo::SqlxPeerNodeRepo::new(pool.clone())),
             user_repo: Arc::new(streamarr_db::repo::SqlxUserRepo::new(pool.clone())),
             policy_repo: Arc::new(streamarr_db::repo::SqlxPolicyRepo::new(pool.clone())),
-            group_library_repo: Arc::new(streamarr_db::repo::SqlxGroupLibraryRepo::new(pool.clone())),
+            group_library_repo: Arc::new(streamarr_db::repo::SqlxGroupLibraryRepo::new(
+                pool.clone(),
+            )),
             user_invite_repo: Arc::new(streamarr_db::repo::SqlxUserInviteRepo::new(pool.clone())),
             user_invite_request_repo: Arc::new(streamarr_db::repo::SqlxUserInviteRequestRepo::new(
                 pool.clone(),
             )),
             work_repo: Arc::new(streamarr_db::repo::SqlxWorkRepo::new(pool.clone())),
-            availability_repo: Arc::new(streamarr_db::repo::SqlxPeerLeafAvailabilityRepo::new(pool.clone())),
+            availability_repo: Arc::new(streamarr_db::repo::SqlxPeerLeafAvailabilityRepo::new(
+                pool.clone(),
+            )),
             routing_rule_repo: Arc::new(streamarr_db::repo::SqlxRoutingRuleRepo::new(pool.clone())),
             sync_state_repo: Arc::new(streamarr_db::repo::SqlxPeerSyncStateRepo::new(pool.clone())),
             conflict_log_repo: Arc::new(streamarr_db::repo::SqlxSyncConflictLogRepo::new(pool)),
@@ -445,7 +457,12 @@ mod tests {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn poller(harness: &Harness, self_peer_id: Uuid, peer_node_id: Uuid, unreachable_threshold: u32) -> PeerSyncPoller {
+    fn poller(
+        harness: &Harness,
+        self_peer_id: Uuid,
+        peer_node_id: Uuid,
+        unreachable_threshold: u32,
+    ) -> PeerSyncPoller {
         PeerSyncPoller::new(
             self_peer_id,
             peer_node_id,
@@ -467,7 +484,12 @@ mod tests {
         )
     }
 
-    async fn seed_peer(harness: &Harness, peer_node_id: Uuid, group_id: Uuid, addresses: Vec<PeerAddress>) {
+    async fn seed_peer(
+        harness: &Harness,
+        peer_node_id: Uuid,
+        group_id: Uuid,
+        addresses: Vec<PeerAddress>,
+    ) {
         sqlx::query("INSERT INTO peer_groups (id, name, created_at) VALUES (?, ?, ?)")
             .bind(group_id.to_string())
             .bind("test group")
@@ -564,7 +586,12 @@ mod tests {
         let mut poller = poller(&harness, self_peer_id, peer_node_id, 3);
         poller.reconcile_all().await.expect("cycle succeeds");
 
-        let updated = harness.peer_node_repo.get(peer_node_id).await.unwrap().unwrap();
+        let updated = harness
+            .peer_node_repo
+            .get(peer_node_id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(updated.status, PeerNodeStatus::Active);
         assert!(updated.last_seen_at.is_some());
         assert!(updated.last_sync_error.is_none());
@@ -606,7 +633,12 @@ mod tests {
             .await
             .expect("cycle succeeds via the fallback address");
 
-        let updated = harness.peer_node_repo.get(peer_node_id).await.unwrap().unwrap();
+        let updated = harness
+            .peer_node_repo
+            .get(peer_node_id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(updated.status, PeerNodeStatus::Active);
     }
 
@@ -631,16 +663,45 @@ mod tests {
 
         let mut poller = poller(&harness, self_peer_id, peer_node_id, 3);
 
-        poller.reconcile_all().await.expect_err("cycle fails: nothing reachable");
-        let after_one = harness.peer_node_repo.get(peer_node_id).await.unwrap().unwrap();
-        assert_eq!(after_one.status, PeerNodeStatus::Active, "must not flip on the first failure");
+        poller
+            .reconcile_all()
+            .await
+            .expect_err("cycle fails: nothing reachable");
+        let after_one = harness
+            .peer_node_repo
+            .get(peer_node_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            after_one.status,
+            PeerNodeStatus::Active,
+            "must not flip on the first failure"
+        );
 
         poller.reconcile_all().await.expect_err("cycle fails again");
-        let after_two = harness.peer_node_repo.get(peer_node_id).await.unwrap().unwrap();
-        assert_eq!(after_two.status, PeerNodeStatus::Active, "must not flip on the second failure");
+        let after_two = harness
+            .peer_node_repo
+            .get(peer_node_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            after_two.status,
+            PeerNodeStatus::Active,
+            "must not flip on the second failure"
+        );
 
-        poller.reconcile_all().await.expect_err("cycle fails a third time");
-        let after_three = harness.peer_node_repo.get(peer_node_id).await.unwrap().unwrap();
+        poller
+            .reconcile_all()
+            .await
+            .expect_err("cycle fails a third time");
+        let after_three = harness
+            .peer_node_repo
+            .get(peer_node_id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(
             after_three.status,
             PeerNodeStatus::Unreachable,
@@ -671,7 +732,12 @@ mod tests {
         .await;
         // Start already `Unreachable` with a stale error, as if a prior
         // poller instance had already tripped the threshold.
-        let mut node = harness.peer_node_repo.get(peer_node_id).await.unwrap().unwrap();
+        let mut node = harness
+            .peer_node_repo
+            .get(peer_node_id)
+            .await
+            .unwrap()
+            .unwrap();
         node.status = PeerNodeStatus::Unreachable;
         node.last_sync_error = Some("stale failure".to_string());
         harness.peer_node_repo.upsert(&node).await.unwrap();
@@ -681,7 +747,12 @@ mod tests {
         poller.reconcile_all().await.expect("cycle succeeds");
 
         assert_eq!(poller.consecutive_failures, 0);
-        let updated = harness.peer_node_repo.get(peer_node_id).await.unwrap().unwrap();
+        let updated = harness
+            .peer_node_repo
+            .get(peer_node_id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(updated.status, PeerNodeStatus::Active);
         assert!(updated.last_sync_error.is_none());
     }
@@ -695,7 +766,10 @@ mod tests {
         seed_peer(&harness, peer_node_id, group_id, vec![]).await;
 
         let mut poller = poller(&harness, self_peer_id, peer_node_id, 3);
-        let err = poller.reconcile_all().await.expect_err("no addresses to try");
+        let err = poller
+            .reconcile_all()
+            .await
+            .expect_err("no addresses to try");
         assert!(matches!(err, PollError::NoAddresses));
     }
 }

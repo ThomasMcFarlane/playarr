@@ -35,8 +35,7 @@ use streamarr_db::{
 };
 use streamarr_model::media::LeafRef;
 use streamarr_model::{
-    Album, Availability, Book, Episode, ExternalProvider, ImageAsset, Season, Track, Work,
-    WorkKind,
+    Album, Availability, Book, Episode, ExternalProvider, ImageAsset, Season, Track, Work, WorkKind,
 };
 use uuid::Uuid;
 
@@ -582,7 +581,10 @@ impl CatalogService {
         if work_ids.is_empty() {
             return Ok(HashMap::new());
         }
-        let rows = sources.availability_repo.list_by_local_work_ids(work_ids).await?;
+        let rows = sources
+            .availability_repo
+            .list_by_local_work_ids(work_ids)
+            .await?;
 
         let mut peer_names: HashMap<Uuid, String> = HashMap::new();
         let mut badges: HashMap<Uuid, Vec<AvailabilityBadge>> = HashMap::new();
@@ -594,7 +596,8 @@ impl CatalogService {
             let Some(work_id) = row.local_work_id else {
                 continue;
             };
-            let peer_name = Self::resolve_peer_name(sources, row.peer_node_id, &mut peer_names).await?;
+            let peer_name =
+                Self::resolve_peer_name(sources, row.peer_node_id, &mut peer_names).await?;
             badges.entry(work_id).or_default().push(AvailabilityBadge {
                 peer_node_id: row.peer_node_id,
                 peer_name,
@@ -636,7 +639,10 @@ impl CatalogService {
             if !seen_groups.insert(*group_id) {
                 continue;
             }
-            let rows = sources.availability_repo.list_unmatched_for_group(*group_id).await?;
+            let rows = sources
+                .availability_repo
+                .list_unmatched_for_group(*group_id)
+                .await?;
             for row in rows {
                 let peer_name =
                     Self::resolve_peer_name(sources, row.peer_node_id, &mut peer_names).await?;

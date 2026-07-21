@@ -1412,9 +1412,10 @@ pub async fn peer_playback_info_handler(
     State(state): State<AppState>,
     peer_signed: PeerSignedRequest,
 ) -> Result<Json<PlaybackInfoResponse>, ApiError> {
-    let body: PeerPlaybackInfoRequest = serde_json::from_slice(&peer_signed.body).map_err(|err| {
-        ApiError::bad_request(format!("invalid peer playback-info request body: {err}"))
-    })?;
+    let body: PeerPlaybackInfoRequest =
+        serde_json::from_slice(&peer_signed.body).map_err(|err| {
+            ApiError::bad_request(format!("invalid peer playback-info request body: {err}"))
+        })?;
 
     // Defense in depth (§5.3): resolve the acting user's policy/allowed
     // libraries from THIS peer's own synced state, never the caller's
@@ -1502,9 +1503,13 @@ async fn forward_negotiation_to_peer(
     client_version: String,
     query: &PlaybackQuery,
 ) -> Result<Json<PlaybackInfoResponse>, ApiError> {
-    let peer = state.peer_node_repo.get(peer_node_id).await?.ok_or_else(|| {
-        ApiError::no_peer_available(format!("peer {peer_node_id} is no longer known"))
-    })?;
+    let peer = state
+        .peer_node_repo
+        .get(peer_node_id)
+        .await?
+        .ok_or_else(|| {
+            ApiError::no_peer_available(format!("peer {peer_node_id} is no longer known"))
+        })?;
     let identity = crate::admin_peer::own_peer_identity(state).await?;
     let client = streamarr_peer_sync::PeerClient::new(state.peer_http.clone(), identity);
 
@@ -1729,9 +1734,11 @@ pub async fn by_external_ref_playback_info_handler(
         // `preferred_nodes`) collapses to the same "nowhere to send this"
         // outcome as `Unavailable` here, see this handler's own doc
         // comment.
-        routing::RoutingDecision::ServeLocally | routing::RoutingDecision::Unavailable => Err(
-            ApiError::no_peer_available("no peer in this group currently reports this title available"),
-        ),
+        routing::RoutingDecision::ServeLocally | routing::RoutingDecision::Unavailable => {
+            Err(ApiError::no_peer_available(
+                "no peer in this group currently reports this title available",
+            ))
+        }
     }
 }
 

@@ -256,7 +256,12 @@ mod tests {
         .expect("sync succeeds");
         assert_eq!(applied, 1);
 
-        let fetched = harness.routing_rule_repo.get(rule.id).await.unwrap().unwrap();
+        let fetched = harness
+            .routing_rule_repo
+            .get(rule.id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(fetched, rule);
 
         let cursor = harness
@@ -303,7 +308,12 @@ mod tests {
         .expect("sync succeeds");
         assert_eq!(applied, 1);
 
-        let fetched = harness.routing_rule_repo.get(rule.id).await.unwrap().unwrap();
+        let fetched = harness
+            .routing_rule_repo
+            .get(rule.id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(fetched.priority, 42);
     }
 
@@ -343,10 +353,19 @@ mod tests {
         .expect("sync succeeds");
         assert_eq!(applied, 0, "a stale incoming write must not be applied");
 
-        let fetched = harness.routing_rule_repo.get(local.id).await.unwrap().unwrap();
+        let fetched = harness
+            .routing_rule_repo
+            .get(local.id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(fetched, local, "the local row must be unchanged");
 
-        let logged = harness.conflict_log_repo.list_requiring_review().await.unwrap();
+        let logged = harness
+            .conflict_log_repo
+            .list_requiring_review()
+            .await
+            .unwrap();
         assert!(
             logged.is_empty(),
             "plain LWW loss is not a privilege dispute -- requires_admin_review must be false"

@@ -194,7 +194,10 @@ impl SourceInstanceRegistry {
     /// contributes nothing. `Vec::new()` without scanning the registry when
     /// `source_instance_ids` is empty -- the common case for a single,
     /// ungrouped node.
-    pub fn group_library_ids_for_source_instances(&self, source_instance_ids: &[Uuid]) -> Vec<Uuid> {
+    pub fn group_library_ids_for_source_instances(
+        &self,
+        source_instance_ids: &[Uuid],
+    ) -> Vec<Uuid> {
         if source_instance_ids.is_empty() {
             return Vec::new();
         }

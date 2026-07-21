@@ -126,14 +126,8 @@ fn from_row(row: &AnyRow) -> Result<UserInvite, DbError> {
         library_allow: serde_json::from_str(&library_allow)?,
         group_library_allow: serde_json::from_str(&group_library_allow)?,
         consumed_at: consumed_at.as_deref().map(parse_datetime).transpose()?,
-        consumed_by_user_id: consumed_by_user_id
-            .as_deref()
-            .map(parse_uuid)
-            .transpose()?,
-        consumed_by_peer_id: consumed_by_peer_id
-            .as_deref()
-            .map(parse_uuid)
-            .transpose()?,
+        consumed_by_user_id: consumed_by_user_id.as_deref().map(parse_uuid).transpose()?,
+        consumed_by_peer_id: consumed_by_peer_id.as_deref().map(parse_uuid).transpose()?,
     })
 }
 
@@ -303,14 +297,18 @@ impl UserInviteRepo for SqlxUserInviteRepo {
                  ORDER BY updated_at ASC, token_hash ASC"
             ),
             (Backend::Sqlite, false) => {
-                format!("SELECT {COLUMNS} FROM user_invites ORDER BY updated_at ASC, token_hash ASC")
+                format!(
+                    "SELECT {COLUMNS} FROM user_invites ORDER BY updated_at ASC, token_hash ASC"
+                )
             }
             (Backend::Postgres, true) => format!(
                 "SELECT {COLUMNS} FROM user_invites WHERE updated_at > $1 \
                  ORDER BY updated_at ASC, token_hash ASC"
             ),
             (Backend::Postgres, false) => {
-                format!("SELECT {COLUMNS} FROM user_invites ORDER BY updated_at ASC, token_hash ASC")
+                format!(
+                    "SELECT {COLUMNS} FROM user_invites ORDER BY updated_at ASC, token_hash ASC"
+                )
             }
         };
         let mut query = sqlx::query(&sql);
@@ -423,7 +421,12 @@ mod tests {
             "a consumed invite must no longer be valid"
         );
         assert!(!repo
-            .consume(&invite.token_hash, now, Uuid::new_v4(), Some(Uuid::new_v4()))
+            .consume(
+                &invite.token_hash,
+                now,
+                Uuid::new_v4(),
+                Some(Uuid::new_v4())
+            )
             .await
             .unwrap());
     }
@@ -526,7 +529,9 @@ mod tests {
         // again is a silent no-op -- it must not error (no unique-constraint
         // violation surfacing as a `DbError::Backend`) and must not change
         // anything.
-        repo.upsert(&invite).await.expect("repeat upsert is a no-op");
+        repo.upsert(&invite)
+            .await
+            .expect("repeat upsert is a no-op");
         let still = repo
             .find_valid(&invite.token_hash, now)
             .await
@@ -594,13 +599,12 @@ mod tests {
         incoming.consumed_by_peer_id = Some(Uuid::new_v4());
         repo.upsert(&incoming).await.unwrap();
 
-        let (consumed_by_user_id,): (Option<String>,) = sqlx::query_as(
-            "SELECT consumed_by_user_id FROM user_invites WHERE token_hash = ?",
-        )
-        .bind(&invite.token_hash)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let (consumed_by_user_id,): (Option<String>,) =
+            sqlx::query_as("SELECT consumed_by_user_id FROM user_invites WHERE token_hash = ?")
+                .bind(&invite.token_hash)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(
             consumed_by_user_id,
             Some(local_redeemer.to_string()),
@@ -658,8 +662,7 @@ mod tests {
         repo.create(&older).await.unwrap();
 
         let rows = repo.list_updated_since(None).await.unwrap();
-        let position =
-            |hash: &str| rows.iter().position(|row| row.token_hash == hash).unwrap();
+        let position = |hash: &str| rows.iter().position(|row| row.token_hash == hash).unwrap();
         assert!(position("older-write") < position("newer-write"));
     }
 
@@ -674,7 +677,11 @@ mod tests {
         let now = Utc::now();
         let repo = SqlxUserInviteRepo::new(pool);
         let cursor = now - Duration::minutes(10);
-        let invite = sample_invite("consumed-after-cursor", created_by, cursor - Duration::hours(1));
+        let invite = sample_invite(
+            "consumed-after-cursor",
+            created_by,
+            cursor - Duration::hours(1),
+        );
         repo.create(&invite).await.unwrap();
 
         // Not yet visible past a cursor taken after creation but before
@@ -685,9 +692,14 @@ mod tests {
             .unwrap()
             .is_empty());
 
-        repo.consume(&invite.token_hash, now, Uuid::new_v4(), Some(Uuid::new_v4()))
-            .await
-            .unwrap();
+        repo.consume(
+            &invite.token_hash,
+            now,
+            Uuid::new_v4(),
+            Some(Uuid::new_v4()),
+        )
+        .await
+        .unwrap();
 
         let rows = repo.list_updated_since(Some(cursor)).await.unwrap();
         assert!(

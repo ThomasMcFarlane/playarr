@@ -320,7 +320,9 @@ impl UserRepo for SqlxUserRepo {
         // like the hard delete this replaced (`NotFound` the second time),
         // rather than silently re-stamping `deleted_at` with a later time.
         let sql = match self.backend {
-            Backend::Sqlite => "UPDATE users SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
+            Backend::Sqlite => {
+                "UPDATE users SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL"
+            }
             Backend::Postgres => {
                 "UPDATE users SET deleted_at = $1 WHERE id = $2 AND deleted_at IS NULL"
             }
@@ -1056,7 +1058,10 @@ mod tests {
             ids.contains(&tombstoned.id),
             "a soft-deleted row must still be reported so its tombstone can propagate"
         );
-        let (_, tombstoned_meta) = rows.iter().find(|(user, _)| user.id == tombstoned.id).unwrap();
+        let (_, tombstoned_meta) = rows
+            .iter()
+            .find(|(user, _)| user.id == tombstoned.id)
+            .unwrap();
         assert!(tombstoned_meta.deleted_at.is_some());
     }
 
@@ -1097,7 +1102,10 @@ mod tests {
 
         let rows = repo.list_updated_since(Some(cursor)).await.unwrap();
         let ids: Vec<Uuid> = rows.iter().map(|(user, _)| user.id).collect();
-        assert!(!ids.contains(&old.id), "a row at or before the cursor must not be re-reported");
+        assert!(
+            !ids.contains(&old.id),
+            "a row at or before the cursor must not be re-reported"
+        );
         assert!(ids.contains(&fresh.id));
     }
 

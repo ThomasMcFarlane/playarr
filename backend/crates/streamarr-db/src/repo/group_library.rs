@@ -348,7 +348,10 @@ mod tests {
         fresh.updated_at = now;
         repo.upsert(&fresh).await.unwrap();
 
-        let rows = repo.list_updated_since(group_id, Some(cursor)).await.unwrap();
+        let rows = repo
+            .list_updated_since(group_id, Some(cursor))
+            .await
+            .unwrap();
         let ids: Vec<Uuid> = rows.iter().map(|library| library.id).collect();
         assert!(
             !ids.contains(&old.id),

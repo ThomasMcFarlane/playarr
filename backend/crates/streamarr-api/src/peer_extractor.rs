@@ -72,7 +72,13 @@ fn required_header<'a>(headers: &'a HeaderMap, name: &str) -> Result<&'a str, Ap
 /// timestamp|nonce`, per §3.3. `body_hash` is the lowercase hex SHA-256
 /// digest of the raw request body (`""` hashes the same as any other empty
 /// input, matching a bodyless `GET`).
-fn canonical_string(method: &str, path: &str, body_hash: &str, timestamp: &str, nonce: &str) -> String {
+fn canonical_string(
+    method: &str,
+    path: &str,
+    body_hash: &str,
+    timestamp: &str,
+    nonce: &str,
+) -> String {
     format!("{method}|{path}|{body_hash}|{timestamp}|{nonce}")
 }
 
@@ -119,9 +125,9 @@ impl FromRequest<AppState> for PeerSignedRequest {
 
         let peer_id = Uuid::parse_str(&peer_id_raw)
             .map_err(|_| unauthorized("X-Streamarr-Peer-Id header is not a valid UUID"))?;
-        let timestamp: i64 = timestamp_raw
-            .parse()
-            .map_err(|_| unauthorized("X-Streamarr-Timestamp header is not a valid unix timestamp"))?;
+        let timestamp: i64 = timestamp_raw.parse().map_err(|_| {
+            unauthorized("X-Streamarr-Timestamp header is not a valid unix timestamp")
+        })?;
         if (Utc::now().timestamp() - timestamp).abs() > TIMESTAMP_TOLERANCE_SECS {
             return Err(unauthorized(
                 "X-Streamarr-Timestamp is outside the accepted window",
@@ -352,7 +358,13 @@ mod tests {
         let peer_id = Uuid::new_v4();
         let key = signing_key();
         seed_peer(&state, peer_id, &key).await;
-        let mut node = state.app.peer_node_repo.get(peer_id).await.unwrap().unwrap();
+        let mut node = state
+            .app
+            .peer_node_repo
+            .get(peer_id)
+            .await
+            .unwrap()
+            .unwrap();
         node.status = PeerNodeStatus::Left;
         state.app.peer_node_repo.upsert(&node).await.unwrap();
 

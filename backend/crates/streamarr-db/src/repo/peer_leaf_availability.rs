@@ -689,7 +689,11 @@ mod tests {
         }
 
         let mut fetched = repo
-            .list_for_leaf(&streamarr_model::ExternalProvider::Tmdb, "603", &LeafSelector::Movie)
+            .list_for_leaf(
+                &streamarr_model::ExternalProvider::Tmdb,
+                "603",
+                &LeafSelector::Movie,
+            )
             .await
             .unwrap();
         fetched.sort_by_key(|row| row.peer_node_id);
@@ -704,7 +708,11 @@ mod tests {
         let repo = SqlxPeerLeafAvailabilityRepo::new(pool);
 
         let fetched = repo
-            .list_for_leaf(&streamarr_model::ExternalProvider::Tmdb, "603", &LeafSelector::Movie)
+            .list_for_leaf(
+                &streamarr_model::ExternalProvider::Tmdb,
+                "603",
+                &LeafSelector::Movie,
+            )
             .await
             .unwrap();
         assert!(fetched.is_empty());

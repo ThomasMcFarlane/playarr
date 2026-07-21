@@ -276,7 +276,9 @@ mod tests {
             .await
             .unwrap();
         let refreshed: RefreshResponse = serde_json::from_slice(&bytes).unwrap();
-        let bundle = refreshed.peer_addresses.expect("grouped node must carry a bundle");
+        let bundle = refreshed
+            .peer_addresses
+            .expect("grouped node must carry a bundle");
         assert_eq!(bundle.group_id, Some(group_id));
         assert_eq!(
             bundle.addresses,

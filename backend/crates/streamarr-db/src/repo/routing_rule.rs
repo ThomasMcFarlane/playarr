@@ -336,7 +336,10 @@ mod tests {
         let rule = sample_rule(group_id);
 
         repo.create(&rule).await.expect("first create");
-        let err = repo.create(&rule).await.expect_err("duplicate id must fail");
+        let err = repo
+            .create(&rule)
+            .await
+            .expect_err("duplicate id must fail");
         assert!(matches!(err, DbError::Backend(_)));
     }
 
@@ -354,7 +357,11 @@ mod tests {
         let group_id = seed_group(&pool).await;
         let repo = SqlxRoutingRuleRepo::new(pool);
 
-        for mode in [DeliveryMode::Auto, DeliveryMode::Redirect, DeliveryMode::Proxy] {
+        for mode in [
+            DeliveryMode::Auto,
+            DeliveryMode::Redirect,
+            DeliveryMode::Proxy,
+        ] {
             let mut rule = sample_rule(group_id);
             rule.delivery_mode = mode;
             repo.create(&rule).await.unwrap();
@@ -426,7 +433,10 @@ mod tests {
         let pool = test_sqlite_pool().await;
         let repo = SqlxRoutingRuleRepo::new(pool);
 
-        let err = repo.delete(Uuid::new_v4()).await.expect_err("missing row must fail");
+        let err = repo
+            .delete(Uuid::new_v4())
+            .await
+            .expect_err("missing row must fail");
         assert!(matches!(err, DbError::NotFound));
     }
 
@@ -529,7 +539,10 @@ mod tests {
         fresh.updated_at = now;
         repo.create(&fresh).await.unwrap();
 
-        let rows = repo.list_updated_since(group_id, Some(cursor)).await.unwrap();
+        let rows = repo
+            .list_updated_since(group_id, Some(cursor))
+            .await
+            .unwrap();
         let ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
         assert!(
             !ids.contains(&old.id),

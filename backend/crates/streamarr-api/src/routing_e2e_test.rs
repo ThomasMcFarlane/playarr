@@ -63,7 +63,9 @@ async fn serve_on_real_tcp(router: axum::Router) -> String {
 async fn body_json(response: reqwest::Response) -> serde_json::Value {
     let status = response.status();
     let text = response.text().await.unwrap();
-    serde_json::from_str(&text).unwrap_or_else(|err| panic!("response (status {status}) was not JSON: {err} -- body: {text}"))
+    serde_json::from_str(&text).unwrap_or_else(|err| {
+        panic!("response (status {status}) was not JSON: {err} -- body: {text}")
+    })
 }
 
 /// Founds a group on `state_a` (served at `base_url_a`) and joins `state_b`
@@ -106,7 +108,11 @@ async fn found_and_join(
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     let founded = body_json(response).await;
     let group_id: Uuid = founded["group"]["id"].as_str().unwrap().parse().unwrap();
-    let node_a_peer_id: Uuid = founded["self_node"]["id"].as_str().unwrap().parse().unwrap();
+    let node_a_peer_id: Uuid = founded["self_node"]["id"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
 
     let response = http
         .post(format!("{base_url_a}/api/v1/admin/peer-groups/join-tokens"))
@@ -145,7 +151,11 @@ async fn found_and_join(
         .expect("join node B into node A's group over real HTTP");
     let status = response.status();
     let joined = body_json(response).await;
-    assert_eq!(status, reqwest::StatusCode::OK, "join must succeed: {joined:?}");
+    assert_eq!(
+        status,
+        reqwest::StatusCode::OK,
+        "join must succeed: {joined:?}"
+    );
 
     let identity_b = state_b
         .app
@@ -423,7 +433,10 @@ async fn delegate_forwards_the_entire_negotiation_and_rewrites_the_url_for_redir
         .expect("the owning peer must have recorded this negotiation itself");
     assert_eq!(tracked_on_b.user_id, user_id);
     assert_eq!(tracked_on_b.media_file_id, media_file_b.id);
-    assert_eq!(tracked_on_b.play_method, streamarr_model::PlayMethod::DirectPlay);
+    assert_eq!(
+        tracked_on_b.play_method,
+        streamarr_model::PlayMethod::DirectPlay
+    );
     assert!(
         state_a.app.session_registry.get(session_id).is_none(),
         "node A must never record its own session for a fully-delegated negotiation"
@@ -448,7 +461,8 @@ async fn proxy_passthrough_preserves_a_range_request_and_its_206_response() {
     // A real file on disk, on node B -- this is what the entry node's
     // proxy route has to actually stream through, `Range` header and all.
     let content = b"0123456789ABCDEFGHIJ".to_vec();
-    let file_path = std::env::temp_dir().join(format!("streamarr-proxy-test-{}.bin", Uuid::new_v4()));
+    let file_path =
+        std::env::temp_dir().join(format!("streamarr-proxy-test-{}.bin", Uuid::new_v4()));
     std::fs::write(&file_path, &content).unwrap();
 
     let source_instance_b = Uuid::new_v4();
@@ -481,30 +495,33 @@ async fn proxy_passthrough_preserves_a_range_request_and_its_206_response() {
     // directly here so this test's own focus stays on the proxy byte path
     // rather than re-driving negotiation end-to-end a second time.
     let session_id = Uuid::new_v4();
-    state_b.app.session_registry.insert(streamarr_model::PlaybackSession {
-        id: session_id,
-        user_id,
-        device_id: Uuid::new_v4(),
-        media_file_id: media_file_b.id,
-        rendition_id: None,
-        started_at: chrono::Utc::now(),
-        ended_at: None,
-        play_method: streamarr_model::PlayMethod::DirectPlay,
-        transcode_reason: None,
-        source_codec: "h264".to_string(),
-        source_container: "mp4".to_string(),
-        source_bitrate: Some(1_000_000),
-        target_codec: "h264".to_string(),
-        target_container: "mp4".to_string(),
-        target_bitrate: Some(1_000_000),
-        client_platform: streamarr_model::ClientPlatform::Web,
-        client_version: "1.0.0".to_string(),
-        ip_address: None,
-        bytes_streamed: 0,
-        buffering_events: 0,
-        buffering_ms_total: 0,
-        stop_reason: None,
-    });
+    state_b
+        .app
+        .session_registry
+        .insert(streamarr_model::PlaybackSession {
+            id: session_id,
+            user_id,
+            device_id: Uuid::new_v4(),
+            media_file_id: media_file_b.id,
+            rendition_id: None,
+            started_at: chrono::Utc::now(),
+            ended_at: None,
+            play_method: streamarr_model::PlayMethod::DirectPlay,
+            transcode_reason: None,
+            source_codec: "h264".to_string(),
+            source_container: "mp4".to_string(),
+            source_bitrate: Some(1_000_000),
+            target_codec: "h264".to_string(),
+            target_container: "mp4".to_string(),
+            target_bitrate: Some(1_000_000),
+            client_platform: streamarr_model::ClientPlatform::Web,
+            client_version: "1.0.0".to_string(),
+            ip_address: None,
+            bytes_streamed: 0,
+            buffering_events: 0,
+            buffering_ms_total: 0,
+            stop_reason: None,
+        });
 
     // ---- The actual request: a real, ranged GET against node A's own
     // proxy route -- node A has never heard of `media_file_b.id` at all. ----
@@ -554,7 +571,8 @@ async fn proxy_passthrough_returns_full_content_without_a_range_header() {
         found_and_join(&state_a, &base_url_a, &state_b, &base_url_b).await;
 
     let content = b"full content, no range".to_vec();
-    let file_path = std::env::temp_dir().join(format!("streamarr-proxy-test-{}.bin", Uuid::new_v4()));
+    let file_path =
+        std::env::temp_dir().join(format!("streamarr-proxy-test-{}.bin", Uuid::new_v4()));
     std::fs::write(&file_path, &content).unwrap();
 
     let source_instance_b = Uuid::new_v4();
@@ -582,30 +600,33 @@ async fn proxy_passthrough_returns_full_content_without_a_range_header() {
     let user_id = Uuid::new_v4();
     seed_streaming_user_with_library_allow(&state_b, user_id, vec![source_instance_b]).await;
     let session_id = Uuid::new_v4();
-    state_b.app.session_registry.insert(streamarr_model::PlaybackSession {
-        id: session_id,
-        user_id,
-        device_id: Uuid::new_v4(),
-        media_file_id: media_file_b.id,
-        rendition_id: None,
-        started_at: chrono::Utc::now(),
-        ended_at: None,
-        play_method: streamarr_model::PlayMethod::DirectPlay,
-        transcode_reason: None,
-        source_codec: "h264".to_string(),
-        source_container: "mp4".to_string(),
-        source_bitrate: Some(1_000_000),
-        target_codec: "h264".to_string(),
-        target_container: "mp4".to_string(),
-        target_bitrate: Some(1_000_000),
-        client_platform: streamarr_model::ClientPlatform::Web,
-        client_version: "1.0.0".to_string(),
-        ip_address: None,
-        bytes_streamed: 0,
-        buffering_events: 0,
-        buffering_ms_total: 0,
-        stop_reason: None,
-    });
+    state_b
+        .app
+        .session_registry
+        .insert(streamarr_model::PlaybackSession {
+            id: session_id,
+            user_id,
+            device_id: Uuid::new_v4(),
+            media_file_id: media_file_b.id,
+            rendition_id: None,
+            started_at: chrono::Utc::now(),
+            ended_at: None,
+            play_method: streamarr_model::PlayMethod::DirectPlay,
+            transcode_reason: None,
+            source_codec: "h264".to_string(),
+            source_container: "mp4".to_string(),
+            source_bitrate: Some(1_000_000),
+            target_codec: "h264".to_string(),
+            target_container: "mp4".to_string(),
+            target_bitrate: Some(1_000_000),
+            client_platform: streamarr_model::ClientPlatform::Web,
+            client_version: "1.0.0".to_string(),
+            ip_address: None,
+            bytes_streamed: 0,
+            buffering_events: 0,
+            buffering_ms_total: 0,
+            stop_reason: None,
+        });
 
     let http = reqwest::Client::new();
     let response = http
@@ -640,7 +661,8 @@ async fn proxy_owning_peer_independently_refuses_a_session_whose_policy_no_longe
     let (_group_id, _node_a_peer_id, node_b_peer_id) =
         found_and_join(&state_a, &base_url_a, &state_b, &base_url_b).await;
 
-    let file_path = std::env::temp_dir().join(format!("streamarr-proxy-test-{}.bin", Uuid::new_v4()));
+    let file_path =
+        std::env::temp_dir().join(format!("streamarr-proxy-test-{}.bin", Uuid::new_v4()));
     std::fs::write(&file_path, b"secret bytes").unwrap();
 
     let source_instance_b = Uuid::new_v4();
@@ -671,30 +693,33 @@ async fn proxy_owning_peer_independently_refuses_a_session_whose_policy_no_longe
     seed_streaming_user_with_library_allow(&state_b, user_id, vec![Uuid::new_v4()]).await;
 
     let session_id = Uuid::new_v4();
-    state_b.app.session_registry.insert(streamarr_model::PlaybackSession {
-        id: session_id,
-        user_id,
-        device_id: Uuid::new_v4(),
-        media_file_id: media_file_b.id,
-        rendition_id: None,
-        started_at: chrono::Utc::now(),
-        ended_at: None,
-        play_method: streamarr_model::PlayMethod::DirectPlay,
-        transcode_reason: None,
-        source_codec: "h264".to_string(),
-        source_container: "mp4".to_string(),
-        source_bitrate: Some(1_000_000),
-        target_codec: "h264".to_string(),
-        target_container: "mp4".to_string(),
-        target_bitrate: Some(1_000_000),
-        client_platform: streamarr_model::ClientPlatform::Web,
-        client_version: "1.0.0".to_string(),
-        ip_address: None,
-        bytes_streamed: 0,
-        buffering_events: 0,
-        buffering_ms_total: 0,
-        stop_reason: None,
-    });
+    state_b
+        .app
+        .session_registry
+        .insert(streamarr_model::PlaybackSession {
+            id: session_id,
+            user_id,
+            device_id: Uuid::new_v4(),
+            media_file_id: media_file_b.id,
+            rendition_id: None,
+            started_at: chrono::Utc::now(),
+            ended_at: None,
+            play_method: streamarr_model::PlayMethod::DirectPlay,
+            transcode_reason: None,
+            source_codec: "h264".to_string(),
+            source_container: "mp4".to_string(),
+            source_bitrate: Some(1_000_000),
+            target_codec: "h264".to_string(),
+            target_container: "mp4".to_string(),
+            target_bitrate: Some(1_000_000),
+            client_platform: streamarr_model::ClientPlatform::Web,
+            client_version: "1.0.0".to_string(),
+            ip_address: None,
+            bytes_streamed: 0,
+            buffering_events: 0,
+            buffering_ms_total: 0,
+            stop_reason: None,
+        });
 
     let http = reqwest::Client::new();
     let response = http

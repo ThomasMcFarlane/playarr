@@ -110,6 +110,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Format the peer-group backend sources with the repository's standard Rust style.
 - Refresh Playarr Web's generated build manifest for the latest production deployment.
 - Consolidate all universal Android sources, internal modules, build tooling, CI, release scripts,
   and documentation into the single `clients/android/` Gradle project, removing the obsolete

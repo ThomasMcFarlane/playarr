@@ -504,7 +504,8 @@ apiVersion = "1"
     /// never an error (§6.1's "one code path" invariant, exercised here
     /// through the real `POST /api/v1/oauth/device/code` route).
     #[tokio::test]
-    async fn device_code_embeds_an_empty_bundle_in_verification_uri_complete_for_a_standalone_node() {
+    async fn device_code_embeds_an_empty_bundle_in_verification_uri_complete_for_a_standalone_node()
+    {
         let (_router, state) = test_state().await;
         let router = router_with_relative_verification_uri(state.app.clone());
         let start_body = serde_json::json!({ "client_platform": "tv-webos" });

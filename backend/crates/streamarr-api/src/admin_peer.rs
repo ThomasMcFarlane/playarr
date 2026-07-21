@@ -237,7 +237,9 @@ pub async fn update_self_peer_node_handler(
             .peer_node_repo
             .upsert(&self_node)
             .await
-            .map_err(|err| ApiError::internal(format!("failed to persist self peer node: {err}")))?;
+            .map_err(|err| {
+                ApiError::internal(format!("failed to persist self peer node: {err}"))
+            })?;
 
         tracing::info!(peer_id = %self_node.id, "updated self peer node profile");
         return Ok(Json(SelfPeerNodeResponse {
@@ -505,7 +507,9 @@ pub async fn join_peer_group_handler(
         identity,
     )
     .await
-    .map_err(|err| ApiError::bad_gateway(format!("failed to join via {}: {err}", body.seed_address)))?;
+    .map_err(|err| {
+        ApiError::bad_gateway(format!("failed to join via {}: {err}", body.seed_address))
+    })?;
 
     *state.pending_self_peer_profile.lock().unwrap() = None;
 
@@ -703,7 +707,11 @@ pub async fn peer_address_bundle(state: &AppState) -> Result<PeerAddressBundle, 
             Some(pending) => {
                 let peer_node_id = match identity {
                     Some(identity) => identity.peer_id,
-                    None => ensure_node_identity(&state.node_identity_repo).await?.peer_id,
+                    None => {
+                        ensure_node_identity(&state.node_identity_repo)
+                            .await?
+                            .peer_id
+                    }
                 };
                 client_reachable_addresses(
                     pending
@@ -853,7 +861,14 @@ mod tests {
         assert!(json.id.is_none());
         assert!(json.public_key.is_none());
         assert_eq!(
-            state.app.pending_self_peer_profile.lock().unwrap().as_ref().unwrap().name,
+            state
+                .app
+                .pending_self_peer_profile
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .name,
             "home"
         );
     }
@@ -1004,7 +1019,10 @@ mod tests {
         let response = router
             .oneshot(
                 Request::builder()
-                    .uri(format!("/api/v1/admin/peer-nodes/{}/sync-status", Uuid::new_v4()))
+                    .uri(format!(
+                        "/api/v1/admin/peer-nodes/{}/sync-status",
+                        Uuid::new_v4()
+                    ))
                     .header("Authorization", bearer_header(&token))
                     .body(Body::empty())
                     .unwrap(),
@@ -1103,7 +1121,10 @@ mod tests {
         let members = state.app.peer_node_repo.list_all().await.unwrap();
         assert_eq!(members.len(), 2);
         let self_row = members.iter().find(|m| m.id == identity.peer_id).unwrap();
-        assert!(self_row.is_self, "this node's own row must be is_self=true locally");
+        assert!(
+            self_row.is_self,
+            "this node's own row must be is_self=true locally"
+        );
         let other_row = members.iter().find(|m| m.id != identity.peer_id).unwrap();
         assert!(!other_row.is_self);
     }
@@ -1126,7 +1147,10 @@ mod tests {
         seed_admin_user(&state, admin_id).await;
         let token = mint_access_token(&state, admin_id);
 
-        let response = router.oneshot(address_bundle_request(&token)).await.unwrap();
+        let response = router
+            .oneshot(address_bundle_request(&token))
+            .await
+            .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
@@ -1149,16 +1173,30 @@ mod tests {
         seed_admin_user(&state, admin_id).await;
         let token = mint_access_token(&state, admin_id);
 
-        router.clone().oneshot(put_self_request(&token, "home")).await.unwrap();
+        router
+            .clone()
+            .oneshot(put_self_request(&token, "home"))
+            .await
+            .unwrap();
 
-        let response = router.oneshot(address_bundle_request(&token)).await.unwrap();
+        let response = router
+            .oneshot(address_bundle_request(&token))
+            .await
+            .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .unwrap();
         let bundle: PeerAddressBundle = serde_json::from_slice(&bytes).unwrap();
         assert!(bundle.group_id.is_none());
-        let peer_id = state.app.node_identity_repo.get().await.unwrap().unwrap().peer_id;
+        let peer_id = state
+            .app
+            .node_identity_repo
+            .get()
+            .await
+            .unwrap()
+            .unwrap()
+            .peer_id;
         assert_eq!(
             bundle.addresses,
             vec![PeerAddressEntry {
@@ -1179,7 +1217,11 @@ mod tests {
         seed_admin_user(&state, admin_id).await;
         let token = mint_access_token(&state, admin_id);
 
-        router.clone().oneshot(put_self_request(&token, "home")).await.unwrap();
+        router
+            .clone()
+            .oneshot(put_self_request(&token, "home"))
+            .await
+            .unwrap();
         let response = router
             .clone()
             .oneshot(found_group_request(&token, "Home Group"))
@@ -1248,7 +1290,10 @@ mod tests {
         self_node.updated_at = now;
         state.app.peer_node_repo.upsert(&self_node).await.unwrap();
 
-        let response = router.oneshot(address_bundle_request(&token)).await.unwrap();
+        let response = router
+            .oneshot(address_bundle_request(&token))
+            .await
+            .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await

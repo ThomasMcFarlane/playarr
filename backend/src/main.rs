@@ -1122,8 +1122,12 @@ async fn boot_api(
     // default, byte-for-byte today's behavior) and only pre-wires the repo
     // in case this node joins a group later without a restart.
     let jwt = Arc::new(
-        JwtIssuer::new(jwt_secret.as_bytes(), "streamarr", chrono::Duration::minutes(15))
-            .with_group_identity(&node_identity, peer_node_repo.clone()),
+        JwtIssuer::new(
+            jwt_secret.as_bytes(),
+            "streamarr",
+            chrono::Duration::minutes(15),
+        )
+        .with_group_identity(&node_identity, peer_node_repo.clone()),
     );
     let refresh = Arc::new(RefreshTokenService::new(
         refresh_store,

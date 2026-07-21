@@ -196,11 +196,20 @@ async fn two_peer_nodes_join_and_sync_over_the_real_wire_protocol() {
     // 200, but that node A's real `enroll_handler` genuinely persisted B
     // into its own `peer_nodes` table. ----
     let identity_b = state_b.app.node_identity_repo.get().await.unwrap().unwrap();
-    assert_eq!(identity_b.group_id.map(|id| id.to_string()), Some(group_id.clone()));
+    assert_eq!(
+        identity_b.group_id.map(|id| id.to_string()),
+        Some(group_id.clone())
+    );
 
     let members_b = state_b.app.peer_node_repo.list_all().await.unwrap();
-    assert_eq!(members_b.len(), 2, "node B must know about itself and node A");
-    assert!(members_b.iter().any(|m| m.id.to_string() == node_a_peer_id && !m.is_self));
+    assert_eq!(
+        members_b.len(),
+        2,
+        "node B must know about itself and node A"
+    );
+    assert!(members_b
+        .iter()
+        .any(|m| m.id.to_string() == node_a_peer_id && !m.is_self));
     assert!(members_b.iter().any(|m| m.is_self));
 
     let members_a = state_a.app.peer_node_repo.list_all().await.unwrap();
@@ -286,7 +295,13 @@ async fn two_peer_nodes_join_and_sync_over_the_real_wire_protocol() {
     state_a.user_repo.upsert(&new_user).await.unwrap();
 
     // Node B must not see either row yet -- the poller hasn't run.
-    assert!(state_b.app.user_repo.find_by_id(new_user.id).await.unwrap().is_none());
+    assert!(state_b
+        .app
+        .user_repo
+        .find_by_id(new_user.id)
+        .await
+        .unwrap()
+        .is_none());
 
     // ---- A real `PeerSyncPoller` cycle, run from B against A's real,
     // TCP-served endpoints (`/api/v1/peer/{nodes,accounts,invites,
@@ -352,8 +367,10 @@ async fn two_peer_nodes_join_and_sync_over_the_real_wire_protocol() {
         .find_by_id(new_policy.id)
         .await
         .unwrap()
-        .expect("the user's policy must have synced too (and, per the fix this test also \
-                 guards, been applied *before* the user so the FK never trips)");
+        .expect(
+            "the user's policy must have synced too (and, per the fix this test also \
+                 guards, been applied *before* the user so the FK never trips)",
+        );
     assert_eq!(synced_policy.name, "synced-from-a");
 
     // The peer-sync cursor must have actually advanced on node B -- proof

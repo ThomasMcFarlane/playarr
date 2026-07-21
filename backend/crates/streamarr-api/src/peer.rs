@@ -598,7 +598,9 @@ pub async fn invites_handler(
         .list_requested_since(since)
         .await
         .map_err(|err| {
-            ApiError::internal(format!("failed to list invite requests for peer sync: {err}"))
+            ApiError::internal(format!(
+                "failed to list invite requests for peer sync: {err}"
+            ))
         })?
         .into_iter()
         .map(PeerInviteRequestRow::from)
@@ -690,7 +692,9 @@ pub async fn libraries_handler(
         .list_updated_since(since)
         .await
         .map_err(|err| {
-            ApiError::internal(format!("failed to list source instances for peer sync: {err}"))
+            ApiError::internal(format!(
+                "failed to list source instances for peer sync: {err}"
+            ))
         })?
         .into_iter()
         .map(SourceInstanceIdentity::from)
@@ -702,7 +706,9 @@ pub async fn libraries_handler(
         .list_updated_since(group_id, since)
         .await
         .map_err(|err| {
-            ApiError::internal(format!("failed to list group libraries for peer sync: {err}"))
+            ApiError::internal(format!(
+                "failed to list group libraries for peer sync: {err}"
+            ))
         })?;
 
     Ok(Json(LibrariesResponse {
@@ -795,7 +801,9 @@ pub struct AvailabilityResponse {
 /// for "what `LeafSelector` does this `media_file_id` have" in both
 /// directions, never two independently maintained ones. Pure, no I/O of its
 /// own: `detail` is already fully resolved by the caller.
-pub(crate) fn leaf_selectors_for(detail: &streamarr_catalog::WorkDetail) -> Vec<(Uuid, LeafSelector)> {
+pub(crate) fn leaf_selectors_for(
+    detail: &streamarr_catalog::WorkDetail,
+) -> Vec<(Uuid, LeafSelector)> {
     let mut leaves: Vec<(Uuid, LeafSelector)> = Vec::new();
     match &detail.children {
         WorkChildren::Movie => {
@@ -847,7 +855,12 @@ pub(crate) fn leaf_selectors_for(detail: &streamarr_catalog::WorkDetail) -> Vec<
                 let Some(media_file_id) = book_detail.media_file_id else {
                     continue;
                 };
-                leaves.push((media_file_id, LeafSelector::Book { index: index as u32 }));
+                leaves.push((
+                    media_file_id,
+                    LeafSelector::Book {
+                        index: index as u32,
+                    },
+                ));
             }
         }
     }
@@ -867,11 +880,10 @@ async fn derive_own_availability(
         .map(|instance| (instance.id, instance.group_library_id))
         .collect();
 
-    let work_ids = state
-        .media_file_repo
-        .list_work_ids()
-        .await
-        .map_err(|err| ApiError::internal(format!("failed to list media file work ids: {err}")))?;
+    let work_ids =
+        state.media_file_repo.list_work_ids().await.map_err(|err| {
+            ApiError::internal(format!("failed to list media file work ids: {err}"))
+        })?;
 
     let mut rows = Vec::new();
     for work_id in work_ids {
@@ -1211,7 +1223,10 @@ mod tests {
             .find_valid(&streamarr_auth::secret::hash_token(&raw_token), Utc::now())
             .await
             .unwrap();
-        assert!(still_valid.is_some(), "the token must not be burned by a rejected enroll");
+        assert!(
+            still_valid.is_some(),
+            "the token must not be burned by a rejected enroll"
+        );
     }
 
     #[tokio::test]
@@ -1296,7 +1311,11 @@ mod sync_endpoint_tests {
     /// `admin_peer.rs`'s doc comment gives for `EnrollResponse` not being
     /// shared 1:1 with `streamarr_peer_sync::EnrollResponse` -- distinct
     /// types/helpers per module, identical shape).
-    async fn seed_group_and_signed_peer(state: &TestState, peer_id: Uuid, key: &SigningKey) -> Uuid {
+    async fn seed_group_and_signed_peer(
+        state: &TestState,
+        peer_id: Uuid,
+        key: &SigningKey,
+    ) -> Uuid {
         let group_id = Uuid::new_v4();
         state
             .app
@@ -1395,12 +1414,7 @@ mod sync_endpoint_tests {
         ] {
             let response = router
                 .clone()
-                .oneshot(
-                    Request::builder()
-                        .uri(path)
-                        .body(Body::empty())
-                        .unwrap(),
-                )
+                .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
                 .await
                 .unwrap();
             assert_eq!(
@@ -1447,7 +1461,10 @@ mod sync_endpoint_tests {
         let body = body_json(response).await;
         let rows = body["rows"].as_array().unwrap();
         assert_eq!(rows.len(), 2);
-        let ids: Vec<String> = rows.iter().map(|r| r["id"].as_str().unwrap().to_string()).collect();
+        let ids: Vec<String> = rows
+            .iter()
+            .map(|r| r["id"].as_str().unwrap().to_string())
+            .collect();
         assert!(ids.contains(&self_id.to_string()));
         assert!(ids.contains(&peer_id.to_string()));
     }
@@ -1482,7 +1499,12 @@ mod sync_endpoint_tests {
         seed_group_and_signed_peer(&state, peer_id, &key).await;
 
         let policy_id = Uuid::new_v4();
-        state.app.policy_repo.upsert(&sample_policy(policy_id)).await.unwrap();
+        state
+            .app
+            .policy_repo
+            .upsert(&sample_policy(policy_id))
+            .await
+            .unwrap();
         let user = User {
             id: Uuid::new_v4(),
             username: "sync-user".to_string(),
@@ -1504,7 +1526,10 @@ mod sync_endpoint_tests {
         assert_eq!(response.status(), StatusCode::OK);
         let body = body_json(response).await;
         let users = body["users"].as_array().unwrap();
-        let synced_user = users.iter().find(|u| u["id"] == user.id.to_string()).unwrap();
+        let synced_user = users
+            .iter()
+            .find(|u| u["id"] == user.id.to_string())
+            .unwrap();
         // The wire shape is `User`'s own fields flattened alongside the
         // sync-only ones -- exactly what `streamarr_peer_sync::account_sync
         // ::UserSyncRow`'s `#[serde(flatten)]` deserializes.
@@ -1514,12 +1539,18 @@ mod sync_endpoint_tests {
         assert!(synced_user["deleted_at"].is_null());
 
         let policies = body["policies"].as_array().unwrap();
-        let synced_policy = policies.iter().find(|p| p["id"] == policy_id.to_string()).unwrap();
+        let synced_policy = policies
+            .iter()
+            .find(|p| p["id"] == policy_id.to_string())
+            .unwrap();
         assert_eq!(synced_policy["name"], "Policy");
         assert!(synced_policy["updated_at"].is_string());
 
         let server_time = body["server_time"].as_str().unwrap().to_string();
-        assert!(server_time.parse::<i64>().is_ok(), "server_time must be a plain integer cursor");
+        assert!(
+            server_time.parse::<i64>().is_ok(),
+            "server_time must be a plain integer cursor"
+        );
 
         // A second pass using the returned cursor must not re-report
         // either row -- proves `since` is actually applied, not ignored.
@@ -1542,7 +1573,12 @@ mod sync_endpoint_tests {
         seed_group_and_signed_peer(&state, peer_id, &key).await;
 
         let policy_id = Uuid::new_v4();
-        state.app.policy_repo.upsert(&sample_policy(policy_id)).await.unwrap();
+        state
+            .app
+            .policy_repo
+            .upsert(&sample_policy(policy_id))
+            .await
+            .unwrap();
         let admin = User {
             id: Uuid::new_v4(),
             username: "invite-admin".to_string(),
@@ -1584,7 +1620,12 @@ mod sync_endpoint_tests {
             library_allow: vec![],
             group_library_allow: vec![],
         };
-        state.app.user_invite_request_repo.create(&request).await.unwrap();
+        state
+            .app
+            .user_invite_request_repo
+            .create(&request)
+            .await
+            .unwrap();
 
         let response = router
             .clone()
@@ -1611,7 +1652,9 @@ mod sync_endpoint_tests {
         );
         assert!(synced_invite["consumed_at"].is_null());
         let invite_requests = body["invite_requests"].as_array().unwrap();
-        assert!(invite_requests.iter().any(|r| r["id"] == request.id.to_string()));
+        assert!(invite_requests
+            .iter()
+            .any(|r| r["id"] == request.id.to_string()));
 
         let server_time = body["server_time"].as_str().unwrap().to_string();
 
@@ -1640,10 +1683,7 @@ mod sync_endpoint_tests {
             .iter()
             .find(|i| i["token_hash"] == "a-token-hash")
             .expect("the now-consumed invite must be re-reported past the earlier cursor");
-        assert_eq!(
-            reconsumed["consumed_by_user_id"],
-            redeemer_id.to_string()
-        );
+        assert_eq!(reconsumed["consumed_by_user_id"], redeemer_id.to_string());
     }
 
     #[tokio::test]
@@ -1679,7 +1719,12 @@ mod sync_endpoint_tests {
             best_effort: false,
             group_library_id: Some(group_library_id),
         };
-        state.app.source_instance_repo.upsert(&source_instance).await.unwrap();
+        state
+            .app
+            .source_instance_repo
+            .upsert(&source_instance)
+            .await
+            .unwrap();
 
         let response = router
             .oneshot(signed_get("/api/v1/peer/libraries", peer_id, &key))
@@ -1703,12 +1748,17 @@ mod sync_endpoint_tests {
             .unwrap();
         assert_eq!(wire_instance["name"], "Main Radarr");
         assert_eq!(wire_instance["priority"], 3);
-        assert_eq!(wire_instance["group_library_id"], group_library_id.to_string());
+        assert_eq!(
+            wire_instance["group_library_id"],
+            group_library_id.to_string()
+        );
         assert!(wire_instance.get("base_url").is_none());
         assert!(wire_instance.get("api_key_encrypted").is_none());
 
         let libraries = body["group_libraries"].as_array().unwrap();
-        assert!(libraries.iter().any(|l| l["id"] == group_library_id.to_string()));
+        assert!(libraries
+            .iter()
+            .any(|l| l["id"] == group_library_id.to_string()));
     }
 
     #[tokio::test]
@@ -1767,7 +1817,11 @@ mod sync_endpoint_tests {
         assert_eq!(response.status(), StatusCode::OK);
         let body = body_json(response).await;
         let rows = body["rows"].as_array().unwrap();
-        assert_eq!(rows.len(), 1, "expected exactly one derived leaf row: {rows:?}");
+        assert_eq!(
+            rows.len(),
+            1,
+            "expected exactly one derived leaf row: {rows:?}"
+        );
         let row = &rows[0];
         assert_eq!(row["provider"], "tmdb");
         assert_eq!(row["external_id"], "603");
@@ -1809,7 +1863,10 @@ mod sync_endpoint_tests {
         assert_eq!(response.status(), StatusCode::OK);
         let body = body_json(response).await;
         let rows = body["rows"].as_array().unwrap();
-        let synced_rule = rows.iter().find(|r| r["id"] == rule.id.to_string()).unwrap();
+        let synced_rule = rows
+            .iter()
+            .find(|r| r["id"] == rule.id.to_string())
+            .unwrap();
         assert_eq!(synced_rule["priority"], 5);
         assert_eq!(synced_rule["delivery_mode"], "redirect");
         assert_eq!(
@@ -1818,7 +1875,10 @@ mod sync_endpoint_tests {
         );
 
         let server_time = body["server_time"].as_str().unwrap().to_string();
-        assert!(server_time.parse::<i64>().is_ok(), "server_time must be a plain integer cursor");
+        assert!(
+            server_time.parse::<i64>().is_ok(),
+            "server_time must be a plain integer cursor"
+        );
 
         // A second pass using the returned cursor must not re-report the
         // already-seen row -- proves `since` is actually applied.

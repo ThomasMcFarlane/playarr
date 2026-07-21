@@ -296,7 +296,10 @@ impl JwtIssuer {
         token: &str,
         peer_id: Uuid,
     ) -> Result<AccessTokenClaims, JwtError> {
-        let repo = self.peer_node_repo.as_ref().ok_or(JwtError::UnknownIssuer)?;
+        let repo = self
+            .peer_node_repo
+            .as_ref()
+            .ok_or(JwtError::UnknownIssuer)?;
         let peer = repo
             .get(peer_id)
             .await
@@ -378,9 +381,7 @@ mod tests {
     fn node_identity(peer_id: Uuid, seed: [u8; 32], group_id: Option<Uuid>) -> NodeIdentity {
         NodeIdentity {
             peer_id,
-            private_key: Sensitive::new(
-                base64::engine::general_purpose::STANDARD.encode(seed),
-            ),
+            private_key: Sensitive::new(base64::engine::general_purpose::STANDARD.encode(seed)),
             group_id,
             created_at: ChronoUtc::now(),
         }
@@ -391,7 +392,12 @@ mod tests {
         base64::engine::general_purpose::STANDARD.encode(signing_key.verifying_key().to_bytes())
     }
 
-    fn peer_node(id: Uuid, public_key_b64: String, is_self: bool, status: PeerNodeStatus) -> PeerNode {
+    fn peer_node(
+        id: Uuid,
+        public_key_b64: String,
+        is_self: bool,
+        status: PeerNodeStatus,
+    ) -> PeerNode {
         let now = ChronoUtc::now();
         PeerNode {
             id,
@@ -512,8 +518,12 @@ mod tests {
             PeerNodeStatus::Active,
         ));
 
-        let issuer = JwtIssuer::new(b"unused-hs256-secret-at-least-32b!!", "streamarr", Duration::minutes(15))
-            .with_group_identity(&identity, repo);
+        let issuer = JwtIssuer::new(
+            b"unused-hs256-secret-at-least-32b!!",
+            "streamarr",
+            Duration::minutes(15),
+        )
+        .with_group_identity(&identity, repo);
 
         let user_id = Uuid::new_v4();
         let token = issuer
@@ -538,8 +548,12 @@ mod tests {
         let peer_a_seed = [21u8; 32];
         let peer_a_identity = node_identity(peer_a_id, peer_a_seed, Some(group_id));
         let peer_a_repo = Arc::new(FakePeerNodeRepo::default());
-        let issuer_a = JwtIssuer::new(b"unused-hs256-secret-at-least-32b!!", "streamarr", Duration::minutes(15))
-            .with_group_identity(&peer_a_identity, peer_a_repo);
+        let issuer_a = JwtIssuer::new(
+            b"unused-hs256-secret-at-least-32b!!",
+            "streamarr",
+            Duration::minutes(15),
+        )
+        .with_group_identity(&peer_a_identity, peer_a_repo);
 
         let user_id = Uuid::new_v4();
         let token = issuer_a
@@ -557,8 +571,12 @@ mod tests {
             false,
             PeerNodeStatus::Active,
         ));
-        let issuer_b = JwtIssuer::new(b"unused-hs256-secret-at-least-32b!!", "streamarr", Duration::minutes(15))
-            .with_group_identity(&peer_b_identity, peer_b_repo);
+        let issuer_b = JwtIssuer::new(
+            b"unused-hs256-secret-at-least-32b!!",
+            "streamarr",
+            Duration::minutes(15),
+        )
+        .with_group_identity(&peer_b_identity, peer_b_repo);
 
         let claims = issuer_b.verify_access_token(&token).await.unwrap();
         assert_eq!(claims.sub, user_id);
@@ -652,8 +670,12 @@ mod tests {
             true,
             PeerNodeStatus::Active,
         ));
-        let issuer = JwtIssuer::new(b"shared-secret-at-least-32-bytes!!!!", "streamarr", Duration::minutes(15))
-            .with_group_identity(&identity, repo);
+        let issuer = JwtIssuer::new(
+            b"shared-secret-at-least-32-bytes!!!!",
+            "streamarr",
+            Duration::minutes(15),
+        )
+        .with_group_identity(&identity, repo);
         let token = issuer
             .issue_access_token(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4())
             .unwrap();

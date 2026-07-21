@@ -42,7 +42,9 @@ pub async fn sync_membership(
     self_peer_id: Uuid,
     base_url: &str,
 ) -> Result<usize, PeerClientError> {
-    let response: NodesResponse = peer_client.signed_get(base_url, "/api/v1/peer/nodes").await?;
+    let response: NodesResponse = peer_client
+        .signed_get(base_url, "/api/v1/peer/nodes")
+        .await?;
     let count = response.rows.len();
     for mut member in response.rows {
         member.is_self = member.id == self_peer_id;
@@ -151,9 +153,15 @@ mod tests {
         let all = repo.list_all().await.unwrap();
         assert_eq!(all.len(), 3);
         let this = all.iter().find(|n| n.id == self_peer_id).unwrap();
-        assert!(this.is_self, "this node's own row must be corrected to is_self=true");
+        assert!(
+            this.is_self,
+            "this node's own row must be corrected to is_self=true"
+        );
         let remote = all.iter().find(|n| n.name == "remote").unwrap();
-        assert!(!remote.is_self, "the reporting peer's own row must not be is_self locally");
+        assert!(
+            !remote.is_self,
+            "the reporting peer's own row must not be is_self locally"
+        );
         assert!(all.iter().any(|n| n.id == third_peer_id));
     }
 

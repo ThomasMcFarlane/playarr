@@ -307,7 +307,9 @@ pub struct SelfCapabilitiesResponse {
         (status = 403, description = "Caller does not have Playarr streaming access")
     )
 )]
-pub async fn get_self_capabilities_handler(streaming: StreamingUser) -> Json<SelfCapabilitiesResponse> {
+pub async fn get_self_capabilities_handler(
+    streaming: StreamingUser,
+) -> Json<SelfCapabilitiesResponse> {
     Json(SelfCapabilitiesResponse {
         can_download: streaming.policy.can_download,
     })
@@ -580,7 +582,10 @@ async fn persist_new_user(
             }
         }
         Err(err) => {
-            tracing::warn!(?err, "failed to load node identity; new user/policy rows keep a NULL origin_peer_id");
+            tracing::warn!(
+                ?err,
+                "failed to load node identity; new user/policy rows keep a NULL origin_peer_id"
+            );
         }
     }
 
@@ -1951,18 +1956,20 @@ mod tests {
 
         let source_instance_id = Uuid::new_v4();
         let group_library_id = Uuid::new_v4();
-        state.source_instances.upsert(streamarr_model::SourceInstance {
-            id: source_instance_id,
-            kind: streamarr_model::SourceKind::Radarr,
-            name: "Grouped Radarr".to_string(),
-            base_url: "http://localhost".to_string(),
-            api_key_encrypted: streamarr_model::Sensitive::new("key".to_string()),
-            priority: 0,
-            default_root_folder_id: None,
-            default_quality_profile_id: None,
-            best_effort: false,
-            group_library_id: Some(group_library_id),
-        });
+        state
+            .source_instances
+            .upsert(streamarr_model::SourceInstance {
+                id: source_instance_id,
+                kind: streamarr_model::SourceKind::Radarr,
+                name: "Grouped Radarr".to_string(),
+                base_url: "http://localhost".to_string(),
+                api_key_encrypted: streamarr_model::Sensitive::new("key".to_string()),
+                priority: 0,
+                default_root_folder_id: None,
+                default_quality_profile_id: None,
+                best_effort: false,
+                group_library_id: Some(group_library_id),
+            });
 
         let invite_body = serde_json::json!({
             "can_stream": true,

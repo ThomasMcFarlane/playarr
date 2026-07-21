@@ -80,7 +80,8 @@ impl PeerClient {
         body: &Req,
     ) -> Result<Resp, PeerClientError> {
         let body_bytes = serde_json::to_vec(body).expect("peer sync request DTOs always serialize");
-        self.signed_request("POST", base_url, path, body_bytes).await
+        self.signed_request("POST", base_url, path, body_bytes)
+            .await
     }
 
     /// `GET {base_url}{path}`, signed with an empty body (a bodyless `GET`
@@ -123,7 +124,10 @@ impl PeerClient {
         let response = request
             .send()
             .await
-            .map_err(|source| PeerClientError::Http { url: url.clone(), source })?;
+            .map_err(|source| PeerClientError::Http {
+                url: url.clone(),
+                source,
+            })?;
         let status = response.status();
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
@@ -144,17 +148,17 @@ impl PeerClient {
         base_url: &str,
         request: &Req,
     ) -> Result<Resp, PeerClientError> {
-        let url = format!(
-            "{}/api/v1/peer/enroll",
-            base_url.trim_end_matches('/')
-        );
+        let url = format!("{}/api/v1/peer/enroll", base_url.trim_end_matches('/'));
         let response = self
             .http
             .post(&url)
             .json(request)
             .send()
             .await
-            .map_err(|source| PeerClientError::Http { url: url.clone(), source })?;
+            .map_err(|source| PeerClientError::Http {
+                url: url.clone(),
+                source,
+            })?;
         let status = response.status();
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
@@ -175,7 +179,10 @@ impl PeerClient {
 pub fn addresses_by_priority(addresses: &[PeerAddress]) -> Vec<&str> {
     let mut sorted: Vec<&PeerAddress> = addresses.iter().collect();
     sorted.sort_by_key(|address| address.priority);
-    sorted.into_iter().map(|address| address.url.as_str()).collect()
+    sorted
+        .into_iter()
+        .map(|address| address.url.as_str())
+        .collect()
 }
 
 #[cfg(test)]
@@ -233,7 +240,11 @@ mod tests {
 
         let client = PeerClient::new(reqwest::Client::new(), identity());
         let result: Pong = client
-            .signed_post(&mock.uri(), "/api/v1/peer/accounts", &json!({"since": "cursor-1"}))
+            .signed_post(
+                &mock.uri(),
+                "/api/v1/peer/accounts",
+                &json!({"since": "cursor-1"}),
+            )
             .await
             .expect("signed POST succeeds");
         assert_eq!(result, Pong { pong: true });

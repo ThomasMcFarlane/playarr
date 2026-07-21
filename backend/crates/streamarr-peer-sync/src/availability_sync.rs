@@ -37,7 +37,9 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use streamarr_db::{PeerLeafAvailabilityRepo, WorkRepo};
-use streamarr_model::{Availability, ExternalProvider, LeafSelector, PeerLeafAvailability, WorkKind};
+use streamarr_model::{
+    Availability, ExternalProvider, LeafSelector, PeerLeafAvailability, WorkKind,
+};
 use uuid::Uuid;
 
 use crate::peer_client::{PeerClient, PeerClientError};
@@ -94,7 +96,9 @@ fn normalized_title(title: &str) -> String {
 /// and release year (empty string when unknown) -- ported from
 /// `joinedServers.ts`'s `fallbackIdentity` function.
 fn fallback_identity(kind: WorkKind, title: &str, release_date: Option<DateTime<Utc>>) -> String {
-    let year = release_date.map(|date| date.format("%Y").to_string()).unwrap_or_default();
+    let year = release_date
+        .map(|date| date.format("%Y").to_string())
+        .unwrap_or_default();
     format!("fallback:{kind:?}:{}:{year}", normalized_title(title))
 }
 
@@ -107,7 +111,10 @@ pub async fn resolve_local_work(
     work_repo: &Arc<dyn WorkRepo>,
     row: &AvailabilityRow,
 ) -> Result<Option<Uuid>, streamarr_db::DbError> {
-    if let Some(work) = work_repo.find_by_external_ref(&row.provider, &row.external_id).await? {
+    if let Some(work) = work_repo
+        .find_by_external_ref(&row.provider, &row.external_id)
+        .await?
+    {
         return Ok(Some(work.id));
     }
 
@@ -232,8 +239,14 @@ mod tests {
     #[test]
     fn fallback_identity_distinguishes_kind_title_and_year() {
         let base = fallback_identity(WorkKind::Movie, "Same Title", None);
-        assert_ne!(base, fallback_identity(WorkKind::Series, "Same Title", None));
-        assert_ne!(base, fallback_identity(WorkKind::Movie, "Different Title", None));
+        assert_ne!(
+            base,
+            fallback_identity(WorkKind::Series, "Same Title", None)
+        );
+        assert_ne!(
+            base,
+            fallback_identity(WorkKind::Movie, "Different Title", None)
+        );
         assert_ne!(
             base,
             fallback_identity(
@@ -287,7 +300,10 @@ mod tests {
             matching.sort_by(|a, b| a.id.cmp(&b.id));
             let start = offset.max(0) as usize;
             let end = (start + limit.max(0) as usize).min(matching.len());
-            Ok(matching.get(start..end).map(|s| s.to_vec()).unwrap_or_default())
+            Ok(matching
+                .get(start..end)
+                .map(|s| s.to_vec())
+                .unwrap_or_default())
         }
 
         async fn upsert(&self, work: &Work) -> Result<(), streamarr_db::DbError> {
@@ -337,7 +353,12 @@ mod tests {
         }
     }
 
-    fn availability_row(provider: ExternalProvider, external_id: &str, kind: WorkKind, title: &str) -> AvailabilityRow {
+    fn availability_row(
+        provider: ExternalProvider,
+        external_id: &str,
+        kind: WorkKind,
+        title: &str,
+    ) -> AvailabilityRow {
         AvailabilityRow {
             provider,
             external_id: external_id.to_string(),
@@ -369,7 +390,12 @@ mod tests {
             "Sample Movie Kilo",
         )]));
 
-        let row = availability_row(ExternalProvider::Tmdb, "603", WorkKind::Movie, "Some Other Title");
+        let row = availability_row(
+            ExternalProvider::Tmdb,
+            "603",
+            WorkKind::Movie,
+            "Some Other Title",
+        );
         let resolved = resolve_local_work(&repo, &row).await.unwrap();
         assert_eq!(resolved, Some(work_id));
     }
@@ -393,7 +419,8 @@ mod tests {
         // title (it only knows the same movie via `Imdb`) -- the exact-ref
         // match must miss, and the title/year fallback must still resolve
         // it.
-        let mut row = availability_row(ExternalProvider::Tmdb, "603", WorkKind::Movie, "sample movie kilo");
+        let mut row =
+            availability_row(ExternalProvider::Tmdb, "603", WorkKind::Movie, "sample movie kilo");
         row.release_date = Some("1999-01-01T00:00:00Z".parse().unwrap());
         let resolved = resolve_local_work(&repo, &row).await.unwrap();
         assert_eq!(resolved, Some(work_id));
@@ -402,7 +429,12 @@ mod tests {
     #[tokio::test]
     async fn resolve_local_work_returns_none_for_a_title_with_zero_local_record() {
         let repo: Arc<dyn WorkRepo> = Arc::new(InMemoryWorkRepo::default());
-        let row = availability_row(ExternalProvider::Tmdb, "999999", WorkKind::Movie, "Unknown Title");
+        let row = availability_row(
+            ExternalProvider::Tmdb,
+            "999999",
+            WorkKind::Movie,
+            "Unknown Title",
+        );
         assert_eq!(resolve_local_work(&repo, &row).await.unwrap(), None);
     }
 
@@ -416,7 +448,12 @@ mod tests {
             "Ambiguous Title",
         )]));
 
-        let row = availability_row(ExternalProvider::Tmdb, "1", WorkKind::Movie, "Ambiguous Title");
+        let row = availability_row(
+            ExternalProvider::Tmdb,
+            "1",
+            WorkKind::Movie,
+            "Ambiguous Title",
+        );
         assert_eq!(resolve_local_work(&repo, &row).await.unwrap(), None);
     }
 
@@ -497,7 +534,11 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].local_work_id, Some(work_id));
 
-        let cursor = sync_state_repo.get(peer_node_id, "availability").await.unwrap().unwrap();
+        let cursor = sync_state_repo
+            .get(peer_node_id, "availability")
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(cursor.cursor.as_deref(), Some("cursor-1"));
     }
 

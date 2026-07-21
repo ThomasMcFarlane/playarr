@@ -1061,7 +1061,10 @@ fn validate_segment_file_name(name: &str) -> Result<(), ApiError> {
 /// error. That response's body (`UnsyncBoxBody<Bytes, io::Error>`) is
 /// re-wrapped into `axum::body::Body` so this can return a plain
 /// `axum::response::Response`.
-pub(crate) async fn serve_file(path: &std::path::Path, request: Request) -> Result<Response, ApiError> {
+pub(crate) async fn serve_file(
+    path: &std::path::Path,
+    request: Request,
+) -> Result<Response, ApiError> {
     let service = ServeFile::new(path);
     let response = match service.oneshot(request).await {
         Ok(response) => response,
@@ -1247,8 +1250,9 @@ fn proxy_response_from(upstream: reqwest::Response) -> Response {
         .map(|chunk| chunk.map_err(std::io::Error::other));
     match builder.body(axum::body::Body::from_stream(stream)) {
         Ok(response) => response,
-        Err(err) => ApiError::internal(format!("failed to build proxied response: {err}"))
-            .into_response(),
+        Err(err) => {
+            ApiError::internal(format!("failed to build proxied response: {err}")).into_response()
+        }
     }
 }
 
@@ -1444,13 +1448,17 @@ pub async fn peer_stream_media_handler(
     ensure_library_allowed(media_file.source_instance_id, allowed_libraries.as_deref())?;
 
     let resolved_path = streamarr_model::resolve_media_path(&media_file.path);
-    let mut synthetic_request = Request::builder().method(axum::http::Method::GET).uri("/proxied-stream");
+    let mut synthetic_request = Request::builder()
+        .method(axum::http::Method::GET)
+        .uri("/proxied-stream");
     if let Some(range) = headers.get(axum::http::header::RANGE) {
         synthetic_request = synthetic_request.header(axum::http::header::RANGE, range.clone());
     }
     let synthetic_request = synthetic_request
         .body(axum::body::Body::empty())
-        .map_err(|err| ApiError::internal(format!("failed to build proxied file request: {err}")))?;
+        .map_err(|err| {
+            ApiError::internal(format!("failed to build proxied file request: {err}"))
+        })?;
 
     let response = serve_file(&resolved_path, synthetic_request).await?;
     Ok(track_streamed_bytes(

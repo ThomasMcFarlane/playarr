@@ -173,7 +173,10 @@ pub enum UserResolution {
     Reject,
 }
 
-pub fn resolve_user(local: Option<SyncMetadata>, incoming_updated_at: DateTime<Utc>) -> UserResolution {
+pub fn resolve_user(
+    local: Option<SyncMetadata>,
+    incoming_updated_at: DateTime<Utc>,
+) -> UserResolution {
     match local {
         None => UserResolution::Insert,
         Some(local_meta) if incoming_updated_at > local_meta.updated_at => UserResolution::Apply,
@@ -412,7 +415,8 @@ pub async fn sync_accounts(
                 }
             }
             PolicyResolution::ApplyNonPrivilegedOnly => {
-                let local_meta = local_meta.expect("this arm only returned when a local row exists");
+                let local_meta =
+                    local_meta.expect("this arm only returned when a local row exists");
                 let local_policy = policy_repo
                     .find_by_id(row.policy.id)
                     .await?
@@ -777,7 +781,11 @@ mod tests {
             deleted_at: None,
         };
         assert_eq!(
-            resolve_policy(Some(local), now - Duration::seconds(1), local.origin_peer_id),
+            resolve_policy(
+                Some(local),
+                now - Duration::seconds(1),
+                local.origin_peer_id
+            ),
             PolicyResolution::Reject
         );
     }
@@ -855,7 +863,10 @@ mod tests {
 
         let merged = merge_non_privileged_policy_fields(&local, &incoming);
 
-        assert!(merged.is_admin, "is_admin must not move from a non-origin peer");
+        assert!(
+            merged.is_admin,
+            "is_admin must not move from a non-origin peer"
+        );
         assert!(merged.can_download);
         assert!(merged.can_delete);
         assert!(merged.can_share_public);
@@ -887,7 +898,10 @@ mod tests {
         assert_eq!(merged.blocked_folders, incoming.blocked_folders);
         assert_eq!(merged.max_rating, incoming.max_rating);
         assert_eq!(merged.can_transcode, incoming.can_transcode);
-        assert_eq!(merged.max_concurrent_sessions, incoming.max_concurrent_sessions);
+        assert_eq!(
+            merged.max_concurrent_sessions,
+            incoming.max_concurrent_sessions
+        );
     }
 
     // ---- wire DTO round trip ----
@@ -939,9 +953,13 @@ mod tests {
             pool: pool.clone(),
             user_repo: Arc::new(streamarr_db::repo::SqlxUserRepo::new(pool.clone())),
             policy_repo: Arc::new(streamarr_db::repo::SqlxPolicyRepo::new(pool.clone())),
-            group_library_repo: Arc::new(streamarr_db::repo::SqlxGroupLibraryRepo::new(pool.clone())),
+            group_library_repo: Arc::new(streamarr_db::repo::SqlxGroupLibraryRepo::new(
+                pool.clone(),
+            )),
             invite_repo: Arc::new(streamarr_db::repo::SqlxUserInviteRepo::new(pool.clone())),
-            invite_request_repo: Arc::new(streamarr_db::repo::SqlxUserInviteRequestRepo::new(pool.clone())),
+            invite_request_repo: Arc::new(streamarr_db::repo::SqlxUserInviteRequestRepo::new(
+                pool.clone(),
+            )),
             sync_state_repo: Arc::new(streamarr_db::repo::SqlxPeerSyncStateRepo::new(pool.clone())),
             conflict_log_repo: Arc::new(streamarr_db::repo::SqlxSyncConflictLogRepo::new(pool)),
         }
@@ -1016,7 +1034,12 @@ mod tests {
         .expect("first sync succeeds");
         assert_eq!(outcome.users_applied, 1);
         assert_eq!(outcome.conflicts_logged, 0);
-        assert!(harness.user_repo.find_by_id(user.id).await.unwrap().is_some());
+        assert!(harness
+            .user_repo
+            .find_by_id(user.id)
+            .await
+            .unwrap()
+            .is_some());
 
         let cursor = harness
             .sync_state_repo
@@ -1059,7 +1082,12 @@ mod tests {
         .expect("second sync succeeds");
         assert_eq!(outcome.users_applied, 1);
         assert_eq!(outcome.conflicts_logged, 0);
-        let fetched = harness.user_repo.find_by_id(user.id).await.unwrap().unwrap();
+        let fetched = harness
+            .user_repo
+            .find_by_id(user.id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(fetched.username, "renamed");
     }
 
@@ -1122,16 +1150,26 @@ mod tests {
         assert_eq!(outcome.conflicts_logged, 1);
 
         // The local row must be untouched by the losing write.
-        let fetched = harness.user_repo.find_by_id(user.id).await.unwrap().unwrap();
+        let fetched = harness
+            .user_repo
+            .find_by_id(user.id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(fetched.username, user.username);
 
-        let pending = harness.conflict_log_repo.list_requiring_review().await.unwrap();
+        let pending = harness
+            .conflict_log_repo
+            .list_requiring_review()
+            .await
+            .unwrap();
         // Plain LWW loss is informational, not review-required.
         assert!(pending.is_empty());
     }
 
     #[tokio::test]
-    async fn sync_accounts_gates_privileged_policy_fields_on_origin_mismatch_and_flags_for_review() {
+    async fn sync_accounts_gates_privileged_policy_fields_on_origin_mismatch_and_flags_for_review()
+    {
         let mock = MockServer::start().await;
         let harness = harness().await;
         let peer_node_id = Uuid::new_v4();
@@ -1191,15 +1229,31 @@ mod tests {
         assert_eq!(outcome.policies_applied, 1);
         assert_eq!(outcome.conflicts_logged, 1);
 
-        let fetched = harness.policy_repo.find_by_id(policy_id).await.unwrap().unwrap();
-        assert!(fetched.is_admin, "is_admin must survive an origin-mismatched write");
+        let fetched = harness
+            .policy_repo
+            .find_by_id(policy_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            fetched.is_admin,
+            "is_admin must survive an origin-mismatched write"
+        );
         assert_eq!(
             fetched.name, "Renamed By Attacker",
             "non-privileged fields still apply from the newer write"
         );
 
-        let pending = harness.conflict_log_repo.list_requiring_review().await.unwrap();
-        assert_eq!(pending.len(), 1, "a privilege-gated conflict requires admin review");
+        let pending = harness
+            .conflict_log_repo
+            .list_requiring_review()
+            .await
+            .unwrap();
+        assert_eq!(
+            pending.len(),
+            1,
+            "a privilege-gated conflict requires admin review"
+        );
         assert_eq!(pending[0].entity_type, "policy");
     }
 
@@ -1267,8 +1321,18 @@ mod tests {
         );
         assert_eq!(outcome.users_applied, 1);
         assert_eq!(outcome.policies_applied, 1);
-        assert!(harness.policy_repo.find_by_id(policy.id).await.unwrap().is_some());
-        assert!(harness.user_repo.find_by_id(user.id).await.unwrap().is_some());
+        assert!(harness
+            .policy_repo
+            .find_by_id(policy.id)
+            .await
+            .unwrap()
+            .is_some());
+        assert!(harness
+            .user_repo
+            .find_by_id(user.id)
+            .await
+            .unwrap()
+            .is_some());
 
         let cursor = harness
             .sync_state_repo
@@ -1401,21 +1465,44 @@ mod tests {
         assert_eq!(outcome.conflicts_logged, 1);
 
         assert!(
-            harness.user_repo.find_by_id(colliding_user.id).await.unwrap().is_none(),
+            harness
+                .user_repo
+                .find_by_id(colliding_user.id)
+                .await
+                .unwrap()
+                .is_none(),
             "the colliding row must never have been inserted"
         );
         assert!(
-            harness.user_repo.find_by_id(good_user.id).await.unwrap().is_some(),
+            harness
+                .user_repo
+                .find_by_id(good_user.id)
+                .await
+                .unwrap()
+                .is_some(),
             "the other row on the same page must still apply despite the earlier row's failure"
         );
-        let existing_admin = harness.user_repo.find_by_id(local_admin.id).await.unwrap().unwrap();
+        let existing_admin = harness
+            .user_repo
+            .find_by_id(local_admin.id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(
             existing_admin.username, "admin",
             "the pre-existing local row that owns the contested username must be untouched"
         );
 
-        let pending = harness.conflict_log_repo.list_requiring_review().await.unwrap();
-        assert_eq!(pending.len(), 1, "the collision needs a human decision, not a silent drop");
+        let pending = harness
+            .conflict_log_repo
+            .list_requiring_review()
+            .await
+            .unwrap();
+        assert_eq!(
+            pending.len(),
+            1,
+            "the collision needs a human decision, not a silent drop"
+        );
         assert_eq!(pending[0].entity_type, "user");
         assert_eq!(pending[0].entity_id, colliding_user.id);
         assert!(pending[0].requires_admin_review);
@@ -1506,12 +1593,32 @@ mod tests {
         .unwrap();
         assert_eq!(applied, 1);
 
-        assert!(harness.group_library_repo.get(new_library_id).await.unwrap().is_some());
-        let stale = harness.group_library_repo.get(stale_library_id).await.unwrap().unwrap();
-        assert_eq!(stale.name, "Local Name", "the stale incoming rename must not apply");
+        assert!(harness
+            .group_library_repo
+            .get(new_library_id)
+            .await
+            .unwrap()
+            .is_some());
+        let stale = harness
+            .group_library_repo
+            .get(stale_library_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            stale.name, "Local Name",
+            "the stale incoming rename must not apply"
+        );
 
-        let pending = harness.conflict_log_repo.list_requiring_review().await.unwrap();
-        assert!(pending.is_empty(), "group_library conflicts are plain LWW, not review-required");
+        let pending = harness
+            .conflict_log_repo
+            .list_requiring_review()
+            .await
+            .unwrap();
+        assert!(
+            pending.is_empty(),
+            "group_library conflicts are plain LWW, not review-required"
+        );
     }
 
     #[tokio::test]

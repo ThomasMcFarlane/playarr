@@ -149,9 +149,7 @@ pub async fn create_download_ticket_handler(
         .media_files
         .get(body.media_file_id)
         .await
-        .ok_or_else(|| {
-            ApiError::not_found(format!("unknown media file {}", body.media_file_id))
-        })?;
+        .ok_or_else(|| ApiError::not_found(format!("unknown media file {}", body.media_file_id)))?;
     ensure_library_allowed(
         media_file.source_instance_id,
         streaming.allowed_libraries().as_deref(),
@@ -250,9 +248,7 @@ pub async fn list_download_tickets_handler(
     // exists. A ticket whose `MediaFile` no longer resolves at all is
     // dropped for a restricted caller too (fail closed).
     let Some(allowed) = streaming.allowed_libraries() else {
-        return Ok(Json(
-            all_tickets.into_iter().map(Into::into).collect(),
-        ));
+        return Ok(Json(all_tickets.into_iter().map(Into::into).collect()));
     };
     let mut visible = Vec::with_capacity(all_tickets.len());
     for ticket in all_tickets {
@@ -403,9 +399,9 @@ pub async fn download_ticket_file_handler(
 
     let file_name = download_file_name(&ticket);
     let mut response = crate::media::serve_file(&resolved_path, request).await?;
-    if let Ok(value) = axum::http::HeaderValue::from_str(&format!(
-        "attachment; filename=\"{file_name}\""
-    )) {
+    if let Ok(value) =
+        axum::http::HeaderValue::from_str(&format!("attachment; filename=\"{file_name}\""))
+    {
         response
             .headers_mut()
             .insert(axum::http::header::CONTENT_DISPOSITION, value);
@@ -744,8 +740,10 @@ mod tests {
     async fn original_ticket_file_serves_source_bytes_with_range_and_attachment_disposition() {
         let (router, state) = test_state().await;
         let contents = b"hello streamarr downloads".to_vec();
-        let path = std::env::temp_dir()
-            .join(format!("streamarr-api-downloads-test-{}.mkv", Uuid::new_v4()));
+        let path = std::env::temp_dir().join(format!(
+            "streamarr-api-downloads-test-{}.mkv",
+            Uuid::new_v4()
+        ));
         std::fs::write(&path, &contents).expect("write temp fixture file");
 
         let work_id = seed_movie(&state, "Test Movie").await;

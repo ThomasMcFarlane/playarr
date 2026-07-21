@@ -208,7 +208,11 @@ pub fn compute_delivery_mode(mode: DeliveryMode, peer: &PeerNode) -> DeliveryMod
         DeliveryMode::Redirect => DeliveryMode::Redirect,
         DeliveryMode::Proxy => DeliveryMode::Proxy,
         DeliveryMode::Auto => {
-            if peer.addresses.iter().any(|address| address.client_reachable) {
+            if peer
+                .addresses
+                .iter()
+                .any(|address| address.client_reachable)
+            {
                 DeliveryMode::Redirect
             } else {
                 DeliveryMode::Proxy
@@ -221,7 +225,11 @@ pub fn compute_delivery_mode(mode: DeliveryMode, peer: &PeerNode) -> DeliveryMod
 /// `peer_id` matching `ctx`'s specific leaf -- the exact primary key
 /// `peer_leaf_availability` itself is keyed on
 /// (`peer_node_id, provider, external_id, leaf_selector`).
-fn peer_reports_available(peer_id: Uuid, ctx: &RoutingContext, availability: &[PeerLeafAvailability]) -> bool {
+fn peer_reports_available(
+    peer_id: Uuid,
+    ctx: &RoutingContext,
+    availability: &[PeerLeafAvailability],
+) -> bool {
     availability.iter().any(|row| {
         row.peer_node_id == peer_id
             && row.provider == ctx.provider
@@ -376,7 +384,11 @@ mod tests {
         }
     }
 
-    fn available_row(peer_id: Uuid, ctx: &RoutingContext, availability: Availability) -> PeerLeafAvailability {
+    fn available_row(
+        peer_id: Uuid,
+        ctx: &RoutingContext,
+        availability: Availability,
+    ) -> PeerLeafAvailability {
         let now = Utc::now().trunc_subsecs(3);
         PeerLeafAvailability {
             peer_node_id: peer_id,
@@ -407,9 +419,15 @@ mod tests {
         let user_only = rule(None, Some(ctx.user_id), 0, vec![]);
         let library_only = rule(ctx.group_library_id, None, 0, vec![]);
         let global = rule(None, None, 0, vec![]);
-        let rules = vec![global.clone(), library_only.clone(), user_only.clone(), library_and_user.clone()];
+        let rules = vec![
+            global.clone(),
+            library_only.clone(),
+            user_only.clone(),
+            library_and_user.clone(),
+        ];
 
-        let selected = select_most_specific_rule(&rules, ctx.group_library_id, ctx.user_id).unwrap();
+        let selected =
+            select_most_specific_rule(&rules, ctx.group_library_id, ctx.user_id).unwrap();
         assert_eq!(selected.id, library_and_user.id);
     }
 
@@ -420,7 +438,8 @@ mod tests {
         let library_only = rule(ctx.group_library_id, None, 0, vec![]);
         let rules = vec![library_only, user_only.clone()];
 
-        let selected = select_most_specific_rule(&rules, ctx.group_library_id, ctx.user_id).unwrap();
+        let selected =
+            select_most_specific_rule(&rules, ctx.group_library_id, ctx.user_id).unwrap();
         assert_eq!(selected.id, user_only.id);
     }
 
@@ -431,7 +450,8 @@ mod tests {
         let global = rule(None, None, 0, vec![]);
         let rules = vec![other_user_rule, global.clone()];
 
-        let selected = select_most_specific_rule(&rules, ctx.group_library_id, ctx.user_id).unwrap();
+        let selected =
+            select_most_specific_rule(&rules, ctx.group_library_id, ctx.user_id).unwrap();
         assert_eq!(selected.id, global.id);
     }
 
@@ -452,7 +472,8 @@ mod tests {
         let high = rule(None, None, 10, vec![]);
         let rules = vec![low, high.clone()];
 
-        let selected = select_most_specific_rule(&rules, ctx.group_library_id, ctx.user_id).unwrap();
+        let selected =
+            select_most_specific_rule(&rules, ctx.group_library_id, ctx.user_id).unwrap();
         assert_eq!(selected.id, high.id);
     }
 
@@ -466,7 +487,8 @@ mod tests {
         // is only the tiebreak *within* a tier.
         let rules = vec![global, library_and_user.clone()];
 
-        let selected = select_most_specific_rule(&rules, ctx.group_library_id, ctx.user_id).unwrap();
+        let selected =
+            select_most_specific_rule(&rules, ctx.group_library_id, ctx.user_id).unwrap();
         assert_eq!(selected.id, library_and_user.id);
     }
 
@@ -536,7 +558,12 @@ mod tests {
         );
         let peers = vec![
             peer(self_id, PeerNodeStatus::Active, true, true),
-            peer(unreachable_preferred, PeerNodeStatus::Unreachable, false, true),
+            peer(
+                unreachable_preferred,
+                PeerNodeStatus::Unreachable,
+                false,
+                true,
+            ),
             peer(second_preferred, PeerNodeStatus::Active, false, true),
         ];
         let availability = vec![
@@ -572,7 +599,11 @@ mod tests {
             peer(has_file_preferred, PeerNodeStatus::Active, false, true),
         ];
         // `no_file_preferred` has no row at all -- never reported having it.
-        let availability = vec![available_row(has_file_preferred, &ctx, Availability::PartiallyAvailable)];
+        let availability = vec![available_row(
+            has_file_preferred,
+            &ctx,
+            Availability::PartiallyAvailable,
+        )];
 
         let decision = resolve_route(&ctx, &[rule], self_id, true, &peers, &availability);
         assert_eq!(
@@ -611,7 +642,11 @@ mod tests {
             peer(dead_preferred, PeerNodeStatus::Unreachable, false, true),
             peer(other_active_peer, PeerNodeStatus::Active, false, false),
         ];
-        let availability = vec![available_row(other_active_peer, &ctx, Availability::Available)];
+        let availability = vec![available_row(
+            other_active_peer,
+            &ctx,
+            Availability::Available,
+        )];
 
         // self_available = false: the entry node doesn't have it either.
         let decision = resolve_route(&ctx, &[rule], self_id, false, &peers, &availability);
@@ -682,7 +717,12 @@ mod tests {
         let self_id = Uuid::new_v4();
         let unknown_peer = Uuid::new_v4();
         let known_peer = Uuid::new_v4();
-        let rule = rule(ctx.group_library_id, None, 0, vec![unknown_peer, known_peer]);
+        let rule = rule(
+            ctx.group_library_id,
+            None,
+            0,
+            vec![unknown_peer, known_peer],
+        );
         let peers = vec![
             peer(self_id, PeerNodeStatus::Active, true, true),
             peer(known_peer, PeerNodeStatus::Active, false, true),
@@ -726,7 +766,10 @@ mod tests {
             peer(preferred, PeerNodeStatus::Active, false, true),
         ];
         let mut row = available_row(preferred, &ctx, Availability::Available);
-        row.leaf_selector = LeafSelector::Episode { season: 1, episode: 1 };
+        row.leaf_selector = LeafSelector::Episode {
+            season: 1,
+            episode: 1,
+        };
 
         let decision = resolve_route(&ctx, &[rule], self_id, true, &peers, &[row]);
         assert_eq!(decision, RoutingDecision::ServeLocally);
@@ -737,32 +780,47 @@ mod tests {
     #[test]
     fn compute_delivery_mode_auto_is_redirect_when_a_client_reachable_address_exists() {
         let peer = peer(Uuid::new_v4(), PeerNodeStatus::Active, false, true);
-        assert_eq!(compute_delivery_mode(DeliveryMode::Auto, &peer), DeliveryMode::Redirect);
+        assert_eq!(
+            compute_delivery_mode(DeliveryMode::Auto, &peer),
+            DeliveryMode::Redirect
+        );
     }
 
     #[test]
     fn compute_delivery_mode_auto_is_proxy_when_no_address_is_client_reachable() {
         let peer = peer(Uuid::new_v4(), PeerNodeStatus::Active, false, false);
-        assert_eq!(compute_delivery_mode(DeliveryMode::Auto, &peer), DeliveryMode::Proxy);
+        assert_eq!(
+            compute_delivery_mode(DeliveryMode::Auto, &peer),
+            DeliveryMode::Proxy
+        );
     }
 
     #[test]
     fn compute_delivery_mode_auto_is_proxy_with_no_addresses_at_all() {
         let mut peer = peer(Uuid::new_v4(), PeerNodeStatus::Active, false, false);
         peer.addresses.clear();
-        assert_eq!(compute_delivery_mode(DeliveryMode::Auto, &peer), DeliveryMode::Proxy);
+        assert_eq!(
+            compute_delivery_mode(DeliveryMode::Auto, &peer),
+            DeliveryMode::Proxy
+        );
     }
 
     #[test]
     fn compute_delivery_mode_explicit_redirect_passes_through_even_without_a_reachable_address() {
         let peer = peer(Uuid::new_v4(), PeerNodeStatus::Active, false, false);
-        assert_eq!(compute_delivery_mode(DeliveryMode::Redirect, &peer), DeliveryMode::Redirect);
+        assert_eq!(
+            compute_delivery_mode(DeliveryMode::Redirect, &peer),
+            DeliveryMode::Redirect
+        );
     }
 
     #[test]
     fn compute_delivery_mode_explicit_proxy_passes_through_even_with_a_reachable_address() {
         let peer = peer(Uuid::new_v4(), PeerNodeStatus::Active, false, true);
-        assert_eq!(compute_delivery_mode(DeliveryMode::Proxy, &peer), DeliveryMode::Proxy);
+        assert_eq!(
+            compute_delivery_mode(DeliveryMode::Proxy, &peer),
+            DeliveryMode::Proxy
+        );
     }
 
     // ---- freshness / cooldown helpers ----

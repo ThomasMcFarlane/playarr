@@ -335,7 +335,10 @@ impl StreamingUser {
     /// access via either mechanism is allowed.
     pub fn allowed_libraries(&self) -> Option<Vec<Uuid>> {
         (!self.policy.is_admin).then(|| {
-            union_library_ids(&self.policy.library_allow, &self.resolved_group_library_allow)
+            union_library_ids(
+                &self.policy.library_allow,
+                &self.resolved_group_library_allow,
+            )
         })
     }
 }
@@ -441,7 +444,10 @@ impl CatalogViewer {
     /// `SourceInstance` ids (§5.1).
     pub fn allowed_libraries(&self) -> Option<Vec<Uuid>> {
         (!self.policy.is_admin).then(|| {
-            union_library_ids(&self.policy.library_allow, &self.resolved_group_library_allow)
+            union_library_ids(
+                &self.policy.library_allow,
+                &self.resolved_group_library_allow,
+            )
         })
     }
 }

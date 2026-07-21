@@ -118,9 +118,9 @@ pub async fn join_group(
     let enrolled = match enrolled {
         Some(enrolled) => enrolled,
         None => {
-            return Err(JoinGroupError::AllAddressesFailed(
-                last_err.expect("the loop above ran at least once since bootstrap_addresses is non-empty"),
-            ))
+            return Err(JoinGroupError::AllAddressesFailed(last_err.expect(
+                "the loop above ran at least once since bootstrap_addresses is non-empty",
+            )))
         }
     };
 
@@ -265,7 +265,10 @@ mod tests {
         let members = peer_node_repo.list_all().await.unwrap();
         assert_eq!(members.len(), 2);
         let self_row = members.iter().find(|m| m.id == peer_id).unwrap();
-        assert!(self_row.is_self, "this node's own row must be is_self=true locally");
+        assert!(
+            self_row.is_self,
+            "this node's own row must be is_self=true locally"
+        );
         let seed_row = members.iter().find(|m| m.id != peer_id).unwrap();
         assert!(
             !seed_row.is_self,

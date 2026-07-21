@@ -61,7 +61,8 @@ impl PeerIdentity {
     /// This identity's Ed25519 public key, base64-encoded -- the exact
     /// value a `peer_nodes.public_key` column stores for this peer.
     pub fn public_key_b64(&self) -> String {
-        base64::engine::general_purpose::STANDARD.encode(self.signing_key.verifying_key().to_bytes())
+        base64::engine::general_purpose::STANDARD
+            .encode(self.signing_key.verifying_key().to_bytes())
     }
 
     /// Signs `method|path|sha256(body)|timestamp|nonce` and returns the
@@ -96,7 +97,13 @@ pub struct SignedRequestHeaders {
 /// The exact string a caller signs -- `method|path|sha256(body)|timestamp|
 /// nonce`, per §3.3. Must match `streamarr-api/src/peer_extractor.rs::
 /// canonical_string` byte-for-byte; see this module's own doc comment.
-pub fn canonical_string(method: &str, path: &str, body: &[u8], timestamp: i64, nonce: &str) -> String {
+pub fn canonical_string(
+    method: &str,
+    path: &str,
+    body: &[u8],
+    timestamp: i64,
+    nonce: &str,
+) -> String {
     let body_hash = hex::encode(Sha256::digest(body));
     format!("{method}|{path}|{body_hash}|{timestamp}|{nonce}")
 }
@@ -253,8 +260,7 @@ mod tests {
         // public key -- a sanity check that `from_seed_b64` is
         // deterministic, which every peer relies on (the joining node
         // derives its public key from the same stored seed every boot).
-        let seed_b64 =
-            base64::engine::general_purpose::STANDARD.encode([7u8; 32]);
+        let seed_b64 = base64::engine::general_purpose::STANDARD.encode([7u8; 32]);
         let reconstructed = PeerIdentity::from_seed_b64(identity.peer_id, &seed_b64).unwrap();
         assert_eq!(identity.public_key_b64(), reconstructed.public_key_b64());
     }

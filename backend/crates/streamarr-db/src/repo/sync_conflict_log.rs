@@ -252,7 +252,9 @@ mod tests {
         let conflict = sample_conflict("group_library", Utc::now());
         repo.create(&conflict).await.unwrap();
 
-        repo.mark_reviewed(conflict.id).await.expect("mark_reviewed");
+        repo.mark_reviewed(conflict.id)
+            .await
+            .expect("mark_reviewed");
 
         assert!(repo.list_requiring_review().await.unwrap().is_empty());
     }

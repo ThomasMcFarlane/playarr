@@ -23,7 +23,9 @@ use axum::Json;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use streamarr_catalog::{BrowseQuery, BrowseSort, WorkDetail};
-use streamarr_model::{Album, Availability, Book, Episode, ExternalProvider, Season, Track, Work, WorkKind};
+use streamarr_model::{
+    Album, Availability, Book, Episode, ExternalProvider, Season, Track, Work, WorkKind,
+};
 use utoipa::ToSchema;
 use uuid::Uuid;
 

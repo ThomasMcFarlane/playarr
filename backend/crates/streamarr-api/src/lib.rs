@@ -55,11 +55,11 @@ pub mod views;
 pub mod webhooks;
 
 #[cfg(test)]
-pub mod test_support;
-#[cfg(test)]
 mod peer_group_e2e_test;
 #[cfg(test)]
 mod routing_e2e_test;
+#[cfg(test)]
+pub mod test_support;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -546,7 +546,8 @@ pub struct AppState {
     /// this from `STREAMARR_NODE_NAME` at boot (ungrouped nodes only) as a
     /// pure UX convenience -- see that function's own comment; it never
     /// substitutes for actually calling this route.
-    pub pending_self_peer_profile: Arc<std::sync::Mutex<Option<admin_peer::PendingSelfPeerProfile>>>,
+    pub pending_self_peer_profile:
+        Arc<std::sync::Mutex<Option<admin_peer::PendingSelfPeerProfile>>>,
     /// Group-wide library registry (`docs/architecture/peer-groups.md`
     /// §2.3) -- backs `peer::libraries_handler`'s `group_libraries` half.
     pub group_library_repo: Arc<dyn streamarr_db::GroupLibraryRepo>,

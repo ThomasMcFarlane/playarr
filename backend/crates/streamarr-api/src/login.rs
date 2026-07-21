@@ -344,7 +344,9 @@ apiVersion = "1"
             .await
             .unwrap();
         let login: LoginResponse = serde_json::from_slice(&bytes).unwrap();
-        let bundle = login.peer_addresses.expect("grouped node must carry a bundle");
+        let bundle = login
+            .peer_addresses
+            .expect("grouped node must carry a bundle");
         assert_eq!(bundle.group_id, Some(group_id));
         assert_eq!(
             bundle.addresses,
