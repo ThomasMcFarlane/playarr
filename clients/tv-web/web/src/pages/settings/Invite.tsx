@@ -3,6 +3,7 @@ import {
   ApiError,
   type UserInviteRequestResponse,
 } from "@streamarr-tv/api-client";
+import { buildInviteUrl, type PeerAddressBundleLike } from "@streamarr-tv/domain";
 import { useApiBaseUrl, usePrimaryApiClient } from "../../lib/ApiClientProvider";
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useToast } from "../../lib/toast";
@@ -79,15 +80,60 @@ export function SettingsInvitePage() {
     }
   }
 
+  /**
+   * `GET .../peer-groups/self/address-bundle` is `AdminUser`-gated
+   * (`admin_peer.rs`), but this friend-invite flow's caller is only a
+   * `StreamingUser` (`users.rs::generate_user_invite_handler` -- any
+   * signed-in household member, not just admins). A 403 here just means
+   * "not an admin," not a real failure: fall back to this node's own
+   * configured address, degenerating to exactly today's single-address
+   * link rather than blocking friend-invite generation for non-admins.
+   *
+   * Separately: even for an admin caller, the bundle's `addresses` list is
+   * empty -- not an error -- for a node that has never called `PUT
+   * /api/v1/admin/peer-nodes/self` (no UI calls that endpoint yet, so this
+   * is every deployment's actual state today). A zero-address `servers=`
+   * bundle is exactly what `signupInvite.ts::parseSignupInvite` treats as
+   * "no invite at all," silently breaking sign-up for the ordinary
+   * single-node case. Fall back the same way as the 403 case: this
+   * client's own currently-connected address, still through the one
+   * `servers=` code path.
+   */
+  async function resolveFriendInviteAddressBundle(): Promise<PeerAddressBundleLike> {
+    try {
+      const bundle = await client.getPeerAddressBundle();
+      return bundle.addresses.length > 0 ? bundle : fallbackAddressBundle(apiBaseUrl);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 403) {
+        return fallbackAddressBundle(apiBaseUrl);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Wraps this client's own connected address into a one-element
+   * `PeerAddressBundleLike` for both fallback branches above.
+   * `peer_node_id` is a placeholder, not a real attribution -- there is no
+   * backing `peer_nodes` row to attribute it to in either fallback case --
+   * but that's harmless: every consumer downstream of `buildInviteUrl`
+   * (ultimately `signupInvite.ts::parseSignupInvite` on the redeeming
+   * client) only ever reads `url`, never `peer_node_id`, since sign-up
+   * redemption works at any node in the group by design.
+   */
+  function fallbackAddressBundle(url: string): PeerAddressBundleLike {
+    return { addresses: [{ peer_node_id: "", url }] };
+  }
+
   async function handleGenerateFriendInvite() {
     const current = friendInviteState.status === "loading" ? null : friendInviteState.request;
     setFriendInviteState({ status: "saving", request: current });
     try {
-      const invite = await client.generateApprovedUserInvite();
-      const url = new URL("/signup", "https://playarr.app");
-      url.searchParams.set("server", apiBaseUrl);
-      url.searchParams.set("invite", invite.invite_token);
-      setFriendInviteLink(url.toString());
+      const [invite, addressBundle] = await Promise.all([
+        client.generateApprovedUserInvite(),
+        resolveFriendInviteAddressBundle(),
+      ]);
+      setFriendInviteLink(buildInviteUrl(addressBundle, invite.invite_token));
       setFriendInviteExpiresAt(invite.expires_at);
       setFriendInviteCopied(false);
       const request = await client.getMyUserInviteRequest();

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiClient, ApiError } from "@streamarr-tv/api-client";
+import { rememberGroup } from "@streamarr-tv/domain";
 import { useAuth } from "../lib/ApiClientProvider";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { createLocalNetworkFetch } from "../lib/localNetworkFetch";
@@ -12,6 +13,28 @@ import { ProfileAuthLayout } from "../components/ProfileAuthLayout";
 
 const invite = parseSignupInvite(window.location.search);
 const browserFetch = createLocalNetworkFetch();
+
+/**
+ * Short reachability-probe budget per address, per `docs/architecture/
+ * peer-groups.md` §6.1 ("tries serverUrls in order, short per-attempt
+ * timeout"). Only guards the probe below, never the real signup/login
+ * requests, which get however long a normal request takes.
+ */
+const SERVER_PROBE_TIMEOUT_MS = 3000;
+
+/** Wraps a `fetchImpl` so a single request aborts after `timeoutMs`. */
+function fetchWithTimeout(
+  fetchImpl: (input: Request) => Promise<Response>,
+  timeoutMs: number
+): (input: Request) => Promise<Response> {
+  return (input) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    return fetchImpl(new Request(input, { signal: controller.signal })).finally(() =>
+      clearTimeout(timer)
+    );
+  };
+}
 
 export function SignupPage() {
   const { t } = useLanguage();
@@ -27,36 +50,78 @@ export function SignupPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [serverName, setServerName] = useState<string | null>(null);
+  // The address (from `invite.serverUrls`) that actually answered -- see the
+  // resolution effect below. `null` until resolved, so `signupClient` (and
+  // therefore submission) waits for a reachable address instead of racing
+  // ahead against one that might not exist.
+  const [resolvedServerUrl, setResolvedServerUrl] = useState<string | null>(null);
   const signupClient = useMemo(
     () =>
-      invite
+      resolvedServerUrl
         ? new ApiClient({
-            baseUrl: publicIpv4RelayUrl(invite.serverUrl),
+            baseUrl: publicIpv4RelayUrl(resolvedServerUrl),
             fetchImpl: browserFetch,
           })
         : null,
-    []
+    [resolvedServerUrl]
   );
 
+  // Tries every address this invite carries, in order, per §6.1: a short
+  // per-attempt timeout so one unreachable peer doesn't stall the whole
+  // list. First address to answer `getVersion()` wins -- that's both the
+  // liveness probe and how the server's display name gets populated, same
+  // as the single-address version of this effect did. On success, the
+  // *whole* list is remembered (not just the winner) as a `KnownServerGroup`
+  // (§7.1) via `rememberGroup`, with the winner promoted to `lastGoodUrl` so
+  // it's tried first on the next resolution -- the invite carries no
+  // `groupId`/`groupName` of its own, so this group starts anonymous.
   useEffect(() => {
-    if (!invite || !signupClient) return;
+    if (!invite) return;
     let cancelled = false;
-    void signupClient
-      .getVersion()
-      .then((version) => {
-        if (!cancelled) setServerName(version.instance_name || invite.serverUrl);
-      })
-      .catch(() => {
-        if (!cancelled) setServerName(invite.serverUrl);
-      });
+
+    void (async () => {
+      for (const serverUrl of invite.serverUrls) {
+        if (cancelled) return;
+        const probeClient = new ApiClient({
+          baseUrl: publicIpv4RelayUrl(serverUrl),
+          fetchImpl: fetchWithTimeout(browserFetch, SERVER_PROBE_TIMEOUT_MS),
+        });
+        try {
+          const version = await probeClient.getVersion();
+          if (cancelled) return;
+          rememberGroup({
+            servers: invite.serverUrls.map((url) => ({ url })),
+            lastGoodUrl: serverUrl,
+          });
+          setResolvedServerUrl(serverUrl);
+          setServerName(version.instance_name || serverUrl);
+          return;
+        } catch {
+          // Unreachable, or timed out -- try the next address. §6.1: "as
+          // long as one of them connects, it's fine."
+        }
+      }
+      if (cancelled) return;
+      // Every address's reachability probe failed. Fall back to the first
+      // address anyway so the form stays usable and a real submit attempt
+      // surfaces a normal network-unreachable error rather than leaving
+      // the page silently inert (matches this effect's pre-multi-address
+      // behavior of always building a client even when the probe failed).
+      const fallbackUrl = invite.serverUrls[0];
+      if (fallbackUrl) {
+        setResolvedServerUrl(fallbackUrl);
+        setServerName(fallbackUrl);
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, [signupClient]);
+  }, []);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!invite || !signupClient) return;
+    if (!invite || !signupClient || !resolvedServerUrl) return;
     if (password !== passwordConfirmation) {
       setError(t("pages.signup.passwordMismatch"));
       return;
@@ -72,7 +137,7 @@ export function SignupPage() {
         email: email || undefined,
         password,
       });
-      await login({ serverUrl: invite.serverUrl, username, password });
+      await login({ serverUrl: resolvedServerUrl, username, password });
       navigate("/", { replace: true });
     } catch (err) {
       if (err instanceof ApiError && err.status === 410) {

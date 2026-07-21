@@ -19,9 +19,38 @@
  * 8628 pairing, whatever) would silently stop working the moment its
  * access token's TTL elapsed, even though a perfectly good refresh token
  * was sitting right there unused.
+ *
+ * `docs/architecture/peer-groups.md` §7.2/§3.7: once a client remembers a
+ * peer group (`@streamarr-tv/domain`'s `KnownServerGroup`), a refresh
+ * failure against the current server no longer falls straight through to a
+ * full login -- it retries the *same* refresh token against every other
+ * remembered address first (`serverGroup`/`clientForUrl` below), since
+ * refresh tokens are never synced peer-to-peer (§3.7) and the issuing peer
+ * being temporarily down is not the same thing as the session being dead.
+ *
+ * That retry is node-scoped, not group-wide: a refresh token is only ever
+ * recognized by the peer that issued it (§3.7 again -- refresh tokens are
+ * never synced), so retrying it against a *different* node's address is a
+ * guaranteed 401, not a real chance at recovery. `refreshAcrossServerGroup`
+ * below only tries addresses `@streamarr-tv/domain`'s `KnownServerGroup`
+ * attributes to the same `peer_node_id` that issued the stored access token
+ * (read off its `iss` claim via `decodeAccessTokenIssuer` -- unverified,
+ * used purely as a routing hint, never a trust decision). A fresh
+ * credential-less login, by contrast, *is* valid at any group node --
+ * accounts/policies sync (Phase 2) -- so the final login fallback
+ * (`loginAcrossServerGroup`) is deliberately the opposite: never node-scoped,
+ * tried across every remembered address.
  */
-import type { ApiClient, ClientPlatform, LoginRequest, RefreshRequest } from "@streamarr-tv/api-client";
+import type {
+  ApiClient,
+  ClientPlatform,
+  LoginRequest,
+  LoginResponse,
+  RefreshRequest,
+  RefreshResponse,
+} from "@streamarr-tv/api-client";
 import { getOrCreateDeviceId } from "./deviceId";
+import { decodeAccessTokenIssuer } from "./jwt";
 import type { StoredSession, TokenStore } from "./tokenStore";
 
 export interface EnsureAccessTokenIdentity {
@@ -32,9 +61,60 @@ export interface EnsureAccessTokenIdentity {
   deviceId?: string;
 }
 
+/**
+ * Structural mirror of `@streamarr-tv/domain`'s `KnownServerGroup` -- this
+ * package deliberately doesn't depend on `@streamarr-tv/domain` for one
+ * shape (same "no new package dependency for a structural type" convention
+ * `inviteUrl.ts`'s `PeerAddressBundleLike` and `knownServers.ts`'s own doc
+ * comment both explain for the identical reason), so callers pass the real
+ * `KnownServerGroup` straight through -- it already satisfies this
+ * structurally, no cast needed.
+ */
+export interface KnownServerGroupLike {
+  /** Priority-ordered. */
+  servers: ReadonlyArray<{
+    url: string;
+    /**
+     * The `peer_nodes` row this address is attributed to
+     * (`@streamarr-tv/domain`'s `KnownServer::peerNodeId`), when known.
+     * `refreshAcrossServerGroup` below only retries addresses whose
+     * `peerNodeId` matches the current session's issuing peer -- absent
+     * for a standalone deployment, or anything remembered before this
+     * attribution existed, in which case that address is never a refresh
+     * candidate (see `nodeScopedServerGroupCandidates`).
+     */
+    peerNodeId?: string;
+  }>;
+  /** Fast path: tried before `servers`. */
+  lastGoodUrl?: string;
+}
+
 export interface EnsureAccessTokenOptions {
   /** Refresh even when the stored access token has not reached its renewal window. */
   forceRefresh?: boolean;
+  /**
+   * Every remembered address for this account's peer group (§7.1/§7.2).
+   * Supplied together with `clientForUrl`; when both are present:
+   *
+   * - A refresh failure against `client` retries the *same* refresh token
+   *   against each other remembered candidate *attributed to the same
+   *   issuing peer* (§3.7 -- refresh tokens never sync peer-to-peer), in
+   *   the same priority order `@streamarr-tv/domain`'s
+   *   `resolveReachableServer` uses (`lastGoodUrl` first, then
+   *   `servers[]`). A no-op -- nothing to retry -- when the issuing peer
+   *   can't be determined or no remembered address is attributed to it.
+   * - Once refresh is exhausted (or wasn't attempted) and a fresh
+   *   credential-less login against `client` also fails, that login is
+   *   retried across *every* remembered candidate, not node-scoped --
+   *   unlike refresh, a login is valid at any group node (accounts/
+   *   policies sync, Phase 2).
+   *
+   * Ignored -- and behavior is identical to omitting both -- without a
+   * matching `clientForUrl`.
+   */
+  serverGroup?: KnownServerGroupLike;
+  /** Builds an `ApiClient` bound to one candidate address, for the retries above. */
+  clientForUrl?: (url: string) => ApiClient;
 }
 
 /**
@@ -72,23 +152,145 @@ const inFlightLogins = new WeakMap<TokenStore, Promise<string>>();
 const ACCESS_TOKEN_MINIMUM_VALIDITY_MS = 2 * 60 * 1000;
 
 /**
+ * Same candidate ordering as `@streamarr-tv/domain`'s
+ * `resolveReachableServer`: `lastGoodUrl` first, then `servers[]`,
+ * de-duplicated. Duplicated locally rather than imported -- see
+ * `KnownServerGroupLike`'s doc comment for why this package doesn't depend
+ * on `@streamarr-tv/domain`.
+ */
+function serverGroupCandidates(group: KnownServerGroupLike): string[] {
+  const candidates: string[] = [];
+  if (group.lastGoodUrl) candidates.push(group.lastGoodUrl);
+  for (const server of group.servers) {
+    if (!candidates.includes(server.url)) candidates.push(server.url);
+  }
+  return candidates;
+}
+
+/**
+ * RFC 4122's hyphenated form -- the only shape `Uuid::new_v4()`/serde ever
+ * produce for a `peer_id`, and the same gate
+ * `streamarr_auth::jwt::JwtIssuer::verify_access_token` itself applies to a
+ * token's `iss` claim (`Uuid::parse_str`) to decide EdDSA-peer verification
+ * vs. the fixed HS256 issuer string. Good enough for a client-side routing
+ * hint -- this is never a trust decision (see `decodeAccessTokenIssuer`'s
+ * doc comment) -- without pulling in a UUID-parsing dependency for one
+ * regex-shaped check.
+ */
+const PEER_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function looksLikePeerId(iss: string | undefined): iss is string {
+  return iss !== undefined && PEER_ID_PATTERN.test(iss);
+}
+
+/**
+ * `serverGroupCandidates`, filtered down to only the addresses
+ * `serverGroup` attributes to `issuingPeerId` -- §3.7's "refresh tokens are
+ * never synced peer-to-peer": an address with no recorded attribution, or
+ * one attributed to a *different* peer, cannot possibly recognize a
+ * refresh token issued by `issuingPeerId`, so retrying it is a guaranteed
+ * 401, not a real chance at recovery. Returns an empty list -- the retry
+ * step below becomes a no-op, exactly like having no group at all -- when
+ * `issuingPeerId` doesn't look like a peer id (a standalone/HS256-issued
+ * token, whose `iss` is a fixed issuer string, not a `peer_id`) or no
+ * remembered address is attributed to it (e.g. a group remembered before
+ * this attribution existed).
+ */
+function nodeScopedServerGroupCandidates(
+  serverGroup: KnownServerGroupLike,
+  issuingPeerId: string | undefined
+): string[] {
+  if (!looksLikePeerId(issuingPeerId)) return [];
+  const peerNodeIdByUrl = new Map(serverGroup.servers.map((server) => [server.url, server.peerNodeId]));
+  return serverGroupCandidates(serverGroup).filter((url) => peerNodeIdByUrl.get(url) === issuingPeerId);
+}
+
+/**
+ * §7.2/§3.7's retry-before-reprompt: tries `refreshBody`'s *same* refresh
+ * token against every candidate address in `candidates` (already
+ * node-scoped by the caller -- see `nodeScopedServerGroupCandidates`), in
+ * priority order, stopping at the first one that accepts it. Returns
+ * `undefined` -- never throws -- once every candidate has failed (or
+ * `candidates` was empty to begin with), so the caller's existing "fall
+ * through to a full login" path handles that exactly like it already does
+ * for a single server with no group at all.
+ */
+async function refreshAcrossServerGroup(
+  refreshBody: RefreshRequest,
+  candidates: readonly string[],
+  clientForUrl: (url: string) => ApiClient
+): Promise<RefreshResponse | undefined> {
+  for (const url of candidates) {
+    try {
+      return await clientForUrl(url).refresh(refreshBody);
+    } catch {
+      // Unreachable, or (should be rare now that candidates are node-
+      // scoped) this peer doesn't recognize the token -- try the next
+      // same-node address before giving up.
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The *other* half of §7.2/§3.7's retry-before-reprompt, and this fix's
+ * second bug: a fresh credential-less login (`POST /api/v1/auth/login`) is
+ * valid at *any* node in the group -- accounts/policies are synced (Phase
+ * 2) -- so, unlike `refreshAcrossServerGroup` above, this is deliberately
+ * never node-scoped. Tries every remembered address in `serverGroup`, same
+ * priority order, stopping at the first that accepts the login. Returns
+ * `undefined` -- never throws -- once every candidate has failed, so the
+ * caller's own direct `client.login` failure is what actually surfaces.
+ */
+async function loginAcrossServerGroup(
+  loginBody: LoginRequest,
+  serverGroup: KnownServerGroupLike,
+  clientForUrl: (url: string) => ApiClient
+): Promise<LoginResponse | undefined> {
+  for (const url of serverGroupCandidates(serverGroup)) {
+    try {
+      return await clientForUrl(url).login(loginBody);
+    } catch {
+      // Unreachable, or this peer rejected the transparent login (e.g. a
+      // non-default AuthMode) -- try the next remembered address before
+      // giving up.
+    }
+  }
+  return undefined;
+}
+
+/**
  * Returns a currently-valid access token. Three cases, in order:
  *
  * 1. The stored access token hasn't expired yet -- return it as-is.
  * 2. A stored session exists but its access token has expired -- redeem
  *    its refresh token via `POST /api/v1/auth/refresh` (rotates it; see
- *    `ApiClient.refresh`'s doc comment) rather than starting over. Only
- *    falls through to (3) if the refresh token itself no longer works
- *    (expired, revoked, already-rotated-and-reused) -- a real "you're
- *    logged out" case, not just "some time passed."
- * 3. Nothing usable is stored (or (2) failed) -- transparently call
- *    `POST /api/v1/auth/login` with no credentials. `LoginRequest`'s
- *    `username`/`password`/`pin`/`profile_user_id` are only consulted by
- *    auth tiers other than the default `TrustedNetwork`, so this never
- *    needs to prompt for anything -- see `ApiClient.login`'s doc comment.
- *    Under `AuthMode::FullAccount`/`ManagedProfiles` this step has nothing
- *    to fall back on and rejects -- callers (`ApiClientProvider`) treat
- *    that as "redirect to a real login screen."
+ *    `ApiClient.refresh`'s doc comment) rather than starting over. If that
+ *    fails and `options.serverGroup`/`clientForUrl` are both supplied, the
+ *    *same* refresh token is retried (`refreshAcrossServerGroup`, §7.2)
+ *    against every other remembered address attributed to the *same peer
+ *    that issued it* -- decoded (unverified) off the expiring access
+ *    token's `iss` claim via `decodeAccessTokenIssuer`. Refresh tokens are
+ *    never synced peer-to-peer (§3.7), so a different peer's address would
+ *    only ever 401; that retry is skipped entirely (not attempted at all)
+ *    when the issuer can't be read as a peer id (a standalone/HS256
+ *    session) or no remembered address is attributed to it -- the peer that
+ *    issued the session being temporarily down isn't "you're logged out,"
+ *    but there is nothing meaningful to retry against either.
+ * 3. Nothing usable is stored, or (2) failed -- transparently call
+ *    `POST /api/v1/auth/login` with no credentials against `client`.
+ *    `LoginRequest`'s `username`/`password`/`pin`/`profile_user_id` are only
+ *    consulted by auth tiers other than the default `TrustedNetwork`, so
+ *    this never needs to prompt for anything -- see `ApiClient.login`'s doc
+ *    comment. If *that* fails too and `options.serverGroup`/`clientForUrl`
+ *    are both supplied, the same credential-less login is retried across
+ *    *every* remembered address (`loginAcrossServerGroup`) -- unlike (2),
+ *    never node-scoped: accounts/policies sync group-wide (Phase 2), so a
+ *    fresh login is exactly as valid at a reachable sibling node as at
+ *    `client` itself. Under `AuthMode::FullAccount`/`ManagedProfiles` (or
+ *    with no group to fall back on) this has nothing left to try and
+ *    rejects -- callers (`ApiClientProvider`) treat that as "redirect to a
+ *    real login screen."
  */
 export async function ensureAccessToken(
   client: ApiClient,
@@ -111,18 +313,36 @@ export async function ensureAccessToken(
   const acquirePromise = (async () => {
     try {
       if (existing) {
+        const refreshBody: RefreshRequest = {
+          device_id: identity.deviceId ?? getOrCreateDeviceId(),
+          refresh_token: existing.refreshToken,
+        };
         try {
-          const refreshBody: RefreshRequest = {
-            device_id: identity.deviceId ?? getOrCreateDeviceId(),
-            refresh_token: existing.refreshToken,
-          };
           const refreshed = await client.refresh(refreshBody);
           store.set(toStoredSession(refreshed));
           return refreshed.access_token;
         } catch {
-          // Refresh token itself is dead -- fall through to a fresh
-          // transparent login attempt below, same as having nothing
-          // stored at all.
+          if (options.serverGroup && options.clientForUrl) {
+            const candidates = nodeScopedServerGroupCandidates(
+              options.serverGroup,
+              decodeAccessTokenIssuer(existing.accessToken)
+            );
+            if (candidates.length > 0) {
+              const refreshed = await refreshAcrossServerGroup(
+                refreshBody,
+                candidates,
+                options.clientForUrl
+              );
+              if (refreshed) {
+                store.set(toStoredSession(refreshed));
+                return refreshed.access_token;
+              }
+            }
+          }
+          // Refresh token itself is dead everywhere it could plausibly
+          // still be recognized (or there was no same-node alternate worth
+          // trying at all) -- fall through to a fresh transparent login
+          // attempt below, same as having nothing stored at all.
         }
       }
 
@@ -132,9 +352,23 @@ export async function ensureAccessToken(
         client_platform: identity.clientPlatform,
         client_version: identity.clientVersion,
       };
-      const response = await client.login(body);
-      store.set(toStoredSession(response));
-      return response.access_token;
+      try {
+        const response = await client.login(body);
+        store.set(toStoredSession(response));
+        return response.access_token;
+      } catch (err) {
+        if (options.serverGroup && options.clientForUrl) {
+          const response = await loginAcrossServerGroup(body, options.serverGroup, options.clientForUrl);
+          if (response) {
+            store.set(toStoredSession(response));
+            return response.access_token;
+          }
+        }
+        // Nothing left to try anywhere in the group (or there was no group
+        // at all) -- the original failure from `client` itself is the
+        // right one to surface, not a generic "everything failed."
+        throw err;
+      }
     } finally {
       inFlightLogins.delete(store);
     }

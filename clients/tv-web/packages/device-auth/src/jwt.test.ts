@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeAccessTokenDeviceId, decodeAccessTokenUserId } from "./jwt";
+import { decodeAccessTokenDeviceId, decodeAccessTokenIssuer, decodeAccessTokenUserId } from "./jwt";
 
 function base64UrlEncode(json: unknown): string {
   const raw = Buffer.from(JSON.stringify(json), "utf-8").toString("base64");
@@ -38,5 +38,31 @@ describe("decodeAccessTokenUserId", () => {
   it("returns undefined when sub is missing or not a string", () => {
     expect(decodeAccessTokenUserId(fakeJwt({ exp: 123 }))).toBeUndefined();
     expect(decodeAccessTokenUserId(fakeJwt({ sub: 123 }))).toBeUndefined();
+  });
+});
+
+describe("decodeAccessTokenIssuer", () => {
+  it("extracts a standalone/HS256 node's fixed issuer string", () => {
+    const token = fakeJwt({ sub: "user-1", iss: "streamarr", exp: 9999999999 });
+    expect(decodeAccessTokenIssuer(token)).toBe("streamarr");
+  });
+
+  it("extracts a grouped node's peer_id issuer", () => {
+    const token = fakeJwt({
+      sub: "user-1",
+      iss: "11111111-1111-4111-8111-111111111111",
+      exp: 9999999999,
+    });
+    expect(decodeAccessTokenIssuer(token)).toBe("11111111-1111-4111-8111-111111111111");
+  });
+
+  it("returns undefined when iss is missing or not a string", () => {
+    expect(decodeAccessTokenIssuer(fakeJwt({ sub: "user-1" }))).toBeUndefined();
+    expect(decodeAccessTokenIssuer(fakeJwt({ sub: "user-1", iss: 123 }))).toBeUndefined();
+  });
+
+  it("returns undefined for a malformed token, same as the other claim readers", () => {
+    expect(decodeAccessTokenIssuer("only-one-segment")).toBeUndefined();
+    expect(decodeAccessTokenIssuer("header.not-valid-base64!!!.sig")).toBeUndefined();
   });
 });

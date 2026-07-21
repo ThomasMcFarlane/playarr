@@ -1,3 +1,5 @@
+import { getStoredApiBaseUrl, readKnownServers } from "@streamarr-tv/domain";
+
 const HOSTED_PLAYARR_HOSTNAME = "playarr.app";
 const PUBLIC_IPV4_RELAY_HOSTNAME = "relay.playarr.app";
 const STREAMARR_PORT = "8484";
@@ -78,12 +80,25 @@ export function publicIpv4RelayUrl(value: string): string {
 
 /**
  * Do not present the hosted client itself as if it were a Streamarr server.
- * The hosted sign-in form always starts blank so a previously selected server
- * is never presented as a default. Self-hosted bundles still use their API URL.
+ * The hosted sign-in form starts blank so a previously selected server is
+ * never presented as a default -- *unless* there is something real to
+ * prefill it with: a legacy operator-entered `apiBaseUrl`
+ * (`getStoredApiBaseUrl`), or a remembered peer-group address book
+ * (`readKnownServers`, `docs/architecture/peer-groups.md` §7.1/§7.3).
+ * Blank only when neither exists at all -- the genuinely first-ever visit
+ * case. Self-hosted bundles (any other hostname) still always use their own
+ * API URL, unchanged. `apiBaseUrl` itself is a display value only here (the
+ * already-resolved current origin) -- the *presence* checks below read the
+ * persisted values directly rather than trusting that `apiBaseUrl` came
+ * from one of them, since on the hosted build it may just be this page's
+ * own origin (`window.location.origin`), which is never a real server.
  */
 export function initialLoginServerUrl(
   apiBaseUrl: string,
   pageHostname: string
 ): string {
-  return pageHostname === HOSTED_PLAYARR_HOSTNAME ? "" : apiBaseUrl;
+  if (pageHostname !== HOSTED_PLAYARR_HOSTNAME) return apiBaseUrl;
+
+  const hasRememberedServer = Boolean(getStoredApiBaseUrl()) || readKnownServers() !== undefined;
+  return hasRememberedServer ? apiBaseUrl : "";
 }

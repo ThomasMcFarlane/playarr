@@ -15,7 +15,10 @@
  *
  * Also exports the session/token-acquisition path (`./session`, `./tokenStore`,
  * `./deviceId`) clients with no pairing UI of their own (Web) use instead --
- * see `ensureAccessToken`'s doc comment.
+ * see `ensureAccessToken`'s doc comment. `./serverAddressBundle` is the other
+ * half of the approver-UI side of the flow (`docs/architecture/peer-groups.md`
+ * §6.3): decoding the `servers=` bundle a device-pairing link carries, and
+ * fanning the approval call out to it in parallel.
  */
 import { ApiError, DEVICE_CODE_GRANT_TYPE } from "@streamarr-tv/api-client";
 import type { ApiClient, ClientPlatform, OAuthErrorBody } from "@streamarr-tv/api-client";
@@ -31,8 +34,15 @@ export {
   toStoredSession,
   type EnsureAccessTokenIdentity,
   type EnsureAccessTokenOptions,
+  type KnownServerGroupLike,
 } from "./session";
-export { decodeAccessTokenDeviceId, decodeAccessTokenUserId } from "./jwt";
+export { decodeAccessTokenDeviceId, decodeAccessTokenIssuer, decodeAccessTokenUserId } from "./jwt";
+export {
+  authorizeDeviceAcrossServers,
+  decodeServersParam,
+  parseServersParam,
+  type AuthorizeDeviceAcrossServersOptions,
+} from "./serverAddressBundle";
 
 /** Generates an offline SVG QR code without sending the pairing URL to a third party. */
 export function createQrCodeSvg(value: string, width = 240): Promise<string> {

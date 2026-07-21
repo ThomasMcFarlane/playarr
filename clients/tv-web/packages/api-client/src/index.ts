@@ -122,6 +122,8 @@ export type UserInviteResponse = components["schemas"]["UserInviteResponse"];
 export type UserInviteRequestResponse = components["schemas"]["UserInviteRequestResponse"];
 export type UserInviteRequestStatus = components["schemas"]["UserInviteRequestStatus"];
 export type ReviewUserInviteRequest = components["schemas"]["ReviewUserInviteRequest"];
+export type PeerAddressBundle = components["schemas"]["PeerAddressBundle"];
+export type PeerAddressEntry = components["schemas"]["PeerAddressEntry"];
 export type FirebaseWebConfig = components["schemas"]["FirebaseWebConfig"];
 export type RegisterPushRequest = components["schemas"]["RegisterPushRequest"];
 export type UpdateUserRequest = components["schemas"]["UpdateUserRequest"];
@@ -651,10 +653,18 @@ export class ApiClient {
     return this.unwrap(await this.raw.GET("/api/v1/catalog/kinds"));
   }
 
+  /**
+   * `/api/v1/catalog/search`'s real wire response is `{items, remote_only}`
+   * (`SearchResponse` -- the partial-cache-node `RemoteOnlyWork` union,
+   * `docs/architecture/peer-groups.md` §4.3), not a bare array; this method
+   * still returns just `items` to preserve every existing caller's
+   * `Work[]` contract unchanged. Surfacing `remote_only` in search results
+   * is separate UI work, not part of this endpoint's client wrapper.
+   */
   async searchCatalog(q: string, limit?: number): Promise<Work[]> {
     return this.unwrap(
       await this.raw.GET("/api/v1/catalog/search", { params: { query: { q, limit } } })
-    );
+    ).items;
   }
 
   async getWork(id: string): Promise<WorkDetail> {
@@ -946,6 +956,22 @@ export class ApiClient {
         params: { path: { id } },
         body,
       })
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // admin (peer groups) -- `docs/architecture/peer-groups.md` §6.1. Just
+  // the address bundle for now: invite-link/QR builders (`Invite.tsx`/
+  // `Users.tsx`) call this at link-build time instead of reading a single
+  // configured base URL directly, so a generated invite carries every
+  // group member's client-reachable address, not just the issuing node's
+  // own. `urls` is a one-element list for a standalone (ungrouped) node --
+  // one code path, same as the backend's own invariant.
+  // ---------------------------------------------------------------------
+
+  async getPeerAddressBundle(): Promise<PeerAddressBundle> {
+    return this.unwrap(
+      await this.raw.GET("/api/v1/admin/peer-groups/self/address-bundle", {})
     );
   }
 

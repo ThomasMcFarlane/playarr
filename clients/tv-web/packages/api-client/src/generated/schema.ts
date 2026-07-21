@@ -52,6 +52,169 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/peer-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Founds a brand-new peer group with this node as its first (and, until
+         *     another node joins, only) member -- `docs/architecture/peer-groups.md`
+         *     §3.4's founding step 2. Mints this node's Ed25519 keypair + `peer_id`
+         *     if it doesn't have one yet, and requires `PUT /api/v1/admin/
+         *     peer-nodes/self` to have been called first (400 otherwise).
+         */
+        post: operations["found_peer_group_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/peer-groups/join": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Joins an existing peer group by calling another member's
+         *     `POST /api/v1/peer/enroll` -- `docs/architecture/peer-groups.md` §3.4's
+         *     joining step 2 (which itself triggers steps 3-4 over the network).
+         *     Mints this node's Ed25519 keypair + `peer_id` if it doesn't have one
+         *     yet, and requires `PUT /api/v1/admin/peer-nodes/self` to have been
+         *     called first (400 otherwise). On success, persists `group_id` into this
+         *     node's own `node_identity` and upserts every member the seed node
+         *     reported (including that node itself) into this node's own
+         *     `peer_nodes` -- correcting `is_self` to reflect *this* node's own
+         *     perspective rather than trusting the flag as reported by the seed node.
+         */
+        post: operations["join_peer_group_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/peer-groups/join-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issues a single-use, 15-minute join token for another node to redeem
+         *     via `POST /api/v1/peer/enroll` -- `docs/architecture/peer-groups.md`
+         *     §3.4's joining step 1, run by an admin on the **already-grouped**
+         *     (founding, or previously joined) node.
+         */
+        post: operations["create_peer_join_token_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/peer-groups/self/address-bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * This node's current address bundle -- `docs/architecture/
+         *     peer-groups.md` §6.1. Invite-link/QR builders (`users.rs`/`admin.rs`'s
+         *     invite-creation handlers, client-side) call this at link-build time
+         *     instead of reading a single configured base URL directly, so an invite
+         *     generated on any one member of a group carries every member's
+         *     client-reachable address, not just the issuing node's own.
+         */
+        get: operations["address_bundle_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/peer-nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every known member of this node's peer group, including this node's
+         *     own `is_self = true` row.
+         */
+        get: operations["list_peer_nodes_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/peer-nodes/self": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Sets this node's own display name and reachable addresses --
+         *     `docs/architecture/peer-groups.md` §3.4's founding step 1 / joining
+         *     step 2. Callable at any time: before this node has founded/joined a
+         *     group, the values are only staged in memory (see
+         *     [`PendingSelfPeerProfile`]); afterward, this writes straight through to
+         *     the persisted self [`PeerNode`] row (e.g. to rename this node or add a
+         *     new address later).
+         */
+        put: operations["update_self_peer_node_handler"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/peer-nodes/{id}/sync-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A single peer node's last-known sync status -- always the "never
+         *     reported" shape in Phase 1; see [`PeerSyncStatusResponse::status`]'s
+         *     doc comment.
+         */
+        get: operations["peer_node_sync_status_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/playback/sessions/active": {
         parameters: {
             query?: never;
@@ -600,6 +763,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Also unions in the partial-cache-node [`RemoteOnlyWork`] case (§4.3):
+         *     titles a full peer reports but this node has zero local record of,
+         *     scoped to the caller's own `Policy::group_library_allow` -- see
+         *     `streamarr_catalog::CatalogService::search_remote_only`'s doc comment.
+         */
         get: operations["search_catalog_handler"];
         put?: never;
         post?: never;
@@ -674,6 +843,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/downloads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_download_tickets_handler"];
+        put?: never;
+        post: operations["create_download_ticket_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/downloads/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_download_ticket_handler"];
+        put?: never;
+        post?: never;
+        delete: operations["cancel_download_ticket_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/downloads/{id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["download_ticket_file_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/media/proxy/{peer_node_id}/{media_file_id}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * `GET /api/v1/media/proxy/{peer_node_id}/{media_file_id}/stream` -- this
+         *     node's own client hits exactly this shape for a `DeliveryMode::Proxy`
+         *     delegated stream (`playback::rewrite_for_delivery` rewrote the owning
+         *     peer's own `.../{media_file_id}/stream` response `url` into this one).
+         *     `media_file_id` is the OWNING peer's own local id -- meaningless on this
+         *     node, only ever used to build the outbound request path. This node signs
+         *     its OWN outbound request with its own peer identity (proving to the
+         *     owning peer "a legitimate member of this group is asking"), and forwards
+         *     `playback_session_id` unvalidated: this node has no way to check it (that
+         *     session lives on the owning peer, not here) -- the owning peer's own
+         *     `peer_stream_media_handler` is the real authorization boundary, exactly
+         *     per §5.3's "defense in depth" -- never trusting this node's mere say-so.
+         */
+        get: operations["proxy_stream_media_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/media/renditions/{rendition_id}/{file_name}": {
         parameters: {
             query?: never;
@@ -714,6 +961,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["media_chapters_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/media/{media_file_id}/download-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["media_download_options_handler"];
         put?: never;
         post?: never;
         delete?: never;
@@ -889,6 +1152,240 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/peer/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * `users`/`policies` upserted or soft-deleted since `since` (every row,
+         *     oldest first, when omitted) -- the read behind
+         *     `streamarr_peer_sync::account_sync::sync_accounts`. Tombstoned rows are
+         *     included (`deleted_at` set), never filtered out: see
+         *     `UserRepo::list_updated_since`'s own doc comment for why a lagging peer
+         *     must never see a delete as mere absence.
+         */
+        get: operations["accounts_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/peer/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * This peer's own leaf availability, derived live -- see
+         *     [`derive_own_availability`]'s doc comment. `since` is accepted (for
+         *     wire compatibility with every other `?since=` endpoint the poller
+         *     calls identically) but ignored: there is no per-leaf `updated_at` to
+         *     filter on, so every call is already a full, safe-to-reapply refresh,
+         *     the same full-refresh strategy §3.6 uses for `GET /api/v1/peer/nodes`.
+         */
+        get: operations["availability_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/peer/enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Join handshake, called by a joining node's own admin-triggered
+         *     `POST /api/v1/admin/peer-groups/join` (never called directly by a
+         *     browser/admin console). Validates the one-shot join token (unexpired,
+         *     unused, hash match) and name uniqueness within the group, marks the
+         *     token redeemed, inserts the caller's row into `peer_nodes`, and replies
+         *     with the full current membership -- `docs/architecture/peer-groups.md`
+         *     §3.4 steps 3-4.
+         */
+        post: operations["enroll_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/peer/invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * `user_invites`/`user_invite_requests` rows created/requested/consumed
+         *     since `since` -- the read behind `streamarr_peer_sync::account_sync::
+         *     sync_invites`. `user_invites` cursors on `updated_at` (creation *or*
+         *     consumption -- see `UserInviteRepo::list_updated_since`'s doc comment);
+         *     `user_invite_requests` still has no `updated_at` and cursors on
+         *     `requested_at` only (see `UserInviteRequestRepo::list_requested_since`'s
+         *     doc comment). The consumer side (`sync_invites`) applies both plain
+         *     append/forward-apply, not full last-writer-wins -- see that function's
+         *     own doc comment.
+         */
+        get: operations["invites_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/peer/libraries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * This node's own `source_instances` (identity only) + this group's
+         *     `group_libraries`, both updated since `since` -- the read behind
+         *     `streamarr_peer_sync::account_sync::sync_libraries` (which only
+         *     consumes the `group_libraries` half -- see [`LibrariesResponse`]'s doc
+         *     comment).
+         */
+        get: operations["libraries_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/peer/nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Full current `peer_nodes` membership (including this node's own
+         *     `is_self = true` row) -- always a full refresh, never filtered. This is
+         *     how a third node's membership (learned via a *different* peer's
+         *     `enroll` call) eventually converges everywhere without a fresh `enroll`
+         *     round trip (§3.4 step 6).
+         */
+        get: operations["nodes_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/peer/playback-info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * `POST /api/v1/peer/playback-info` -- the receiving side of §5.2's
+         *     negotiation forward: [`PeerSignedRequest`]-gated (only a known, active
+         *     peer in this group may call this), runs the *exact same*
+         *     [`negotiate_playback`] this node's own [`playback_info_handler`] runs
+         *     for a local caller, just fed from [`PeerPlaybackInfoRequest`] instead of
+         *     a `StreamingUser`/`ConnectInfo`/`HeaderMap`. See this module's own
+         *     `PeerPlaybackInfoRequest` doc comment for the defense-in-depth reasoning
+         *     behind resolving the acting user's grant independently here rather than
+         *     trusting the caller's forwarded claim.
+         */
+        post: operations["peer_playback_info_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/peer/routing-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * This group's `routing_rules` updated since `since` (every row, oldest
+         *     first, when omitted) -- the read behind `streamarr_peer_sync::
+         *     routing_sync::sync_routing_rules`. Plain last-writer-wins by
+         *     `updated_at` on the consumer side, no origin-gating: see that module's
+         *     own doc comment for why a routing preference isn't a privilege-bearing
+         *     field the way `Policy`'s `is_admin`/`can_stream`/... are.
+         */
+        get: operations["routing_rules_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/peer/stream/{media_file_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * `GET /api/v1/peer/stream/{media_file_id}` -- the OWNING peer's side of
+         *     `Proxy` delivery (§5.3). [`PeerSignedRequest`]-gated (only a known,
+         *     active peer may call this at all), but the *real* authorization check is
+         *     independent of that signature: `playback_session_id` must resolve to a
+         *     still-open [`streamarr_model::PlaybackSession`] in THIS node's own
+         *     `session_registry` -- populated only by THIS node's own
+         *     [`crate::playback::negotiate_playback`] run (either for a local caller,
+         *     or for a request this same node received via `peer_playback_info_handler`)
+         *     and never by anything the calling node merely asserts. This mirrors
+         *     `stream_media_handler`'s own established anonymous-capability trust
+         *     model exactly (a live `session_registry` entry, minted only after a real
+         *     negotiation-time grant check, is itself sufficient authorization for the
+         *     byte-range reads that follow) -- just checked here against THIS peer's
+         *     own authoritative session data instead of a forwarding node's say-so.
+         *     Additionally re-resolves the session owner's *current* `Policy` (never
+         *     merely trusting that the session still reflects it): a policy change
+         *     after negotiation (e.g. an admin revoking a library grant mid-stream)
+         *     takes effect on the very next byte request, not just the next
+         *     negotiation.
+         */
+        get: operations["peer_stream_media_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/people/{id}": {
         parameters: {
             query?: never;
@@ -922,6 +1419,42 @@ export interface paths {
         get: operations["person_works_handler"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playback/by-external-ref": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * `POST /api/v1/playback/by-external-ref` -- §4.3/§5.2's dedicated entry
+         *     point for a `RemoteOnlyWork` with no local `media_file_id`: runs the
+         *     identical routing evaluation [`playback_info_handler`] does, from a
+         *     [`routing::RoutingContext`] built directly from the request body instead
+         *     of a resolved local `MediaFile`. Negotiation capabilities
+         *     (`containers`/`video_codecs`/...) are accepted the same way
+         *     `playback_info_handler`'s own `GET` does, as a [`PlaybackQuery`] query
+         *     string -- they don't fit naturally into a JSON body alongside a nested
+         *     `LeafSelector`, and reusing the identical query-parameter convention
+         *     keeps this endpoint's negotiation inputs consistent with the one it
+         *     mirrors rather than introducing a second shape for the same thing.
+         * @description This node's own copy is deliberately never consulted for
+         *     `self_available` (`resolve_route` is always called with
+         *     `self_available = false`): a caller only ever reaches for this endpoint
+         *     because it has zero local record of the title, so this always resolves
+         *     to [`routing::RoutingDecision::Delegate`] or
+         *     [`routing::RoutingDecision::Unavailable`], never `ServeLocally` -- see
+         *     `docs/architecture/peer-groups.md` §5.2's own note on this.
+         */
+        post: operations["by_external_ref_playback_info_handler"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1104,22 +1637,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/users/me/player-preferences": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_player_preferences_handler"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch: operations["update_player_preferences_handler"];
-        trace?: never;
-    };
     "/api/v1/users/me/capabilities": {
         parameters: {
             query?: never;
@@ -1134,6 +1651,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/player-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_player_preferences_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["update_player_preferences_handler"];
         trace?: never;
     };
     "/api/v1/users/me/profile-avatar": {
@@ -1328,6 +1861,19 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AccessWindow: {
+            time_range: components["schemas"]["TimeRange"];
+            weekday: components["schemas"]["Weekday"];
+        };
+        /**
+         * @description Response body for [`accounts_handler`] -- `docs/architecture/
+         *     peer-groups.md` §3.6: `{users, policies}` upserts/tombstones.
+         */
+        AccountsResponse: {
+            policies: components["schemas"]["PeerPolicyRow"][];
+            server_time: string;
+            users: components["schemas"]["PeerUserRow"][];
+        };
         /**
          * @description One live session, enriched with the labels and route target used by the
          *     administrator Activity and Tasks pages.
@@ -1406,6 +1952,32 @@ export interface components {
          * @enum {string}
          */
         Availability: "unknown" | "pending" | "processing" | "partially_available" | "available" | "deleted";
+        /**
+         * @description One peer's reported availability for a `Work`, per
+         *     `docs/architecture/peer-groups.md` §4.3's Rust sketch. Mirrors
+         *     [`streamarr_catalog::AvailabilityBadge`] field-for-field: that type
+         *     can't implement `ToSchema` itself (`streamarr-catalog` deliberately
+         *     doesn't depend on `utoipa`, same as every other type this file mirrors
+         *     for OpenAPI purposes), and [`SearchResponse`] below needs a real,
+         *     `ToSchema`-implementing type to actually return -- so, unlike
+         *     `CatalogPageSchema`/`WorkDetailSchema`'s purely-decorative mirrors, this
+         *     one is genuinely constructed (via the `From` impl below), not just
+         *     `#[allow(dead_code)]` documentation. Named without the `Schema` suffix
+         *     those use, matching the design doc's own naming for this DTO exactly.
+         */
+        AvailabilityBadge: {
+            availability: components["schemas"]["Availability"];
+            peer_name: string;
+            /** Format: uuid */
+            peer_node_id: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description Response body for [`availability_handler`]. */
+        AvailabilityResponse: {
+            rows: components["schemas"]["PeerAvailabilityRow"][];
+            server_time: string;
+        };
         /**
          * @description Minimal household-profile projection for Playarr's 'who is watching'
          *     screen. Password hashes, email addresses and policy details are never
@@ -1489,6 +2061,15 @@ export interface components {
              *     time rather than being cut off with no notice.
              */
             sunset?: string | null;
+        };
+        CreateDownloadTicketRequest: {
+            /** Format: uuid */
+            media_file_id: string;
+            /**
+             * @description `"original"`, or a transcode profile name from
+             *     `GET /api/v1/media/{media_file_id}/download-options`.
+             */
+            quality_id: string;
         };
         CreatePlaylistRequest: {
             /**
@@ -1574,6 +2155,12 @@ export interface components {
             person: components["schemas"]["PersonResponse"];
         };
         /**
+         * @description How a stream resolved to a remote peer should actually reach the
+         *     client -- see §5.3 for the redirect-vs-proxy tradeoff this encodes.
+         * @enum {string}
+         */
+        DeliveryMode: "auto" | "redirect" | "proxy";
+        /**
          * @description The short code displayed by a TV and entered (or supplied by a QR-code
          *     link) on an already-authenticated browser or mobile device.
          */
@@ -1605,6 +2192,98 @@ export interface components {
              *     up, per RFC 6749 §5.2.
              */
             grant_type: string;
+        };
+        DownloadOptionsResponse: {
+            container: string;
+            /** Format: uuid */
+            media_file_id: string;
+            options: components["schemas"]["DownloadQualityOption"][];
+        };
+        /**
+         * @description One quality `GET /api/v1/media/{media_file_id}/download-options` offers
+         *     -- the same `id`/`label`/`profile`/`height` shape
+         *     [`crate::playback::PlaybackQualityOption`] already exposes for playback,
+         *     plus a download-specific size estimate. `"original"` is always exact
+         *     (`size_is_estimate: false`, `estimated_size_bytes` is the real
+         *     `MediaFile::size_bytes`); every named transcode profile is a rough
+         *     `video_bitrate_bps * duration_ms / 8000` estimate (`size_is_estimate:
+         *     true`) since nothing has actually encoded it yet.
+         */
+        DownloadQualityOption: {
+            /** Format: int64 */
+            estimated_size_bytes?: number | null;
+            /** Format: int32 */
+            height?: number | null;
+            id: string;
+            label: string;
+            profile?: string | null;
+            size_is_estimate: boolean;
+        };
+        /** @enum {string} */
+        DownloadStatus: "queued" | "processing" | "ready" | "failed" | "expired" | "canceled";
+        /**
+         * @description Wire projection of [`DownloadTicket`] -- not the model type directly,
+         *     same reasoning as `MediaFile`/`Rendition`'s own DTOs elsewhere in this
+         *     crate: `DownloadTicket::output_path` is a `PathBuf` (no `ToSchema`
+         *     mapping, and not something a caller should see the server's real
+         *     filesystem layout through anyway). `profile` is deliberately omitted --
+         *     it's an internal detail of how a `Ready` ticket got produced, not part
+         *     of the documented response contract; `quality_id` is what callers key
+         *     off of.
+         */
+        DownloadTicketResponse: {
+            container: string;
+            error_message?: string | null;
+            /** Format: date-time */
+            expires_at?: string | null;
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            media_file_id: string;
+            quality_id: string;
+            /** Format: date-time */
+            ready_at?: string | null;
+            /** Format: date-time */
+            requested_at: string;
+            /** Format: int64 */
+            size_bytes?: number | null;
+            status: components["schemas"]["DownloadStatus"];
+        };
+        /**
+         * @description Request body for [`enroll_handler`] -- exactly `docs/architecture/
+         *     peer-groups.md` §3.4 step 3's `{join_token, peer_id, name, addresses,
+         *     public_key}`. `admin_peer::join_peer_group_handler` builds and sends
+         *     this same shape when it drives the client side of this handshake.
+         */
+        EnrollRequest: {
+            addresses?: components["schemas"]["PeerAddress"][];
+            /**
+             * @description The raw, one-time token an admin on this (the founding/receiving)
+             *     node issued via `POST /api/v1/admin/peer-groups/join-tokens`.
+             */
+            join_token: string;
+            name: string;
+            /**
+             * Format: uuid
+             * @description The joining node's own durable `node_identity.peer_id`.
+             */
+            peer_id: string;
+            /** @description The joining node's Ed25519 public key, base64. */
+            public_key: string;
+        };
+        /**
+         * @description Response body for [`enroll_handler`] -- exactly §3.4 step 4's
+         *     `{group, members}`, where `members` is this node's **full** current
+         *     membership (including this node's own `is_self = true` row and the
+         *     row just inserted for the caller), so the joining node doesn't have to
+         *     wait for its first sync pass to learn about any third peer that
+         *     already joined. Reused as-is by `admin_peer::join_peer_group_handler`
+         *     to deserialize this same shape on the joining node's side, rather than
+         *     hand-duplicating an identical struct there.
+         */
+        EnrollResponse: {
+            group: components["schemas"]["PeerGroup"];
+            members: components["schemas"]["PeerNode"][];
         };
         Episode: {
             /** Format: date */
@@ -1670,6 +2349,33 @@ export interface components {
             storage_bucket: string;
             vapid_public_key: string;
         };
+        /** @description Request body for [`found_peer_group_handler`]. */
+        FoundPeerGroupRequest: {
+            name: string;
+        };
+        /** @description Response body for [`found_peer_group_handler`]. */
+        FoundPeerGroupResponse: {
+            group: components["schemas"]["PeerGroup"];
+            self_node: components["schemas"]["PeerNode"];
+        };
+        /**
+         * @description A stable, group-wide library identity. `SourceInstance` is the only
+         *     thing an operator can currently call a "library," and its id is minted
+         *     independently per node -- there is no value that means "the Movies
+         *     library" the same way on every peer until this one exists.
+         */
+        GroupLibrary: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            group_id: string;
+            /** Format: uuid */
+            id: string;
+            /** @description "Movies", "TV", "Music" -- operator-defined, syncs across the group. */
+            name: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
         ImageAsset: {
             /** Format: int32 */
             height?: number | null;
@@ -1696,6 +2402,67 @@ export interface components {
             token_type: string;
             /** Format: uuid */
             user_id: string;
+        };
+        /**
+         * @description Response body for [`invites_handler`] -- `docs/architecture/
+         *     peer-groups.md` §3.6: `user_invites`/`user_invite_requests` rows.
+         */
+        InvitesResponse: {
+            invite_requests: components["schemas"]["PeerInviteRequestRow"][];
+            invites: components["schemas"]["PeerInviteRow"][];
+            server_time: string;
+        };
+        /** @description Request body for [`join_peer_group_handler`]. */
+        JoinPeerGroupRequest: {
+            join_token: string;
+            /**
+             * @description Base URL of a node already in the target group, e.g.
+             *     `"https://home.example.com"` -- the doc's "bootstrap address".
+             */
+            seed_address: string;
+        };
+        /**
+         * @description Portable leaf identity -- never a peer-local `LeafRef`/`Uuid`, which is
+         *     meaningless off the node that minted it. A receiving peer resolves
+         *     `(provider, external_id, LeafSelector)` against its own child rows to
+         *     get its own `LeafRef`/`media_file_id`; it never adopts a sender's id.
+         */
+        LeafSelector: "movie" | {
+            episode: {
+                /** Format: int32 */
+                episode: number;
+                /** Format: int32 */
+                season: number;
+            };
+        } | {
+            track: {
+                /** Format: int32 */
+                disc?: number | null;
+                /** Format: int32 */
+                track: number;
+            };
+        } | {
+            book: {
+                /** Format: int32 */
+                index: number;
+            };
+        };
+        /**
+         * @description Response body for [`libraries_handler`] -- `docs/architecture/
+         *     peer-groups.md` §3.6: `source_instances` identity-only rows (no
+         *     `api_key_encrypted`) + `group_libraries`. `streamarr_peer_sync::
+         *     account_sync::LibrariesResponse` only deserializes `group_libraries`/
+         *     `server_time` (its own doc comment explains why: no local sink table
+         *     for another peer's `SourceInstance` identity exists yet) -- the extra
+         *     `source_instances` field here is additive and simply ignored by that
+         *     consumer's `serde_json::from_slice`, not a byte-for-byte mismatch: a
+         *     consumer with no `deny_unknown_fields` tolerates unrecognized top-level
+         *     fields by design.
+         */
+        LibrariesResponse: {
+            group_libraries: components["schemas"]["GroupLibrary"][];
+            server_time: string;
+            source_instances: components["schemas"]["SourceInstanceIdentity"][];
         };
         /**
          * @description Request body for both create (`POST /api/v1/admin/views`) and update
@@ -1761,6 +2528,7 @@ export interface components {
             access_token: string;
             /** Format: int64 */
             expires_in: number;
+            peer_addresses?: null | components["schemas"]["PeerAddressBundle"];
             refresh_token: string;
             token_type: string;
             /** Format: uuid */
@@ -1795,12 +2563,339 @@ export interface components {
             quality_id: string;
             subtitle_track_id?: string | null;
         };
+        /**
+         * @description Response body for [`nodes_handler`] -- `docs/architecture/peer-groups.md`
+         *     §3.6: "full `peer_nodes` (small; always full-refresh gossip)". No
+         *     `since`/`server_time` -- `streamarr_peer_sync::membership_sync`'s own
+         *     `NodesResponse` doc comment explains why membership has no
+         *     corresponding `peer_sync_state.entity` cursor to persist.
+         */
+        NodesResponse: {
+            rows: components["schemas"]["PeerNode"][];
+        };
         OAuthErrorBody: {
             /**
              * @description One of RFC 8628 §3.5's four device-flow error codes, or RFC 6749
              *     §5.2's `unsupported_grant_type`.
              */
             error: string;
+        };
+        /**
+         * @description One reachable address for a [`PeerNode`], as asserted by that peer's
+         *     own operator.
+         */
+        PeerAddress: {
+            /**
+             * @description Operator-asserted, never auto-detected (NAT/firewall topology
+             *     cannot be reliably guessed -- same philosophy already used for
+             *     `STREAMARR_ACME_DOMAIN`). Drives `DeliveryMode::Auto`, see §5.3.
+             */
+            client_reachable: boolean;
+            label: string;
+            /**
+             * Format: int32
+             * @description Lower sorts first -- same convention as `SourceInstance::priority`.
+             */
+            priority: number;
+            url: string;
+        };
+        /**
+         * @description Every reachable address this node -- or, once grouped, this node's
+         *     entire peer group -- can currently be reached at. `docs/architecture/
+         *     peer-groups.md` §6.1. Built fresh on every call, never cached/stored on
+         *     another row (see that section's "Deliberate simplification" note about
+         *     `UserInvite` not snapshotting one of these): the live membership table
+         *     is always the source of truth.
+         */
+        PeerAddressBundle: {
+            /**
+             * @description Every `status = Active` member's `client_reachable` addresses, each
+             *     attributed to the peer node it belongs to, flattened and
+             *     priority-ordered (lower `PeerAddress::priority` first). Empty --
+             *     never an error -- when nothing is configured yet.
+             */
+            addresses: components["schemas"]["PeerAddressEntry"][];
+            /**
+             * Format: uuid
+             * @description `None` for a standalone deployment that has never founded or
+             *     joined a peer group.
+             */
+            group_id?: string | null;
+            group_name?: string | null;
+        };
+        /**
+         * @description One [`PeerAddressBundle`] entry: a single reachable URL attributed to
+         *     the `peer_nodes` row (or, before grouping, this node's own
+         *     `node_identity`) it belongs to. This attribution is the entire point of
+         *     [`PeerAddressBundle`] not being a bare `Vec<String>`: per
+         *     `docs/architecture/peer-groups.md` §3.7, refresh tokens are never synced
+         *     across peer nodes -- only accounts/policies are -- so a client retrying
+         *     a failed refresh needs to know whether a given URL is *another address
+         *     of the same node* that issued the token (worth retrying) or a
+         *     genuinely different node (guaranteed to 401, since that node's own
+         *     database has no record of a token it never issued).
+         */
+        PeerAddressEntry: {
+            /** Format: uuid */
+            peer_node_id: string;
+            url: string;
+        };
+        /**
+         * @description Wire shape of one derived leaf-availability row -- field-for-field
+         *     identical to `streamarr_peer_sync::availability_sync::AvailabilityRow`.
+         *     Reuses `streamarr_model::{ExternalProvider, Availability, LeafSelector,
+         *     WorkKind}` directly (all `ToSchema`, none secret): one shared type on
+         *     both ends for each of those fields, so there is nothing for this DTO's
+         *     definition to drift out of sync with.
+         */
+        PeerAvailabilityRow: {
+            availability: components["schemas"]["Availability"];
+            /** Format: int64 */
+            bitrate?: number | null;
+            codec?: string | null;
+            container?: string | null;
+            /** Format: int64 */
+            duration_ms?: number | null;
+            external_id: string;
+            /** Format: uuid */
+            group_library_id?: string | null;
+            kind: components["schemas"]["WorkKind"];
+            leaf_selector: components["schemas"]["LeafSelector"];
+            provider: components["schemas"]["ExternalProvider"];
+            /** Format: date-time */
+            release_date?: string | null;
+            /** Format: int64 */
+            size_bytes?: number | null;
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description A set of peer nodes that have agreed to sync with each other. */
+        PeerGroup: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        /**
+         * @description Wire shape of one `user_invite_requests` row -- mirrors
+         *     `streamarr_model::UserInviteRequest`, same rationale as
+         *     [`PeerInviteRow`].
+         */
+        PeerInviteRequestRow: {
+            can_stream: boolean;
+            /** Format: date-time */
+            generated_at?: string | null;
+            group_library_allow: string[];
+            /** Format: uuid */
+            id: string;
+            library_allow: string[];
+            message?: string | null;
+            /** Format: date-time */
+            requested_at: string;
+            /** Format: date-time */
+            reviewed_at?: string | null;
+            /** Format: uuid */
+            reviewed_by?: string | null;
+            status: components["schemas"]["UserInviteRequestStatus"];
+            /** Format: uuid */
+            user_id: string;
+        };
+        /**
+         * @description Wire shape of one `user_invites` row on `GET /api/v1/peer/invites` --
+         *     field-for-field identical to `streamarr_model::UserInvite`'s own
+         *     `Serialize` output (which is exactly what `streamarr_peer_sync::
+         *     account_sync::InvitesResponse` consumes -- that type uses `UserInvite`
+         *     directly, not a wrapper). Mirrored here rather than adding `ToSchema`
+         *     to `UserInvite` itself, matching `users.rs`'s own established
+         *     `UserInviteResponse`/`UserInviteRequestResponse` precedent of never
+         *     deriving a schema straight off these domain types.
+         */
+        PeerInviteRow: {
+            can_stream: boolean;
+            /** Format: date-time */
+            consumed_at?: string | null;
+            /** Format: uuid */
+            consumed_by_peer_id?: string | null;
+            /** Format: uuid */
+            consumed_by_user_id?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            created_by: string;
+            /** Format: date-time */
+            expires_at: string;
+            group_library_allow: string[];
+            library_allow: string[];
+            token_hash: string;
+        };
+        /**
+         * @description Response body for [`create_peer_join_token_handler`]. Mirrors
+         *     `users::UserInviteResponse`'s exact shape -- the raw token is returned
+         *     exactly once and never again.
+         */
+        PeerJoinTokenResponse: {
+            /** Format: date-time */
+            expires_at: string;
+            join_token: string;
+        };
+        /**
+         * @description One known member of a [`PeerGroup`], including a row for this node
+         *     itself (`is_self = true`) so every "list the whole membership picture"
+         *     query (admin UI, sync fan-out target list) is one query, not "self plus
+         *     the other peers".
+         */
+        PeerNode: {
+            addresses: components["schemas"]["PeerAddress"][];
+            /** Format: uuid */
+            group_id: string;
+            /** Format: uuid */
+            id: string;
+            is_self: boolean;
+            /** Format: date-time */
+            joined_at: string;
+            /** Format: date-time */
+            last_seen_at?: string | null;
+            last_sync_error?: string | null;
+            name: string;
+            public_key: string;
+            status: components["schemas"]["PeerNodeStatus"];
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /**
+         * @description A [`PeerNode`]'s membership state.
+         * @enum {string}
+         */
+        PeerNodeStatus: "active" | "unreachable" | "left";
+        /**
+         * @description Request/response DTOs and the receiving-side handler for §5.2's "the
+         *     entire negotiation request is forwarded" mechanism, and §5.3's "defense
+         *     in depth": [`PeerSignedRequest`]-gated (proves the *calling node* is a
+         *     legitimate, still-active member of this group) but deliberately carries
+         *     `user_id`/`device_id` explicitly rather than a bearer token -- the
+         *     receiving (owning) peer independently resolves *that* user's `Policy`
+         *     from its own synced state ([`resolve_streaming_access`]) before running
+         *     negotiation, rather than trusting the forwarding peer's assertion of
+         *     what its caller is allowed.
+         */
+        PeerPlaybackInfoRequest: {
+            client_platform: components["schemas"]["ClientPlatform"];
+            client_version: string;
+            /** Format: uuid */
+            device_id: string;
+            query: components["schemas"]["PlaybackQuery"];
+            target: components["schemas"]["PeerPlaybackTarget"];
+            /** Format: uuid */
+            user_id: string;
+        };
+        /**
+         * @description Which leaf to negotiate playback for, on the peer actually holding it.
+         *     `ExternalRef` -- `(provider, external_id, LeafSelector)`, §4.2's
+         *     portability layer -- is the only variant either of this crate's own
+         *     callers ([`forward_negotiation_to_peer`], reached from both
+         *     `playback_info_handler`'s locally-resolved path and
+         *     [`by_external_ref_playback_info_handler`]'s §4.3 `RemoteOnlyWork` path)
+         *     ever actually sends: a local `media_file_id` is only ever meaningful on
+         *     the node that minted it (§4.1), so forwarding one to a *different* node
+         *     would resolve to nothing there -- see [`LocalRouteOutcome`]'s own doc
+         *     comment. `MediaFile` is still accepted on the receiving side
+         *     ([`peer_playback_info_handler`]) for a caller that, unlike this crate's
+         *     own, already knows it's addressing a media file id meaningful on the
+         *     *receiving* peer specifically (kept as a documented, valid wire shape
+         *     rather than removed, even though nothing in this codebase constructs it
+         *     today).
+         */
+        PeerPlaybackTarget: {
+            /** @enum {string} */
+            kind: "media_file";
+            /** Format: uuid */
+            media_file_id: string;
+        } | {
+            external_id: string;
+            /** @enum {string} */
+            kind: "external_ref";
+            leaf_selector: components["schemas"]["LeafSelector"];
+            provider: components["schemas"]["ExternalProvider"];
+        };
+        /**
+         * @description Wire shape of one `policies` row on `GET /api/v1/peer/accounts` --
+         *     field-for-field identical to `streamarr_peer_sync::account_sync::
+         *     PolicySyncRow`. `Policy` carries no secret, so (unlike [`PeerUserRow`])
+         *     this flattens the real `streamarr_model::Policy` directly: one type,
+         *     zero risk of the two shapes drifting apart.
+         */
+        PeerPolicyRow: components["schemas"]["Policy"] & {
+            /** Format: date-time */
+            deleted_at?: string | null;
+            /** Format: uuid */
+            origin_peer_id?: string | null;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /**
+         * @description One peer node's most recently reported sync outcome -- mirrors
+         *     `admin::SourceInstanceSyncStatusResponse`'s exact shape. Serialize-only,
+         *     matching that type -- nothing in this crate ever deserializes it (the
+         *     `status: Option<&'static str>` field can't derive `Deserialize` without
+         *     forcing a `'static` borrow out of the input buffer).
+         */
+        PeerSyncStatusResponse: {
+            detail?: string | null;
+            error?: string | null;
+            /** Format: date-time */
+            finished_at?: string | null;
+            name: string;
+            /** Format: uuid */
+            peer_node_id: string;
+            /** Format: date-time */
+            started_at?: string | null;
+            /**
+             * @description Always `None` in Phase 1. `PeerSyncPoller` (`docs/architecture/
+             *     peer-groups.md` §3.6) does not exist yet -- there is no real sync
+             *     run to report. This is a deliberate stub matching `admin
+             *     ::sync_status_handler`'s own "unreported" shape (`status: None`
+             *     together with every other field below), not a fabricated
+             *     "succeeded"/"never synced" value. Phase 2 wires a real
+             *     `SyncStatusReporter` through here in place of this stub.
+             */
+            status?: string | null;
+        };
+        /**
+         * @description Wire shape of one `users` row on `GET /api/v1/peer/accounts` --
+         *     field-for-field identical to `streamarr_peer_sync::account_sync::
+         *     UserSyncRow`'s flattened wire shape (`streamarr_model::User`'s own
+         *     fields plus the three sync-only columns). Not `User` itself flattened
+         *     via `#[serde(flatten)]`: `User` is deliberately not `ToSchema`-derived
+         *     (it carries `password_hash` -- see that type's own doc comment); this
+         *     is the one narrow, deliberate exception to "never on an HTTP response"
+         *     that field's doc comment warns about -- the design doc's §3.1 table
+         *     explicitly lists `password_hash` as one of the few fields that DOES
+         *     sync between group peers ("already a hash, replicating it is exactly
+         *     what makes a password valid on every node"), and this type is never
+         *     reachable from any browser-facing route, only from a
+         *     [`PeerSignedRequest`]-gated node-to-node call.
+         */
+        PeerUserRow: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            deleted_at?: string | null;
+            disabled: boolean;
+            display_name: string;
+            email?: string | null;
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            origin_peer_id?: string | null;
+            password_hash: string;
+            /** Format: uuid */
+            policy_id: string;
+            preferred_audio_language: string;
+            /** Format: date-time */
+            updated_at: string;
+            username: string;
         };
         PersonResponse: {
             headshot_url?: string | null;
@@ -1820,6 +2915,19 @@ export interface components {
             language?: string | null;
             /** Format: int32 */
             stream_index: number;
+        };
+        /**
+         * @description Request body for [`by_external_ref_playback_info_handler`] -- §4.3/§5.2:
+         *     the `RemoteOnlyWork` entry point, used when the client's starting point
+         *     was a title it can browse (via cross-peer availability, §4.3) but has no
+         *     local `media_file_id` to call [`playback_info_handler`] with at all.
+         */
+        PlaybackByExternalRefRequest: {
+            external_id: string;
+            /** Format: uuid */
+            group_library_id?: string | null;
+            leaf_selector: components["schemas"]["LeafSelector"];
+            provider: components["schemas"]["ExternalProvider"];
         };
         /**
          * @description A single timestamped occurrence within a [`PlaybackSession`]. Kept as a
@@ -1981,6 +3089,50 @@ export interface components {
              */
             video_bitrate_bps?: number | null;
         };
+        PlaybackQuery: {
+            /**
+             * @description Comma-separated audio codecs the client can play; informational
+             *     only today -- see `TranscodeOrchestrator::can_direct_play`'s docs.
+             */
+            audio_codecs?: string;
+            /**
+             * Format: int32
+             * @description Global ffprobe stream index of the source audio track to encode into
+             *     an on-demand HLS session. Supplying this forces a fresh transcode so
+             *     a track-specific stream never reuses a default-audio rendition.
+             */
+            audio_stream_index?: number | null;
+            /** @description Comma-separated container names the client can play, e.g. `"mp4"`. */
+            containers?: string;
+            /**
+             * @description Skip direct play and produce the requested rendition profile. Used
+             *     by an explicit player quality choice; omitted/false keeps Original
+             *     as the default uncapped negotiation behaviour.
+             */
+            force_transcode?: boolean;
+            /**
+             * @description Ignore this viewer's remembered per-media choices for this request.
+             *     Used when the player explicitly switches back to Original/automatic.
+             */
+            ignore_saved_preferences?: boolean;
+            /** Format: int64 */
+            max_bitrate_bps?: number | null;
+            /**
+             * @description Target rendition profile name if a transcode is needed; defaults to
+             *     `"h264-720p-4mbps"` (an unrecognized name still resolves to a sane
+             *     default -- see `TranscodeTargetProfile::resolve`).
+             */
+            profile?: string | null;
+            /**
+             * Format: int64
+             * @description Absolute source timestamp at which a newly-created on-demand
+             *     transcode should begin. Direct play and complete renditions ignore
+             *     this and remain normally seekable by the player.
+             */
+            start_position_ms?: number;
+            /** @description Comma-separated video codecs the client can play, e.g. `"h264"`. */
+            video_codecs?: string;
+        };
         /**
          * @description One playback attempt from start to finish. Written incrementally: a row
          *     is inserted at playback start and updated (`ended_at`, `stop_reason`,
@@ -2095,6 +3247,87 @@ export interface components {
             updated_at: string;
         };
         /**
+         * @description The full set of gates an authorization check can consult for a user.
+         *     Deliberately flat (no nested "permissions" sub-struct) so a policy
+         *     evaluation function can be a straightforward series of field reads —
+         *     see `streamarr_auth::policy` for the evaluator.
+         */
+        Policy: {
+            /**
+             * @description `None` means "no schedule restriction" (always allowed). `Some(vec)`
+             *     with an empty vec means "never allowed" — an explicit lockout.
+             */
+            access_schedule?: components["schemas"]["AccessWindow"][] | null;
+            allowed_tags: string[];
+            /**
+             * @description Absolute or root-relative folder paths that are hidden regardless of
+             *     `library_allow` (e.g. a folder with pre-release content).
+             */
+            blocked_folders: string[];
+            blocked_tags: string[];
+            can_delete: boolean;
+            /**
+             * @description Grants permission to create and fetch downloads (original or a
+             *     transcoded quality) of media this account can already stream --
+             *     enforced per-item in addition to, not instead of, `library_allow`.
+             *     A separate, deliberate grant from `can_stream`/`library_allow`
+             *     (same reasoning as `can_stream` on this struct): being able to
+             *     browse and play a library does not imply being allowed to copy it
+             *     off the server. Defaults to `false` (least privilege) for every
+             *     newly created account -- an admin has to explicitly turn it on.
+             */
+            can_download: boolean;
+            can_share_public: boolean;
+            /**
+             * @description Whether this account may sign in to Playarr (the consumer streaming
+             *     client family) at all. Deliberately **not** bypassed by `is_admin`
+             *     below — an operator/admin account exists to run Streamarr's own
+             *     admin surface, not to imply a household viewer account, so the two
+             *     are independent grants. Defaults to `false` (least privilege): an
+             *     admin has to explicitly opt an account into Playarr access, same
+             *     philosophy as `library_allow` defaulting to no grants.
+             */
+            can_stream: boolean;
+            can_transcode: boolean;
+            device_allow: components["schemas"]["ClientPlatform"][];
+            /**
+             * @description Additive, portable sibling to [`Self::library_allow`] (which stays
+             *     exactly as-is: still "this specific local `SourceInstance` id, on
+             *     whichever node evaluates this policy") -- `crate::GroupLibrary` ids
+             *     (`docs/architecture/peer-groups.md` §2.3/§5.1), meaningful regardless
+             *     of which group node evaluates the policy. Resolved to local
+             *     `SourceInstance` ids at the API layer (`streamarr-api::
+             *     auth_extractor`'s `StreamingUser`/`CatalogViewer::allowed_libraries`)
+             *     and unioned with `library_allow` there -- an empty list here grants
+             *     nothing extra, it does not widen access, matching `library_allow`'s
+             *     own deny-by-default semantics.
+             */
+            group_library_allow: string[];
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description Bypasses every other field on this struct *except* `can_stream`
+             *     above. Kept as the last field so review diffs always show it as an
+             *     explicit, deliberate grant.
+             */
+            is_admin: boolean;
+            /**
+             * @description Work/library root ids this policy grants browse/playback access to.
+             *     An empty list means "no explicit library grants" (all-deny by
+             *     default, not all-allow) — pair with `is_admin` for the superuser
+             *     bypass.
+             */
+            library_allow: string[];
+            /** Format: int32 */
+            max_concurrent_sessions?: number | null;
+            /**
+             * @description Content-rating ceiling, e.g. `"PG-13"`; rating comparison logic
+             *     lives in `streamarr-auth`, not here.
+             */
+            max_rating?: string | null;
+            name: string;
+        };
+        /**
          * @description The two durable avatar sources a Playarr profile can select. Custom
          *     photos are cropped and resized by the client before persistence.
          * @enum {string}
@@ -2129,6 +3362,7 @@ export interface components {
             access_token: string;
             /** Format: int64 */
             expires_in: number;
+            peer_addresses?: null | components["schemas"]["PeerAddressBundle"];
             /**
              * @description Rotated -- a new refresh token, not the one presented. The caller
              *     must persist this and discard the old one; presenting the old one
@@ -2144,6 +3378,21 @@ export interface components {
             platform: components["schemas"]["ClientPlatform"];
             token: string;
         };
+        /**
+         * @description A title a full peer reports but this node has zero local record of at
+         *     all -- the partial-cache-node case (§4.3). Mirrors
+         *     [`streamarr_catalog::RemoteOnlyWork`]; see [`AvailabilityBadge`]'s doc
+         *     comment for why this exists as a real, separately-constructed type
+         *     rather than a purely decorative mirror.
+         */
+        RemoteOnlyWork: {
+            available_on: components["schemas"]["AvailabilityBadge"][];
+            external_id: string;
+            kind: components["schemas"]["WorkKind"];
+            provider: components["schemas"]["ExternalProvider"];
+            release_date?: string | null;
+            title: string;
+        };
         ReorderPlaylistItemsRequest: {
             /**
              * @description Every item id currently on this playlist, in the desired new order.
@@ -2157,6 +3406,58 @@ export interface components {
             approved: boolean;
             can_stream?: boolean;
             library_allow?: string[];
+        };
+        /**
+         * @description One routing policy row. `group_library_id = None` matches any library;
+         *     `user_id = None` matches any user. Among rules that match equally
+         *     specifically, `priority` is the tiebreak (higher wins -- see §5.2).
+         */
+        RoutingRule: {
+            /** Format: date-time */
+            created_at: string;
+            delivery_mode: components["schemas"]["DeliveryMode"];
+            /** Format: uuid */
+            group_id: string;
+            /** Format: uuid */
+            group_library_id?: string | null;
+            /** Format: uuid */
+            id: string;
+            /** @description `peer_nodes.id` values, ordered most-preferred first. */
+            preferred_nodes: string[];
+            /** Format: int32 */
+            priority: number;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: uuid */
+            user_id?: string | null;
+        };
+        /**
+         * @description Response body for [`routing_rules_handler`] -- `docs/architecture/
+         *     peer-groups.md` §3.6: `routing_rules` rows. `RoutingRule` is reused
+         *     directly (see this module's own "wire-shape discipline" doc comment):
+         *     it carries no secret and already stamps its own `created_at`/
+         *     `updated_at`, so there is no separate sync-metadata envelope to define
+         *     here the way [`PeerUserRow`]/[`PeerPolicyRow`] need for `User`/`Policy`.
+         */
+        RoutingRulesResponse: {
+            rows: components["schemas"]["RoutingRule"][];
+            server_time: string;
+        };
+        /**
+         * @description `GET /api/v1/catalog/search`'s real response shape: locally-known
+         *     matches (`items`, from `CatalogService::search`, unchanged) plus the
+         *     partial-cache-node `remote_only` union (§4.3, from `CatalogService::
+         *     search_remote_only`) -- see [`search_catalog_handler`]. Unlike
+         *     `CatalogPageSchema`/`WorkDetailSchema` above, this genuinely is the real
+         *     wire type (not just a doc-only mirror): `CatalogService::search` itself
+         *     deliberately keeps returning a bare `Vec<Work>` (every existing caller/
+         *     test is unaffected), so combining it with `remote_only` for the HTTP
+         *     response has to happen here, in the API layer, rather than in
+         *     `streamarr-catalog`.
+         */
+        SearchResponse: {
+            items: components["schemas"]["Work"][];
+            remote_only: components["schemas"]["RemoteOnlyWork"][];
         };
         Season: {
             availability: components["schemas"]["Availability"];
@@ -2180,10 +3481,38 @@ export interface components {
          *     capability being enforced server-side is not the same as it being
          *     visibly gated in the UI: without this, a client has no way to know
          *     whether to show a "Download" button/nav item at all, only whether the
-         *     resulting API call will succeed once clicked.
+         *     resulting API call will succeed once clicked. Deliberately just the
+         *     capability booleans a Playarr client actually needs to gate its own UI
+         *     on -- not `library_allow`/`is_admin`/`max_rating`, which are either
+         *     already enforced per-request server-side (so the client never needs to
+         *     duplicate that check) or not relevant to what Playarr's own chrome
+         *     renders.
          */
         SelfCapabilitiesResponse: {
             can_download: boolean;
+        };
+        /** @description Request body for [`update_self_peer_node_handler`]. */
+        SelfPeerNodeRequest: {
+            addresses?: components["schemas"]["PeerAddress"][];
+            name: string;
+        };
+        /**
+         * @description Response body for [`update_self_peer_node_handler`]. Every field but
+         *     `name`/`addresses` is `None` until this node has actually founded or
+         *     joined a group (see [`PendingSelfPeerProfile`]'s doc comment) --
+         *     deliberately a distinct, all-nullable shape rather than reusing
+         *     [`PeerNode`] with fabricated placeholder values for the fields that
+         *     genuinely don't exist yet.
+         */
+        SelfPeerNodeResponse: {
+            addresses: components["schemas"]["PeerAddress"][];
+            /** Format: uuid */
+            group_id?: string | null;
+            /** Format: uuid */
+            id?: string | null;
+            name: string;
+            public_key?: string | null;
+            status?: null | components["schemas"]["PeerNodeStatus"];
         };
         /**
          * @description Historical playback-session fields plus the same best-effort linked
@@ -2241,6 +3570,26 @@ export interface components {
             invite_token: string;
             password: string;
             username: string;
+        };
+        /**
+         * @description Identity-only projection of this node's own `SourceInstance` rows --
+         *     `docs/architecture/peer-groups.md` §3.1's table: "`source_instances`
+         *     identity only (id, kind, name, priority, `group_library_id`) ... never
+         *     `api_key_encrypted`." Also never `base_url`: an *arr base URL is
+         *     exactly as node-local/credential-adjacent as the API key that
+         *     authenticates against it -- see `SourceInstanceRepo::list_updated_since`'s
+         *     own doc comment, which explicitly leaves stripping non-identity fields
+         *     to the calling endpoint handler (this one).
+         */
+        SourceInstanceIdentity: {
+            /** Format: uuid */
+            group_library_id?: string | null;
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["SourceKind"];
+            name: string;
+            /** Format: int32 */
+            priority: number;
         };
         /**
          * @description Request body for registering (or re-registering, by re-POSTing with the
@@ -2362,6 +3711,18 @@ export interface components {
             updated_at: string;
             worker_process: string;
         };
+        /**
+         * @description A minute-of-day range, e.g. 06:00-22:00. Stored as minutes-since-midnight
+         *     rather than `chrono::NaiveTime` so it serializes trivially and compares
+         *     without timezone concerns; the caller supplies the user's local minute
+         *     of day when evaluating.
+         */
+        TimeRange: {
+            /** Format: int32 */
+            end_minute_of_day: number;
+            /** Format: int32 */
+            start_minute_of_day: number;
+        };
         /** @description Doc-only mirror of [`TokenResponse`]; see [`DeviceCodeResponseSchema`]. */
         TokenResponseSchema: {
             access_token: string;
@@ -2460,9 +3821,12 @@ export interface components {
             duration_ms: number;
             /**
              * Format: date-time
-             * @description When this update actually happened (RFC3339), for an offline-buffered
-             *     watch-progress update replayed after reconnecting. Omitted/absent for a
-             *     normal live update -- the server falls back to `now()`.
+             * @description When this progress update actually happened, RFC3339. Optional and
+             *     additive -- lets an offline-buffered client (one that kept recording
+             *     progress while disconnected and is only now replaying it) timestamp
+             *     the update for when it occurred rather than when it's replayed after
+             *     reconnecting. Omitted by every existing caller, who get the prior
+             *     behaviour unchanged: the server falls back to `Utc::now()`.
              */
             occurred_at?: string | null;
             /** Format: int64 */
@@ -2608,6 +3972,8 @@ export interface components {
          * @enum {string}
          */
         WatchState: "unseen" | "part_watched" | "watched";
+        /** @enum {string} */
+        Weekday: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
         /**
          * @description The aggregate root for anything in the catalog. A movie is a `Work` of
          *     kind `Movie` with no children; a series/artist/author is a `Work` whose
@@ -2670,6 +4036,11 @@ export interface components {
             crew: components["schemas"]["CreditResponse"][];
         };
         WorkDetailSchema: {
+            /**
+             * @description Cross-peer availability for `work` (§4.3) -- empty for a deployment
+             *     not part of a peer group.
+             */
+            available_on: components["schemas"]["AvailabilityBadge"][];
             children: components["schemas"]["WorkChildrenSchema"];
             /**
              * Format: uuid
@@ -2787,6 +4158,360 @@ export interface operations {
                      */
                     "application/json": components["schemas"]["VersionEnvelope"];
                 };
+            };
+        };
+    };
+    found_peer_group_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "name": "Home Group"
+                 *     }
+                 */
+                "application/json": components["schemas"]["FoundPeerGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description Group founded, this node is its first member */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoundPeerGroupResponse"];
+                };
+            };
+            /** @description This node's name/addresses have not been set yet (call PUT .../peer-nodes/self first) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This node has already founded or joined a peer group */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    join_peer_group_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "join_token": "5f8a1c2e9b3d4f6a8c1e2b3d4f6a8c1e",
+                 *       "seed_address": "https://home.example.com"
+                 *     }
+                 */
+                "application/json": components["schemas"]["JoinPeerGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description Joined -- full current group membership returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrollResponse"];
+                };
+            };
+            /** @description This node's name/addresses have not been set yet (call PUT .../peer-nodes/self first) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This node has already founded or joined a peer group */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The seed node could not be reached, or rejected the join token */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_peer_join_token_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Join token issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "expires_at": "2026-07-21T12:15:00Z",
+                     *       "join_token": "5f8a1c2e9b3d4f6a8c1e2b3d4f6a8c1e"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["PeerJoinTokenResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This node has not founded or joined a peer group yet */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    address_bundle_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description This node's (or, once grouped, this group's) current address bundle */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "addresses": [
+                     *         {
+                     *           "peer_node_id": "11111111-1111-4111-8111-111111111111",
+                     *           "url": "https://home.example.com"
+                     *         },
+                     *         {
+                     *           "peer_node_id": "22222222-2222-4222-8222-222222222222",
+                     *           "url": "https://east.example.com"
+                     *         }
+                     *       ],
+                     *       "group_id": "11111111-1111-4111-8111-111111111111",
+                     *       "group_name": "Home Group"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["PeerAddressBundle"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_peer_nodes_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every known peer node, including self */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeerNode"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_self_peer_node_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "addresses": [
+                 *         {
+                 *           "client_reachable": true,
+                 *           "label": "wan",
+                 *           "priority": 0,
+                 *           "url": "https://home.example.com"
+                 *         },
+                 *         {
+                 *           "client_reachable": false,
+                 *           "label": "lan",
+                 *           "priority": 1,
+                 *           "url": "http://192.168.1.10:8080"
+                 *         }
+                 *       ],
+                 *       "name": "home"
+                 *     }
+                 */
+                "application/json": components["schemas"]["SelfPeerNodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Self profile set or updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SelfPeerNodeResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    peer_node_sync_status_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Peer node id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Last-known sync status (always unreported in Phase 1) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeerSyncStatusResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No peer node with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -4445,6 +6170,7 @@ export interface operations {
                      * @example {
                      *       "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5ZjhkN2E2Yi0xMjM0LTQ1NjctODlhYi1jZGVmMDEyMzQ1NjciLCJkZXZpY2VfaWQiOiJiM2YyYzlhNC02ZTFkLTRmOGEtOWMyYi0xYTdlNWQzZjZiOTAiLCJzZXNzaW9uX2lkIjoiN2E5ZDNlMWYtOGI0Yy00ZDJhLTliM2UtNWY2YTdiOGM5ZDBlIiwiaXNzIjoic3RyZWFtYXJyIiwiaWF0IjoxNzE2MjM5MDIyLCJleHAiOjE3MTYyNDI2MjJ9.dGhpcyBpcyBhIGZha2Ugc2lnbmF0dXJl",
                      *       "expires_in": 3600,
+                     *       "peer_addresses": null,
                      *       "refresh_token": "rt_9f8d7a6b1234456789abcdef01234567",
                      *       "token_type": "Bearer",
                      *       "user_id": "9f8d7a6b-1234-4567-89ab-cdef01234567"
@@ -4505,6 +6231,7 @@ export interface operations {
                      * @example {
                      *       "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1ZjNjZjk2YS0xZjI0LTQ4ZTQtOWJkNC0zZTg5N2VlYjY0YTgiLCJkZXZpY2VfaWQiOiI4ZjE0ZTQ1Zi1jZWVhLTQ2N2UtYWRkZS0zZmI1YzhmODhlNGIiLCJzZXNzaW9uX2lkIjoiZDJiOWYwYTQtNzY1Yy00ZjNlLWFjOTQtN2NmMDQ1YjBkOTFlIiwiaXNzIjoic3RyZWFtYXJyIiwiaWF0IjoxNzE4ODAwMDAwLCJleHAiOjE3MTg4MDA5MDB9.dGhpc19pc19hX2Zha2Vfc2lnbmF0dXJl",
                      *       "expires_in": 900,
+                     *       "peer_addresses": null,
                      *       "refresh_token": "rt_1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
                      *       "token_type": "Bearer",
                      *       "user_id": "5f3cf96a-1f24-48e4-9bd4-3e897eeb64a8"
@@ -4736,48 +6463,51 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Matching works */
+            /** @description Matching works, plus any partial-cache-node remote-only titles */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     /**
-                     * @example [
-                     *       {
-                     *         "added_at": "2024-01-15T10:30:00Z",
-                     *         "availability": "available",
-                     *         "external_refs": [
-                     *           {
-                     *             "external_id": "155",
-                     *             "provider": "tmdb"
-                     *           }
-                     *         ],
-                     *         "genres": [
-                     *           "Action",
-                     *           "Crime",
-                     *           "Drama"
-                     *         ],
-                     *         "id": "4c9e2a1b-7f3d-4e6a-9b2c-8d5f1e3a7c90",
-                     *         "images": [
-                     *           {
-                     *             "height": 3000,
-                     *             "kind": "poster",
-                     *             "url": "https://image.tmdb.org/t/p/original/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
-                     *             "width": 2000
-                     *           }
-                     *         ],
-                     *         "kind": "movie",
-                     *         "monitored": true,
-                     *         "overview": "Sample Vigilante raises the stakes in his war on crime with the help of Lt. Jim Gordon and District Attorney Harvey Dent.",
-                     *         "release_date": "2008-07-16T00:00:00Z",
-                     *         "sort_title": "Test Film, The",
-                     *         "tags": [],
-                     *         "title": "The Test Film"
-                     *       }
-                     *     ]
+                     * @example {
+                     *       "items": [
+                     *         {
+                     *           "added_at": "2024-01-15T10:30:00Z",
+                     *           "availability": "available",
+                     *           "external_refs": [
+                     *             {
+                     *               "external_id": "155",
+                     *               "provider": "tmdb"
+                     *             }
+                     *           ],
+                     *           "genres": [
+                     *             "Action",
+                     *             "Crime",
+                     *             "Drama"
+                     *           ],
+                     *           "id": "4c9e2a1b-7f3d-4e6a-9b2c-8d5f1e3a7c90",
+                     *           "images": [
+                     *             {
+                     *               "height": 3000,
+                     *               "kind": "poster",
+                     *               "url": "https://image.tmdb.org/t/p/original/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
+                     *               "width": 2000
+                     *             }
+                     *           ],
+                     *           "kind": "movie",
+                     *           "monitored": true,
+                     *           "overview": "Sample Vigilante raises the stakes in his war on crime with the help of Lt. Jim Gordon and District Attorney Harvey Dent.",
+                     *           "release_date": "2008-07-16T00:00:00Z",
+                     *           "sort_title": "Test Film, The",
+                     *           "tags": [],
+                     *           "title": "The Test Film"
+                     *         }
+                     *       ],
+                     *       "remote_only": []
+                     *     }
                      */
-                    "application/json": components["schemas"]["Work"][];
+                    "application/json": components["schemas"]["SearchResponse"];
                 };
             };
             /** @description Missing or invalid access token */
@@ -5026,6 +6756,317 @@ export interface operations {
             };
         };
     };
+    list_download_tickets_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every download ticket for the caller, restricted to this account's currently allowed libraries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadTicketResponse"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller lacks Playarr streaming access or download access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_download_ticket_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "media_file_id": "3f9c1e2d-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+                 *       "quality_id": "original"
+                 *     }
+                 */
+                "application/json": components["schemas"]["CreateDownloadTicketRequest"];
+            };
+        };
+        responses: {
+            /** @description An existing queued/processing/ready ticket for this exact media file + quality already existed; returned instead of creating a duplicate */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadTicketResponse"];
+                };
+            };
+            /** @description A new download ticket was created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "container": "mkv",
+                     *       "error_message": null,
+                     *       "expires_at": null,
+                     *       "id": "6a5e2c3e-2b9a-4b3e-9b7a-8e2f1c3d4a5b",
+                     *       "media_file_id": "3f9c1e2d-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+                     *       "quality_id": "original",
+                     *       "ready_at": "2026-07-20T14:22:05Z",
+                     *       "requested_at": "2026-07-20T14:22:05Z",
+                     *       "size_bytes": 4000000000,
+                     *       "status": "ready"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["DownloadTicketResponse"];
+                };
+            };
+            /** @description Unknown quality_id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller lacks Playarr streaming access, download access, or access to this media file's library */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown media_file_id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_download_ticket_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description DownloadTicket id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The ticket's current state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadTicketResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller lacks Playarr streaming access, download access, or access to this media file's library */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown ticket id, or it does not belong to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cancel_download_ticket_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description DownloadTicket id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ticket canceled (soft: marked Canceled, not deleted -- see this module's doc comment) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller lacks Playarr streaming access, download access, or access to this media file's library */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown ticket id, or it does not belong to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    download_ticket_file_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description DownloadTicket id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Full file content, Content-Disposition: attachment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Partial content for a `Range` request */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller lacks Playarr streaming access, download access, or access to this media file's library */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown ticket id, or it does not belong to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The ticket has not finished processing yet (queued/processing/failed) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The ticket expired or was canceled */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    proxy_stream_media_handler: {
+        parameters: {
+            query: {
+                /** @description The owning peer's own PlaybackSession id, from its PlaybackInfoResponse */
+                playback_session_id: string;
+            };
+            header?: never;
+            path: {
+                /** @description The PeerNode a routing decision resolved to */
+                peer_node_id: string;
+                /** @description The OWNING peer's own local MediaFile id (meaningless on this node) */
+                media_file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Full file content, proxied from the owning peer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Partial content for a Range request, proxied from the owning peer */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The owning peer could not be reached, or refused the request */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description peer_node_id is not currently a known, active peer */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     serve_rendition_file_handler: {
         parameters: {
             query?: never;
@@ -5201,6 +7242,81 @@ export interface operations {
                 content?: never;
             };
             /** @description The source file could not be probed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    media_download_options_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MediaFile id */
+                media_file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Download qualities this server can produce for this media file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "container": "mkv",
+                     *       "media_file_id": "3f9c1e2d-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+                     *       "options": [
+                     *         {
+                     *           "estimated_size_bytes": 4000000000,
+                     *           "height": null,
+                     *           "id": "original",
+                     *           "label": "Original",
+                     *           "profile": null,
+                     *           "size_is_estimate": false
+                     *         },
+                     *         {
+                     *           "estimated_size_bytes": 1200000000,
+                     *           "height": 1080,
+                     *           "id": "h264-1080p-8mbps",
+                     *           "label": "1080p",
+                     *           "profile": "h264-1080p-8mbps",
+                     *           "size_is_estimate": true
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["DownloadOptionsResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller lacks Playarr streaming access, download access, or access to this library */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown media_file_id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source file could not be probed for its duration */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -5870,6 +7986,374 @@ export interface operations {
             };
         };
     };
+    accounts_handler: {
+        parameters: {
+            query?: {
+                since?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description users/policies upserted or tombstoned since the given cursor */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountsResponse"];
+                };
+            };
+            /** @description Malformed since cursor */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing/invalid peer signature, or an unknown/left peer */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    availability_handler: {
+        parameters: {
+            query?: {
+                since?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description This peer's own leaf-level availability, derived live from its own MediaFileRepo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailabilityResponse"];
+                };
+            };
+            /** @description Missing/invalid peer signature, or an unknown/left peer */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    enroll_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "addresses": [
+                 *         {
+                 *           "client_reachable": true,
+                 *           "label": "wan",
+                 *           "priority": 0,
+                 *           "url": "https://east.example.com"
+                 *         }
+                 *       ],
+                 *       "join_token": "5f8a1c2e9b3d4f6a8c1e2b3d4f6a8c1e",
+                 *       "name": "east",
+                 *       "peer_id": "22222222-2222-4222-8222-222222222222",
+                 *       "public_key": "MCowBQYDK2VwAyEA...base64..."
+                 *     }
+                 */
+                "application/json": components["schemas"]["EnrollRequest"];
+            };
+        };
+        responses: {
+            /** @description Enrolled -- full current group membership returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrollResponse"];
+                };
+            };
+            /** @description A peer with this name already exists in the group */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Join token is invalid, expired, or already used */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    invites_handler: {
+        parameters: {
+            query?: {
+                since?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description user_invites/user_invite_requests rows created/requested/consumed since the given cursor */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitesResponse"];
+                };
+            };
+            /** @description Malformed since cursor */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing/invalid peer signature, or an unknown/left peer */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    libraries_handler: {
+        parameters: {
+            query?: {
+                since?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description source_instances identity rows + group_libraries updated since the given cursor */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibrariesResponse"];
+                };
+            };
+            /** @description Malformed since cursor */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing/invalid peer signature, or an unknown/left peer */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    nodes_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Full current peer_nodes membership, including self */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodesResponse"];
+                };
+            };
+            /** @description Missing/invalid peer signature, or an unknown/left peer */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    peer_playback_info_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "client_platform": "web",
+                 *       "client_version": "1.0.0",
+                 *       "device_id": "7a9d3e1f-8b4c-4d2a-9b3e-5f6a7b8c9d0e",
+                 *       "query": {
+                 *         "audio_codecs": "aac",
+                 *         "containers": "mp4",
+                 *         "video_codecs": "h264"
+                 *       },
+                 *       "target": {
+                 *         "kind": "media_file",
+                 *         "media_file_id": "9c8b7a6f-5e4d-3c2b-1a0f-9e8d7c6b5a4f"
+                 *       },
+                 *       "user_id": "3f9c1e2d-5a6b-4c7d-8e9f-0a1b2c3d4e5f"
+                 *     }
+                 */
+                "application/json": components["schemas"]["PeerPlaybackInfoRequest"];
+            };
+        };
+        responses: {
+            /** @description Playback negotiation resolved against this (the owning) peer's own local media file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackInfoResponse"];
+                };
+            };
+            /** @description Missing/invalid peer signature, or an unknown/left peer */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The forwarded user does not have Playarr streaming access on this peer's own policy, or is outside its own library grant */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown media file, or no local leaf resolves the given external ref */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    routing_rules_handler: {
+        parameters: {
+            query?: {
+                since?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description routing_rules rows updated since the given cursor */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutingRulesResponse"];
+                };
+            };
+            /** @description Malformed since cursor */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing/invalid peer signature, or an unknown/left peer */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    peer_stream_media_handler: {
+        parameters: {
+            query: {
+                /** @description This peer's own PlaybackSession id, minted by its own prior negotiation */
+                playback_session_id: string;
+            };
+            header?: never;
+            path: {
+                /** @description This peer's own local MediaFile id */
+                media_file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Full file content */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Partial content for a Range request */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing/invalid peer signature, an unknown/left peer, or an unknown/expired playback session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The session owner's current policy no longer grants access to this library */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown media_file_id, or the file no longer exists on disk */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_person_handler: {
         parameters: {
             query?: never;
@@ -6024,6 +8508,101 @@ export interface operations {
             };
             /** @description No person with this id */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    by_external_ref_playback_info_handler: {
+        parameters: {
+            query?: {
+                /** @description Comma-separated container names the client can play, e.g. `"mp4"`. */
+                containers?: string;
+                /** @description Comma-separated video codecs the client can play, e.g. `"h264"`. */
+                video_codecs?: string;
+                /**
+                 * @description Comma-separated audio codecs the client can play; informational
+                 *     only today -- see `TranscodeOrchestrator::can_direct_play`'s docs.
+                 */
+                audio_codecs?: string;
+                max_bitrate_bps?: number | null;
+                /**
+                 * @description Target rendition profile name if a transcode is needed; defaults to
+                 *     `"h264-720p-4mbps"` (an unrecognized name still resolves to a sane
+                 *     default -- see `TranscodeTargetProfile::resolve`).
+                 */
+                profile?: string | null;
+                /**
+                 * @description Skip direct play and produce the requested rendition profile. Used
+                 *     by an explicit player quality choice; omitted/false keeps Original
+                 *     as the default uncapped negotiation behaviour.
+                 */
+                force_transcode?: boolean;
+                /**
+                 * @description Absolute source timestamp at which a newly-created on-demand
+                 *     transcode should begin. Direct play and complete renditions ignore
+                 *     this and remain normally seekable by the player.
+                 */
+                start_position_ms?: number;
+                /**
+                 * @description Global ffprobe stream index of the source audio track to encode into
+                 *     an on-demand HLS session. Supplying this forces a fresh transcode so
+                 *     a track-specific stream never reuses a default-audio rendition.
+                 */
+                audio_stream_index?: number | null;
+                /**
+                 * @description Ignore this viewer's remembered per-media choices for this request.
+                 *     Used when the player explicitly switches back to Original/automatic.
+                 */
+                ignore_saved_preferences?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "external_id": "603",
+                 *       "group_library_id": "b6a1c2d3-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+                 *       "leaf_selector": {
+                 *         "kind": "movie"
+                 *       },
+                 *       "provider": "tmdb"
+                 *     }
+                 */
+                "application/json": components["schemas"]["PlaybackByExternalRefRequest"];
+            };
+        };
+        responses: {
+            /** @description Playback negotiation resolved on the peer that actually holds this title */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackInfoResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No peer in the group currently reports this title available */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6913,45 +9492,6 @@ export interface operations {
             };
         };
     };
-    get_player_preferences_handler: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The signed-in user's player preferences */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "preferred_audio_language": "en"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["PlayerPreferencesResponse"];
-                };
-            };
-            /** @description Missing or invalid access token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description The signed-in user no longer exists */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     get_self_capabilities_handler: {
         parameters: {
             query?: never;
@@ -6984,6 +9524,45 @@ export interface operations {
             };
             /** @description Caller does not have Playarr streaming access */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_player_preferences_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The signed-in user's player preferences */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "preferred_audio_language": "en"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["PlayerPreferencesResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The signed-in user no longer exists */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

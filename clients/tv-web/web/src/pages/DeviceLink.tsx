@@ -1,11 +1,19 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ApiError } from "@streamarr-tv/api-client";
+import { ApiClient, ApiError } from "@streamarr-tv/api-client";
+import { authorizeDeviceAcrossServers, parseServersParam } from "@streamarr-tv/device-auth";
 import { useApiClient, useAuth } from "../lib/ApiClientProvider";
 import { isCompleteDeviceCode, normaliseDeviceCode } from "../lib/deviceCode";
+import { createLocalNetworkFetch } from "../lib/localNetworkFetch";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
+
+// Matches `ApiClientProvider.tsx`'s own module-scoped instance: stateless
+// (just routes each request through the Local Network Access exemption its
+// target address needs), so a second instance here is equivalent, not a
+// duplicated cache.
+const browserFetch = createLocalNetworkFetch();
 
 export function DeviceLinkPage() {
   const { t } = useLanguage();
@@ -31,7 +39,27 @@ export function DeviceLinkPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await client.authorizeDevice({ user_code: code });
+      // `docs/architecture/peer-groups.md` §6.3: a `servers=` bundle on this
+      // very link (carried by `verification_uri_complete`, the QR-encoded
+      // form) means the issuing peer told us the whole group's addresses --
+      // fan the approval out to all of them in parallel, since it has to
+      // beat an impatient human. No bundle (an old cached client, a
+      // pre-upgrade peer, or a bare manually-typed code with no URL context
+      // at all) falls back to this browser's own already-connected server,
+      // exactly as before.
+      const bundledServers = parseServersParam(location.search);
+      if (bundledServers) {
+        await authorizeDeviceAcrossServers(bundledServers, code, {
+          buildClient: (url) =>
+            new ApiClient({
+              baseUrl: url,
+              fetchImpl: browserFetch,
+              getAccessToken: (request) => client.getAccessToken(request),
+            }),
+        });
+      } else {
+        await client.authorizeDevice({ user_code: code });
+      }
       setLinked(true);
     } catch (reason) {
       if (!currentUserId) {

@@ -1,7 +1,40 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { rememberGroup } from "@streamarr-tv/domain";
 import { initialLoginServerUrl, publicIpv4RelayUrl } from "./loginServerUrl";
 
+/** Matches `knownServers.test.ts`'s own `localStorage` stub convention. */
+function createMemoryLocalStorage(): Storage {
+  const store = new Map<string, string>();
+  return {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    clear: () => store.clear(),
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+    get length() {
+      return store.size;
+    },
+  } as Storage;
+}
+
+beforeEach(() => {
+  vi.stubGlobal("localStorage", createMemoryLocalStorage());
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe("initialLoginServerUrl", () => {
+  // These first two cases are the rollout invariant (`docs/architecture/
+  // peer-groups.md`'s top, restated in §7.3): with neither a legacy
+  // `apiBaseUrl` nor a remembered `KnownServerGroup` ever stored (this
+  // file's own `beforeEach` starts every test with empty storage), the
+  // hosted form must blank exactly as it always has.
   it("leaves the server blank on the hosted Playarr origin", () => {
     expect(initialLoginServerUrl("https://playarr.app", "playarr.app")).toBe("");
   });
@@ -14,6 +47,26 @@ describe("initialLoginServerUrl", () => {
     expect(initialLoginServerUrl("https://media.example.com", "media.example.com")).toBe(
       "https://media.example.com"
     );
+  });
+
+  it("prefills on hosted Playarr when a legacy apiBaseUrl is stored", () => {
+    localStorage.setItem("streamarr:apiBaseUrl", "https://home.example.com");
+    expect(initialLoginServerUrl("https://home.example.com", "playarr.app")).toBe(
+      "https://home.example.com"
+    );
+  });
+
+  it("prefills on hosted Playarr when a KnownServerGroup is remembered, even with no legacy apiBaseUrl", () => {
+    rememberGroup({ servers: [{ url: "https://home.example.com" }], lastGoodUrl: "https://home.example.com" });
+    expect(initialLoginServerUrl("https://home.example.com", "playarr.app")).toBe(
+      "https://home.example.com"
+    );
+  });
+
+  it("still blanks on hosted Playarr once forgetGroup-equivalent empty storage is restored", () => {
+    // No group, no legacy key (this test's own `beforeEach` storage) --
+    // confirms the blank path isn't a one-time fluke of test ordering.
+    expect(initialLoginServerUrl("https://playarr.app", "playarr.app")).toBe("");
   });
 });
 

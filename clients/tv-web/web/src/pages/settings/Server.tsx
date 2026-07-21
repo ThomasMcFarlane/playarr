@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ApiError, type VersionEnvelope } from "@streamarr-tv/api-client";
-import { DEFAULT_API_BASE_URL } from "@streamarr-tv/domain";
+import { DEFAULT_API_BASE_URL, readKnownServers } from "@streamarr-tv/domain";
 import { useApiBaseUrl, usePrimaryApiClient, useAuth } from "../../lib/ApiClientProvider";
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useToast } from "../../lib/toast";
@@ -22,13 +22,21 @@ export function SettingsServerPage() {
   useDocumentTitle(t("settings.server.pageTitle"));
   const [apiBaseUrl] = useApiBaseUrl();
   const client = usePrimaryApiClient();
-  const { connectedServers, connectServer, disconnectServer, currentUserName } = useAuth();
+  const { connectedServers, connectServer, disconnectServer, currentUserName, forgetKnownServerGroup } =
+    useAuth();
   const { showToast } = useToast();
   const [serverUrl, setServerUrl] = useState("");
   const [serverUsername, setServerUsername] = useState(currentUserName ?? "");
   const [serverPassword, setServerPassword] = useState("");
   const [addServerState, setAddServerState] = useState<AddServerState>({ status: "idle" });
   const [testState, setTestState] = useState<ConnectionTestState>({ status: "idle" });
+  // `docs/architecture/peer-groups.md` §7.1/§7.3: whether this browser has a
+  // remembered `KnownServerGroup` at all -- only then does "Forget this
+  // server" (the manual escape hatch, `forgetGroup()`) have anything to do.
+  // Read once at mount, same as `ApiClientProvider`'s own lazy-init reads --
+  // updated locally on click rather than re-read from storage, since this
+  // page is the only place that can change it.
+  const [hasKnownServerGroup, setHasKnownServerGroup] = useState(() => readKnownServers() !== undefined);
 
   async function handleAddServer(event: React.FormEvent) {
     event.preventDefault();
@@ -79,7 +87,22 @@ export function SettingsServerPage() {
                 <small>{server.url}</small>
               </div>
               {server.primary ? (
-                <span className="connected-server-badge">{t("settings.server.primaryBadge")}</span>
+                <div className="connected-server-primary">
+                  <span className="connected-server-badge">{t("settings.server.primaryBadge")}</span>
+                  {hasKnownServerGroup && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        forgetKnownServerGroup();
+                        setHasKnownServerGroup(false);
+                        showToast(t("settings.server.serverGroupForgottenToast"));
+                      }}
+                    >
+                      {t("settings.server.forgetServer")}
+                    </button>
+                  )}
+                </div>
               ) : (
                 <button
                   type="button"
@@ -177,6 +200,7 @@ export function SettingsServerPage() {
         </div>
 
         <p className="hint">{t("settings.server.primaryServerHint", { apiBaseUrl })}</p>
+        {hasKnownServerGroup && <p className="hint">{t("settings.server.forgetServerHint")}</p>}
 
         {window.PlayarrAndroidMobile && (
           <div className="connection-actions">

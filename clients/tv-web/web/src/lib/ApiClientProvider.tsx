@@ -11,7 +11,9 @@ import {
 import {
   ApiClient,
   type AccessTokenRequest,
+  type ApiClientConfig,
   type LoginRequest,
+  type PeerAddressBundle,
 } from "@streamarr-tv/api-client";
 import {
   decodeAccessTokenDeviceId,
@@ -25,8 +27,14 @@ import {
 } from "@streamarr-tv/device-auth";
 import {
   API_BASE_URL_QUERY_PARAM,
+  forgetGroup,
   getStoredApiBaseUrl,
+  mergeKnownServerGroup,
   normaliseApiBaseUrl,
+  readKnownServers,
+  rememberGroup,
+  rememberServerSuccess,
+  resolveReachableServer,
   setStoredApiBaseUrl,
 } from "@streamarr-tv/domain";
 import { PLAYARR_CLIENT_PLATFORM } from "./clientPlatform";
@@ -224,6 +232,76 @@ function serverLabel(serverUrl: string): string {
   }
 }
 
+// ---------------------------------------------------------------------
+// §7.1 self-healing: `docs/architecture/peer-groups.md`. Every `ApiClient`
+// this provider builds goes through `createManagedApiClient` (never a bare
+// `new ApiClient(...)`) so both halves of self-healing apply uniformly:
+// every successful request marks its server reachable
+// (`withServerSuccessTracking`), and a grouped login/refresh response folds
+// its `peer_addresses` into the remembered address book
+// (`withPeerAddressSelfHealing`). Both are no-ops for an ungrouped
+// deployment -- `rememberServerSuccess` no-ops with nothing remembered yet,
+// and `peer_addresses` stays `null` for a standalone node (see
+// `admin_peer.rs::peer_addresses_for_response`'s doc comment) -- so this
+// is the rollout invariant restated in code, not just prose.
+// ---------------------------------------------------------------------
+
+/**
+ * Wraps `fetchImpl` so a completed 2xx response marks `baseUrl` as
+ * reachable in the remembered `KnownServerGroup` (§7.1) -- every
+ * successful call against this client counts, not just login/refresh.
+ */
+function withServerSuccessTracking(
+  fetchImpl: (input: Request) => Promise<Response>,
+  baseUrl: string
+): (input: Request) => Promise<Response> {
+  return async (input) => {
+    const response = await fetchImpl(input);
+    if (response.ok) rememberServerSuccess(baseUrl);
+    return response;
+  };
+}
+
+/**
+ * Wraps `client.login`/`client.refresh` so a grouped response's
+ * `peer_addresses` self-heals the remembered `KnownServerGroup` (§7.1) --
+ * every call site that logs in or refreshes a token against this client
+ * (the transparent `ensureAccessToken` path below, and the real
+ * username/password `login()`/`connectServer()` flows) gets this for free
+ * instead of each one remembering to call `rememberGroup` itself.
+ */
+function withPeerAddressSelfHealing(client: ApiClient, baseUrl: string): ApiClient {
+  const originalLogin = client.login.bind(client);
+  const originalRefresh = client.refresh.bind(client);
+  const fold = (response: { peer_addresses?: PeerAddressBundle | null }) => {
+    if (response.peer_addresses) rememberGroup(mergeKnownServerGroup(response.peer_addresses, baseUrl));
+  };
+  client.login = async (body) => {
+    const response = await originalLogin(body);
+    fold(response);
+    return response;
+  };
+  client.refresh = async (body) => {
+    const response = await originalRefresh(body);
+    fold(response);
+    return response;
+  };
+  return client;
+}
+
+/**
+ * Builds an `ApiClient` wired for §7.1's self-healing -- see the comment
+ * above this section. Every `ApiClient` construction site in this provider
+ * goes through this instead of `new ApiClient(...)` directly.
+ */
+export function createManagedApiClient(config: ApiClientConfig): ApiClient {
+  const instance = new ApiClient({
+    ...config,
+    fetchImpl: withServerSuccessTracking(config.fetchImpl ?? browserFetch, config.baseUrl),
+  });
+  return withPeerAddressSelfHealing(instance, config.baseUrl);
+}
+
 /** Credentials for the real username/password login flow -- see `ApiClientContextValue.login`. */
 export interface LoginCredentials {
   serverUrl: string;
@@ -294,15 +372,24 @@ interface ApiClientContextValue {
   logout: () => void;
   /** Clears the saved session for one profile without requiring that profile's PIN. */
   logoutProfile: (userId: string) => void;
+  /**
+   * Clears the remembered `KnownServerGroup` (§7.1/§7.3) -- the explicit
+   * manual escape hatch if a group becomes fully defunct. Does not touch
+   * the active session, the legacy single `apiBaseUrl` key, or
+   * `apiBaseUrl` itself: it only resets which addresses future resolution
+   * (a fresh boot, or `ensureAccessToken`'s §7.2 retry) considers
+   * "remembered." Settings > Server's "Forget this server" action.
+   */
+  forgetKnownServerGroup: () => void;
 }
 
 const ApiClientContext = createContext<ApiClientContextValue | null>(null);
 
 /**
- * Resolves the initial API base URL for the web app: an operator-entered
- * value persisted from the Settings page wins, then a `?apiBaseUrl=...`
- * query param (for a split reverse-proxy deployment or pointing a dev
- * build at a non-default backend), then this page's own origin.
+ * Today's pre-§7.1 resolution chain: an operator-entered value persisted
+ * from the Settings page wins, then a `?apiBaseUrl=...` query param (for a
+ * split reverse-proxy deployment or pointing a dev build at a non-default
+ * backend), then this page's own origin.
  *
  * Same-origin is the real default, not a placeholder: `streamarr-bin` co-
  * hosts this app's built assets with the API on one port (see
@@ -314,8 +401,12 @@ const ApiClientContext = createContext<ApiClientContextValue | null>(null);
  * Settings text field (see `pages/Settings.tsx`) instead of the TV-only
  * `streamarr-config.json` runtime-config-file lookup, so that lookup is
  * skipped here.
+ *
+ * Kept verbatim as `resolveInitialApiBaseUrl`'s fallback once no
+ * `KnownServerGroup` is remembered at all (§7.3's rollout invariant) --
+ * see that function's own doc comment.
  */
-function resolveInitialApiBaseUrl(): string {
+function resolveLegacyInitialApiBaseUrl(): string {
   const stored = getStoredApiBaseUrl();
   if (stored) return publicIpv4RelayUrl(stored);
 
@@ -323,6 +414,93 @@ function resolveInitialApiBaseUrl(): string {
   if (fromQuery) return publicIpv4RelayUrl(fromQuery);
 
   return window.location.origin;
+}
+
+/**
+ * Resolves the initial API base URL for the web app -- `docs/architecture/
+ * peer-groups.md` §7.3: group-aware first, before falling back to
+ * `resolveLegacyInitialApiBaseUrl`'s chain above. A remembered
+ * `KnownServerGroup`'s `lastGoodUrl` (or, absent that, its first `servers[]`
+ * entry) wins over the legacy single-key/query-param/origin chain: once a
+ * group is known, it is a strictly more specific answer to "which server"
+ * than a same-origin guess or a stale legacy key. This is a synchronous
+ * *best guess*, deliberately not a network probe -- see the `useEffect`
+ * below (`ApiClientProvider`'s body) for the actual `resolveReachableServer`
+ * verification/self-heal, which runs in the background so this function
+ * stays a plain, synchronous `useState` lazy initializer exactly as it
+ * always has (no added render pass for *any* client, grouped or not).
+ * Falls through to `resolveLegacyInitialApiBaseUrl` untouched when no group
+ * is remembered at all: the rollout invariant -- a client that has never
+ * been grouped resolves exactly as it does today, byte for byte.
+ */
+export function resolveInitialApiBaseUrl(): string {
+  const group = readKnownServers();
+  const knownGroupUrl = group?.lastGoodUrl ?? group?.servers[0]?.url;
+  if (knownGroupUrl) return publicIpv4RelayUrl(knownGroupUrl);
+
+  return resolveLegacyInitialApiBaseUrl();
+}
+
+/**
+ * Short reachability-probe budget per address, mirroring `Signup.tsx`'s
+ * own identical constant for the same "try each remembered address, short
+ * per-attempt timeout" shape (`docs/architecture/peer-groups.md` §6.1/§7.3)
+ * -- duplicated rather than shared across those two files' otherwise
+ * unrelated import graphs, same convention `signupInvite.ts`'s
+ * `base64UrlDecode` duplication comment explains.
+ */
+const SERVER_PROBE_TIMEOUT_MS = 3000;
+
+/** Wraps a `fetchImpl` so a single request aborts after `timeoutMs`. */
+function fetchWithTimeout(
+  fetchImpl: (input: Request) => Promise<Response>,
+  timeoutMs: number
+): (input: Request) => Promise<Response> {
+  return (input) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    return fetchImpl(new Request(input, { signal: controller.signal })).finally(() =>
+      clearTimeout(timer)
+    );
+  };
+}
+
+/** `resolveReachableServer`'s probe: a real `GET /api/system/version` against `url`, short-timeout. */
+async function probeServerReachable(url: string): Promise<boolean> {
+  const probeClient = new ApiClient({
+    baseUrl: publicIpv4RelayUrl(url),
+    fetchImpl: fetchWithTimeout(browserFetch, SERVER_PROBE_TIMEOUT_MS),
+  });
+  try {
+    await probeClient.getVersion();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * §7.2's `clientForUrl`: builds a managed `ApiClient` (self-healing, §7.1)
+ * bound to one candidate address in the primary account's own remembered
+ * `KnownServerGroup` -- for `ensureAccessToken`'s cross-peer refresh retry
+ * below, never for the unrelated "joined servers" feature's own,
+ * independently-accounted secondary clients (`serverClients`), which each
+ * belong to a different server/account with no shared group of its own.
+ * A plain module-level function, not a hook: every input (`PLAYARR_LOGIN_IDENTITY`'s
+ * platform, `browserFetch`) is already a stable module constant.
+ */
+function buildClientForServerGroupUrl(url: string): ApiClient {
+  return createManagedApiClient({
+    baseUrl: url,
+    fetchImpl: browserFetch,
+    defaultHeaders:
+      PLAYARR_CLIENT_PLATFORM === "tv-vidaa"
+        ? {
+            "X-Streamarr-Client-Platform": PLAYARR_LOGIN_IDENTITY.clientPlatform,
+            "X-Streamarr-Client-Version": PLAYARR_LOGIN_IDENTITY.clientVersion,
+          }
+        : undefined,
+  });
 }
 
 export function ApiClientProvider({ children }: { children: ReactNode }) {
@@ -341,6 +519,47 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
   const applyApiBaseUrl = useCallback((value: string) => {
     setStoredApiBaseUrl(value);
     setApiBaseUrlState(value);
+  }, []);
+
+  // §7.3's group-aware initial resolution, second half: `resolveInitialApiBaseUrl`'s
+  // synchronous lazy initializer above already prefers a remembered group's
+  // `lastGoodUrl`/first server over the legacy chain, but as a best guess,
+  // with no network round trip -- keeping the ungrouped path exactly as
+  // synchronous as it always was (the rollout invariant). This effect is
+  // what actually calls `resolveReachableServer` to verify that guess and
+  // self-heal onto a different address in the same group if it was wrong
+  // (e.g. the previously-good node is down): §8's "survives node A being
+  // down by trying B then C without user action" acceptance criterion for
+  // ordinary reads, which never flow through `ensureAccessToken`'s own
+  // §7.2 retry (that only triggers on an actual token acquisition/refresh).
+  // A no-op when no group is remembered at all: reads straight through to
+  // `return` before ever touching the network. Runs once at mount against
+  // the group captured then -- ongoing mid-session failover during token
+  // acquisition is §7.2's `ensureAccessToken` retry path, not this effect
+  // re-running.
+  useEffect(() => {
+    const group = readKnownServers();
+    if (!group || group.servers.length === 0) return;
+    let cancelled = false;
+
+    void resolveReachableServer(group, probeServerReachable)
+      .then((resolvedUrl) => {
+        if (cancelled) return;
+        rememberServerSuccess(resolvedUrl);
+        const normalized = publicIpv4RelayUrl(resolvedUrl);
+        if (normalized !== apiBaseUrl) applyApiBaseUrl(normalized);
+      })
+      .catch(() => {
+        // Every remembered address failed its probe -- stay on whatever
+        // the synchronous best guess above already picked; a real request
+        // failing against it surfaces through the app's normal error
+        // handling, same as an unreachable server always has.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Seeded synchronously from whatever's already persisted (a page reload
@@ -484,7 +703,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     // `instance` is referenced inside `getAccessToken` below before this
     // `const` finishes initializing -- safe because that closure only ever
     // runs later (on a protected request), by which point `instance` is bound.
-    const instance: ApiClient = new ApiClient({
+    const instance: ApiClient = createManagedApiClient({
       baseUrl: apiBaseUrl,
       fetchImpl: browserFetch,
       defaultHeaders:
@@ -504,7 +723,16 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
               ...PLAYARR_LOGIN_IDENTITY,
               deviceId: activeProfile?.deviceId,
             },
-            request
+            {
+              ...request,
+              // §7.2: a refresh failure against `apiBaseUrl` retries the
+              // same refresh token across the rest of the remembered
+              // group before falling through to a full login. A no-op
+              // (retry never fires) when nothing is remembered --
+              // `readKnownServers()` reads as `undefined`.
+              serverGroup: readKnownServers(),
+              clientForUrl: buildClientForServerGroupUrl,
+            }
           );
           const userId = decodeAccessTokenUserId(token);
           const activeSession = tokenStore.get();
@@ -523,6 +751,20 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
               activeSession
             );
           }
+          // If that retry just succeeded against a different address than
+          // `apiBaseUrl` (the current server's own refresh failed, another
+          // group member's didn't), that address is now this group's
+          // `lastGoodUrl` (`withServerSuccessTracking`/`withPeerAddressSelfHealing`,
+          // §7.1) -- switch over for every future request too, not just
+          // this one token, so ordinary reads stop hitting the down peer
+          // without the viewer doing anything (§8's Phase 5 acceptance
+          // criterion). A no-op on the overwhelmingly common path where
+          // `apiBaseUrl`'s own calls are already succeeding: `lastGoodUrl`
+          // then already equals it.
+          const healedUrl = readKnownServers()?.lastGoodUrl;
+          if (healedUrl && healedUrl !== apiBaseUrl) {
+            applyApiBaseUrl(publicIpv4RelayUrl(healedUrl));
+          }
           setAuthFailed(false);
           setCurrentUserId(userId);
           return token;
@@ -538,7 +780,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
       },
     });
     return instance;
-  }, [apiBaseUrl, persistProfileSession]);
+  }, [apiBaseUrl, applyApiBaseUrl, persistProfileSession]);
 
   const activeProfileKey = activeProfileRef.current?.profileKey;
   const serverClients = useMemo<ConnectedServerClient[]>(() => {
@@ -567,7 +809,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
           );
         });
         let instance: ApiClient;
-        instance = new ApiClient({
+        instance = createManagedApiClient({
           baseUrl: profile.apiBaseUrl,
           fetchImpl: browserFetch,
           defaultHeaders:
@@ -630,7 +872,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         );
       const profileDeviceId = existingProfile?.deviceId ?? createProfileDeviceId();
       const profileKey = existingProfile?.profileKey ?? createProfileDeviceId();
-      const loginClient = new ApiClient({
+      const loginClient = createManagedApiClient({
         baseUrl: targetApiBaseUrl,
         fetchImpl: browserFetch,
         defaultHeaders:
@@ -703,7 +945,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
           profile.apiBaseUrl === targetApiBaseUrl
       );
       const deviceId = existing?.deviceId ?? createProfileDeviceId();
-      const loginClient = new ApiClient({
+      const loginClient = createManagedApiClient({
         baseUrl: targetApiBaseUrl,
         fetchImpl: browserFetch,
         defaultHeaders:
@@ -828,10 +1070,15 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         deviceId: target.deviceId,
       };
       try {
-        const token = await ensureAccessToken(client, tokenStore, {
-          ...PLAYARR_LOGIN_IDENTITY,
-          deviceId: target.deviceId,
-        });
+        const token = await ensureAccessToken(
+          client,
+          tokenStore,
+          {
+            ...PLAYARR_LOGIN_IDENTITY,
+            deviceId: target.deviceId,
+          },
+          { serverGroup: readKnownServers(), clientForUrl: buildClientForServerGroupUrl }
+        );
         const resolvedUserId = decodeAccessTokenUserId(token);
         if (resolvedUserId !== userId) {
           throw new Error(t("lib.apiClientProvider.profileSessionMismatch"));
@@ -852,6 +1099,13 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         setCurrentUserId(userId);
         setCurrentUserName(target.name);
         setAuthFailed(false);
+        // §7.1/§7.2: switch over to whichever address the retry actually
+        // succeeded against -- see the primary client's `getAccessToken`
+        // for the identical, more fully-commented check.
+        const healedUrl = readKnownServers()?.lastGoodUrl;
+        if (healedUrl && healedUrl !== apiBaseUrl) {
+          applyApiBaseUrl(publicIpv4RelayUrl(healedUrl));
+        }
       } catch (error) {
         if (previousSession) {
           tokenStore.set(previousSession);
@@ -862,7 +1116,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         throw error;
       }
     },
-    [apiBaseUrl, client, persistProfileSession, storedProfileSessions]
+    [apiBaseUrl, applyApiBaseUrl, client, persistProfileSession, storedProfileSessions]
   );
 
   const isProfileSaved = useCallback(
@@ -920,6 +1174,10 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     [apiBaseUrl]
   );
 
+  const forgetKnownServerGroup = useCallback(() => {
+    forgetGroup();
+  }, []);
+
   if (!apiBaseUrl || !client || !joinedClient) {
     // Briefly resolving the stored/query-param base URL; nothing to render yet.
     return null;
@@ -960,6 +1218,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         isProfileSaved,
         logout,
         logoutProfile,
+        forgetKnownServerGroup,
       }}
     >
       {children}
@@ -1028,6 +1287,7 @@ export function useAuth(): {
   isProfileSaved: (userId: string) => boolean;
   logout: () => void;
   logoutProfile: (userId: string) => void;
+  forgetKnownServerGroup: () => void;
 } {
   const {
     authFailed,
@@ -1043,6 +1303,7 @@ export function useAuth(): {
     isProfileSaved,
     logout,
     logoutProfile,
+    forgetKnownServerGroup,
   } = useApiClientContext();
   return {
     authFailed,
@@ -1058,5 +1319,6 @@ export function useAuth(): {
     isProfileSaved,
     logout,
     logoutProfile,
+    forgetKnownServerGroup,
   };
 }

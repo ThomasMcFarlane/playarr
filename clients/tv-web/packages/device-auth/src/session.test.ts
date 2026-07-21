@@ -17,6 +17,26 @@ function jsonResponse(status: number, body: unknown): Response {
 const BASE_URL = "http://localhost:8484";
 const IDENTITY = { deviceName: "Streamarr Web", clientPlatform: "web" as const, clientVersion: "1.0.0" };
 
+// Two distinct, UUID-shaped `peer_id`s -- the only shape
+// `decodeAccessTokenIssuer`'s caller (`session.ts`'s
+// `nodeScopedServerGroupCandidates`) treats as "this looks like a peer id,"
+// mirroring the backend's own `Uuid::parse_str(&peeked.iss)` gate.
+const PEER_HOME = "11111111-1111-4111-8111-111111111111";
+const PEER_EAST = "22222222-2222-4222-8222-222222222222";
+
+/**
+ * Builds an unsigned, but structurally decodable, access token whose `iss`
+ * claim is `iss` -- everything `decodeAccessTokenIssuer` (and, through it,
+ * `ensureAccessToken`'s node-scoped refresh retry) ever reads. No signature
+ * is written or checked here, matching `decodeAccessTokenIssuer`'s own "used
+ * only as a routing hint, never a trust decision" doc comment.
+ */
+function accessTokenWithIssuer(iss: string): string {
+  const payload = { sub: "00000000-0000-0000-0000-000000000009", iss };
+  const base64 = btoa(JSON.stringify(payload)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return `unused-header.${base64}.unused-signature`;
+}
+
 afterEach(() => {
   // See `tokenStore.test.ts`'s matching `afterEach` comment: the in-memory
   // fallback `TokenStore` falls back to is module-level, so it must be
@@ -301,5 +321,445 @@ describe("ensureAccessToken", () => {
 
     await expect(ensureAccessToken(client, store, IDENTITY)).rejects.toBeInstanceOf(ApiError);
     expect(store.get()).toBeUndefined();
+  });
+});
+
+// `docs/architecture/peer-groups.md` §7.2/§3.7: retry-before-reprompt.
+// Every test above calls `ensureAccessToken` with the same 3-argument (or
+// `forceRefresh`-only) shape existing callers already use -- proving those
+// call sites are unaffected is the point of leaving them untouched here
+// rather than retrofitting `serverGroup`/`clientForUrl` onto them.
+//
+// This fix's own bug report, restated as the three things this describe
+// block has to prove:
+//   (a) a refresh retry against a *different* node's address is skipped
+//       entirely, not attempted -- only same-node alternates are tried;
+//   (b) the fresh-login fallback genuinely tries multiple group addresses
+//       when the first fails, succeeding on a later one;
+//   (c) with no known peer group at all (a client that hasn't synced
+//       anything yet), behavior is unchanged/inert -- a single refresh
+//       attempt, then a single login attempt, exactly as with no
+//       `serverGroup`/`clientForUrl` at all.
+describe("ensureAccessToken with serverGroup/clientForUrl", () => {
+  // (a)
+  it("retries refresh only against same-node alternates -- a different node's address is never attempted", async () => {
+    const homeUrl = "https://home.example.com";
+    const homeAltUrl = "https://home-lan.example.com";
+    const eastUrl = "https://east.example.com";
+    let homeAltRefreshCalls = 0;
+    let eastCalls = 0;
+
+    const homeClient = new ApiClient({
+      baseUrl: homeUrl,
+      fetchImpl: mockFetch(() => {
+        throw new TypeError("Failed to fetch");
+      }),
+    });
+    const homeAltClient = new ApiClient({
+      baseUrl: homeAltUrl,
+      fetchImpl: mockFetch(async (request) => {
+        homeAltRefreshCalls += 1;
+        expect(new URL(request.url).pathname).toBe("/api/v1/auth/refresh");
+        const body = (await request.json()) as Record<string, unknown>;
+        expect(body.refresh_token).toBe("rt-stale");
+        return jsonResponse(200, {
+          access_token: "token-from-home-alt",
+          refresh_token: "rt-rotated-by-home-alt",
+          token_type: "Bearer",
+          expires_in: 3600,
+          user_id: "00000000-0000-0000-0000-000000000009",
+        });
+      }),
+    });
+    const eastClient = new ApiClient({
+      baseUrl: eastUrl,
+      fetchImpl: mockFetch(() => {
+        eastCalls += 1;
+        throw new Error("must never be reached -- east belongs to a different peer node");
+      }),
+    });
+
+    const store = new TokenStore();
+    store.set({
+      accessToken: accessTokenWithIssuer(PEER_HOME),
+      refreshToken: "rt-stale",
+      tokenType: "Bearer",
+      expiresAt: Date.now() - 1,
+    });
+
+    const token = await ensureAccessToken(homeClient, store, IDENTITY, {
+      serverGroup: {
+        servers: [
+          { url: homeUrl, peerNodeId: PEER_HOME },
+          { url: homeAltUrl, peerNodeId: PEER_HOME },
+          { url: eastUrl, peerNodeId: PEER_EAST },
+        ],
+      },
+      clientForUrl: (url) => (url === homeAltUrl ? homeAltClient : url === eastUrl ? eastClient : homeClient),
+    });
+
+    expect(token).toBe("token-from-home-alt");
+    expect(homeAltRefreshCalls).toBe(1);
+    expect(eastCalls).toBe(0);
+    expect(store.get()).toMatchObject({ accessToken: "token-from-home-alt", refreshToken: "rt-rotated-by-home-alt" });
+  });
+
+  // (a), the standalone/HS256 half: an `iss` that isn't peer-id-shaped at
+  // all disables the retry outright, even though the group has real,
+  // attributed addresses that would otherwise be candidates.
+  it("does not attempt the refresh-across-group retry at all when iss isn't peer-id-shaped", async () => {
+    const homeUrl = "https://home.example.com";
+    const eastUrl = "https://east.example.com";
+    let refreshAttempts = 0;
+
+    const homeClient = new ApiClient({
+      baseUrl: homeUrl,
+      fetchImpl: mockFetch((request) => {
+        const pathname = new URL(request.url).pathname;
+        if (pathname === "/api/v1/auth/refresh") {
+          refreshAttempts += 1;
+          throw new TypeError("Failed to fetch");
+        }
+        return jsonResponse(200, {
+          access_token: "token-from-home-login",
+          refresh_token: "rt-from-home-login",
+          token_type: "Bearer",
+          expires_in: 3600,
+          user_id: "00000000-0000-0000-0000-000000000009",
+        });
+      }),
+    });
+    const eastClient = new ApiClient({
+      baseUrl: eastUrl,
+      fetchImpl: mockFetch(() => {
+        throw new Error("must never be reached -- the retry should never fire at all");
+      }),
+    });
+
+    const store = new TokenStore();
+    store.set({
+      // The fixed HS256 issuer string a standalone (or not-yet-cross-node-
+      // trusted) node issues -- `streamarr_auth::jwt::JwtIssuer`'s default,
+      // not a `peer_id`.
+      accessToken: accessTokenWithIssuer("streamarr"),
+      refreshToken: "rt-stale",
+      tokenType: "Bearer",
+      expiresAt: Date.now() - 1,
+    });
+
+    const token = await ensureAccessToken(homeClient, store, IDENTITY, {
+      serverGroup: {
+        servers: [
+          { url: homeUrl, peerNodeId: PEER_HOME },
+          { url: eastUrl, peerNodeId: PEER_EAST },
+        ],
+      },
+      clientForUrl: (url) => (url === eastUrl ? eastClient : homeClient),
+    });
+
+    expect(token).toBe("token-from-home-login");
+    // Exactly the one direct attempt against `client` -- the group-wide
+    // retry step never runs at all.
+    expect(refreshAttempts).toBe(1);
+  });
+
+  it("tries lastGoodUrl before servers[] during the node-scoped refresh retry", async () => {
+    const homeUrl = "https://home.example.com";
+    const homeAltUrl = "https://home-lan.example.com";
+    const eastUrl = "https://east.example.com";
+    const refreshTried: string[] = [];
+    let eastCalls = 0;
+
+    // Every same-node candidate's refresh fails; anything that isn't a
+    // refresh call (i.e. the eventual login fallback) succeeds -- isolates
+    // candidate *order* from the unrelated "which address serves the final
+    // login" question the next tests cover.
+    const homeFamilyClientFor = (url: string) =>
+      new ApiClient({
+        baseUrl: url,
+        fetchImpl: mockFetch((request) => {
+          if (new URL(request.url).pathname !== "/api/v1/auth/refresh") {
+            return jsonResponse(200, {
+              access_token: "fallback-login-token",
+              refresh_token: "fallback-login-refresh",
+              token_type: "Bearer",
+              expires_in: 3600,
+              user_id: "00000000-0000-0000-0000-000000000009",
+            });
+          }
+          refreshTried.push(url);
+          throw new TypeError("Failed to fetch");
+        }),
+      });
+    const eastClient = new ApiClient({
+      baseUrl: eastUrl,
+      fetchImpl: mockFetch(() => {
+        eastCalls += 1;
+        throw new Error("must never be reached -- east belongs to a different peer node");
+      }),
+    });
+    const store = new TokenStore();
+    store.set({
+      accessToken: accessTokenWithIssuer(PEER_HOME),
+      refreshToken: "rt-stale",
+      tokenType: "Bearer",
+      expiresAt: Date.now() - 1,
+    });
+    const primaryClient = homeFamilyClientFor(homeUrl);
+
+    const token = await ensureAccessToken(primaryClient, store, IDENTITY, {
+      serverGroup: {
+        servers: [
+          { url: homeUrl, peerNodeId: PEER_HOME },
+          { url: homeAltUrl, peerNodeId: PEER_HOME },
+          { url: eastUrl, peerNodeId: PEER_EAST },
+        ],
+        lastGoodUrl: homeAltUrl,
+      },
+      clientForUrl: (url) => (url === eastUrl ? eastClient : homeFamilyClientFor(url)),
+    });
+
+    expect(token).toBe("fallback-login-token");
+    expect(refreshTried).toEqual([
+      homeUrl, // `client` itself, tried first, same as always
+      homeAltUrl, // lastGoodUrl -- tried before servers[], since it's home-owned
+      homeUrl, // servers[] walk (home-owned; homeAltUrl already tried is de-duped)
+    ]);
+    expect(eastCalls).toBe(0);
+  });
+
+  it("retries refresh across every same-node address before falling through to login, once all of them fail", async () => {
+    let refreshAttempts = 0;
+    let loginCalls = 0;
+    const homeFamilyClientFor = (url: string) =>
+      new ApiClient({
+        baseUrl: url,
+        fetchImpl: mockFetch((request) => {
+          const pathname = new URL(request.url).pathname;
+          if (pathname === "/api/v1/auth/refresh") {
+            refreshAttempts += 1;
+            throw new TypeError("Failed to fetch");
+          }
+          loginCalls += 1;
+          return jsonResponse(200, {
+            access_token: "token-from-fresh-login",
+            refresh_token: "rt-from-fresh-login",
+            token_type: "Bearer",
+            expires_in: 3600,
+            user_id: "00000000-0000-0000-0000-000000000009",
+          });
+        }),
+      });
+    const store = new TokenStore();
+    store.set({
+      accessToken: accessTokenWithIssuer(PEER_HOME),
+      refreshToken: "rt-stale",
+      tokenType: "Bearer",
+      expiresAt: Date.now() - 1,
+    });
+    const primaryClient = homeFamilyClientFor("https://home.example.com");
+
+    const token = await ensureAccessToken(primaryClient, store, IDENTITY, {
+      serverGroup: {
+        servers: [
+          { url: "https://home.example.com", peerNodeId: PEER_HOME },
+          { url: "https://home-lan.example.com", peerNodeId: PEER_HOME },
+        ],
+      },
+      clientForUrl: homeFamilyClientFor,
+    });
+
+    expect(token).toBe("token-from-fresh-login");
+    // `client` directly (home) + the node-scoped retry's own walk (home
+    // again, then home-lan) -- both addresses genuinely belong to the same
+    // peer that issued the stored access token, so both are worth trying.
+    expect(refreshAttempts).toBe(3);
+    expect(loginCalls).toBe(1);
+  });
+
+  // (b)
+  it("retries a fresh login across every remembered group address, succeeding on a later one", async () => {
+    const homeUrl = "https://home.example.com";
+    const eastUrl = "https://east.example.com";
+    const westUrl = "https://west.example.com";
+    const loginAttempts: string[] = [];
+
+    const clientFor = (url: string) =>
+      new ApiClient({
+        baseUrl: url,
+        fetchImpl: mockFetch((request) => {
+          const pathname = new URL(request.url).pathname;
+          if (pathname === "/api/v1/auth/refresh") {
+            throw new TypeError("Failed to fetch");
+          }
+          loginAttempts.push(url);
+          if (url === westUrl) {
+            return jsonResponse(200, {
+              access_token: "token-from-west-login",
+              refresh_token: "rt-from-west-login",
+              token_type: "Bearer",
+              expires_in: 3600,
+              user_id: "00000000-0000-0000-0000-000000000009",
+            });
+          }
+          throw new TypeError("Failed to fetch");
+        }),
+      });
+
+    const store = new TokenStore();
+    // No attribution at all -- irrelevant here, since the login fallback is
+    // deliberately never node-scoped (unlike refresh).
+    store.set({ accessToken: "stale", refreshToken: "rt-stale", tokenType: "Bearer", expiresAt: Date.now() - 1 });
+    const homeClient = clientFor(homeUrl);
+
+    const token = await ensureAccessToken(homeClient, store, IDENTITY, {
+      serverGroup: { servers: [{ url: homeUrl }, { url: eastUrl }, { url: westUrl }] },
+      clientForUrl: clientFor,
+    });
+
+    expect(token).toBe("token-from-west-login");
+    // `client` itself (home) is tried directly first, same as always; once
+    // that fails too, the group-wide login fallback walks its own
+    // candidate list from the top -- home fails again, then east, before
+    // west finally succeeds.
+    expect(loginAttempts).toEqual([homeUrl, homeUrl, eastUrl, westUrl]);
+    expect(store.get()).toMatchObject({ accessToken: "token-from-west-login", refreshToken: "rt-from-west-login" });
+  });
+
+  // (c)
+  it("is unaffected when only one of serverGroup/clientForUrl is supplied -- both are required together", async () => {
+    let refreshCalls = 0;
+    let loginCalls = 0;
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch((request) => {
+        const pathname = new URL(request.url).pathname;
+        if (pathname === "/api/v1/auth/refresh") {
+          refreshCalls += 1;
+          throw new TypeError("Failed to fetch");
+        }
+        loginCalls += 1;
+        return jsonResponse(200, {
+          access_token: "solo-login-token",
+          refresh_token: "solo-login-refresh",
+          token_type: "Bearer",
+          expires_in: 3600,
+          user_id: "00000000-0000-0000-0000-000000000009",
+        });
+      }),
+    });
+    const store = new TokenStore();
+    store.set({ accessToken: "stale", refreshToken: "rt-stale", tokenType: "Bearer", expiresAt: Date.now() - 1 });
+
+    const token = await ensureAccessToken(client, store, IDENTITY, {
+      serverGroup: { servers: [{ url: "https://east.example.com" }] },
+      // clientForUrl deliberately omitted.
+    });
+
+    expect(token).toBe("solo-login-token");
+    expect(refreshCalls).toBe(1);
+    expect(loginCalls).toBe(1);
+  });
+
+  // The exact shape `ApiClientProvider.tsx`'s real call sites pass for a
+  // client that has never remembered a `KnownServerGroup`:
+  // `serverGroup: readKnownServers()` (`undefined`) alongside a real,
+  // always-supplied `clientForUrl`. Proves that pairing is just as inert
+  // as omitting both -- the rollout invariant holds for the *actual*
+  // shape production code sends, not just the "omitted entirely" shape
+  // the very first tests in this file already cover.
+  it("is unaffected when serverGroup is explicitly undefined, even with a real clientForUrl supplied", async () => {
+    let refreshCalls = 0;
+    let loginCalls = 0;
+    let clientForUrlCalls = 0;
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch((request) => {
+        const pathname = new URL(request.url).pathname;
+        if (pathname === "/api/v1/auth/refresh") {
+          refreshCalls += 1;
+          throw new TypeError("Failed to fetch");
+        }
+        loginCalls += 1;
+        return jsonResponse(200, {
+          access_token: "solo-login-token-2",
+          refresh_token: "solo-login-refresh-2",
+          token_type: "Bearer",
+          expires_in: 3600,
+          user_id: "00000000-0000-0000-0000-000000000009",
+        });
+      }),
+    });
+    const store = new TokenStore();
+    store.set({ accessToken: "stale", refreshToken: "rt-stale", tokenType: "Bearer", expiresAt: Date.now() - 1 });
+
+    const token = await ensureAccessToken(client, store, IDENTITY, {
+      serverGroup: undefined,
+      clientForUrl: () => {
+        clientForUrlCalls += 1;
+        throw new Error("must never be called when serverGroup is undefined");
+      },
+    });
+
+    expect(token).toBe("solo-login-token-2");
+    expect(refreshCalls).toBe(1);
+    expect(loginCalls).toBe(1);
+    expect(clientForUrlCalls).toBe(0);
+  });
+
+  // (c), the "remembered a group, but no address carries node attribution
+  // yet" shape -- e.g. a `KnownServerGroup` written before this fix shipped.
+  // The refresh-across-group step is inert here too (nothing to scope
+  // against), exactly like having no group at all -- but the *login*
+  // fallback below is a different feature with a different rule (never
+  // node-scoped, §3.7), so it still fires and can still recover the
+  // session. Proves the two retries are independently gated, not one
+  // all-or-nothing "group known" switch.
+  it("leaves the refresh retry inert with no peerNodeId attribution anywhere, while the login fallback still spans the group", async () => {
+    let refreshAttempts = 0;
+    const homeUrl = "https://home.example.com";
+    const eastUrl = "https://east.example.com";
+    const clientFor = (url: string) =>
+      new ApiClient({
+        baseUrl: url,
+        fetchImpl: mockFetch((request) => {
+          const pathname = new URL(request.url).pathname;
+          if (pathname === "/api/v1/auth/refresh") {
+            refreshAttempts += 1;
+            throw new TypeError("Failed to fetch");
+          }
+          if (url === eastUrl) {
+            return jsonResponse(200, {
+              access_token: "token-from-east-login",
+              refresh_token: "rt-from-east-login",
+              token_type: "Bearer",
+              expires_in: 3600,
+              user_id: "00000000-0000-0000-0000-000000000009",
+            });
+          }
+          throw new TypeError("Failed to fetch");
+        }),
+      });
+    const store = new TokenStore();
+    store.set({
+      // A real, peer-id-shaped issuer -- but no `servers[]` entry below
+      // carries a matching (or any) `peerNodeId`, so there is nothing for
+      // the refresh retry to match against.
+      accessToken: accessTokenWithIssuer(PEER_HOME),
+      refreshToken: "rt-stale",
+      tokenType: "Bearer",
+      expiresAt: Date.now() - 1,
+    });
+    const homeClient = clientFor(homeUrl);
+
+    const token = await ensureAccessToken(homeClient, store, IDENTITY, {
+      serverGroup: { servers: [{ url: homeUrl }, { url: eastUrl }] },
+      clientForUrl: clientFor,
+    });
+
+    expect(token).toBe("token-from-east-login");
+    // Exactly one refresh attempt (the direct one) -- no unattributed
+    // address is ever retried for refresh.
+    expect(refreshAttempts).toBe(1);
   });
 });

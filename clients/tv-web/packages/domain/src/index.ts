@@ -11,8 +11,11 @@
  * client's own version against the server's compatibility table
  * (`./version-check`) and, for the Web/TV-web family specifically, polling
  * the CDN-hosted build manifest that is Web's OTA update signal
- * (`./bundle-manifest`). Import wire-shape types directly from
- * `@streamarr-tv/api-client` instead of from here.
+ * (`./bundle-manifest`). Also home to invite-link address encoding
+ * (`./inviteUrl`) and the remembered peer-group address book (`./knownServers`,
+ * `docs/architecture/peer-groups.md` §7.1) that supersedes the single
+ * `apiBaseUrl` key below for a grouped deployment. Import wire-shape types
+ * directly from `@streamarr-tv/api-client` instead of from here.
  */
 
 export {
@@ -30,6 +33,19 @@ export {
   type BuildManifest,
   type FetchBuildManifestOptions,
 } from "./bundle-manifest";
+
+export { buildInviteUrl, type PeerAddressBundleLike, type PeerAddressEntryLike } from "./inviteUrl";
+
+export {
+  readKnownServers,
+  rememberGroup,
+  rememberServerSuccess,
+  mergeKnownServerGroup,
+  forgetGroup,
+  resolveReachableServer,
+  type KnownServer,
+  type KnownServerGroup,
+} from "./knownServers";
 
 /** Default Streamarr API origin for local development. */
 export const DEFAULT_API_BASE_URL = "http://localhost:8484";

@@ -2139,6 +2139,13 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   text-transform: uppercase;
 }
 
+.connected-server-primary {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
 .connection-server-fields {
   display: grid;
   grid-template-columns:
