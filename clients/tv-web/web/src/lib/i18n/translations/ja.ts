@@ -540,6 +540,17 @@ export const ja: Translations = {
   "pages.workDetail.titleChaptersAndPeople": "{{title}}のチャプターと出演者",
   "pages.workDetail.yourLibrary": "あなたのライブラリ",
 
+  "quality.level.high": "高",
+  "quality.level.low": "低",
+  "quality.level.medium": "中",
+  "quality.original": "オリジナル",
+  "quality.originalDetail": "利用可能な最高品質のソース",
+  "quality.tier.fhd": "FHD",
+  "quality.tier.hd": "HD",
+  "quality.tier.sd": "SD",
+  "quality.tier.uhd": "UHD",
+  "quality.unavailable": "利用できません",
+
   "settings.account.signOut": "サインアウト",
 
   "settings.appearance.documentTitle": "外観 - 設定",

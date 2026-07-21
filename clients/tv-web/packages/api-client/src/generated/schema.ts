@@ -7381,7 +7381,7 @@ export interface operations {
                      *           "estimated_size_bytes": 1200000000,
                      *           "height": 1080,
                      *           "id": "h264-1080p-8mbps",
-                     *           "label": "1080p",
+                     *           "label": "FHD Medium",
                      *           "profile": "h264-1080p-8mbps",
                      *           "size_is_estimate": true
                      *         }
@@ -7524,14 +7524,14 @@ export interface operations {
                      *         {
                      *           "height": 1080,
                      *           "id": "h264-1080p-8mbps",
-                     *           "label": "1080p",
+                     *           "label": "FHD Medium",
                      *           "profile": "h264-1080p-8mbps",
                      *           "video_bitrate_bps": 8000000
                      *         },
                      *         {
                      *           "height": 720,
                      *           "id": "h264-720p-4mbps",
-                     *           "label": "720p",
+                     *           "label": "HD Medium",
                      *           "profile": "h264-720p-4mbps",
                      *           "video_bitrate_bps": 4000000
                      *         }
@@ -7634,14 +7634,14 @@ export interface operations {
                      *         {
                      *           "height": 1080,
                      *           "id": "h264-1080p-8mbps",
-                     *           "label": "1080p",
+                     *           "label": "FHD Medium",
                      *           "profile": "h264-1080p-8mbps",
                      *           "video_bitrate_bps": 8000000
                      *         },
                      *         {
                      *           "height": 720,
                      *           "id": "h264-720p-4mbps",
-                     *           "label": "720p",
+                     *           "label": "HD Medium",
                      *           "profile": "h264-720p-4mbps",
                      *           "video_bitrate_bps": 4000000
                      *         }
@@ -8925,7 +8925,7 @@ export interface operations {
                      *         {
                      *           "height": 720,
                      *           "id": "h264-720p-4mbps",
-                     *           "label": "720p",
+                     *           "label": "HD Medium",
                      *           "profile": "h264-720p-4mbps",
                      *           "video_bitrate_bps": 4000000
                      *         }

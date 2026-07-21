@@ -1,13 +1,11 @@
+import {
+  qualityDefinitionForId,
+  type MatrixQualityId,
+} from "./qualityMatrix";
+
 export const PLAYER_DEFAULTS_STORAGE_KEY = "playarr.player-defaults.v1";
 
-export const PLAYER_QUALITY_DEFAULTS = [
-  { id: "original", label: "Original", detail: "Best available source" },
-  { id: "h264-1080p-8mbps", label: "1080p", detail: "Up to 8 Mbps" },
-  { id: "h264-720p-4mbps", label: "720p", detail: "Up to 4 Mbps" },
-  { id: "h264-480p-2mbps", label: "480p", detail: "Up to 2 Mbps" },
-] as const;
-
-export type PlayerQualityDefault = (typeof PLAYER_QUALITY_DEFAULTS)[number]["id"];
+export type PlayerQualityDefault = "original" | MatrixQualityId;
 export type PlayerSubtitleDefault = "off" | "forced" | "always";
 
 export interface PlayerDefaults {
@@ -39,7 +37,10 @@ function browserStorage(): Storage | undefined {
 }
 
 function isQualityDefault(value: unknown): value is PlayerQualityDefault {
-  return PLAYER_QUALITY_DEFAULTS.some((option) => option.id === value);
+  return (
+    value === "original" ||
+    (typeof value === "string" && qualityDefinitionForId(value) !== undefined)
+  );
 }
 
 function isSubtitleDefault(value: unknown): value is PlayerSubtitleDefault {

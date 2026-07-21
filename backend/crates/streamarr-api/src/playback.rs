@@ -294,7 +294,17 @@ pub(crate) fn playback_quality_options(
             .into_iter()
             .map(|profile| PlaybackQualityOption {
                 id: profile.name.clone(),
-                label: format!("{}p", profile.height),
+                label: format!(
+                    "{} {}",
+                    match profile.height {
+                        2160 => "UHD",
+                        1080 => "FHD",
+                        720 => "HD",
+                        480 => "SD",
+                        _ => "Video",
+                    },
+                    profile.quality_level.as_str()
+                ),
                 profile: Some(profile.name),
                 height: Some(profile.height),
                 video_bitrate_bps: profile
@@ -736,7 +746,7 @@ async fn start_analytics_session(state: &AppState, session: PlaybackSession) -> 
                 },
                 {
                     "id": "h264-720p-4mbps",
-                    "label": "720p",
+                    "label": "HD Medium",
                     "profile": "h264-720p-4mbps",
                     "height": 720,
                     "video_bitrate_bps": 4_000_000
@@ -1935,12 +1945,15 @@ mod tests {
         assert_eq!(info.selected_quality_id, "original");
         assert_eq!(info.quality_options[0].label, "Original");
         assert_eq!(info.quality_options[0].video_bitrate_bps, Some(15_000_000));
+        assert_eq!(info.quality_options.len(), 13);
+        assert_eq!(info.quality_options[1].label, "UHD Low");
+        assert_eq!(info.quality_options[5].label, "FHD Medium");
         assert_eq!(
             info.quality_options
                 .iter()
                 .filter_map(|quality| quality.height)
                 .collect::<Vec<_>>(),
-            vec![1080, 720, 480]
+            vec![2160, 2160, 2160, 1080, 1080, 1080, 720, 720, 720, 480, 480, 480]
         );
         assert_ne!(info.session_id, Uuid::nil());
         assert_eq!(

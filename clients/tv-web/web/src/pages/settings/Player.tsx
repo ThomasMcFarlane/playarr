@@ -5,11 +5,11 @@ import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useToast } from "../../lib/toast";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import {
-  PLAYER_QUALITY_DEFAULTS,
   readPlayerDefaults,
   writePlayerDefaults,
   type PlayerDefaults,
 } from "../../lib/playerDefaults";
+import { QualityMatrix } from "../../components/QualityMatrix";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
 
 const AUDIO_LANGUAGE_OPTIONS = [
@@ -131,25 +131,27 @@ export function SettingsPlayerPage() {
             <p>{t("settings.playerPreferences.qualityDescription")}</p>
           </div>
           <div
-            className="player-default-choice"
+            className="player-quality-default-matrix"
             role="radiogroup"
             aria-label={t("settings.playerPreferences.qualityAriaLabel")}
           >
-            {PLAYER_QUALITY_DEFAULTS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                role="radio"
-                className={`player-default-button${
-                  playerDefaults.qualityId === option.id ? " is-active" : ""
-                }`}
-                aria-checked={playerDefaults.qualityId === option.id}
-                onClick={() => updatePlayerDefaults({ qualityId: option.id })}
-              >
-                <span>{option.label}</span>
-                <small>{option.detail}</small>
-              </button>
-            ))}
+            <QualityMatrix
+              variant="settings"
+              role="radio"
+              selectedId={playerDefaults.qualityId}
+              standaloneChoices={[
+                {
+                  id: "original",
+                  label: t("quality.original"),
+                  detail: t("quality.originalDetail"),
+                },
+              ]}
+              onSelect={(qualityId) =>
+                updatePlayerDefaults({
+                  qualityId: qualityId as PlayerDefaults["qualityId"],
+                })
+              }
+            />
           </div>
         </div>
 

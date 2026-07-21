@@ -3988,6 +3988,192 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   text-align: center;
 }
 
+.player-quality-matrix-menu {
+  width: min(620px, 64vw);
+}
+
+.quality-matrix {
+  min-width: 0;
+}
+
+.quality-matrix-standalone {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.quality-matrix-standalone:empty {
+  display: none;
+}
+
+.quality-matrix-grid {
+  display: grid;
+  grid-template-columns: minmax(52px, 0.72fr) repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.quality-matrix-corner,
+.quality-matrix-column-heading,
+.quality-matrix-row-heading,
+.quality-matrix-unavailable,
+.quality-matrix-choice {
+  min-width: 0;
+}
+
+.quality-matrix-column-heading {
+  align-self: end;
+  padding: 0.38rem 0.2rem;
+  font-size: clamp(0.48rem, 0.54vw, 0.64rem);
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.quality-matrix-row-heading {
+  display: grid;
+  align-content: center;
+  gap: 0.12rem;
+  padding: 0.45rem 0.25rem;
+}
+
+.quality-matrix-row-heading strong {
+  font-size: clamp(0.56rem, 0.66vw, 0.76rem);
+  font-weight: 760;
+}
+
+.quality-matrix-row-heading small {
+  font-size: clamp(0.44rem, 0.5vw, 0.58rem);
+}
+
+.quality-matrix-choice,
+.quality-matrix-unavailable {
+  min-height: clamp(48px, 4vw, 60px);
+  border-radius: 10px;
+}
+
+.quality-matrix-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  padding: 0.55rem 0.62rem;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 180ms ease,
+    color 160ms ease,
+    transform 180ms ease;
+}
+
+.quality-matrix-choice > span:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 0.12rem;
+}
+
+.quality-matrix-choice strong {
+  overflow: hidden;
+  font-size: clamp(0.58rem, 0.68vw, 0.78rem);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quality-matrix-choice small {
+  font-size: clamp(0.44rem, 0.5vw, 0.58rem);
+}
+
+.quality-matrix-check {
+  flex: 0 0 16px;
+  font-size: 0.74rem;
+  text-align: center;
+}
+
+.quality-matrix-unavailable {
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+}
+
+.quality-matrix.is-settings .quality-matrix-column-heading,
+.quality-matrix.is-settings .quality-matrix-row-heading small,
+.quality-matrix.is-settings .quality-matrix-choice small {
+  color: var(--ink-muted);
+}
+
+.quality-matrix.is-settings .quality-matrix-choice {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-soft);
+}
+
+.quality-matrix.is-settings .quality-matrix-choice:hover,
+.quality-matrix.is-settings .quality-matrix-choice:focus-visible {
+  outline: 0;
+  border-color: color-mix(in srgb, #cf3157 62%, var(--line));
+  background: var(--surface-strong);
+  color: var(--ink);
+  box-shadow: 0 14px 32px rgba(56, 38, 33, 0.12);
+  transform: scale(1.025);
+}
+
+.quality-matrix.is-settings .quality-matrix-choice.is-selected {
+  border-color: color-mix(in srgb, #cf3157 76%, transparent);
+  background: color-mix(in srgb, #cf3157 12%, var(--surface));
+  color: var(--ink);
+  box-shadow: inset 3px 0 #cf3157;
+}
+
+.quality-matrix.is-settings .quality-matrix-check {
+  color: #cf3157;
+}
+
+.quality-matrix.is-settings .quality-matrix-unavailable {
+  border: 1px dashed var(--line);
+  color: var(--ink-muted);
+}
+
+.quality-matrix.is-player .quality-matrix-column-heading,
+.quality-matrix.is-player .quality-matrix-row-heading small,
+.quality-matrix.is-player .quality-matrix-choice small {
+  color: rgba(255, 255, 255, 0.54);
+}
+
+.quality-matrix.is-player .quality-matrix-row-heading {
+  color: #ffffff;
+}
+
+.quality-matrix.is-player .quality-matrix-choice {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.055);
+  color: #ffffff;
+}
+
+.quality-matrix.is-player .quality-matrix-choice:hover,
+.quality-matrix.is-player .quality-matrix-choice:focus-visible,
+body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:focus {
+  outline: 0;
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.15);
+  transform: scale(1.025);
+}
+
+.quality-matrix.is-player .quality-matrix-choice.is-selected {
+  border-color: rgba(207, 49, 87, 0.62);
+  background: rgba(207, 49, 87, 0.22);
+}
+
+.quality-matrix.is-player .quality-matrix-check {
+  color: var(--player-accent);
+}
+
+.quality-matrix.is-player .quality-matrix-unavailable {
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.28);
+}
+
 .player-playlist-panel {
   position: absolute;
   z-index: 55;

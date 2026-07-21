@@ -138,20 +138,150 @@ pub struct TranscodeTargetProfile {
     pub video_codec: String,
     /// ffmpeg `-c:a` value, e.g. `"aac"`.
     pub audio_codec: String,
+    /// Relative bitrate within this profile's resolution tier.
+    pub quality_level: TranscodeQualityLevel,
     pub video_bitrate_kbps: Option<u32>,
     pub audio_bitrate_kbps: Option<u32>,
+}
+
+/// Relative bitrate within a resolution tier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TranscodeQualityLevel {
+    Low,
+    Medium,
+    High,
+}
+
+impl TranscodeQualityLevel {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Low => "Low",
+            Self::Medium => "Medium",
+            Self::High => "High",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct TranscodeProfileSpec {
+    name: &'static str,
+    height: u16,
+    quality_level: TranscodeQualityLevel,
+    video_bitrate_kbps: u32,
+    audio_bitrate_kbps: u32,
+}
+
+const SUPPORTED_PROFILE_SPECS: [TranscodeProfileSpec; 12] = [
+    TranscodeProfileSpec {
+        name: "h264-2160p-12mbps",
+        height: 2160,
+        quality_level: TranscodeQualityLevel::Low,
+        video_bitrate_kbps: 12_000,
+        audio_bitrate_kbps: 192,
+    },
+    TranscodeProfileSpec {
+        name: "h264-2160p-20mbps",
+        height: 2160,
+        quality_level: TranscodeQualityLevel::Medium,
+        video_bitrate_kbps: 20_000,
+        audio_bitrate_kbps: 192,
+    },
+    TranscodeProfileSpec {
+        name: "h264-2160p-35mbps",
+        height: 2160,
+        quality_level: TranscodeQualityLevel::High,
+        video_bitrate_kbps: 35_000,
+        audio_bitrate_kbps: 192,
+    },
+    TranscodeProfileSpec {
+        name: "h264-1080p-4mbps",
+        height: 1080,
+        quality_level: TranscodeQualityLevel::Low,
+        video_bitrate_kbps: 4_000,
+        audio_bitrate_kbps: 128,
+    },
+    TranscodeProfileSpec {
+        name: "h264-1080p-8mbps",
+        height: 1080,
+        quality_level: TranscodeQualityLevel::Medium,
+        video_bitrate_kbps: 8_000,
+        audio_bitrate_kbps: 192,
+    },
+    TranscodeProfileSpec {
+        name: "h264-1080p-12mbps",
+        height: 1080,
+        quality_level: TranscodeQualityLevel::High,
+        video_bitrate_kbps: 12_000,
+        audio_bitrate_kbps: 192,
+    },
+    TranscodeProfileSpec {
+        name: "h264-720p-2mbps",
+        height: 720,
+        quality_level: TranscodeQualityLevel::Low,
+        video_bitrate_kbps: 2_000,
+        audio_bitrate_kbps: 96,
+    },
+    TranscodeProfileSpec {
+        name: "h264-720p-4mbps",
+        height: 720,
+        quality_level: TranscodeQualityLevel::Medium,
+        video_bitrate_kbps: 4_000,
+        audio_bitrate_kbps: 128,
+    },
+    TranscodeProfileSpec {
+        name: "h264-720p-6mbps",
+        height: 720,
+        quality_level: TranscodeQualityLevel::High,
+        video_bitrate_kbps: 6_000,
+        audio_bitrate_kbps: 128,
+    },
+    TranscodeProfileSpec {
+        name: "h264-480p-1mbps",
+        height: 480,
+        quality_level: TranscodeQualityLevel::Low,
+        video_bitrate_kbps: 1_000,
+        audio_bitrate_kbps: 96,
+    },
+    TranscodeProfileSpec {
+        name: "h264-480p-2mbps",
+        height: 480,
+        quality_level: TranscodeQualityLevel::Medium,
+        video_bitrate_kbps: 2_000,
+        audio_bitrate_kbps: 96,
+    },
+    TranscodeProfileSpec {
+        name: "h264-480p-3mbps",
+        height: 480,
+        quality_level: TranscodeQualityLevel::High,
+        video_bitrate_kbps: 3_000,
+        audio_bitrate_kbps: 128,
+    },
+];
+
+impl TranscodeProfileSpec {
+    fn resolve(self) -> TranscodeTargetProfile {
+        TranscodeTargetProfile {
+            name: self.name.to_string(),
+            height: self.height,
+            video_codec: "libx264".to_string(),
+            audio_codec: "aac".to_string(),
+            quality_level: self.quality_level,
+            video_bitrate_kbps: Some(self.video_bitrate_kbps),
+            audio_bitrate_kbps: Some(self.audio_bitrate_kbps),
+        }
+    }
 }
 
 impl TranscodeTargetProfile {
     /// The real rendition ladder this server can currently produce.
     ///
     /// Playback clients use this rather than maintaining a second,
-    /// potentially fictional quality list. Keep the order highest-first
-    /// for direct rendering in a quality picker.
+    /// potentially fictional quality list. Rows are ordered by resolution
+    /// from UHD to SD, with Low/Medium/High bitrates inside each row.
     pub fn supported() -> Vec<Self> {
-        ["h264-1080p-8mbps", "h264-720p-4mbps", "h264-480p-2mbps"]
+        SUPPORTED_PROFILE_SPECS
             .into_iter()
-            .map(Self::resolve)
+            .map(TranscodeProfileSpec::resolve)
             .collect()
     }
 
@@ -162,39 +292,21 @@ impl TranscodeTargetProfile {
     /// *something* playable rather than erroring the whole playback
     /// attempt.
     pub fn resolve(profile: &str) -> Self {
-        match profile {
-            "h264-1080p-8mbps" => Self {
-                name: profile.to_string(),
-                height: 1080,
-                video_codec: "libx264".to_string(),
-                audio_codec: "aac".to_string(),
-                video_bitrate_kbps: Some(8000),
-                audio_bitrate_kbps: Some(192),
-            },
-            "h264-720p-4mbps" => Self {
-                name: profile.to_string(),
-                height: 720,
-                video_codec: "libx264".to_string(),
-                audio_codec: "aac".to_string(),
-                video_bitrate_kbps: Some(4000),
-                audio_bitrate_kbps: Some(128),
-            },
-            "h264-480p-2mbps" => Self {
-                name: profile.to_string(),
-                height: 480,
-                video_codec: "libx264".to_string(),
-                audio_codec: "aac".to_string(),
-                video_bitrate_kbps: Some(2000),
-                audio_bitrate_kbps: Some(96),
-            },
-            other => Self {
-                name: other.to_string(),
-                height: 720,
-                video_codec: "libx264".to_string(),
-                audio_codec: "aac".to_string(),
-                video_bitrate_kbps: Some(4000),
-                audio_bitrate_kbps: Some(128),
-            },
+        if let Some(spec) = SUPPORTED_PROFILE_SPECS
+            .iter()
+            .find(|spec| spec.name == profile)
+        {
+            return spec.resolve();
+        }
+
+        Self {
+            name: profile.to_string(),
+            height: 720,
+            video_codec: "libx264".to_string(),
+            audio_codec: "aac".to_string(),
+            quality_level: TranscodeQualityLevel::Medium,
+            video_bitrate_kbps: Some(4000),
+            audio_bitrate_kbps: Some(128),
         }
     }
 }
@@ -1220,6 +1332,7 @@ mod tests {
                 height: 720,
                 video_codec: "libx264".to_string(),
                 audio_codec: "aac".to_string(),
+                quality_level: TranscodeQualityLevel::Medium,
                 video_bitrate_kbps: Some(4000),
                 audio_bitrate_kbps: Some(128),
             };
@@ -1277,6 +1390,7 @@ mod tests {
                 height: 0,
                 video_codec: "libx264".to_string(),
                 audio_codec: "aac".to_string(),
+                quality_level: TranscodeQualityLevel::Medium,
                 video_bitrate_kbps: None,
                 audio_bitrate_kbps: None,
             };
@@ -1390,10 +1504,11 @@ mod tests {
                     .iter()
                     .map(|profile| profile.height)
                     .collect::<Vec<_>>(),
-                vec![1080, 720, 480]
+                vec![2160, 2160, 2160, 1080, 1080, 1080, 720, 720, 720, 480, 480, 480]
             );
-            assert_eq!(profiles[0].name, "h264-1080p-8mbps");
-            assert_eq!(profiles[2].video_bitrate_kbps, Some(2000));
+            assert_eq!(profiles[0].name, "h264-2160p-12mbps");
+            assert_eq!(profiles[1].quality_level, TranscodeQualityLevel::Medium);
+            assert_eq!(profiles[11].video_bitrate_kbps, Some(3000));
         }
     }
 

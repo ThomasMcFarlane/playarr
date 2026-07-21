@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Offer Low, Medium, and High playback bitrates across SD, HD, FHD, and UHD tiers in a
+  three-column quality matrix shared by the live player and Player settings.
 - Let Playarr viewers switch home rails between thumbnail and cover artwork, add depth to media
   cards, and softly fade scrolled items at the left edge of shared tracks.
 - Let the authoritative relay DNS instance serve one explicitly configured, temporary DNS-01

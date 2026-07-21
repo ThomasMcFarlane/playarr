@@ -9,7 +9,9 @@ import {
 } from "react";
 import type { PlaybackQualityOption } from "@streamarr-tv/api-client";
 import type { PlaybackEngineState } from "@streamarr-tv/player-core";
+import { QualityMatrix } from "../QualityMatrix";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
+import { qualityDefinitionForId } from "../../lib/qualityMatrix";
 import {
   AudioTrackIcon,
   FullscreenEnterIcon,
@@ -140,7 +142,7 @@ export function PlayerControls({
   const playlistButtonRef = useRef<HTMLButtonElement>(null);
   const qualityButtonRef = useRef<HTMLButtonElement>(null);
   const fullscreenButtonRef = useRef<HTMLButtonElement>(null);
-  const qualityOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const qualityOptionRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const audioOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const subtitleOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const activeScrubRef = useRef<{
@@ -321,6 +323,35 @@ export function PlayerControls({
   const volumePct = engineState.muted ? 0 : Math.round(engineState.volume * 100);
   const activeQuality =
     qualityOptions.find((quality) => quality.id === activeQualityId) ?? qualityOptions[0];
+  const activeQualityBadge =
+    activeQuality?.height === 2160
+      ? t("quality.tier.uhd")
+      : activeQuality?.height === 1080
+        ? t("quality.tier.fhd")
+        : activeQuality?.height === 720
+          ? t("quality.tier.hd")
+          : activeQuality?.height === 480
+            ? t("quality.tier.sd")
+            : t("components.player.controls.hdBadge");
+  const availableQualityIds = useMemo(
+    () => new Set(qualityOptions.map((quality) => quality.id)),
+    [qualityOptions]
+  );
+  const standaloneQualityChoices = useMemo(
+    () =>
+      qualityOptions
+        .filter((quality) => qualityDefinitionForId(quality.id) === undefined)
+        .map((quality) => ({
+          id: quality.id,
+          label: quality.label,
+          detail: quality.video_bitrate_bps
+            ? t("components.player.controls.bitrateMbps", {
+                bitrate: Math.round(quality.video_bitrate_bps / 1_000_000),
+              })
+            : t("components.player.controls.sourceQuality"),
+        })),
+    [qualityOptions, t]
+  );
   const activeAudio =
     audioTracks.find((track) => track.id === selectedAudioTrackId) ?? audioTracks[0];
   const activeSubtitle = subtitleTracks.find(
@@ -339,11 +370,9 @@ export function PlayerControls({
     setSubtitleMenuOpen(false);
     setQualityMenuOpen(true);
     window.requestAnimationFrame(() => {
-      const activeIndex = Math.max(
-        0,
-        qualityOptions.findIndex((quality) => quality.id === activeQualityId)
-      );
-      qualityOptionRefs.current[activeIndex]?.focus();
+      const activeOption = qualityOptionRefs.current.get(activeQualityId);
+      const firstOption = qualityOptionRefs.current.values().next().value;
+      (activeOption ?? firstOption)?.focus();
     });
   }, [activeQualityId, qualityOptions, qualitySwitching]);
 
@@ -420,28 +449,63 @@ export function PlayerControls({
   const handleQualityMenuKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
       if (!qualityMenuOpen) return;
-      const focusedIndex = qualityOptionRefs.current.findIndex(
-        (element) => element === document.activeElement
+      const options = Array.from(
+        event.currentTarget.querySelectorAll<HTMLButtonElement>(
+          "[data-quality-id]:not(:disabled)"
+        )
       );
-      let nextIndex: number | undefined;
+      const focused = options.find((option) => option === document.activeElement);
+      const row = Number(focused?.dataset.qualityRow ?? options[0]?.dataset.qualityRow ?? 0);
+      const column = Number(
+        focused?.dataset.qualityColumn ?? options[0]?.dataset.qualityColumn ?? 0
+      );
+      let nextOption: HTMLButtonElement | undefined;
       switch (event.key) {
-        case "ArrowUp":
-          nextIndex = Math.max(0, focusedIndex - 1);
+        case "ArrowLeft":
+        case "ArrowRight": {
+          const direction = event.key === "ArrowLeft" ? -1 : 1;
+          nextOption = options
+            .filter((option) => Number(option.dataset.qualityRow) === row)
+            .sort(
+              (left, right) =>
+                direction *
+                (Number(left.dataset.qualityColumn) -
+                  Number(right.dataset.qualityColumn))
+            )
+            .find(
+              (option) =>
+                direction * (Number(option.dataset.qualityColumn) - column) > 0
+            );
           break;
-        case "ArrowDown":
-          if (focusedIndex >= qualityOptions.length - 1) {
+        }
+        case "ArrowUp":
+        case "ArrowDown": {
+          const direction = event.key === "ArrowUp" ? -1 : 1;
+          const rows = [
+            ...new Set(options.map((option) => Number(option.dataset.qualityRow))),
+          ].sort((left, right) => left - right);
+          const rowIndex = rows.indexOf(row);
+          const targetRow = rows[rowIndex + direction];
+          if (targetRow === undefined && direction > 0) {
             event.preventDefault();
             event.stopPropagation();
             closeQualityMenu();
             return;
           }
-          nextIndex = focusedIndex < 0 ? 0 : focusedIndex + 1;
+          nextOption = options
+            .filter((option) => Number(option.dataset.qualityRow) === targetRow)
+            .sort(
+              (left, right) =>
+                Math.abs(Number(left.dataset.qualityColumn) - column) -
+                Math.abs(Number(right.dataset.qualityColumn) - column)
+            )[0];
           break;
+        }
         case "Home":
-          nextIndex = 0;
+          nextOption = options[0];
           break;
         case "End":
-          nextIndex = qualityOptions.length - 1;
+          nextOption = options.at(-1);
           break;
         case "Escape":
         case "BrowserBack":
@@ -460,9 +524,9 @@ export function PlayerControls({
       }
       event.preventDefault();
       event.stopPropagation();
-      qualityOptionRefs.current[nextIndex]?.focus();
+      nextOption?.focus();
     },
-    [closeQualityMenu, qualityMenuOpen, qualityOptions.length]
+    [closeQualityMenu, qualityMenuOpen]
   );
 
   const handleTrackMenuKeyDown = useCallback(
@@ -529,7 +593,7 @@ export function PlayerControls({
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
       if (
-        qualityOptionRefs.current.some((option) => option === target) ||
+        [...qualityOptionRefs.current.values()].some((option) => option === target) ||
         audioOptionRefs.current.some((option) => option === target) ||
         subtitleOptionRefs.current.some((option) => option === target)
       ) {
@@ -1000,50 +1064,33 @@ export function PlayerControls({
           )}
           {qualityMenuOpen && (
             <div
-              className="player-quality-menu"
+              className="player-quality-menu player-quality-matrix-menu"
               role="menu"
               aria-label={t("components.player.controls.qualityMenuLabel")}
             >
               <p className="player-quality-heading">
                 {t("components.player.controls.qualityHeading")}
               </p>
-              {qualityOptions.map((quality, index) => {
-                const selected = quality.id === activeQualityId;
-                return (
-                  <button
-                    key={quality.id}
-                    ref={(element) => {
-                      qualityOptionRefs.current[index] = element;
-                    }}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={selected}
-                    className={`player-quality-option${selected ? " is-selected" : ""}`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setQualityMenuOpen(false);
-                      onSelectQuality(quality.id);
-                      window.requestAnimationFrame(() => qualityButtonRef.current?.focus());
-                    }}
-                  >
-                    <span>
-                      <strong>{quality.label}</strong>
-                      {quality.video_bitrate_bps ? (
-                        <small>
-                          {t("components.player.controls.bitrateMbps", {
-                            bitrate: Math.round(quality.video_bitrate_bps / 1_000_000),
-                          })}
-                        </small>
-                      ) : (
-                        <small>{t("components.player.controls.sourceQuality")}</small>
-                      )}
-                    </span>
-                    <span className="player-quality-check" aria-hidden="true">
-                      {selected ? "✓" : ""}
-                    </span>
-                  </button>
-                );
-              })}
+              <QualityMatrix
+                variant="player"
+                role="menuitemradio"
+                availableIds={availableQualityIds}
+                selectedId={activeQualityId}
+                standaloneChoices={standaloneQualityChoices}
+                disabled={qualitySwitching}
+                buttonRef={(id, element) => {
+                  if (element) {
+                    qualityOptionRefs.current.set(id, element);
+                  } else {
+                    qualityOptionRefs.current.delete(id);
+                  }
+                }}
+                onSelect={(qualityId) => {
+                  setQualityMenuOpen(false);
+                  onSelectQuality(qualityId);
+                  window.requestAnimationFrame(() => qualityButtonRef.current?.focus());
+                }}
+              />
             </div>
           )}
           <button
@@ -1077,7 +1124,7 @@ export function PlayerControls({
             }}
           >
             <span className="player-quality-glyph" aria-hidden="true">
-              {t("components.player.controls.hdBadge")}
+              {activeQualityBadge}
             </span>
             <span>
               {qualitySwitching

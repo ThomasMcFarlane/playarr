@@ -35,7 +35,7 @@ describe("player defaults", () => {
   it("persists supported quality and subtitle defaults", () => {
     const storage = memoryStorage();
     const defaults = {
-      qualityId: "h264-1080p-8mbps" as const,
+      qualityId: "h264-2160p-35mbps" as const,
       subtitleMode: "always" as const,
       subtitleLanguage: "ja",
     };

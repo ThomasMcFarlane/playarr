@@ -543,6 +543,17 @@ export const th: Translations = {
   "pages.workDetail.titleChaptersAndPeople": "บทและทีมงานของ {{title}}",
   "pages.workDetail.yourLibrary": "ไลบรารีของคุณ",
 
+  "quality.level.high": "สูง",
+  "quality.level.low": "ต่ำ",
+  "quality.level.medium": "กลาง",
+  "quality.original": "ต้นฉบับ",
+  "quality.originalDetail": "แหล่งที่มาคุณภาพดีที่สุด",
+  "quality.tier.fhd": "FHD",
+  "quality.tier.hd": "HD",
+  "quality.tier.sd": "SD",
+  "quality.tier.uhd": "UHD",
+  "quality.unavailable": "ไม่พร้อมใช้งาน",
+
   "settings.account.signOut": "ออกจากระบบ",
 
   "settings.appearance.documentTitle": "ลักษณะที่ปรากฏ - การตั้งค่า",

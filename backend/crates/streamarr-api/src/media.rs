@@ -1578,7 +1578,7 @@ pub async fn media_metadata_handler(
                 },
                 {
                     "id": "h264-1080p-8mbps",
-                    "label": "1080p",
+                    "label": "FHD Medium",
                     "profile": "h264-1080p-8mbps",
                     "height": 1080,
                     "estimated_size_bytes": 1_200_000_000_u64,
@@ -1765,14 +1765,14 @@ async fn media_playback_options(
                 },
                 {
                     "id": "h264-1080p-8mbps",
-                    "label": "1080p",
+                    "label": "FHD Medium",
                     "profile": "h264-1080p-8mbps",
                     "height": 1080,
                     "video_bitrate_bps": 8000000
                 },
                 {
                     "id": "h264-720p-4mbps",
-                    "label": "720p",
+                    "label": "HD Medium",
                     "profile": "h264-720p-4mbps",
                     "height": 720,
                     "video_bitrate_bps": 4000000
@@ -1846,14 +1846,14 @@ pub async fn media_playback_options_handler(
                 },
                 {
                     "id": "h264-1080p-8mbps",
-                    "label": "1080p",
+                    "label": "FHD Medium",
                     "profile": "h264-1080p-8mbps",
                     "height": 1080,
                     "video_bitrate_bps": 8000000
                 },
                 {
                     "id": "h264-720p-4mbps",
-                    "label": "720p",
+                    "label": "HD Medium",
                     "profile": "h264-720p-4mbps",
                     "height": 720,
                     "video_bitrate_bps": 4000000
