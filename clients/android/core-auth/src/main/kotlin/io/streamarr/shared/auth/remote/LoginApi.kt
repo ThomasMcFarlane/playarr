@@ -26,3 +26,21 @@ interface LoginApi {
     @POST("api/v1/auth/login")
     suspend fun login(@Body body: LoginRequest): LoginResponse
 }
+
+/**
+ * Builds an unauthenticated [LoginApi] pointed at an arbitrary remembered
+ * address, rather than whatever the default injected [LoginApi] instance is
+ * currently configured for -- what [io.streamarr.shared.auth.SessionManager]
+ * retries a fresh login attempt against every remembered group address
+ * with, once the default address fails (`docs/architecture/peer-groups.md`
+ * §6.4/§7.2/§3.7). Unlike [io.streamarr.shared.auth.remote.RefreshApiForUrl]'s
+ * refresh retry, this is deliberately **not** scoped to any one peer node:
+ * a fresh login is valid at *any* group member, since accounts/policies are
+ * synced across the whole group (Phase 2), not just the node that happened
+ * to serve this client last. Mirrors [RefreshApiForUrl]'s own dedicated
+ * `fun interface` rationale (Hilt/Kotlin function-type wildcard variance) --
+ * see that type's KDoc.
+ */
+fun interface LoginApiForUrl {
+    operator fun invoke(url: String): LoginApi
+}

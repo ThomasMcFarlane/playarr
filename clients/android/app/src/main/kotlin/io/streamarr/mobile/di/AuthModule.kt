@@ -13,7 +13,9 @@ import dagger.hilt.components.SingletonComponent
 import io.streamarr.shared.auth.remote.AuthHttpClient
 import io.streamarr.shared.auth.remote.DeviceAuthApi
 import io.streamarr.shared.auth.remote.LoginApi
+import io.streamarr.shared.auth.remote.LoginApiForUrl
 import io.streamarr.shared.auth.remote.RefreshApi
+import io.streamarr.shared.auth.remote.RefreshApiForUrl
 import io.streamarr.shared.data.config.ServerConfigStore
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.first
@@ -56,6 +58,20 @@ object AuthModule {
         enableHttpLogging = false,
     )
 
+    /**
+     * Builds an unauthenticated [LoginApi] pointed at an arbitrary
+     * address rather than whatever [ServerConfigStore] currently holds --
+     * what `SessionManager` retries a fresh login attempt against every
+     * other remembered group address with, once the default
+     * [provideLoginApi] instance fails (`docs/architecture/
+     * peer-groups.md` §6.4/§7.2/§3.7).
+     */
+    @Provides
+    @Singleton
+    fun provideLoginApiForUrl(): LoginApiForUrl = LoginApiForUrl { url ->
+        AuthHttpClient.createLoginApi(baseUrlProvider = { url }, enableHttpLogging = false)
+    }
+
     @Provides
     @Singleton
     fun provideRefreshApi(serverConfigStore: ServerConfigStore): RefreshApi = AuthHttpClient.createRefreshApi(
@@ -63,9 +79,23 @@ object AuthModule {
         enableHttpLogging = false,
     )
 
-    // DeviceAuthClient, TokenStore, SessionManager, SessionRefresher, and ServerConfigStore
-    // are not provided here: all carry `@Inject constructor(...)` over
-    // dependencies already bound above (DeviceAuthApi, LoginApi,
-    // DataStore<Preferences>), so Hilt constructs them directly without an
-    // explicit @Provides.
+    /**
+     * Builds an unauthenticated [RefreshApi] pointed at an arbitrary
+     * address rather than whatever [ServerConfigStore] currently holds --
+     * what `SessionRefresher` retries a still-unredeemed refresh token
+     * against every other remembered address with, once the default
+     * [provideRefreshApi] instance fails (`docs/architecture/
+     * peer-groups.md` §6.4/§7.2/§3.7).
+     */
+    @Provides
+    @Singleton
+    fun provideRefreshApiForUrl(): RefreshApiForUrl = RefreshApiForUrl { url ->
+        AuthHttpClient.createRefreshApi(baseUrlProvider = { url }, enableHttpLogging = false)
+    }
+
+    // DeviceAuthClient, TokenStore, SessionManager, SessionRefresher,
+    // ServerConfigStore, and KnownServerGroupStore are not provided here:
+    // all carry `@Inject constructor(...)` over dependencies already bound
+    // above (DeviceAuthApi, LoginApi, RefreshApi, DataStore<Preferences>),
+    // so Hilt constructs them directly without an explicit @Provides.
 }

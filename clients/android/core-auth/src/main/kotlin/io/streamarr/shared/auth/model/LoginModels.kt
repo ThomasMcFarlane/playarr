@@ -44,6 +44,14 @@ data class LoginResponse(
      * in this client reads it directly rather than decoding the token.
      */
     @SerialName("user_id") val userId: String,
+    /**
+     * `docs/architecture/peer-groups.md` §7.1's self-healing address
+     * book: this node's current [PeerAddressBundle], so
+     * [io.streamarr.shared.auth.SessionManager] can fold newly
+     * added/removed peers into `KnownServerGroupStore` without a separate
+     * round trip. `null`/absent for a standalone (never grouped) node.
+     */
+    @SerialName("peer_addresses") val peerAddresses: PeerAddressBundle? = null,
 )
 
 /** [io.streamarr.shared.auth.TokenStore.save] takes a [TokenResponse]; this is the field-for-field projection that drops [LoginResponse.userId]. */

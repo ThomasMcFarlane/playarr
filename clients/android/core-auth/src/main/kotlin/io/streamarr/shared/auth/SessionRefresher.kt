@@ -1,18 +1,46 @@
 package io.streamarr.shared.auth
 
 import io.streamarr.shared.auth.model.RefreshRequest
+import io.streamarr.shared.auth.model.RefreshResponse
+import io.streamarr.shared.auth.model.sameNodeCandidateUrls
 import io.streamarr.shared.auth.model.toTokenResponse
 import io.streamarr.shared.auth.remote.RefreshApi
+import io.streamarr.shared.auth.remote.RefreshApiForUrl
 import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import retrofit2.HttpException
 
-/** Refreshes and rotates one native client's token pair after an authenticated request receives 401. */
+/**
+ * Refreshes and rotates one native client's token pair after an
+ * authenticated request receives 401.
+ *
+ * Once a peer group is known (`docs/architecture/peer-groups.md`
+ * §6.4/§7.2), a failure against the default [refreshApi] -- the address
+ * this client currently believes issued the session -- retries the same,
+ * still-unredeemed refresh token, but **only** against other remembered
+ * addresses attributed to the *same peer node* that issued it (via
+ * [refreshApiForUrl], scoped by [io.streamarr.shared.auth.model.sameNodeCandidateUrls]).
+ * Per §3.7's stated, honest limitation, refresh-token state is never synced
+ * between peers, so a genuinely different node's database has no record of
+ * a token it never issued -- retrying one is a guaranteed 401, not a
+ * recovery attempt, and this class no longer wastes a round trip finding
+ * that out. Only a full re-login (`SessionManager.ensureAccessToken`,
+ * which per §7.3 still only ever re-prompts for **credentials**, never a
+ * server address -- and, unlike a refresh, *is* worth retrying at any
+ * group member, since accounts/policies do sync, Phase 2) truly recovers a
+ * session whose issuing peer has partitioned away for good. When no group
+ * is remembered at all, or the issuing peer node can't be determined (see
+ * [decodeAccessTokenIssuerPeerNodeId]), or no remembered address is
+ * attributed to that node, this collapses to exactly the original
+ * single-address behavior -- no sibling is ever guessed at.
+ */
 class SessionRefresher @Inject constructor(
     private val refreshApi: RefreshApi,
     private val tokenStore: TokenStore,
+    private val knownServerGroupStore: KnownServerGroupStore,
+    private val refreshApiForUrl: RefreshApiForUrl,
 ) {
     private val mutex = Mutex()
 
@@ -28,21 +56,58 @@ class SessionRefresher @Inject constructor(
 
         val refreshToken = tokenStore.refreshToken.first()?.takeIf { it.isNotBlank() }
             ?: return@withLock null
-        val response = try {
-            refreshApi.refresh(
-                RefreshRequest(
-                    deviceId = tokenStore.getOrCreateDeviceId(),
-                    refreshToken = refreshToken,
-                ),
-            )
+        val request = RefreshRequest(
+            deviceId = tokenStore.getOrCreateDeviceId(),
+            refreshToken = refreshToken,
+        )
+
+        // Whether the *primary* address -- the one this client currently
+        // believes issued the session -- definitively rejected the token
+        // (401), as opposed to merely being unreachable. Only that counts
+        // as proof the session itself is over. A sibling peer's 401 does
+        // not: per §3.7, refresh tokens are never synced between peers, so
+        // a sibling rejecting a token it never issued is expected noise,
+        // not evidence the session is dead -- it just means that candidate
+        // isn't valid for this token, so move on to the next one. Likewise,
+        // every address simply failing to answer proves nothing either way,
+        // and a later call may still recover it.
+        var primaryRejected = false
+        suspend fun attempt(api: RefreshApi, isPrimary: Boolean = false): RefreshResponse? = try {
+            api.refresh(request)
         } catch (error: Exception) {
-            // A rejected refresh token is the real end of the session. A
-            // network failure is not: retain it so a later retry can recover.
-            if (error is HttpException && error.code() == 401) tokenStore.clear()
-            return@withLock null
+            if (isPrimary && error is HttpException && error.code() == 401) primaryRejected = true
+            null
         }
 
-        tokenStore.save(response.toTokenResponse())
-        response.accessToken
+        attempt(refreshApi, isPrimary = true)?.let { response ->
+            tokenStore.save(response.toTokenResponse())
+            knownServerGroupStore.rememberPeerAddresses(response.peerAddresses)
+            return@withLock response.accessToken
+        }
+
+        // The peer that issued this session may simply be unreachable right
+        // now, not genuinely dead -- retry the same refresh token against
+        // every OTHER remembered address of that SAME peer node before
+        // giving up. Scoped by the token's own `iss` claim, not every
+        // remembered address: a sibling node's database was never handed
+        // this refresh token (§3.7), so trying one is guaranteed busywork,
+        // not a recovery attempt.
+        val group = knownServerGroupStore.group.first()
+        val issuingPeerNodeId = decodeAccessTokenIssuerPeerNodeId(currentAccessToken ?: rejectedAccessToken)
+        val sameNodeCandidates = if (group != null && issuingPeerNodeId != null) {
+            group.sameNodeCandidateUrls(issuingPeerNodeId)
+        } else {
+            emptyList()
+        }
+        for (url in sameNodeCandidates) {
+            val response = attempt(refreshApiForUrl(url)) ?: continue
+            tokenStore.save(response.toTokenResponse())
+            knownServerGroupStore.rememberServerSuccess(url)
+            knownServerGroupStore.rememberPeerAddresses(response.peerAddresses)
+            return@withLock response.accessToken
+        }
+
+        if (primaryRejected) tokenStore.clear()
+        null
     }
 }

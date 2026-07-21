@@ -18,6 +18,15 @@ data class RefreshResponse(
     @SerialName("token_type") val tokenType: String,
     @SerialName("expires_in") val expiresIn: Long,
     @SerialName("user_id") val userId: String,
+    /**
+     * `docs/architecture/peer-groups.md` §7.1's self-healing address
+     * book: this node's current [PeerAddressBundle], so
+     * [io.streamarr.shared.auth.SessionRefresher] can fold newly
+     * added/removed peers into `KnownServerGroupStore` on every
+     * successful refresh, not just every login. `null`/absent for a
+     * standalone (never grouped) node.
+     */
+    @SerialName("peer_addresses") val peerAddresses: PeerAddressBundle? = null,
 )
 
 fun RefreshResponse.toTokenResponse(): TokenResponse = TokenResponse(
