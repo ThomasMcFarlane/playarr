@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Reuse the configured SQLite busy-timeout value during connection initialisation, keeping
+  database builds free of a dead-code warning.
 - Run file-backed SQLite pools in WAL mode with a 30-second busy timeout so concurrent peer,
   catalogue, and admin work does not repeatedly fail with `database is locked`.
 - Accept large initial signed peer-sync pushes within a bounded 64 MiB limit instead of rejecting

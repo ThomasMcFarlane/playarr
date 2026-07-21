@@ -50,10 +50,9 @@ pub async fn connect(database_url: &str) -> Result<DbPool, DbError> {
         // every pooled connection, routine background writes can turn a
         // short collision into SQLITE_BUSY failures across unrelated reads.
         options = options.after_connect(|connection, _metadata| {
+            let statement = format!("PRAGMA busy_timeout = {}", SQLITE_BUSY_TIMEOUT.as_millis());
             Box::pin(async move {
-                sqlx::query("PRAGMA busy_timeout = 30000")
-                    .execute(&mut *connection)
-                    .await?;
+                sqlx::query(&statement).execute(&mut *connection).await?;
                 Ok(())
             })
         });
