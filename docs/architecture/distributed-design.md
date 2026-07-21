@@ -16,27 +16,31 @@ eviction in Kubernetes safe rather than something that silently drops
 requests or corrupts state. Concretely:
 
 - **No durable state lives in process memory — this is the target, and is
-  true today for devices and library/catalog data, but not yet for
-  everything.** `Device` rows, `Work`/`MediaFile`/`Rendition` catalog data,
-  and playback analytics all really do live in the database (SQLite at
-  Tier 1, Postgres at Tiers 2/3) via real `streamarr-db` repositories, so an
-  API node handling a request for those doesn't need to have "seen" the
-  client before. **`User` accounts, `Policy` records, refresh-token
-  secrets, and RFC 8628 device-authorization state do not yet** — there is
-  no `UserRepo`/`PolicyRepo` in `streamarr-db`, and no `users`/`sessions`/
-  `refresh_tokens`/`policies` table in either migration set. `streamarr-auth`'s
-  `InMemoryUserDirectory`, `InMemoryAdminRegistry`, `InMemoryRefreshTokenStore`,
-  and `InMemoryDeviceAuthorizationStore` are real, working, thread-safe
-  implementations (not mocks) that make the login/refresh/device-pairing
-  flows fully functional *within one process's lifetime* — but that state
-  does not survive a restart and is not visible to a second node, which
-  directly violates the interchangeability property this section otherwise
-  describes. See [`auth-modes.md`](auth-modes.md) for what this means
-  concretely for each `AuthMode`. This is the single biggest asterisk on
-  "Streamarr is stateless above the database" as of this pass, and a
-  multi-node deployment should not be run against `AuthMode::FullAccount`
-  or expect device-pairing approvals to work across nodes until real
-  persistence lands here.
+  true today for devices, library/catalog data, users, policies, and
+  refresh tokens, but not yet for everything.** `Device` rows,
+  `Work`/`MediaFile`/`Rendition` catalog data, playback analytics, `User`
+  accounts, `Policy` records, and refresh-token secrets all really do live
+  in the database (SQLite at Tier 1, Postgres at Tiers 2/3) via real
+  `streamarr-db` repositories — `streamarr-db/src/repo/{user,policy,
+  refresh_token}.rs` are real, `users`/`policies` have existed since
+  `backend/migrations/postgres/0010_users_policies.sql`, and
+  `backend/src/main.rs` wires `SqlxRefreshTokenRepo` (durable), not
+  `InMemoryRefreshTokenStore` — so an API node handling a request for any
+  of those doesn't need to have "seen" the client before. (Corrected here:
+  an earlier pass of this document said the opposite for this paragraph;
+  see `docs/architecture/peer-groups.md` §1.1 for how that staleness was
+  caught.) **RFC 8628 device-authorization state does not yet** —
+  `streamarr-auth`'s `InMemoryDeviceAuthorizationStore`/
+  `DashMapDeviceFlowHandler` remain real, working, thread-safe (not mocks),
+  making the device-pairing flow fully functional *within one process's
+  lifetime* — but that state does not survive a restart and is not visible
+  to a second node, which directly violates the interchangeability
+  property this section otherwise describes. See
+  [`auth-modes.md`](auth-modes.md) for what this means concretely for each
+  `AuthMode`. This is the single remaining asterisk on "Streamarr is
+  stateless above the database" as of this pass, and a multi-node
+  deployment should not expect device-pairing approvals to work across
+  nodes until real persistence lands here.
 - **Ephemeral, non-durable state (rate limiting, short-lived caches) is
   either per-node with a short TTL and no cross-node consistency
   requirement, or lives in a shared store when correctness genuinely
