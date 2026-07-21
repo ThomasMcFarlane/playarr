@@ -110,6 +110,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Refresh Playarr Web's generated build manifest for the latest production deployment.
 - Consolidate all universal Android sources, internal modules, build tooling, CI, release scripts,
   and documentation into the single `clients/android/` Gradle project, removing the obsolete
   `mobile-android`, `android-shared`, and `tv-android` project directories.
