@@ -300,6 +300,7 @@ public final class APIClient: StreamarrAPIClient {
     public init(
         configuration: APIClientConfiguration,
         tokenProvider: AccessTokenProviding? = nil,
+        serverGroupStore: KnownServerGroupStoring? = nil,
         session: URLSession? = nil
     ) {
         let resolvedSession = session ?? URLSession(configuration: configuration.urlSessionConfiguration)
@@ -311,6 +312,7 @@ public final class APIClient: StreamarrAPIClient {
             AccessTokenCoordinator(
                 configuration: configuration,
                 tokenProvider: $0,
+                serverGroupStore: serverGroupStore,
                 session: resolvedSession
             )
         }
@@ -794,14 +796,34 @@ private struct EmptyRequestBody: Encodable {}
 private actor AccessTokenCoordinator {
     private let configuration: APIClientConfiguration
     private let tokenProvider: AccessTokenProviding
+    /// `docs/architecture/peer-groups.md` §6.4/§7.2, §8 Phase 5: `nil`
+    /// (the default) reproduces this coordinator's pre-Phase-5 behavior
+    /// exactly — a single attempt against `configuration.baseURL`, no
+    /// fallback address to retry. When present, the two retry loops below
+    /// deliberately scope differently, per §3.7: the credential-less login
+    /// fallback retries across *every* address this install has ever
+    /// remembered for this account ("retry across the list before ever
+    /// re-prompting" — a fresh login is valid at any group node, since
+    /// accounts/policies sync), but the refresh loop only retries the
+    /// *same* refresh token against addresses of the *same peer node* that
+    /// issued it (`refreshCandidateBaseURLs(for:)`) — refresh tokens are
+    /// never synced across peer nodes, so a genuinely different node is
+    /// guaranteed to reject one it never issued.
+    private let serverGroupStore: KnownServerGroupStoring?
     private let session: URLSession
     private let decoder = StreamarrJSONCoding.makeDecoder()
     private let encoder = StreamarrJSONCoding.makeEncoder()
     private var inFlight: Task<Sensitive<String>, Error>?
 
-    init(configuration: APIClientConfiguration, tokenProvider: AccessTokenProviding, session: URLSession) {
+    init(
+        configuration: APIClientConfiguration,
+        tokenProvider: AccessTokenProviding,
+        serverGroupStore: KnownServerGroupStoring?,
+        session: URLSession
+    ) {
         self.configuration = configuration
         self.tokenProvider = tokenProvider
+        self.serverGroupStore = serverGroupStore
         self.session = session
     }
 
@@ -822,27 +844,123 @@ private actor AccessTokenCoordinator {
         }
 
         if let existing {
-            do {
-                let refreshed: RefreshResponse = try await post(
-                    path: "/api/v1/auth/refresh",
-                    body: RefreshRequest(
-                        deviceID: configuration.deviceID,
-                        refreshToken: existing.refreshToken.exposeSecret()
+            for baseURL in await refreshCandidateBaseURLs(for: existing) {
+                do {
+                    let stored = try await performRefresh(
+                        refreshToken: existing.refreshToken.exposeSecret(),
+                        baseURL: baseURL
                     )
-                )
-                let stored = StoredAuthSession(
-                    accessToken: refreshed.accessToken,
-                    refreshToken: refreshed.refreshToken,
-                    tokenType: refreshed.tokenType,
-                    expiresAt: Date().addingTimeInterval(TimeInterval(refreshed.expiresIn))
-                )
+                    try await tokenProvider.storeSession(stored)
+                    return stored.accessToken
+                } catch {
+                    // Try the next same-node address (§3.7: a refresh
+                    // token issued by this session's peer node is never
+                    // valid on a genuinely different one, so only another
+                    // address of the *same* node is worth retrying here)
+                    // rather than giving up on the first failure -- only
+                    // once every same-node candidate has failed does this
+                    // fall through to a full re-login.
+                    continue
+                }
+            }
+            try? await tokenProvider.clearSession()
+        }
+
+        // Credential-less trusted-network login, same retry-across-the-list
+        // treatment. `lastLoginError` seeds to a real `APIError` so a
+        // (never-expected) empty candidate list still throws something
+        // meaningful rather than silently returning; every real call
+        // through this loop overwrites it with the actual failure.
+        var lastLoginError: Error = APIError.invalidBaseURL
+        for baseURL in await candidateBaseURLs() {
+            do {
+                let stored = try await performLogin(baseURL: baseURL)
                 try await tokenProvider.storeSession(stored)
                 return stored.accessToken
             } catch {
-                try? await tokenProvider.clearSession()
+                lastLoginError = error
             }
         }
+        throw lastLoginError
+    }
 
+    /// `configuration.baseURL` first (today's only candidate when no group
+    /// is known — preserves this coordinator's original one-address
+    /// behavior exactly), then every other address this install's
+    /// `KnownServerGroup` remembers, `lastGoodURL` first, deduplicated.
+    /// **Any-node** — used only by the credential-less login fallback
+    /// (`acquireAccessToken`'s second loop), which is valid to attempt at
+    /// any group member since accounts/policies sync (§3.7). The refresh
+    /// loop deliberately does *not* use this — see
+    /// `refreshCandidateBaseURLs(for:)`.
+    private func candidateBaseURLs() async -> [URL] {
+        var urls: [URL] = [configuration.baseURL]
+        guard let serverGroupStore, let group = await serverGroupStore.currentGroup() else {
+            return urls
+        }
+
+        var ordered: [String] = []
+        if let lastGoodURL = group.lastGoodURL {
+            ordered.append(lastGoodURL)
+        }
+        for server in group.servers where !ordered.contains(server.url) {
+            ordered.append(server.url)
+        }
+        for candidate in ordered {
+            guard let url = URL(string: candidate), !urls.contains(url) else { continue }
+            urls.append(url)
+        }
+        return urls
+    }
+
+    /// `configuration.baseURL` first (always attempted, exactly like
+    /// `candidateBaseURLs()`), then only the addresses `sameNodeAddresses
+    /// (in:peerNodeID:)` attributes to the *same peer node* that issued
+    /// `session`'s access token (its `iss` claim, decoded via
+    /// `JWTClaims.issuerPeerID(ofAccessToken:)` — a routing hint only,
+    /// no signature verification needed since this app already trusts a
+    /// token it was just handed over HTTPS). **Same-node only** — §3.7:
+    /// refresh tokens are never synced across peer nodes, so a genuinely
+    /// different node is guaranteed to reject a token it never issued;
+    /// retrying against it would just be several guaranteed-401 round
+    /// trips before the real fallback (a fresh login, which *is* valid at
+    /// any node) ever runs. When the issuing peer can't be determined —
+    /// no known group, a non-UUID `iss` (a standalone node's HS256
+    /// issuer string), or a malformed token — this degrades to exactly
+    /// `[configuration.baseURL]`, the same inert, single-address behavior
+    /// as having no group at all.
+    private func refreshCandidateBaseURLs(for session: StoredAuthSession) async -> [URL] {
+        var urls: [URL] = [configuration.baseURL]
+        guard let serverGroupStore,
+              let group = await serverGroupStore.currentGroup(),
+              let issuingPeerNodeID = JWTClaims.issuerPeerID(ofAccessToken: session.accessToken.exposeSecret())
+        else {
+            return urls
+        }
+
+        for candidate in sameNodeAddresses(in: group, peerNodeID: issuingPeerNodeID) {
+            guard let url = URL(string: candidate), !urls.contains(url) else { continue }
+            urls.append(url)
+        }
+        return urls
+    }
+
+    private func performRefresh(refreshToken: String, baseURL: URL) async throws -> StoredAuthSession {
+        let refreshed: RefreshResponse = try await post(
+            path: "/api/v1/auth/refresh",
+            body: RefreshRequest(deviceID: configuration.deviceID, refreshToken: refreshToken),
+            baseURL: baseURL
+        )
+        await recordOutcome(peerAddresses: refreshed.peerAddresses, successfulURL: baseURL.absoluteString)
+        return StoredAuthSession(
+            accessToken: refreshed.accessToken,
+            refreshToken: refreshed.refreshToken,
+            tokenType: refreshed.tokenType,
+            expiresAt: Date().addingTimeInterval(TimeInterval(refreshed.expiresIn))
+        )
+    }
+
+    private func performLogin(baseURL: URL) async throws -> StoredAuthSession {
         let loggedIn: LoginResponse = try await post(
             path: "/api/v1/auth/login",
             body: LoginRequest(
@@ -850,20 +968,38 @@ private actor AccessTokenCoordinator {
                 deviceName: configuration.deviceName,
                 clientPlatform: configuration.clientPlatform,
                 clientVersion: configuration.clientVersion
-            )
+            ),
+            baseURL: baseURL
         )
-        let stored = StoredAuthSession(
+        await recordOutcome(peerAddresses: loggedIn.peerAddresses, successfulURL: baseURL.absoluteString)
+        return StoredAuthSession(
             accessToken: loggedIn.accessToken,
             refreshToken: loggedIn.refreshToken,
             tokenType: loggedIn.tokenType,
             expiresAt: Date().addingTimeInterval(TimeInterval(loggedIn.expiresIn))
         )
-        try await tokenProvider.storeSession(stored)
-        return stored.accessToken
     }
 
-    private func post<Body: Encodable, Response: Decodable>(path: String, body: Body) async throws -> Response {
-        guard var components = URLComponents(url: configuration.baseURL, resolvingAgainstBaseURL: false) else {
+    /// A successful refresh/login is this coordinator's only signal that
+    /// `baseURL` is currently reachable -- feed it back into the known-
+    /// server group (§7.1's self-healing) so the next `candidateBaseURLs()`
+    /// fast-paths it via `lastGoodURL`, whether or not the server actually
+    /// sent a fresh `PeerAddressBundle` this time.
+    private func recordOutcome(peerAddresses: PeerAddressBundle?, successfulURL: String) async {
+        guard let serverGroupStore else { return }
+        if let peerAddresses {
+            await serverGroupStore.merge(peerAddresses, successfulURL: successfulURL)
+        } else {
+            await serverGroupStore.recordSuccess(url: successfulURL)
+        }
+    }
+
+    private func post<Body: Encodable, Response: Decodable>(
+        path: String,
+        body: Body,
+        baseURL: URL
+    ) async throws -> Response {
+        guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw APIError.invalidBaseURL
         }
         components.path += path

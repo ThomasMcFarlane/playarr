@@ -66,6 +66,12 @@ public final class AppEnvironment {
 
     @ObservationIgnored private let userDefaults: UserDefaults
     @ObservationIgnored private var tokenStore: KeychainTokenStore
+    /// The remembered *group* of server addresses for this account —
+    /// `docs/architecture/peer-groups.md` §6.4/§7.1, §8 Phase 5. Unlike
+    /// `tokenStore` (rebuilt per-server in `rebuildClients()`), this is
+    /// one store for the whole install: a known-server group isn't scoped
+    /// to any single address, it's the address *book*.
+    @ObservationIgnored private let serverGroupStore: UserDefaultsKnownServerGroupStore
     @ObservationIgnored private let demoMode: Bool
     @ObservationIgnored private var suppressAutomaticSessionRestore = false
 
@@ -96,6 +102,7 @@ public final class AppEnvironment {
             simulatorDefaults: userDefaults
         )
         self.tokenStore = tokenStore
+        self.serverGroupStore = UserDefaultsKnownServerGroupStore(defaults: userDefaults)
 
         let resolvedAPIClient: StreamarrAPIClient = APIClient(
             configuration: APIClientConfiguration(
@@ -104,7 +111,8 @@ public final class AppEnvironment {
                 deviceID: self.deviceID,
                 deviceName: Self.deviceName
             ),
-            tokenProvider: tokenStore
+            tokenProvider: tokenStore,
+            serverGroupStore: serverGroupStore
         )
         self.apiClient = resolvedAPIClient
         self.deviceFlowClient = DeviceFlowClient(
@@ -149,7 +157,8 @@ public final class AppEnvironment {
             accessToken: response.accessToken,
             refreshToken: response.refreshToken,
             tokenType: response.tokenType,
-            expiresIn: response.expiresIn
+            expiresIn: response.expiresIn,
+            peerAddresses: response.peerAddresses
         )
         let resolvedName = username.trimmingCharacters(in: .whitespacesAndNewlines)
         currentUserName = resolvedName
@@ -180,7 +189,8 @@ public final class AppEnvironment {
             accessToken: response.accessToken,
             refreshToken: response.refreshToken,
             tokenType: response.tokenType,
-            expiresIn: response.expiresIn
+            expiresIn: response.expiresIn,
+            peerAddresses: response.peerAddresses
         )
         currentUserName = profile.displayName
         currentUserID = response.userID
@@ -192,7 +202,8 @@ public final class AppEnvironment {
         accessToken: String,
         refreshToken: String,
         tokenType: String,
-        expiresIn: Int64
+        expiresIn: Int64,
+        peerAddresses: PeerAddressBundle? = nil
     ) async throws {
         try await tokenStore.storeSession(
             StoredAuthSession(
@@ -202,6 +213,16 @@ public final class AppEnvironment {
                 expiresAt: Date().addingTimeInterval(TimeInterval(expiresIn))
             )
         )
+        // §7.1's self-healing address book: fold this login's own
+        // `peer_addresses` in when present, otherwise just record that
+        // `serverBaseURL` is reachable (the fast path for the *next*
+        // reconnect — see `AccessTokenCoordinator.recordOutcome`, which
+        // does the identical thing for the transparent refresh/login path).
+        if let peerAddresses {
+            await serverGroupStore.merge(peerAddresses, successfulURL: serverBaseURL.absoluteString)
+        } else {
+            await serverGroupStore.recordSuccess(url: serverBaseURL.absoluteString)
+        }
         isSignedIn = true
         sessionState = .signedIn
     }
@@ -258,11 +279,21 @@ public final class AppEnvironment {
                 deviceID: deviceID,
                 deviceName: Self.deviceName
             ),
-            tokenProvider: tokenStore
+            tokenProvider: tokenStore,
+            serverGroupStore: serverGroupStore
         )
         deviceFlowClient = DeviceFlowClient(
             configuration: DeviceFlowConfiguration(baseURL: serverBaseURL)
         )
+        // The user just pointed this install at a different server
+        // outright (not a same-server re-login — `prepareServerForSignIn`
+        // only touches `serverBaseURL`, and therefore only reaches here,
+        // when the URL actually changed). Whatever group was remembered
+        // belonged to the old address; carrying it forward would make the
+        // refresh/login retry-across-the-list above silently try to
+        // reconnect to it. `setSession`'s next successful login reseeds a
+        // fresh group from that server's own `peer_addresses`.
+        Task { await self.serverGroupStore.forget() }
         downloadRepository.updateAPIClient(apiClient)
         isSignedIn = false
         currentUserID = nil

@@ -948,6 +948,64 @@ public struct LoginRequest: Codable, Sendable {
     }
 }
 
+/// One `PeerAddressBundle` entry: a single reachable URL attributed to the
+/// peer node it belongs to — mirrors
+/// `streamarr_api::admin_peer::PeerAddressEntry` field for field. This
+/// attribution is the entire point of `PeerAddressBundle.addresses` not
+/// being a bare `[String]`: per `docs/architecture/peer-groups.md` §3.7,
+/// refresh tokens are never synced across peer nodes — only
+/// accounts/policies are — so a client retrying a failed refresh needs to
+/// know whether a given URL is *another address of the same node* that
+/// issued the token (worth retrying) or a genuinely different node
+/// (guaranteed to 401, since that node's own database has no record of a
+/// token it never issued). See `AccessTokenCoordinator`'s refresh-retry
+/// loop in `APIClient.swift`.
+public struct PeerAddressEntry: Codable, Sendable, Equatable {
+    public var peerNodeID: UUID
+    public var url: String
+
+    enum CodingKeys: String, CodingKey {
+        case peerNodeID = "peer_node_id"
+        case url
+    }
+
+    public init(peerNodeID: UUID, url: String) {
+        self.peerNodeID = peerNodeID
+        self.url = url
+    }
+}
+
+/// `docs/architecture/peer-groups.md` §6.1/§7.1's self-healing address
+/// book — mirrors `streamarr_api::admin_peer::PeerAddressBundle` field for
+/// field. Carried on `LoginResponse`/`RefreshResponse` (`null`/absent for
+/// a standalone, never-grouped node — see those types' own
+/// `peerAddresses` doc comments), and folded into a `KnownServerGroup`
+/// (`Auth/KnownServerGroup.swift`) via
+/// `KnownServerGroupStoring.merge(_:successfulURL:)`.
+public struct PeerAddressBundle: Codable, Sendable, Equatable {
+    /// `nil` for a standalone deployment that has never founded or joined
+    /// a peer group.
+    public var groupID: UUID?
+    public var groupName: String?
+    /// Every active member's client-reachable addresses, each attributed
+    /// to the peer node it came from, flattened and priority-ordered
+    /// (lower `PeerAddress.priority` first). Empty — never absent —
+    /// when nothing is configured yet.
+    public var addresses: [PeerAddressEntry]
+
+    enum CodingKeys: String, CodingKey {
+        case groupID = "group_id"
+        case groupName = "group_name"
+        case addresses
+    }
+
+    public init(groupID: UUID? = nil, groupName: String? = nil, addresses: [PeerAddressEntry] = []) {
+        self.groupID = groupID
+        self.groupName = groupName
+        self.addresses = addresses
+    }
+}
+
 /// `POST /api/v1/auth/login`'s 200 response — the same access+refresh token
 /// pair shape the RFC 8628 device-flow `TokenResponse` returns, plus the
 /// server-resolved `user_id` this session belongs to (the one thing
@@ -958,6 +1016,13 @@ public struct LoginResponse: Codable, Sendable {
     public var tokenType: String
     public var expiresIn: Int64
     public var userID: UUID
+    /// `docs/architecture/peer-groups.md` §7.1's self-healing address
+    /// book: this node's current `PeerAddressBundle`, so the client can
+    /// pick up newly added/removed peers without a separate round trip.
+    /// `nil`/absent for a standalone (never grouped) node — see
+    /// `streamarr_api::admin_peer::peer_addresses_for_response`'s doc
+    /// comment for why that lookup is skipped rather than always attached.
+    public var peerAddresses: PeerAddressBundle?
 
     enum CodingKeys: String, CodingKey {
         case accessToken = "access_token"
@@ -965,14 +1030,23 @@ public struct LoginResponse: Codable, Sendable {
         case tokenType = "token_type"
         case expiresIn = "expires_in"
         case userID = "user_id"
+        case peerAddresses = "peer_addresses"
     }
 
-    public init(accessToken: String, refreshToken: String, tokenType: String, expiresIn: Int64, userID: UUID) {
+    public init(
+        accessToken: String,
+        refreshToken: String,
+        tokenType: String,
+        expiresIn: Int64,
+        userID: UUID,
+        peerAddresses: PeerAddressBundle? = nil
+    ) {
         self.accessToken = accessToken
         self.refreshToken = refreshToken
         self.tokenType = tokenType
         self.expiresIn = expiresIn
         self.userID = userID
+        self.peerAddresses = peerAddresses
     }
 }
 
@@ -999,6 +1073,9 @@ public struct RefreshResponse: Codable, Sendable {
     public var tokenType: String
     public var expiresIn: Int64
     public var userID: UUID
+    /// `docs/architecture/peer-groups.md` §7.1's self-healing address
+    /// book — see `LoginResponse.peerAddresses`'s identical doc comment.
+    public var peerAddresses: PeerAddressBundle?
 
     enum CodingKeys: String, CodingKey {
         case accessToken = "access_token"
@@ -1006,14 +1083,23 @@ public struct RefreshResponse: Codable, Sendable {
         case tokenType = "token_type"
         case expiresIn = "expires_in"
         case userID = "user_id"
+        case peerAddresses = "peer_addresses"
     }
 
-    public init(accessToken: String, refreshToken: String, tokenType: String, expiresIn: Int64, userID: UUID) {
+    public init(
+        accessToken: String,
+        refreshToken: String,
+        tokenType: String,
+        expiresIn: Int64,
+        userID: UUID,
+        peerAddresses: PeerAddressBundle? = nil
+    ) {
         self.accessToken = accessToken
         self.refreshToken = refreshToken
         self.tokenType = tokenType
         self.expiresIn = expiresIn
         self.userID = userID
+        self.peerAddresses = peerAddresses
     }
 }
 

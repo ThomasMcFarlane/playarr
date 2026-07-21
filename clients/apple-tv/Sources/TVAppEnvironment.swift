@@ -3,6 +3,10 @@ import Observation
 import StreamarrKit
 
 protocol TVDeviceAuthorizing: Sendable {
+    /// The server this authorizer talks to — lets the retry-across-known-
+    /// addresses loop in `startPairing()` (§6.4/§8 Phase 5) tell which
+    /// remembered address a given authorizer actually succeeded against.
+    var baseURL: URL { get }
     func requestDeviceCode() async throws -> DeviceCodeResponse
     func pollForToken(
         deviceCode: String,
@@ -56,9 +60,17 @@ final class TVAppEnvironment {
     private var deviceAuthorizer: any TVDeviceAuthorizing
     private var accessToken: Sensitive<String>?
     private var refreshToken: Sensitive<String>?
+    /// The remembered *group* of server addresses for this Apple TV —
+    /// `docs/architecture/peer-groups.md` §6.4/§7.1, §8 Phase 5. Mirrors
+    /// `AppEnvironment.serverGroupStore` on the iOS target exactly (same
+    /// `StreamarrKit` type, since `PlayarrTV.xcodeproj` links that package
+    /// product directly) -- one address book for this install, independent
+    /// of `serverURL` (the address currently in use).
+    private let serverGroupStore: UserDefaultsKnownServerGroupStore
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        self.serverGroupStore = UserDefaultsKnownServerGroupStore(defaults: defaults)
 
         let storedURL = defaults.string(forKey: Self.serverURLKey).flatMap(URL.init(string:))
         let resolvedURL = storedURL ?? Self.defaultServerURL
@@ -93,13 +105,35 @@ final class TVAppEnvironment {
         defaults.set(url.absoluteString, forKey: Self.serverURLKey)
         rebuildClients()
         signOut()
+        // The user just pointed this Apple TV at a different server
+        // outright. Whatever group was remembered belonged to the old
+        // address -- carrying it forward would make `startPairing()`'s
+        // retry-across-known-addresses loop silently try to reconnect to
+        // it instead of the address just entered.
+        Task { await self.serverGroupStore.forget() }
         return true
     }
 
+    /// Requests a device code, retrying across every address this Apple TV
+    /// has ever remembered for its current server group (`lastGoodURL`
+    /// first, §7.1's fast path) before surfacing a failure -- §6.4/§8 Phase
+    /// 5: "retry across the list before ever re-prompting; only ever
+    /// re-prompt for credentials, never for an address, once a group is
+    /// known." The address that actually answers becomes `serverURL` (and
+    /// this Apple TV's new `lastGoodURL`) so the rest of pairing --
+    /// `pollForToken`, and every catalog/playback call once signed in --
+    /// consistently targets the address that's actually reachable, not
+    /// whichever one happened to be configured before this attempt.
     func startPairing() async {
         pairingState = .requestingCode
         do {
-            let pending = try await deviceAuthorizer.requestDeviceCode()
+            let (pending, authorizer) = try await requestDeviceCodeAcrossKnownAddresses()
+            if authorizer.baseURL != serverURL {
+                adoptWorkingServerURL(authorizer.baseURL)
+            }
+            deviceAuthorizer = authorizer
+            await serverGroupStore.recordSuccess(url: authorizer.baseURL.absoluteString)
+
             pairingState = .awaitingApproval(pending)
             let token = try await deviceAuthorizer.pollForToken(
                 deviceCode: pending.deviceCode,
@@ -116,6 +150,65 @@ final class TVAppEnvironment {
         } catch {
             pairingState = .failed(error.localizedDescription)
         }
+    }
+
+    /// Tries `requestDeviceCode()` against `serverURL` first, then every
+    /// other address this install's `KnownServerGroup` remembers
+    /// (`lastGoodURL` first, deduplicated) -- mirrors
+    /// `AccessTokenCoordinator.candidateBaseURLs()`/its refresh-retry loop
+    /// on the iOS target exactly, applied here to device-code request
+    /// instead of token refresh since that's this app's actual "start of
+    /// auth" call. Rethrows the last failure once every candidate (at
+    /// least `serverURL` itself) has failed.
+    private func requestDeviceCodeAcrossKnownAddresses() async throws -> (DeviceCodeResponse, any TVDeviceAuthorizing) {
+        var lastError: Error = DeviceFlowError.invalidBaseURL
+        for baseURL in await candidateServerURLs() {
+            let authorizer: any TVDeviceAuthorizing = baseURL == serverURL
+                ? deviceAuthorizer
+                : DeviceFlowClient(configuration: DeviceFlowConfiguration(baseURL: baseURL, clientPlatform: .ios))
+            do {
+                let pending = try await authorizer.requestDeviceCode()
+                return (pending, authorizer)
+            } catch {
+                lastError = error
+            }
+        }
+        throw lastError
+    }
+
+    /// `serverURL` first (today's only candidate when no group is known --
+    /// preserves this environment's original one-address behavior
+    /// exactly), then every other address this install's
+    /// `KnownServerGroup` remembers.
+    private func candidateServerURLs() async -> [URL] {
+        var urls: [URL] = [serverURL]
+        guard let group = await serverGroupStore.currentGroup() else { return urls }
+
+        var ordered: [String] = []
+        if let lastGoodURL = group.lastGoodURL {
+            ordered.append(lastGoodURL)
+        }
+        for server in group.servers where !ordered.contains(server.url) {
+            ordered.append(server.url)
+        }
+        for candidate in ordered {
+            guard let url = TVServerAddress.normalisedURL(from: candidate), !urls.contains(url) else { continue }
+            urls.append(url)
+        }
+        return urls
+    }
+
+    /// Adopts `url` as the current `serverURL` once pairing has actually
+    /// proven it reachable -- persists it the same way `saveServerAddress`
+    /// does, and rebuilds `apiClient` so post-pairing catalog/playback
+    /// calls target it too. Deliberately doesn't touch `deviceAuthorizer`
+    /// (the caller already has the exact authorizer instance that just
+    /// succeeded) or call `signOut()` (pairing is still in progress).
+    private func adoptWorkingServerURL(_ url: URL) {
+        serverURL = url
+        serverAddress = url.absoluteString
+        defaults.set(url.absoluteString, forKey: Self.serverURLKey)
+        apiClient = APIClient(configuration: Self.apiConfiguration(serverURL: url, deviceID: deviceID))
     }
 
     func signOut() {

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0C97FF1D2C239D4199B02257 /* KnownServerGroupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB77C9F9366C65A153551833 /* KnownServerGroupTests.swift */; };
 		12DDD6DBB72468965DC3CD6A /* ProfilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 238F31E1B80D5BD46ACA0808 /* ProfilesView.swift */; };
 		222079C5091027E9F5CC005E /* LoginServerURLTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF359DCD71A0DB1DFE371F7B /* LoginServerURLTests.swift */; };
 		2803A8AB28DD8487529C6C88 /* WorkDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8525AEDD13C65F22CAA667F /* WorkDetailViewModel.swift */; };
@@ -91,6 +92,7 @@
 		CBB44F26E3979A87C5554E13 /* DownloadsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadsView.swift; sourceTree = "<group>"; };
 		CF359DCD71A0DB1DFE371F7B /* LoginServerURLTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginServerURLTests.swift; sourceTree = "<group>"; };
 		D2EA71A178219F9CBB095F37 /* PlayerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerViewModel.swift; sourceTree = "<group>"; };
+		DB77C9F9366C65A153551833 /* KnownServerGroupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnownServerGroupTests.swift; sourceTree = "<group>"; };
 		E69E796E082CEDAAF64DE76A /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 		F55C2EDD38D3EE78CF143BE1 /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
 		FF473E7FBA8AF8F108E8681D /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -121,6 +123,7 @@
 			children = (
 				7E9F5AD7BEE43A57468E1FF1 /* APIClientAuthenticationTests.swift */,
 				530064E9763897EB523F7328 /* AppUpdateEvaluatorTests.swift */,
+				DB77C9F9366C65A153551833 /* KnownServerGroupTests.swift */,
 				22FB21E00BEA101D1E185EFF /* OpenAPISchemasTests.swift */,
 			);
 			name = StreamarrKitTests;
@@ -379,6 +382,7 @@
 			files = (
 				4D5B51C84C335C7AA2F963D1 /* APIClientAuthenticationTests.swift in Sources */,
 				FC280A968B55BD609D112F88 /* AppUpdateEvaluatorTests.swift in Sources */,
+				0C97FF1D2C239D4199B02257 /* KnownServerGroupTests.swift in Sources */,
 				37478F9C0FAA2B8BA6F84F30 /* OpenAPISchemasTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

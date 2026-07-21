@@ -16,6 +16,10 @@ public enum JWTClaims {
         let sub: String
     }
 
+    private struct IssuerClaim: Decodable {
+        let iss: String
+    }
+
     /// Returns the token's `sub` claim as a `UUID`, or `nil` if the token
     /// isn't a well-formed three-segment JWT, its payload isn't valid
     /// base64url JSON, or `sub` isn't present/isn't a UUID string --
@@ -29,6 +33,31 @@ public enum JWTClaims {
             return nil
         }
         return UUID(uuidString: claims.sub)
+    }
+
+    /// Returns the token's `iss` claim as a `UUID` -- the peer node that
+    /// minted this access token, per `streamarr_auth::jwt`'s doc comment
+    /// (`docs/architecture/peer-groups.md` §5.4): once a node is grouped,
+    /// it signs tokens with `iss` set to its own `peer_id`; a standalone
+    /// node's tokens carry its configured HS256 issuer string instead
+    /// (e.g. `"streamarr"`), which doesn't parse as a `UUID` and so
+    /// correctly returns `nil` here. `nil` also covers a malformed token
+    /// (not three segments, payload not valid base64url JSON, `iss`
+    /// missing) -- callers should treat any of those as "don't know which
+    /// node issued this," not crash. No signature verification, same
+    /// caveat as `subject(ofAccessToken:)`: a routing hint for "which
+    /// remembered address belongs to this session's own node"
+    /// (`sameNodeAddresses(in:peerNodeID:)` in `KnownServerGroup.swift`),
+    /// never an authorization decision.
+    public static func issuerPeerID(ofAccessToken token: String) -> UUID? {
+        let segments = token.split(separator: ".")
+        guard segments.count == 3 else { return nil }
+
+        guard let payloadData = base64URLDecode(String(segments[1])) else { return nil }
+        guard let claims = try? JSONDecoder().decode(IssuerClaim.self, from: payloadData) else {
+            return nil
+        }
+        return UUID(uuidString: claims.iss)
     }
 
     private static func base64URLDecode(_ value: String) -> Data? {

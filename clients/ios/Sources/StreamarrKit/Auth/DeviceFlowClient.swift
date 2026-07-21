@@ -105,6 +105,15 @@ public actor DeviceFlowClient {
         self.encoder = StreamarrJSONCoding.makeEncoder()
     }
 
+    /// The server this client is configured to talk to — mirrors
+    /// `StreamarrAPIClient.baseURL`. `nonisolated` (safe: `configuration`
+    /// is an immutable, `Sendable` `let`) so callers can read it without
+    /// an `await`, the same way they read `APIClient.baseURL`. Lets a
+    /// caller (`TVAppEnvironment`'s pairing retry-across-known-addresses
+    /// loop, §6.4/§8 Phase 5) tell which remembered address a given
+    /// `DeviceFlowClient` instance actually succeeded against.
+    public nonisolated var baseURL: URL { configuration.baseURL }
+
     /// `POST /api/v1/oauth/device/code` (RFC 8628 §3.1/§3.2): request a
     /// device code + user code from the server.
     public func requestDeviceCode() async throws -> DeviceCodeResponse {

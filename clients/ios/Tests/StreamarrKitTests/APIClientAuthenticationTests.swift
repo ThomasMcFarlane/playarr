@@ -238,6 +238,166 @@ final class APIClientAuthenticationTests: XCTestCase {
         XCTAssertEqual(saved.preference?.value, "robot")
     }
 
+    // MARK: - Peer-group refresh/login scoping
+    //
+    // `docs/architecture/peer-groups.md` §3.7/§6.4, this bug fix: a refresh
+    // token issued by one peer node is never valid on a genuinely different
+    // node (refresh tokens aren't synced -- only accounts/policies are), so
+    // `AccessTokenCoordinator` must only retry a refresh against addresses
+    // attributed to the *same* node, while the credential-less login
+    // fallback -- valid at any node -- keeps retrying across the whole
+    // group.
+
+    func testRefreshRetriesOnlySameNodeAddressesNeverAnotherPeer() async throws {
+        let nodeA = UUID()
+        let nodeB = UUID()
+        let store = TestTokenStore(
+            session: StoredAuthSession(
+                accessToken: Self.fakeAccessToken(issuer: nodeA.uuidString),
+                refreshToken: "refresh-old",
+                tokenType: "Bearer",
+                expiresAt: .distantPast
+            )
+        )
+        let serverGroupStore = InMemoryKnownServerGroupStore(
+            group: KnownServerGroup(servers: [
+                KnownServer(url: "https://primary.invalid", peerNodeID: nodeA),
+                KnownServer(url: "https://node-a-alt.invalid", peerNodeID: nodeA),
+                KnownServer(url: "https://node-b.invalid", peerNodeID: nodeB),
+            ])
+        )
+
+        var refreshedHosts: [String] = []
+        URLProtocolStub.handler = { request in
+            guard request.url!.path == "/api/v1/auth/refresh" else {
+                return Self.response(request, status: 404, json: #"{"error":"not_found","message":"unexpected path"}"#)
+            }
+            let host = request.url!.host!
+            refreshedHosts.append(host)
+            guard host == "node-a-alt.invalid" else {
+                return Self.response(request, status: 401, json: #"{"error":"unauthorized","message":"nope"}"#)
+            }
+            return Self.response(
+                request,
+                json: #"{"access_token":"access-new","refresh_token":"refresh-new","token_type":"Bearer","expires_in":900,"user_id":"00000000-0000-0000-0000-000000000001"}"#
+            )
+        }
+
+        let client = makeClient(baseURL: "https://primary.invalid", store: store, serverGroupStore: serverGroupStore)
+        let headers = try await client.playbackRequestHeaders()
+
+        XCTAssertEqual(headers["Authorization"], "Bearer access-new")
+        XCTAssertEqual(refreshedHosts, ["primary.invalid", "node-a-alt.invalid"])
+        XCTAssertFalse(
+            refreshedHosts.contains("node-b.invalid"),
+            "refresh must never be retried against a genuinely different peer node's address"
+        )
+    }
+
+    func testExhaustedSameNodeRefreshFallsThroughToAnyNodeLogin() async throws {
+        let nodeA = UUID()
+        let nodeB = UUID()
+        let store = TestTokenStore(
+            session: StoredAuthSession(
+                accessToken: Self.fakeAccessToken(issuer: nodeA.uuidString),
+                refreshToken: "refresh-old",
+                tokenType: "Bearer",
+                expiresAt: .distantPast
+            )
+        )
+        let serverGroupStore = InMemoryKnownServerGroupStore(
+            group: KnownServerGroup(servers: [
+                KnownServer(url: "https://primary.invalid", peerNodeID: nodeA),
+                KnownServer(url: "https://node-a-alt.invalid", peerNodeID: nodeA),
+                KnownServer(url: "https://node-b.invalid", peerNodeID: nodeB),
+            ])
+        )
+
+        var loggedInHosts: [String] = []
+        URLProtocolStub.handler = { request in
+            switch request.url!.path {
+            case "/api/v1/auth/refresh":
+                // Every same-node candidate (nodeA's two addresses) fails --
+                // this token is dead everywhere it could possibly still work.
+                return Self.response(request, status: 401, json: #"{"error":"unauthorized","message":"nope"}"#)
+            case "/api/v1/auth/login":
+                let host = request.url!.host!
+                loggedInHosts.append(host)
+                guard host == "node-b.invalid" else {
+                    return Self.response(request, status: 401, json: #"{"error":"unauthorized","message":"nope"}"#)
+                }
+                return Self.response(
+                    request,
+                    json: #"{"access_token":"access-fresh","refresh_token":"refresh-fresh","token_type":"Bearer","expires_in":900,"user_id":"00000000-0000-0000-0000-000000000001"}"#
+                )
+            default:
+                return Self.response(request, status: 404, json: #"{"error":"not_found","message":"unexpected path"}"#)
+            }
+        }
+
+        let client = makeClient(baseURL: "https://primary.invalid", store: store, serverGroupStore: serverGroupStore)
+        let headers = try await client.playbackRequestHeaders()
+
+        XCTAssertEqual(headers["Authorization"], "Bearer access-fresh")
+        // Unlike refresh, the credential-less login fallback is valid at any
+        // node (accounts/policies sync) -- it must reach node-b even though
+        // refresh never touched it.
+        XCTAssertEqual(loggedInHosts, ["primary.invalid", "node-a-alt.invalid", "node-b.invalid"])
+    }
+
+    func testRefreshIsInertAcrossAGroupWithNoRecordedPeerAttribution() async throws {
+        let nodeA = UUID()
+        let store = TestTokenStore(
+            session: StoredAuthSession(
+                accessToken: Self.fakeAccessToken(issuer: nodeA.uuidString),
+                refreshToken: "refresh-old",
+                tokenType: "Bearer",
+                expiresAt: .distantPast
+            )
+        )
+        // A group remembered before the server attributed addresses to peer
+        // nodes -- every `peerNodeID` is `nil`.
+        let serverGroupStore = InMemoryKnownServerGroupStore(
+            group: KnownServerGroup(servers: [
+                KnownServer(url: "https://primary.invalid"),
+                KnownServer(url: "https://unattributed-alt.invalid"),
+            ])
+        )
+
+        var refreshedHosts: [String] = []
+        var loggedInHosts: [String] = []
+        URLProtocolStub.handler = { request in
+            switch request.url!.path {
+            case "/api/v1/auth/refresh":
+                refreshedHosts.append(request.url!.host!)
+                return Self.response(request, status: 401, json: #"{"error":"unauthorized","message":"nope"}"#)
+            case "/api/v1/auth/login":
+                let host = request.url!.host!
+                loggedInHosts.append(host)
+                guard host == "unattributed-alt.invalid" else {
+                    return Self.response(request, status: 401, json: #"{"error":"unauthorized","message":"nope"}"#)
+                }
+                return Self.response(
+                    request,
+                    json: #"{"access_token":"access-fresh","refresh_token":"refresh-fresh","token_type":"Bearer","expires_in":900,"user_id":"00000000-0000-0000-0000-000000000001"}"#
+                )
+            default:
+                return Self.response(request, status: 404, json: #"{"error":"not_found","message":"unexpected path"}"#)
+            }
+        }
+
+        let client = makeClient(baseURL: "https://primary.invalid", store: store, serverGroupStore: serverGroupStore)
+        let headers = try await client.playbackRequestHeaders()
+
+        XCTAssertEqual(headers["Authorization"], "Bearer access-fresh")
+        // No attribution means no confidently-same-node candidate exists --
+        // refresh degrades to just the primary address, never the
+        // unattributed alternate.
+        XCTAssertEqual(refreshedHosts, ["primary.invalid"])
+        // Login, unaffected by attribution, still retries the whole group.
+        XCTAssertEqual(loggedInHosts, ["primary.invalid", "unattributed-alt.invalid"])
+    }
+
     private func makeClient(store: TestTokenStore) -> APIClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [URLProtocolStub.self]
@@ -251,6 +411,53 @@ final class APIClientAuthenticationTests: XCTestCase {
             ),
             tokenProvider: store
         )
+    }
+
+    private func makeClient(
+        baseURL: String,
+        store: TestTokenStore,
+        serverGroupStore: InMemoryKnownServerGroupStore
+    ) -> APIClient {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [URLProtocolStub.self]
+        return APIClient(
+            configuration: APIClientConfiguration(
+                baseURL: URL(string: baseURL)!,
+                clientVersion: "0.1.0",
+                deviceID: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
+                deviceName: "Playarr Tests",
+                urlSessionConfiguration: configuration
+            ),
+            tokenProvider: store,
+            serverGroupStore: serverGroupStore
+        )
+    }
+
+    /// Builds an unsigned three-segment JWT string carrying `iss` (plus the
+    /// other claims `JWTClaims`/`AccessTokenClaims` expect) -- enough for
+    /// `JWTClaims.issuerPeerID(ofAccessToken:)` to decode, since it never
+    /// verifies a signature (see that function's own doc comment). The
+    /// third segment is a non-empty placeholder rather than truly empty --
+    /// `String.split(separator:)` drops empty trailing subsequences by
+    /// default, which would otherwise make this look like a two-segment
+    /// (malformed) token to `JWTClaims`.
+    private static func fakeAccessToken(issuer: String) -> String {
+        let header = try! JSONSerialization.data(withJSONObject: ["alg": "none", "typ": "JWT"])
+        let payload = try! JSONSerialization.data(withJSONObject: [
+            "sub": UUID().uuidString,
+            "device_id": UUID().uuidString,
+            "session_id": UUID().uuidString,
+            "iss": issuer,
+            "iat": 0,
+            "exp": 9_999_999_999,
+        ])
+        func base64URL(_ data: Data) -> String {
+            data.base64EncodedString()
+                .replacingOccurrences(of: "+", with: "-")
+                .replacingOccurrences(of: "/", with: "_")
+                .replacingOccurrences(of: "=", with: "")
+        }
+        return "\(base64URL(header)).\(base64URL(payload)).unsigned"
     }
 
     private static func response(
@@ -296,6 +503,18 @@ private actor TestTokenStore: AccessTokenProviding {
     func currentSession() -> StoredAuthSession? { session }
     func storeSession(_ session: StoredAuthSession) { self.session = session }
     func clearSession() { session = nil }
+}
+
+private actor InMemoryKnownServerGroupStore: KnownServerGroupStoring {
+    private var group: KnownServerGroup?
+
+    init(group: KnownServerGroup? = nil) {
+        self.group = group
+    }
+
+    func currentGroup() -> KnownServerGroup? { group }
+    func remember(_ group: KnownServerGroup) { self.group = group }
+    func forget() { group = nil }
 }
 
 private final class URLProtocolStub: URLProtocol {
