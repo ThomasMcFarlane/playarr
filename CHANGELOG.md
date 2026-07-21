@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Let the authoritative relay DNS instance serve one explicitly configured, temporary DNS-01
+  challenge so direct relay nodes behind filtered HTTP-01 port 80 can obtain trusted certificates.
 - Let a Streamarr administrator leave the current peer group with explicit confirmation, notify
   reachable members, preserve local users and media, and immediately create or join another group.
 - Let administrators enrol independent Streamarr deployments into a signed peer group, synchronise

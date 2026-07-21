@@ -89,6 +89,7 @@ STREAMARR_METRICS_BIND_ADDR=0.0.0.0:9090
 # STREAMARR_ACME_HTTP01_BIND_ADDR=0.0.0.0:80
 # Optional authoritative DNS in this same Streamarr process:
 # STREAMARR_RELAY_DNS_BIND_ADDR=0.0.0.0:53
+# STREAMARR_RELAY_DNS_ACME_CHALLENGE=_acme-challenge.v4-203-0-113-10.relay.playarr.app=VALIDATION
 STREAMARR_WEB_ASSETS_DIR=/var/lib/streamarr/web
 ```
 
@@ -145,7 +146,11 @@ subscriber agreement; automatic HTTPS will not start without that setting.
 
 Setting `STREAMARR_RELAY_DNS_BIND_ADDR` also serves the authoritative
 `relay.playarr.app` DNS zone from this same Streamarr process over UDP and
-TCP. The systemd unit grants only the low-port bind capability needed for
+TCP. For a node whose provider filters HTTP-01 port 80, temporarily set
+`STREAMARR_RELAY_DNS_ACME_CHALLENGE` on the authoritative DNS instance to the
+exact `_acme-challenge` hostname and unpadded base64url validation joined by
+`=`. It serves only that TXT record; remove the setting immediately after
+certificate issuance. The systemd unit grants only the low-port bind capability needed for
 ports 53 and 80; DNS and automatic ACME remain disabled unless their variables
 are set.
 

@@ -302,7 +302,10 @@ async fn serve() -> anyhow::Result<()> {
 
     if let Some(bind_addr) = config.relay_dns_bind_addr {
         tracing::info!(addr = %bind_addr, "authoritative relay DNS enabled inside streamarr");
-        tokio::try_join!(application_listener, relay_dns::serve(bind_addr))?;
+        tokio::try_join!(
+            application_listener,
+            relay_dns::serve(bind_addr, config.relay_dns_acme_challenge.clone())
+        )?;
     } else {
         application_listener.await?;
     }

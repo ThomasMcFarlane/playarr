@@ -7,6 +7,7 @@ use std::{
 };
 
 use anyhow::Context;
+use streamarr_config::RelayDnsAcmeChallenge;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream, UdpSocket},
@@ -31,6 +32,7 @@ const UDP_PRUNE_INTERVAL: usize = 1_024;
 const TYPE_A: u16 = 1;
 const TYPE_NS: u16 = 2;
 const TYPE_SOA: u16 = 6;
+const TYPE_TXT: u16 = 16;
 const TYPE_AAAA: u16 = 28;
 const TYPE_CAA: u16 = 257;
 const TYPE_AXFR: u16 = 252;
@@ -47,7 +49,10 @@ const RCODE_REFUSED: u16 = 5;
 ///
 /// The server deliberately implements no recursive resolution. A hostname such as
 /// `v4-11-22-33-44.relay.playarr.app` resolves directly to `11.22.33.44`.
-pub async fn serve(bind_addr: SocketAddr) -> anyhow::Result<()> {
+pub async fn serve(
+    bind_addr: SocketAddr,
+    acme_challenge: Option<RelayDnsAcmeChallenge>,
+) -> anyhow::Result<()> {
     let udp = UdpSocket::bind(bind_addr)
         .await
         .with_context(|| format!("failed to bind relay DNS UDP listener on {bind_addr}"))?;
@@ -55,13 +60,20 @@ pub async fn serve(bind_addr: SocketAddr) -> anyhow::Result<()> {
         .await
         .with_context(|| format!("failed to bind relay DNS TCP listener on {bind_addr}"))?;
 
-    let udp_task = run_udp(udp);
-    let tcp_task = run_tcp(tcp);
+    if let Some(challenge) = &acme_challenge {
+        tracing::info!(domain = %challenge.domain, "relay DNS ACME DNS-01 challenge enabled");
+    }
+    let acme_challenge = Arc::new(acme_challenge);
+    let udp_task = run_udp(udp, Arc::clone(&acme_challenge));
+    let tcp_task = run_tcp(tcp, acme_challenge);
     tokio::try_join!(udp_task, tcp_task)?;
     Ok(())
 }
 
-async fn run_udp(socket: UdpSocket) -> anyhow::Result<()> {
+async fn run_udp(
+    socket: UdpSocket,
+    acme_challenge: Arc<Option<RelayDnsAcmeChallenge>>,
+) -> anyhow::Result<()> {
     let mut buffer = vec![0_u8; u16::MAX as usize];
     let mut limiter = UdpRateLimiter::new(Instant::now());
 
@@ -73,7 +85,9 @@ async fn run_udp(socket: UdpSocket) -> anyhow::Result<()> {
         if !limiter.allow(peer.ip(), Instant::now()) {
             continue;
         }
-        if let Some(response) = handle_packet(&buffer[..length]) {
+        if let Some(response) =
+            handle_packet_with_challenge(&buffer[..length], acme_challenge.as_ref().as_ref())
+        {
             let _ = socket.send_to(&response, peer).await;
         }
     }
@@ -152,7 +166,10 @@ impl UdpRateLimiter {
     }
 }
 
-async fn run_tcp(listener: TcpListener) -> anyhow::Result<()> {
+async fn run_tcp(
+    listener: TcpListener,
+    acme_challenge: Arc<Option<RelayDnsAcmeChallenge>>,
+) -> anyhow::Result<()> {
     let permits = Arc::new(Semaphore::new(MAX_TCP_CONNECTIONS));
     loop {
         let permit = Arc::clone(&permits)
@@ -163,14 +180,18 @@ async fn run_tcp(listener: TcpListener) -> anyhow::Result<()> {
             .accept()
             .await
             .context("relay DNS TCP accept failed")?;
+        let acme_challenge = Arc::clone(&acme_challenge);
         tokio::spawn(async move {
             let _permit = permit;
-            let _ = serve_tcp_connection(stream).await;
+            let _ = serve_tcp_connection(stream, acme_challenge).await;
         });
     }
 }
 
-async fn serve_tcp_connection(mut stream: TcpStream) -> io::Result<()> {
+async fn serve_tcp_connection(
+    mut stream: TcpStream,
+    acme_challenge: Arc<Option<RelayDnsAcmeChallenge>>,
+) -> io::Result<()> {
     loop {
         let mut length_bytes = [0_u8; 2];
         match timeout(TCP_IDLE_TIMEOUT, stream.read_exact(&mut length_bytes)).await {
@@ -189,7 +210,9 @@ async fn serve_tcp_connection(mut stream: TcpStream) -> io::Result<()> {
             .await
             .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "DNS TCP read timed out"))??;
 
-        let Some(response) = handle_packet(&request) else {
+        let Some(response) =
+            handle_packet_with_challenge(&request, acme_challenge.as_ref().as_ref())
+        else {
             continue;
         };
         let response_length = u16::try_from(response.len())
@@ -221,6 +244,11 @@ impl Name {
             return None;
         }
         parse_ipv4_label(&self.0[0])
+    }
+
+    fn equals_domain(&self, domain: &str) -> bool {
+        let labels: Vec<&[u8]> = domain.split('.').map(str::as_bytes).collect();
+        labels_equal(&self.0, &labels)
     }
 }
 
@@ -283,6 +311,13 @@ struct Question {
 }
 
 fn handle_packet(request: &[u8]) -> Option<Vec<u8>> {
+    handle_packet_with_challenge(request, None)
+}
+
+fn handle_packet_with_challenge(
+    request: &[u8],
+    acme_challenge: Option<&RelayDnsAcmeChallenge>,
+) -> Option<Vec<u8>> {
     if request.len() < 2 {
         return None;
     }
@@ -329,7 +364,12 @@ fn handle_packet(request: &[u8]) -> Option<Vec<u8>> {
         ));
     }
 
-    Some(authoritative_response(id, request_flags, &question))
+    Some(authoritative_response(
+        id,
+        request_flags,
+        &question,
+        acme_challenge,
+    ))
 }
 
 fn parse_question(message: &[u8]) -> Result<Question, ()> {
@@ -390,12 +430,28 @@ fn parse_name(message: &[u8], start: usize) -> Result<(Name, usize), ()> {
     }
 }
 
-fn authoritative_response(id: u16, request_flags: u16, question: &Question) -> Vec<u8> {
+fn authoritative_response(
+    id: u16,
+    request_flags: u16,
+    question: &Question,
+    acme_challenge: Option<&RelayDnsAcmeChallenge>,
+) -> Vec<u8> {
     let mut answers = Vec::new();
     let mut authority = Vec::new();
     let mut rcode = RCODE_NOERROR;
 
-    if question.name.is_zone_apex() {
+    if let Some(challenge) =
+        acme_challenge.filter(|challenge| question.name.equals_domain(&challenge.domain))
+    {
+        match question.qtype {
+            TYPE_TXT => answers.push(ResourceRecord::txt(challenge.validation.clone())),
+            TYPE_CAA => {
+                answers.push(ResourceRecord::caa_issue());
+                answers.push(ResourceRecord::caa_issuewild());
+            }
+            _ => authority.push(ResourceRecord::soa()),
+        }
+    } else if question.name.is_zone_apex() {
         match question.qtype {
             TYPE_NS => {
                 answers.push(ResourceRecord::ns(PRIMARY_NS));
@@ -475,6 +531,7 @@ enum ResourceRecord {
     A(Ipv4Addr),
     Ns(&'static [&'static [u8]]),
     Soa,
+    Txt(String),
     CaaIssue,
     CaaIssueWild,
 }
@@ -490,6 +547,10 @@ impl ResourceRecord {
 
     fn soa() -> Self {
         Self::Soa
+    }
+
+    fn txt(value: String) -> Self {
+        Self::Txt(value)
     }
 
     fn caa_issue() -> Self {
@@ -523,6 +584,12 @@ impl ResourceRecord {
                 push_u32(&mut rdata, 604_800);
                 push_u32(&mut rdata, TTL);
                 (TYPE_SOA, rdata)
+            }
+            Self::Txt(value) => {
+                let mut rdata = Vec::with_capacity(value.len() + 1);
+                rdata.push(value.len() as u8);
+                rdata.extend_from_slice(value.as_bytes());
+                (TYPE_TXT, rdata)
             }
             Self::CaaIssue => {
                 let mut rdata = Vec::from([0_u8, 5_u8]);
@@ -669,6 +736,45 @@ mod tests {
                 .windows(b"\0\x09issuewild;".len())
                 .any(|window| window == b"\0\x09issuewild;"));
         }
+    }
+
+    #[test]
+    fn serves_only_the_configured_acme_dns01_txt_record() {
+        let challenge = RelayDnsAcmeChallenge {
+            domain: "_acme-challenge.v4-11-22-33-44.relay.playarr.app".to_string(),
+            validation: "abc_DEF-123".to_string(),
+        };
+        let request = query(
+            &[
+                "_acme-challenge",
+                "v4-11-22-33-44",
+                "relay",
+                "playarr",
+                "app",
+            ],
+            TYPE_TXT,
+        );
+        let response = handle_packet_with_challenge(&request, Some(&challenge)).unwrap();
+
+        assert_eq!(rcode(&response), RCODE_NOERROR);
+        assert_eq!(counts(&response), (1, 1, 0));
+        assert_eq!(
+            first_record(&response),
+            (TYPE_TXT, TTL, b"\x0babc_DEF-123".to_vec())
+        );
+
+        let other = query(
+            &[
+                "_acme-challenge",
+                "v4-11-22-33-45",
+                "relay",
+                "playarr",
+                "app",
+            ],
+            TYPE_TXT,
+        );
+        let other_response = handle_packet_with_challenge(&other, Some(&challenge)).unwrap();
+        assert_eq!(rcode(&other_response), RCODE_NXDOMAIN);
     }
 
     #[test]

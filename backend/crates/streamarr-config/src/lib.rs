@@ -128,6 +128,9 @@ pub struct Config {
     /// Optional authoritative DNS listener for deterministic
     /// `v4-A-B-C-D.relay.playarr.app` names. Disabled when unset.
     pub relay_dns_bind_addr: Option<SocketAddr>,
+    /// Optional one-record DNS-01 response for issuing a certificate when a
+    /// relay node cannot receive Let's Encrypt HTTP-01 traffic on port 80.
+    pub relay_dns_acme_challenge: Option<RelayDnsAcmeChallenge>,
     /// `STREAMARR_OTLP_ENDPOINT` — optional OTLP collector endpoint; when
     /// unset, `streamarr-telemetry::otel` is a no-op layer.
     pub otlp_endpoint: Option<String>,
@@ -138,6 +141,12 @@ pub struct Config {
 pub struct TlsConfig {
     pub cert_path: PathBuf,
     pub key_path: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RelayDnsAcmeChallenge {
+    pub domain: String,
+    pub validation: String,
 }
 
 /// Automatic certificate management using Let's Encrypt's ACME service and
@@ -327,6 +336,19 @@ impl Config {
             }
             None => None,
         };
+        let relay_dns_acme_challenge = optional(
+            lookup,
+            "STREAMARR_RELAY_DNS_ACME_CHALLENGE",
+        )
+        .map(|raw| parse_relay_dns_acme_challenge(&raw))
+        .transpose()?;
+        if relay_dns_acme_challenge.is_some() && relay_dns_bind_addr.is_none() {
+            return Err(ConfigError::InvalidValue {
+                var: "STREAMARR_RELAY_DNS_ACME_CHALLENGE".to_string(),
+                value: "set".to_string(),
+                reason: "requires STREAMARR_RELAY_DNS_BIND_ADDR".to_string(),
+            });
+        }
         let otlp_endpoint = optional(lookup, "STREAMARR_OTLP_ENDPOINT");
 
         let deployment_tier = DeploymentTier::resolve(&database_url, redis_url.as_deref());
@@ -341,10 +363,50 @@ impl Config {
             tls,
             acme,
             relay_dns_bind_addr,
+            relay_dns_acme_challenge,
             otlp_endpoint,
             deployment_tier,
         })
     }
+}
+
+fn parse_relay_dns_acme_challenge(raw: &str) -> Result<RelayDnsAcmeChallenge, ConfigError> {
+    let (domain, validation) = raw.split_once('=').ok_or_else(|| ConfigError::InvalidValue {
+        var: "STREAMARR_RELAY_DNS_ACME_CHALLENGE".to_string(),
+        value: "malformed".to_string(),
+        reason: "expected `_acme-challenge.v4-A-B-C-D.relay.playarr.app=VALIDATION`"
+            .to_string(),
+    })?;
+    let canonical_domain = domain.to_ascii_lowercase();
+    let challenge_target = canonical_domain.strip_prefix("_acme-challenge.");
+    if !challenge_target.is_some_and(|target| {
+        target.starts_with("v4-")
+            && target.ends_with(".relay.playarr.app")
+            && is_valid_dns_name(target)
+    })
+    {
+        return Err(ConfigError::InvalidValue {
+            var: "STREAMARR_RELAY_DNS_ACME_CHALLENGE".to_string(),
+            value: domain.to_string(),
+            reason: "expected an ACME challenge hostname below relay.playarr.app".to_string(),
+        });
+    }
+    if validation.is_empty()
+        || validation.len() > u8::MAX as usize
+        || !validation
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    {
+        return Err(ConfigError::InvalidValue {
+            var: "STREAMARR_RELAY_DNS_ACME_CHALLENGE".to_string(),
+            value: domain.to_string(),
+            reason: "validation must be 1-255 unpadded base64url characters".to_string(),
+        });
+    }
+    Ok(RelayDnsAcmeChallenge {
+        domain: canonical_domain,
+        validation: validation.to_string(),
+    })
 }
 
 fn validate_acme_domain(domain: &str) -> Result<(), ConfigError> {
@@ -447,6 +509,7 @@ mod tests {
         assert_eq!(config.tls, None);
         assert_eq!(config.acme, None);
         assert_eq!(config.relay_dns_bind_addr, None);
+        assert_eq!(config.relay_dns_acme_challenge, None);
     }
 
     #[test]
@@ -631,6 +694,43 @@ mod tests {
             config.relay_dns_bind_addr,
             Some("0.0.0.0:53".parse().unwrap())
         );
+    }
+
+    #[test]
+    fn relay_dns_accepts_one_scoped_acme_dns01_challenge() {
+        let lookup = lookup_from(HashMap::from([
+            ("DATABASE_URL", "sqlite://streamarr.db"),
+            ("STREAMARR_RELAY_DNS_BIND_ADDR", "0.0.0.0:53"),
+            (
+                "STREAMARR_RELAY_DNS_ACME_CHALLENGE",
+                "_acme-challenge.v4-203-0-113-10.relay.playarr.app=abc_DEF-123",
+            ),
+        ]));
+        let config = Config::from_env_source(&lookup).unwrap();
+        assert_eq!(
+            config.relay_dns_acme_challenge,
+            Some(RelayDnsAcmeChallenge {
+                domain: "_acme-challenge.v4-203-0-113-10.relay.playarr.app".to_string(),
+                validation: "abc_DEF-123".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn relay_dns_rejects_unscoped_or_malformed_acme_challenges() {
+        for challenge in [
+            "_acme-challenge.example.com=value",
+            "v4-203-0-113-10.relay.playarr.app=value",
+            "_acme-challenge.v4-203-0-113-10.relay.playarr.app=bad=value",
+        ] {
+            let lookup = lookup_from(HashMap::from([
+                ("DATABASE_URL", "sqlite://streamarr.db"),
+                ("STREAMARR_RELAY_DNS_BIND_ADDR", "0.0.0.0:53"),
+                ("STREAMARR_RELAY_DNS_ACME_CHALLENGE", challenge),
+            ]));
+            let err = Config::from_env_source(&lookup).unwrap_err();
+            assert!(matches!(err, ConfigError::InvalidValue { var, .. } if var == "STREAMARR_RELAY_DNS_ACME_CHALLENGE"));
+        }
     }
 
     #[test]
