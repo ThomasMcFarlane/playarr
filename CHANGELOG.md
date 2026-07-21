@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Run file-backed SQLite pools in WAL mode with a 30-second busy timeout so concurrent peer,
+  catalogue, and admin work does not repeatedly fail with `database is locked`.
 - Accept large initial signed peer-sync pushes within a bounded 64 MiB limit instead of rejecting
   availability payloads above Axum's general 2 MiB request-body default.
 - Allow outbound-only peer nodes to create or join a group without advertising an inbound

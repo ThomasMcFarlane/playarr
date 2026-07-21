@@ -190,6 +190,10 @@ crate's `src/pool.rs`, `src/codec.rs`, and `src/repo/*.rs`):
 - Each backend is used exactly where it is strong: SQLite for single-writer
   embedded durability, Postgres for concurrent multi-node access, advisory
   locks, and the query patterns `ClusterCoordinator` needs.
+- File-backed SQLite pools use WAL journal mode and a 30-second busy timeout
+  on every pooled connection. Readers can therefore continue while the single
+  SQLite writer commits, and short background-write collisions wait instead
+  of surfacing `database is locked` across API and sync paths.
 - The storage engine choice is decoupled from the deployment-tier decision
   a user makes, and matches the operational reality of that tier rather than
   forcing one engine's assumptions onto both.

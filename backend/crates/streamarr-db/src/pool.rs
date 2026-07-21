@@ -9,10 +9,13 @@
 //! feature flags — enabling `AnyPool` doesn't make an absent driver appear.
 
 use sqlx::any::AnyPoolOptions;
+use std::time::Duration;
 
 use crate::error::DbError;
 
 pub type DbPool = sqlx::AnyPool;
+
+const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Embedded SQLite migrations, read from `backend/migrations/sqlite` at
 /// *compile* time (the path is relative to this crate's `Cargo.toml`, i.e.
@@ -35,11 +38,41 @@ pub async fn connect(database_url: &str) -> Result<DbPool, DbError> {
     sqlx::any::install_default_drivers();
 
     let database_url = ensure_sqlite_create_mode(database_url);
+    let is_sqlite = database_url.starts_with("sqlite:");
+    let use_wal = is_sqlite
+        && !database_url.contains(":memory:")
+        && !database_url.contains("mode=memory")
+        && !database_url.contains("mode=ro");
 
-    let pool = AnyPoolOptions::new()
-        .max_connections(10)
-        .connect(&database_url)
-        .await?;
+    let mut options = AnyPoolOptions::new().max_connections(10);
+    if is_sqlite {
+        // SQLite permits one writer at a time. Without a busy timeout on
+        // every pooled connection, routine background writes can turn a
+        // short collision into SQLITE_BUSY failures across unrelated reads.
+        options = options.after_connect(|connection, _metadata| {
+            Box::pin(async move {
+                sqlx::query("PRAGMA busy_timeout = 30000")
+                    .execute(&mut *connection)
+                    .await?;
+                Ok(())
+            })
+        });
+    }
+
+    let pool = options.connect(&database_url).await?;
+    if use_wal {
+        // Set WAL before returning the pool to callers. WAL lets readers and
+        // the single SQLite writer make progress concurrently; the setting
+        // persists in the database, so later pooled connections inherit it.
+        let journal_mode: String = sqlx::query_scalar("PRAGMA journal_mode = WAL")
+            .fetch_one(&pool)
+            .await?;
+        if !journal_mode.eq_ignore_ascii_case("wal") {
+            return Err(DbError::Backend(sqlx::Error::Protocol(format!(
+                "SQLite refused WAL journal mode and returned {journal_mode:?}"
+            ))));
+        }
+    }
     Ok(pool)
 }
 
@@ -212,6 +245,16 @@ mod tests {
         let pool = connect(&url)
             .await
             .expect("connect must create the database file, not error");
+        let journal_mode: String = sqlx::query_scalar("PRAGMA journal_mode")
+            .fetch_one(&pool)
+            .await
+            .expect("read journal mode");
+        let busy_timeout: i64 = sqlx::query_scalar("PRAGMA busy_timeout")
+            .fetch_one(&pool)
+            .await
+            .expect("read busy timeout");
+        assert_eq!(journal_mode.to_ascii_lowercase(), "wal");
+        assert_eq!(busy_timeout, SQLITE_BUSY_TIMEOUT.as_millis() as i64);
         run_migrations(&pool, false)
             .await
             .expect("migrations must run against the freshly created file");
