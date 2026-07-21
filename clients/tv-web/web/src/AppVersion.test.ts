@@ -8,11 +8,11 @@ describe("Playarr version label", () => {
 
     expect(app).toContain('className="app-user-version"');
     expect(app).toContain("v{__APP_VERSION__}");
-    expect(css).toMatch(
-      /\.app-user-version\s*\{[^}]*grid-column:\s*1;[^}]*grid-row:\s*2;/s
+    expect(app).toMatch(
+      /<div className="app-user-identity-cluster">[\s\S]*<\/button>\s*<span className="app-user-version"/
     );
     expect(css).toMatch(
-      /\.app-user-version\s*\{[^}]*position:\s*absolute;[^}]*top:\s*calc\(100% \+ 4px\);/s
+      /\.app-user-version\s*\{[^}]*position:\s*absolute;[^}]*top:\s*calc\(100% \+ 5px\);/s
     );
   });
 });

@@ -486,42 +486,44 @@ function AppShell() {
       )}
 
       {!isPlayerRoute && (
-        <button
-          type="button"
-          className="app-user-identity"
-          aria-label={t("shell.user.ariaLabel", {
-            name: currentUserName ?? t("shell.user.viewerFallback"),
-          })}
-          data-navigation-focus-key="shell:user"
-          onClick={(event) => {
-            const origin = captureNavigationLayer(
-              location.pathname,
-              location.key,
-              event.currentTarget
-            );
-            navigate("/profiles", {
-              state: {
-                backTo: `${location.pathname}${location.search}`,
-                navigationOrigin: origin,
-              },
-            });
-          }}
-        >
-          {currentAvatar ? (
-            <ProfileAvatar
-              className="app-user-avatar"
-              preference={currentAvatar}
-            />
-          ) : (
-            <span className="app-user-avatar" aria-hidden="true" />
-          )}
+        <div className="app-user-identity-cluster">
+          <button
+            type="button"
+            className="app-user-identity"
+            aria-label={t("shell.user.ariaLabel", {
+              name: currentUserName ?? t("shell.user.viewerFallback"),
+            })}
+            data-navigation-focus-key="shell:user"
+            onClick={(event) => {
+              const origin = captureNavigationLayer(
+                location.pathname,
+                location.key,
+                event.currentTarget
+              );
+              navigate("/profiles", {
+                state: {
+                  backTo: `${location.pathname}${location.search}`,
+                  navigationOrigin: origin,
+                },
+              });
+            }}
+          >
+            {currentAvatar ? (
+              <ProfileAvatar
+                className="app-user-avatar"
+                preference={currentAvatar}
+              />
+            ) : (
+              <span className="app-user-avatar" aria-hidden="true" />
+            )}
+            <span className="app-user-name">
+              {currentUserName ?? t("shell.user.viewerFallback")}
+            </span>
+          </button>
           <span className="app-user-version" aria-hidden="true">
             v{__APP_VERSION__}
           </span>
-          <span className="app-user-name">
-            {currentUserName ?? t("shell.user.viewerFallback")}
-          </span>
-        </button>
+        </div>
       )}
     </div>
   );
