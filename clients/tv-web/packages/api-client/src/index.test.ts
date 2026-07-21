@@ -946,6 +946,115 @@ describe("ApiClient", () => {
     });
     expect(requests).toHaveLength(4);
   });
+
+  it("runs the authenticated peer-group operator flow", async () => {
+    const requests: Request[] = [];
+    const selfNode = {
+      id: "peer-a",
+      group_id: "group-1",
+      name: "Home",
+      addresses: [
+        {
+          url: "https://home.example.test",
+          label: "Public",
+          priority: 0,
+          client_reachable: true,
+        },
+      ],
+      public_key: "public-key",
+      status: "active",
+      is_self: true,
+      joined_at: "2026-07-22T00:00:00Z",
+      last_seen_at: null,
+      last_sync_error: null,
+      updated_at: "2026-07-22T00:00:00Z",
+    } as const;
+    const fetchImpl = mockFetch(async (request) => {
+      requests.push(request);
+      const path = new URL(request.url).pathname;
+      expect(request.headers.get("Authorization")).toBe("Bearer admin-token");
+
+      if (path === "/api/v1/admin/peer-nodes/self") {
+        expect(await request.json()).toEqual({
+          name: "Home",
+          addresses: selfNode.addresses,
+        });
+        return jsonResponse(200, selfNode);
+      }
+      if (path === "/api/v1/admin/peer-groups" && request.method === "POST") {
+        expect(await request.json()).toEqual({ name: "Family" });
+        return jsonResponse(200, {
+          group: { id: "group-1", name: "Family", created_at: "2026-07-22T00:00:00Z" },
+          self_node: selfNode,
+        });
+      }
+      if (path === "/api/v1/admin/peer-groups/join-tokens") {
+        return jsonResponse(200, {
+          join_token: "single-use-token",
+          expires_at: "2026-07-22T00:15:00Z",
+        });
+      }
+      if (path === "/api/v1/admin/peer-groups/join") {
+        expect(await request.json()).toEqual({
+          seed_address: "https://home.example.test",
+          join_token: "single-use-token",
+        });
+        return jsonResponse(200, {
+          group: { id: "group-1", name: "Family", created_at: "2026-07-22T00:00:00Z" },
+          members: [selfNode],
+        });
+      }
+      if (path === "/api/v1/admin/peer-nodes") {
+        return jsonResponse(200, [selfNode]);
+      }
+      if (path === "/api/v1/admin/peer-nodes/peer-a/sync-status") {
+        return jsonResponse(200, {
+          peer_node_id: "peer-a",
+          name: "Home",
+          status: null,
+          detail: null,
+          error: null,
+          started_at: null,
+          finished_at: null,
+        });
+      }
+      expect(path).toBe("/api/v1/admin/peer-groups/self/address-bundle");
+      return jsonResponse(200, {
+        group_id: "group-1",
+        group_name: "Family",
+        addresses: [{ peer_node_id: "peer-a", url: "https://home.example.test" }],
+      });
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "admin-token",
+    });
+
+    await expect(
+      client.updateSelfPeerNode({ name: "Home", addresses: [...selfNode.addresses] })
+    ).resolves.toMatchObject({ name: "Home" });
+    await expect(client.foundPeerGroup({ name: "Family" })).resolves.toMatchObject({
+      group: { id: "group-1" },
+    });
+    await expect(client.createPeerJoinToken()).resolves.toMatchObject({
+      join_token: "single-use-token",
+    });
+    await expect(
+      client.joinPeerGroup({
+        seed_address: "https://home.example.test",
+        join_token: "single-use-token",
+      })
+    ).resolves.toMatchObject({ members: [selfNode] });
+    await expect(client.listPeerNodes()).resolves.toEqual([selfNode]);
+    await expect(client.getPeerNodeSyncStatus("peer-a")).resolves.toMatchObject({
+      peer_node_id: "peer-a",
+    });
+    await expect(client.getPeerAddressBundle()).resolves.toMatchObject({
+      group_name: "Family",
+    });
+    expect(requests).toHaveLength(7);
+  });
 });
 
 describe("describeApiError", () => {

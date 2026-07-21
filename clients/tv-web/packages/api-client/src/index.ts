@@ -124,6 +124,18 @@ export type UserInviteRequestStatus = components["schemas"]["UserInviteRequestSt
 export type ReviewUserInviteRequest = components["schemas"]["ReviewUserInviteRequest"];
 export type PeerAddressBundle = components["schemas"]["PeerAddressBundle"];
 export type PeerAddressEntry = components["schemas"]["PeerAddressEntry"];
+export type PeerAddress = components["schemas"]["PeerAddress"];
+export type PeerGroup = components["schemas"]["PeerGroup"];
+export type PeerNode = components["schemas"]["PeerNode"];
+export type PeerNodeStatus = components["schemas"]["PeerNodeStatus"];
+export type FoundPeerGroupRequest = components["schemas"]["FoundPeerGroupRequest"];
+export type FoundPeerGroupResponse = components["schemas"]["FoundPeerGroupResponse"];
+export type JoinPeerGroupRequest = components["schemas"]["JoinPeerGroupRequest"];
+export type JoinPeerGroupResponse = components["schemas"]["EnrollResponse"];
+export type PeerJoinTokenResponse = components["schemas"]["PeerJoinTokenResponse"];
+export type SelfPeerNodeRequest = components["schemas"]["SelfPeerNodeRequest"];
+export type SelfPeerNodeResponse = components["schemas"]["SelfPeerNodeResponse"];
+export type PeerSyncStatusResponse = components["schemas"]["PeerSyncStatusResponse"];
 export type FirebaseWebConfig = components["schemas"]["FirebaseWebConfig"];
 export type RegisterPushRequest = components["schemas"]["RegisterPushRequest"];
 export type UpdateUserRequest = components["schemas"]["UpdateUserRequest"];
@@ -334,6 +346,13 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/admin/source-instances/sync-status", method: "GET" },
   { schemaPath: "/api/v1/admin/system-settings", method: "GET" },
   { schemaPath: "/api/v1/admin/system-settings", method: "PUT" },
+  { schemaPath: "/api/v1/admin/peer-groups", method: "POST" },
+  { schemaPath: "/api/v1/admin/peer-groups/join", method: "POST" },
+  { schemaPath: "/api/v1/admin/peer-groups/join-tokens", method: "POST" },
+  { schemaPath: "/api/v1/admin/peer-groups/self/address-bundle", method: "GET" },
+  { schemaPath: "/api/v1/admin/peer-nodes", method: "GET" },
+  { schemaPath: "/api/v1/admin/peer-nodes/self", method: "PUT" },
+  { schemaPath: "/api/v1/admin/peer-nodes/{id}/sync-status", method: "GET" },
   { schemaPath: "/api/v1/admin/tdarr", method: "POST" },
   { schemaPath: "/api/v1/admin/tdarr", method: "GET" },
   { schemaPath: "/api/v1/admin/tdarr", method: "DELETE" },
@@ -960,14 +979,47 @@ export class ApiClient {
   }
 
   // ---------------------------------------------------------------------
-  // admin (peer groups) -- `docs/architecture/peer-groups.md` §6.1. Just
-  // the address bundle for now: invite-link/QR builders (`Invite.tsx`/
-  // `Users.tsx`) call this at link-build time instead of reading a single
-  // configured base URL directly, so a generated invite carries every
-  // group member's client-reachable address, not just the issuing node's
-  // own. `urls` is a one-element list for a standalone (ungrouped) node --
-  // one code path, same as the backend's own invariant.
+  // admin (peer groups) -- `docs/architecture/peer-groups.md` §3.4/§6.1.
+  // These cover the complete operator flow: stage this node's profile,
+  // found or join a group, inspect membership, and mint the one-use token
+  // another node needs in order to join.
   // ---------------------------------------------------------------------
+
+  async updateSelfPeerNode(body: SelfPeerNodeRequest): Promise<SelfPeerNodeResponse> {
+    return this.unwrap(
+      await this.raw.PUT("/api/v1/admin/peer-nodes/self", { body })
+    );
+  }
+
+  async foundPeerGroup(body: FoundPeerGroupRequest): Promise<FoundPeerGroupResponse> {
+    return this.unwrap(
+      await this.raw.POST("/api/v1/admin/peer-groups", { body })
+    );
+  }
+
+  async joinPeerGroup(body: JoinPeerGroupRequest): Promise<JoinPeerGroupResponse> {
+    return this.unwrap(
+      await this.raw.POST("/api/v1/admin/peer-groups/join", { body })
+    );
+  }
+
+  async createPeerJoinToken(): Promise<PeerJoinTokenResponse> {
+    return this.unwrap(
+      await this.raw.POST("/api/v1/admin/peer-groups/join-tokens", {})
+    );
+  }
+
+  async listPeerNodes(): Promise<PeerNode[]> {
+    return this.unwrap(await this.raw.GET("/api/v1/admin/peer-nodes", {}));
+  }
+
+  async getPeerNodeSyncStatus(id: string): Promise<PeerSyncStatusResponse> {
+    return this.unwrap(
+      await this.raw.GET("/api/v1/admin/peer-nodes/{id}/sync-status", {
+        params: { path: { id } },
+      })
+    );
+  }
 
   async getPeerAddressBundle(): Promise<PeerAddressBundle> {
     return this.unwrap(

@@ -12,6 +12,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Let administrators enrol independent Streamarr deployments into a signed peer group, synchronise
   membership and account, library, availability, and routing metadata, route playback across nodes,
   and give Playarr clients ordered failover addresses.
+- Add a dedicated Peer Groups screen to Streamarr Admin for creating or joining groups, editing
+  node addresses, issuing one-use join tokens, and checking every member's current status.
 - Give every Playarr client its own catalogue URL, with downloads, installation guidance, and
   availability details shown on one client page at a time while keeping the platform selector
   available for direct switching and using each platform circle as its sole route control.
