@@ -586,7 +586,9 @@ one HTTP call an admin makes and watches succeed or fail.
 
 **Founding a group** (node A, first node):
 1. `PUT /api/v1/admin/peer-nodes/self` (`AdminUser`-gated): sets `name` +
-   `addresses` (each with its own `client_reachable` flag).
+   `addresses` (each with its own `client_reachable` flag). `addresses` may
+   be empty for an outbound-only node; it initiates pull and push exchanges
+   through another member rather than accepting inbound sync.
 2. `POST /api/v1/admin/peer-groups` `{name}`: generates the Ed25519
    keypair (if this node has none yet) + `peer_id`, writes `node_identity`
    + `peer_groups` + a self row (`is_self = 1`) into `peer_nodes`.
@@ -594,7 +596,7 @@ one HTTP call an admin makes and watches succeed or fail.
 **Joining** (node B, into A's group):
 1. Admin on **A**: `POST /api/v1/admin/peer-groups/join-tokens` → raw
    token returned once, 15-minute default TTL, single-use.
-2. Admin on **B**: `PUT /api/v1/admin/peer-nodes/self` (name + addresses),
+2. Admin on **B**: `PUT /api/v1/admin/peer-nodes/self` (name + optional addresses),
    then `POST /api/v1/admin/peer-groups/join {seed_address, join_token}`.
 3. B calls **A**: `POST /api/v1/peer/enroll {join_token, peer_id, name,
    addresses, public_key}`: trying each address in `bootstrap_addresses`

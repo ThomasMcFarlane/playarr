@@ -7,6 +7,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Allow outbound-only peer nodes to create or join a group without advertising an inbound
+  address, matching signed push-and-pull synchronisation behaviour.
+
 ### Added
 
 - Show the running Playarr bundle version outside the user button beneath its avatar across

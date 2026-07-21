@@ -1049,6 +1049,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbound_only_node_can_found_a_group_without_addresses() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+        let token = mint_access_token(&state, admin_id);
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/v1/admin/peer-nodes/self")
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::from(
+                        serde_json::json!({"name": "outbound", "addresses": []}).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = router
+            .oneshot(found_group_request(&token, "Outbound Group"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let founded: FoundPeerGroupResponse = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(founded.self_node.name, "outbound");
+        assert!(founded.self_node.addresses.is_empty());
+    }
+
+    #[tokio::test]
     async fn leaving_a_group_detaches_locally_and_preserves_the_self_profile() {
         let (router, state) = test_state().await;
         let admin_id = Uuid::new_v4();

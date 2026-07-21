@@ -61,10 +61,6 @@ function parseHttpUrl(raw: string, fieldName: string): string {
 
 function parseAddresses(drafts: AddressDraft[]): PeerAddress[] {
   const populated = drafts.filter((draft) => draft.url.trim() || draft.label.trim());
-  if (populated.length === 0) {
-    throw new Error("Add at least one address that another Streamarr node can reach.");
-  }
-
   return populated
     .map((draft, index) => {
       const label = draft.label.trim();
@@ -109,10 +105,11 @@ function AddressEditor({ addresses, disabled, idPrefix, onChange }: AddressEdito
 
   return (
     <fieldset className="peer-addresses" disabled={disabled}>
-      <legend className="form-label">Reachable addresses</legend>
+      <legend className="form-label">Reachable addresses (optional)</legend>
       <div className="peer-section-heading">
         <p className="hint">
-          Add LAN and public URLs separately. Lower priorities are tried first.
+          Add LAN and public URLs only when this node accepts inbound connections. Lower
+          priorities are tried first.
         </p>
         <button
           className="btn btn-secondary btn-sm"
@@ -387,7 +384,8 @@ export function PeerGroupsPage() {
             <div>
               <h2 className="section-title">Set up this node</h2>
               <p className="muted">
-                Name this deployment and list every address other nodes may use to reach it.
+                Name this deployment. Outbound-only nodes can leave addresses blank and still
+                push and pull through a reachable group member.
               </p>
             </div>
 
@@ -591,7 +589,10 @@ export function PeerGroupsPage() {
             <form className="peer-node-form" onSubmit={(event) => void handleSaveNode(event)}>
               <div>
                 <h2 className="section-title">This node</h2>
-                <p className="muted">Update how this deployment appears to the rest of the group.</p>
+                <p className="muted">
+                  Update how this deployment appears to the rest of the group. Outbound-only nodes
+                  can leave addresses blank.
+                </p>
               </div>
               <div className="peer-field">
                 <label className="form-label" htmlFor="grouped-node-name">Node name</label>
