@@ -29,6 +29,7 @@ import {
   useNavigationLayer,
 } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { useHomeView, type HomeViewPreference } from "../lib/homeView";
 import {
   TvMediaTrack,
   TvRailSurface,
@@ -130,6 +131,7 @@ function centreHomeRail(
 /** TV-first landing page: a mixed library spotlight plus on-deck and recent rails. */
 export function HomePage() {
   const { t } = useLanguage();
+  const { preference: homeView } = useHomeView();
   useDocumentTitle(t("pages.home.title"));
   const client = useApiClient();
   const seriesState = useCatalogBrowse(client, {
@@ -423,7 +425,7 @@ export function HomePage() {
 
   return (
     <TvStageShell
-      className="tv-home"
+      className={`tv-home${homeView === "cover" ? " is-cover-view" : ""}`}
       ariaLabel={t("pages.home.title")}
       artworkKey={selected.id}
       artwork={
@@ -475,6 +477,7 @@ export function HomePage() {
             onProgressChanged={handleProgressChanged}
             navigationOrigin={navigationLayer.origin}
             onNavigate={navigationLayer.captureLink}
+            view={homeView}
           />
         ))}
       </TvRailSurface>
@@ -487,14 +490,20 @@ function HomeRailArtwork({
   mediaFileId,
   title,
   children,
+  view,
 }: {
   work: Work;
   mediaFileId?: string | null;
   title: string;
   children: ReactNode;
+  view: HomeViewPreference;
 }) {
-  const fallback = useCachedArtwork(work, ["backdrop", "poster"]).url;
-  if (mediaFileId) {
+  const kinds =
+    view === "cover"
+      ? (["poster", "backdrop"] as const)
+      : (["backdrop", "poster"] as const);
+  const fallback = useCachedArtwork(work, kinds).url;
+  if (mediaFileId && view === "thumbnail") {
     return (
       <MediaThumbnailArtwork
         mediaFileId={mediaFileId}
@@ -512,7 +521,7 @@ function HomeRailArtwork({
     <span className="tv-home-card-art">
       <CachedArtworkImage
         work={work}
-        kinds={["backdrop", "poster"]}
+        kinds={kinds}
         alt=""
         loading="lazy"
         fallback={<span>{title}</span>}
@@ -535,6 +544,7 @@ function HomeRail({
   onProgressChanged,
   navigationOrigin,
   onNavigate,
+  view,
 }: {
   railId: HomeRailId;
   title: string;
@@ -552,6 +562,7 @@ function HomeRail({
   onProgressChanged: (workId: string, progress: WatchProgress[]) => void;
   navigationOrigin: ReturnType<typeof useNavigationLayer>["origin"];
   onNavigate: ReturnType<typeof useNavigationLayer>["captureLink"];
+  view: HomeViewPreference;
 }) {
   const mediaContext = useMediaContextMenu({ onProgressChanged });
   const { t } = useLanguage();
@@ -624,6 +635,7 @@ function HomeRail({
                   work={work}
                   mediaFileId={mediaFileId}
                   title={title}
+                  view={view}
                 >
                   <WatchStateOverlay progress={progress} showUnwatched={progressReady} />
                 </HomeRailArtwork>

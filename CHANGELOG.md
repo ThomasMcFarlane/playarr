@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Let Playarr viewers switch home rails between thumbnail and cover artwork, add depth to media
+  cards, and softly fade scrolled items at the left edge of shared tracks.
 - Let the authoritative relay DNS instance serve one explicitly configured, temporary DNS-01
   challenge so direct relay nodes behind filtered HTTP-01 port 80 can obtain trusted certificates.
 - Let a Streamarr administrator leave the current peer group with explicit confirmation, notify

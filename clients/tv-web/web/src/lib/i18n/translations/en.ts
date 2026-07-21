@@ -616,8 +616,16 @@ export const en = {
   "pages.workDetail.yourLibrary": "Your library",
   "settings.account.signOut": "Sign out",
   "settings.appearance.colourThemeLabel": "Colour theme",
-  "settings.appearance.description": "Follow this device or keep a theme fixed.",
+  "settings.appearance.description":
+    "Choose this device's theme and home screen artwork.",
   "settings.appearance.documentTitle": "Appearance - Settings",
+  "settings.appearance.homeViewAriaLabel": "Home screen artwork",
+  "settings.appearance.homeViewCover": "Covers",
+  "settings.appearance.homeViewDescription":
+    "Show portrait covers instead of wide media thumbnails on the home screen.",
+  "settings.appearance.homeViewSaved": "Home screen view saved.",
+  "settings.appearance.homeViewThumbnail": "Thumbnails",
+  "settings.appearance.homeViewTitle": "Home screen artwork",
   "settings.appearance.kicker": "Make it yours",
   "settings.appearance.themeSaved": "Theme preference saved.",
   "settings.appearance.title": "Appearance",
@@ -654,7 +662,8 @@ export const en = {
   "settings.profileAvatar.uploadPhoto": "Upload custom photo",
   "settings.profileAvatar.verticalPosition": "Vertical position",
   "settings.profileAvatar.zoom": "Zoom",
-  "settings.index.appearance.description": "Follow this device or keep a theme fixed.",
+  "settings.index.appearance.description":
+    "Choose this device's theme and home screen artwork.",
   "settings.index.appearance.title": "Appearance",
   "settings.index.description": "Choose how Playarr looks and where it connects.",
   "settings.index.documentTitle": "Settings",

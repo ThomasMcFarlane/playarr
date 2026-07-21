@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import { App } from "./App";
 import { ApiClientProvider } from "./lib/ApiClientProvider";
 import { DownloadsProvider } from "./lib/DownloadsProvider";
+import { HomeViewProvider } from "./lib/homeView";
 import { LanguageProvider } from "./lib/i18n/LanguageProvider";
 import { ThemeProvider } from "./lib/theme";
 import { ToastProvider } from "./lib/toast";
@@ -25,13 +26,15 @@ createRoot(container).render(
     <BrowserRouter>
       <LanguageProvider>
         <ThemeProvider>
-          <ApiClientProvider>
-            <ToastProvider>
-              <DownloadsProvider>
-                <App />
-              </DownloadsProvider>
-            </ToastProvider>
-          </ApiClientProvider>
+          <HomeViewProvider>
+            <ApiClientProvider>
+              <ToastProvider>
+                <DownloadsProvider>
+                  <App />
+                </DownloadsProvider>
+              </ToastProvider>
+            </ApiClientProvider>
+          </HomeViewProvider>
         </ThemeProvider>
       </LanguageProvider>
     </BrowserRouter>

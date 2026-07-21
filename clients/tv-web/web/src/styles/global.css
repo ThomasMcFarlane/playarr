@@ -1749,6 +1749,33 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   transform: scale(1.04);
 }
 
+.appearance-setting {
+  display: grid;
+  gap: clamp(12px, calc(1.5 * var(--viewport-unit)), 20px);
+}
+
+.appearance-setting + .appearance-setting {
+  padding-top: clamp(22px, calc(2.8 * var(--viewport-unit)), 36px);
+  border-top: 1px solid var(--line);
+}
+
+.appearance-setting-heading {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.appearance-setting-heading h3 {
+  font-size: clamp(1.05rem, 1.45vw, 1.65rem);
+  font-weight: 560;
+  letter-spacing: -0.035em;
+}
+
+.appearance-setting-heading p {
+  color: var(--ink-muted);
+  font-size: clamp(0.66rem, 0.76vw, 0.82rem);
+  line-height: 1.55;
+}
+
 .language-dropdown {
   position: relative;
   width: fit-content;
@@ -4778,18 +4805,24 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   overflow: hidden;
   border-radius: clamp(8px, 0.7vw, 14px);
   background: var(--surface-soft);
-  box-shadow: 0 12px 30px rgba(56, 38, 33, 0.08);
+  box-shadow:
+    0 10px 20px rgba(56, 38, 33, 0.14),
+    0 3px 8px rgba(56, 38, 33, 0.1);
   transition:
     box-shadow 240ms ease,
     transform 240ms ease;
 }
 
 .tv-title-card:focus-visible .tv-title-card-art,
+.tv-title-card:hover .tv-title-card-art,
 .tv-episode-card:focus-visible .tv-episode-art,
+.tv-episode-card:hover .tv-episode-art,
 .tv-title-rail:focus-within .tv-title-card.is-selected .tv-title-card-art,
 .tv-title-grid:focus-within .tv-title-card.is-selected .tv-title-card-art,
 .tv-episode-rail:focus-within .tv-episode-card.is-selected .tv-episode-art {
-  box-shadow: 0 18px 45px rgba(56, 38, 33, 0.22);
+  box-shadow:
+    0 24px 48px rgba(56, 38, 33, 0.3),
+    0 10px 20px rgba(56, 38, 33, 0.2);
   transform: scale(1.025);
 }
 
@@ -6980,7 +7013,30 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   overflow: hidden;
   border-radius: clamp(8px, 0.65vw, 13px);
   background: var(--surface-soft);
-  box-shadow: 0 12px 34px rgba(56, 38, 33, 0.1);
+  box-shadow:
+    0 10px 22px rgba(56, 38, 33, 0.16),
+    0 3px 9px rgba(56, 38, 33, 0.1);
+  transition:
+    box-shadow 240ms ease,
+    transform 240ms ease;
+}
+
+.tv-home-card:hover .tv-home-card-art,
+.tv-home-card:focus-visible .tv-home-card-art,
+.tv-home-rail:focus-within .tv-home-card.is-selected .tv-home-card-art,
+.tv-media-track-scroll:focus-within .tv-home-card.is-selected .tv-home-card-art {
+  box-shadow:
+    0 26px 52px rgba(56, 38, 33, 0.32),
+    0 11px 22px rgba(56, 38, 33, 0.22);
+  transform: scale(1.025);
+}
+
+.tv-home.is-cover-view .tv-home-card {
+  flex-basis: clamp(118px, 8.6vw, 172px);
+}
+
+.tv-home.is-cover-view .tv-home-card-art {
+  aspect-ratio: 2 / 3;
 }
 
 .tv-home-card-art img {
@@ -7385,7 +7441,6 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   overflow: hidden;
 }
 
-.tv-media-track-window::before,
 .tv-media-track-window::after {
   content: "";
   position: absolute;
@@ -7396,18 +7451,6 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   pointer-events: none;
   opacity: 0;
   transition: opacity 180ms ease;
-}
-
-.tv-media-track-window::before {
-  left: 0;
-  border-radius: 0 48% 48% 0;
-  background: radial-gradient(
-    ellipse 100% 88% at -28% 50%,
-    rgba(31, 14, 20, 0.5),
-    rgba(31, 14, 20, 0.18) 46%,
-    transparent 78%
-  );
-  box-shadow: inset 18px 0 24px -22px rgba(31, 14, 20, 0.72);
 }
 
 .tv-media-track-window::after {
@@ -7422,14 +7465,28 @@ body[data-input-mode="remote"] .player-quality-option:focus {
   box-shadow: inset -18px 0 24px -22px rgba(31, 14, 20, 0.72);
 }
 
-.tv-media-track-window.can-scroll-left::before,
 .tv-media-track-window.can-scroll-right::after {
   opacity: 0.58;
 }
 
-:root[data-theme="dark"] .tv-media-track-window.can-scroll-left::before,
 :root[data-theme="dark"] .tv-media-track-window.can-scroll-right::after {
   opacity: 0.5;
+}
+
+.tv-media-track-window.can-scroll-left .tv-media-track-scroll {
+  --tv-track-left-fade: clamp(22px, 2.2vw, 38px);
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--tv-track-left-fade),
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--tv-track-left-fade),
+    #000 100%
+  );
 }
 
 .tv-media-track-scroll {
@@ -10194,6 +10251,10 @@ html.is-native-scroll-root .profile-auth-scroll {
     width: 100%;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .home-view-choice {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .theme-choice-button {

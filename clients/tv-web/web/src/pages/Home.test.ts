@@ -2,6 +2,20 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("Home layout", () => {
+  it("supports raised media cards, portrait covers, and a short left track fade", () => {
+    const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+
+    expect(css).toMatch(
+      /\.tv-home\.is-cover-view \.tv-home-card-art\s*\{[^}]*aspect-ratio:\s*2 \/ 3/s
+    );
+    expect(css).toMatch(
+      /\.tv-home-card:hover \.tv-home-card-art,[\s\S]*?\{[^}]*0 26px 52px[^}]*transform:\s*scale\(1\.025\)/s
+    );
+    expect(css).toMatch(
+      /\.tv-media-track-window\.can-scroll-left \.tv-media-track-scroll\s*\{[^}]*--tv-track-left-fade:\s*clamp\(22px, 2\.2vw, 38px\)[^}]*mask-image:\s*linear-gradient/s
+    );
+  });
+
   it("shares media-copy layout and typography across home, directories, and details", () => {
     const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
     const sharedCopyRule = css.match(
