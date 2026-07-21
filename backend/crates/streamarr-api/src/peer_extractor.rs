@@ -33,7 +33,7 @@
 //! extractor yet in Phase 1 (see `crate::peer`'s doc comment for why), so
 //! nothing today is exposed to this gap in practice.
 
-use axum::body::Bytes;
+use axum::body::{to_bytes, Bytes};
 use axum::extract::{FromRequest, Request};
 use axum::http::{HeaderMap, StatusCode};
 use base64::Engine;
@@ -55,6 +55,13 @@ pub const NONCE_HEADER: &str = "x-streamarr-nonce";
 /// own clock -- bounds how long a captured, validly-signed request stays
 /// replayable (see the module doc comment's "Replay protection" note).
 const TIMESTAMP_TOLERANCE_SECS: i64 = 300;
+
+/// Initial peer convergence can carry a complete availability page containing
+/// thousands of media rows. Axum's `Bytes` extractor inherits its 2 MiB
+/// default body limit, which is too small for that signed aggregate payload.
+/// Keep a finite, peer-specific ceiling so a known peer still cannot force an
+/// unbounded allocation while allowing realistic first-sync requests.
+const MAX_SIGNED_PEER_BODY_BYTES: usize = 64 * 1024 * 1024;
 
 fn unauthorized(message: impl Into<String>) -> ApiError {
     ApiError::new(StatusCode::UNAUTHORIZED, "unauthorized", message)
@@ -175,7 +182,7 @@ impl FromRequest<AppState> for PeerSignedRequest {
         // The body has to be consumed to hash it -- do this last, so every
         // header-shaped failure above rejects without touching the body at
         // all.
-        let body = Bytes::from_request(req, state)
+        let body = to_bytes(req.into_body(), MAX_SIGNED_PEER_BODY_BYTES)
             .await
             .map_err(|_| unauthorized("failed to read request body"))?;
         let body_hash = hex::encode(Sha256::digest(&body));
@@ -301,6 +308,30 @@ mod tests {
             ))
             .await
             .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn accepts_a_signed_body_larger_than_axums_default_limit() {
+        let (_router, state) = test_state().await;
+        let peer_id = Uuid::new_v4();
+        let key = signing_key();
+        seed_peer(&state, peer_id, &key).await;
+        let body = vec![b'x'; 2 * 1024 * 1024 + 1];
+
+        let app = test_router(state.app.clone());
+        let response = app
+            .oneshot(signed_request(
+                "POST",
+                "/probe",
+                &body,
+                peer_id,
+                &key,
+                Utc::now().timestamp(),
+            ))
+            .await
+            .unwrap();
+
         assert_eq!(response.status(), StatusCode::OK);
     }
 

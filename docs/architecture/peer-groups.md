@@ -701,6 +701,11 @@ per-entity cursors used by pull. Consequently, if node B can dial node A but A
 cannot dial B, B pulls A's changes and pushes B's changes over B-initiated
 connections; no reverse tunnel or hosted broker is required.
 
+Signed peer request bodies have a 64 MiB ceiling. This is deliberately above
+Axum's general 2 MiB default because the first aggregate push can contain
+thousands of availability rows, while retaining a finite allocation bound for
+requests from known peers.
+
 Inbound endpoints, `streamarr-api/src/peer.rs` (new file), all
 `PeerSignedRequest`-gated except `enroll` (bearer is the one-shot join
 token instead):

@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Accept large initial signed peer-sync pushes within a bounded 64 MiB limit instead of rejecting
+  availability payloads above Axum's general 2 MiB request-body default.
 - Allow outbound-only peer nodes to create or join a group without advertising an inbound
   address, matching signed push-and-pull synchronisation behaviour.
 
