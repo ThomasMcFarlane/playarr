@@ -161,6 +161,32 @@ paths:
           description: This node has not founded or joined a peer group yet
       security:
       - bearer_auth: []
+  /api/v1/admin/peer-groups/self:
+    delete:
+      tags:
+      - peer-groups
+      summary: |-
+        Leaves this node's current peer group. Reachable members are notified
+        with this node's signed identity first; local group-scoped metadata is
+        then removed and token issuance returns to standalone mode. The durable
+        peer id/keypair is retained, and this node's name/addresses are staged
+        for the next create or join operation.
+      operationId: leave_peer_group_handler
+      responses:
+        '200':
+          description: This node left its peer group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeavePeerGroupResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '409':
+          description: This node has not founded or joined a peer group
+      security:
+      - bearer_auth: []
   /api/v1/admin/peer-groups/self/address-bundle:
     get:
       tags:
@@ -2923,6 +2949,32 @@ paths:
           description: Missing/invalid peer signature, or an unknown/left peer
       security:
       - bearer_auth: []
+  /api/v1/peer/nodes/{id}:
+    delete:
+      tags:
+      - peer-groups
+      summary: |-
+        Receives a signed notification that the calling node is leaving the
+        group. A peer may only mark its own authenticated identity as left;
+        removing somebody else remains an administrator action.
+      operationId: leave_notification_handler
+      parameters:
+      - name: id
+        in: path
+        description: Leaving peer node id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Leaving peer marked as left
+        '400':
+          description: Signed peer id does not match the path id
+        '401':
+          description: Missing/invalid peer signature, or an unknown/left peer
+      security:
+      - bearer_auth: []
   /api/v1/peer/playback-info:
     post:
       tags:
@@ -5612,6 +5664,26 @@ components:
         meaningless off the node that minted it. A receiving peer resolves
         `(provider, external_id, LeafSelector)` against its own child rows to
         get its own `LeafRef`/`media_file_id`; it never adopts a sender's id.
+    LeavePeerGroupResponse:
+      type: object
+      description: |-
+        Result of leaving this node's current peer group. Unreachable peers do
+        not block local detachment, but the counts make partial notification
+        visible to the administrator.
+      required:
+      - group_id
+      - notified_peers
+      - unreachable_peers
+      properties:
+        group_id:
+          type: string
+          format: uuid
+        notified_peers:
+          type: integer
+          minimum: 0
+        unreachable_peers:
+          type: integer
+          minimum: 0
     LibrariesResponse:
       type: object
       description: |-

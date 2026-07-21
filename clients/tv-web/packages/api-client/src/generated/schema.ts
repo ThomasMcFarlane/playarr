@@ -125,6 +125,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/peer-groups/self": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Leaves this node's current peer group. Reachable members are notified
+         *     with this node's signed identity first; local group-scoped metadata is
+         *     then removed and token issuance returns to standalone mode. The durable
+         *     peer id/keypair is retained, and this node's name/addresses are staged
+         *     for the next create or join operation.
+         */
+        delete: operations["leave_peer_group_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/peer-groups/self/address-bundle": {
         parameters: {
             query?: never;
@@ -1298,6 +1321,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/peer/nodes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Receives a signed notification that the calling node is leaving the
+         *     group. A peer may only mark its own authenticated identity as left;
+         *     removing somebody else remains an administrator action.
+         */
+        delete: operations["leave_notification_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/peer/playback-info": {
         parameters: {
             query?: never;
@@ -2446,6 +2490,17 @@ export interface components {
                 /** Format: int32 */
                 index: number;
             };
+        };
+        /**
+         * @description Result of leaving this node's current peer group. Unreachable peers do
+         *     not block local detachment, but the counts make partial notification
+         *     visible to the administrator.
+         */
+        LeavePeerGroupResponse: {
+            /** Format: uuid */
+            group_id: string;
+            notified_peers: number;
+            unreachable_peers: number;
         };
         /**
          * @description Response body for [`libraries_handler`] -- `docs/architecture/
@@ -4322,6 +4377,47 @@ export interface operations {
                 content?: never;
             };
             /** @description This node has not founded or joined a peer group yet */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    leave_peer_group_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description This node left its peer group */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeavePeerGroupResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This node has not founded or joined a peer group */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8194,6 +8290,41 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["NodesResponse"];
                 };
+            };
+            /** @description Missing/invalid peer signature, or an unknown/left peer */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    leave_notification_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Leaving peer node id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Leaving peer marked as left */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Signed peer id does not match the path id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Missing/invalid peer signature, or an unknown/left peer */
             401: {

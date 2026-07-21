@@ -35,7 +35,7 @@
 
 use std::collections::HashMap;
 
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
 use chrono::{DateTime, Utc};
@@ -336,6 +336,40 @@ pub async fn nodes_handler(
         .await
         .map_err(|err| ApiError::internal(format!("failed to list peer nodes: {err}")))?;
     Ok(Json(NodesResponse { rows }))
+}
+
+/// Receives a signed notification that the calling node is leaving the
+/// group. A peer may only mark its own authenticated identity as left;
+/// removing somebody else remains an administrator action.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/peer/nodes/{id}",
+    tag = "peer-groups",
+    params(("id" = Uuid, Path, description = "Leaving peer node id")),
+    responses(
+        (status = 204, description = "Leaving peer marked as left"),
+        (status = 400, description = "Signed peer id does not match the path id"),
+        (status = 401, description = "Missing/invalid peer signature, or an unknown/left peer")
+    )
+)]
+pub async fn leave_notification_handler(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    peer: PeerSignedRequest,
+) -> Result<StatusCode, ApiError> {
+    if peer.peer.id != id {
+        return Err(ApiError::bad_request("a peer may only mark itself as left"));
+    }
+    let mut leaving = peer.peer;
+    leaving.status = PeerNodeStatus::Left;
+    leaving.updated_at = Utc::now();
+    state
+        .peer_node_repo
+        .upsert(&leaving)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to mark leaving peer: {err}")))?;
+    tracing::info!(peer_id = %id, "peer left group");
+    Ok(StatusCode::NO_CONTENT)
 }
 
 // ---------------------------------------------------------------------
@@ -1078,6 +1112,56 @@ mod tests {
             .header("content-type", "application/json")
             .body(Body::from(serde_json::to_vec(body).unwrap()))
             .unwrap()
+    }
+
+    #[tokio::test]
+    async fn signed_leave_notification_marks_only_the_calling_peer_left() {
+        let (_router, state) = test_state().await;
+        let group = PeerGroup {
+            id: Uuid::new_v4(),
+            name: "Home Group".to_string(),
+            created_at: Utc::now(),
+        };
+        state.app.peer_group_repo.create(&group).await.unwrap();
+        let now = Utc::now();
+        let peer = PeerNode {
+            id: Uuid::new_v4(),
+            group_id: group.id,
+            name: "east".to_string(),
+            addresses: vec![],
+            public_key: "peer-pubkey".to_string(),
+            is_self: false,
+            status: PeerNodeStatus::Active,
+            last_seen_at: Some(now),
+            last_sync_error: None,
+            joined_at: now,
+            updated_at: now,
+        };
+        state.app.peer_node_repo.upsert(&peer).await.unwrap();
+
+        let status = leave_notification_handler(
+            State(state.app.clone()),
+            Path(peer.id),
+            PeerSignedRequest {
+                peer: peer.clone(),
+                body: axum::body::Bytes::new(),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        assert_eq!(
+            state
+                .app
+                .peer_node_repo
+                .get(peer.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .status,
+            PeerNodeStatus::Left
+        );
     }
 
     #[tokio::test]

@@ -10,13 +10,14 @@
 //! - `POST /api/v1/admin/peer-groups` -- [`found_peer_group_handler`]
 //! - `POST /api/v1/admin/peer-groups/join-tokens` -- [`create_peer_join_token_handler`]
 //! - `POST /api/v1/admin/peer-groups/join` -- [`join_peer_group_handler`]
+//! - `DELETE /api/v1/admin/peer-groups/self` -- [`leave_peer_group_handler`]
 //! - `GET /api/v1/admin/peer-nodes` -- [`list_peer_nodes_handler`]
 //! - `GET /api/v1/admin/peer-nodes/{id}/sync-status` -- [`peer_node_sync_status_handler`]
 //! - `GET /api/v1/admin/peer-groups/self/address-bundle` -- [`address_bundle_handler`]
 //!
-//! `DELETE /api/v1/admin/peer-nodes/{id}` (leaving/removing, §3.4) and
-//! every `/api/v1/peer/*` sync endpoint besides `enroll` are Phase 2+
-//! scope -- deliberately not implemented here.
+//! Removing another member remains a separate operator action. Leaving
+//! this node's own group is explicit so local detachment can also reset
+//! token issuance and preserve the self profile for another create/join.
 //!
 //! [`peer_address_bundle`]/[`peer_addresses_for_response`] (Phase 4,
 //! `docs/architecture/peer-groups.md` §6.1) back [`address_bundle_handler`]
@@ -356,6 +357,13 @@ pub async fn found_peer_group_handler(
         .await
         .map_err(|err| ApiError::internal(format!("failed to persist self peer node: {err}")))?;
 
+    state
+        .jwt
+        .activate_group_identity(&identity)
+        .map_err(|err| {
+            ApiError::internal(format!("failed to activate grouped JWT identity: {err}"))
+        })?;
+
     *state.pending_self_peer_profile.lock().unwrap() = None;
 
     tracing::info!(group_id = %group.id, peer_id = %self_node.id, "founded peer group");
@@ -511,6 +519,14 @@ pub async fn join_peer_group_handler(
         ApiError::bad_gateway(format!("failed to join via {}: {err}", body.seed_address))
     })?;
 
+    let joined_identity = ensure_node_identity(&state.node_identity_repo).await?;
+    state
+        .jwt
+        .activate_group_identity(&joined_identity)
+        .map_err(|err| {
+            ApiError::internal(format!("failed to activate grouped JWT identity: {err}"))
+        })?;
+
     *state.pending_self_peer_profile.lock().unwrap() = None;
 
     // `streamarr_peer_sync::EnrollResponse` and this module's own
@@ -522,6 +538,110 @@ pub async fn join_peer_group_handler(
     Ok(Json(EnrollResponse {
         group: enrolled.group,
         members: enrolled.members,
+    }))
+}
+
+/// Result of leaving this node's current peer group. Unreachable peers do
+/// not block local detachment, but the counts make partial notification
+/// visible to the administrator.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct LeavePeerGroupResponse {
+    pub group_id: Uuid,
+    pub notified_peers: usize,
+    pub unreachable_peers: usize,
+}
+
+/// Leaves this node's current peer group. Reachable members are notified
+/// with this node's signed identity first; local group-scoped metadata is
+/// then removed and token issuance returns to standalone mode. The durable
+/// peer id/keypair is retained, and this node's name/addresses are staged
+/// for the next create or join operation.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/admin/peer-groups/self",
+    tag = "peer-groups",
+    responses(
+        (status = 200, description = "This node left its peer group", body = LeavePeerGroupResponse),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Caller is authenticated but not an admin"),
+        (status = 409, description = "This node has not founded or joined a peer group")
+    )
+)]
+pub async fn leave_peer_group_handler(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+) -> Result<Json<LeavePeerGroupResponse>, ApiError> {
+    let mut identity = ensure_node_identity(&state.node_identity_repo).await?;
+    let group_id = identity
+        .group_id
+        .ok_or_else(|| ApiError::conflict("this node has not founded or joined a peer group"))?;
+    let self_node = state
+        .peer_node_repo
+        .get(identity.peer_id)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to load self peer node: {err}")))?
+        .ok_or_else(|| ApiError::internal("grouped node has no self peer row"))?;
+
+    let peer_client = streamarr_peer_sync::PeerClient::new(
+        state.peer_http.clone(),
+        own_peer_identity(&state).await?,
+    );
+    let path = format!("/api/v1/peer/nodes/{}", identity.peer_id);
+    let peers = state
+        .peer_node_repo
+        .list_others()
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to list peer nodes: {err}")))?;
+    let mut notified_peers = 0;
+    let mut unreachable_peers = 0;
+    for peer in peers {
+        let mut notified = false;
+        for address in streamarr_peer_sync::peer_client::addresses_by_priority(&peer.addresses) {
+            let attempt = tokio::time::timeout(
+                std::time::Duration::from_secs(3),
+                peer_client.signed_delete(address, &path),
+            )
+            .await;
+            if matches!(attempt, Ok(Ok(()))) {
+                notified = true;
+                break;
+            }
+        }
+        if notified {
+            notified_peers += 1;
+        } else {
+            unreachable_peers += 1;
+            tracing::warn!(peer_id = %peer.id, "peer could not be notified before this node left its group");
+        }
+    }
+
+    identity.group_id = None;
+    state
+        .node_identity_repo
+        .put(&identity)
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to detach node identity: {err}")))?;
+    if let Err(err) = state.peer_group_repo.delete(group_id).await {
+        identity.group_id = Some(group_id);
+        if let Err(rollback_err) = state.node_identity_repo.put(&identity).await {
+            tracing::error!(%rollback_err, "failed to restore node identity after peer-group delete failed");
+        }
+        return Err(ApiError::internal(format!(
+            "failed to remove local peer-group state: {err}"
+        )));
+    }
+
+    *state.pending_self_peer_profile.lock().unwrap() = Some(PendingSelfPeerProfile {
+        name: self_node.name,
+        addresses: self_node.addresses,
+    });
+    state.jwt.deactivate_group_identity();
+
+    tracing::info!(%group_id, notified_peers, unreachable_peers, "left peer group");
+    Ok(Json(LeavePeerGroupResponse {
+        group_id,
+        notified_peers,
+        unreachable_peers,
     }))
 }
 
@@ -926,6 +1046,84 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[tokio::test]
+    async fn leaving_a_group_detaches_locally_and_preserves_the_self_profile() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+        let token = mint_access_token(&state, admin_id);
+
+        router
+            .clone()
+            .oneshot(put_self_request(&token, "home"))
+            .await
+            .unwrap();
+        let founded = router
+            .clone()
+            .oneshot(found_group_request(&token, "Home Group"))
+            .await
+            .unwrap();
+        let bytes = axum::body::to_bytes(founded.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let founded: FoundPeerGroupResponse = serde_json::from_slice(&bytes).unwrap();
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/api/v1/admin/peer-groups/self")
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let left: LeavePeerGroupResponse = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(left.group_id, founded.group.id);
+        assert_eq!(left.notified_peers, 0);
+        assert_eq!(left.unreachable_peers, 0);
+
+        let identity = state.app.node_identity_repo.get().await.unwrap().unwrap();
+        assert_eq!(identity.group_id, None);
+        assert!(state
+            .app
+            .peer_group_repo
+            .get(founded.group.id)
+            .await
+            .unwrap()
+            .is_none());
+        assert!(state
+            .app
+            .peer_node_repo
+            .list_all()
+            .await
+            .unwrap()
+            .is_empty());
+        let pending = state
+            .app
+            .pending_self_peer_profile
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap();
+        assert_eq!(pending.name, "home");
+        assert_eq!(pending.addresses, founded.self_node.addresses);
+
+        // The same admin session remains usable, and the preserved profile
+        // means another group can be founded without re-entering node data.
+        let response = router
+            .oneshot(found_group_request(&token, "Replacement Group"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[tokio::test]

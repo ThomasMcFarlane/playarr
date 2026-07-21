@@ -42,6 +42,12 @@ pub trait PeerGroupRepo: Send + Sync {
     async fn create(&self, group: &PeerGroup) -> Result<(), DbError>;
 
     async fn get(&self, id: Uuid) -> Result<Option<PeerGroup>, DbError>;
+
+    /// Deletes the group and its group-scoped rows through the schema's
+    /// `ON DELETE CASCADE` relationships. The caller must clear
+    /// `node_identity.group_id` first because that installation-local
+    /// pointer deliberately has no foreign-key cascade.
+    async fn delete(&self, id: Uuid) -> Result<(), DbError>;
 }
 
 pub struct SqlxPeerGroupRepo {
@@ -84,6 +90,18 @@ impl PeerGroupRepo for SqlxPeerGroupRepo {
             .fetch_optional(&self.pool)
             .await?;
         row.as_ref().map(from_row).transpose()
+    }
+
+    async fn delete(&self, id: Uuid) -> Result<(), DbError> {
+        let sql = match self.backend {
+            Backend::Sqlite => "DELETE FROM peer_groups WHERE id = ?",
+            Backend::Postgres => "DELETE FROM peer_groups WHERE id = $1",
+        };
+        sqlx::query(sql)
+            .bind(id.to_string())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 }
 
@@ -131,5 +149,17 @@ mod tests {
 
         let err = repo.create(&group).await.unwrap_err();
         assert!(matches!(err, DbError::Backend(_)));
+    }
+
+    #[tokio::test]
+    async fn delete_removes_the_group() {
+        let pool = test_sqlite_pool().await;
+        let repo = SqlxPeerGroupRepo::new(pool);
+        let group = sample_group("Home Group");
+        repo.create(&group).await.unwrap();
+
+        repo.delete(group.id).await.unwrap();
+
+        assert!(repo.get(group.id).await.unwrap().is_none());
     }
 }

@@ -611,13 +611,24 @@ one HTTP call an admin makes and watches succeed or fail.
    further membership changes symmetrically. Enrollment is the **only**
    push in the protocol; everything else is a pull.
 
-**Leaving/removing**: `DELETE /api/v1/admin/peer-nodes/{id}` (consistent
-with `GET .../peer-nodes/{id}/sync-status` below) on any member sets
-`status = 'left'` locally, propagating on next sync.
+**Leaving this node**: `DELETE /api/v1/admin/peer-groups/self` notifies
+each reachable member through signed `DELETE /api/v1/peer/nodes/{id}`
+requests, then clears the local `node_identity.group_id`, removes local
+group-scoped metadata, and returns JWT issuance to standalone HS256. The
+durable peer id/keypair is retained, and the node's name/addresses are
+staged so it can create or join another group immediately. Unreachable
+peers do not block local detachment; the response reports how many peers
+could not be notified.
+
+**Removing another member** remains a separate administrator operation.
+On the receiving peers, a leave notification sets `status = 'left'`.
+Membership gossip honours each row's `updated_at`, so an older `active`
+copy cannot resurrect a newer leave tombstone.
 `RoutingRule.preferred_nodes` entries pointing at a left node are skipped
 at evaluation time (§5.2), never auto-rewritten: an admin edits the rule
-explicitly. No data is deleted. Re-running a failed join is safe: it's
-idempotent by peer identity (`peer_nodes.id`).
+explicitly. Local users, source instances, and media are never deleted by
+leaving. Re-running a failed join is safe: it's idempotent by peer identity
+(`peer_nodes.id`).
 
 ### 3.5 Consistency model and conflict resolution
 

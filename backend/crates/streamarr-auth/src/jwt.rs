@@ -28,7 +28,7 @@
 //! by every other member — `Redirect` delivery (§5.3) needs no token
 //! exchange at all.
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use base64::Engine;
 use chrono::{Duration, Utc};
@@ -114,7 +114,12 @@ pub struct JwtIssuer {
     /// `Some` only once `with_group_identity` has been called for a
     /// grouped node -- switches issuance to EdDSA. `None` (the default)
     /// keeps issuance on HS256 unconditionally.
-    eddsa: Option<EddsaIdentity>,
+    eddsa: RwLock<Option<EddsaIdentity>>,
+    /// This installation's own identity remains available for verifying
+    /// access tokens it issued immediately before leaving a group. Remote
+    /// peers revoke those tokens through their `Left` row; the issuing
+    /// node should not invalidate its own active admin session mid-action.
+    own_eddsa: RwLock<Option<EddsaIdentity>>,
     /// Wired by `with_group_identity` (regardless of whether *this* node
     /// is grouped) so `verify_access_token` can resolve *other* peers'
     /// public keys for tokens minted elsewhere in the group. Looked up
@@ -133,7 +138,8 @@ impl JwtIssuer {
             algorithm: Algorithm::HS256,
             issuer: issuer.into(),
             access_ttl,
-            eddsa: None,
+            eddsa: RwLock::new(None),
+            own_eddsa: RwLock::new(None),
             peer_node_repo: None,
         }
     }
@@ -166,7 +172,11 @@ impl JwtIssuer {
         if node_identity.group_id.is_some() {
             match decode_ed25519_seed(node_identity.private_key.expose_secret()) {
                 Ok(signing_key) => {
-                    self.eddsa = Some(EddsaIdentity {
+                    *self.eddsa.get_mut().unwrap() = Some(EddsaIdentity {
+                        signing_key: signing_key.clone(),
+                        peer_id: node_identity.peer_id.to_string(),
+                    });
+                    *self.own_eddsa.get_mut().unwrap() = Some(EddsaIdentity {
                         signing_key,
                         peer_id: node_identity.peer_id.to_string(),
                     });
@@ -182,9 +192,38 @@ impl JwtIssuer {
                     );
                 }
             }
+        } else if let Ok(signing_key) =
+            decode_ed25519_seed(node_identity.private_key.expose_secret())
+        {
+            *self.own_eddsa.get_mut().unwrap() = Some(EddsaIdentity {
+                signing_key,
+                peer_id: node_identity.peer_id.to_string(),
+            });
         }
         self.peer_node_repo = Some(peer_node_repo);
         self
+    }
+
+    /// Switches token issuance to this grouped node's EdDSA identity at
+    /// runtime. Founding and joining happen after boot, so this cannot be
+    /// a boot-only builder concern.
+    pub fn activate_group_identity(&self, node_identity: &NodeIdentity) -> Result<(), JwtError> {
+        let signing_key = decode_ed25519_seed(node_identity.private_key.expose_secret())?;
+        *self.eddsa.write().unwrap() = Some(EddsaIdentity {
+            signing_key: signing_key.clone(),
+            peer_id: node_identity.peer_id.to_string(),
+        });
+        *self.own_eddsa.write().unwrap() = Some(EddsaIdentity {
+            signing_key,
+            peer_id: node_identity.peer_id.to_string(),
+        });
+        Ok(())
+    }
+
+    /// Returns token issuance to standalone HS256 immediately after this
+    /// node leaves its peer group.
+    pub fn deactivate_group_identity(&self) {
+        *self.eddsa.write().unwrap() = None;
     }
 
     /// The configured access-token TTL, e.g. so a token-response builder
@@ -220,7 +259,8 @@ impl JwtIssuer {
         impersonated_by: Option<Uuid>,
     ) -> Result<String, JwtError> {
         let now = Utc::now();
-        let iss = match &self.eddsa {
+        let eddsa = self.eddsa.read().unwrap();
+        let iss = match eddsa.as_ref() {
             Some(eddsa) => eddsa.peer_id.clone(),
             None => self.issuer.clone(),
         };
@@ -234,7 +274,7 @@ impl JwtIssuer {
             impersonated_by,
         };
 
-        match &self.eddsa {
+        match eddsa.as_ref() {
             Some(eddsa) => encode_eddsa(&claims, &eddsa.signing_key),
             None => {
                 let header = Header::new(self.algorithm);
@@ -296,6 +336,22 @@ impl JwtIssuer {
         token: &str,
         peer_id: Uuid,
     ) -> Result<AccessTokenClaims, JwtError> {
+        if let Some(own) = self
+            .own_eddsa
+            .read()
+            .unwrap()
+            .as_ref()
+            .filter(|own| own.peer_id == peer_id.to_string())
+        {
+            let public_key = own.signing_key.verifying_key().to_bytes();
+            let decoding_key = DecodingKey::from_ed_der(&public_key);
+            let mut validation = Validation::new(Algorithm::EdDSA);
+            validation.set_issuer(&[peer_id.to_string().as_str()]);
+            let data =
+                jsonwebtoken::decode::<AccessTokenClaims>(token, &decoding_key, &validation)?;
+            return Ok(data.claims);
+        }
+
         let repo = self
             .peer_node_repo
             .as_ref()
@@ -533,6 +589,46 @@ mod tests {
 
         assert_eq!(claims.sub, user_id);
         assert_eq!(claims.iss, peer_id.to_string());
+    }
+
+    #[tokio::test]
+    async fn runtime_group_identity_can_be_activated_and_deactivated() {
+        let peer_id = Uuid::new_v4();
+        let seed = [12u8; 32];
+        let identity = node_identity(peer_id, seed, Some(Uuid::new_v4()));
+        let repo = Arc::new(FakePeerNodeRepo::default());
+        repo.insert(peer_node(
+            peer_id,
+            public_key_b64(seed),
+            true,
+            PeerNodeStatus::Active,
+        ));
+        let issuer = JwtIssuer::new(
+            b"runtime-secret-at-least-32-bytes!!",
+            "streamarr",
+            Duration::minutes(15),
+        )
+        .with_group_identity(&node_identity(peer_id, seed, None), repo);
+
+        issuer.activate_group_identity(&identity).unwrap();
+        let grouped = issuer
+            .issue_access_token(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        assert_eq!(
+            JwtIssuer::peek_claims(&grouped).unwrap().iss,
+            peer_id.to_string()
+        );
+
+        issuer.deactivate_group_identity();
+        issuer.verify_access_token(&grouped).await.unwrap();
+        let standalone = issuer
+            .issue_access_token(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        assert_eq!(
+            JwtIssuer::peek_claims(&standalone).unwrap().iss,
+            "streamarr"
+        );
+        issuer.verify_access_token(&standalone).await.unwrap();
     }
 
     /// Scenario 3 (task): a grouped node verifies a token minted by a

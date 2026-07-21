@@ -15,6 +15,7 @@ import {
 } from "@streamarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { Modal } from "../components/Modal";
 
 type SetupMode = "create" | "join";
 
@@ -210,6 +211,7 @@ export function PeerGroupsPage() {
   const [copiedField, setCopiedField] = useState<"seed" | "token" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [leaveConfirmationOpen, setLeaveConfirmationOpen] = useState(false);
 
   const selfNode = useMemo(() => nodes.find((node) => node.is_self), [nodes]);
   const grouped = Boolean(bundle?.group_id ?? selfNode?.group_id);
@@ -317,6 +319,28 @@ export function PeerGroupsPage() {
     try {
       setBusy(true);
       setIssuedToken(await client.createPeerJoinToken());
+    } catch (err) {
+      setError(describeApiError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleLeaveGroup() {
+    setError(null);
+    setNotice(null);
+    try {
+      setBusy(true);
+      const result = await client.leavePeerGroup();
+      setLeaveConfirmationOpen(false);
+      setIssuedToken(null);
+      setCopiedField(null);
+      setNotice(
+        result.unreachable_peers > 0
+          ? `Left the peer group. ${result.unreachable_peers} unreachable ${result.unreachable_peers === 1 ? "peer was" : "peers were"} not notified.`
+          : "This node left the peer group."
+      );
+      await refresh();
     } catch (err) {
       setError(describeApiError(err));
     } finally {
@@ -480,6 +504,16 @@ export function PeerGroupsPage() {
               <div><dt>Members</dt><dd>{nodes.length}</dd></div>
               <div><dt>Group ID</dt><dd className="peer-monospace">{bundle?.group_id ?? selfNode?.group_id}</dd></div>
             </dl>
+            <div className="peer-group-actions">
+              <button
+                className="btn btn-danger"
+                type="button"
+                disabled={busy}
+                onClick={() => setLeaveConfirmationOpen(true)}
+              >
+                Leave peer group
+              </button>
+            </div>
           </section>
 
           <section className="card peer-card peer-invite-card">
@@ -632,6 +666,40 @@ export function PeerGroupsPage() {
             </div>
           </section>
         </div>
+      )}
+
+      {leaveConfirmationOpen && (
+        <Modal
+          title="Leave peer group?"
+          onClose={() => {
+            if (!busy) setLeaveConfirmationOpen(false);
+          }}
+          footer={
+            <div className="modal-footer-right">
+              <button
+                className="btn btn-secondary"
+                type="button"
+                disabled={busy}
+                onClick={() => setLeaveConfirmationOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-danger"
+                type="button"
+                disabled={busy}
+                onClick={() => void handleLeaveGroup()}
+              >
+                {busy ? "Leaving..." : "Leave peer group"}
+              </button>
+            </div>
+          }
+        >
+          <p className="muted" style={{ margin: 0 }}>
+            This node will stop syncing accounts, libraries, availability, and playback routing
+            with the group. Local users, source instances, and media stay on this node.
+          </p>
+        </Modal>
       )}
     </div>
   );

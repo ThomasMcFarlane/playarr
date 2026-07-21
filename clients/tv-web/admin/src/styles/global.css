@@ -1008,6 +1008,12 @@ button {
   justify-content: space-between;
 }
 
+.peer-group-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.25rem;
+}
+
 .peer-eyebrow {
   margin-bottom: 0.35rem;
   color: var(--color-success-label);

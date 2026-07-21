@@ -132,6 +132,7 @@ export type FoundPeerGroupRequest = components["schemas"]["FoundPeerGroupRequest
 export type FoundPeerGroupResponse = components["schemas"]["FoundPeerGroupResponse"];
 export type JoinPeerGroupRequest = components["schemas"]["JoinPeerGroupRequest"];
 export type JoinPeerGroupResponse = components["schemas"]["EnrollResponse"];
+export type LeavePeerGroupResponse = components["schemas"]["LeavePeerGroupResponse"];
 export type PeerJoinTokenResponse = components["schemas"]["PeerJoinTokenResponse"];
 export type SelfPeerNodeRequest = components["schemas"]["SelfPeerNodeRequest"];
 export type SelfPeerNodeResponse = components["schemas"]["SelfPeerNodeResponse"];
@@ -348,6 +349,7 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/admin/system-settings", method: "PUT" },
   { schemaPath: "/api/v1/admin/peer-groups", method: "POST" },
   { schemaPath: "/api/v1/admin/peer-groups/join", method: "POST" },
+  { schemaPath: "/api/v1/admin/peer-groups/self", method: "DELETE" },
   { schemaPath: "/api/v1/admin/peer-groups/join-tokens", method: "POST" },
   { schemaPath: "/api/v1/admin/peer-groups/self/address-bundle", method: "GET" },
   { schemaPath: "/api/v1/admin/peer-nodes", method: "GET" },
@@ -1000,6 +1002,12 @@ export class ApiClient {
   async joinPeerGroup(body: JoinPeerGroupRequest): Promise<JoinPeerGroupResponse> {
     return this.unwrap(
       await this.raw.POST("/api/v1/admin/peer-groups/join", { body })
+    );
+  }
+
+  async leavePeerGroup(): Promise<LeavePeerGroupResponse> {
+    return this.unwrap(
+      await this.raw.DELETE("/api/v1/admin/peer-groups/self", {})
     );
   }
 

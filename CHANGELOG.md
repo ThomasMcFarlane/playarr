@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Let a Streamarr administrator leave the current peer group with explicit confirmation, notify
+  reachable members, preserve local users and media, and immediately create or join another group.
 - Let administrators enrol independent Streamarr deployments into a signed peer group, synchronise
   membership and account, library, availability, and routing metadata, route playback across nodes,
   and give Playarr clients ordered failover addresses.

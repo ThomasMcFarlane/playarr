@@ -48,6 +48,18 @@ pub async fn sync_membership(
     let count = response.rows.len();
     for mut member in response.rows {
         member.is_self = member.id == self_peer_id;
+        if peer_node_repo
+            .get(member.id)
+            .await
+            .map_err(|err| PeerClientError::Status {
+                url: format!("{base_url}/api/v1/peer/nodes"),
+                status: reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+                body: format!("failed to load local peer node before merge: {err}"),
+            })?
+            .is_some_and(|local| local.updated_at > member.updated_at)
+        {
+            continue;
+        }
         peer_node_repo
             .upsert(&member)
             .await
@@ -203,5 +215,35 @@ mod tests {
             .unwrap();
 
         assert_eq!(repo.list_all().await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn stale_active_membership_does_not_overwrite_a_newer_left_status() {
+        let mock = MockServer::start().await;
+        let self_peer_id = Uuid::new_v4();
+        let (repo, pool) = node_repo().await;
+        let group_id = seed_group(&pool).await;
+        let peer_id = Uuid::new_v4();
+        let mut stale_active = node(peer_id, group_id, "peer-b", false);
+        stale_active.updated_at = Utc::now() - chrono::Duration::minutes(1);
+        let mut local_left = stale_active.clone();
+        local_left.status = PeerNodeStatus::Left;
+        local_left.updated_at = Utc::now();
+        repo.upsert(&local_left).await.unwrap();
+
+        Mock::given(method("GET"))
+            .and(path("/api/v1/peer/nodes"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"rows": [stale_active]})))
+            .mount(&mock)
+            .await;
+
+        sync_membership(&client(), &repo, self_peer_id, &mock.uri())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            repo.get(peer_id).await.unwrap().unwrap().status,
+            PeerNodeStatus::Left
+        );
     }
 }

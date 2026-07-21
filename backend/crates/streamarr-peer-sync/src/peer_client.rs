@@ -95,6 +95,33 @@ impl PeerClient {
         self.signed_request("GET", base_url, path, Vec::new()).await
     }
 
+    /// `DELETE {base_url}{path}`, signed with an empty body. This is kept
+    /// separate from [`Self::signed_request`] because a successful leave
+    /// notification returns `204 No Content`, not a JSON response.
+    pub async fn signed_delete(&self, base_url: &str, path: &str) -> Result<(), PeerClientError> {
+        let url = format!("{}{path}", base_url.trim_end_matches('/'));
+        let headers = self.identity.sign_request("DELETE", path, &[]);
+        let response = self
+            .http
+            .delete(&url)
+            .header(PEER_ID_HEADER, headers.peer_id.to_string())
+            .header(SIGNATURE_HEADER, headers.signature_b64)
+            .header(TIMESTAMP_HEADER, headers.timestamp.to_string())
+            .header(NONCE_HEADER, headers.nonce)
+            .send()
+            .await
+            .map_err(|source| PeerClientError::Http {
+                url: url.clone(),
+                source,
+            })?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(PeerClientError::Status { url, status, body });
+        }
+        Ok(())
+    }
+
     async fn signed_request<Resp: DeserializeOwned>(
         &self,
         method: &str,
@@ -108,7 +135,7 @@ impl PeerClient {
         let mut request = match method {
             "GET" => self.http.get(&url),
             "POST" => self.http.post(&url),
-            other => unreachable!("peer_client only issues GET/POST, got {other}"),
+            other => unreachable!("peer_client only deserializes GET/POST, got {other}"),
         };
         request = request
             .header(PEER_ID_HEADER, headers.peer_id.to_string())
@@ -248,6 +275,27 @@ mod tests {
             .await
             .expect("signed POST succeeds");
         assert_eq!(result, Pong { pong: true });
+    }
+
+    #[tokio::test]
+    async fn signed_delete_attaches_every_signing_header() {
+        let mock = MockServer::start().await;
+        let peer_id = identity().peer_id;
+        Mock::given(method("DELETE"))
+            .and(path(format!("/api/v1/peer/nodes/{peer_id}")))
+            .and(header_exists(PEER_ID_HEADER))
+            .and(header_exists(SIGNATURE_HEADER))
+            .and(header_exists(TIMESTAMP_HEADER))
+            .and(header_exists(NONCE_HEADER))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&mock)
+            .await;
+
+        let client = PeerClient::new(reqwest::Client::new(), identity());
+        client
+            .signed_delete(&mock.uri(), &format!("/api/v1/peer/nodes/{peer_id}"))
+            .await
+            .expect("signed DELETE succeeds");
     }
 
     #[tokio::test]
