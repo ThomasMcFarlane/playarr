@@ -19,6 +19,7 @@ import io.streamarr.mobile.ui.LocalPlayarrDisplayPreferences
 import io.streamarr.mobile.ui.PlayarrApp
 import io.streamarr.mobile.ui.rememberPlayarrDisplayPreferences
 import io.streamarr.mobile.ui.setPlayarrWebPalette
+import io.streamarr.mobile.update.AppUpdateEffect
 import io.streamarr.shared.designsystem.theme.StreamarrTheme
 
 @AndroidEntryPoint
@@ -60,6 +61,7 @@ class MainActivity : ComponentActivity() {
             StreamarrTheme(darkTheme = display.darkTheme) {
                 CompositionLocalProvider(LocalPlayarrDisplayPreferences provides display.value) {
                     PlayarrApp(isTelevision = isTelevision)
+                    if (!isTelevision) AppUpdateEffect()
                 }
             }
         }

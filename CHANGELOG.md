@@ -24,6 +24,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Mount Android's Play Store update effect on phone builds so resume-time recommended and required
+  update checks actually run, while retaining the TV profile screen's sideload updater.
 - Hide Android's authenticated navigation until catalogue-kind access resolves, matching Playarr
   Web and preventing a partially authorized navigation bar from flashing during profile changes.
 - Preserve Android's exact top-level, playlist-detail, or media-detail destination through profile
