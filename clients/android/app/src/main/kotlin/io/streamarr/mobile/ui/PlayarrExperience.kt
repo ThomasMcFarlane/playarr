@@ -94,7 +94,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -527,7 +526,7 @@ internal class PlayarrExperienceViewModel @Inject constructor(
 
 internal data class ExperienceDestination(
     val route: String,
-    val label: String,
+    val label: PlayarrString,
     val icon: ImageVector,
     val kind: WorkKind? = null,
 )
@@ -536,14 +535,14 @@ private enum class LibraryViewMode { List, Screen, Cover, CoverFlow }
 private enum class LibraryArtworkSize { Small, Medium, Large }
 
 internal val experienceDestinations = listOf(
-    ExperienceDestination("downloads", "Downloads", Icons.Outlined.Download),
-    ExperienceDestination("search", "Search", Icons.Outlined.Search),
-    ExperienceDestination("home", "Home", Icons.Outlined.Home),
-    ExperienceDestination("series", "Series", Icons.Outlined.Tv, WorkKind.Series),
-    ExperienceDestination("movies", "Movies", Icons.Outlined.Movie, WorkKind.Movie),
-    ExperienceDestination("sites", "Sites", Icons.Outlined.Language, WorkKind.Site),
-    ExperienceDestination("music", "Music", Icons.Outlined.MusicNote, WorkKind.Artist),
-    ExperienceDestination("playlists", "Playlists", Icons.Outlined.PlaylistPlay),
+    ExperienceDestination("downloads", PlayarrString.NavDownloads, Icons.Outlined.Download),
+    ExperienceDestination("search", PlayarrString.NavSearch, Icons.Outlined.Search),
+    ExperienceDestination("home", PlayarrString.NavHome, Icons.Outlined.Home),
+    ExperienceDestination("series", PlayarrString.NavSeries, Icons.Outlined.Tv, WorkKind.Series),
+    ExperienceDestination("movies", PlayarrString.NavMovies, Icons.Outlined.Movie, WorkKind.Movie),
+    ExperienceDestination("sites", PlayarrString.NavSites, Icons.Outlined.Language, WorkKind.Site),
+    ExperienceDestination("music", PlayarrString.NavMusic, Icons.Outlined.MusicNote, WorkKind.Artist),
+    ExperienceDestination("playlists", PlayarrString.NavPlaylists, Icons.Outlined.PlaylistPlay),
 )
 
 internal fun visibleExperienceDestinations(
@@ -905,6 +904,7 @@ private fun ExperienceNavigation(
         ) {
             items(destinations, key = { it.route }) { destination ->
                 val selected = currentRoute == destination.route
+                val label = playarrString(destination.label)
                 Surface(
                     onClick = { onNavigate(destination.route) },
                     color = if (selected) WebInk else Color.Transparent,
@@ -917,10 +917,10 @@ private fun ExperienceNavigation(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center,
                     ) {
-                        Icon(destination.icon, contentDescription = destination.label, modifier = Modifier.size(21.dp))
+                        Icon(destination.icon, contentDescription = label, modifier = Modifier.size(21.dp))
                         AnimatedVisibility(visible = selected && isTelevision) {
                             Text(
-                                destination.label.uppercase(),
+                                label.uppercase(LocalPlayarrLanguage.current.locale),
                                 modifier = Modifier.padding(start = 8.dp),
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
@@ -956,6 +956,7 @@ private fun TelevisionNavigation(
                 Column(Modifier.padding(horizontal = 6.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     group.forEach { destination ->
                         val selected = currentRoute == destination.route
+                        val label = playarrString(destination.label)
                         var focused by remember { mutableStateOf(false) }
                         Surface(
                             onClick = { onNavigate(destination.route) },
@@ -969,7 +970,7 @@ private fun TelevisionNavigation(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                                 Icon(destination.icon, contentDescription = null, modifier = Modifier.size(20.dp))
-                                Text(destination.label, fontSize = 7.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
+                                Text(label, fontSize = 7.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
                             }
                         }
                     }
@@ -982,7 +983,7 @@ private fun TelevisionNavigation(
 @Composable
 private fun ExperienceClock(modifier: Modifier = Modifier) {
     var now by remember { mutableStateOf(LocalDateTime.now()) }
-    val locale = LocalConfiguration.current.locales[0]
+    val locale = LocalPlayarrLanguage.current.locale
     val dateFormatter = remember(locale) { DateTimeFormatter.ofPattern("EEE d MMM", locale) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -1005,6 +1006,11 @@ private fun ProfileControl(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val viewer = playarrString(PlayarrString.ProfileViewerFallback)
+    val profileDescription = playarrString(
+        PlayarrString.ProfileControl,
+        "name" to (userName ?: viewer),
+    )
     Column(
         modifier = modifier
             .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.safeDrawing)
@@ -1014,7 +1020,7 @@ private fun ProfileControl(
         Surface(
             onClick = onClick,
             modifier = (if (isTelevision) Modifier.height(46.dp) else Modifier.size(42.dp))
-                .semantics { contentDescription = "Profiles for ${userName ?: "Viewer"}" },
+                .semantics { contentDescription = profileDescription },
             shape = CircleShape,
             color = WebSurfaceStrong.copy(alpha = 0.94f),
             contentColor = WebInkSoft,

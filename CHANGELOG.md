@@ -53,6 +53,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Honour Auto, English, Thai, and Japanese Android UI language preferences across mobile and TV
+  sign-in, primary navigation, and Settings section chrome, including an accessible TV sign-in
+  language picker and regression coverage for locale resolution and translation interpolation.
 - Prompt Android mobile and TV viewers to choose an owning server before playing a title available
   on multiple connected Playarr instances, then map the selected movie, episode, track, or book to
   that server's local media ids and queue.

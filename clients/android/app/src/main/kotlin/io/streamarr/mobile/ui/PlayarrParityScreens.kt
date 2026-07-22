@@ -893,8 +893,14 @@ internal class ParitySettingsViewModel @Inject constructor(
     }
 }
 
-private enum class SettingsSection(val label: String) {
-    Appearance("Appearance"), Avatar("Profile avatar"), Language("Language"), Player("Player"), Server("Server"), Lock("Profile lock"), Invite("Invite a friend"),
+private enum class SettingsSection(val label: PlayarrString) {
+    Appearance(PlayarrString.SettingsAppearance),
+    Avatar(PlayarrString.SettingsAvatar),
+    Language(PlayarrString.SettingsLanguage),
+    Player(PlayarrString.SettingsPlayer),
+    Server(PlayarrString.SettingsServer),
+    Lock(PlayarrString.SettingsProfileLock),
+    Invite(PlayarrString.SettingsInvite),
 }
 
 @Composable
@@ -924,10 +930,10 @@ internal fun ExperienceParitySettingsScreen(
         Row(Modifier.fillMaxSize()) {
             if (wide) {
                 Column(Modifier.width(310.dp).fillMaxHeight().padding(start = 112.dp, top = 90.dp, bottom = 70.dp)) {
-                    Text("Profile", color = WebInk, fontSize = 32.sp, fontWeight = FontWeight.Medium)
+                    Text(playarrString(PlayarrString.SettingsTitle), color = WebInk, fontSize = 32.sp, fontWeight = FontWeight.Medium)
                     SettingsSection.entries.forEachIndexed { index, candidate ->
                         Text(
-                            "0${index + 1}  ${candidate.label}",
+                            "0${index + 1}  ${playarrString(candidate.label)}",
                             color = if (candidate == section) WebInk else WebInkMuted,
                             fontWeight = if (candidate == section) FontWeight.Bold else FontWeight.Normal,
                             modifier = Modifier.fillMaxWidth().clickable { section = candidate }.padding(vertical = 12.dp),
@@ -941,11 +947,11 @@ internal fun ExperienceParitySettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 if (!wide) {
-                    item { Text("Profile", color = WebInk, fontSize = 28.sp, fontWeight = FontWeight.Medium) }
+                    item { Text(playarrString(PlayarrString.SettingsTitle), color = WebInk, fontSize = 28.sp, fontWeight = FontWeight.Medium) }
                     item {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(SettingsSection.entries) { candidate ->
-                                OutlinedButton(onClick = { section = candidate }, enabled = candidate != section) { Text(candidate.label) }
+                                OutlinedButton(onClick = { section = candidate }, enabled = candidate != section) { Text(playarrString(candidate.label)) }
                             }
                         }
                     }
@@ -1003,7 +1009,7 @@ private fun SettingsSectionContent(
     viewModel: ParitySettingsViewModel,
 ) {
     val display = LocalPlayarrDisplayPreferences.current
-    SettingsCard(section.label) {
+    SettingsCard(playarrString(section.label)) {
         when (section) {
             SettingsSection.Appearance -> {
                 SettingChoices(
@@ -1049,12 +1055,15 @@ private fun SettingsSectionContent(
                     onSaveAvatar = viewModel::saveAvatar,
                 )
             }
-            SettingsSection.Language -> SettingChoices(
-                "App language",
-                listOf("System", "English", "ไทย", "日本語"),
-                mapOf("system" to "System", "en" to "English", "th" to "ไทย", "ja" to "日本語")[display.language],
-            ) { selected ->
-                display.setLanguage(mapOf("System" to "system", "English" to "en", "ไทย" to "th", "日本語" to "ja").getValue(selected))
+            SettingsSection.Language -> {
+                val options = playarrUiLanguageOptions.map { it to it.label() }
+                SettingChoices(
+                    playarrString(PlayarrString.LanguageAppLabel),
+                    options.map { it.second },
+                    options.firstOrNull { it.first.preference == display.language }?.second,
+                ) { selected ->
+                    options.firstOrNull { it.second == selected }?.let { display.setLanguage(it.first.preference) }
+                }
             }
             SettingsSection.Player -> {
                 PlayerDefaultHeading(

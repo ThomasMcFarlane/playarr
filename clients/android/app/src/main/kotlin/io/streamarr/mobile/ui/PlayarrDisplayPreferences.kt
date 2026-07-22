@@ -55,7 +55,7 @@ internal fun rememberPlayarrDisplayPreferences(context: Context): RememberedPlay
     var homeView by remember {
         mutableStateOf(parsePlayarrHomeViewPreference(store.getString("home_view", null)))
     }
-    var language by remember { mutableStateOf(store.getString("language", "system") ?: "system") }
+    var language by remember { mutableStateOf(parsePlayarrLanguagePreference(store.getString("language", null))) }
     var playerQuality by remember { mutableStateOf(parsePlayarrQualityDefault(store.getString("player_quality", null))) }
     var subtitleMode by remember { mutableStateOf(parsePlayarrSubtitleDefault(store.getString("subtitle_mode", null))) }
     var subtitleLanguage by remember { mutableStateOf(parsePlayarrSubtitleLanguage(store.getString("subtitle_language", null))) }
@@ -83,8 +83,12 @@ internal fun rememberPlayarrDisplayPreferences(context: Context): RememberedPlay
             }
         },
         setLanguage = {
-            language = it
-            store.edit().putString("language", it).apply()
+            language = parsePlayarrLanguagePreference(it)
+            if (language == "system") {
+                store.edit().remove("language").apply()
+            } else {
+                store.edit().putString("language", language).apply()
+            }
         },
         setPlayerQuality = {
             playerQuality = parsePlayarrQualityDefault(it)

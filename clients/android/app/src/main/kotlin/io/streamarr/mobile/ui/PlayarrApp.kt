@@ -32,6 +32,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +48,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -60,6 +63,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -67,6 +72,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -159,7 +165,15 @@ class PlayarrRootViewModel @Inject constructor(
 sealed interface LoginState {
     data object Idle : LoginState
     data object Submitting : LoginState
-    data class Failed(val message: String) : LoginState
+    data class Failed(val failure: LoginFailure) : LoginState
+}
+
+enum class LoginFailure {
+    InvalidServer,
+    MissingCredentials,
+    Rejected,
+    Forbidden,
+    Connection,
 }
 
 sealed interface PairingState {
@@ -188,7 +202,7 @@ class LoginViewModel @Inject constructor(
         if (_state.value == LoginState.Submitting) return
         viewModelScope.launch {
             val normalisedUrl = runCatching { normaliseServerUrl(serverUrl) }.getOrElse {
-                _state.value = LoginState.Failed("Enter a valid Streamarr server address.")
+                _state.value = LoginState.Failed(LoginFailure.InvalidServer)
                 return@launch
             }
             _state.value = LoginState.Submitting
@@ -209,7 +223,7 @@ class LoginViewModel @Inject constructor(
                 tokenStore.saveIdentity(response.userId, username.trim().ifBlank { null })
                 _state.value = LoginState.Idle
             } catch (error: Exception) {
-                _state.value = LoginState.Failed(loginErrorMessage(error))
+                _state.value = LoginState.Failed(loginFailure(error))
             }
         }
     }
@@ -319,11 +333,19 @@ private fun publicIpv4Octets(hostname: String): List<Int>? {
     return octets
 }
 
-private fun loginErrorMessage(error: Exception): String = when {
-    error.message?.contains("400") == true -> "This server requires a username and password."
-    error.message?.contains("401") == true -> "The username or password was not accepted."
-    error.message?.contains("403") == true -> "This account cannot sign in on this device."
-    else -> "Couldn’t connect to that Streamarr server. Check the address and try again."
+private fun loginFailure(error: Exception): LoginFailure = when {
+    error.message?.contains("400") == true -> LoginFailure.MissingCredentials
+    error.message?.contains("401") == true -> LoginFailure.Rejected
+    error.message?.contains("403") == true -> LoginFailure.Forbidden
+    else -> LoginFailure.Connection
+}
+
+private val LoginFailure.messageKey: PlayarrString get() = when (this) {
+    LoginFailure.InvalidServer -> PlayarrString.LoginInvalidServer
+    LoginFailure.MissingCredentials -> PlayarrString.LoginMissingCredentials
+    LoginFailure.Rejected -> PlayarrString.LoginRejected
+    LoginFailure.Forbidden -> PlayarrString.LoginForbidden
+    LoginFailure.Connection -> PlayarrString.LoginConnectionFailed
 }
 
 @Composable
@@ -332,17 +354,21 @@ fun PlayarrApp(
     rootViewModel: PlayarrRootViewModel = hiltViewModel(),
 ) {
     val state by rootViewModel.state.collectAsState()
-    Surface(modifier = Modifier.fillMaxSize(), color = PlayarrBackground, contentColor = Color.White) {
-        when (val current = state) {
-            RootState.Loading -> LoadingScreen()
-            is RootState.SignedOut -> LoginScreen(
-                savedServerUrl = current.savedServerUrl,
-                isTelevision = isTelevision,
-            )
-            is RootState.SignedIn -> PlayarrExperience(
-                serverUrl = current.serverUrl,
-                isTelevision = isTelevision,
-            )
+    val display = LocalPlayarrDisplayPreferences.current
+    val language = rememberPlayarrLanguageState(display.language)
+    CompositionLocalProvider(LocalPlayarrLanguage provides language) {
+        Surface(modifier = Modifier.fillMaxSize(), color = PlayarrBackground, contentColor = Color.White) {
+            when (val current = state) {
+                RootState.Loading -> LoadingScreen()
+                is RootState.SignedOut -> LoginScreen(
+                    savedServerUrl = current.savedServerUrl,
+                    isTelevision = isTelevision,
+                )
+                is RootState.SignedIn -> PlayarrExperience(
+                    serverUrl = current.serverUrl,
+                    isTelevision = isTelevision,
+                )
+            }
         }
     }
 }
@@ -388,6 +414,7 @@ private fun LoginScreen(
                 state = pairingState,
                 onStart = viewModel::pairTelevision,
             )
+            PlayarrLanguageDropdown(Modifier.align(Alignment.TopEnd).padding(34.dp))
             return@BoxWithConstraints
         }
         MobileLoginScreen(
@@ -416,10 +443,10 @@ private fun MobileLoginScreen(
     onSubmit: () -> Unit,
     compact: Boolean,
 ) {
-    val display = LocalPlayarrDisplayPreferences.current
+    val language = LocalPlayarrLanguage.current
     Box(Modifier.fillMaxSize()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 14.dp),
+            modifier = Modifier.fillMaxWidth().zIndex(1f).padding(horizontal = 22.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
@@ -436,11 +463,7 @@ private fun MobileLoginScreen(
                 modifier = Modifier.padding(start = 22.dp).size(42.dp),
             ) { Box(contentAlignment = Alignment.Center) { Text("←", color = WebInkSoft) } }
             Spacer(Modifier.weight(1f))
-            TextButton(onClick = {
-                display.setLanguage(if (display.language == "en") "system" else "en")
-            }) {
-                Text("◎  ${if (display.language == "system") "Auto" else "English"}", color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
+            PlayarrLanguageDropdown()
         }
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(
@@ -451,9 +474,9 @@ private fun MobileLoginScreen(
             ),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("WELCOME HOME", color = WebInkMuted, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.7.sp)
+            Text(playarrString(PlayarrString.LoginKicker).uppercase(language.locale), color = WebInkMuted, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.7.sp)
             Text(
-                "Sign in to Playarr",
+                playarrString(PlayarrString.LoginHeading),
                 color = WebInk,
                 fontSize = if (compact) 40.sp else 48.sp,
                 fontWeight = FontWeight.Normal,
@@ -462,20 +485,20 @@ private fun MobileLoginScreen(
                 modifier = Modifier.padding(top = 7.dp),
             )
             Text(
-                "Choose your Streamarr server, then save this profile on the current device.",
+                playarrString(PlayarrString.LoginDescription),
                 color = WebInkMuted,
                 fontSize = 13.sp,
                 lineHeight = 19.sp,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier = Modifier.padding(top = 14.dp, bottom = 30.dp),
             )
-            LoginField("SERVER URL", serverUrl, onServerUrlChange, KeyboardType.Uri, ImeAction.Next)
-            Text("Your device connects directly to this server. Playarr does not proxy your login.", color = WebInkMuted, fontSize = 8.sp, modifier = Modifier.fillMaxWidth().padding(top = 5.dp, bottom = 18.dp))
-            LoginField("USERNAME", username, onUsernameChange, KeyboardType.Text, ImeAction.Next)
+            LoginField(playarrString(PlayarrString.LoginServerUrl).uppercase(language.locale), serverUrl, onServerUrlChange, KeyboardType.Uri, ImeAction.Next)
+            Text(playarrString(PlayarrString.LoginDirectConnectionHint), color = WebInkMuted, fontSize = 8.sp, modifier = Modifier.fillMaxWidth().padding(top = 5.dp, bottom = 18.dp))
+            LoginField(playarrString(PlayarrString.LoginUsername).uppercase(language.locale), username, onUsernameChange, KeyboardType.Text, ImeAction.Next)
             Spacer(Modifier.height(18.dp))
-            LoginField("PASSWORD", password, onPasswordChange, KeyboardType.Password, ImeAction.Done, password = true)
+            LoginField(playarrString(PlayarrString.LoginPassword).uppercase(language.locale), password, onPasswordChange, KeyboardType.Password, ImeAction.Done, password = true)
             if (state is LoginState.Failed) {
-                Text(state.message, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
+                Text(playarrString(state.failure.messageKey), color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
             }
             Button(
                 onClick = onSubmit,
@@ -484,7 +507,37 @@ private fun MobileLoginScreen(
                 shape = CircleShape,
             ) {
                 if (state == LoginState.Submitting) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                else Text("Sign in", fontWeight = FontWeight.Bold)
+                else Text(playarrString(PlayarrString.LoginSubmit), fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlayarrLanguageDropdown(modifier: Modifier = Modifier) {
+    val display = LocalPlayarrDisplayPreferences.current
+    var expanded by remember { mutableStateOf(false) }
+    val selected = playarrUiLanguageOptions.firstOrNull { it.preference == display.language }
+        ?: playarrUiLanguageOptions.first()
+    Box(modifier) {
+        TextButton(onClick = { expanded = true }) {
+            Text(
+                "◎  ${selected.label()}",
+                color = WebInk,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            playarrUiLanguageOptions.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.label()) },
+                    onClick = {
+                        display.setLanguage(option.preference)
+                        expanded = false
+                    },
+                    enabled = option.preference != display.language,
+                )
             }
         }
     }
@@ -518,6 +571,10 @@ private fun TelevisionPairingScreen(
     state: PairingState,
     onStart: () -> Unit,
 ) {
+    val instructions = playarrString(
+        PlayarrString.DeviceLoginInstructions,
+        "url" to "playarr.app/link",
+    )
     Row(
         modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -525,8 +582,9 @@ private fun TelevisionPairingScreen(
     ) {
         Column(Modifier.weight(0.9f).padding(50.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             PlayarrMark()
-            Text("Link this TV", color = WebInk, fontSize = 42.sp, fontWeight = FontWeight.Medium)
-            Text("Scan the QR code or enter the generated code at playarr.app/link, then choose the Playarr profile for this TV.", color = WebInkMuted, fontSize = 15.sp, lineHeight = 22.sp)
+            Text(playarrString(PlayarrString.DeviceLoginKicker), color = WebPink, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text(playarrString(PlayarrString.DeviceLoginTitle), color = WebInk, fontSize = 42.sp, fontWeight = FontWeight.Medium)
+            Text(instructions, color = WebInkMuted, fontSize = 15.sp, lineHeight = 22.sp)
         }
         Surface(
             modifier = Modifier.weight(1.1f).padding(44.dp),
@@ -535,19 +593,33 @@ private fun TelevisionPairingScreen(
         ) {
             Column(Modifier.padding(32.dp), verticalArrangement = Arrangement.spacedBy(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 when (state) {
-                    PairingState.Idle, PairingState.Requesting -> CircularProgressIndicator(color = WebPink)
+                    PairingState.Idle, PairingState.Requesting -> {
+                        CircularProgressIndicator(color = WebPink)
+                        Text(playarrString(PlayarrString.DeviceLoginCreatingCode), color = WebInkMuted)
+                    }
                     is PairingState.Waiting -> {
+                        val pairingDescription = playarrString(
+                            PlayarrString.DeviceLoginPairingCode,
+                            "code" to state.code.userCode,
+                        )
                         PlayarrQrCode(
                             state.code.verificationUriComplete,
-                            "QR code for playarr.app/link",
+                            playarrString(PlayarrString.DeviceLoginQrLabel),
                         )
-                        Text(state.code.userCode, color = WebInk, fontSize = 42.sp, fontWeight = FontWeight.Bold, letterSpacing = 5.sp)
-                        Text("Open playarr.app/link and enter this code", color = WebInkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        Text("Waiting for approval…", color = WebPink, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            state.code.userCode,
+                            color = WebInk,
+                            fontSize = 42.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 5.sp,
+                            modifier = Modifier.semantics { contentDescription = pairingDescription },
+                        )
+                        Text(instructions, color = WebInkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Text(playarrString(PlayarrString.DeviceLoginWaitingApproval), color = WebPink, fontWeight = FontWeight.SemiBold)
                     }
                     is PairingState.Failed -> {
                         Text(state.message, color = MaterialTheme.colorScheme.error, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text("Try again") }
+                        Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text(playarrString(PlayarrString.DeviceLoginTryAgain)) }
                     }
                 }
             }
@@ -659,7 +731,7 @@ private fun LoginForm(
                 modifier = Modifier.fillMaxWidth(),
             )
             if (state is LoginState.Failed) {
-                Text(state.message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                Text(playarrString(state.failure.messageKey), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             }
             Button(
                 onClick = onSubmit,
