@@ -1,6 +1,7 @@
 package io.streamarr.mobile.ui
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -662,6 +663,7 @@ internal fun PlayarrExperience(
     val activePlaybackItem = playbackQueue.currentItem
     val isPlayer = currentRoute.startsWith("experience-player")
     val isProfiles = currentRoute == "profiles"
+    val online by rememberPlayarrOnlineStatus()
 
     LaunchedEffect(currentUserId) {
         if (currentUserId != null) viewModel.reloadForProfile()
@@ -687,11 +689,16 @@ internal fun PlayarrExperience(
         }
     }
 
-    val closePlayback = {
+    val closePlayback: () -> Unit = {
         playerViewModel.stopPlayback()
         viewModel.clearPlayback()
         if (isPlayer) navController.popBackStack()
     }
+
+    BackHandler(
+        enabled = shouldHandlePlayarrMiniPlayerBack(isPlayer, activePlaybackItem != null),
+        onBack = closePlayback,
+    )
 
     if (activePlaybackItem != null && persistentPlayerState is ExperienceLoad.Ready) {
         PlayarrMediaSession(
@@ -711,7 +718,16 @@ internal fun PlayarrExperience(
 
     CompositionLocalProvider(LocalPlayarrServerAccessResolver provides viewModel.serverAccessResolver) {
         Box(modifier = Modifier.fillMaxSize().background(WebBackground)) {
-            ExperienceNavHost(navController, serverUrl, token, isTelevision, canDownload, viewModel, playerViewModel)
+            ExperienceNavHost(
+                navController,
+                serverUrl,
+                token,
+                isTelevision,
+                canDownload,
+                online,
+                viewModel,
+                playerViewModel,
+            )
 
             if (!isPlayer && !isProfiles) {
                 ExperienceNavigation(
@@ -1102,16 +1118,21 @@ private fun ExperienceNavHost(
     accessToken: String?,
     isTelevision: Boolean,
     canDownload: Boolean?,
+    isOnline: Boolean,
     viewModel: PlayarrExperienceViewModel,
     playerViewModel: ExperiencePlayerViewModel,
 ) {
     val playbackQueue by viewModel.playbackQueue.collectAsState()
     NavHost(navController, startDestination = "home", modifier = Modifier.fillMaxSize()) {
         composable("home") {
-            ExperienceHomeScreen(serverUrl, accessToken, isTelevision, canDownload == true, navController, viewModel)
+            ExperienceOnlineGate(isOnline, isTelevision, "home") {
+                ExperienceHomeScreen(serverUrl, accessToken, isTelevision, canDownload == true, navController, viewModel)
+            }
         }
         composable("search") {
-            ExperienceSearchScreen(serverUrl, accessToken, isTelevision, canDownload == true, navController, viewModel)
+            ExperienceOnlineGate(isOnline, isTelevision, "search") {
+                ExperienceSearchScreen(serverUrl, accessToken, isTelevision, canDownload == true, navController, viewModel)
+            }
         }
         listOf(
             "series" to WorkKind.Series,
@@ -1120,7 +1141,9 @@ private fun ExperienceNavHost(
             "music" to WorkKind.Artist,
         ).forEach { (route, kind) ->
             composable(route) {
-                ExperienceLibraryScreen(kind, serverUrl, accessToken, isTelevision, canDownload == true, navController, viewModel)
+                ExperienceOnlineGate(isOnline, isTelevision, route) {
+                    ExperienceLibraryScreen(kind, serverUrl, accessToken, isTelevision, canDownload == true, navController, viewModel)
+                }
             }
         }
         composable(
@@ -1133,22 +1156,24 @@ private fun ExperienceNavHost(
                 },
             ),
         ) { entry ->
-            ExperienceDetailScreen(
-                workId = entry.arguments?.getString("workId").orEmpty(),
-                initialMediaFileId = entry.arguments?.getString("mediaFileId"),
-                serverUrl = serverUrl,
-                accessToken = accessToken,
-                isTelevision = isTelevision,
-                canDownload = canDownload == true,
-                onBack = navController::popBackStack,
-                onOpenWork = { navController.navigate("experience-detail/$it") },
-                onPlay = { mediaFileId, orderedItems, startPositionMs, launchSettings ->
-                    viewModel.startPlayback(mediaFileId, orderedItems, startPositionMs, launchSettings)
-                    if (orderedItems.none { it.music }) {
-                        navController.navigate("experience-player/${Uri.encode(mediaFileId)}")
-                    }
-                },
-            )
+            ExperienceOnlineGate(isOnline, isTelevision, "experience-detail") {
+                ExperienceDetailScreen(
+                    workId = entry.arguments?.getString("workId").orEmpty(),
+                    initialMediaFileId = entry.arguments?.getString("mediaFileId"),
+                    serverUrl = serverUrl,
+                    accessToken = accessToken,
+                    isTelevision = isTelevision,
+                    canDownload = canDownload == true,
+                    onBack = navController::popBackStack,
+                    onOpenWork = { navController.navigate("experience-detail/$it") },
+                    onPlay = { mediaFileId, orderedItems, startPositionMs, launchSettings ->
+                        viewModel.startPlayback(mediaFileId, orderedItems, startPositionMs, launchSettings)
+                        if (orderedItems.none { it.music }) {
+                            navController.navigate("experience-player/${Uri.encode(mediaFileId)}")
+                        }
+                    },
+                )
+            }
         }
         composable("experience-player/{mediaFileId}") { entry ->
             ExperiencePlayerScreen(
@@ -1169,23 +1194,27 @@ private fun ExperienceNavHost(
             )
         }
         composable("playlists") {
-            ExperiencePlaylistsScreen(serverUrl, accessToken, isTelevision, navController)
+            ExperienceOnlineGate(isOnline, isTelevision, "playlists") {
+                ExperiencePlaylistsScreen(serverUrl, accessToken, isTelevision, navController)
+            }
         }
         composable("playlists/{playlistId}") { entry ->
-            ExperiencePlaylistDetailScreen(
-                playlistId = entry.arguments?.getString("playlistId").orEmpty(),
-                serverUrl = serverUrl,
-                accessToken = accessToken,
-                isTelevision = isTelevision,
-                onBack = navController::popBackStack,
-                onOpenWork = { navController.navigate("experience-detail/$it") },
-                onPlay = { mediaFileId, orderedItems, startPositionMs, launchSettings ->
-                    viewModel.startPlayback(mediaFileId, orderedItems, startPositionMs, launchSettings)
-                    if (orderedItems.none { it.music }) {
-                        navController.navigate("experience-player/${Uri.encode(mediaFileId)}")
-                    }
-                },
-            )
+            ExperienceOnlineGate(isOnline, isTelevision, "playlists/{playlistId}") {
+                ExperiencePlaylistDetailScreen(
+                    playlistId = entry.arguments?.getString("playlistId").orEmpty(),
+                    serverUrl = serverUrl,
+                    accessToken = accessToken,
+                    isTelevision = isTelevision,
+                    onBack = navController::popBackStack,
+                    onOpenWork = { navController.navigate("experience-detail/$it") },
+                    onPlay = { mediaFileId, orderedItems, startPositionMs, launchSettings ->
+                        viewModel.startPlayback(mediaFileId, orderedItems, startPositionMs, launchSettings)
+                        if (orderedItems.none { it.music }) {
+                            navController.navigate("experience-player/${Uri.encode(mediaFileId)}")
+                        }
+                    },
+                )
+            }
         }
         composable("profiles") {
             val profileAvatar by viewModel.profileAvatar.collectAsState()
@@ -1198,7 +1227,11 @@ private fun ExperienceNavHost(
                 onSettings = { navController.openExperienceTopLevel("settings") },
             )
         }
-        composable("settings") { ExperienceParitySettingsScreen(serverUrl, isTelevision) }
+        composable("settings") {
+            ExperienceOnlineGate(isOnline, isTelevision, "settings") {
+                ExperienceParitySettingsScreen(serverUrl, isTelevision)
+            }
+        }
         composable("downloads") {
             when (canDownload) {
                 null -> ExperienceLoading(playarrString(PlayarrString.DownloadsLoading))
@@ -1215,6 +1248,118 @@ private fun ExperienceNavHost(
                         }
                     },
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExperienceOnlineGate(
+    isOnline: Boolean,
+    isTelevision: Boolean,
+    route: String,
+    content: @Composable () -> Unit,
+) {
+    if (shouldShowPlayarrOfflineState(isOnline, route)) {
+        ExperienceOfflineScreen(isTelevision)
+    } else {
+        content()
+    }
+}
+
+@Composable
+private fun ExperienceOfflineScreen(isTelevision: Boolean) {
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize().background(WebSurface),
+        contentAlignment = Alignment.Center,
+    ) {
+        val wide = isTelevision || maxWidth >= 760.dp
+        val artwork: @Composable () -> Unit = {
+            Box(
+                modifier = Modifier
+                    .size(if (wide) 164.dp else 116.dp)
+                    .clip(CircleShape)
+                    .background(WebPink.copy(alpha = 0.12f))
+                    .border(2.dp, WebInk.copy(alpha = 0.82f), CircleShape)
+                    .padding(if (wide) 34.dp else 24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Canvas(Modifier.fillMaxSize()) {
+                    val stroke = Stroke(width = size.minDimension * 0.055f)
+                    val panelTopLeft = Offset(size.width * 0.08f, size.height * 0.2f)
+                    val panelSize = Size(size.width * 0.72f, size.height * 0.58f)
+                    drawRoundRect(
+                        color = WebInk,
+                        topLeft = panelTopLeft,
+                        size = panelSize,
+                        cornerRadius = CornerRadius(size.minDimension * 0.08f),
+                        style = stroke,
+                    )
+                    listOf(0.36f, 0.49f, 0.62f).forEachIndexed { index, y ->
+                        drawLine(
+                            color = WebInk,
+                            start = Offset(size.width * 0.2f, size.height * y),
+                            end = Offset(size.width * (if (index == 2) 0.55f else 0.67f), size.height * y),
+                            strokeWidth = size.minDimension * 0.045f,
+                        )
+                    }
+                    drawCircle(
+                        color = WebPink,
+                        radius = size.minDimension * 0.14f,
+                        center = Offset(size.width * 0.79f, size.height * 0.24f),
+                    )
+                    drawCircle(
+                        color = WebInk,
+                        radius = size.minDimension * 0.14f,
+                        center = Offset(size.width * 0.79f, size.height * 0.24f),
+                        style = stroke,
+                    )
+                }
+            }
+        }
+        val copy: @Composable () -> Unit = {
+            Column(
+                modifier = Modifier.widthIn(max = 480.dp),
+                horizontalAlignment = if (wide) Alignment.Start else Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    playarrString(PlayarrString.OfflineTitle),
+                    color = WebInk,
+                    fontSize = if (wide) 28.sp else 22.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    textAlign = if (wide) androidx.compose.ui.text.style.TextAlign.Start else androidx.compose.ui.text.style.TextAlign.Center,
+                )
+                Text(
+                    playarrString(PlayarrString.OfflineDescription),
+                    color = WebInkMuted,
+                    fontSize = if (wide) 14.sp else 12.sp,
+                    lineHeight = if (wide) 21.sp else 18.sp,
+                    textAlign = if (wide) androidx.compose.ui.text.style.TextAlign.Start else androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            }
+        }
+        if (wide) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 176.dp, end = 96.dp, top = 96.dp, bottom = 120.dp),
+                horizontalArrangement = Arrangement.spacedBy(42.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                artwork()
+                copy()
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 32.dp, end = 32.dp, top = 86.dp, bottom = 116.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(28.dp, Alignment.CenterVertically),
+            ) {
+                artwork()
+                copy()
             }
         }
     }

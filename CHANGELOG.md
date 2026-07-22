@@ -18,6 +18,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Match Playarr Web's shell offline state on Android while keeping Downloads, downloaded playback,
+  and saved profiles available, and consume Back to close a minimised player before navigating.
 - Reject Android releases signed by the debug or an unexpected certificate, and verify the APK
   package and version against its release tag before publishing it to Playarr or GitHub.
 - Serve the Roku developer ZIP from Playarr's public same-origin download storage instead of

@@ -1119,6 +1119,13 @@ internal enum class PlayarrString(
     ),
     ProfilesUpdateRetry("Try update again", "ลองอัปเดตอีกครั้ง", "もう一度アップデート"),
 
+    OfflineTitle("You're offline", "คุณออฟไลน์อยู่", "オフラインです"),
+    OfflineDescription(
+        "This page needs a connection. Downloaded titles keep working from Downloads.",
+        "หน้านี้ต้องใช้การเชื่อมต่อ รายการที่ดาวน์โหลดไว้ยังใช้งานได้จากหน้าดาวน์โหลด",
+        "このページには接続が必要です。ダウンロード済みのタイトルはダウンロード画面から引き続き視聴できます。",
+    ),
+
     ProfileViewerFallback("Viewer", "ผู้ชม", "視聴者"),
     ProfileControl("Profiles for {{name}}", "โปรไฟล์สำหรับ {{name}}", "{{name}}のプロフィール"),
 }
