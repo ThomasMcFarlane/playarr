@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Serve the Roku developer ZIP from Playarr's public same-origin download storage instead of
+  linking the public Clients page to an inaccessible private GitHub release.
 - Re-register rotated Android Firebase messaging tokens with Streamarr and identify universal APK
   push registrations as phone or television so invite approvals keep reaching the correct device.
 - Localize Android-generated HTTP, loading, server-source, playback, and queue-title fallback

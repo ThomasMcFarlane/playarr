@@ -22,12 +22,10 @@ interface PlayarrClient {
   platformKey: TranslationKey;
   descriptionKey?: TranslationKey;
   status: ClientStatus;
-  downloadFile?: string;
+  downloadPath?: string;
   icon: ClientIcon;
 }
 
-const CLIENT_PREVIEW_RELEASE_BASE =
-  "https://github.com/ThomasMcFarlane/streamarr/releases/download/clients-v0.1.0-preview.1";
 const PLAYARR_PUBLIC_ORIGIN = "https://playarr.app";
 
 const PLAYARR_CLIENTS: readonly PlayarrClient[] = [
@@ -75,7 +73,7 @@ const PLAYARR_CLIENTS: readonly PlayarrClient[] = [
     platformKey: "pages.clients.roku.platform",
     descriptionKey: "pages.clients.roku.description",
     status: "experimental",
-    downloadFile: "playarr-roku.zip",
+    downloadPath: "/downloads/roku/playarr-roku.zip",
     icon: "roku",
   },
 ];
@@ -600,11 +598,11 @@ function ClientOverviewDetails({ client }: { client: PlayarrClient }) {
       <span className="client-details-status">
         {t(`pages.clients.status.${client.status}`)}
       </span>
-      {client.downloadFile ? (
+      {client.downloadPath ? (
         <div className="android-download-actions">
           <a
             className="profile-action-button"
-            href={`${CLIENT_PREVIEW_RELEASE_BASE}/${client.downloadFile}`}
+            href={`${PLAYARR_PUBLIC_ORIGIN}${client.downloadPath}`}
             download
             data-navigation-focus-key={`clients:${client.id}:download`}
             data-tv-focus-default

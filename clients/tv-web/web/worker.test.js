@@ -116,6 +116,12 @@ describe("client package downloads", () => {
       filename: "playarr-tizen.wgt",
       contentType: "application/widget",
     },
+    {
+      path: "/downloads/roku/playarr-roku.zip",
+      key: "roku/playarr-roku.zip",
+      filename: "playarr-roku.zip",
+      contentType: "application/zip",
+    },
   ])("serves the published $filename from its stable R2 key", async ({
     path,
     key,
@@ -146,6 +152,7 @@ describe("client package downloads", () => {
   it.each([
     "/downloads/webos/playarr-webos.ipk",
     "/downloads/tizen/playarr-tizen.wgt",
+    "/downloads/roku/playarr-roku.zip",
   ])("returns a truthful unpublished response for %s", async (path) => {
     const response = await worker.fetch(
       new Request(`https://playarr.app${path}`),

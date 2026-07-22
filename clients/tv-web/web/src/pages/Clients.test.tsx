@@ -225,7 +225,7 @@ describe("ClientsPage", () => {
       /class="client-choice is-experimental is-roku is-active"/
     );
     expect(rokuMarkup).toContain(
-      "releases/download/clients-v0.1.0-preview.1/playarr-roku.zip"
+      'href="https://playarr.app/downloads/roku/playarr-roku.zip"'
     );
     expect(rokuMarkup).toContain("Download Roku ZIP");
     expect(rokuMarkup).toContain(

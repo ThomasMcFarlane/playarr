@@ -1,6 +1,7 @@
 const DOWNLOADS = new Map([
   ["/downloads/android/playarr-android.apk", "android/playarr-android.apk"],
   ["/downloads/android/playarr-android.json", "android/playarr-android.json"],
+  ["/downloads/roku/playarr-roku.zip", "roku/playarr-roku.zip"],
   ["/downloads/webos/playarr-webos.ipk", "webos/playarr-webos.ipk"],
   ["/downloads/tizen/playarr-tizen.wgt", "tizen/playarr-tizen.wgt"],
 ]);
@@ -252,6 +253,7 @@ export default {
     const isApk = filename.endsWith(".apk");
     const isIpk = filename.endsWith(".ipk");
     const isWgt = filename.endsWith(".wgt");
+    const isZip = filename.endsWith(".zip");
     const isJson = filename.endsWith(".json");
     const headers = new Headers();
     object.writeHttpMetadata(headers);
@@ -263,7 +265,7 @@ export default {
     );
     headers.set(
       "Content-Disposition",
-      `${isApk || isIpk || isWgt ? "attachment" : "inline"}; filename="${filename}"`
+      `${isApk || isIpk || isWgt || isZip ? "attachment" : "inline"}; filename="${filename}"`
     );
     headers.set("Content-Length", String(object.size));
     headers.set(
@@ -274,6 +276,8 @@ export default {
           ? "application/octet-stream"
           : isWgt
             ? "application/widget"
+            : isZip
+              ? "application/zip"
             : isJson
               ? "application/json; charset=utf-8"
               : "text/plain; charset=utf-8"

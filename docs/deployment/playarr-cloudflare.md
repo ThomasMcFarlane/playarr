@@ -10,10 +10,11 @@ redirect there, and `/vidaa-store/` publishes the fixed Playarr-only VIDAA custo
 store assets. Playarr does not operate a public VIDAA DNS resolver. Viewers choose
 and control a compatible DNS, proxy, or self-hosted interception method themselves.
 
-The signed universal Android APK is stored in the private `playarr-client-downloads` R2 bucket.
-The Worker streams it from the same-origin `/downloads/android/playarr-android.apk` URL while
-continuing to serve ordinary application routes from Static Assets. Releases also publish a
-short-lived latest-version manifest and an immutable, versioned APK route used by the native
+The signed universal Android APK and Roku developer-mode ZIP are stored in the private
+`playarr-client-downloads` R2 bucket. The Worker streams them from the same-origin
+`/downloads/android/playarr-android.apk` and `/downloads/roku/playarr-roku.zip` URLs while
+continuing to serve ordinary application routes from Static Assets. Android releases also publish
+a short-lived latest-version manifest and an immutable, versioned APK route used by the native
 television self-update action.
 
 The Worker also owns the short-lived Android first-contact broker under `/api/link/*`. Each
