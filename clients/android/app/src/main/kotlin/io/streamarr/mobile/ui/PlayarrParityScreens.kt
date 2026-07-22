@@ -1792,6 +1792,22 @@ internal sealed interface SettingsConnectionTest {
     data class Failed(val message: String) : SettingsConnectionTest
 }
 
+internal sealed interface SettingsServerOperation {
+    data object Connecting : SettingsServerOperation
+    data class Disconnecting(val serverUrl: String) : SettingsServerOperation
+    data object Forgetting : SettingsServerOperation
+}
+
+private enum class SettingsServerInputFailure {
+    InvalidUrl,
+    AlreadyPrimary,
+    SignInRequired,
+}
+
+private class SettingsServerInputException(
+    val failure: SettingsServerInputFailure,
+) : IllegalArgumentException()
+
 internal data class SettingsNotice(
     val key: PlayarrString? = null,
     val text: String? = null,
@@ -1832,8 +1848,8 @@ internal class ParitySettingsViewModel @Inject constructor(
     val servers = _servers.asStateFlow()
     private val _hasKnownServerGroup = MutableStateFlow(false)
     val hasKnownServerGroup = _hasKnownServerGroup.asStateFlow()
-    private val _serverBusy = MutableStateFlow(false)
-    val serverBusy = _serverBusy.asStateFlow()
+    private val _serverOperation = MutableStateFlow<SettingsServerOperation?>(null)
+    val serverOperation = _serverOperation.asStateFlow()
     private val _connectionTest = MutableStateFlow<SettingsConnectionTest>(SettingsConnectionTest.Idle)
     val connectionTest = _connectionTest.asStateFlow()
 
@@ -1926,14 +1942,17 @@ internal class ParitySettingsViewModel @Inject constructor(
         isTelevision: Boolean,
         onSuccess: () -> Unit,
     ) = viewModelScope.launch {
-        if (_serverBusy.value) return@launch
-        _serverBusy.value = true
+        if (_serverOperation.value != null) return@launch
+        _serverOperation.value = SettingsServerOperation.Connecting
         runCatching {
             val profileUserId = tokenStore.currentUserId.first()
-                ?: error("Sign in before connecting another server.")
-            val targetUrl = normaliseServerUrl(serverUrl)
+                ?: throw SettingsServerInputException(SettingsServerInputFailure.SignInRequired)
+            val targetUrl = runCatching { normaliseServerUrl(serverUrl) }
+                .getOrElse { throw SettingsServerInputException(SettingsServerInputFailure.InvalidUrl) }
             val primaryUrl = normaliseServerUrl(serverConfigStore.baseUrl.first())
-            require(targetUrl != primaryUrl) { "That is already your primary server." }
+            if (targetUrl == primaryUrl) {
+                throw SettingsServerInputException(SettingsServerInputFailure.AlreadyPrimary)
+            }
             connectedServerSessionManager.connect(
                 profileUserId = profileUserId,
                 serverUrl = targetUrl,
@@ -1947,12 +1966,23 @@ internal class ParitySettingsViewModel @Inject constructor(
             _message.value = SettingsNotice(key = PlayarrString.SettingsServerConnected, success = true)
             onSuccess()
         }.onFailure {
-            _message.value = SettingsNotice(text = it.playarrServerConnectionMessage(), success = false)
+            _message.value = (it as? SettingsServerInputException)?.failure?.let { failure ->
+                SettingsNotice(
+                    key = when (failure) {
+                        SettingsServerInputFailure.InvalidUrl -> PlayarrString.SettingsServerInvalidUrl
+                        SettingsServerInputFailure.AlreadyPrimary -> PlayarrString.SettingsServerAlreadyPrimary
+                        SettingsServerInputFailure.SignInRequired -> PlayarrString.SettingsServerSignInRequired
+                    },
+                    success = false,
+                )
+            } ?: SettingsNotice(text = it.playarrServerConnectionMessage(), success = false)
         }
-        _serverBusy.value = false
+        _serverOperation.value = null
     }
     fun disconnectServer(serverUrl: String) = viewModelScope.launch {
+        if (_serverOperation.value != null) return@launch
         val profileUserId = tokenStore.currentUserId.first() ?: return@launch
+        _serverOperation.value = SettingsServerOperation.Disconnecting(serverUrl)
         runCatching { connectedServerSessionManager.disconnect(profileUserId, serverUrl) }
             .onSuccess {
                 _message.value = SettingsNotice(key = PlayarrString.SettingsServerDisconnected, success = true)
@@ -1960,8 +1990,11 @@ internal class ParitySettingsViewModel @Inject constructor(
             .onFailure {
                 _message.value = SettingsNotice(text = it.playarrMessage("server connection"), success = false)
             }
+        _serverOperation.value = null
     }
     fun forgetKnownServerGroup() = viewModelScope.launch {
+        if (_serverOperation.value != null) return@launch
+        _serverOperation.value = SettingsServerOperation.Forgetting
         runCatching { knownServerGroupStore.forgetGroup() }
             .onSuccess {
                 _message.value = SettingsNotice(key = PlayarrString.SettingsServerGroupForgotten, success = true)
@@ -1969,6 +2002,7 @@ internal class ParitySettingsViewModel @Inject constructor(
             .onFailure {
                 _message.value = SettingsNotice(text = it.playarrMessage("server group"), success = false)
             }
+        _serverOperation.value = null
     }
     fun testPrimaryConnection() = viewModelScope.launch {
         if (_connectionTest.value == SettingsConnectionTest.Testing) return@launch
@@ -1983,7 +2017,7 @@ internal class ParitySettingsViewModel @Inject constructor(
             .onSuccess { serverConfigStore.setBaseUrl(it); tokenStore.clear() }
             .onFailure {
                 _message.value = SettingsNotice(
-                    text = "Enter a valid HTTP or HTTPS server URL.",
+                    key = PlayarrString.SettingsServerInvalidUrl,
                     success = false,
                 )
             }
@@ -2087,7 +2121,7 @@ internal fun ExperienceParitySettingsScreen(
     val pinBusy by viewModel.pinBusy.collectAsState()
     val servers by viewModel.servers.collectAsState()
     val hasKnownServerGroup by viewModel.hasKnownServerGroup.collectAsState()
-    val serverBusy by viewModel.serverBusy.collectAsState()
+    val serverOperation by viewModel.serverOperation.collectAsState()
     val connectionTest by viewModel.connectionTest.collectAsState()
     var section by remember { mutableStateOf(SettingsSection.Appearance) }
     LaunchedEffect(section) {
@@ -2141,7 +2175,7 @@ internal fun ExperienceParitySettingsScreen(
                             pinBusy = pinBusy,
                             servers = servers,
                             hasKnownServerGroup = hasKnownServerGroup,
-                            serverBusy = serverBusy,
+                            serverOperation = serverOperation,
                             connectionTest = connectionTest,
                             viewModel = viewModel,
                         )
@@ -2182,7 +2216,7 @@ private fun SettingsSectionContent(
     pinBusy: Boolean,
     servers: List<SettingsServerEntry>,
     hasKnownServerGroup: Boolean,
-    serverBusy: Boolean,
+    serverOperation: SettingsServerOperation?,
     connectionTest: SettingsConnectionTest,
     viewModel: ParitySettingsViewModel,
 ) {
@@ -2192,6 +2226,7 @@ private fun SettingsSectionContent(
         SettingsSection.Appearance -> playarrString(PlayarrString.SettingsAppearanceDescription)
         SettingsSection.Language -> playarrString(PlayarrString.SettingsLanguageDescription)
         SettingsSection.Player -> playarrString(PlayarrString.SettingsPlayerDescription)
+        SettingsSection.Server -> playarrString(PlayarrString.SettingsServerDescription)
         SettingsSection.Lock -> playarrString(
             PlayarrString.SettingsProfileLockDescription,
             "name" to snapshot.userName,
@@ -2355,7 +2390,7 @@ private fun SettingsSectionContent(
                     isTelevision = isTelevision,
                     servers = servers,
                     hasKnownServerGroup = hasKnownServerGroup,
-                    serverBusy = serverBusy,
+                    serverOperation = serverOperation,
                     connectionTest = connectionTest,
                     viewModel = viewModel,
                 )
@@ -2491,7 +2526,7 @@ private fun SettingsServerSection(
     isTelevision: Boolean,
     servers: List<SettingsServerEntry>,
     hasKnownServerGroup: Boolean,
-    serverBusy: Boolean,
+    serverOperation: SettingsServerOperation?,
     connectionTest: SettingsConnectionTest,
     viewModel: ParitySettingsViewModel,
 ) {
@@ -2499,10 +2534,18 @@ private fun SettingsServerSection(
     var username by remember(defaultUsername) { mutableStateOf(defaultUsername) }
     var password by remember { mutableStateOf("") }
     var primaryValue by remember(primaryServerUrl) { mutableStateOf(primaryServerUrl) }
+    var connectionAdded by remember { mutableStateOf(false) }
+    val serverBusy = serverOperation != null
+    val connecting = serverOperation == SettingsServerOperation.Connecting
 
-    Text("Connected servers", color = WebInkSoft, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    Text(
+        playarrString(PlayarrString.SettingsServerConnectedServers),
+        color = WebInkSoft,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
+    )
     if (servers.isEmpty()) {
-        Text("Loading server connections…", color = WebInkMuted, fontSize = 11.sp)
+        Text(playarrString(PlayarrString.SettingsServerLoadingConnections), color = WebInkMuted, fontSize = 11.sp)
     }
     servers.forEach { server ->
         Surface(
@@ -2523,10 +2566,20 @@ private fun SettingsServerSection(
                 }
                 if (server.primary) {
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Text("PRIMARY", color = WebPink, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(
+                            playarrString(PlayarrString.SettingsServerPrimaryBadge).uppercase(
+                                LocalPlayarrLanguage.current.locale,
+                            ),
+                            color = WebPink,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                        )
                         if (hasKnownServerGroup) {
-                            OutlinedButton(onClick = viewModel::forgetKnownServerGroup) {
-                                Text("Forget server", fontSize = 10.sp)
+                            OutlinedButton(
+                                onClick = viewModel::forgetKnownServerGroup,
+                                enabled = !serverBusy,
+                            ) {
+                                Text(playarrString(PlayarrString.SettingsServerForget), fontSize = 10.sp)
                             }
                         }
                     }
@@ -2534,37 +2587,39 @@ private fun SettingsServerSection(
                     OutlinedButton(
                         onClick = { viewModel.disconnectServer(server.serverUrl) },
                         enabled = !serverBusy,
-                    ) { Text("Disconnect", fontSize = 10.sp) }
+                    ) { Text(playarrString(PlayarrString.SettingsServerDisconnect), fontSize = 10.sp) }
                 }
             }
         }
     }
 
-    Text("Add another server", color = WebInk, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
     Text(
-        "Sign in to an independent Playarr server to join its catalogue with this profile.",
-        color = WebInkMuted,
-        fontSize = 11.sp,
+        playarrString(PlayarrString.SettingsServerAddAnother),
+        color = WebInk,
+        fontSize = 15.sp,
+        fontWeight = FontWeight.SemiBold,
     )
     OutlinedTextField(
         value = serverUrl,
-        onValueChange = { serverUrl = it },
-        label = { Text("Server address") },
-        placeholder = { Text("https://playarr.example") },
+        onValueChange = { serverUrl = it; connectionAdded = false },
+        enabled = !serverBusy,
+        label = { Text(playarrString(PlayarrString.SettingsServerAddress)) },
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
     )
     OutlinedTextField(
         value = username,
         onValueChange = { username = it },
-        label = { Text("Username") },
+        enabled = !serverBusy,
+        label = { Text(playarrString(PlayarrString.SettingsServerUsername)) },
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
     )
     OutlinedTextField(
         value = password,
         onValueChange = { password = it },
-        label = { Text("Password") },
+        enabled = !serverBusy,
+        label = { Text(playarrString(PlayarrString.SettingsServerPassword)) },
         visualTransformation = PasswordVisualTransformation(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
         singleLine = true,
@@ -2575,42 +2630,87 @@ private fun SettingsServerSection(
             viewModel.connectServer(serverUrl, username, password, isTelevision) {
                 serverUrl = ""
                 password = ""
+                connectionAdded = true
             }
         },
         enabled = serverUrl.isNotBlank() && !serverBusy,
-    ) { Text(if (serverBusy) "Connecting…" else "Connect") }
+    ) {
+        Text(
+            playarrString(
+                if (connecting) PlayarrString.SettingsServerConnecting else PlayarrString.SettingsServerConnect,
+            ),
+        )
+    }
+    Text(
+        playarrString(
+            if (connectionAdded) PlayarrString.SettingsServerConnectedHint
+            else PlayarrString.SettingsServerCredentialsHint,
+        ),
+        color = WebInkMuted,
+        fontSize = 11.sp,
+    )
 
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         OutlinedButton(
             onClick = viewModel::testPrimaryConnection,
             enabled = connectionTest != SettingsConnectionTest.Testing,
-        ) { Text(if (connectionTest == SettingsConnectionTest.Testing) "Testing…" else "Test connection") }
+        ) {
+            Text(
+                playarrString(
+                    if (connectionTest == SettingsConnectionTest.Testing) {
+                        PlayarrString.SettingsServerTesting
+                    } else {
+                        PlayarrString.SettingsServerTestConnection
+                    },
+                ),
+            )
+        }
         when (connectionTest) {
             SettingsConnectionTest.Idle, SettingsConnectionTest.Testing -> Unit
             is SettingsConnectionTest.Success -> Text(
-                "Connected · Server ${connectionTest.version.serverVersion} · API ${connectionTest.version.apiVersion}",
+                playarrString(
+                    PlayarrString.SettingsServerConnectedSuccess,
+                    "serverVersion" to connectionTest.version.serverVersion,
+                    "apiVersion" to connectionTest.version.apiVersion,
+                ),
                 color = WebPink,
                 fontSize = 10.sp,
             )
             is SettingsConnectionTest.Failed -> Text(
-                connectionTest.message,
+                playarrString(PlayarrString.SettingsServerConnectError, "message" to connectionTest.message),
                 color = MaterialTheme.colorScheme.error,
                 fontSize = 10.sp,
             )
         }
     }
 
-    Text("Primary app server", color = WebInk, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    Text(
+        playarrString(PlayarrString.SettingsServerPrimaryHint, "apiBaseUrl" to primaryServerUrl),
+        color = WebInkMuted,
+        fontSize = 11.sp,
+    )
+    if (hasKnownServerGroup) {
+        Text(playarrString(PlayarrString.SettingsServerForgetHint), color = WebInkMuted, fontSize = 11.sp)
+    }
+    Text(
+        playarrString(PlayarrString.SettingsServerChangeAppHost),
+        color = WebInk,
+        fontSize = 15.sp,
+        fontWeight = FontWeight.SemiBold,
+    )
     OutlinedTextField(
         value = primaryValue,
         onValueChange = { primaryValue = it },
-        label = { Text("Server URL") },
+        label = { Text(playarrString(PlayarrString.LoginServerUrl)) },
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
     )
-    Button(onClick = { viewModel.changeServer(primaryValue) }) { Text("Save primary server") }
+    Button(
+        onClick = { viewModel.changeServer(primaryValue) },
+        enabled = primaryValue.isNotBlank(),
+    ) { Text(playarrString(PlayarrString.SettingsServerChangeAppHost)) }
     Text(
-        "Changing the primary server returns you to sign-in. Forget server only clears remembered failover addresses; it does not disconnect independent servers.",
+        playarrString(PlayarrString.SettingsServerChangeAppHostHint),
         color = WebInkMuted,
         fontSize = 11.sp,
     )

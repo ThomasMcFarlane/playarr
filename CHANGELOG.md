@@ -53,6 +53,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Align Android server settings with Playarr Web through localized connected-server management,
+  guarded connect, disconnect, and forget operations, connection feedback, and app-host editing.
 - Align Android profile-lock and friend-invite settings with Playarr Web through localized status,
   guarded PIN updates, request-state guidance, QR details, and approval-notification controls.
 - Localize Android profile-avatar presets, upload validation, photo preparation, and the complete
