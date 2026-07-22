@@ -174,8 +174,6 @@ private data class PlayarrSessionClosure(
     val terminal: PlaybackEventRequest,
 )
 
-private enum class PlayarrPlayerMenu { Quality, Audio, Subtitles }
-
 private val darkWebPalette = WebPalette(
     Color(0xFF151315), Color(0xFF1B181B), Color(0xFF211D21), Color(0xFF312A30),
     Color(0xFFF4F0F1), Color(0xFFC5B8BD), Color(0xFF887A82), Color(0xFFDFDCDD),
@@ -718,6 +716,7 @@ private fun ExperienceNavHost(
             ExperiencePlayerScreen(
                 mediaFileId = entry.arguments?.getString("mediaFileId").orEmpty(),
                 serverUrl = serverUrl,
+                isTelevision = isTelevision,
                 onBack = navController::popBackStack,
             )
         }
@@ -1760,6 +1759,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     private var activeSessionId: String? = null
     private var activeSourceOffsetMs = 0L
     private var activeSourceDurationMs = 0L
+    private var activeOnDemandHls = false
     private var previousPlayerState = player.state.value
     private val telemetryMutex = Mutex()
 
@@ -1779,6 +1779,9 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                     currentError != null && previous.error == null -> {
                         persistProgress()
                         closeActiveSession(PlaybackStopReason.Error, currentError.message)
+                        _state.value = ExperienceLoad.Failed(
+                            "Playback failed: ${currentError.message.replace('_', ' ').lowercase()}",
+                        )
                     }
                     previous.isPlaying && !current.isPlaying && !current.isBuffering -> checkpoint()
                 }
@@ -1795,6 +1798,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
             activeDefaults = defaults
             activeSourceOffsetMs = 0L
             activeSourceDurationMs = 0L
+            activeOnDemandHls = false
             _controls.value = PlayarrPlaybackControls()
             _state.value = ExperienceLoad.Loading
             val resumePosition = runCatching { api.getWatchProgress(mediaFileId) }
@@ -1869,10 +1873,11 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         forceTranscode: Boolean,
         audioStreamIndex: Int?,
         ignoreSavedPreferences: Boolean,
+        requestedSourcePositionMs: Long? = null,
     ) {
         val mediaFileId = activeMediaFileId ?: return
         viewModelScope.launch {
-            val sourcePosition = currentSourcePositionMs()
+            val sourcePosition = requestedSourcePositionMs ?: currentSourcePositionMs()
             val shouldPlay = player.state.value.isPlaying || player.rawPlayer.playWhenReady
             persistProgress(ensureCompletion = true)
             player.pause()
@@ -1921,6 +1926,8 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         activeSessionId = playback.sessionId
         activeSourceOffsetMs = playback.sourceOffsetMs.coerceAtLeast(0L)
         activeSourceDurationMs = playback.durationMs.coerceAtLeast(0L)
+        activeOnDemandHls = playback.mode == io.streamarr.shared.data.model.PlaybackMode.Hls &&
+            isPlayarrOnDemandHls(playback.url)
         val selectedSubtitleId = preferredSubtitleId
             ?.takeIf { selected -> playback.subtitleTracks.any { it.id == selected } }
             ?: playback.selectedSubtitleTrackId
@@ -1983,6 +1990,48 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         persistProgress(ensureCompletion = true)
         closeActiveSession(PlaybackStopReason.UserStopped)
         player.pause()
+    }
+
+    fun togglePlayback() {
+        if (player.state.value.playWhenReady) {
+            player.pause()
+        } else {
+            player.play()
+        }
+    }
+
+    fun seekToSourcePosition(positionMs: Long) {
+        val sourceDuration = currentSourceDurationMs()
+        val sourcePosition = if (sourceDuration > 0L) {
+            positionMs.coerceIn(0L, sourceDuration)
+        } else {
+            positionMs.coerceAtLeast(0L)
+        }
+        if (activeOnDemandHls) {
+            val quality = _controls.value.qualityOptions
+                .firstOrNull { it.id == _controls.value.activeQualityId }
+            switchNegotiatedPlayback(
+                profile = quality?.profile ?: quality?.id?.takeUnless { it == "original" },
+                forceTranscode = quality?.id != null && quality.id != "original",
+                audioStreamIndex = selectedAudioStreamIndex(),
+                ignoreSavedPreferences = false,
+                requestedSourcePositionMs = sourcePosition,
+            )
+            return
+        }
+        player.seekTo(playarrEnginePositionMs(sourcePosition, activeSourceOffsetMs))
+        checkpoint()
+    }
+
+    fun timelineSnapshot(): PlayarrPlayerTimeline {
+        val durationMs = currentSourceDurationMs()
+        val positionMs = currentSourcePositionMs()
+        val bufferedPositionMs = playarrSourcePositionMs(
+            enginePositionMs = player.rawPlayer.bufferedPosition,
+            sourceOffsetMs = activeSourceOffsetMs,
+            sourceDurationMs = durationMs,
+        ).coerceAtLeast(positionMs)
+        return PlayarrPlayerTimeline(positionMs, durationMs, bufferedPositionMs)
     }
 
     private fun currentSourcePositionMs(): Long = playarrSourcePositionMs(
@@ -2053,14 +2102,23 @@ internal class ExperiencePlayerViewModel @Inject constructor(
 private fun ExperiencePlayerScreen(
     mediaFileId: String,
     serverUrl: String,
+    isTelevision: Boolean,
     onBack: () -> Unit,
     viewModel: ExperiencePlayerViewModel = hiltViewModel(),
 ) {
     val playerDefaults = LocalPlayarrDisplayPreferences.current.playerDefaults
     val state by viewModel.state.collectAsState()
     val controls by viewModel.controls.collectAsState()
-    var openMenu by remember { mutableStateOf<PlayarrPlayerMenu?>(null) }
+    val playbackState by viewModel.player.state.collectAsState()
+    var timeline by remember(mediaFileId) { mutableStateOf(PlayarrPlayerTimeline()) }
     LaunchedEffect(mediaFileId, serverUrl) { viewModel.play(mediaFileId, serverUrl, playerDefaults) }
+    LaunchedEffect(state, mediaFileId) {
+        if (state !is ExperienceLoad.Ready) return@LaunchedEffect
+        while (true) {
+            timeline = viewModel.timelineSnapshot()
+            kotlinx.coroutines.delay(250)
+        }
+    }
     LaunchedEffect(state, mediaFileId) {
         if (state !is ExperienceLoad.Ready) return@LaunchedEffect
         while (true) {
@@ -2076,143 +2134,28 @@ private fun ExperiencePlayerScreen(
             }
             is ExperienceLoad.Ready -> androidx.compose.ui.viewinterop.AndroidView(
                 modifier = Modifier.fillMaxSize(),
-                factory = { context -> androidx.media3.ui.PlayerView(context).apply { player = viewModel.player.rawPlayer; useController = true } },
+                factory = { context ->
+                    androidx.media3.ui.PlayerView(context).apply {
+                        player = viewModel.player.rawPlayer
+                        useController = false
+                    }
+                },
             )
         }
         if (state is ExperienceLoad.Ready) {
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(16.dp)
-                    .background(Color.Black.copy(alpha = 0.66f), RoundedCornerShape(14.dp))
-                    .padding(horizontal = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                if (controls.audioTracks.isNotEmpty()) {
-                    TextButton(
-                        onClick = { openMenu = PlayarrPlayerMenu.Audio },
-                        enabled = !controls.switching,
-                    ) { Text("Audio", color = Color.White) }
-                }
-                if (controls.subtitleTracks.isNotEmpty()) {
-                    TextButton(
-                        onClick = { openMenu = PlayarrPlayerMenu.Subtitles },
-                        enabled = !controls.switching,
-                    ) { Text("Subtitles", color = Color.White) }
-                }
-                if (controls.qualityOptions.isNotEmpty()) {
-                    TextButton(
-                        onClick = { openMenu = PlayarrPlayerMenu.Quality },
-                        enabled = !controls.switching,
-                    ) { Text("Quality", color = Color.White) }
-                }
-            }
-        }
-        if (controls.switching) {
-            Surface(
-                color = Color.Black.copy(alpha = 0.72f),
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.align(Alignment.Center),
-            ) {
-                Row(Modifier.padding(18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(color = WebPink, modifier = Modifier.size(28.dp))
-                    Text("Switching playback source…", color = Color.White)
-                }
-            }
-        }
-        IconButton(onClick = { viewModel.stopPlayback(); onBack() }, modifier = Modifier.align(Alignment.TopStart).windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp).background(Color.Black.copy(alpha = 0.55f), CircleShape)) {
-            Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = Color.White)
-        }
-    }
-    openMenu?.let { menu ->
-        PlayarrPlayerOptionsDialog(
-            menu = menu,
-            controls = controls,
-            onDismiss = { openMenu = null },
-            onQuality = { viewModel.selectQuality(it); openMenu = null },
-            onAudio = { viewModel.selectAudioTrack(it); openMenu = null },
-            onSubtitle = { viewModel.selectSubtitleTrack(it); openMenu = null },
-        )
-    }
-}
-
-@Composable
-private fun PlayarrPlayerOptionsDialog(
-    menu: PlayarrPlayerMenu,
-    controls: PlayarrPlaybackControls,
-    onDismiss: () -> Unit,
-    onQuality: (String) -> Unit,
-    onAudio: (String) -> Unit,
-    onSubtitle: (String?) -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                when (menu) {
-                    PlayarrPlayerMenu.Quality -> "Quality"
-                    PlayarrPlayerMenu.Audio -> "Audio"
-                    PlayarrPlayerMenu.Subtitles -> "Subtitles"
-                },
+            PlayarrPlayerChrome(
+                playbackState = playbackState,
+                timeline = timeline,
+                controls = controls,
+                isTelevision = isTelevision,
+                onBack = { viewModel.stopPlayback(); onBack() },
+                onTogglePlayback = viewModel::togglePlayback,
+                onSeek = viewModel::seekToSourcePosition,
+                onQuality = viewModel::selectQuality,
+                onAudio = viewModel::selectAudioTrack,
+                onSubtitle = viewModel::selectSubtitleTrack,
             )
-        },
-        text = {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().height(360.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                if (menu == PlayarrPlayerMenu.Subtitles) {
-                    item {
-                        PlayerDialogOption(
-                            label = "Off",
-                            detail = null,
-                            selected = controls.selectedSubtitleTrackId == null,
-                        ) { onSubtitle(null) }
-                    }
-                }
-                when (menu) {
-                    PlayarrPlayerMenu.Quality -> items(controls.qualityOptions) { option ->
-                        PlayerDialogOption(
-                            label = option.label,
-                            detail = option.videoBitrateBps?.let { "${it / 1_000_000} Mbps" },
-                            selected = option.id == controls.activeQualityId,
-                        ) { onQuality(option.id) }
-                    }
-                    PlayarrPlayerMenu.Audio -> items(controls.audioTracks) { track ->
-                        PlayerDialogOption(
-                            label = track.label,
-                            detail = track.language,
-                            selected = track.id == controls.selectedAudioTrackId,
-                        ) { onAudio(track.id) }
-                    }
-                    PlayarrPlayerMenu.Subtitles -> items(controls.subtitleTracks) { track ->
-                        PlayerDialogOption(
-                            label = track.label,
-                            detail = track.language,
-                            selected = track.id == controls.selectedSubtitleTrackId,
-                        ) { onSubtitle(track.id) }
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-    )
-}
-
-@Composable
-private fun PlayerDialogOption(
-    label: String,
-    detail: String?,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
-            Text(label)
-            detail?.let { Text(it, color = WebInkMuted, fontSize = 11.sp) }
         }
-        if (selected) Text("✓", color = WebPink, fontWeight = FontWeight.Bold)
     }
 }
 

@@ -3,6 +3,8 @@ package io.streamarr.shared.player
 /** Snapshot of playback state, observed via [StreamarrPlayer.state]. */
 data class PlaybackState(
     val isPlaying: Boolean = false,
+    /** True while playback is intended to continue, including a buffering interval. */
+    val playWhenReady: Boolean = false,
     val isBuffering: Boolean = false,
     val hasEnded: Boolean = false,
     val positionMs: Long = 0L,

@@ -17,4 +17,17 @@ class PlayarrPlaybackTimelineTest {
         assertEquals(45_000L, playarrSourcePositionMs(45_000L, 0L, 90_000L))
         assertEquals(90_000L, playarrSourcePositionMs(100_000L, 0L, 90_000L))
     }
+
+    @Test
+    fun `player time matches the web controller clock`() {
+        assertEquals("0:00", formatPlayarrPlayerTime(-1L))
+        assertEquals("9:08", formatPlayarrPlayerTime(548_999L))
+        assertEquals("1:01:01", formatPlayarrPlayerTime(3_661_000L))
+    }
+
+    @Test
+    fun `on demand session urls use source renegotiation for seeks`() {
+        assertEquals(true, isPlayarrOnDemandHls("/api/v1/media/sessions/s1/playlist.m3u8"))
+        assertEquals(false, isPlayarrOnDemandHls("/api/v1/media/mf-1/content"))
+    }
 }

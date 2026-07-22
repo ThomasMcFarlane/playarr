@@ -190,6 +190,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Replace Android's stock Media3 player chrome with Playarr controls that show the absolute source
+  timeline, buffered progress, auto-hide behaviour, and phone/TV track selectors.
 - Change the catalogue search response from a bare item array to `{ items, remote_only }` so
   partial-cache nodes can surface titles available only from peers.
 - Format the peer-group backend sources with the repository's standard Rust style.

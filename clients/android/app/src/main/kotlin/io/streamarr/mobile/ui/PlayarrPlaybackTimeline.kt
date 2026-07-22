@@ -1,5 +1,11 @@
 package io.streamarr.mobile.ui
 
+internal data class PlayarrPlayerTimeline(
+    val positionMs: Long = 0L,
+    val durationMs: Long = 0L,
+    val bufferedPositionMs: Long = 0L,
+)
+
 internal fun playarrEnginePositionMs(sourcePositionMs: Long, sourceOffsetMs: Long): Long =
     (sourcePositionMs - sourceOffsetMs).coerceAtLeast(0L)
 
@@ -11,3 +17,16 @@ internal fun playarrSourcePositionMs(
     .let { absolute ->
         if (sourceDurationMs > 0L) absolute.coerceAtMost(sourceDurationMs) else absolute
     }
+
+internal fun isPlayarrOnDemandHls(playbackUrl: String): Boolean =
+    playbackUrl.contains("/api/v1/media/sessions/")
+
+internal fun formatPlayarrPlayerTime(totalMs: Long): String {
+    val totalSeconds = totalMs.coerceAtLeast(0L) / 1_000L
+    val hours = totalSeconds / 3_600L
+    val minutes = (totalSeconds % 3_600L) / 60L
+    val seconds = totalSeconds % 60L
+    val paddedSeconds = seconds.toString().padStart(2, '0')
+    if (hours == 0L) return "$minutes:$paddedSeconds"
+    return "$hours:${minutes.toString().padStart(2, '0')}:$paddedSeconds"
+}

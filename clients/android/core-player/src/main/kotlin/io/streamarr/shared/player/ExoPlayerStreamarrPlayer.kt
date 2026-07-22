@@ -39,6 +39,10 @@ class ExoPlayerStreamarrPlayer private constructor(
                 _state.update { it.copy(isPlaying = isPlaying) }
             }
 
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                _state.update { it.copy(playWhenReady = playWhenReady) }
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 _state.update {
                     it.copy(
@@ -113,10 +117,12 @@ class ExoPlayerStreamarrPlayer private constructor(
 
     override fun play() {
         rawPlayer.play()
+        _state.update { it.copy(playWhenReady = true) }
     }
 
     override fun pause() {
         rawPlayer.pause()
+        _state.update { it.copy(playWhenReady = false) }
     }
 
     override fun seekTo(positionMs: Long) {
