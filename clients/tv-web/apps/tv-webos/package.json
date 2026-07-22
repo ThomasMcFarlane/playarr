@@ -11,7 +11,11 @@
     "package:ipk": "pnpm --filter @streamarr-tv/app-webos... run build && ares-package dist -o out",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "simulator:install": "bash scripts/webos-sdk/install-simulator.sh",
+    "simulator": "bash scripts/webos-sdk/launch-simulator.sh",
+    "emulator:install": "bash scripts/webos-sdk/install-ose-emulator.sh",
+    "emulator": "bash scripts/webos-sdk/launch-ose-emulator.sh"
   },
   "dependencies": {
     "@streamarr-tv/web": "workspace:*",
