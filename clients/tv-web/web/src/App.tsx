@@ -71,7 +71,11 @@ import {
 import { useTvNavigation } from "./lib/useTvNavigation";
 import { useOnlineStatus } from "./lib/useOnlineStatus";
 import { useDownloads } from "./lib/DownloadsProvider";
-import { PLAYARR_CLIENT_PLATFORM } from "./lib/clientPlatform";
+import {
+  IS_PACKAGED_TV,
+  PLAYARR_CLIENT_PLATFORM,
+  shouldStartPackagedTvLink,
+} from "./lib/clientPlatform";
 import { useLanguage } from "./lib/i18n/LanguageProvider";
 import type { TranslationKey } from "./lib/i18n/translations";
 import {
@@ -80,6 +84,8 @@ import {
   writeCachedCatalogKinds,
 } from "./lib/catalogKindsCache";
 import { profileAvatarScope } from "./lib/profileAvatar";
+
+const PLAYARR_ICON_URL = `${import.meta.env.BASE_URL}playarr-icon.svg`;
 
 const LOCALE_TAGS: Record<string, string> = {
   en: "en-GB",
@@ -197,7 +203,13 @@ function AppShell() {
   const [apiBaseUrl] = useApiBaseUrl();
   const { t, language } = useLanguage();
   const localeTag = LOCALE_TAGS[language] ?? "en-GB";
-  const { authFailed, connectedServers, currentUserId, currentUserName } = useAuth();
+  const {
+    authFailed,
+    connectedServers,
+    currentUserId,
+    currentUserName,
+    savedProfiles,
+  } = useAuth();
   const currentAvatarScope = currentUserId
     ? profileAvatarScope(apiBaseUrl, currentUserId)
     : undefined;
@@ -344,6 +356,10 @@ function AppShell() {
     }
   }, [currentUserId, playerSession]);
 
+  if (shouldStartPackagedTvLink(IS_PACKAGED_TV, currentUserId, savedProfiles.length)) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
   if (authFailed) {
     return (
       <ProfilesPage
@@ -389,7 +405,7 @@ function AppShell() {
             <div className="app-logo" aria-hidden="true">
               <img
                 className="app-logo-icon"
-                src="/playarr-icon.svg"
+                src={PLAYARR_ICON_URL}
                 alt=""
               />
             </div>

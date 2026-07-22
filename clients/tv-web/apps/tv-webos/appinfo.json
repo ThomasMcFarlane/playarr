@@ -4,13 +4,13 @@
   "vendor": "Streamarr",
   "type": "web",
   "main": "index.html",
-  "title": "Streamarr",
+  "title": "Playarr",
   "icon": "icon.png",
-  "largeIcon": "icon.png",
-  "iconColor": "#000000",
-  "uiRevision": "2",
+  "largeIcon": "largeIcon.png",
+  "iconColor": "#17111f",
   "resolution": "1920x1080",
-  "disableBackHistoryAPI": false,
-  "requiredPermissions": ["network.internet"],
-  "appDescription": "Streamarr -- browse and play your media library on the big screen."
+  "disableBackHistoryAPI": true,
+  "handlesRelaunch": false,
+  "transparent": false,
+  "appDescription": "Play your Streamarr libraries on LG webOS TV."
 }

@@ -28,6 +28,7 @@ interface PlayarrClient {
 
 const CLIENT_PREVIEW_RELEASE_BASE =
   "https://github.com/ThomasMcFarlane/streamarr/releases/download/clients-v0.1.0-preview.1";
+const PLAYARR_PUBLIC_ORIGIN = "https://playarr.app";
 
 const PLAYARR_CLIENTS: readonly PlayarrClient[] = [
   {
@@ -57,7 +58,7 @@ const PLAYARR_CLIENTS: readonly PlayarrClient[] = [
     nameKey: "pages.clients.webos.name",
     platformKey: "pages.clients.webos.platform",
     descriptionKey: "pages.clients.webos.description",
-    status: "soon",
+    status: "experimental",
     icon: "lg",
   },
   {
@@ -65,7 +66,7 @@ const PLAYARR_CLIENTS: readonly PlayarrClient[] = [
     nameKey: "pages.clients.tizen.name",
     platformKey: "pages.clients.tizen.platform",
     descriptionKey: "pages.clients.tizen.description",
-    status: "soon",
+    status: "experimental",
     icon: "samsung",
   },
   {
@@ -242,7 +243,7 @@ export function AndroidDownloadDetails() {
         <a
           id="android-download"
           className="profile-action-button"
-          href="/downloads/android/playarr-android.apk"
+          href={`${PLAYARR_PUBLIC_ORIGIN}/downloads/android/playarr-android.apk`}
           target="_blank"
           rel="noopener noreferrer"
           data-navigation-focus-key="clients:android:download"
@@ -293,7 +294,7 @@ function VidaaInstallDetails() {
           <a
             id="vidaa-store-open"
             className="profile-action-button"
-            href="/vidaa-store/"
+            href={`${PLAYARR_PUBLIC_ORIGIN}/vidaa-store/`}
             data-navigation-focus-key="clients:vidaa:store"
             data-tv-focus-default
           >
@@ -391,6 +392,189 @@ function RokuInstallGuide() {
   );
 }
 
+type SmartTvClientId = "webos" | "tizen";
+
+interface SmartTvInstallConfig {
+  appId: string;
+  downloadHref: string;
+  officialGuideHref: string;
+  sourceHref: string;
+  steps: readonly (readonly string[])[];
+}
+
+const SMART_TV_INSTALL_CONFIG: Record<SmartTvClientId, SmartTvInstallConfig> = {
+  webos: {
+    appId: "com.streamarr.tv",
+    downloadHref: `${PLAYARR_PUBLIC_ORIGIN}/downloads/webos/playarr-webos.ipk`,
+    officialGuideHref:
+      "https://webostv.developer.lge.com/develop/getting-started/developer-mode-app",
+    sourceHref:
+      "https://github.com/ThomasMcFarlane/streamarr/tree/main/clients/tv-web/apps/tv-webos",
+    steps: [
+      [],
+      [
+        "git clone https://github.com/ThomasMcFarlane/streamarr.git",
+        "cd streamarr/clients/tv-web",
+        "npm install -g pnpm@11.13.0",
+        "pnpm install --frozen-lockfile",
+        "npm install -g @webos-tools/cli",
+        "pnpm --filter @streamarr-tv/app-webos run package:ipk",
+      ],
+      [
+        'ares-setup-device --add playarr-tv -i "host=<TV-IP>" -i "port=9922" -i "username=prisoner"',
+        "ares-novacom --device playarr-tv --getkey",
+        "ares-device --system-info --device playarr-tv",
+      ],
+      [
+        "ares-install --device playarr-tv apps/tv-webos/out/com.streamarr.tv_*_all.ipk",
+        "ares-launch --device playarr-tv com.streamarr.tv",
+      ],
+    ],
+  },
+  tizen: {
+    appId: "StrmarrTV1.Streamarr",
+    downloadHref: `${PLAYARR_PUBLIC_ORIGIN}/downloads/tizen/playarr-tizen.wgt`,
+    officialGuideHref:
+      "https://developer.samsung.com/smarttv/develop/getting-started/using-sdk/tv-device.html",
+    sourceHref:
+      "https://github.com/ThomasMcFarlane/streamarr/tree/main/clients/tv-web/apps/tv-tizen",
+    steps: [
+      [],
+      [],
+      [
+        "git clone https://github.com/ThomasMcFarlane/streamarr.git",
+        "cd streamarr/clients/tv-web",
+        "npm install -g pnpm@11.13.0",
+        "pnpm install --frozen-lockfile",
+        "pnpm --filter @streamarr-tv/app-tizen... run build",
+        "tizen package -t wgt -s <certificate-profile> -- apps/tv-tizen/dist",
+      ],
+      [
+        "sdb connect <TV-IP>",
+        "sdb devices",
+        "tizen list tv",
+        "tizen install -n <generated-package>.wgt -t <target-name> -- apps/tv-tizen/dist",
+        "tizen run -p StrmarrTV1.Streamarr -t <target-name>",
+      ],
+    ],
+  },
+};
+
+function SmartTvInstallGuide({
+  client,
+}: {
+  client: PlayarrClient & { id: SmartTvClientId };
+}) {
+  const { t } = useLanguage();
+  const config = SMART_TV_INSTALL_CONFIG[client.id];
+  const pageKey = `pages.clients.${client.id}Page` as const;
+
+  return (
+    <>
+      <section
+        className={`android-inline-details client-details-summary smart-tv-overview is-${client.icon}`}
+        aria-labelledby={`${client.id}-details-title`}
+      >
+        <span
+          className="client-platform-icon client-details-icon"
+          data-client-icon={client.icon}
+          aria-hidden="true"
+        >
+          <ClientPlatformIcon icon={client.icon} />
+        </span>
+        <p className="page-kicker">{t(client.platformKey)}</p>
+        <h1 id={`${client.id}-details-title`}>{t(`${pageKey}.title`)}</h1>
+        <p className="smart-tv-description">{t(`${pageKey}.description`)}</p>
+        <span className="client-details-status">
+          {t("pages.clients.status.developerPreview")}
+        </span>
+        <p className="smart-tv-package-note" id={`${client.id}-package-note`}>
+          {t(`${pageKey}.packageNote`)}
+        </p>
+        <div className="android-download-actions smart-tv-download-actions">
+          <a
+            className="profile-action-button"
+            href={config.downloadHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-describedby={`${client.id}-package-note`}
+            data-navigation-focus-key={`clients:${client.id}:download`}
+          >
+            <strong>{t(`${pageKey}.download`)}</strong>
+          </a>
+          <a
+            className="profile-action-button profile-action-button-secondary"
+            href={config.sourceHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-navigation-focus-key={`clients:${client.id}:source`}
+          >
+            <strong>{t("pages.clients.smartTvPage.openSource")}</strong>
+          </a>
+        </div>
+      </section>
+
+      <section
+        className={`vidaa-steps smart-tv-install-guide is-${client.icon}`}
+        aria-labelledby={`${client.id}-install-title`}
+      >
+        <div className="vidaa-section-heading">
+          <span aria-hidden="true">01</span>
+          <div>
+            <p>{t(`${pageKey}.installKicker`)}</p>
+            <h2 id={`${client.id}-install-title`}>{t(`${pageKey}.installTitle`)}</h2>
+          </div>
+        </div>
+        <p className="vidaa-section-copy">{t(`${pageKey}.installDescription`)}</p>
+        <ol>
+          {([1, 2, 3, 4] as const).map((step, index) => (
+            <li key={step}>
+              <span>0{step}</span>
+              <div>
+                <h3>{t(`${pageKey}.step${step}Title`)}</h3>
+                <p>{t(`${pageKey}.step${step}Description`)}</p>
+                {config.steps[index]?.length ? (
+                  <ul
+                    className="smart-tv-commands"
+                    aria-label={t("pages.clients.smartTvPage.commandsAriaLabel", {
+                      step,
+                    })}
+                  >
+                    {config.steps[index].map((command) => (
+                      <li key={command}>
+                        <code>{command}</code>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ol>
+        <p className="roku-official-guide">
+          <a
+            href={config.officialGuideHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-navigation-focus-key={`clients:${client.id}:official-guide`}
+          >
+            {t(`${pageKey}.officialGuide`)}
+          </a>
+        </p>
+      </section>
+
+      <section
+        className={`vidaa-safety smart-tv-install-note is-${client.icon}`}
+        aria-labelledby={`${client.id}-install-note-title`}
+      >
+        <p className="page-kicker">{t("pages.clients.smartTvPage.noteKicker")}</p>
+        <h2 id={`${client.id}-install-note-title`}>{t(`${pageKey}.noteTitle`)}</h2>
+        <p>{t(`${pageKey}.noteDescription`, { appId: config.appId })}</p>
+      </section>
+    </>
+  );
+}
+
 function ClientOverviewDetails({ client }: { client: PlayarrClient }) {
   const { t } = useLanguage();
 
@@ -464,6 +648,10 @@ export function ClientDetailsPage() {
             <ClientOverviewDetails client={client} />
             <RokuInstallGuide />
           </>
+        ) : client.id === "webos" || client.id === "tizen" ? (
+          <SmartTvInstallGuide
+            client={client as PlayarrClient & { id: SmartTvClientId }}
+          />
         ) : (
           <ClientOverviewDetails client={client} />
         )}

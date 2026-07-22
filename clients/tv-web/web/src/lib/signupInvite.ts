@@ -111,7 +111,9 @@ function extractUrl(entry: unknown): string | undefined {
 function base64UrlDecode(segment: string): string {
   const base64 = segment.replace(/-/g, "+").replace(/_/g, "/");
   const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
-  if (typeof atob === "function") return atob(padded);
-  // Fallback for runtimes with no global `atob` (older Node test runners).
-  return Buffer.from(padded, "base64").toString("utf-8");
+  if (typeof atob !== "function") {
+    throw new Error("This runtime cannot decode base64url values");
+  }
+  const bytes = Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
 }

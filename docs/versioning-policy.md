@@ -206,23 +206,22 @@ mechanisms:
    `VersionEnvelope.compatibility`; `"unsupported"` forces an **automatic,
    non-dismissible** reload rather than merely offering one.
 
-Since `compatibility` is always `[]` from the real server today, and since no
-call site currently sets the platform/version headers for this client either,
-mechanism 2 cannot currently fire against a real deployment — only mechanism
-1 (the CDN-manifest OTA path) is exercisable today.
+Since `compatibility` is always `[]` from the real server today, mechanism 2
+cannot currently fire against a real deployment even though Web and packaged
+TV requests now identify their platform/version. Only mechanism 1 (the
+CDN-manifest OTA path) is exercisable today.
 
-### webOS / Tizen — `VersionBanner.tsx`
+### webOS / Tizen — packaged update notice
 
-Both packaged TV shells share the `tv-web`/`ui-tv` codebase and render the same
-[`VersionBanner`](../clients/tv-web/packages/ui-tv/src/screens/VersionBanner.tsx):
-a simple, non-blocking (`pointerEvents: "none"`), check-on-launch banner shown
-whenever `evaluateClientVersion` returns `"deprecated"` or `"unsupported"`,
-telling the viewer to update via their TV's app store. Unlike Web, there is no
-forced-reload path here, because these platforms have no OTA mechanism at
-all: webOS and Tizen require a full store resubmission and review cycle for
-every release, including patches. As with the other clients, this banner
-currently has nothing real to react to against a
-live server, since the compatibility array it reads is always empty.
+Both vendor packages run the full Web client and its compatibility check, but
+`useAppUpdate` explicitly skips service-worker registration and the hosted
+`build-manifest.json` poll. When `evaluateClientVersion` returns
+`"unsupported"`, the package shows a persistent reinstall notice. It never
+force-reloads: an IPK/WGT is immutable, so that would only reopen the same
+unsupported bundle in a loop. webOS and Tizen require a new developer/store
+package for every release, including patches. As with the other clients, the
+notice currently has nothing real to react to against a live server while the
+compatibility array remains empty.
 
 ### VIDAA — hosted Playarr Web
 

@@ -31,7 +31,7 @@ function environment(object) {
   };
 }
 
-describe("Android APK downloads", () => {
+describe("client package downloads", () => {
   it("serves a published APK without authentication as a same-origin attachment", async () => {
     const env = environment({
       body: new Uint8Array([1, 2, 3]),
@@ -103,6 +103,60 @@ describe("Android APK downloads", () => {
     );
   });
 
+  it.each([
+    {
+      path: "/downloads/webos/playarr-webos.ipk",
+      key: "webos/playarr-webos.ipk",
+      filename: "playarr-webos.ipk",
+      contentType: "application/octet-stream",
+    },
+    {
+      path: "/downloads/tizen/playarr-tizen.wgt",
+      key: "tizen/playarr-tizen.wgt",
+      filename: "playarr-tizen.wgt",
+      contentType: "application/widget",
+    },
+  ])("serves the published $filename from its stable R2 key", async ({
+    path,
+    key,
+    filename,
+    contentType,
+  }) => {
+    const env = environment({
+      body: new Uint8Array([1, 2, 3]),
+      httpEtag: '"release-etag"',
+      size: 3,
+      writeHttpMetadata() {},
+    });
+
+    const response = await worker.fetch(
+      new Request(`https://playarr.app${path}`),
+      env
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Disposition")).toBe(
+      `attachment; filename="${filename}"`
+    );
+    expect(response.headers.get("Content-Type")).toBe(contentType);
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(env.CLIENT_DOWNLOADS.get).toHaveBeenCalledWith(key);
+  });
+
+  it.each([
+    "/downloads/webos/playarr-webos.ipk",
+    "/downloads/tizen/playarr-tizen.wgt",
+  ])("returns a truthful unpublished response for %s", async (path) => {
+    const response = await worker.fetch(
+      new Request(`https://playarr.app${path}`),
+      environment(null)
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    await expect(response.text()).resolves.toContain("has not been published yet");
+  });
+
   it("does not expose arbitrary R2 object paths", async () => {
     const env = environment(null);
     await worker.fetch(
@@ -125,6 +179,86 @@ describe("Android APK downloads", () => {
 });
 
 describe("hosted device linking", () => {
+  it("allows packaged TV webviews to preflight and read link responses", async () => {
+    const env = environment(null);
+    const preflight = await worker.fetch(
+      new Request("https://playarr.app/api/link/code", {
+        method: "OPTIONS",
+        headers: {
+          Origin: "app://playarr",
+          "Access-Control-Request-Headers": "content-type",
+          "Access-Control-Request-Method": "POST",
+        },
+      }),
+      env
+    );
+
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(preflight.headers.get("Access-Control-Allow-Methods")).toContain("POST");
+    expect(preflight.headers.get("Access-Control-Allow-Headers")).toBe("Content-Type");
+    expect(env.ASSETS.fetch).not.toHaveBeenCalled();
+
+    const created = await worker.fetch(
+      new Request("https://playarr.app/api/link/code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "app://playarr",
+        },
+        body: JSON.stringify({ client_platform: "tv-webos" }),
+      }),
+      env
+    );
+
+    expect(created.status).toBe(200);
+    expect(created.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(created.headers.get("Content-Type")).toBe(
+      "application/json; charset=utf-8"
+    );
+  });
+
+  it("keeps phone-side inspection and authorisation same-origin", async () => {
+    const env = environment(null);
+    const preflight = await worker.fetch(
+      new Request("https://playarr.app/api/link/authorize", {
+        method: "OPTIONS",
+        headers: { Origin: "https://malicious.example" },
+      }),
+      env
+    );
+
+    expect(preflight.status).toBe(404);
+    expect(preflight.headers.has("Access-Control-Allow-Origin")).toBe(false);
+  });
+
+  it.each(["android-mobile", "android-tv", "tv-webos", "tv-tizen"])(
+    "preserves the %s client platform in the link session",
+    async (clientPlatform) => {
+      const env = environment(null);
+      const created = await worker.fetch(
+        new Request("https://playarr.app/api/link/code", {
+          method: "POST",
+          body: JSON.stringify({ client_platform: clientPlatform }),
+        }),
+        env
+      );
+      const code = await created.json();
+
+      const inspection = await worker.fetch(
+        new Request(
+          `https://playarr.app/api/link/session?user_code=${encodeURIComponent(code.user_code)}`
+        ),
+        env
+      );
+
+      await expect(inspection.json()).resolves.toMatchObject({
+        client_platform: clientPlatform,
+      });
+      expect(inspection.headers.get("Access-Control-Allow-Origin")).toBeNull();
+    }
+  );
+
   it("creates, authorises, and returns a one-time pairing claim", async () => {
     const env = environment(null);
     const created = await worker.fetch(
@@ -183,5 +317,31 @@ describe("hosted device linking", () => {
       env
     );
     expect(response.status).toBe(404);
+  });
+
+  it("rejects server claims containing URL credentials", async () => {
+    const env = environment(null);
+    const created = await worker.fetch(
+      new Request("https://playarr.app/api/link/code", {
+        method: "POST",
+        body: JSON.stringify({ client_platform: "tv-tizen" }),
+      }),
+      env
+    );
+    const code = await created.json();
+    const response = await worker.fetch(
+      new Request("https://playarr.app/api/link/authorize", {
+        method: "POST",
+        body: JSON.stringify({
+          user_code: code.user_code,
+          server_url: "https://viewer:secret@streamarr.example.com",
+          server_device_code: "server-secret-device-code",
+          server_urls: ["https://streamarr.example.com"],
+        }),
+      }),
+      env
+    );
+
+    expect(response.status).toBe(400);
   });
 });

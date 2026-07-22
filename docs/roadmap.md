@@ -207,10 +207,12 @@ someone runs them for real.
 
 - **Android TV.** **Built.** The universal `clients/android/` project
   exposes a Leanback launcher and adapts the same native UI for D-pad use.
-- **webOS.** **Built.** `clients/tv-web/apps/tv-webos/`, a real adapter
-  over the shared TV shell using `player-shaka`.
-- **Tizen.** **Built.** `clients/tv-web/apps/tv-tizen/`, using the
-  `player-avplay` adapter for Samsung's `AVPlay`.
+- **webOS.** **Built.** `clients/tv-web/apps/tv-webos/` packages the full
+  Playarr Web page tree with hash routing, LG lifecycle handling, conservative
+  playback negotiation, and `player-shaka`.
+- **Tizen.** **Built.** `clients/tv-web/apps/tv-tizen/` packages that same
+  complete page tree with Samsung remote/lifecycle handling and the native
+  `player-avplay` adapter.
 - **VIDAA hosted Web App.** **Browser client and experimental launcher gateway
   built; deployment and hardware validation pending.** The hosted Playarr Web client persists a `tv-vidaa` identity
   and negotiates a conservative television playback profile. Users can open it
@@ -219,9 +221,10 @@ someone runs them for real.
   VIDAA partner or device-specific developer access. The older
   `apps/tv-vidaa-fallback/` PWA remains an experimental prototype.
 
-The packaged webOS/Tizen shells share `VersionBanner.tsx`; hosted VIDAA uses
-Playarr Web's update flow described in
-[`versioning-policy.md`](versioning-policy.md).
+Packaged webOS/Tizen builds use Playarr Web's compatibility check but skip its
+service-worker OTA path; an unsupported package shows a persistent reinstall
+notice instead of reloading the same immutable bundle. Hosted VIDAA uses the
+normal Web update flow described in [`versioning-policy.md`](versioning-policy.md).
 
 ## Wave 7 — Hardening and Versioning Rollout
 
@@ -247,7 +250,7 @@ Playarr Web's update flow described in
   worker-driven OTA path (`sw.js` + `build-manifest.json` polling) that can
   actually deliver a new bundle without a store review and is also the hosted
   VIDAA delivery path; webOS/Tizen correctly have no OTA path and instead show
-  `VersionBanner`. All of this
+  the full app's package-update notice. All of this
   is real, working client code — its only real limitation is the empty
   `compatibility` array noted above, which means none of it can currently
   see real floor/deprecation data from a live server.

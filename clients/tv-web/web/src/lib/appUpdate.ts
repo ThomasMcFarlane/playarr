@@ -15,7 +15,8 @@
  *    -- "is the bundle I'm running still within the server's supported
  *    range". This drives the *hard*, non-dismissible path: once the
  *    running bundle is below `min_supported_version` (the server's floor),
- *    a reload is forced automatically rather than merely offered.
+ *    hosted Web reloads while immutable webOS/Tizen packages show an update
+ *    notice and wait for the viewer to install a newer IPK/WGT.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ApiClient } from "@streamarr-tv/api-client";
@@ -27,22 +28,25 @@ const POLL_INTERVAL_MS = 15 * 60 * 1000;
 export interface AppUpdateState {
   /** A newer CDN bundle exists. Dismissible -- shows the "Update available" toast. */
   updateAvailable: boolean;
-  /** The running bundle is below the server's `min_supported_version` floor. Non-dismissible; a reload is triggered automatically. */
+  /** The running bundle is below the server's `min_supported_version` floor. */
   mustReload: boolean;
+  /** Vendor packages cannot update through the Web service worker and must be reinstalled. */
+  packageUpdateRequired: boolean;
   dismiss: () => void;
   reloadNow: () => void;
 }
 
 /**
- * Registers the versioned service worker (production builds only -- see
- * the `import.meta.env.PROD` guard below, so this never fights Vite's dev
- * server/HMR) and polls both update signals above.
+ * Registers the versioned service worker for hosted production builds only
+ * (never vendor packages and never Vite development) and polls the applicable
+ * update signals above.
  */
 export function useAppUpdate(client: ApiClient, clientPlatform = "web"): AppUpdateState {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [mustReload, setMustReload] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
+  const isVendorPackage = clientPlatform === "tv-webos" || clientPlatform === "tv-tizen";
 
   const reloadNow = useCallback(() => {
     const waiting = registrationRef.current?.waiting;
@@ -66,7 +70,12 @@ export function useAppUpdate(client: ApiClient, clientPlatform = "web"): AppUpda
   }, []);
 
   useEffect(() => {
-    if (typeof navigator === "undefined" || !("serviceWorker" in navigator) || !import.meta.env.PROD) return;
+    if (
+      isVendorPackage ||
+      typeof navigator === "undefined" ||
+      !("serviceWorker" in navigator) ||
+      !import.meta.env.PROD
+    ) return;
     let cancelled = false;
     navigator.serviceWorker
       .register("/sw.js")
@@ -80,19 +89,21 @@ export function useAppUpdate(client: ApiClient, clientPlatform = "web"): AppUpda
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isVendorPackage]);
 
   const checkForUpdate = useCallback(async () => {
-    const manifest = await fetchBuildManifest({
-      manifestUrl: "/build-manifest.json",
-    });
-    if (manifest && isNewerBundleAvailable(__APP_VERSION__, manifest)) {
-      setUpdateAvailable(true);
-      // Ask the SW to re-check/precache the new bundle in the background --
-      // the actual reload still waits for `reloadNow` (dismissible toast, or
-      // the forced path below), matching the architecture doc's "background
-      // fetch... without interrupting an in-progress session" step.
-      void registrationRef.current?.update();
+    if (!isVendorPackage) {
+      const manifest = await fetchBuildManifest({
+        manifestUrl: "/build-manifest.json",
+      });
+      if (manifest && isNewerBundleAvailable(__APP_VERSION__, manifest)) {
+        setUpdateAvailable(true);
+        // Ask the SW to re-check/precache the new bundle in the background --
+        // the actual reload still waits for `reloadNow` (dismissible toast, or
+        // the forced path below), matching the architecture doc's "background
+        // fetch... without interrupting an in-progress session" step.
+        void registrationRef.current?.update();
+      }
     }
 
     try {
@@ -104,7 +115,7 @@ export function useAppUpdate(client: ApiClient, clientPlatform = "web"): AppUpda
     } catch {
       // Server unreachable this tick -- try again on the next poll rather than treating it as a hard failure.
     }
-  }, [client, clientPlatform]);
+  }, [client, clientPlatform, isVendorPackage]);
 
   useEffect(() => {
     void checkForUpdate();
@@ -121,15 +132,18 @@ export function useAppUpdate(client: ApiClient, clientPlatform = "web"): AppUpda
     };
   }, [checkForUpdate]);
 
-  // The floor check is a hard requirement, not a suggestion -- force the
-  // reload as soon as it's detected rather than waiting for the viewer.
+  // Hosted Web builds can satisfy the floor by loading their newly deployed
+  // bundle. Vendor TV packages cannot, so they keep running and surface the
+  // explicit reinstall notice returned below instead of entering a reload
+  // loop against the same immutable IPK/WGT.
   useEffect(() => {
-    if (mustReload) reloadNow();
-  }, [mustReload, reloadNow]);
+    if (mustReload && !isVendorPackage) reloadNow();
+  }, [isVendorPackage, mustReload, reloadNow]);
 
   return {
     updateAvailable: updateAvailable && !dismissed,
     mustReload,
+    packageUpdateRequired: isVendorPackage && mustReload,
     dismiss: () => setDismissed(true),
     reloadNow,
   };

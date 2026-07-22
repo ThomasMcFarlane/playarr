@@ -37,7 +37,7 @@ import {
   resolveReachableServer,
   setStoredApiBaseUrl,
 } from "@streamarr-tv/domain";
-import { PLAYARR_CLIENT_PLATFORM } from "./clientPlatform";
+import { IS_PACKAGED_TV, PLAYARR_CLIENT_PLATFORM } from "./clientPlatform";
 import { createLocalNetworkFetch } from "./localNetworkFetch";
 import { publicIpv4RelayUrl } from "./loginServerUrl";
 import {
@@ -61,14 +61,26 @@ const PLAYARR_LOGIN_IDENTITY = {
   deviceName:
     PLAYARR_CLIENT_PLATFORM === "tv-vidaa"
       ? "Playarr for VIDAA"
-      : PLAYARR_CLIENT_PLATFORM === "android-tv"
-        ? "Playarr for Android TV"
-        : PLAYARR_CLIENT_PLATFORM === "android-mobile"
-          ? "Playarr for Android"
-        : "Playarr Web",
+      : PLAYARR_CLIENT_PLATFORM === "tv-webos"
+        ? "Playarr for LG webOS"
+        : PLAYARR_CLIENT_PLATFORM === "tv-tizen"
+          ? "Playarr for Samsung Tizen"
+          : PLAYARR_CLIENT_PLATFORM === "android-tv"
+            ? "Playarr for Android TV"
+            : PLAYARR_CLIENT_PLATFORM === "android-mobile"
+              ? "Playarr for Android"
+              : "Playarr Web",
   clientPlatform: PLAYARR_CLIENT_PLATFORM,
   clientVersion: __APP_VERSION__,
 };
+
+const PLAYARR_PLATFORM_HEADERS =
+  PLAYARR_CLIENT_PLATFORM === "web"
+    ? undefined
+    : {
+        "X-Streamarr-Client-Platform": PLAYARR_LOGIN_IDENTITY.clientPlatform,
+        "X-Streamarr-Client-Version": PLAYARR_LOGIN_IDENTITY.clientVersion,
+      };
 
 const CURRENT_USER_NAME_STORAGE_KEY = "playarr.currentUserName";
 const SAVED_PROFILE_SESSIONS_STORAGE_KEY = "playarr.profileSessions.v4";
@@ -101,6 +113,11 @@ export interface ConnectedServer {
   label: string;
   username: string;
   primary: boolean;
+}
+
+export interface DeviceLoginTarget {
+  serverUrl: string;
+  serverUrls: string[];
 }
 
 function isStoredSession(value: unknown): value is StoredSession {
@@ -363,7 +380,10 @@ interface ApiClientContextValue {
     request?: AccessTokenRequest
   ) => Promise<string | undefined>;
   /** Stores the token pair returned by the TV device-code flow. */
-  loginWithDeviceToken: (token: DeviceTokenSuccess) => void;
+  loginWithDeviceToken: (
+    token: DeviceTokenSuccess,
+    target?: DeviceLoginTarget
+  ) => void;
   /** Activates a profile session already saved in this browser and validates/refreshes it. */
   switchProfile: (userId: string) => Promise<void>;
   /** True when this browser already has a reusable session for the profile. */
@@ -412,6 +432,15 @@ function resolveLegacyInitialApiBaseUrl(): string {
 
   const fromQuery = new URLSearchParams(window.location.search).get(API_BASE_URL_QUERY_PARAM);
   if (fromQuery) return publicIpv4RelayUrl(fromQuery);
+
+  const packagedDefault = window.PlayarrPackagedConfig?.apiBaseUrl?.trim();
+  if (IS_PACKAGED_TV && packagedDefault) return publicIpv4RelayUrl(packagedDefault);
+
+  // Installed packages run from a file/widget origin, which is never a
+  // Streamarr API. Keep an inert but valid HTTP base until hosted pairing
+  // supplies the user's real server (or an operator sets the packaged
+  // runtime config).
+  if (IS_PACKAGED_TV) return "http://localhost:8484";
 
   return window.location.origin;
 }
@@ -493,13 +522,7 @@ function buildClientForServerGroupUrl(url: string): ApiClient {
   return createManagedApiClient({
     baseUrl: url,
     fetchImpl: browserFetch,
-    defaultHeaders:
-      PLAYARR_CLIENT_PLATFORM === "tv-vidaa"
-        ? {
-            "X-Streamarr-Client-Platform": PLAYARR_LOGIN_IDENTITY.clientPlatform,
-            "X-Streamarr-Client-Version": PLAYARR_LOGIN_IDENTITY.clientVersion,
-          }
-        : undefined,
+    defaultHeaders: PLAYARR_PLATFORM_HEADERS,
   });
 }
 
@@ -706,13 +729,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     const instance: ApiClient = createManagedApiClient({
       baseUrl: apiBaseUrl,
       fetchImpl: browserFetch,
-      defaultHeaders:
-        PLAYARR_CLIENT_PLATFORM === "tv-vidaa"
-          ? {
-              "X-Streamarr-Client-Platform": PLAYARR_LOGIN_IDENTITY.clientPlatform,
-              "X-Streamarr-Client-Version": PLAYARR_LOGIN_IDENTITY.clientVersion,
-            }
-          : undefined,
+      defaultHeaders: PLAYARR_PLATFORM_HEADERS,
       getAccessToken: async (request) => {
         try {
           const activeProfile = activeProfileRef.current;
@@ -812,13 +829,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         instance = createManagedApiClient({
           baseUrl: profile.apiBaseUrl,
           fetchImpl: browserFetch,
-          defaultHeaders:
-            PLAYARR_CLIENT_PLATFORM === "tv-vidaa"
-              ? {
-                  "X-Streamarr-Client-Platform": PLAYARR_LOGIN_IDENTITY.clientPlatform,
-                  "X-Streamarr-Client-Version": PLAYARR_LOGIN_IDENTITY.clientVersion,
-                }
-              : undefined,
+          defaultHeaders: PLAYARR_PLATFORM_HEADERS,
           getAccessToken: async (request) =>
             ensureAccessToken(instance, store, {
               ...PLAYARR_LOGIN_IDENTITY,
@@ -875,13 +886,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
       const loginClient = createManagedApiClient({
         baseUrl: targetApiBaseUrl,
         fetchImpl: browserFetch,
-        defaultHeaders:
-          PLAYARR_CLIENT_PLATFORM === "tv-vidaa"
-            ? {
-                "X-Streamarr-Client-Platform": PLAYARR_LOGIN_IDENTITY.clientPlatform,
-                "X-Streamarr-Client-Version": PLAYARR_LOGIN_IDENTITY.clientVersion,
-              }
-            : undefined,
+        defaultHeaders: PLAYARR_PLATFORM_HEADERS,
       });
       const body: LoginRequest = {
         device_id: profileDeviceId,
@@ -948,13 +953,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
       const loginClient = createManagedApiClient({
         baseUrl: targetApiBaseUrl,
         fetchImpl: browserFetch,
-        defaultHeaders:
-          PLAYARR_CLIENT_PLATFORM === "tv-vidaa"
-            ? {
-                "X-Streamarr-Client-Platform": PLAYARR_LOGIN_IDENTITY.clientPlatform,
-                "X-Streamarr-Client-Version": PLAYARR_LOGIN_IDENTITY.clientVersion,
-              }
-            : undefined,
+        defaultHeaders: PLAYARR_PLATFORM_HEADERS,
       });
       const response = await loginClient.login({
         device_id: deviceId,
@@ -1019,7 +1018,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
   );
 
   const loginWithDeviceToken = useCallback(
-    (token: DeviceTokenSuccess) => {
+    (token: DeviceTokenSuccess, target?: DeviceLoginTarget) => {
       const userId = decodeAccessTokenUserId(token.accessToken);
       const deviceId = decodeAccessTokenDeviceId(token.accessToken);
       if (!userId || !deviceId) {
@@ -1033,17 +1032,43 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         expires_in: token.expiresInSeconds,
       });
       const name = t("lib.apiClientProvider.defaultViewerName");
+      const targetApiBaseUrl = target
+        ? publicIpv4RelayUrl(normaliseApiBaseUrl(target.serverUrl))
+        : apiBaseUrl;
+      if (target) {
+        const serverUrls = [...new Set([target.serverUrl, ...target.serverUrls])].map(
+          (url) => publicIpv4RelayUrl(normaliseApiBaseUrl(url))
+        );
+        rememberGroup({
+          servers: serverUrls.map((url) => ({ url })),
+          lastGoodUrl: targetApiBaseUrl,
+        });
+      }
       (tokenStoreRef.current as TokenStore).set(session);
       window.localStorage.removeItem(CURRENT_USER_NAME_STORAGE_KEY);
       const profileKey = createProfileDeviceId();
-      activeProfileRef.current = { profileKey, apiBaseUrl, userId, name, deviceId };
-      persistProfileSession(apiBaseUrl, profileKey, userId, name, deviceId, session);
+      activeProfileRef.current = {
+        profileKey,
+        apiBaseUrl: targetApiBaseUrl,
+        userId,
+        name,
+        deviceId,
+      };
+      persistProfileSession(
+        targetApiBaseUrl,
+        profileKey,
+        userId,
+        name,
+        deviceId,
+        session
+      );
       clearJoinedServerRegistry();
       setAuthFailed(false);
       setCurrentUserId(userId);
       setCurrentUserName(undefined);
+      if (targetApiBaseUrl !== apiBaseUrl) applyApiBaseUrl(targetApiBaseUrl);
     },
-    [apiBaseUrl, persistProfileSession]
+    [apiBaseUrl, applyApiBaseUrl, persistProfileSession, t]
   );
 
   const switchProfile = useCallback(
@@ -1282,7 +1307,10 @@ export function useAuth(): {
   login: (credentials: LoginCredentials) => Promise<void>;
   connectServer: (credentials: LoginCredentials) => Promise<void>;
   disconnectServer: (serverUrl: string) => void;
-  loginWithDeviceToken: (token: DeviceTokenSuccess) => void;
+  loginWithDeviceToken: (
+    token: DeviceTokenSuccess,
+    target?: DeviceLoginTarget
+  ) => void;
   switchProfile: (userId: string) => Promise<void>;
   isProfileSaved: (userId: string) => boolean;
   logout: () => void;

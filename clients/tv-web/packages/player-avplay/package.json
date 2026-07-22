@@ -2,7 +2,7 @@
   "name": "@streamarr-tv/player-avplay",
   "version": "0.1.0",
   "private": true,
-  "description": "Tizen webapis.avplay adapter implementing PlaybackEngine. Typed against a minimal local declaration of the Tizen AVPlay API surface (src/tizen-avplay.d.ts) since there is no real Tizen environment/SDK available here.",
+  "description": "Production Samsung Tizen webapis.avplay adapter implementing Playarr's shared PlaybackEngine contract.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -15,6 +15,7 @@
   "files": ["dist"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "test": "tsc -p tsconfig.json && node --test test/*.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist"
   },

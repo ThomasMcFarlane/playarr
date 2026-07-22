@@ -155,6 +155,8 @@ export const th: Translations = {
   "components.serverChoiceModal.cancel": "ยกเลิก",
   "components.themeToggle.useTheme": "ใช้ธีม {{theme}}",
   "components.updateToast.updateAvailable": "มี Playarr เวอร์ชันใหม่พร้อมใช้งานแล้ว",
+  "components.updateToast.packageUpdateRequired":
+    "เซิร์ฟเวอร์ Streamarr ของคุณไม่รองรับแอป Playarr ที่ติดตั้งอยู่นี้แล้ว โปรดติดตั้งแพ็กเกจเวอร์ชันใหม่เพื่อใช้งานต่อ",
   "components.updateToast.reload": "โหลดใหม่",
   "components.updateToast.dismiss": "ปิด",
   "components.watchStateOverlay.percentWatched": "ดูแล้ว {{percent}}%",
@@ -773,6 +775,7 @@ export const th: Translations = {
   "pages.clients.gridAriaLabel": "สถานะไคลเอนต์ Playarr",
   "pages.clients.status.available": "พร้อมใช้งาน",
   "pages.clients.status.experimental": "พร้อมใช้งาน · การติดตั้งทดลอง",
+  "pages.clients.status.developerPreview": "พร้อมใช้งาน · รุ่นพรีวิวนักพัฒนา",
   "pages.clients.status.soon": "เร็ว ๆ นี้",
   "pages.clients.web.name": "เว็บ",
   "pages.clients.web.platform": "เบราว์เซอร์สมัยใหม่ทุกชนิด",
@@ -802,17 +805,72 @@ export const th: Translations = {
   "pages.clients.appleTv.platform": "Apple TV",
   "pages.clients.webos.name": "LG webOS",
   "pages.clients.webos.platform": "สมาร์ททีวี LG",
-  "pages.clients.webos.description": "มีโครงแอปทีวีแล้ว แต่ยังไม่มีแพ็กเกจใช้งานจริงที่ลงลายเซ็นเผยแพร่",
+  "pages.clients.webos.description": "ประสบการณ์ Playarr สำหรับทีวีแบบเต็มพร้อมใช้งานเป็นรุ่นนักพัฒนา webOS พร้อมขั้นตอนแพ็กเกจและไซด์โหลด",
   "pages.clients.tizen.name": "Samsung Tizen",
   "pages.clients.tizen.platform": "สมาร์ททีวี Samsung",
-  "pages.clients.tizen.description": "มีโครงแอปทีวีแล้ว แต่ยังไม่มีแพ็กเกจใช้งานจริงที่ลงลายเซ็นเผยแพร่",
+  "pages.clients.tizen.description": "ประสบการณ์ Playarr สำหรับทีวีแบบเต็มพร้อมใช้งานเป็นบิลด์นักพัฒนา Tizen ที่พร้อมนำไปแพ็กเกจ พร้อมขั้นตอนลงลายเซ็นและไซด์โหลด",
   "pages.clients.vidaaSetup": "ติดตั้ง",
   "pages.clients.downloadApk": "ดาวน์โหลด APK",
   "pages.clients.downloadApp": "ดาวน์โหลดแอป",
   "pages.clients.downloadNote":
-    "มีเฉพาะแพ็กเกจแอปที่ติดตั้งได้เท่านั้นสำหรับดาวน์โหลด แอป Roku ต้องเปิดโหมดนักพัฒนา ส่วนไคลเอนต์เนทีฟอื่นจะยังไม่พร้อมจนกว่าจะเผยแพร่แพ็กเกจที่ลงลายเซ็นแล้ว",
+    "แพ็กเกจนักพัฒนาจะให้ดาวน์โหลดหลังเผยแพร่ไฟล์รุ่นแล้วเท่านั้น แต่ละหน้าไคลเอนต์ยังมีขั้นตอนที่เชื่อถือได้สำหรับสร้างจากซอร์สและไซด์โหลด",
   "pages.clients.notYetPublished": "ยังไม่มีไฟล์ดาวน์โหลดที่ลงลายเซ็นเผยแพร่",
   "pages.clients.footer": "คลังเดียว ทุกหน้าจอ เซิร์ฟเวอร์ยังเป็นของคุณ",
+  "pages.clients.smartTvPage.openSource": "เปิดซอร์สและ README",
+  "pages.clients.smartTvPage.commandsAriaLabel": "คำสั่งสำหรับขั้นตอน {{step}}",
+  "pages.clients.smartTvPage.noteKicker": "ก่อนติดตั้ง",
+  "pages.clients.webosPage.title": "Playarr สำหรับ LG webOS",
+  "pages.clients.webosPage.description":
+    "แอป webOS รวมอินเทอร์เฟซทีวี การจับคู่เซิร์ฟเวอร์ การนำทางด้วยรีโมต และการเล่นสื่อทั้งหมดของ Playarr ไว้ใน IPK ที่ติดตั้งบนทีวี LG ได้",
+  "pages.clients.webosPage.packageNote":
+    "ปุ่มแพ็กเกจจะดาวน์โหลด IPK นักพัฒนาล่าสุดหลังเผยแพร่แล้วเท่านั้น หากยังไม่มี ให้สร้าง IPK เดียวกันจากซอร์สด้วยคำสั่งด้านล่าง",
+  "pages.clients.webosPage.download": "ดาวน์โหลด LG webOS IPK",
+  "pages.clients.webosPage.installKicker": "โหมดนักพัฒนา LG",
+  "pages.clients.webosPage.installTitle": "ติดตั้ง Playarr บนทีวี LG",
+  "pages.clients.webosPage.installDescription":
+    "ใช้ทีวี LG ที่ทำงานบน webOS 23 หรือใหม่กว่า และให้อยู่ในเครือข่ายภายในเดียวกับคอมพิวเตอร์ คุณต้องมีบัญชีนักพัฒนา LG, แอป Developer Mode, webOS CLI และ IPK ที่เผยแพร่ด้านบนหรือแพ็กเกจที่สร้างจากซอร์ส",
+  "pages.clients.webosPage.step1Title": "เปิดโหมดนักพัฒนา",
+  "pages.clients.webosPage.step1Description":
+    "ติดตั้ง Developer Mode จาก LG Content Store เข้าสู่ระบบด้วยบัญชีนักพัฒนา LG เปิด Dev Mode Status แล้วให้ทีวีรีสตาร์ต เปิดแอปอีกครั้ง เลือก Key Server และกด EXTEND ก่อนเวลาที่เหลือหมด",
+  "pages.clients.webosPage.step2Title": "รับ Playarr IPK",
+  "pages.clients.webosPage.step2Description":
+    "ลองดาวน์โหลดแพ็กเกจด้านบน หากยังไม่ได้เผยแพร่ IPK ให้ติดตั้ง Node.js โคลน Playarr ติดตั้ง webOS CLI อย่างเป็นทางการ แล้วสร้างแพ็กเกจในเครื่อง",
+  "pages.clients.webosPage.step3Title": "เชื่อมต่อทีวี",
+  "pages.clients.webosPage.step3Description":
+    "เรียกการตั้งค่าอุปกรณ์ เลือก add และตั้งชื่อปลายทางว่า playarr-tv ป้อน IP ของทีวี พอร์ต 9922 และผู้ใช้ prisoner โดยไม่ต้องใส่รหัสผ่าน ขณะที่ Key Server ยังเปิดอยู่ ให้ดึงคีย์และป้อนวลีรหัสหกตัวที่แสดงบนทีวี",
+  "pages.clients.webosPage.step4Title": "ติดตั้งและเปิดแอป",
+  "pages.clients.webosPage.step4Description":
+    "สำหรับ IPK ที่สร้างเอง ให้เรียกคำสั่งจากไดเรกทอรี tv-web หากดาวน์โหลด playarr-webos.ipk ให้เปลี่ยนเป็นพาธของไฟล์นั้น เมื่อ Playarr เปิดขึ้น ให้สแกนรหัสเชื่อมโยงแล้วเลือกเซิร์ฟเวอร์ Streamarr และโปรไฟล์ครัวเรือนใน Playarr",
+  "pages.clients.webosPage.officialGuide": "เปิดคู่มือ Developer Mode อย่างเป็นทางการของ LG",
+  "pages.clients.webosPage.noteTitle": "แอปที่ติดตั้งผ่านโหมดนักพัฒนาจะหมดอายุตามเซสชัน",
+  "pages.clients.webosPage.noteDescription":
+    "Playarr เปิดด้วยรหัส {{appId}} เมื่อเซสชันหมด LG จะลบแอป Developer Mode ดังนั้นให้ทีวีออนไลน์และกด EXTEND ก่อนตัวจับเวลาถึงศูนย์ โปรดถือว่าเป็นรุ่นพรีวิวนักพัฒนาจนกว่าจะทดสอบการเล่น รีโมต การพัก และการกลับมาทำงานบนฮาร์ดแวร์จริงที่เป็นตัวแทน",
+  "pages.clients.tizenPage.title": "Playarr สำหรับ Samsung Tizen",
+  "pages.clients.tizenPage.description":
+    "แอป Tizen รวมอินเทอร์เฟซทีวี การจับคู่เซิร์ฟเวอร์ การนำทางด้วยรีโมต และการเล่นผ่าน AVPlay ทั้งหมดของ Playarr ไว้ในวิดเจ็ต Samsung TV",
+  "pages.clients.tizenPage.packageNote":
+    "WGT ต้องมีลายเซ็น Samsung/Tizen ที่ถูกต้องสำหรับเส้นทางติดตั้ง ปุ่มแพ็กเกจจะใช้ได้หลังเผยแพร่ไฟล์นักพัฒนาที่ลงลายเซ็นแล้วเท่านั้น มิฉะนั้นให้สร้างด้วยโปรไฟล์ใบรับรองของคุณตามด้านล่าง",
+  "pages.clients.tizenPage.download": "ดาวน์โหลด Samsung WGT ที่ลงลายเซ็น",
+  "pages.clients.tizenPage.installKicker": "โหมดนักพัฒนา Samsung",
+  "pages.clients.tizenPage.installTitle": "ติดตั้ง Playarr บนทีวี Samsung",
+  "pages.clients.tizenPage.installDescription":
+    "ใช้ทีวี Samsung รุ่นปี 2023 หรือใหม่กว่าที่ทำงานบน Tizen 7.0 ขึ้นไป และให้อยู่ในเครือข่ายภายในเดียวกับคอมพิวเตอร์ คุณต้องมี Tizen Studio พร้อมส่วนขยาย Samsung TV, โปรไฟล์ใบรับรองที่ถูกต้อง และ WGT ที่ลงลายเซ็นและรองรับจากด้านบนหรือที่ลงลายเซ็นจากซอร์สเอง",
+  "pages.clients.tizenPage.step1Title": "ติดตั้ง TV SDK และสร้างใบรับรอง",
+  "pages.clients.tizenPage.step1Description":
+    "ติดตั้ง Tizen Studio แล้วเพิ่ม Samsung TV Extension, Samsung Certificate Extension และ Web CLI จาก Package Manager สร้างและเปิดใช้โปรไฟล์ใบรับรอง Samsung เพราะ Tizen จะไม่ติดตั้งวิดเจ็ตที่ไม่ได้ลงลายเซ็น",
+  "pages.clients.tizenPage.step2Title": "เปิดโหมดนักพัฒนา",
+  "pages.clients.tizenPage.step2Description":
+    "บนทีวี เปิด Apps แล้วไป App Settings จากนั้นป้อน 12345 เปิด Developer Mode ป้อน IP ภายในของคอมพิวเตอร์ ยืนยัน แล้วรีบูตทีวี ให้อุปกรณ์ทั้งสองอยู่ในเครือข่ายเดียวกัน",
+  "pages.clients.tizenPage.step3Title": "สร้างและลงลายเซ็น WGT",
+  "pages.clients.tizenPage.step3Description":
+    "ลองดาวน์โหลดแพ็กเกจที่ลงลายเซ็นด้านบนก่อน หากยังไม่มีหรือลายเซ็นใช้กับทีวีไม่ได้ ให้สร้าง Playarr แล้วแพ็กไดเรกทอรี dist ด้วยชื่อโปรไฟล์ใบรับรองที่เปิดใช้อยู่ใน Tizen Studio อย่างตรงกัน",
+  "pages.clients.tizenPage.step4Title": "เชื่อมต่อ ติดตั้ง และเปิดแอป",
+  "pages.clients.tizenPage.step4Description":
+    "เชื่อมต่อด้วย SDB จากนั้นใน Device Manager ของ Tizen Studio ให้คลิกขวาที่ทีวีที่เชื่อมต่อแล้วเลือก Permit to install applications ใช้ tizen list tv เพื่อดูชื่อเป้าหมายของ CLI แล้วแทนชื่อไฟล์ WGT ที่สร้าง ไดเรกทอรีแพ็กเกจ และชื่อเป้าหมาย เปิด Playarr ด้วยรหัสแอปคงที่ สแกนรหัสเชื่อมโยง แล้วเลือกเซิร์ฟเวอร์ Streamarr และโปรไฟล์ครัวเรือนใน Playarr",
+  "pages.clients.tizenPage.officialGuide": "เปิดคู่มืออุปกรณ์ทีวีอย่างเป็นทางการของ Samsung",
+  "pages.clients.tizenPage.noteTitle": "WGT ต้องคงลายเซ็นและห้ามแก้ไข",
+  "pages.clients.tizenPage.noteDescription":
+    "Tizen ปฏิเสธแพ็กเกจที่ไม่ได้ลงลายเซ็นหรือถูกแก้ไข และโปรไฟล์ใบรับรองต้องอนุญาตทีวีเป้าหมาย Playarr จะเปิดด้วยรหัส {{appId}} หลังติดตั้ง โปรดถือว่าเป็นรุ่นพรีวิวนักพัฒนาจนกว่าจะทดสอบรีโมตและ AVPlay บนทีวีจริงที่รองรับ",
   "pages.clients.androidPage.kicker": "Android",
   "pages.clients.androidPage.title": "แอป Android เดียวสำหรับทุกหน้าจอ",
   "pages.clients.androidPage.description":

@@ -2,8 +2,40 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=1920, height=1080, user-scalable=no" />
-    <title>Streamarr</title>
+    <meta
+      name="viewport"
+      content="width=device-width, height=device-height, initial-scale=1, user-scalable=no"
+    />
+    <meta name="theme-color" content="#17111f" />
+    <link rel="icon" type="image/png" href="./icon.png" />
+    <title>Playarr</title>
+    <style>
+      html,
+      body,
+      #root {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      html,
+      body {
+        background: #17111f;
+      }
+    </style>
+    <script>
+      (() => {
+        try {
+          const stored = localStorage.getItem("playarr-theme");
+          const theme = stored === "light" || stored === "dark" ? stored : "dark";
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.style.colorScheme = theme;
+        } catch {
+          document.documentElement.dataset.theme = "dark";
+          document.documentElement.style.colorScheme = "dark";
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

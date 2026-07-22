@@ -576,6 +576,16 @@ export function parentRoute(pathname: string, requestedBackTo?: string): string 
   return "/";
 }
 
+export function tvBackNavigationTarget(
+  routeKey: string,
+  requestedBackTo?: string,
+  hasNavigationOrigin = false
+): string | -1 | null {
+  if (hasNavigationOrigin) return -1;
+  const target = parentRoute(routeKey, requestedBackTo);
+  return target === routeKey ? null : target;
+}
+
 function handleDirectionalKeyDown(event: KeyboardEvent): boolean {
   const direction: Direction | undefined =
     event.key === "ArrowUp"
@@ -693,12 +703,15 @@ export function useTvNavigation(
         event.keyCode === 10009 ||
         event.keyCode === 461;
       if (isBack) {
+        const target = tvBackNavigationTarget(
+          routeKey,
+          requestedBackTo,
+          navigationOrigin != null
+        );
+        if (target === null) return;
         event.preventDefault();
-        if (navigationOrigin) {
-          navigate(-1);
-        } else {
-          navigate(parentRoute(routeKey, requestedBackTo));
-        }
+        if (target === -1) navigate(-1);
+        else navigate(target);
       }
     };
 

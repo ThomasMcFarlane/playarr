@@ -18,8 +18,10 @@ import {
   type WatchProgress,
 } from "@streamarr-tv/api-client";
 import { ShakaPlaybackEngine } from "@streamarr-tv/player-shaka";
+import { TizenAvplayEngine } from "@streamarr-tv/player-avplay";
 import type {
   PlaybackAudioTrack,
+  PlaybackEngine,
   PlaybackEngineState,
   PlaybackSubtitleTrack,
 } from "@streamarr-tv/player-core";
@@ -31,6 +33,7 @@ import {
 } from "./playerDefaults";
 import { useDownloads, type LocalPlaybackSource } from "./DownloadsProvider";
 import { useOnlineStatus } from "./useOnlineStatus";
+import { IS_TIZEN } from "./clientPlatform";
 
 /** Selector id for the synthetic "Downloaded" quality option a completed local copy adds to `qualityOptions` -- never a real server rendition profile. */
 export const DOWNLOADED_QUALITY_ID = "downloaded";
@@ -39,6 +42,12 @@ const initialNegotiations = new WeakMap<
   ApiClient,
   Map<string, Promise<PlaybackInfo>>
 >();
+
+type ManagedPlaybackEngine = PlaybackEngine & {
+  getBytesReceived?: () => number;
+  resetBytesReceived?: () => void;
+  setPlaybackSessionId?: (sessionId: string | null) => void;
+};
 
 /**
  * React StrictMode deliberately replays effects in development. Playback
@@ -198,11 +207,10 @@ export interface PlaybackLaunchSettings {
 
 /**
  * Negotiates playback for `mediaFileId` (`GET /api/v1/playback/{id}`), then
- * attaches `@streamarr-tv/player-shaka`'s `ShakaPlaybackEngine` to a
- * `<video>` element and loads whatever the negotiation returned -- a direct
- * progressive file (`mode: "direct"`) or an HLS manifest (`mode: "hls"`),
- * Shaka picks the right internal pipeline for either from the `mimeType`
- * alone, so this hook doesn't need its own direct-vs-HLS branch.
+ * selects the platform playback adapter and loads whatever the negotiation
+ * returned: Shaka attaches to the `<video>` element on Web/webOS/VIDAA,
+ * while Samsung packages use native `webapis.avplay` behind the same control
+ * surface. Both accept direct media or HLS through `PlaybackEngine`.
  *
  * Wires `ShakaPlaybackEngine.setAuthHeaderProvider` to the current access
  * token selected by `ApiClientProvider` for this media's server so every
@@ -225,7 +233,7 @@ export function usePlaybackEngine(
   const [localSource, setLocalSource] = useState<LocalPlaybackSource | null>(null);
   const playerDefaults = useMemo(() => readPlayerDefaults(), [mediaFileId]);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const engineRef = useRef<ShakaPlaybackEngine | null>(null);
+  const engineRef = useRef<ManagedPlaybackEngine | null>(null);
   const loadedForUrl = useRef<string | null>(null);
   const progressPromiseRef = useRef<Promise<WatchProgress | undefined> | null>(null);
   const latestPlaybackRef = useRef({
@@ -424,7 +432,7 @@ export function usePlaybackEngine(
         .recordPlaybackEvent(sessionId, {
           kind: "heartbeat",
           position_ms: Math.max(0, latestPlaybackRef.current.positionMs),
-          bytes_streamed_total: engineRef.current?.getBytesReceived() ?? 0,
+          bytes_streamed_total: engineRef.current?.getBytesReceived?.() ?? 0,
         })
         .catch(() => {
           // Analytics must never interrupt playback. A later heartbeat or
@@ -692,7 +700,7 @@ export function usePlaybackEngine(
             position_ms: Math.max(0, latestPlaybackRef.current.positionMs),
           });
         }
-        engineRef.current?.resetBytesReceived();
+        engineRef.current?.resetBytesReceived?.();
         // A completed local copy (if any) is merged into `qualityOptions`
         // by the dedicated effect above instead of here -- that keeps
         // resolving it (an async OPFS/IndexedDB read) from ever forcing
@@ -764,8 +772,8 @@ export function usePlaybackEngine(
     stopActiveSession,
   ]);
 
-  // Create the engine and attach it to the <video> element once negotiation
-  // has actually succeeded -- `PlayerSurface` (which renders the `<video>`
+  // Create the platform engine once negotiation has succeeded and, for
+  // Shaka, attach it to the `<video>`. `PlayerSurface` (which renders the `<video>`
   // this hook's `videoRef` points at) is only mounted by the caller once
   // `negotiation.kind === "ready"` (see `Player.tsx`), so `videoRef.current`
   // is null for the entire "loading"/"error" lifetime. An empty dependency
@@ -785,9 +793,16 @@ export function usePlaybackEngine(
   useEffect(() => {
     if (!videoRef.current) return;
 
-    const engine = new ShakaPlaybackEngine();
+    let engine: ManagedPlaybackEngine;
     try {
-      engine.attach(videoRef.current);
+      if (IS_TIZEN) {
+        engine = new TizenAvplayEngine();
+      } else {
+        const shaka = new ShakaPlaybackEngine();
+        shaka.attach(videoRef.current);
+        shaka.setAuthHeaderProvider(getAccessToken);
+        engine = shaka;
+      }
     } catch (err) {
       // Browser lacks MSE/EME support -- surface it the same way an engine
       // playback error would be surfaced, since from the UI's perspective
@@ -796,7 +811,7 @@ export function usePlaybackEngine(
         ...IDLE_ENGINE_STATE,
         state: "error",
         error: {
-          code: "UNSUPPORTED_BROWSER",
+          code: IS_TIZEN ? "AVPLAY_UNAVAILABLE" : "UNSUPPORTED_BROWSER",
           message: err instanceof Error ? err.message : String(err),
           fatal: true,
         },
@@ -804,7 +819,6 @@ export function usePlaybackEngine(
       return;
     }
 
-    engine.setAuthHeaderProvider(getAccessToken);
     engineRef.current = engine;
     setEngineState(engine.getState());
     const unsubscribe = engine.onStateChange(setEngineState);
@@ -827,6 +841,7 @@ export function usePlaybackEngine(
     const resolvedUrl = client.resolveUrl(negotiation.url);
     if (loadedForUrl.current === resolvedUrl) return;
     loadedForUrl.current = resolvedUrl;
+    engineRef.current.setPlaybackSessionId?.(activeSessionIdRef.current);
 
     void engineRef.current
       .load({
@@ -1093,7 +1108,7 @@ export function usePlaybackEngine(
             return;
           }
           activeSessionIdRef.current = info.session_id;
-          engineRef.current?.resetBytesReceived();
+          engineRef.current?.resetBytesReceived?.();
           onDemandTranscodeRef.current =
             info.mode === "hls" && isOnDemandHlsUrl(info.url);
           sourceOffsetSecondsRef.current = Math.max(0, info.source_offset_ms / 1000);
@@ -1192,7 +1207,7 @@ export function usePlaybackEngine(
             });
           }
           activeSessionIdRef.current = info.session_id;
-          engineRef.current?.resetBytesReceived();
+          engineRef.current?.resetBytesReceived?.();
           onDemandTranscodeRef.current =
             info.mode === "hls" && isOnDemandHlsUrl(info.url);
           sourceOffsetSecondsRef.current = Math.max(0, info.source_offset_ms / 1000);
@@ -1344,7 +1359,7 @@ export function usePlaybackEngine(
             return;
           }
           activeSessionIdRef.current = info.session_id;
-          engineRef.current?.resetBytesReceived();
+          engineRef.current?.resetBytesReceived?.();
           onDemandTranscodeRef.current =
             info.mode === "hls" && isOnDemandHlsUrl(info.url);
           sourceOffsetSecondsRef.current = Math.max(0, info.source_offset_ms / 1000);

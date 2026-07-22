@@ -1,6 +1,8 @@
 const DOWNLOADS = new Map([
   ["/downloads/android/playarr-android.apk", "android/playarr-android.apk"],
   ["/downloads/android/playarr-android.json", "android/playarr-android.json"],
+  ["/downloads/webos/playarr-webos.ipk", "webos/playarr-webos.ipk"],
+  ["/downloads/tizen/playarr-tizen.wgt", "tizen/playarr-tizen.wgt"],
 ]);
 
 const VERSIONED_ANDROID_DOWNLOAD =
@@ -9,12 +11,40 @@ const VERSIONED_ANDROID_DOWNLOAD =
 const LINK_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const LINK_CODE_TTL_MS = 10 * 60 * 1000;
 const LINK_CODE_POLL_SECONDS = 2;
+const LINK_CLIENT_PLATFORMS = new Set([
+  "android-mobile",
+  "android-tv",
+  "tv-webos",
+  "tv-tizen",
+]);
 
 function json(body, init = {}) {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json; charset=utf-8");
   headers.set("Cache-Control", "no-store");
   return new Response(JSON.stringify(body), { ...init, headers });
+}
+
+function withLinkCors(response) {
+  const headers = new Headers(response.headers);
+  headers.set("Access-Control-Allow-Origin", "*");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function linkCorsPreflight() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Max-Age": "86400",
+    },
+  });
 }
 
 function randomToken(byteLength = 32) {
@@ -39,7 +69,11 @@ function isHttpUrl(value) {
   if (typeof value !== "string" || value.length > 2048) return false;
   try {
     const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      !url.username &&
+      !url.password
+    );
   } catch {
     return false;
   }
@@ -52,7 +86,9 @@ function linkObject(env, userCode) {
 
 async function createLinkSession(request, env) {
   const body = await request.json().catch(() => ({}));
-  const clientPlatform = body.client_platform === "android-mobile" ? "android-mobile" : "android-tv";
+  const clientPlatform = LINK_CLIENT_PLATFORMS.has(body.client_platform)
+    ? body.client_platform
+    : "android-tv";
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const userCode = randomUserCode();
     const deviceSecret = `${userCode.replace("-", "")}.${randomToken()}`;
@@ -167,17 +203,32 @@ function downloadKey(pathname) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === "/api/link/code" && request.method === "POST") {
-      return createLinkSession(request, env);
-    }
-    if (url.pathname.startsWith("/api/link/code/") && request.method === "GET") {
-      return pollLinkSession(decodeURIComponent(url.pathname.slice("/api/link/code/".length)), env);
-    }
-    if (url.pathname === "/api/link/session" && request.method === "GET") {
-      return inspectLinkSession(url.searchParams.get("user_code"), env);
-    }
-    if (url.pathname === "/api/link/authorize" && request.method === "POST") {
-      return authoriseLinkSession(request, env);
+    if (url.pathname.startsWith("/api/link/")) {
+      const packagedLinkEndpoint =
+        url.pathname === "/api/link/code" ||
+        url.pathname.startsWith("/api/link/code/");
+      if (request.method === "OPTIONS") {
+        return packagedLinkEndpoint
+          ? linkCorsPreflight()
+          : json({ error: "not_found" }, { status: 404 });
+      }
+
+      let response;
+      if (url.pathname === "/api/link/code" && request.method === "POST") {
+        response = await createLinkSession(request, env);
+      } else if (url.pathname.startsWith("/api/link/code/") && request.method === "GET") {
+        response = await pollLinkSession(
+          decodeURIComponent(url.pathname.slice("/api/link/code/".length)),
+          env
+        );
+      } else if (url.pathname === "/api/link/session" && request.method === "GET") {
+        response = await inspectLinkSession(url.searchParams.get("user_code"), env);
+      } else if (url.pathname === "/api/link/authorize" && request.method === "POST") {
+        response = await authoriseLinkSession(request, env);
+      } else {
+        response = json({ error: "not_found" }, { status: 404 });
+      }
+      return packagedLinkEndpoint ? withLinkCors(response) : response;
     }
     const key = downloadKey(url.pathname);
     if (!key) return env.ASSETS.fetch(request);
@@ -191,7 +242,7 @@ export default {
 
     const object = await env.CLIENT_DOWNLOADS.get(key);
     if (!object) {
-      return new Response("This Android release has not been published yet.", {
+      return new Response("This Playarr client package has not been published yet.", {
         status: 404,
         headers: { "Cache-Control": "no-store" },
       });
@@ -199,6 +250,8 @@ export default {
 
     const filename = url.pathname.slice(url.pathname.lastIndexOf("/") + 1);
     const isApk = filename.endsWith(".apk");
+    const isIpk = filename.endsWith(".ipk");
+    const isWgt = filename.endsWith(".wgt");
     const isJson = filename.endsWith(".json");
     const headers = new Headers();
     object.writeHttpMetadata(headers);
@@ -210,16 +263,20 @@ export default {
     );
     headers.set(
       "Content-Disposition",
-      `${isApk ? "attachment" : "inline"}; filename="${filename}"`
+      `${isApk || isIpk || isWgt ? "attachment" : "inline"}; filename="${filename}"`
     );
     headers.set("Content-Length", String(object.size));
     headers.set(
       "Content-Type",
       isApk
         ? "application/vnd.android.package-archive"
-        : isJson
-          ? "application/json; charset=utf-8"
-          : "text/plain; charset=utf-8"
+        : isIpk
+          ? "application/octet-stream"
+          : isWgt
+            ? "application/widget"
+            : isJson
+              ? "application/json; charset=utf-8"
+              : "text/plain; charset=utf-8"
     );
     headers.set("ETag", object.httpEtag);
     headers.set("X-Content-Type-Options", "nosniff");

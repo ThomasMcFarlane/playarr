@@ -85,8 +85,8 @@ export function LoginPage() {
   if (IS_TV) {
     return (
       <DeviceLogin
-        onAuthenticated={(token) => {
-          loginWithDeviceToken(token);
+        onAuthenticated={(token, connection) => {
+          loginWithDeviceToken(token, connection);
           finishLogin();
         }}
       />

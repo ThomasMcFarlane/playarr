@@ -155,6 +155,8 @@ export const ja: Translations = {
   "components.serverChoiceModal.cancel": "キャンセル",
   "components.themeToggle.useTheme": "{{theme}}テーマを使用",
   "components.updateToast.updateAvailable": "Playarrの新しいバージョンが利用可能です。",
+  "components.updateToast.packageUpdateRequired":
+    "インストール済みのPlayarrアプリは、このStreamarrサーバーではサポートされなくなりました。続行するには新しいパッケージをインストールしてください。",
   "components.updateToast.reload": "再読み込み",
   "components.updateToast.dismiss": "閉じる",
   "components.watchStateOverlay.percentWatched": "{{percent}}%視聴済み",
@@ -769,6 +771,7 @@ export const ja: Translations = {
   "pages.clients.gridAriaLabel": "Playarrクライアントの提供状況",
   "pages.clients.status.available": "利用可能",
   "pages.clients.status.experimental": "利用可能 · 試験的インストール",
+  "pages.clients.status.developerPreview": "利用可能 · 開発者プレビュー",
   "pages.clients.status.soon": "近日公開",
   "pages.clients.web.name": "Web",
   "pages.clients.web.platform": "最新の各種ブラウザ",
@@ -798,17 +801,72 @@ export const ja: Translations = {
   "pages.clients.appleTv.platform": "Apple TV",
   "pages.clients.webos.name": "LG webOS",
   "pages.clients.webos.platform": "LGスマートテレビ",
-  "pages.clients.webos.description": "テレビ用シェルはありますが、署名済み製品パッケージはまだ公開されていません。",
+  "pages.clients.webos.description": "Playarrのテレビ向け機能一式を、パッケージ作成とサイドロード手順付きのwebOS開発者ビルドとして利用できます。",
   "pages.clients.tizen.name": "Samsung Tizen",
   "pages.clients.tizen.platform": "Samsungスマートテレビ",
-  "pages.clients.tizen.description": "テレビ用シェルはありますが、署名済み製品パッケージはまだ公開されていません。",
+  "pages.clients.tizen.description": "Playarrのテレビ向け機能一式を、署名とサイドロード手順付きのパッケージ準備済みTizen開発者ビルドとして利用できます。",
   "pages.clients.vidaaSetup": "インストール",
   "pages.clients.downloadApk": "APKをダウンロード",
   "pages.clients.downloadApp": "アプリをダウンロード",
   "pages.clients.downloadNote":
-    "インストール可能なアプリパッケージのみダウンロードできます。Roku版には開発者モードが必要です。その他のネイティブクライアントは、署名済みパッケージが公開されるまで利用できません。",
+    "開発者パッケージはリリース成果物の公開後にのみ配信されます。各クライアントページには、確実なソースからのビルドとサイドロードの手順もあります。",
   "pages.clients.notYetPublished": "署名済みダウンロードは未公開",
   "pages.clients.footer": "ひとつのライブラリを、すべての画面で。サーバーはあなたのもの。",
+  "pages.clients.smartTvPage.openSource": "ソースとREADMEを開く",
+  "pages.clients.smartTvPage.commandsAriaLabel": "手順{{step}}のコマンド",
+  "pages.clients.smartTvPage.noteKicker": "インストール前の注意",
+  "pages.clients.webosPage.title": "LG webOS版Playarr",
+  "pages.clients.webosPage.description":
+    "webOSアプリは、Playarrのテレビ向けUI、サーバーペアリング、リモコン操作、再生機能をLGテレビ用のインストール可能なIPKにまとめています。",
+  "pages.clients.webosPage.packageNote":
+    "パッケージボタンは、開発者向けIPKが公開された後に最新版を配信します。利用できない場合は、以下のコマンドで同じIPKをソースからビルドしてください。",
+  "pages.clients.webosPage.download": "LG webOS IPKをダウンロード",
+  "pages.clients.webosPage.installKicker": "LG Developer Mode",
+  "pages.clients.webosPage.installTitle": "LGテレビにPlayarrをインストール",
+  "pages.clients.webosPage.installDescription":
+    "webOS 23以降を搭載したLGテレビを使用し、パソコンと同じローカルネットワークに接続してください。LG開発者アカウント、Developer Modeアプリ、webOS CLI、および上で公開されたIPKまたはソースから作成したパッケージが必要です。",
+  "pages.clients.webosPage.step1Title": "Developer Modeを有効にする",
+  "pages.clients.webosPage.step1Description":
+    "LG Content StoreからDeveloper Modeをインストールし、LG開発者アカウントでサインインしてDev Mode Statusを有効にし、テレビを再起動します。アプリを再度開いてKey Serverを選択し、残り時間が切れる前にEXTENDを使用してください。",
+  "pages.clients.webosPage.step2Title": "Playarr IPKを入手する",
+  "pages.clients.webosPage.step2Description":
+    "まず上のパッケージをダウンロードします。リリースIPKが未公開の場合は、Node.jsをインストールしてPlayarrをクローンし、公式webOS CLIを導入してローカルでパッケージをビルドします。",
+  "pages.clients.webosPage.step3Title": "テレビに接続する",
+  "pages.clients.webosPage.step3Description":
+    "デバイス設定を実行してaddを選び、接続先をplayarr-tvと名付けます。テレビのIPアドレス、ポート9922、ユーザーprisonerを入力し、パスワードは空欄にします。Key Serverを有効にしたまま鍵を取得し、テレビに表示された6文字のパスフレーズを入力します。",
+  "pages.clients.webosPage.step4Title": "インストールして起動する",
+  "pages.clients.webosPage.step4Description":
+    "ローカルでビルドしたIPKの場合はtv-webディレクトリからコマンドを実行します。playarr-webos.ipkをダウンロードした場合は、そのファイルのパスに置き換えてください。Playarrが開いたらリンクコードを読み取り、PlayarrでStreamarrサーバーと世帯プロフィールを選択します。",
+  "pages.clients.webosPage.officialGuide": "LG公式Developer Modeガイドを開く",
+  "pages.clients.webosPage.noteTitle": "Developer Modeでのインストールには有効期限があります。",
+  "pages.clients.webosPage.noteDescription":
+    "Playarrは{{appId}}として起動します。セッションが切れるとLGはDeveloper Modeアプリを削除するため、テレビをオンラインに保ち、タイマーがゼロになる前にEXTENDを使用してください。代表的な実機で再生、リモコン、サスペンド、復帰を検証するまでは開発者プレビューとして扱ってください。",
+  "pages.clients.tizenPage.title": "Samsung Tizen版Playarr",
+  "pages.clients.tizenPage.description":
+    "Tizenアプリは、Playarrのテレビ向けUI、サーバーペアリング、リモコン操作、AVPlay再生をSamsung TVウィジェットにまとめています。",
+  "pages.clients.tizenPage.packageNote":
+    "WGTには対象のインストール経路で有効なSamsung/Tizen署名が必要です。パッケージボタンは署名済み開発者成果物の公開後にのみ機能します。それまでは以下の手順でご自身の証明書プロファイルを使ってビルドしてください。",
+  "pages.clients.tizenPage.download": "署名済みSamsung WGTをダウンロード",
+  "pages.clients.tizenPage.installKicker": "Samsung Developer Mode",
+  "pages.clients.tizenPage.installTitle": "SamsungテレビにPlayarrをインストール",
+  "pages.clients.tizenPage.installDescription":
+    "Tizen 7.0以降を搭載した2023年以降のSamsungテレビを使用し、パソコンと同じローカルネットワークに接続してください。Samsung TV拡張を含むTizen Studio、有効な証明書プロファイル、および上の互換性のある署名済みWGTかソースから署名したWGTが必要です。",
+  "pages.clients.tizenPage.step1Title": "TV SDKを導入して証明書を作成する",
+  "pages.clients.tizenPage.step1Description":
+    "Tizen Studioをインストールし、Package ManagerでSamsung TV Extension、Samsung Certificate Extension、Web CLIを追加します。Samsung証明書プロファイルを作成して有効化してください。Tizenは未署名のウィジェットをインストールできません。",
+  "pages.clients.tizenPage.step2Title": "Developer Modeを有効にする",
+  "pages.clients.tizenPage.step2Description":
+    "テレビでAppsからApp Settingsを開き、12345と入力します。Developer Modeをオンにし、パソコンのローカルIPアドレスを入力して確定し、テレビを再起動します。両方の機器を同じネットワークに接続したままにしてください。",
+  "pages.clients.tizenPage.step3Title": "WGTをビルドして署名する",
+  "pages.clients.tizenPage.step3Description":
+    "まず上の署名済みパッケージを試します。利用できない場合や署名がテレビで無効な場合は、Playarrをビルドし、Tizen Studioで有効になっている証明書プロファイルの正確な名前を指定してdistディレクトリをパッケージ化します。",
+  "pages.clients.tizenPage.step4Title": "接続、インストール、起動",
+  "pages.clients.tizenPage.step4Description":
+    "SDBで接続します。Tizen StudioのDevice Managerで接続したテレビを右クリックし、Permit to install applicationsを選びます。tizen list tvでCLIのターゲット名を確認し、生成されたWGTのファイル名、パッケージディレクトリ、ターゲット名を代入して固定アプリIDでPlayarrを起動します。リンクコードを読み取り、PlayarrでStreamarrサーバーと世帯プロフィールを選択します。",
+  "pages.clients.tizenPage.officialGuide": "Samsung公式TVデバイスガイドを開く",
+  "pages.clients.tizenPage.noteTitle": "WGTは署名後に変更しないでください。",
+  "pages.clients.tizenPage.noteDescription":
+    "Tizenは未署名または変更済みのパッケージを拒否し、証明書プロファイルは対象テレビへのインストールを許可する必要があります。インストール後、Playarrは{{appId}}として起動します。対応する実機でリモコンとAVPlayの動作を検証するまでは開発者プレビューとして扱ってください。",
   "pages.clients.androidPage.kicker": "Android",
   "pages.clients.androidPage.title": "すべての画面に1つのAndroidアプリ",
   "pages.clients.androidPage.description":

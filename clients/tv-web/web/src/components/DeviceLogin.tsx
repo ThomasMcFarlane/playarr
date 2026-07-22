@@ -1,19 +1,41 @@
 import { useEffect, useRef, useState } from "react";
+import { ApiClient } from "@streamarr-tv/api-client";
 import {
   pollForToken,
   requestDeviceCode,
   type DeviceCodeResponse,
   type DeviceTokenSuccess,
 } from "@streamarr-tv/device-auth";
+import { publicIpv4RelayUrl } from "../lib/loginServerUrl";
 import { useApiClient } from "../lib/ApiClientProvider";
-import { PLAYARR_CLIENT_PLATFORM } from "../lib/clientPlatform";
+import {
+  IS_PACKAGED_TV,
+  PLAYARR_CLIENT_PLATFORM,
+} from "../lib/clientPlatform";
+import {
+  pollHostedDeviceLink,
+  requestHostedDeviceLink,
+  shouldUseHostedDeviceLink,
+} from "../lib/hostedDeviceLink";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
+import { createLocalNetworkFetch } from "../lib/localNetworkFetch";
 import { QrCode } from "./QrCode";
+
+const PLAYARR_ICON_URL = `${import.meta.env.BASE_URL}playarr-icon.svg`;
+const browserFetch = createLocalNetworkFetch();
+
+export interface DeviceLoginConnection {
+  serverUrl: string;
+  serverUrls: string[];
+}
 
 export function DeviceLogin({
   onAuthenticated,
 }: {
-  onAuthenticated: (token: DeviceTokenSuccess) => void;
+  onAuthenticated: (
+    token: DeviceTokenSuccess,
+    connection?: DeviceLoginConnection
+  ) => void;
 }) {
   const { t } = useLanguage();
   const client = useApiClient();
@@ -30,6 +52,48 @@ export function DeviceLogin({
     setError(null);
 
     void (async () => {
+      if (
+        shouldUseHostedDeviceLink(
+          IS_PACKAGED_TV,
+          window.PlayarrPackagedConfig?.apiBaseUrl
+        )
+      ) {
+        const platform = PLAYARR_CLIENT_PLATFORM as "tv-webos" | "tv-tizen";
+        const code = await requestHostedDeviceLink(platform);
+        if (cancelled) return;
+        setDeviceCode(code);
+        const claim = await pollHostedDeviceLink(code, { signal: controller.signal });
+        const serverUrl = publicIpv4RelayUrl(claim.server_url);
+        const serverUrls = [...new Set([claim.server_url, ...claim.server_urls])].map(
+          publicIpv4RelayUrl
+        );
+        const serverClient = new ApiClient({
+          baseUrl: serverUrl,
+          fetchImpl: browserFetch,
+          defaultHeaders: {
+            "X-Streamarr-Client-Platform": platform,
+            "X-Streamarr-Client-Version": __APP_VERSION__,
+          },
+        });
+        const token = await pollForToken(
+          serverClient,
+          {
+            deviceCode: claim.server_device_code,
+            userCode: claim.user_code,
+            verificationUri: code.verificationUri,
+            verificationUriComplete: code.verificationUriComplete,
+            expiresInSeconds: Math.max(
+              1,
+              Math.floor((code.expiresAt - Date.now()) / 1000)
+            ),
+            intervalSeconds: 1,
+          },
+          { signal: controller.signal }
+        );
+        if (!cancelled) callbackRef.current(token, { serverUrl, serverUrls });
+        return;
+      }
+
       const code = await requestDeviceCode(client, PLAYARR_CLIENT_PLATFORM);
       if (cancelled) return;
       setDeviceCode(code);
@@ -55,7 +119,7 @@ export function DeviceLogin({
           <span className="app-logo">
             <img
               className="app-logo-icon"
-              src="/playarr-icon.svg"
+              src={PLAYARR_ICON_URL}
               alt=""
             />
             <span><span className="app-logo-accent">Play</span>arr</span>

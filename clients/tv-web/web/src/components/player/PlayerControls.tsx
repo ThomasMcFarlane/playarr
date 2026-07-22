@@ -505,7 +505,7 @@ export function PlayerControls({
           nextOption = options[0];
           break;
         case "End":
-          nextOption = options.at(-1);
+          nextOption = options[options.length - 1];
           break;
         case "Escape":
         case "BrowserBack":

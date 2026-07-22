@@ -861,7 +861,7 @@ export function MusicDetailPage() {
       <aside className="tv-detail-copy" key={`music-copy-${selectedTrack?.track.id ?? work.id}`}>
         <p className="tv-detail-kicker">
           {selectedAlbum
-            ? selectedAlbum.album.album_type.replaceAll("_", " ")
+            ? selectedAlbum.album.album_type.replace(/_/g, " ")
             : work.genres[0] ?? t("pages.musicDetail.artist")}
         </p>
         <h1>{selectedAlbum?.album.title ?? work.title}</h1>

@@ -1,10 +1,12 @@
 import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { legacyTvCssPlugin } from "../../tooling/legacy-tv-css.mjs";
 
-// This shell's own version, baked into the bundle at build time and read
-// back at runtime as `__APP_VERSION__` -- see `src/index.tsx` and
-// `@streamarr-tv/ui-tv`'s `TvApp` "check on launch" version-check banner.
+// Keep the native package and the web runtime on one release number. The
+// package-preparation step independently rejects a version mismatch between
+// package.json and appinfo.json so an IPK can never report a different version
+// from the bundle that it runs.
 const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf-8")) as {
   version: string;
 };
@@ -15,12 +17,17 @@ const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.met
 // resolve once installed on the TV.
 export default defineConfig({
   base: "./",
-  plugins: [react()],
+  plugins: [legacyTvCssPlugin(), react()],
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
+    __PLAYARR_PLATFORM__: JSON.stringify("tv-webos"),
   },
   build: {
     outDir: "dist",
-    target: "es2019", // webOS 4.x's Chromium (M53-ish on older sets) -- keep the syntax target conservative
+    // webOS 23 is the supported developer-package floor. Its Chromium runtime
+    // supports the full Playarr/Shaka bundle; es2018 keeps our own output
+    // conservative without claiming compatibility with untested older TVs.
+    target: "es2018",
+    cssTarget: "chrome94",
   },
 });

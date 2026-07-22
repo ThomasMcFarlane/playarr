@@ -1,135 +1,130 @@
-# Client Architecture: Tizen (Samsung Smart TVs)
+# Client Architecture: Samsung Tizen TV
 
-The Tizen client targets Samsung's Tizen Smart TV platform. Like webOS, it
-is one of the "TV shell" clients built on the shared packages in
-`clients/tv-web/packages/` (see [`webos.md`](webos.md) and
-[`web.md`](web.md)) — Tizen TVs run a web-app host with a native bridge,
-the same shape of platform as webOS, and the same "share the packages,
-adapt the player/platform pieces" approach applies.
+Playarr for Samsung Tizen is a packaged distribution of the complete
+[`clients/tv-web/web`](../../../clients/tv-web/web/) application. It shares the
+same profiles, home, search, libraries, playlists, settings, authentication,
+and player UI as the hosted Web client. The Tizen project is a platform and
+packaging layer, not a second UI and not the earlier `ui-tv` screen skeleton.
 
-## Target OS/SDK versions
+## Supported runtime
 
-- **Minimum Tizen version:** Tizen 6.0 (`required_version="6.0"` in
-  `tizen-manifest.xml`), matched to Samsung's own typical multi-year
-  support and certification window for currently sellable/serviceable TV
-  app submissions. The app's build target (`vite.config.ts`) compiles to
-  conservative `es2018` for Tizen's legacy WebKit runtime.
-- **SDK/tooling:** [Tizen Studio](https://developer.tizen.org/development/tizen-studio)
-  and its CLI (`tizen build-web`, `tizen package`, `tizen install`, `tizen
-  run`), plus a Samsung **Partner Certificate** profile required to sign
-  packages for submission. **Tizen Studio is not installed in this
-  development environment** — a real, current gap, not a permanent one:
-  `clients/tv-web/apps/tv-tizen/` builds a genuine static Vite `dist/`
-  bundle (verified as part of the workspace's full `pnpm -r run build`),
-  and `tizen-manifest.xml` is a real, structurally-valid Tizen web-app
-  manifest (W3C widget config + `tizen:` namespace extensions: application
-  id/package, `tv` profile, required privileges, TV display settings), but
-  `tizen build-web`/`tizen package` have not been invoked to produce or
-  test an actual `.wgt` here. The production build copies
-  `tizen-manifest.xml` to the package-root `config.xml`, includes the Playarr
-  application icon, and validates both in its package-ready `dist/`
-  directory. See `clients/tv-web/apps/tv-tizen/README.md` for the exact
-  packaging commands to run once Tizen Studio is available.
+- **Developer-package floor:** Tizen 7.0 (2023 Samsung TVs), declared by
+  `required_version="7.0"` in the widget manifest. The Vite bundle targets
+  ES2018, and shared runtime and CSS code stay within Tizen 7's Chromium 94
+  floor. The vendor-only CSS transform expands `inset` plus emits theme-colour
+  fallbacks before `color-mix()` values. Older generations are not supported
+  until the complete application and native player are proven on
+  representative TVs.
+- **Tooling:** Tizen Studio with Samsung TV Extensions, Samsung Certificate
+  Extension, Web CLI, and SDB. The checked-in environment can build and test
+  the package-ready tree but does not contain Tizen Studio or Samsung Product
+  APIs, so it cannot sign a WGT or replace real-device certification.
+- **Signing:** every WGT must be signed. A physical-TV developer package needs
+  a Samsung author/distributor certificate profile whose distributor
+  certificate authorises the TV DUID. Partner certificates are feature- and
+  submission-dependent, not a universal requirement for this app.
 
-## Tech stack
+Exact source-build, signing, Developer Mode, install, and launch commands are
+in the app [README](../../../clients/tv-web/apps/tv-tizen/README.md).
 
-| Concern | Choice |
-|---|---|
-| Base codebase | Shared `clients/tv-web/packages/` (`ui-tv`, `player-avplay`, `device-auth`, `domain`, `api-client`, `spatial-nav`) |
-| UI | React + TypeScript |
-| Playback | Samsung **`webapis.avplay`** API (not plain HTML5 `<video>`), via `@streamarr-tv/player-avplay` |
-| DRM | Not implemented in practice today — see "Playback / DRM approach" below |
-| Platform bridge | No dedicated Tizen bridge module beyond the player adapter — see "Code-sharing story" below |
-| Packaging | Tizen Studio (`tizen package` → `.wgt`) — not yet run in this environment, see above |
+## Shared runtime integration
 
-The one meaningful divergence from webOS's approach: Tizen's `webapis.avplay`
-API is used for playback instead of Shaka Player + `<video>`. `AVPlay` is
-Samsung's own TV-optimised native playback API; `TizenAvplayEngine`
-(`@streamarr-tv/player-avplay`) satisfies the same `PlaybackEngine`
-interface from `player-core` that `ShakaPlaybackEngine` satisfies, so
-`ui-tv`'s Player screen and containers don't need to know which one is
-plugged in — the Tizen app entry point (`apps/tv-tizen/src/index.tsx`)
-renders no `<video>` element at all (unlike webOS/Web/VIDAA), since
-`TizenAvplayEngine` draws to a native video plane positioned with
-`setDisplayRect` instead of an MSE-backed DOM element. `player-avplay` is
-typed against a hand-written `tizen-avplay.d.ts` (global ambient
-declarations covering only the AVPlay surface the adapter actually calls),
-since there is no real Tizen SDK available in this environment to pull
-official type declarations from.
+`apps/tv-tizen/src/index.ts` loads the optional packaged server configuration,
+installs Samsung lifecycle/input behavior, and imports the real Web entry
+point. Its Vite config supplies:
 
-## Playback / DRM approach
+- `__PLAYARR_PLATFORM__ = "tv-tizen"`, so API sessions, device login, version
+  compatibility, TV interaction policy, and playback negotiation identify the
+  Samsung app correctly; and
+- `__APP_VERSION__`, sourced from the widget package version.
 
-`webapis.avplay` handles both direct-play and on-demand-transcoded
-HLS/DASH sources (see
-[`../overview.md`](../overview.md#the-tdarr-background-vs-on-demand-transcode-split)),
-loading whatever `GET /api/v1/playback/{media_file_id}` returns.
+The package uses `base: "./"`; the shared entry point selects hash routing for
+installed TVs. Those choices make all assets and routes work from a widget
+package path rather than an HTTP server with rewrite rules. The generic
+package leaves `streamarr-config.json` empty. On a fresh install it obtains a
+short-lived QR/manual code from `playarr.app`; the phone-side link flow chooses
+an existing profile/server and returns a server-scoped device authorisation to
+the TV. No localhost default or TV-keyboard server entry is part of that
+generic flow. An operator build can still embed an absolute HTTP(S) server URL
+before packaging.
 
-**No DRM is exercised in practice today**, though this is the one TV
-platform where the plumbing goes furthest: `player-avplay`'s
-`applyDrm(DrmConfig)` contains real, working code that calls
-`webapis.avplay.setStreamingProperty("WIDEVINE_LICENSE_SERVER_URL", ...)`
-or `"PLAYREADY_LICENSE_SERVER_URL"` and `webapis.avplay.setDrm(...)`
-depending on the config's `systemId` (`com.widevine.alpha` or
-`com.microsoft.playready`) — real AVPlay DRM API usage, not a stub. But
-nothing ever supplies a `DrmConfig`: the real `PlaybackInfoResponse`
-carries no DRM fields, `ui-tv`'s playback wiring never sets
-`PlaybackSource.drm`, and there is no `/api/drm/...` endpoint anywhere in
-the real API surface. So, exactly as with the other platforms (see
-[`web.md`](web.md#playback--drm-approach)), the DRM code path is real and
-ready — and, on this platform specifically, more complete than the others,
-since AVPlay's native DRM API is directly wired up — but currently always
-inert pending server-side content protection. Earlier drafts of this
-document described a live Widevine-with-PlayReady-fallback integration
-against real `/api/drm/widevine/license`/`/api/drm/playready/license`
-endpoints that were never actually built; treat that framing as
-aspirational, not current.
+## Remote navigation and lifecycle
 
-## Code-sharing story with sibling platforms
+Directional navigation, focus restoration, native scroll containers,
+on-screen keyboard behavior, and standard media controls remain shared Web
+features. The Tizen bootstrap adds the platform responsibilities:
 
-Tizen shares the same `ui-tv` component tree, generated `api-client`, and
-auth/session logic (including real RFC 8628 device pairing, per
-[`../auth-modes.md`](../auth-modes.md)) as webOS, VIDAA, and (partially —
-`ui-tv`/`spatial-nav` aren't used there) Web, through
-`clients/tv-web/packages/`. As described in
-[`webos.md`](webos.md#code-sharing-story-with-sibling-platforms), there is
-no formal `TvPlatformAdapter` interface and no per-platform bridge module;
-Tizen's one real divergence from webOS/VIDAA is the player implementation
-(`TizenAvplayEngine`/`webapis.avplay` rather than `ShakaPlaybackEngine`/
-`<video>`+MSE, as described above), confined to
-`clients/tv-web/packages/player-avplay/` and the one line in
-`apps/tv-tizen/src/index.tsx` that constructs it. Remote-key handling
-itself is not Tizen-specific either — `spatial-nav` listens for the same
-standard `keydown` events Tizen's remote dispatches, same as webOS.
+- registers Samsung's media-key names through `tvinputdevice` and normalises
+  numeric key codes to standard keyboard events;
+- lets Back traverse hash-router history on nested routes, but displays an
+  explicit Exit/Stay confirmation when Back is pressed at the entry route;
+- closes AVPlay and restores screen-saver policy during termination; and
+- gives the player Samsung visibility changes so AVPlay can suspend and
+  restore without losing application state.
 
-## Store submission process and constraints
+Samsung supplies the four directional keys, Enter, and Back without explicit
+registration. The manifest requests `tv.inputdevice` for the additional media
+keys.
 
-- Distributed via the **Samsung Seller Office** (Samsung's TV app developer
-  portal), which requires a registered Samsung developer/seller account
-  distinct from LG's or Google's.
-- Packaging is a signed `.wgt` produced by `tizen package`, signed against
-  a Samsung **Partner Certificate** profile obtained through Tizen Studio's
-  certificate manager — this is a harder prerequisite than webOS's or the
-  mobile stores' developer accounts, since it requires Samsung's
-  certificate-issuance process to be completed before a package can even
-  be installed on a physical test device, let alone submitted. This has
-  not happened yet — see "Target OS/SDK versions" above for the current
-  tooling gap.
-- Submission goes through Samsung's certification review (functional
-  testing against Samsung's Smart TV app guidelines, remote-control
-  navigability, `AVPlay` usage compliance), with turnaround outside
-  Streamarr's control.
-- **No OTA update path.** Exactly as with webOS, every release — patch or
-  otherwise — requires a full `.wgt` resubmission and Samsung's
-  certification cycle; there is no in-app patch loophole. This is recorded
-  identically in the per-platform update table in
-  [`../../versioning-policy.md`](../../versioning-policy.md). `ui-tv`'s
-  real `VersionBanner` component (shared with webOS and VIDAA) surfaces
-  this in-app — a non-blocking banner once the running build is below the
-  server's `GET /api/system/version` `latest_version` for this platform,
-  escalating its wording once below `min_supported_version` — but, per its
-  own doc comment, can only tell the viewer to update via the Samsung Smart
-  Hub, not force it: the same deprecation-window consideration from
-  [`webos.md`](webos.md#store-submission-process-and-constraints) applies,
-  so the server's compatibility floor must give Tizen users realistic time
-  to receive a store update before support for their client's version is
-  dropped.
+## Native playback
+
+Tizen replaces the Web client's Shaka/HTML `<video>` engine with
+`TizenAvplayEngine`, while retaining the same player page and surrounding
+application. `index.html` loads Samsung's `$WEBAPIS/webapis/webapis.js` and
+contains the required `application/avplayer` object. AVPlay renders into that
+native plane; the React controls remain above it.
+
+The adapter provides the shared playback-engine contract and additionally
+handles Samsung-specific behavior:
+
+- AVPlay's `open` → streaming properties → `prepareAsync` state order;
+- direct and HLS playback selected by the server capability negotiation;
+- playback-session cookie injection after `open`, when AVPlay first permits
+  the `COOKIE` property, and before manifest preparation;
+- position, duration, buffering, completion, error, and track state;
+- explicit initial audio selection after PLAYING for multi-audio sources,
+  plus later audio/text track selection;
+- WebVTT sidecar conversion to Samsung-supported SAMI in `wgt-private-tmp`
+  before `setExternalSubtitlePath`;
+- native plane sizing with letterbox display mode, keeping both AVPlay's
+  1920x1080 display rectangle and the `<object>` CSS bounds aligned with the
+  full-screen or minimised React player;
+- AVPlay suspend/restore across visibility changes; and
+- screen-saver disable only while playing, restored on pause, completion,
+  error, teardown, and exit.
+
+DRM properties use AVPlay's three-argument
+`setDrm(type, "SetProperties", json)` contract. The app does not claim
+protected-content support today because the real playback API still supplies
+no DRM configuration or licence endpoints, and the package intentionally does
+not request Samsung's unused DRM privilege. The dormant code path is
+infrastructure, not proof of an end-to-end DRM product; enabling it would also
+require the matching manifest privilege and certificate/release validation.
+
+The AVPlay declarations are a deliberately small structural interface rather
+than a bundled Samsung SDK. Runtime behavior therefore remains gated on a
+physical Tizen TV even when unit tests cover call order and state transitions.
+
+## Package contract
+
+`tizen-manifest.xml` declares the TV profile, Tizen 7.0 floor, full-HD
+viewport, network/input/filesystem privileges, cross-origin access, and
+application ID `StrmarrTV1.Streamarr`. `scripts/prepare-package.mjs` copies it
+to the required package-root `config.xml`, adds the launcher icon and runtime
+configuration, and rejects a build missing the Product API script or AVPlay
+surface.
+
+`scripts/package-wgt.mjs` refuses to package without an explicit Samsung
+certificate profile. It runs `tizen package`, verifies exactly one generated
+WGT, then copies it to the stable local name `playarr-tizen.wgt` for release
+automation. The internal application ID and version are not rewritten.
+
+## Distribution blockers
+
+Repository-local buildability is separate from release completion. A public
+Smart Hub release still needs Samsung Seller Office registration, store
+metadata/artwork, model and country targeting, representative-hardware tests,
+and Samsung certification. A developer WGT signed for one set of TV DUIDs is
+not a generic public installer; broad distribution must use Samsung's approved
+store/signing path. There is no in-app patch channel for a packaged release,
+so fixes require a new versioned WGT and distribution review.

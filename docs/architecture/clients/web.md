@@ -2,10 +2,10 @@
 
 The Web client is a browser-based Playarr app with a versioned,
 service-worker-driven self-update mechanism — and, architecturally, it is
-the **foundation client**: it is built from the same pnpm-workspace
-packages reused by the [webOS](webos.md), [Tizen](tizen.md), and
-[VIDAA](vidaa.md) TV app shells. Understanding this document is close to a
-prerequisite for understanding those three.
+the **foundation client**: [webOS](webos.md) and [Tizen](tizen.md) compile
+this same routed React application into vendor packages, while
+[VIDAA](vidaa.md) opens its hosted build. Understanding this document is
+therefore a prerequisite for understanding those three.
 
 ## Target OS/SDK versions
 
@@ -33,19 +33,18 @@ prerequisite for understanding those three.
 The real codebase lives at `clients/tv-web/`, a pnpm workspace, not at
 `clients/tv-shell/`/`clients/web/`. `clients/tv-web/web/` is the
 standalone browser app (Vite + React: Home/Library/WorkDetail/Player/
-Settings/Admin pages); `clients/tv-web/packages/` holds the
-platform-agnostic shared libraries every surface (Web and the three TV
-shells) depends on: `api-client` (the generated client, plus shared React
+Settings pages); `clients/tv-web/packages/` holds the platform-agnostic
+libraries every surface depends on: `api-client` (the generated client, plus shared React
 data-fetching hooks at its `./react` subpath export), `device-auth` (RFC
 8628 pairing + trusted-network login + `TokenStore`), `domain`
 (API-base-URL resolution, version-compatibility evaluation, the CDN
 build-manifest OTA check), `player-core`/`player-shaka`/`player-avplay`
-(the playback abstraction — see below), `ui-tv` (Browse/Detail/Player/
-Pairing screens and their data-wired containers, reused as-is by all four
-web-runtime apps), and `spatial-nav` (the d-pad/remote focus engine, used
-by the TV shells; the Web app instead reads plain
-pointer/keyboard/`react-router-dom` navigation, since desktop/mobile-web
-has no D-pad to map).
+(the playback abstraction — see below), plus the older `ui-tv` and
+`spatial-nav` packages retained for the experimental VIDAA fallback shell.
+The production webOS/Tizen packages do not use that limited shell: they
+import `web/src/main.tsx`, so profiles, home, search, every library/detail
+flow, playlists, settings, downloads, and player behaviour stay in one page
+tree.
 
 ## Playback / DRM approach
 
@@ -63,7 +62,7 @@ real `DrmConfig`/`DrmSystemId` shape (`com.widevine.alpha` /
 `player-shaka` and `player-avplay` (see [`tizen.md`](tizen.md)) contain
 real, working code to apply a `DrmConfig` if one is ever supplied — but
 nothing ever supplies one: the real `PlaybackInfoResponse` carries no DRM
-fields at all, and `ui-tv`'s playback wiring never sets `PlaybackSource.drm`.
+fields at all, and the shared playback hook never sets `PlaybackSource.drm`.
 So the DRM plumbing exists and is ready, but is currently always inert;
 there is no `/api/drm/...` endpoint anywhere in the real API surface
 either. Earlier drafts of this document described a live per-browser CDM
@@ -74,14 +73,10 @@ added, not a description of shipped behaviour.
 
 ## Code-sharing story with sibling platforms
 
-The Web app and the three TV shells all consume the same
-`clients/tv-web/packages/*` libraries rather than one being "the shared
-base" that the others fork from — `api-client`, `device-auth`, `domain`,
-and `player-core` are used unmodified by all four; `ui-tv`'s screen
-components and containers are used unmodified by all four as well (the
-Web app renders its own page components instead — `web/src/pages/` — so
-`ui-tv` today is exercised by the three TV shells, not the Web app
-itself). What differs per app is confined to:
+The hosted Web app and packaged webOS/Tizen apps use the same
+`web/src/pages`, providers, controls, and shared packages. Vendor entry
+points install only their platform lifecycle/configuration before importing
+the real Web entry. What differs per app is confined to:
 
 - **Which `PlaybackEngine` implementation is wired in** —
   `ShakaPlaybackEngine` (Web, webOS, VIDAA) or `TizenAvplayEngine`
@@ -100,28 +95,27 @@ itself). What differs per app is confined to:
   the hosted `playarr.app` build marks all HTTP server addresses as Local
   Network Access requests, allowing supporting browsers to ask permission and
   connect directly to LAN-only Streamarr without a public route;
-  the TV shells have no keyboard, so they resolve it from a
-  `?apiBaseUrl=` launch query param, then a `streamarr-config.json` file
-  shipped in the package and overwritable on-device, then a hardcoded
-  local-dev default.
-- **Whether RFC 8628 pairing or trusted-network login is used** — the TV
-  shells always pair first (`PairingScreenContainer`, since there is no
-  keyboard for credentials). The hosted Web bundle also switches to the
-  same QR/manual-code pairing screen when embedded by Android TV or running
-  on VIDAA; ordinary desktop/mobile browsers sign in directly against the
-  selected server with username/password and serve the authenticated
-  `/link` approval page. In every case,
+  a fresh webOS/Tizen package first obtains a short-lived code from
+  `playarr.app`; the viewer approves it from a signed-in Playarr browser,
+  which transfers the chosen Streamarr server addresses and its real
+  server-scoped device grant. An operator-provided `?apiBaseUrl=` or
+  packaged `streamarr-config.json` remains an optional default.
+- **Whether device-code or password login is used** — packaged TVs always
+  show the shared QR/manual-code `DeviceLogin`. The hosted Web bundle also
+  uses that screen when embedded by Android TV or running on VIDAA;
+  ordinary desktop/mobile browsers sign in directly and host the
+  authenticated `/link` approval page. In every case,
   `@streamarr-tv/device-auth`'s `ensureAccessToken` retains the transparent
   trusted-network fallback and refresh path for subsequent requests.
-- **Whether `spatial-nav`'s D-pad focus engine is mounted at all** — the
-  three TV shells use it; the Web app doesn't, since it has ordinary
-  pointer/keyboard/anchor-tag navigation via `react-router-dom` instead.
+- **Input/runtime policy** — the same pages retain pointer, touch, keyboard,
+  native scroll, and D-pad handling. Vendor bootstraps add Back/media-key
+  registration and suspend/resume behaviour; Tizen also supplies its native
+  AVPlay surface.
 
-A change to, say, `ui-tv`'s Player screen lands once in
-`clients/tv-web/packages/ui-tv/` and ships to webOS, Tizen, and VIDAA
-together (each on its own build/packaging cadence per platform); a change
-to the Web app's own React pages is Web-only, since those pages aren't
-shared with the TV shells today.
+A change to the Web app's React pages or controls now ships to hosted Web,
+webOS, and Tizen together, each on its own build/packaging cadence. The
+experimental VIDAA fallback remains the only consumer of the older
+`ui-tv` screen tree.
 
 ## Store submission process and constraints
 

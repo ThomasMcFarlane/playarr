@@ -2,11 +2,26 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=1920, height=1080, user-scalable=no" />
-    <title>Streamarr</title>
+    <meta
+      name="viewport"
+      content="width=1920, height=1080, initial-scale=1, user-scalable=no"
+    />
+    <meta name="theme-color" content="#05070b" />
+    <link rel="icon" type="image/svg+xml" href="./playarr-icon.svg" />
+    <title>Playarr</title>
+    <!-- Samsung Product APIs, including AVPlay and AppCommon. This exact
+         platform URL is resolved by the TV runtime and must not be bundled. -->
+    <script type="text/javascript" src="$WEBAPIS/webapis/webapis.js"></script>
   </head>
   <body>
+    <!-- Samsung requires this native surface for webapis.avplay video. -->
+    <object
+      id="av-player"
+      type="application/avplayer"
+      aria-hidden="true"
+      tabindex="-1"
+    ></object>
     <div id="root"></div>
-    <script type="module" src="/src/index.tsx"></script>
+    <script type="module" src="/src/index.ts"></script>
   </body>
 </html>

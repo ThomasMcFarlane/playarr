@@ -1,62 +1,124 @@
-# @streamarr-tv/app-tizen
+# Playarr for Samsung Tizen
 
-Streamarr's Tizen TV app shell. Bootstraps `@streamarr-tv/ui-tv` (Browse /
-Detail / Player screens + spatial navigation) with `@streamarr-tv/player-avplay`
-as the playback engine, since Tizen TVs play video through the native
-`webapis.avplay` API rather than a `<video>` element.
+This package turns the complete Playarr client from `clients/tv-web/web` into
+an installable Samsung Smart TV application. It includes the same profiles,
+home, search, libraries, playlists, settings, device login, and player as
+`playarr.app`; it is not the earlier limited `ui-tv` shell.
 
-## Configuring the API server
+The package sets `__PLAYARR_PLATFORM__` to `tv-tizen`, uses hash routing so
+every route works from the widget's installed `index.html`, and emits relative
+asset paths. Video uses Samsung's native `webapis.avplay` plane while the
+shared Web player supplies controls, tracks, resume state, quality selection,
+analytics, and authenticated playback-session handling. Samsung media keys,
+Back-at-root exit confirmation, AVPlay suspend/resume, and screen-saver policy
+are installed by the Tizen bootstrap. The bootstrap keeps both the AVPlay
+display rectangle and its `<object>` CSS bounds aligned with the full-screen
+or minimised shared player. Playarr's downloaded WebVTT sidecars are converted
+to a local SAMI file before AVPlay receives `setExternalSubtitlePath`.
 
-This TV has no keyboard, so the app resolves which Streamarr instance to
-talk to (via `@streamarr-tv/domain`'s `resolveApiBaseUrl`) in this order:
+## Install on a physical Samsung TV
 
-1. A `?apiBaseUrl=http://192.168.1.50:8484` query param the app was launched
-   with.
-2. `apiBaseUrl` in `streamarr-config.json`, shipped in this app's `public/`
-   directory and copied verbatim into `dist/` (and so into the packaged
-   `.wgt`) at build time. An operator can overwrite this file inside the
-   installed widget to repoint the app without a rebuild.
-3. `DEFAULT_API_BASE_URL` (`http://localhost:8484`), for local development.
+Samsung does not support generic USB installation of a developer WGT. The TV
+and development computer must be on the same network, and the WGT must be
+signed by a Samsung TV certificate profile that authorises that TV's DUID.
 
-## Building
+1. Install [Tizen Studio](https://developer.tizen.org/development/tizen-studio/download),
+   then use Package Manager to add **Samsung TV Extensions**, **Samsung
+   Certificate Extension**, and the Web CLI tools.
+2. In Tizen Studio's Certificate Manager, create a **Samsung** certificate
+   profile with an author and distributor certificate. Add the target TV's
+   DUID to the distributor certificate. A Partner certificate is needed only
+   for APIs or submission classes that specifically require Partner privilege;
+   it is not a blanket prerequisite for this widget.
+3. On the TV, open **Smart Hub → Apps**, scroll to **App Settings**, enter
+   `12345`, enable **Developer Mode**, enter the development computer's IP
+   address, and restart the TV.
+4. Find the TV's IP address in its network settings and connect it. Replace
+   the documentation-only addresses and target name below:
 
-`pnpm --filter @streamarr-tv/app-tizen run build` produces a package-ready
-`dist/` directory: the static Vite bundle, Tizen's required `config.xml`, the
-runtime server configuration, and the Playarr application icon. The build uses
-relative asset paths and a conservative `es2018` target for Tizen's legacy
-WebKit runtime.
+   ```sh
+   sdb connect 192.0.2.20
+   sdb devices
+   tizen list tv
+   ```
 
-Once the active Tizen Studio certificate profile is configured, create the
-signed widget with:
+   In Tizen Studio's **Device Manager**, right-click the connected TV and
+   choose **Permit to install applications**.
+
+5. From `clients/tv-web/`, build and sign the widget with the certificate
+   profile created above:
+
+   ```sh
+   pnpm install --frozen-lockfile
+   pnpm --filter @streamarr-tv/app-tizen... run build
+   pnpm --filter @streamarr-tv/player-avplay run test
+   pnpm --filter @streamarr-tv/app-tizen run test
+   pnpm --filter @streamarr-tv/app-tizen run package:wgt -- --profile PlayarrTV
+   ```
+
+   The command writes the signed, stable artifact to
+   `apps/tv-tizen/playarr-tizen.wgt`.
+
+6. Install and launch it, using the target reported by `tizen list tv`:
+
+   ```sh
+   tizen install -n playarr-tizen.wgt -t <target-name> -- apps/tv-tizen
+   tizen run -p StrmarrTV1.Streamarr -t <target-name>
+   ```
+
+On a fresh install, the TV asks `playarr.app` for a short-lived link code. Scan
+the displayed QR code with a phone, or open the displayed `playarr.app`
+address and type the manual code. Choose the existing Playarr profile/server
+on the phone; the TV then receives that server's own device authorisation and
+finishes login without entering a LAN URL on a TV keyboard. An
+operator-specific package may instead set an absolute HTTP or HTTPS
+`apiBaseUrl` in `public/streamarr-config.json` before building. The checked-in
+value is intentionally empty for the hosted first-install flow.
+
+The physical-device procedure follows Samsung's
+[TV device setup](https://developer.samsung.com/smarttv/develop/getting-started/using-sdk/tv-device.html),
+[certificate](https://developer.samsung.com/smarttv/develop/getting-started/setting-up-sdk/creating-certificates.html),
+and [CLI](https://developer.samsung.com/smarttv/develop/getting-started/using-sdk/command-line-interface.html)
+guides.
+
+## Build without packaging
+
+From `clients/tv-web/`:
 
 ```sh
-pnpm --filter @streamarr-tv/app-tizen run package:wgt
+pnpm --filter @streamarr-tv/app-tizen... run build
+pnpm --filter @streamarr-tv/player-avplay run test
+pnpm --filter @streamarr-tv/app-tizen run test
 ```
 
-## Known gap: Tizen Studio CLI is not installed in this environment
+The build creates `apps/tv-tizen/dist/` with the complete hashed Playarr
+bundle, `config.xml`, `streamarr-config.json`, and launcher icon. Package
+preparation fails if the Tizen TV profile, network/input privileges, Product
+API bootstrap, or AVPlay object is missing.
 
-Turning `dist/` into an installable `.wgt` and pushing it to a device or the
-Tizen TV Simulator requires **Tizen Studio** (`tizen build-web`, `tizen
-package`, `tizen install`, `tizen run`), which is not installed here.
-`tizen-manifest.xml` in this directory is a real Tizen web-app manifest (W3C
-widget config + `tizen:` namespace extensions: application id/package,
-`tv` profile, required privileges, TV display settings) so packaging is a
-matter of running, once the CLI is available:
+The package shortcut shown above requires a profile explicitly so an unsigned
+artifact cannot be mistaken for an installable release. The equivalent manual
+commands are:
 
 ```sh
-pnpm --filter @streamarr-tv/app-tizen run build
-tizen package -t wgt -s <profile-name> -- dist
-tizen install -n <package>.wgt -t <device-id>
-tizen run -p StrmarrTV1.Streamarr -t <device-id>
+tizen package -t wgt -s <certificate-profile> -- apps/tv-tizen/dist
+tizen install -n <generated-name>.wgt -t <target-name> -- apps/tv-tizen/dist
 ```
 
-The package preparation step validates that the manifest and icon are present
-in `dist/` before packaging can begin.
+## Compatibility and release boundaries
 
-## Known gap: no real Tizen AVPlay runtime here
-
-`packages/player-avplay/src/tizen-avplay.d.ts` is a hand-written stand-in
-for the Tizen SDK's own AVPlay type declarations (normally sourced from
-Tizen Studio / `@types` equivalents), since there is no Tizen environment
-available to pull real ones from. It covers only the API surface the
-adapter currently calls.
+- The developer-package baseline is Tizen 7.0+ (2023 Samsung TVs). The bundle
+  targets ES2018 and the build's CSS baseline is Chromium 94. Older
+  models are not claimed until tested and certified on representative
+  hardware.
+- Local unit, type, and package-preparation tests cannot exercise Samsung's
+  proprietary Product APIs. Playback, DRM, remote keys, suspend/resume,
+  screen-saver behavior, memory pressure, and subtitles still need real-TV
+  testing.
+- An arbitrary downloaded developer WGT generally cannot be installed on a
+  different TV because the distributor certificate contains authorised DUIDs.
+  Broad consumer distribution belongs in Samsung Seller Office/Smart Hub;
+  publishing a download is useful only when its signature authorises the
+  intended device or Samsung provides the applicable distribution signature.
+- Smart Hub publication still needs a Samsung seller account, store metadata
+  and artwork, representative-device certification, and Samsung review.

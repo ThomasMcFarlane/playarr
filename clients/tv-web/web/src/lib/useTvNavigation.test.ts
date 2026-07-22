@@ -5,6 +5,7 @@ import {
   horizontalRevealDelta,
   parentRoute,
   shouldAutoFocusViewDefault,
+  tvBackNavigationTarget,
 } from "./useTvNavigation";
 
 describe("shouldAutoFocusViewDefault", () => {
@@ -108,6 +109,13 @@ describe("directional page fallback", () => {
     expect(parentRoute("/clients/android")).toBe("/clients");
     expect(parentRoute("/clients")).toBe("/");
     expect(parentRoute("/clients", "/profiles")).toBe("/profiles");
+  });
+
+  it("leaves an unhandled root Back press for an installed TV platform", () => {
+    expect(tvBackNavigationTarget("/")).toBeNull();
+    expect(tvBackNavigationTarget("/", "/profiles")).toBe("/profiles");
+    expect(tvBackNavigationTarget("/movies/example")).toBe("/movies");
+    expect(tvBackNavigationTarget("/", undefined, true)).toBe(-1);
   });
 
   it("reveals an offscreen item inside a hidden-scrollbar horizontal selector", () => {

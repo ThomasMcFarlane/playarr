@@ -2,11 +2,16 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
     "noEmit": true,
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "allowJs": true,
+    "checkJs": true
   },
-  "include": ["src"]
+  "include": [
+    "src/index.tsx",
+    "src/webosLifecycle.mjs",
+    "../../web/src/global.d.ts"
+  ]
 }

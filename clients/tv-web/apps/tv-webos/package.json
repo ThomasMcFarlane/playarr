@@ -2,23 +2,19 @@
   "name": "@streamarr-tv/app-webos",
   "version": "0.1.0",
   "private": true,
-  "description": "Streamarr webOS TV app shell: bootstraps @streamarr-tv/ui-tv + @streamarr-tv/player-shaka. Bundled with Vite to static assets, then packaged with the webOS CLI (ares-package) -- see README.md, the CLI is not installed in this environment.",
+  "description": "The full Playarr web client packaged as an installable LG webOS TV application.",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build && node scripts/prepare-package.mjs",
-    "test": "node --test scripts/prepare-package.test.mjs",
-    "package:ipk": "pnpm run build && ares-package dist -o out",
+    "test": "node --test scripts/*.test.mjs src/*.test.mjs",
+    "package:ipk": "pnpm --filter @streamarr-tv/app-webos... run build && ares-package dist -o out",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@streamarr-tv/api-client": "workspace:*",
-    "@streamarr-tv/domain": "workspace:*",
-    "@streamarr-tv/player-core": "workspace:*",
-    "@streamarr-tv/player-shaka": "workspace:*",
-    "@streamarr-tv/ui-tv": "workspace:*",
+    "@streamarr-tv/web": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:"
   },

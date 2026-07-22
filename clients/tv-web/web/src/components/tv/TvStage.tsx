@@ -8,6 +8,8 @@ import {
 import { useScrollEdges } from "../../lib/useScrollEdges";
 import { LanguageDropdown } from "../LanguageDropdown";
 
+const PLAYARR_ICON_URL = `${import.meta.env.BASE_URL}playarr-icon.svg`;
+
 export function TvStageChrome({
   backLabel,
   onBack,
@@ -18,7 +20,7 @@ export function TvStageChrome({
   return (
     <header className="tv-stage-chrome">
       <span className="tv-stage-chrome-logo" aria-hidden="true">
-        <img className="app-logo-icon" src="/playarr-icon.svg" alt="" />
+        <img className="app-logo-icon" src={PLAYARR_ICON_URL} alt="" />
       </span>
       {backLabel && onBack ? (
         <div className="tv-library-heading tv-stage-chrome-heading">

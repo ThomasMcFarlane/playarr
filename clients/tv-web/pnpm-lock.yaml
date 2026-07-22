@@ -15,6 +15,9 @@ catalogs:
     '@vitejs/plugin-react':
       specifier: ^4.3.4
       version: 4.7.0
+    postcss:
+      specifier: ^8.5.19
+      version: 8.5.19
     react:
       specifier: ^18.3.1
       version: 18.3.1
@@ -35,6 +38,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.1
+      postcss:
+        specifier: 'catalog:'
+        version: 8.5.19
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -81,21 +87,12 @@ importers:
 
   apps/tv-tizen:
     dependencies:
-      '@streamarr-tv/api-client':
-        specifier: workspace:*
-        version: link:../../packages/api-client
-      '@streamarr-tv/domain':
-        specifier: workspace:*
-        version: link:../../packages/domain
       '@streamarr-tv/player-avplay':
         specifier: workspace:*
         version: link:../../packages/player-avplay
-      '@streamarr-tv/player-core':
+      '@streamarr-tv/web':
         specifier: workspace:*
-        version: link:../../packages/player-core
-      '@streamarr-tv/ui-tv':
-        specifier: workspace:*
-        version: link:../../packages/ui-tv
+        version: link:../../web
       react:
         specifier: 'catalog:'
         version: 18.3.1
@@ -161,21 +158,9 @@ importers:
 
   apps/tv-webos:
     dependencies:
-      '@streamarr-tv/api-client':
+      '@streamarr-tv/web':
         specifier: workspace:*
-        version: link:../../packages/api-client
-      '@streamarr-tv/domain':
-        specifier: workspace:*
-        version: link:../../packages/domain
-      '@streamarr-tv/player-core':
-        specifier: workspace:*
-        version: link:../../packages/player-core
-      '@streamarr-tv/player-shaka':
-        specifier: workspace:*
-        version: link:../../packages/player-shaka
-      '@streamarr-tv/ui-tv':
-        specifier: workspace:*
-        version: link:../../packages/ui-tv
+        version: link:../../web
       react:
         specifier: 'catalog:'
         version: 18.3.1
@@ -338,6 +323,9 @@ importers:
       '@streamarr-tv/domain':
         specifier: workspace:*
         version: link:../packages/domain
+      '@streamarr-tv/player-avplay':
+        specifier: workspace:*
+        version: link:../packages/player-avplay
       '@streamarr-tv/player-core':
         specifier: workspace:*
         version: link:../packages/player-core

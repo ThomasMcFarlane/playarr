@@ -5,13 +5,19 @@ const PLATFORM_STORAGE_KEY = "playarr.clientPlatform";
 
 export type PlayarrWebPlatform = Extract<
   ClientPlatform,
-  "web" | "tv-vidaa" | "android-mobile" | "android-tv"
+  | "web"
+  | "tv-vidaa"
+  | "tv-webos"
+  | "tv-tizen"
+  | "android-mobile"
+  | "android-tv"
 >;
 
 interface PlatformRuntime {
   search: string;
   userAgent: string;
   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem">;
+  packagedPlatform?: Extract<PlayarrWebPlatform, "tv-webos" | "tv-tizen"> | null;
 }
 
 function browserRuntime(): PlatformRuntime {
@@ -24,9 +30,14 @@ function browserRuntime(): PlatformRuntime {
       search: window.location.search,
       userAgent: navigator.userAgent,
       storage: window.localStorage,
+      packagedPlatform: __PLAYARR_PLATFORM__,
     };
   } catch {
-    return { search: window.location.search, userAgent: navigator.userAgent };
+    return {
+      search: window.location.search,
+      userAgent: navigator.userAgent,
+      packagedPlatform: __PLAYARR_PLATFORM__,
+    };
   }
 }
 
@@ -42,6 +53,8 @@ function browserRuntime(): PlatformRuntime {
 export function resolveClientPlatform(
   runtime: PlatformRuntime = browserRuntime()
 ): PlayarrWebPlatform {
+  if (runtime.packagedPlatform) return runtime.packagedPlatform;
+
   const requested = new URLSearchParams(runtime.search).get(PLATFORM_QUERY_PARAM);
 
   if (requested === "web") {
@@ -74,5 +87,19 @@ export function resolveClientPlatform(
 
 export const PLAYARR_CLIENT_PLATFORM = resolveClientPlatform();
 export const IS_VIDAA = PLAYARR_CLIENT_PLATFORM === "tv-vidaa";
+export const IS_WEBOS = PLAYARR_CLIENT_PLATFORM === "tv-webos";
+export const IS_TIZEN = PLAYARR_CLIENT_PLATFORM === "tv-tizen";
+export const IS_PACKAGED_TV = IS_WEBOS || IS_TIZEN;
+
+export function shouldStartPackagedTvLink(
+  isPackagedTv: boolean,
+  currentUserId: string | undefined,
+  savedProfileCount: number
+): boolean {
+  return isPackagedTv && currentUserId === undefined && savedProfileCount === 0;
+}
+
 export const IS_TV =
-  PLAYARR_CLIENT_PLATFORM === "tv-vidaa" || PLAYARR_CLIENT_PLATFORM === "android-tv";
+  IS_PACKAGED_TV ||
+  PLAYARR_CLIENT_PLATFORM === "tv-vidaa" ||
+  PLAYARR_CLIENT_PLATFORM === "android-tv";

@@ -35,9 +35,15 @@
    * Android TV's native WebView host overrides these from its measured
    * bounds because some WebView builds resolve viewport units to zero.
    */
-  --viewport-unit: max(1vh, 1dvh);
+  --viewport-unit: 1vh;
   --viewport-height: calc(100 * var(--viewport-unit));
   --viewport-half-height: calc(50 * var(--viewport-unit));
+}
+
+@supports (height: 1dvh) {
+  :root {
+    --viewport-unit: max(1vh, 1dvh);
+  }
 }
 
 /* Media-item context drawer: long-press OK/Enter or right-click. */
@@ -10902,7 +10908,7 @@ html[data-platform="android-tv"] .player-quality-option {
  * DownloadQualityDrawer, the /downloads page, and the offline empty-state.
  * Reuses this file's existing tokens (--ink/--bg/--surface-strong/--line
  * etc., already theme-aware via :root[data-theme]) and the established
- * .tv-detail-*/.tv-filter-drawer/.tv-filter-choice-grid/.media-context-*
+ * .tv-detail-* and .tv-filter-drawer/.tv-filter-choice-grid/.media-context-*
  * visual language rather than inventing a new one.
  * --------------------------------------------------------------------- */
 

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { resolveClientPlatform } from "./clientPlatform";
+import {
+  resolveClientPlatform,
+  shouldStartPackagedTvLink,
+} from "./clientPlatform";
 
 function createMemoryStorage(): Storage {
   const values = new Map<string, string>();
@@ -16,6 +19,19 @@ function createMemoryStorage(): Storage {
 }
 
 describe("resolveClientPlatform", () => {
+  it.each(["tv-webos", "tv-tizen"] as const)(
+    "gives the packaged %s identity precedence over browser hints",
+    (packagedPlatform) => {
+      expect(
+        resolveClientPlatform({
+          packagedPlatform,
+          search: "?platform=web",
+          userAgent: "Mozilla/5.0 VIDAA",
+        })
+      ).toBe(packagedPlatform);
+    }
+  );
+
   it("selects and persists VIDAA from the installer URL", () => {
     const storage = createMemoryStorage();
 
@@ -68,5 +84,14 @@ describe("resolveClientPlatform", () => {
     expect(resolveClientPlatform({ search: "", userAgent: "", storage })).toBe(
       "web"
     );
+  });
+});
+
+describe("shouldStartPackagedTvLink", () => {
+  it("opens first-contact linking only for a fresh installed TV", () => {
+    expect(shouldStartPackagedTvLink(true, undefined, 0)).toBe(true);
+    expect(shouldStartPackagedTvLink(true, "viewer-id", 0)).toBe(false);
+    expect(shouldStartPackagedTvLink(true, undefined, 1)).toBe(false);
+    expect(shouldStartPackagedTvLink(false, undefined, 0)).toBe(false);
   });
 });

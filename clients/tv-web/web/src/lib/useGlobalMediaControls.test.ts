@@ -9,6 +9,9 @@ describe("globalMediaControlActionForKeystroke", () => {
     ["MediaPlay", "play"],
     ["MediaPause", "pause"],
     ["MediaPlayPause", "toggle-playback"],
+    ["MediaStop", "stop"],
+    ["MediaRewind", "seek-backward"],
+    ["MediaFastForward", "seek-forward"],
     ["MediaTrackPrevious", "previous-track"],
     ["MediaTrackNext", "next-track"],
   ] as const)("maps %s to %s", (key, action) => {

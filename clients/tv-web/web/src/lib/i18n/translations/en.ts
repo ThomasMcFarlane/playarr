@@ -160,6 +160,8 @@ export const en = {
   "components.serverChoiceModal.wherePlay": "Where should Playarr play {{title}}?",
   "components.themeToggle.useTheme": "Use {{theme}} theme",
   "components.updateToast.dismiss": "Dismiss",
+  "components.updateToast.packageUpdateRequired":
+    "This installed Playarr app is no longer supported by your Streamarr server. Install a newer package to continue.",
   "components.updateToast.reload": "Reload",
   "components.updateToast.updateAvailable": "A new version of Playarr is available.",
   "components.watchStateOverlay.percentWatched": "{{percent}}% watched",
@@ -850,6 +852,7 @@ export const en = {
   "pages.clients.gridAriaLabel": "Playarr client availability",
   "pages.clients.status.available": "Available",
   "pages.clients.status.experimental": "Available · Experimental install",
+  "pages.clients.status.developerPreview": "Available · Developer preview",
   "pages.clients.status.soon": "Coming soon",
   "pages.clients.web.name": "Web",
   "pages.clients.web.platform": "Any modern browser",
@@ -884,18 +887,73 @@ export const en = {
   "pages.clients.webos.name": "LG webOS",
   "pages.clients.webos.platform": "LG smart TVs",
   "pages.clients.webos.description":
-    "The TV shell exists, but a signed production package is not published yet.",
+    "The complete Playarr TV experience is available as a webOS developer build with package and sideload instructions.",
   "pages.clients.tizen.name": "Samsung Tizen",
   "pages.clients.tizen.platform": "Samsung smart TVs",
   "pages.clients.tizen.description":
-    "The TV shell exists, but a signed production package is not published yet.",
+    "The complete Playarr TV experience is available as a package-ready Tizen developer build with signing and sideload instructions.",
   "pages.clients.vidaaSetup": "Install",
   "pages.clients.downloadApk": "Download APK",
   "pages.clients.downloadApp": "Download app",
   "pages.clients.downloadNote":
-    "Only installable app packages are offered for download. The Roku app requires developer mode; other native clients remain unavailable until their signed packages are published.",
+    "Developer packages are served only after a release artifact is published. Each client page also includes the dependable build-from-source and sideload path.",
   "pages.clients.notYetPublished": "Signed download not yet published",
   "pages.clients.footer": "One library. Every screen. Your server stays yours.",
+  "pages.clients.smartTvPage.openSource": "Open source and README",
+  "pages.clients.smartTvPage.commandsAriaLabel": "Commands for step {{step}}",
+  "pages.clients.smartTvPage.noteKicker": "Before you install",
+  "pages.clients.webosPage.title": "Playarr for LG webOS.",
+  "pages.clients.webosPage.description":
+    "The webOS app packages Playarr's full TV interface, server pairing, remote navigation and playback in an installable IPK for LG televisions.",
+  "pages.clients.webosPage.packageNote":
+    "The package button serves the latest developer IPK only after one has been published. If it is unavailable, build the same IPK from source with the commands below.",
+  "pages.clients.webosPage.download": "Download LG webOS IPK",
+  "pages.clients.webosPage.installKicker": "LG Developer Mode",
+  "pages.clients.webosPage.installTitle": "Install Playarr on your LG TV",
+  "pages.clients.webosPage.installDescription":
+    "Use an LG television running webOS 23 or newer, and keep it on the same local network as the computer. You need an LG developer account, the Developer Mode app, the webOS CLI and either the published IPK above or a package you build from source.",
+  "pages.clients.webosPage.step1Title": "Enable Developer Mode",
+  "pages.clients.webosPage.step1Description":
+    "Install Developer Mode from the LG Content Store, sign in with your LG developer account, enable Dev Mode Status and let the TV restart. Reopen the app, select Key Server and use EXTEND before the remaining session expires.",
+  "pages.clients.webosPage.step2Title": "Get the Playarr IPK",
+  "pages.clients.webosPage.step2Description":
+    "Try the package download above. If no release IPK has been published, install Node.js, clone Playarr, install the official webOS CLI and build the package locally.",
+  "pages.clients.webosPage.step3Title": "Connect the TV",
+  "pages.clients.webosPage.step3Description":
+    "Run the device setup, choose add and name the target playarr-tv. Enter the TV's IP address, port 9922 and user prisoner without a password. With Key Server still enabled, fetch the key and enter the six-character passphrase shown on the TV.",
+  "pages.clients.webosPage.step4Title": "Install and launch",
+  "pages.clients.webosPage.step4Description":
+    "Run the commands from the tv-web directory for a locally built IPK. If you downloaded playarr-webos.ipk instead, substitute that file's path. When Playarr opens, scan its link code and choose your Streamarr server and household profile in Playarr.",
+  "pages.clients.webosPage.officialGuide": "Open LG's official Developer Mode guide",
+  "pages.clients.webosPage.noteTitle": "Developer Mode installs expire with the session.",
+  "pages.clients.webosPage.noteDescription":
+    "Playarr launches as {{appId}}. LG removes Developer Mode apps when the session expires, so keep the TV online and use EXTEND before the timer reaches zero. Treat this build as a developer preview until playback, remote, suspend and resume are validated on representative hardware.",
+  "pages.clients.tizenPage.title": "Playarr for Samsung Tizen.",
+  "pages.clients.tizenPage.description":
+    "The Tizen app packages Playarr's full TV interface, server pairing, remote navigation and AVPlay playback in a Samsung TV widget.",
+  "pages.clients.tizenPage.packageNote":
+    "A WGT must carry valid Samsung/Tizen signatures for its target install path. The package button works only after a signed developer artifact is published; otherwise build with your own certificate profile below.",
+  "pages.clients.tizenPage.download": "Download signed Samsung WGT",
+  "pages.clients.tizenPage.installKicker": "Samsung Developer Mode",
+  "pages.clients.tizenPage.installTitle": "Install Playarr on your Samsung TV",
+  "pages.clients.tizenPage.installDescription":
+    "Use a 2023-or-newer Samsung television running Tizen 7.0 or newer, and keep it on the same local network as the computer. You need Tizen Studio with the Samsung TV extensions, a valid certificate profile and either a compatible signed WGT above or one you sign from source.",
+  "pages.clients.tizenPage.step1Title": "Install the TV SDK and create a certificate",
+  "pages.clients.tizenPage.step1Description":
+    "Install Tizen Studio, then add the Samsung TV Extension, Samsung Certificate Extension and Web CLI in Package Manager. Create and activate a Samsung certificate profile; Tizen will not install an unsigned widget.",
+  "pages.clients.tizenPage.step2Title": "Enable Developer Mode",
+  "pages.clients.tizenPage.step2Description":
+    "On the TV open Apps, then App Settings, and enter 12345. Turn Developer Mode on, enter the computer's local IP address, confirm and reboot the TV. Keep both devices on the same network.",
+  "pages.clients.tizenPage.step3Title": "Build and sign the WGT",
+  "pages.clients.tizenPage.step3Description":
+    "Try the signed package download above first. If it is unavailable or its signature is not valid for your TV, build Playarr and package the dist directory with the exact active certificate profile name from Tizen Studio.",
+  "pages.clients.tizenPage.step4Title": "Connect, install and launch",
+  "pages.clients.tizenPage.step4Description":
+    "Connect with SDB. In Tizen Studio Device Manager, right-click the connected TV and choose Permit to install applications. Use tizen list tv to find the CLI target name, then substitute the generated WGT filename, package directory and target name. Launch Playarr with its fixed application ID, scan its link code and choose your Streamarr server and household profile in Playarr.",
+  "pages.clients.tizenPage.officialGuide": "Open Samsung's official TV device guide",
+  "pages.clients.tizenPage.noteTitle": "The WGT must stay signed and unchanged.",
+  "pages.clients.tizenPage.noteDescription":
+    "Tizen rejects unsigned or modified packages, and the certificate profile must permit the target TV. Playarr launches as {{appId}} after installation. Treat this build as a developer preview until remote and AVPlay behaviour are validated on a supported real TV.",
   "pages.clients.androidPage.kicker": "Android",
   "pages.clients.androidPage.title": "One Android app. Every screen.",
   "pages.clients.androidPage.description":

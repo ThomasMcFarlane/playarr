@@ -4,6 +4,9 @@ export type GlobalMediaControlAction =
   | "play"
   | "pause"
   | "toggle-playback"
+  | "stop"
+  | "seek-backward"
+  | "seek-forward"
   | "previous-track"
   | "next-track";
 
@@ -35,6 +38,12 @@ export function globalMediaControlActionForKeystroke({
       return "pause";
     case "MediaPlayPause":
       return "toggle-playback";
+    case "MediaStop":
+      return "stop";
+    case "MediaRewind":
+      return "seek-backward";
+    case "MediaFastForward":
+      return "seek-forward";
     case "MediaTrackPrevious":
       return "previous-track";
     case "MediaTrackNext":
@@ -51,6 +60,9 @@ interface GlobalMediaControlCallbacks {
   onPlay: () => void;
   onPause: () => void;
   onTogglePlay: () => void;
+  onStop?: () => void;
+  onSeekBackward?: () => void;
+  onSeekForward?: () => void;
   onPrevious?: () => void;
   onNext?: () => void;
 }
@@ -139,6 +151,15 @@ function runMediaControlAction(
     case "toggle-playback":
       callbacks.onTogglePlay();
       return true;
+    case "stop":
+      callbacks.onStop?.();
+      return Boolean(callbacks.onStop);
+    case "seek-backward":
+      callbacks.onSeekBackward?.();
+      return Boolean(callbacks.onSeekBackward);
+    case "seek-forward":
+      callbacks.onSeekForward?.();
+      return Boolean(callbacks.onSeekForward);
     case "previous-track":
       callbacks.onPrevious?.();
       return Boolean(callbacks.onPrevious);
@@ -152,6 +173,9 @@ export function useGlobalMediaControls({
   onPlay,
   onPause,
   onTogglePlay,
+  onStop,
+  onSeekBackward,
+  onSeekForward,
   onPrevious,
   onNext,
   playbackState,
@@ -160,6 +184,9 @@ export function useGlobalMediaControls({
     onPlay,
     onPause,
     onTogglePlay,
+    onStop,
+    onSeekBackward,
+    onSeekForward,
     onPrevious,
     onNext,
   });
@@ -167,6 +194,9 @@ export function useGlobalMediaControls({
     onPlay,
     onPause,
     onTogglePlay,
+    onStop,
+    onSeekBackward,
+    onSeekForward,
     onPrevious,
     onNext,
   };

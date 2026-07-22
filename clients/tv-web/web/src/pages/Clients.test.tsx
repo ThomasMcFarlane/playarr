@@ -73,7 +73,9 @@ describe("ClientsPage", () => {
     expect(markup).not.toContain("playarr-apple-tv-source.zip");
     expect(markup).not.toContain("playarr-webos-developer-bundle.zip");
     expect(markup).not.toContain("playarr-tizen-developer-bundle.zip");
-    expect(markup).toContain("Only installable app packages are offered for download");
+    expect(markup).toContain(
+      "Developer packages are served only after a release artifact is published"
+    );
     expect(markup).not.toContain('aria-disabled="true"');
     expect(markup).not.toMatch(
       /id="client-(?:vidaa|android)-action"[^>]*aria-expanded=/
@@ -112,7 +114,7 @@ describe("ClientsPage", () => {
       /id="client-android"[^>]*aria-current="page"/
     );
     expect(markup).toContain(
-      'href="/downloads/android/playarr-android.apk"'
+      'href="https://playarr.app/downloads/android/playarr-android.apk"'
     );
     expect(markup).not.toMatch(/\/downloads\/android\/releases\/\d+\.\d+\.\d+\//);
     expect(markup).toContain('target="_blank"');
@@ -132,7 +134,7 @@ describe("ClientsPage", () => {
       /class="client-choice is-experimental is-vidaa is-active"/
     );
     expect(markup).toContain('aria-label="All clients"');
-    expect(markup).toContain('href="/vidaa-store/"');
+    expect(markup).toContain('href="https://playarr.app/vidaa-store/"');
     expect(markup).toContain("Playarr does not operate a public DNS resolver");
     expect(markup).toContain("Firmware support varies");
     expect(markup).toContain("Restart and restore DNS");
@@ -141,6 +143,76 @@ describe("ClientsPage", () => {
       /\b(?:\d{1,3}\.){3}\d{1,3}\b/
     );
     expect(markup).not.toContain("Activate installer");
+  });
+
+  it("publishes complete LG and Samsung developer-mode install paths", () => {
+    const webosMarkup = renderClientRoute("/clients/webos");
+    const tizenMarkup = renderClientRoute("/clients/tizen");
+
+    expect(webosMarkup).toContain('data-navigation-scroll-key="clients:webos"');
+    expect(webosMarkup).toMatch(
+      /class="client-choice is-experimental is-lg is-active"/
+    );
+    expect(webosMarkup).toContain("Available · Developer preview");
+    expect(webosMarkup).not.toContain("Coming soon");
+    expect(webosMarkup).toContain(
+      'href="https://playarr.app/downloads/webos/playarr-webos.ipk"'
+    );
+    expect(webosMarkup).toContain(
+      "only after one has been published"
+    );
+    expect(webosMarkup).toContain("webOS 23 or newer");
+    expect(webosMarkup).toContain(
+      "pnpm --filter @streamarr-tv/app-webos run package:ipk"
+    );
+    expect(webosMarkup).toContain("ares-setup-device --add playarr-tv");
+    expect(webosMarkup).toContain(
+      "ares-novacom --device playarr-tv --getkey"
+    );
+    expect(webosMarkup).toContain(
+      "ares-launch --device playarr-tv com.streamarr.tv"
+    );
+    expect(webosMarkup).toContain(
+      'href="https://webostv.developer.lge.com/develop/getting-started/developer-mode-app"'
+    );
+    expect(webosMarkup).toContain(
+      'href="https://github.com/ThomasMcFarlane/streamarr/tree/main/clients/tv-web/apps/tv-webos"'
+    );
+
+    expect(tizenMarkup).toContain('data-navigation-scroll-key="clients:tizen"');
+    expect(tizenMarkup).toMatch(
+      /class="client-choice is-experimental is-samsung is-active"/
+    );
+    expect(tizenMarkup).toContain("Available · Developer preview");
+    expect(tizenMarkup).not.toContain("Coming soon");
+    expect(tizenMarkup).toContain(
+      'href="https://playarr.app/downloads/tizen/playarr-tizen.wgt"'
+    );
+    expect(tizenMarkup).toContain("only after a signed developer artifact is published");
+    expect(tizenMarkup).toContain("Tizen 7.0 or newer");
+    expect(tizenMarkup).toContain(
+      "tizen package -t wgt -s &lt;certificate-profile&gt; -- apps/tv-tizen/dist"
+    );
+    expect(tizenMarkup).toContain("sdb connect &lt;TV-IP&gt;");
+    expect(tizenMarkup).toContain(
+      "tizen run -p StrmarrTV1.Streamarr -t &lt;target-name&gt;"
+    );
+    expect(tizenMarkup).toContain(
+      'href="https://developer.samsung.com/smarttv/develop/getting-started/using-sdk/tv-device.html"'
+    );
+    expect(tizenMarkup).toContain(
+      'href="https://github.com/ThomasMcFarlane/streamarr/tree/main/clients/tv-web/apps/tv-tizen"'
+    );
+
+    for (const markup of [webosMarkup, tizenMarkup]) {
+      expect(markup).toContain('data-tv-scroll-container="true"');
+      expect(markup).toContain('data-tv-scroll-axis="vertical"');
+      expect(markup).toContain('data-tv-scroll-axis="horizontal"');
+      expect(markup).toContain('target="_blank"');
+      expect(markup).toContain('rel="noopener noreferrer"');
+      expect(markup.match(/href="\/clients\//g)).toHaveLength(6);
+      expect(markup.match(/data-tv-focus-default="true"/g)).toHaveLength(1);
+    }
   });
 
   it("moves Roku downloads and coming-soon details onto their own URLs", () => {

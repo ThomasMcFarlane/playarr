@@ -8,13 +8,20 @@ export interface UpdateToastProps {
 /**
  * The dismissible "Update available" toast for the Web app's OTA flow (see
  * `lib/appUpdate.ts`). Renders nothing once dismissed or when there is
- * nothing to report. The forced-reload case (`state.mustReload`) doesn't
- * need its own UI here -- `useAppUpdate` triggers that reload itself as
- * soon as it's detected, so by the time this would render, the page is
- * already on its way to a fresh reload.
+ * nothing to report. Hosted Web builds force-reload when their compatibility
+ * floor requires it; immutable webOS/Tizen packages instead get a persistent
+ * reinstall notice because reloading cannot change their bundled version.
  */
 export function UpdateToast({ state }: UpdateToastProps) {
   const { t } = useLanguage();
+
+  if (state.packageUpdateRequired) {
+    return (
+      <div role="alert" className="update-toast">
+        <span>{t("components.updateToast.packageUpdateRequired")}</span>
+      </div>
+    );
+  }
 
   if (!state.updateAvailable) return null;
 

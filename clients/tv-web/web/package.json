@@ -17,6 +17,7 @@
     "@streamarr-tv/api-client": "workspace:*",
     "@streamarr-tv/device-auth": "workspace:*",
     "@streamarr-tv/domain": "workspace:*",
+    "@streamarr-tv/player-avplay": "workspace:*",
     "@streamarr-tv/player-core": "workspace:*",
     "@streamarr-tv/player-shaka": "workspace:*",
     "firebase": "12.15.0",

@@ -112,8 +112,8 @@ function representativeFailure(errors: unknown[]): unknown {
  * RFC 8628 §3.2's human-approval step (`POST /api/v1/oauth/device/authorize
  * {user_code}`), fanned out to every address in a `servers=` bundle IN
  * PARALLEL, not sequentially -- §6.3. Resolves as soon as any one address
- * accepts the approval (`Promise.any`: races every attempt, ignores the
- * rest once one settles) without waiting for the others to answer at all.
+ * accepts the approval (racing every attempt and ignoring the rest once one
+ * settles) without waiting for the others to answer at all.
  * Throws only once every address has failed.
  */
 export async function authorizeDeviceAcrossServers(
@@ -125,12 +125,20 @@ export async function authorizeDeviceAcrossServers(
     throw new Error("No server address available to approve this device.");
   }
 
-  try {
-    await Promise.any(urls.map((url) => options.buildClient(url).authorizeDevice({ user_code: userCode })));
-  } catch (err) {
-    if (err instanceof AggregateError) {
-      throw representativeFailure(err.errors);
-    }
-    throw err;
-  }
+  await new Promise<void>((resolve, reject) => {
+    const errors: unknown[] = new Array(urls.length);
+    let failureCount = 0;
+
+    urls.forEach((url, index) => {
+      // Starting from a resolved promise also turns a synchronous client
+      // construction failure into one failed race participant.
+      void Promise.resolve()
+        .then(() => options.buildClient(url).authorizeDevice({ user_code: userCode }))
+        .then(resolve, (error: unknown) => {
+          errors[index] = error;
+          failureCount += 1;
+          if (failureCount === urls.length) reject(representativeFailure(errors));
+        });
+    });
+  });
 }

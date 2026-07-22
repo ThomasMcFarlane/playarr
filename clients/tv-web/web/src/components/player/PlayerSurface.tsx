@@ -11,6 +11,7 @@ import type { Work } from "@streamarr-tv/api-client";
 import type { PlaybackEngineController } from "../../lib/usePlaybackEngine";
 import { CachedArtworkImage } from "../../lib/artwork";
 import { useGlobalMediaControls } from "../../lib/useGlobalMediaControls";
+import { IS_TIZEN } from "../../lib/clientPlatform";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../../lib/i18n/translations";
 import {
@@ -482,8 +483,9 @@ export function PlayerSurface({
   } = player;
   const { t } = useLanguage();
   const systemVolumeOnly =
-    typeof navigator !== "undefined" &&
-    navigator.userAgent.includes("PlayarrAndroidTV/");
+    IS_TIZEN ||
+    (typeof navigator !== "undefined" &&
+      navigator.userAgent.includes("PlayarrAndroidTV/"));
 
   const shellRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<number | undefined>(undefined);
@@ -749,6 +751,20 @@ export function PlayerSurface({
     onPlay: player.play,
     onPause: player.pause,
     onTogglePlay: togglePlayback,
+    onStop,
+    onSeekBackward: () => {
+      const current = engineStateRef.current;
+      seek(Math.max(0, current.currentTimeSeconds - SEEK_STEP_SECONDS * 2));
+    },
+    onSeekForward: () => {
+      const current = engineStateRef.current;
+      seek(
+        Math.min(
+          current.durationSeconds,
+          current.currentTimeSeconds + SEEK_STEP_SECONDS * 2
+        )
+      );
+    },
     onPrevious,
     onNext,
     playbackState: engineState.state,

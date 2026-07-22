@@ -2256,7 +2256,7 @@ paths:
         '400':
           description: file_name contains a path separator or `..`
         '401':
-          description: Missing or invalid access token
+          description: Missing or invalid bearer token/playback-session cookie
         '403':
           description: Caller does not have Playarr streaming access
         '404':
@@ -2290,7 +2290,7 @@ paths:
         '400':
           description: file_name contains a path separator or `..`
         '401':
-          description: Missing or invalid access token
+          description: Missing or invalid bearer token/playback-session cookie
         '403':
           description: Caller does not have Playarr streaming access
         '404':

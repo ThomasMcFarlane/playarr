@@ -14,6 +14,7 @@ export default defineConfig({
   plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
+    __PLAYARR_PLATFORM__: JSON.stringify(null),
   },
   server: {
     port: 5173,

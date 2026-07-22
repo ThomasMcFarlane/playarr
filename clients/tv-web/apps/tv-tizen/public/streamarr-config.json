@@ -1,4 +1,4 @@
 {
-  "_comment": "Operator-editable runtime config, read by @streamarr-tv/domain's resolveApiBaseUrl() on app startup. This TV has no keyboard, so this file (or a ?apiBaseUrl=... launch query param, which takes priority) is how an operator points the app at their own Streamarr instance instead of localhost. Edit apiBaseUrl below and reinstall/redeploy this file inside the .wgt package -- no rebuild required.",
-  "apiBaseUrl": "http://localhost:8484"
+  "_comment": "Optional package default for the Streamarr server. Set an absolute HTTP(S) URL without embedded credentials before building an operator-specific WGT, or leave this empty and connect the server through Playarr's device-login flow after installation. A ?apiBaseUrl=... launch query parameter takes priority.",
+  "apiBaseUrl": ""
 }
