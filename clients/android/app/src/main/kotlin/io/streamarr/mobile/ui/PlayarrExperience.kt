@@ -1989,6 +1989,7 @@ private fun ExperienceLibraryScreen(
                     modifier = Modifier
                         .then(if (isTelevision) Modifier.fillMaxWidth(0.65f).fillMaxHeight().align(Alignment.CenterEnd) else Modifier.fillMaxSize())
                         .background(if (isTelevision) WebSurfaceStrong.copy(alpha = 0.93f) else Color.Transparent)
+                        .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.statusBars)
                         .padding(top = if (isTelevision) 76.dp else 18.dp),
                 ) {
                     Text(plural, color = WebInk, fontSize = if (isTelevision) 28.sp else 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(horizontal = if (isTelevision) 32.dp else 16.dp))
