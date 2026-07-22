@@ -47,6 +47,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add Android player now-playing metadata and an authenticated, natively scrollable Up Next panel
+  with direct episode and track selection on phone and TV.
 - Register Android playback with the platform media session so hardware play, pause, stop, seek,
   Previous, and Next actions match Playarr Web's global media controls.
 - Carry ordered episode, track, and playlist context into Android playback so the Playarr player

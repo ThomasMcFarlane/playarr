@@ -397,7 +397,7 @@ internal fun ExperiencePlaylistDetailScreen(
     isTelevision: Boolean,
     onBack: () -> Unit,
     onOpenWork: (String) -> Unit,
-    onPlay: (String, List<String>) -> Unit,
+    onPlay: (String, List<PlayarrPlaybackQueueItem>) -> Unit,
     viewModel: PlaylistDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -407,8 +407,8 @@ internal fun ExperiencePlaylistDetailScreen(
         is ParityLoad.Failed -> ParityFailure(current.message) { viewModel.load(playlistId) }
         is ParityLoad.Ready -> {
             val value = current.value
-            val orderedMediaFileIds = remember(value) {
-                value.items.mapNotNull { item -> value.details[item.workId]?.mediaFileFor(item) }
+            val orderedItems = remember(value) {
+                value.items.mapNotNull { item -> value.details[item.workId]?.playarrPlaybackQueueItem(item) }
             }
             Box(Modifier.fillMaxSize().background(WebSurface)) {
                 Column(
@@ -458,7 +458,7 @@ internal fun ExperiencePlaylistDetailScreen(
                                             Text("Item ${item.position + 1}", color = WebInkMuted, fontSize = 10.sp)
                                         }
                                         if (mediaFileId != null) {
-                                            IconButton(onClick = { onPlay(mediaFileId, orderedMediaFileIds) }) {
+                                            IconButton(onClick = { onPlay(mediaFileId, orderedItems) }) {
                                                 Icon(Icons.Outlined.PlayArrow, "Play", tint = WebPink)
                                             }
                                         }

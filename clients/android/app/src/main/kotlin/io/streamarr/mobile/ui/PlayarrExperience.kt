@@ -364,12 +364,16 @@ internal class PlayarrExperienceViewModel @Inject constructor(
         }
     }
 
-    fun startPlayback(mediaFileId: String, orderedMediaFileIds: List<String>) {
-        _playbackQueue.value = playarrPlaybackQueue(mediaFileId, orderedMediaFileIds)
+    fun startPlayback(mediaFileId: String, orderedItems: List<PlayarrPlaybackQueueItem>) {
+        _playbackQueue.value = playarrPlaybackQueue(mediaFileId, orderedItems)
     }
 
     fun movePlayback(delta: Int) {
         _playbackQueue.value = _playbackQueue.value.move(delta)
+    }
+
+    fun selectPlayback(index: Int) {
+        _playbackQueue.value = _playbackQueue.value.select(index)
     }
 
     private fun buildHomeRails(byKind: Map<WorkKind, List<Work>>, progress: List<WatchProgress>): List<HomeRail> {
@@ -721,8 +725,8 @@ private fun ExperienceNavHost(
                 isTelevision = isTelevision,
                 canDownload = canDownload == true,
                 onBack = navController::popBackStack,
-                onPlay = { mediaFileId, orderedMediaFileIds ->
-                    viewModel.startPlayback(mediaFileId, orderedMediaFileIds)
+                onPlay = { mediaFileId, orderedItems ->
+                    viewModel.startPlayback(mediaFileId, orderedItems)
                     navController.navigate("experience-player/${Uri.encode(mediaFileId)}")
                 },
             )
@@ -731,9 +735,11 @@ private fun ExperienceNavHost(
             ExperiencePlayerScreen(
                 mediaFileId = entry.arguments?.getString("mediaFileId").orEmpty(),
                 serverUrl = serverUrl,
+                accessToken = accessToken,
                 isTelevision = isTelevision,
                 playbackQueue = playbackQueue,
                 onMovePlayback = viewModel::movePlayback,
+                onSelectPlayback = viewModel::selectPlayback,
                 onBack = navController::popBackStack,
             )
         }
@@ -748,8 +754,8 @@ private fun ExperienceNavHost(
                 isTelevision = isTelevision,
                 onBack = navController::popBackStack,
                 onOpenWork = { navController.navigate("experience-detail/$it") },
-                onPlay = { mediaFileId, orderedMediaFileIds ->
-                    viewModel.startPlayback(mediaFileId, orderedMediaFileIds)
+                onPlay = { mediaFileId, orderedItems ->
+                    viewModel.startPlayback(mediaFileId, orderedItems)
                     navController.navigate("experience-player/${Uri.encode(mediaFileId)}")
                 },
             )
@@ -1545,7 +1551,7 @@ private fun ExperienceDetailScreen(
     isTelevision: Boolean,
     canDownload: Boolean,
     onBack: () -> Unit,
-    onPlay: (String, List<String>) -> Unit,
+    onPlay: (String, List<PlayarrPlaybackQueueItem>) -> Unit,
     viewModel: ExperienceDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -1555,9 +1561,9 @@ private fun ExperienceDetailScreen(
         is ExperienceLoad.Failed -> ExperienceFailure(current.message) { viewModel.load(workId) }
         is ExperienceLoad.Ready -> {
             val detail = current.value
-            val orderedMediaFileIds = remember(detail) { detail.mediaFileIds() }
+            val orderedItems = remember(detail) { detail.playarrPlaybackQueueItems() }
             val playInContext: (String) -> Unit = { mediaFileId ->
-                onPlay(mediaFileId, orderedMediaFileIds)
+                onPlay(mediaFileId, orderedItems)
             }
             var pendingPlaylistTrackId by remember(detail.work.id) { mutableStateOf<String?>(null) }
             var addWorkToPlaylist by remember(detail.work.id) { mutableStateOf(false) }
@@ -2164,9 +2170,11 @@ internal class ExperiencePlayerViewModel @Inject constructor(
 private fun ExperiencePlayerScreen(
     mediaFileId: String,
     serverUrl: String,
+    accessToken: String?,
     isTelevision: Boolean,
     playbackQueue: PlayarrPlaybackQueue,
     onMovePlayback: (Int) -> Unit,
+    onSelectPlayback: (Int) -> Unit,
     onBack: () -> Unit,
     viewModel: ExperiencePlayerViewModel = hiltViewModel(),
 ) {
@@ -2228,10 +2236,14 @@ private fun ExperiencePlayerScreen(
                 timeline = timeline,
                 controls = controls,
                 isTelevision = isTelevision,
+                queue = playbackQueue,
+                serverUrl = serverUrl,
+                accessToken = accessToken,
                 canPrevious = playbackQueue.canPrevious,
                 canNext = playbackQueue.canNext,
                 onPrevious = { onMovePlayback(-1) },
                 onNext = { onMovePlayback(1) },
+                onSelectQueueItem = onSelectPlayback,
                 onBack = { viewModel.stopPlayback(); onBack() },
                 onTogglePlayback = viewModel::togglePlayback,
                 onSeek = viewModel::seekToSourcePosition,
