@@ -56,6 +56,7 @@ WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential \
       pkg-config \
+      libssl-dev \
       ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 RUN cargo install cargo-chef --locked
@@ -102,10 +103,11 @@ RUN cargo build --release --workspace --locked --bin streamarr \
 # planner/builder stages above -- BuildKit runs this concurrently with
 # them, not after.
 # ------------------------------------------------------------------------
-FROM node:20-slim AS web-builder
+FROM node:23-slim AS web-builder
 WORKDIR /build
-RUN corepack enable && corepack prepare pnpm@9 --activate
+RUN corepack enable && corepack prepare pnpm@11.13.0 --activate
 COPY clients/tv-web/ ./clients/tv-web/
+COPY infra/vidaa-gateway/portal/ ./infra/vidaa-gateway/portal/
 WORKDIR /build/clients/tv-web
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @streamarr-tv/web... run build
