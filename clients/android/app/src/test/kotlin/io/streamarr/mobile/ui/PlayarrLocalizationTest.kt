@@ -50,6 +50,14 @@ class PlayarrLocalizationTest {
     }
 
     @Test
+    fun `player queue units match web singular plural and music rules`() {
+        assertEquals(PlayarrString.PlayerUnitTrack, playarrPlayerQueueUnit(1, music = true))
+        assertEquals(PlayarrString.PlayerUnitTracks, playarrPlayerQueueUnit(2, music = true))
+        assertEquals(PlayarrString.PlayerUnitItem, playarrPlayerQueueUnit(1, music = false))
+        assertEquals(PlayarrString.PlayerUnitEpisodes, playarrPlayerQueueUnit(2, music = false))
+    }
+
+    @Test
     fun `every locale has nonblank text and matching interpolation tokens`() {
         val tokenPattern = "\\{\\{(\\w+)\\}\\}".toRegex()
         PlayarrString.entries.forEach { key ->

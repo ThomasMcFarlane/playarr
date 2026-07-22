@@ -51,6 +51,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Language
@@ -752,6 +753,7 @@ private fun PlayarrMiniPlayer(
     onMaximise: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val maximiseDescription = playarrString(PlayarrString.PlayerMaximiseTitle, "title" to item.title)
     Surface(
         onClick = onMaximise,
         color = WebSurfaceStrong.copy(alpha = 0.97f),
@@ -766,7 +768,7 @@ private fun PlayarrMiniPlayer(
                 end = if (isTelevision) 48.dp else 10.dp,
                 bottom = if (isTelevision) 42.dp else 78.dp,
             )
-            .semantics { contentDescription = "Now playing ${item.title}. Open player." },
+            .semantics { contentDescription = maximiseDescription },
     ) {
         BoxWithConstraints(Modifier.height(if (isTelevision) 118.dp else 82.dp)) {
             val artworkModifier = Modifier
@@ -4578,10 +4580,20 @@ private fun ExperiencePlayerScreen(
     }
     Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
         when (val current = state) {
-            ExperienceLoad.Loading -> CircularProgressIndicator(color = WebPink)
-            is ExperienceLoad.Failed -> ExperienceFailure(current.message) {
-                viewModel.play(activeMediaFileId, playerDefaults)
-            }
+            ExperienceLoad.Loading -> PlayarrPlayerStatus(
+                loading = true,
+                kicker = playarrString(PlayarrString.PlayerOneMoment),
+                title = playarrString(PlayarrString.PlayerPreparingPlayback),
+                message = playarrString(PlayarrString.PlayerPreparingMessage),
+            )
+            is ExperienceLoad.Failed -> PlayarrPlayerStatus(
+                loading = false,
+                kicker = playarrString(PlayarrString.PlayerPlaybackUnavailable),
+                title = playarrString(PlayarrString.PlayerCouldNotStart),
+                message = current.message,
+                onRetry = { viewModel.play(activeMediaFileId, playerDefaults) },
+                onBack = onBack,
+            )
             is ExperienceLoad.Ready -> {
                 val item = playbackQueue.currentItem
                 if (item?.music == true) {
@@ -4636,7 +4648,73 @@ private fun ExperiencePlayerScreen(
                     .padding(16.dp)
                     .background(Color.Black.copy(alpha = 0.62f), CircleShape),
             ) {
-                Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = Color.White)
+                Icon(
+                    Icons.Outlined.ArrowBack,
+                    contentDescription = playarrString(PlayarrString.PlayerBackToDetails),
+                    tint = Color.White,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlayarrPlayerStatus(
+    loading: Boolean,
+    kicker: String,
+    title: String,
+    message: String,
+    onRetry: (() -> Unit)? = null,
+    onBack: (() -> Unit)? = null,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (loading) {
+            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(38.dp))
+        } else {
+            Icon(
+                Icons.Outlined.ErrorOutline,
+                contentDescription = null,
+                tint = Color(0xFFEE9297),
+                modifier = Modifier.size(42.dp),
+            )
+        }
+        Text(
+            kicker.uppercase(LocalPlayarrLanguage.current.locale),
+            color = WebInkMuted,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 1.7.sp,
+        )
+        Text(
+            title,
+            color = Color.White,
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        Text(
+            message,
+            color = WebInkSoft,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(0.8f),
+        )
+        if (onRetry != null || onBack != null) {
+            Row(
+                modifier = Modifier.padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                onRetry?.let {
+                    Button(onClick = it) { Text(playarrString(PlayarrString.CommonTryAgain)) }
+                }
+                onBack?.let {
+                    OutlinedButton(onClick = it) {
+                        Text(playarrString(PlayarrString.PlayerBackToDetails), color = Color.White)
+                    }
+                }
             }
         }
     }

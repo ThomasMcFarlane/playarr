@@ -53,6 +53,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Align Android player loading and error states, busy indicator, controls, playback option dialogs,
+  and season-grouped Up Next queue with Playarr Web across English, Thai, and Japanese on phone and TV.
 - Bring Android music details to Playarr Web parity with localized artist, album, track, empty,
   duration, and action copy; restore an explicitly requested track; and keep the focused track's
   title, duration, and selected styling synchronized across phone and TV layouts.

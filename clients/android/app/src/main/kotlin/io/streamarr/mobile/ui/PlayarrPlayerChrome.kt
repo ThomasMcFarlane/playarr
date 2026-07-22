@@ -184,27 +184,25 @@ internal fun PlayarrPlayerChrome(
         )
 
         AnimatedVisibility(visible = visible, modifier = Modifier.align(Alignment.TopStart)) {
-            IconButton(
-                onClick = { showControls(); onBack() },
-                modifier = Modifier
-                    .focusRequester(backFocusRequester)
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(16.dp)
-                    .background(Color.Black.copy(alpha = 0.62f), CircleShape),
+            Row(
+                modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = Color.White)
-            }
-        }
-
-        AnimatedVisibility(visible = visible, modifier = Modifier.align(Alignment.TopEnd)) {
-            IconButton(
-                onClick = { showControls(); onMinimise() },
-                modifier = Modifier
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(16.dp)
-                    .background(Color.Black.copy(alpha = 0.62f), CircleShape),
-            ) {
-                Icon(Icons.Outlined.PictureInPictureAlt, contentDescription = "Minimise player", tint = Color.White)
+                PlayarrPlayerTopButton(
+                    icon = Icons.Outlined.ArrowBack,
+                    label = playarrString(PlayarrString.CommonBack),
+                    accessibilityLabel = playarrString(PlayarrString.PlayerBackToDetails),
+                    isTelevision = isTelevision,
+                    onClick = { showControls(); onBack() },
+                    modifier = Modifier.focusRequester(backFocusRequester),
+                )
+                PlayarrPlayerTopButton(
+                    icon = Icons.Outlined.PictureInPictureAlt,
+                    label = playarrString(PlayarrString.PlayerMinimiseLabel),
+                    accessibilityLabel = playarrString(PlayarrString.PlayerMinimise),
+                    isTelevision = isTelevision,
+                    onClick = { showControls(); onMinimise() },
+                )
             }
         }
 
@@ -249,36 +247,11 @@ internal fun PlayarrPlayerChrome(
             )
         }
 
-        if (controls.switching) {
-            Surface(
-                color = Color.Black.copy(alpha = 0.76f),
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.align(Alignment.Center),
-            ) {
-                Row(
-                    Modifier.padding(18.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CircularProgressIndicator(color = WebPink, modifier = Modifier.size(28.dp))
-                    Text("Switching playback source…", color = Color.White)
-                }
-            }
-        } else if (playbackState.isBuffering) {
-            Surface(
-                color = Color.Black.copy(alpha = 0.68f),
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.align(Alignment.Center),
-            ) {
-                Row(
-                    Modifier.padding(18.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CircularProgressIndicator(color = WebPink, modifier = Modifier.size(28.dp))
-                    Text("Buffering…", color = Color.White)
-                }
-            }
+        if (controls.switching || playbackState.isBuffering) {
+            CircularProgressIndicator(
+                color = Color.White,
+                modifier = Modifier.align(Alignment.Center).size(38.dp),
+            )
         }
     }
 
@@ -291,6 +264,36 @@ internal fun PlayarrPlayerChrome(
             onAudio = { onAudio(it); openMenu = null; showControls() },
             onSubtitle = { onSubtitle(it); openMenu = null; showControls() },
         )
+    }
+}
+
+@Composable
+private fun PlayarrPlayerTopButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    accessibilityLabel: String,
+    isTelevision: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        onClick = onClick,
+        color = Color.Black.copy(alpha = 0.62f),
+        contentColor = Color.White,
+        shape = CircleShape,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)),
+        modifier = modifier.then(if (isTelevision) Modifier.height(48.dp) else Modifier.size(44.dp)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = if (isTelevision) 16.dp else 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(icon, contentDescription = accessibilityLabel, modifier = Modifier.size(22.dp))
+            if (isTelevision) {
+                Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }
 
@@ -321,6 +324,11 @@ private fun PlayarrPlayerControlBar(
     } else {
         0f
     }
+    val seekDescription = playarrString(
+        PlayarrString.PlayerSeekValueText,
+        "position" to formatPlayarrPlayerTime(displayedPositionMs),
+        "duration" to formatPlayarrPlayerTime(durationMs),
+    )
     Column(
         Modifier
             .fillMaxWidth()
@@ -365,9 +373,7 @@ private fun PlayarrPlayerControlBar(
             modifier = Modifier
                 .focusRequester(seekFocusRequester)
                 .fillMaxWidth()
-                .semantics {
-                    contentDescription = "Seek ${formatPlayarrPlayerTime(displayedPositionMs)} of ${formatPlayarrPlayerTime(durationMs)}"
-                },
+                .semantics { contentDescription = seekDescription },
         )
         if (!isTelevision) {
             Text(
@@ -386,14 +392,16 @@ private fun PlayarrPlayerControlBar(
             IconButton(onClick = onPrevious, enabled = canPrevious && !controls.switching) {
                 Icon(
                     Icons.Outlined.SkipPrevious,
-                    contentDescription = "Previous",
+                    contentDescription = playarrString(PlayarrString.PlayerPreviousEpisode),
                     tint = if (canPrevious && !controls.switching) Color.White else Color.White.copy(alpha = 0.35f),
                 )
             }
             IconButton(onClick = onTogglePlayback, enabled = !controls.switching) {
                 Icon(
                     if (playbackState.playWhenReady) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
-                    contentDescription = if (playbackState.playWhenReady) "Pause" else "Play",
+                    contentDescription = playarrString(
+                        if (playbackState.playWhenReady) PlayarrString.PlayerPause else PlayarrString.PlayerPlay,
+                    ),
                     tint = Color.White,
                     modifier = Modifier.size(if (isTelevision) 34.dp else 28.dp),
                 )
@@ -401,7 +409,7 @@ private fun PlayarrPlayerControlBar(
             IconButton(onClick = onNext, enabled = canNext && !controls.switching) {
                 Icon(
                     Icons.Outlined.SkipNext,
-                    contentDescription = "Next",
+                    contentDescription = playarrString(PlayarrString.PlayerNextEpisode),
                     tint = if (canNext && !controls.switching) Color.White else Color.White.copy(alpha = 0.35f),
                 )
             }
@@ -415,23 +423,53 @@ private fun PlayarrPlayerControlBar(
             }
             Spacer(Modifier.weight(1f))
             PlayerMenuButton(
-                Icons.Outlined.QueueMusic,
-                "${if (playlistOpen) "Close playlist" else "Playlist"} (${queue.items.size})",
-                isTelevision,
-                !controls.switching,
+                icon = Icons.Outlined.QueueMusic,
+                label = playarrString(
+                    if (queue.items.size == 1) {
+                        PlayarrString.PlayerPlaylistLabelSingular
+                    } else {
+                        PlayarrString.PlayerPlaylistLabelPlural
+                    },
+                    "count" to queue.items.size,
+                ),
+                accessibilityLabel = if (playlistOpen) {
+                    playarrString(PlayarrString.PlayerClosePlaylist)
+                } else {
+                    null
+                },
+                isTelevision = isTelevision,
+                enabled = !controls.switching,
             ) { onTogglePlaylist() }
             if (controls.audioTracks.isNotEmpty()) {
-                PlayerMenuButton(Icons.Outlined.MusicNote, "Audio", isTelevision, !controls.switching) {
+                PlayerMenuButton(
+                    Icons.Outlined.MusicNote,
+                    playarrString(PlayarrString.PlayerAudioHeading),
+                    isTelevision,
+                    !controls.switching,
+                    playarrString(PlayarrString.PlayerAudioTrackMenuLabel),
+                ) {
                     onMenu(PlayarrPlayerMenu.Audio)
                 }
             }
             if (controls.subtitleTracks.isNotEmpty()) {
-                PlayerMenuButton(Icons.Outlined.Subtitles, "Subtitles", isTelevision, !controls.switching) {
+                PlayerMenuButton(
+                    Icons.Outlined.Subtitles,
+                    playarrString(PlayarrString.PlayerSubtitlesHeading),
+                    isTelevision,
+                    !controls.switching,
+                    playarrString(PlayarrString.PlayerSubtitleTrackMenuLabel),
+                ) {
                     onMenu(PlayarrPlayerMenu.Subtitles)
                 }
             }
             if (controls.qualityOptions.isNotEmpty()) {
-                PlayerMenuButton(Icons.Outlined.HighQuality, "Quality", isTelevision, !controls.switching) {
+                PlayerMenuButton(
+                    Icons.Outlined.HighQuality,
+                    playarrString(PlayarrString.PlayerQualityHeading),
+                    isTelevision,
+                    !controls.switching,
+                    playarrString(PlayarrString.PlayerQualityMenuLabel),
+                ) {
                     onMenu(PlayarrPlayerMenu.Quality)
                 }
             }
@@ -448,6 +486,7 @@ private fun PlayarrPlayerPlaylistPanel(
     onClose: () -> Unit,
     onSelect: (Int) -> Unit,
 ) {
+    val closeDescription = playarrString(PlayarrString.PlayerClosePlaylist)
     Surface(
         color = Color(0xF21B181B),
         shape = RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp),
@@ -462,14 +501,28 @@ private fun PlayarrPlayerPlaylistPanel(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("UP NEXT", color = WebPink, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
                     Text(
-                        "${queue.items.size} ${if (queue.currentItem?.music == true) "tracks" else "items"}",
+                        playarrString(PlayarrString.PlayerUpNext).uppercase(LocalPlayarrLanguage.current.locale),
+                        color = WebPink,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                    Text(
+                        playarrString(
+                            PlayarrString.PlayerQueueCount,
+                            "count" to queue.items.size,
+                            "unit" to playarrString(playarrPlayerQueueUnit(queue.items.size, queue.currentItem?.music == true)),
+                        ),
                         color = Color.White.copy(alpha = 0.66f),
                         fontSize = 12.sp,
                     )
                 }
-                TextButton(onClick = onClose) { Text("Close", color = Color.White) }
+                TextButton(
+                    onClick = onClose,
+                    modifier = Modifier.semantics { contentDescription = closeDescription },
+                ) {
+                    Text("×", color = Color.White, fontSize = 24.sp)
+                }
             }
             androidx.compose.foundation.lazy.LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(top = 16.dp),
@@ -478,6 +531,16 @@ private fun PlayarrPlayerPlaylistPanel(
             ) {
                 itemsIndexed(queue.items, key = { index, item -> "${item.mediaFileId}-$index" }) { index, item ->
                     val active = index == queue.currentIndex
+                    val previousSeason = queue.items.getOrNull(index - 1)?.seasonNumber
+                    if (item.seasonNumber != null && item.seasonNumber != previousSeason) {
+                        Text(
+                            playarrString(PlayarrString.PlayerSeasonHeading, "number" to item.seasonNumber),
+                            color = Color.White.copy(alpha = 0.72f),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(start = 22.dp, top = 12.dp, bottom = 4.dp),
+                        )
+                    }
                     Surface(
                         onClick = { onSelect(index) },
                         color = if (active) WebSurfaceSoft else Color.Transparent,
@@ -512,10 +575,14 @@ private fun PlayarrPlayerPlaylistPanel(
                                 Text(
                                     when {
                                         item.seasonNumber != null && item.episodeNumber != null ->
-                                            "S${item.seasonNumber.toString().padStart(2, '0')} E${item.episodeNumber.toString().padStart(2, '0')}"
-                                        active -> "NOW PLAYING"
-                                        item.music -> "TRACK"
-                                        else -> "ITEM"
+                                            playarrString(
+                                                PlayarrString.PlayerSeasonEpisodeLabel,
+                                                "season" to item.seasonNumber.toString().padStart(2, '0'),
+                                                "episode" to item.episodeNumber.toString().padStart(2, '0'),
+                                            )
+                                        active -> playarrString(PlayarrString.PlayerNowPlaying)
+                                        item.music -> playarrString(PlayarrString.PlayerTrackLabel)
+                                        else -> playarrString(PlayarrString.PlayerMovieLabel)
                                     },
                                     color = if (active) WebPink else Color.White.copy(alpha = 0.54f),
                                     fontSize = 9.sp,
@@ -540,6 +607,7 @@ private fun PlayerMenuButton(
     label: String,
     isTelevision: Boolean,
     enabled: Boolean,
+    accessibilityLabel: String? = null,
     onClick: () -> Unit,
 ) {
     if (isTelevision) {
@@ -549,7 +617,7 @@ private fun PlayerMenuButton(
         }
     } else {
         IconButton(onClick = onClick, enabled = enabled) {
-            Icon(icon, contentDescription = label, tint = Color.White)
+            Icon(icon, contentDescription = accessibilityLabel ?: label, tint = Color.White)
         }
     }
 }
@@ -568,9 +636,9 @@ private fun PlayarrPlayerOptionsDialog(
         title = {
             Text(
                 when (menu) {
-                    PlayarrPlayerMenu.Quality -> "Quality"
-                    PlayarrPlayerMenu.Audio -> "Audio"
-                    PlayarrPlayerMenu.Subtitles -> "Subtitles"
+                    PlayarrPlayerMenu.Quality -> playarrString(PlayarrString.PlayerQualityHeading)
+                    PlayarrPlayerMenu.Audio -> playarrString(PlayarrString.PlayerAudioHeading)
+                    PlayarrPlayerMenu.Subtitles -> playarrString(PlayarrString.PlayerSubtitlesHeading)
                 },
             )
         },
@@ -582,7 +650,7 @@ private fun PlayarrPlayerOptionsDialog(
                 if (menu == PlayarrPlayerMenu.Subtitles) {
                     item {
                         PlayerDialogOption(
-                            label = "Off",
+                            label = playarrString(PlayarrString.PlayerOff),
                             detail = null,
                             selected = controls.selectedSubtitleTrackId == null,
                         ) { onSubtitle(null) }
@@ -616,8 +684,17 @@ private fun PlayarrPlayerOptionsDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.CommonClose)) }
+        },
     )
+}
+
+internal fun playarrPlayerQueueUnit(itemCount: Int, music: Boolean): PlayarrString = when {
+    music && itemCount == 1 -> PlayarrString.PlayerUnitTrack
+    music -> PlayarrString.PlayerUnitTracks
+    itemCount == 1 -> PlayarrString.PlayerUnitItem
+    else -> PlayarrString.PlayerUnitEpisodes
 }
 
 @Composable
