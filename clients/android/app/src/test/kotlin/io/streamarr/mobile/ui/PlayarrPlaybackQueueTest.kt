@@ -107,4 +107,19 @@ class PlayarrPlaybackQueueTest {
             resolveAlbumArtworkUrl("https://media.example/", "artist id", "album/id"),
         )
     }
+
+    @Test
+    fun `album queue remains scoped to the selected album`() {
+        val first = PlayarrPlaybackQueueItem("one", "One", music = true, albumId = "album-a")
+        val second = PlayarrPlaybackQueueItem("two", "Two", music = true, albumId = "album-b")
+
+        assertEquals(listOf(first), playarrAlbumPlaybackQueueItems(listOf(first, second), "album-a"))
+    }
+
+    @Test
+    fun `music durations match Playarr Web formatting`() {
+        assertEquals("3:07", formatMusicDuration(187))
+        assertEquals("--:--", formatMusicDuration(null))
+        assertEquals("--:--", formatMusicDuration(0))
+    }
 }

@@ -47,6 +47,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Replace Android's generic artist list with a responsive album browser that uses authenticated
+  album covers, native scroll viewports, album-scoped queues, track metadata, and per-track actions.
 - Render Android music playback on an authenticated album-art stage with track metadata and an
   animated playing visualiser instead of a blank video surface.
 - Add Android player now-playing metadata and an authenticated, natively scrollable Up Next panel

@@ -115,12 +115,14 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import io.streamarr.mobile.BuildConfig
 import io.streamarr.mobile.R
 import io.streamarr.shared.auth.TokenStore
+import io.streamarr.shared.data.model.AlbumDetail
 import io.streamarr.shared.data.model.ImageKind
 import io.streamarr.shared.data.model.Playlist
 import io.streamarr.shared.data.model.PlaybackEventRequest
 import io.streamarr.shared.data.model.PlaybackInfoResponse
 import io.streamarr.shared.data.model.PlaybackStopReason
 import io.streamarr.shared.data.model.ProfileAvatarPreference
+import io.streamarr.shared.data.model.TrackDetail
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
 import io.streamarr.shared.data.model.WorkDetail
@@ -1576,51 +1578,72 @@ private fun ExperienceDetailScreen(
             var addWorkToPlaylist by remember(detail.work.id) { mutableStateOf(false) }
             var pendingDownloadCandidates by remember(detail.work.id) { mutableStateOf<List<DownloadCandidate>?>(null) }
             Box(Modifier.fillMaxSize().background(WebSurface)) {
-                AuthenticatedArtwork(
-                    work = detail.work,
-                    kinds = listOf(ImageKind.Backdrop, ImageKind.Poster),
-                    serverUrl = serverUrl,
-                    accessToken = accessToken,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().then(if (isTelevision) Modifier.fillMaxWidth(0.55f) else Modifier.fillMaxHeight(0.48f)),
-                )
-                Box(Modifier.fillMaxSize().background(if (isTelevision) Brush.horizontalGradient(listOf(WebSurface.copy(alpha = 0.2f), WebSurface)) else Brush.verticalGradient(listOf(Color.Transparent, WebSurface), endY = 960f)))
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier
-                        .windowInsetsPadding(WindowInsets.safeDrawing)
-                        .padding(start = if (isTelevision) 104.dp else 16.dp, top = 16.dp)
-                        .background(WebSurfaceStrong.copy(alpha = 0.8f), CircleShape),
-                ) {
-                    Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = WebInk)
-                }
-                if (isTelevision) {
-                    Box(Modifier.fillMaxWidth(0.38f).fillMaxHeight().padding(start = 154.dp, top = 259.dp, end = 24.dp), contentAlignment = Alignment.TopStart) { FeatureCopy(detail.work, true) }
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(0.55f).fillMaxHeight(0.62f).align(Alignment.CenterEnd).padding(end = 52.dp),
-                        color = WebSurfaceStrong.copy(alpha = 0.88f),
-                        shape = RoundedCornerShape(2.dp),
-                    ) {
-                        DetailChildren(
-                            detail, playInContext,
-                            { trackId -> pendingPlaylistTrackId = trackId; addWorkToPlaylist = true },
-                            { candidates -> pendingDownloadCandidates = candidates },
-                            canDownload,
-                            PaddingValues(30.dp), scrollable = true,
-                        )
-                    }
+                val artistChildren = detail.children as? WorkChildren.Artist
+                if (artistChildren != null) {
+                    ExperienceMusicDetailContent(
+                        detail = detail,
+                        children = artistChildren,
+                        serverUrl = serverUrl,
+                        accessToken = accessToken,
+                        isTelevision = isTelevision,
+                        canDownload = canDownload,
+                        onBack = onBack,
+                        onPlay = { mediaFileId, albumId ->
+                            onPlay(mediaFileId, playarrAlbumPlaybackQueueItems(orderedItems, albumId))
+                        },
+                        onAddToPlaylist = { trackId ->
+                            pendingPlaylistTrackId = trackId
+                            addWorkToPlaylist = true
+                        },
+                        onDownload = { candidates -> pendingDownloadCandidates = candidates },
+                    )
                 } else {
-                    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 250.dp, bottom = 108.dp)) {
-                        item { FeatureCopy(detail.work) }
-                        item { Spacer(Modifier.height(22.dp)) }
-                        item {
+                    AuthenticatedArtwork(
+                        work = detail.work,
+                        kinds = listOf(ImageKind.Backdrop, ImageKind.Poster),
+                        serverUrl = serverUrl,
+                        accessToken = accessToken,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize().then(if (isTelevision) Modifier.fillMaxWidth(0.55f) else Modifier.fillMaxHeight(0.48f)),
+                    )
+                    Box(Modifier.fillMaxSize().background(if (isTelevision) Brush.horizontalGradient(listOf(WebSurface.copy(alpha = 0.2f), WebSurface)) else Brush.verticalGradient(listOf(Color.Transparent, WebSurface), endY = 960f)))
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .windowInsetsPadding(WindowInsets.safeDrawing)
+                            .padding(start = if (isTelevision) 104.dp else 16.dp, top = 16.dp)
+                            .background(WebSurfaceStrong.copy(alpha = 0.8f), CircleShape),
+                    ) {
+                        Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = WebInk)
+                    }
+                    if (isTelevision) {
+                        Box(Modifier.fillMaxWidth(0.38f).fillMaxHeight().padding(start = 154.dp, top = 259.dp, end = 24.dp), contentAlignment = Alignment.TopStart) { FeatureCopy(detail.work, true) }
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(0.55f).fillMaxHeight(0.62f).align(Alignment.CenterEnd).padding(end = 52.dp),
+                            color = WebSurfaceStrong.copy(alpha = 0.88f),
+                            shape = RoundedCornerShape(2.dp),
+                        ) {
                             DetailChildren(
                                 detail, playInContext,
                                 { trackId -> pendingPlaylistTrackId = trackId; addWorkToPlaylist = true },
                                 { candidates -> pendingDownloadCandidates = candidates },
                                 canDownload,
-                                PaddingValues(0.dp), scrollable = false,
+                                PaddingValues(30.dp), scrollable = true,
                             )
+                        }
+                    } else {
+                        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 250.dp, bottom = 108.dp)) {
+                            item { FeatureCopy(detail.work) }
+                            item { Spacer(Modifier.height(22.dp)) }
+                            item {
+                                DetailChildren(
+                                    detail, playInContext,
+                                    { trackId -> pendingPlaylistTrackId = trackId; addWorkToPlaylist = true },
+                                    { candidates -> pendingDownloadCandidates = candidates },
+                                    canDownload,
+                                    PaddingValues(0.dp), scrollable = false,
+                                )
+                            }
                         }
                     }
                 }
@@ -1638,6 +1661,266 @@ private fun ExperienceDetailScreen(
             }
         }
     }
+}
+
+@Composable
+private fun ExperienceMusicDetailContent(
+    detail: WorkDetail,
+    children: WorkChildren.Artist,
+    serverUrl: String,
+    accessToken: String?,
+    isTelevision: Boolean,
+    canDownload: Boolean,
+    onBack: () -> Unit,
+    onPlay: (mediaFileId: String, albumId: String) -> Unit,
+    onAddToPlaylist: (trackId: String) -> Unit,
+    onDownload: (List<DownloadCandidate>) -> Unit,
+) {
+    val albums = remember(children) {
+        children.albums.filter { album -> album.tracks.any { it.mediaFileId != null } }
+    }
+    var selectedAlbumId by remember(detail.work.id, albums) { mutableStateOf(albums.firstOrNull()?.album?.id) }
+    val selectedAlbum = albums.firstOrNull { it.album.id == selectedAlbumId } ?: albums.firstOrNull()
+    val selectedTracks = selectedAlbum?.tracks?.filter { it.mediaFileId != null }.orEmpty()
+    val posterUrl = remember(detail.work.id) {
+        detail.work.images.firstOrNull { it.kind == ImageKind.Poster }?.url
+    }
+
+    Box(Modifier.fillMaxSize().background(WebSurface)) {
+        if (detail.work.images.any { it.kind == ImageKind.Backdrop }) {
+            AuthenticatedArtwork(
+                work = detail.work,
+                kinds = listOf(ImageKind.Backdrop),
+                serverUrl = serverUrl,
+                accessToken = accessToken,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().then(if (isTelevision) Modifier.fillMaxWidth(0.58f) else Modifier.fillMaxHeight(0.42f)),
+            )
+        } else if (selectedAlbum != null) {
+            AuthenticatedAlbumArtwork(
+                artistWork = detail.work,
+                albumId = selectedAlbum.album.id,
+                serverUrl = serverUrl,
+                accessToken = accessToken,
+                modifier = Modifier.fillMaxSize().then(if (isTelevision) Modifier.fillMaxWidth(0.58f) else Modifier.fillMaxHeight(0.42f)),
+            )
+        }
+        Box(
+            Modifier.fillMaxSize().background(
+                if (isTelevision) {
+                    Brush.horizontalGradient(listOf(WebSurface.copy(alpha = 0.28f), WebSurface.copy(alpha = 0.9f), WebSurface))
+                } else {
+                    Brush.verticalGradient(listOf(Color.Transparent, WebSurface), endY = 900f)
+                },
+            ),
+        )
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = if (isTelevision) 118.dp else 16.dp,
+                end = if (isTelevision) 64.dp else 16.dp,
+                top = if (isTelevision) 60.dp else 42.dp,
+                bottom = if (isTelevision) 118.dp else 110.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(if (isTelevision) 24.dp else 16.dp),
+        ) {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    IconButton(onClick = onBack, modifier = Modifier.background(WebSurfaceStrong.copy(alpha = 0.88f), CircleShape)) {
+                        Icon(Icons.Outlined.ArrowBack, contentDescription = "Back to Music", tint = WebInk)
+                    }
+                    Column {
+                        Text("MUSIC", color = WebPink, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
+                        Text(detail.work.title, color = WebInk, fontSize = if (isTelevision) 32.sp else 24.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+            item {
+                Column(
+                    modifier = Modifier.fillMaxWidth(if (isTelevision) 0.48f else 1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        selectedAlbum?.album?.albumType?.name?.replace('_', ' ')?.uppercase() ?: "ARTIST",
+                        color = WebInkMuted,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        selectedAlbum?.album?.title ?: detail.work.title,
+                        color = WebInk,
+                        fontSize = if (isTelevision) 46.sp else 32.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(detail.work.title, color = WebInkSoft, fontWeight = FontWeight.SemiBold)
+                        selectedAlbum?.album?.releaseDate?.year?.let { Text(it.toString(), color = WebInkMuted) }
+                        if (selectedAlbum != null) Text("${selectedTracks.size} tracks", color = WebInkMuted)
+                    }
+                    detail.work.overview?.let {
+                        Text(it, color = WebInkSoft, maxLines = if (isTelevision) 3 else 4, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+            if (albums.isEmpty()) {
+                item { Text("No playable albums are available.", color = WebInkMuted, modifier = Modifier.padding(vertical = 48.dp)) }
+            } else {
+                item {
+                    Text("Albums", color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 22.dp else 12.dp),
+                    ) {
+                        items(albums, key = { it.album.id }) { album ->
+                            val firstTrack = album.tracks.firstOrNull { it.mediaFileId != null }
+                            MusicAlbumCard(
+                                album = album,
+                                artist = detail.work,
+                                serverUrl = serverUrl,
+                                accessToken = accessToken,
+                                selected = album.album.id == selectedAlbum?.album?.id,
+                                isTelevision = isTelevision,
+                                onSelect = { selectedAlbumId = album.album.id },
+                                onPlay = {
+                                    selectedAlbumId = album.album.id
+                                    firstTrack?.mediaFileId?.let { onPlay(it, album.album.id) }
+                                },
+                            )
+                        }
+                    }
+                }
+                selectedAlbum?.let { album ->
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(album.album.title, color = WebInk, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Album tracks", color = WebInkMuted, fontSize = 10.sp)
+                            }
+                            val albumDownloads = album.tracks.mapNotNull { track ->
+                                track.mediaFileId?.let {
+                                    DownloadCandidate(it, detail.work.id, track.track.title, detail.work.title, posterUrl, "track")
+                                }
+                            }
+                            if (canDownload && albumDownloads.isNotEmpty()) {
+                                IconButton(onClick = { onDownload(albumDownloads) }) {
+                                    Icon(Icons.Outlined.Download, contentDescription = "Download album", tint = WebInk)
+                                }
+                            }
+                        }
+                    }
+                    items(selectedTracks, key = { it.track.id }) { track ->
+                        MusicTrackRow(
+                            track = track,
+                            artistWorkId = detail.work.id,
+                            artistTitle = detail.work.title,
+                            posterUrl = posterUrl,
+                            canDownload = canDownload,
+                            onPlay = { track.mediaFileId?.let { onPlay(it, album.album.id) } },
+                            onAddToPlaylist = { onAddToPlaylist(track.track.id) },
+                            onDownload = { candidate -> onDownload(listOf(candidate)) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MusicAlbumCard(
+    album: AlbumDetail,
+    artist: Work,
+    serverUrl: String,
+    accessToken: String?,
+    selected: Boolean,
+    isTelevision: Boolean,
+    onSelect: () -> Unit,
+    onPlay: () -> Unit,
+) {
+    var focused by remember(album.album.id) { mutableStateOf(false) }
+    Column(
+        modifier = Modifier.width(if (isTelevision) 200.dp else 142.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Surface(
+            onClick = onPlay,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .scale(if (focused) 1.05f else 1f)
+                .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused) onSelect() }
+                .then(if (selected) Modifier.border(2.dp, WebPink, RoundedCornerShape(12.dp)) else Modifier),
+            shape = RoundedCornerShape(12.dp),
+            color = WebSurfaceStrong,
+        ) {
+            AuthenticatedAlbumArtwork(
+                artistWork = artist,
+                albumId = album.album.id,
+                serverUrl = serverUrl,
+                accessToken = accessToken,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        Text(album.album.title, color = WebInk, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            album.album.releaseDate?.year?.toString() ?: album.album.albumType.name.replace('_', ' '),
+            color = WebInkMuted,
+            fontSize = 10.sp,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun MusicTrackRow(
+    track: TrackDetail,
+    artistWorkId: String,
+    artistTitle: String,
+    posterUrl: String?,
+    canDownload: Boolean,
+    onPlay: () -> Unit,
+    onAddToPlaylist: () -> Unit,
+    onDownload: (DownloadCandidate) -> Unit,
+) {
+    val mediaFileId = track.mediaFileId ?: return
+    var focused by remember(track.track.id) { mutableStateOf(false) }
+    Surface(
+        onClick = onPlay,
+        color = if (focused) WebSurfaceSoft else WebSurfaceStrong.copy(alpha = 0.92f),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(track.track.trackNumber.toString().padStart(2, '0'), color = WebInkMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text(track.track.title, color = WebInk, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(formatMusicDuration(track.track.durationSeconds), color = WebInkMuted, fontSize = 11.sp)
+            IconButton(onClick = onAddToPlaylist) {
+                Icon(Icons.Outlined.Add, contentDescription = "Add ${track.track.title} to playlist", tint = WebInkMuted)
+            }
+            if (canDownload) {
+                IconButton(
+                    onClick = {
+                        onDownload(DownloadCandidate(mediaFileId, artistWorkId, track.track.title, artistTitle, posterUrl, "track"))
+                    },
+                ) {
+                    Icon(Icons.Outlined.Download, contentDescription = "Download ${track.track.title}", tint = WebInkMuted)
+                }
+            }
+            Icon(Icons.Outlined.PlayArrow, contentDescription = "Play ${track.track.title}", tint = WebPink)
+        }
+    }
+}
+
+internal fun formatMusicDuration(seconds: Int?): String {
+    if (seconds == null || seconds <= 0) return "--:--"
+    return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
 }
 
 @Composable

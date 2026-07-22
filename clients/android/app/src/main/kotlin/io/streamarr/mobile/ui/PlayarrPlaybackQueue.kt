@@ -56,6 +56,11 @@ internal fun playarrPlaybackQueue(
     }
 }
 
+internal fun playarrAlbumPlaybackQueueItems(
+    items: List<PlayarrPlaybackQueueItem>,
+    albumId: String,
+): List<PlayarrPlaybackQueueItem> = items.filter { it.albumId == albumId }
+
 internal fun WorkDetail.playarrPlaybackQueueItems(): List<PlayarrPlaybackQueueItem> = when (val tree = children) {
     WorkChildren.Movie -> listOfNotNull(
         mediaFileId?.let { PlayarrPlaybackQueueItem(it, work.title, artworkWork = work) },
