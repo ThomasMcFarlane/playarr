@@ -215,6 +215,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Match Playarr Web's Android Search presentation with live result counts, persistent focus
+  selection, and a focused work or playlist preview that carries title and metadata context.
 - Match Playarr Web Search on Android with 320 ms request coalescing, stale-request cancellation,
   available-only results, dynamic content-type filters, saved-view library filters, and the same
   playlist-versus-library exclusion rules.

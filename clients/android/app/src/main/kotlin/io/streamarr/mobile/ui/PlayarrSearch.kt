@@ -20,7 +20,16 @@ internal enum class PlayarrSearchMediaType(
 internal data class PlayarrSearchResults(
     val works: List<Work> = emptyList(),
     val playlists: List<Playlist> = emptyList(),
-)
+) {
+    val count: Int get() = works.size + playlists.size
+
+    fun keys(): List<String> = works.map { "work:${it.id}" } + playlists.map { "playlist:${it.id}" }
+}
+
+internal fun playarrSearchSelection(
+    results: PlayarrSearchResults,
+    current: String?,
+): String? = results.keys().let { keys -> current?.takeIf(keys::contains) ?: keys.firstOrNull() }
 
 internal fun filterPlayarrSearchWorks(
     works: List<Work>,

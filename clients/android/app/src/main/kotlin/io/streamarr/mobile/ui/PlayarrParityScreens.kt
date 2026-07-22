@@ -312,14 +312,29 @@ internal fun ExperiencePlaylistsScreen(
 }
 
 @Composable
-internal fun PlaylistCard(playlist: Playlist, onClick: () -> Unit) {
+internal fun PlaylistCard(
+    playlist: Playlist,
+    selected: Boolean = false,
+    onSelected: () -> Unit = {},
+    onClick: () -> Unit,
+) {
     var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().aspectRatio(1.45f).scale(if (focused) 1.04f else 1f).onFocusChanged { focused = it.isFocused },
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(1.45f)
+            .scale(if (focused) 1.04f else 1f)
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) onSelected()
+            },
         color = WebSurfaceStrong,
         shape = RoundedCornerShape(18.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, if (focused) WebInkSoft else WebInkMuted.copy(alpha = 0.18f)),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (focused || selected) WebInkSoft else WebInkMuted.copy(alpha = 0.18f),
+        ),
     ) {
         Box(Modifier.background(Brush.linearGradient(listOf(WebPink.copy(alpha = 0.22f), WebSurfaceStrong)))) {
             Icon(Icons.Outlined.PlaylistPlay, contentDescription = null, tint = WebPink, modifier = Modifier.align(Alignment.TopEnd).padding(18.dp).size(38.dp))

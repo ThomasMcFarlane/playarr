@@ -1678,22 +1678,32 @@ private fun ExperienceSearchScreen(
     val views by viewModel.searchViews.collectAsState()
     val availableKinds by viewModel.availableKinds.collectAsState()
     val progress by viewModel.progress.collectAsState()
+    val searchResults = when (val current = state) {
+        is ExperienceLoad.Ready -> current.value
+        else -> null
+    }
     val progressByWork = remember(progress) { progress.associateBy(WatchProgress::workId) }
     var query by remember { mutableStateOf("") }
     var mediaFilter by remember { mutableStateOf(PlayarrSearchMediaType.All) }
     var libraryId by remember { mutableStateOf<String?>(null) }
     var filtersOpen by remember { mutableStateOf(false) }
     var contextWork by remember { mutableStateOf<Work?>(null) }
+    var selectedResultKey by remember { mutableStateOf<String?>(null) }
     val visibleMediaTypes = remember(availableKinds) {
         PlayarrSearchMediaType.entries.filter { type ->
             type.workKind == null || availableKinds?.contains(type.workKind) == true
         }
     }
     val activeLibrary = views.firstOrNull { it.id == libraryId }
+    val selectedWork = searchResults?.works?.firstOrNull { "work:${it.id}" == selectedResultKey }
+    val selectedPlaylist = searchResults?.playlists?.firstOrNull { "playlist:${it.id}" == selectedResultKey }
     fun submitSearch(debounce: Boolean) {
         viewModel.search(query, mediaFilter, libraryId, debounce)
     }
     LaunchedEffect(Unit) { viewModel.prepareSearch() }
+    LaunchedEffect(searchResults) {
+        searchResults?.let { selectedResultKey = playarrSearchSelection(it, selectedResultKey) }
+    }
     LaunchedEffect(availableKinds, mediaFilter) {
         if (mediaFilter.workKind != null && availableKinds?.contains(mediaFilter.workKind) == false) {
             mediaFilter = PlayarrSearchMediaType.All
@@ -1707,7 +1717,28 @@ private fun ExperienceSearchScreen(
             top = if (isTelevision) 92.dp else 72.dp,
         ),
     ) {
-        Text("Search", color = WebInk, fontSize = if (isTelevision) 44.sp else 30.sp, fontWeight = FontWeight.Medium, letterSpacing = (-1).sp)
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                "Search",
+                color = WebInk,
+                fontSize = if (isTelevision) 44.sp else 30.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = (-1).sp,
+            )
+            if (query.isNotBlank()) {
+                val resultStatus = when (val current = state) {
+                    ExperienceLoad.Loading -> "Searching…"
+                    is ExperienceLoad.Ready -> if (current.value.count == 1) "1 result" else "${current.value.count} results"
+                    is ExperienceLoad.Failed -> "0 results"
+                }
+                Text(
+                    resultStatus,
+                    color = WebInkMuted,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(start = 12.dp, bottom = 5.dp),
+                )
+            }
+        }
         OutlinedTextField(
             value = query,
             onValueChange = {
@@ -1784,6 +1815,14 @@ private fun ExperienceSearchScreen(
                 }
             }
         }
+        if (selectedWork != null || selectedPlaylist != null) {
+            ExperienceSearchPreview(
+                work = selectedWork,
+                playlist = selectedPlaylist,
+                isTelevision = isTelevision,
+                modifier = Modifier.fillMaxWidth(if (isTelevision) 0.72f else 1f).padding(top = 14.dp),
+            )
+        }
         when (val current = state) {
             ExperienceLoad.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebPink) }
             is ExperienceLoad.Failed -> ExperienceFailure(current.message) { submitSearch(debounce = false) }
@@ -1803,15 +1842,20 @@ private fun ExperienceSearchScreen(
                         ExperienceLandscapeCard(
                             work, serverUrl, accessToken,
                             width = if (isTelevision) 210.dp else 164.dp,
-                            selected = false,
+                            selected = selectedResultKey == "work:${work.id}",
                             progress = progressByWork[work.id],
-                            onSelected = {},
+                            onSelected = { selectedResultKey = "work:${work.id}" },
                             onClick = { navController.navigate("experience-detail/${work.id}") },
                             onContext = { contextWork = work },
                         )
                     }
                     items(current.value.playlists, key = { "playlist:${it.id}" }) { playlist ->
-                        PlaylistCard(playlist) { navController.navigate("playlists/${playlist.id}") }
+                        PlaylistCard(
+                            playlist = playlist,
+                            onClick = { navController.navigate("playlists/${playlist.id}") },
+                            selected = selectedResultKey == "playlist:${playlist.id}",
+                            onSelected = { selectedResultKey = "playlist:${playlist.id}" },
+                        )
                     }
                 }
             }
@@ -1826,6 +1870,70 @@ private fun ExperienceSearchScreen(
             canDownload = canDownload,
         )
     }
+}
+
+@Composable
+private fun ExperienceSearchPreview(
+    work: Work?,
+    playlist: Playlist?,
+    isTelevision: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        color = WebSurfaceStrong.copy(alpha = 0.74f),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
+            if (work != null) {
+                Text(work.searchKindLabel().uppercase(), color = WebPink, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    work.title,
+                    color = WebInk,
+                    fontSize = if (isTelevision) 24.sp else 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val year = work.releaseDate?.atZone(java.time.ZoneOffset.UTC)?.year?.toString()
+                val metadata = listOfNotNull(year, work.genres.take(2).joinToString(" · ").takeIf(String::isNotBlank))
+                if (metadata.isNotEmpty()) {
+                    Text(metadata.joinToString(" · "), color = WebInkMuted, fontSize = 10.sp, maxLines = 1)
+                }
+                Text(
+                    work.overview ?: "No synopsis is available.",
+                    color = WebInkSoft,
+                    fontSize = 11.sp,
+                    maxLines = if (isTelevision) 2 else 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 5.dp),
+                )
+            } else if (playlist != null) {
+                Text(
+                    if (playlist.isSystem) "SYSTEM PLAYLIST" else "PLAYLIST",
+                    color = WebPink,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    playlist.name,
+                    color = WebInk,
+                    fontSize = if (isTelevision) 24.sp else 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+private fun Work.searchKindLabel(): String = when (kind) {
+    WorkKind.Movie -> "Movie"
+    WorkKind.Series -> "Series"
+    WorkKind.Site -> "Site"
+    WorkKind.Artist -> "Artist"
+    WorkKind.Author -> "Author"
 }
 
 @HiltViewModel

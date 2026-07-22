@@ -55,6 +55,11 @@ class PlayarrSearchTest {
                 mediaType = PlayarrSearchMediaType.Playlist,
             ),
         )
+        val results = PlayarrSearchResults(listOf(work("movie", WorkKind.Movie)), listOf(playlist))
+        assertEquals(2, results.count)
+        assertEquals("work:movie", playarrSearchSelection(results, null))
+        assertEquals("playlist:playlist", playarrSearchSelection(results, "playlist:playlist"))
+        assertEquals("work:movie", playarrSearchSelection(results, "work:missing"))
     }
 
     private fun work(id: String, kind: WorkKind) = Work(
