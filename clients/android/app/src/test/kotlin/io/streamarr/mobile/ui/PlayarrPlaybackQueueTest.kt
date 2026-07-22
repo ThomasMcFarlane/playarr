@@ -122,4 +122,15 @@ class PlayarrPlaybackQueueTest {
         assertEquals("--:--", formatMusicDuration(null))
         assertEquals("--:--", formatMusicDuration(0))
     }
+
+    @Test
+    fun `music advances at the end only when another track exists`() {
+        val music = PlayarrPlaybackQueueItem("one", "One", music = true)
+        val video = PlayarrPlaybackQueueItem("movie", "Movie")
+
+        assertTrue(shouldAutoAdvancePlayarrMusic(true, music, true))
+        assertFalse(shouldAutoAdvancePlayarrMusic(true, music, false))
+        assertFalse(shouldAutoAdvancePlayarrMusic(false, music, true))
+        assertFalse(shouldAutoAdvancePlayarrMusic(true, video, true))
+    }
 }

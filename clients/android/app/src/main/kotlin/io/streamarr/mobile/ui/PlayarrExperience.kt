@@ -49,6 +49,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Home
@@ -56,9 +57,13 @@ import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PictureInPictureAlt
 import androidx.compose.material.icons.outlined.PlaylistPlay
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.SkipNext
+import androidx.compose.material.icons.outlined.SkipPrevious
 import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
@@ -142,6 +147,7 @@ import io.streamarr.shared.download.DownloadCandidate
 import io.streamarr.shared.download.DownloadRepository
 import io.streamarr.shared.download.OfflineProgressRepository
 import io.streamarr.shared.player.StreamFormat
+import io.streamarr.shared.player.PlaybackState
 import io.streamarr.shared.player.StreamarrPlayer
 import io.streamarr.shared.player.StreamarrSubtitleTrack
 import java.net.URI
@@ -153,6 +159,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -385,6 +392,10 @@ internal class PlayarrExperienceViewModel @Inject constructor(
         _playbackQueue.value = _playbackQueue.value.select(index)
     }
 
+    fun clearPlayback() {
+        _playbackQueue.value = PlayarrPlaybackQueue()
+    }
+
     private fun buildHomeRails(byKind: Map<WorkKind, List<Work>>, progress: List<WatchProgress>): List<HomeRail> {
         val movies = byKind[WorkKind.Movie].orEmpty()
         val series = byKind[WorkKind.Series].orEmpty()
@@ -448,6 +459,7 @@ internal fun PlayarrExperience(
     serverUrl: String,
     isTelevision: Boolean,
     viewModel: PlayarrExperienceViewModel = hiltViewModel(),
+    playerViewModel: ExperiencePlayerViewModel = hiltViewModel(),
 ) {
     val navController = rememberNavController()
     val entry by navController.currentBackStackEntryAsState()
@@ -458,6 +470,11 @@ internal fun PlayarrExperience(
     val profileAvatar by viewModel.profileAvatar.collectAsState()
     val availableKinds by viewModel.availableKinds.collectAsState()
     val canDownload by viewModel.canDownload.collectAsState()
+    val playbackQueue by viewModel.playbackQueue.collectAsState()
+    val persistentPlayerState by playerViewModel.state.collectAsState()
+    val playbackState by playerViewModel.player.state.collectAsState()
+    val playerDefaults = LocalPlayarrDisplayPreferences.current.playerDefaults
+    val activePlaybackItem = playbackQueue.currentItem
     val isPlayer = currentRoute.startsWith("experience-player")
     val isProfiles = currentRoute == "profiles"
 
@@ -467,9 +484,46 @@ internal fun PlayarrExperience(
     LaunchedEffect(currentRoute, currentUserId) {
         if (currentUserId != null) viewModel.refreshProfileAvatar()
     }
+    LaunchedEffect(activePlaybackItem?.mediaFileId, serverUrl, playerDefaults) {
+        activePlaybackItem?.let { playerViewModel.play(it.mediaFileId, serverUrl, playerDefaults) }
+    }
+    LaunchedEffect(playbackState.hasEnded, activePlaybackItem?.mediaFileId, playbackQueue.canNext) {
+        if (shouldAutoAdvancePlayarrMusic(playbackState.hasEnded, activePlaybackItem, playbackQueue.canNext)) {
+            viewModel.movePlayback(1)
+        }
+    }
+    LaunchedEffect(persistentPlayerState, activePlaybackItem?.mediaFileId) {
+        if (persistentPlayerState !is ExperienceLoad.Ready || activePlaybackItem == null) return@LaunchedEffect
+        while (true) {
+            delay(10_000)
+            playerViewModel.checkpoint()
+        }
+    }
+
+    val closePlayback = {
+        playerViewModel.stopPlayback()
+        viewModel.clearPlayback()
+        if (isPlayer) navController.popBackStack()
+    }
+
+    if (activePlaybackItem != null && persistentPlayerState is ExperienceLoad.Ready) {
+        PlayarrMediaSession(
+            player = playerViewModel.player.rawPlayer,
+            canPrevious = playbackQueue.canPrevious,
+            canNext = playbackQueue.canNext,
+            onPlay = playerViewModel.player::play,
+            onPause = playerViewModel.player::pause,
+            onTogglePlayback = playerViewModel::togglePlayback,
+            onStop = closePlayback,
+            onSeekBackward = { playerViewModel.seekBy(-10_000L) },
+            onSeekForward = { playerViewModel.seekBy(10_000L) },
+            onPrevious = { viewModel.movePlayback(-1) },
+            onNext = { viewModel.movePlayback(1) },
+        )
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(WebBackground)) {
-        ExperienceNavHost(navController, serverUrl, token, isTelevision, canDownload, viewModel)
+        ExperienceNavHost(navController, serverUrl, token, isTelevision, canDownload, viewModel, playerViewModel)
 
         if (!isPlayer && !isProfiles) {
             ExperienceNavigation(
@@ -497,6 +551,111 @@ internal fun PlayarrExperience(
                 ) {
                     ExperienceClock()
                 }
+            }
+        }
+
+        if (!isPlayer && activePlaybackItem != null) {
+            PlayarrMiniPlayer(
+                item = activePlaybackItem,
+                playbackState = playbackState,
+                serverUrl = serverUrl,
+                accessToken = token,
+                isTelevision = isTelevision,
+                canPrevious = playbackQueue.canPrevious,
+                canNext = playbackQueue.canNext,
+                onPrevious = { viewModel.movePlayback(-1) },
+                onTogglePlayback = playerViewModel::togglePlayback,
+                onNext = { viewModel.movePlayback(1) },
+                onClose = closePlayback,
+                onMaximise = {
+                    navController.navigate("experience-player/${Uri.encode(activePlaybackItem.mediaFileId)}")
+                },
+                modifier = Modifier.align(if (isTelevision) Alignment.BottomEnd else Alignment.BottomCenter),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlayarrMiniPlayer(
+    item: PlayarrPlaybackQueueItem,
+    playbackState: PlaybackState,
+    serverUrl: String,
+    accessToken: String?,
+    isTelevision: Boolean,
+    canPrevious: Boolean,
+    canNext: Boolean,
+    onPrevious: () -> Unit,
+    onTogglePlayback: () -> Unit,
+    onNext: () -> Unit,
+    onClose: () -> Unit,
+    onMaximise: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        onClick = onMaximise,
+        color = WebSurfaceStrong.copy(alpha = 0.97f),
+        contentColor = WebInk,
+        shape = RoundedCornerShape(18.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.28f)),
+        shadowElevation = 20.dp,
+        modifier = modifier
+            .then(if (isTelevision) Modifier.width(500.dp) else Modifier.fillMaxWidth())
+            .padding(
+                start = if (isTelevision) 0.dp else 10.dp,
+                end = if (isTelevision) 48.dp else 10.dp,
+                bottom = if (isTelevision) 42.dp else 78.dp,
+            )
+            .semantics { contentDescription = "Now playing ${item.title}. Open player." },
+    ) {
+        Row(
+            modifier = Modifier.height(if (isTelevision) 88.dp else 76.dp).padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            val artworkModifier = Modifier.size(if (isTelevision) 72.dp else 60.dp).clip(RoundedCornerShape(12.dp))
+            item.artworkWork?.let { work ->
+                if (item.music) {
+                    AuthenticatedAlbumArtwork(work, item.albumId, serverUrl, accessToken, artworkModifier)
+                } else {
+                    AuthenticatedArtwork(
+                        work = work,
+                        kinds = listOf(ImageKind.Thumb, ImageKind.Backdrop, ImageKind.Poster),
+                        serverUrl = serverUrl,
+                        accessToken = accessToken,
+                        contentScale = ContentScale.Crop,
+                        modifier = artworkModifier,
+                    )
+                }
+            }
+            Column(Modifier.weight(1f)) {
+                Text(item.title, color = WebInk, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                item.subtitle?.let { Text(it, color = WebInkMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            }
+            if (isTelevision) {
+                IconButton(onClick = onPrevious, enabled = canPrevious) {
+                    Icon(Icons.Outlined.SkipPrevious, contentDescription = "Previous", tint = if (canPrevious) WebInk else WebInkMuted.copy(alpha = 0.4f))
+                }
+            }
+            IconButton(onClick = onTogglePlayback) {
+                Icon(
+                    if (playbackState.playWhenReady) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                    contentDescription = if (playbackState.playWhenReady) "Pause" else "Play",
+                    tint = WebPink,
+                )
+            }
+            if (isTelevision) {
+                IconButton(onClick = onNext, enabled = canNext) {
+                    Icon(Icons.Outlined.SkipNext, contentDescription = "Next", tint = if (canNext) WebInk else WebInkMuted.copy(alpha = 0.4f))
+                }
+            }
+            if (isTelevision) {
+                IconButton(onClick = onMaximise) {
+                    Icon(Icons.Outlined.PictureInPictureAlt, contentDescription = "Open full player", tint = WebInkMuted)
+                }
+            }
+            IconButton(onClick = onClose) {
+                Icon(Icons.Outlined.Close, contentDescription = "Stop playback", tint = WebInkMuted)
             }
         }
     }
@@ -707,6 +866,7 @@ private fun ExperienceNavHost(
     isTelevision: Boolean,
     canDownload: Boolean?,
     viewModel: PlayarrExperienceViewModel,
+    playerViewModel: ExperiencePlayerViewModel,
 ) {
     val playbackQueue by viewModel.playbackQueue.collectAsState()
     NavHost(navController, startDestination = "home", modifier = Modifier.fillMaxSize()) {
@@ -736,7 +896,9 @@ private fun ExperienceNavHost(
                 onBack = navController::popBackStack,
                 onPlay = { mediaFileId, orderedItems ->
                     viewModel.startPlayback(mediaFileId, orderedItems)
-                    navController.navigate("experience-player/${Uri.encode(mediaFileId)}")
+                    if (orderedItems.none { it.music }) {
+                        navController.navigate("experience-player/${Uri.encode(mediaFileId)}")
+                    }
                 },
             )
         }
@@ -749,7 +911,13 @@ private fun ExperienceNavHost(
                 playbackQueue = playbackQueue,
                 onMovePlayback = viewModel::movePlayback,
                 onSelectPlayback = viewModel::selectPlayback,
-                onBack = navController::popBackStack,
+                onBack = {
+                    playerViewModel.stopPlayback()
+                    viewModel.clearPlayback()
+                    navController.popBackStack()
+                },
+                onMinimise = navController::popBackStack,
+                viewModel = playerViewModel,
             )
         }
         composable("playlists") {
@@ -765,7 +933,9 @@ private fun ExperienceNavHost(
                 onOpenWork = { navController.navigate("experience-detail/$it") },
                 onPlay = { mediaFileId, orderedItems ->
                     viewModel.startPlayback(mediaFileId, orderedItems)
-                    navController.navigate("experience-player/${Uri.encode(mediaFileId)}")
+                    if (orderedItems.none { it.music }) {
+                        navController.navigate("experience-player/${Uri.encode(mediaFileId)}")
+                    }
                 },
             )
         }
@@ -2082,6 +2252,8 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     private var activeOnDemandHls = false
     private var activePlaybackUrl = ""
     private var automaticRecoveryUrl: String? = null
+    private var prepareJob: Job? = null
+    private var switchJob: Job? = null
     private var previousPlayerState = player.state.value
     private val telemetryMutex = Mutex()
 
@@ -2123,7 +2295,9 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     }
 
     fun play(mediaFileId: String, serverUrl: String, defaults: PlayarrPlayerDefaults) {
-        viewModelScope.launch {
+        prepareJob?.cancel()
+        switchJob?.cancel()
+        prepareJob = viewModelScope.launch {
             if (activeMediaFileId != null) persistProgress(ensureCompletion = true)
             closeActiveSessionAndWait(PlaybackStopReason.UserStopped)
             activeMediaFileId = mediaFileId
@@ -2214,7 +2388,9 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         shouldPlayOverride: Boolean? = null,
     ) {
         val mediaFileId = activeMediaFileId ?: return
-        viewModelScope.launch {
+        prepareJob?.cancel()
+        switchJob?.cancel()
+        switchJob = viewModelScope.launch {
             val sourcePosition = requestedSourcePositionMs ?: currentSourcePositionMs()
             val shouldPlay = shouldPlayOverride ?: player.state.value.playWhenReady
             persistProgress(ensureCompletion = true)
@@ -2326,9 +2502,16 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     }
 
     fun stopPlayback() {
+        prepareJob?.cancel()
+        switchJob?.cancel()
+        prepareJob = null
+        switchJob = null
         persistProgress(ensureCompletion = true)
         closeActiveSession(PlaybackStopReason.UserStopped)
         player.pause()
+        activeMediaFileId = null
+        activePlaybackUrl = ""
+        automaticRecoveryUrl = null
     }
 
     fun togglePlayback() {
@@ -2421,7 +2604,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         errorMessage: String? = null,
     ) {
         val closure = takeActiveSession(reason, errorMessage) ?: return
-        withContext(Dispatchers.IO) { sendSessionClosure(closure) }
+        withContext(Dispatchers.IO + NonCancellable) { sendSessionClosure(closure) }
     }
 
     private fun takeActiveSession(
@@ -2466,6 +2649,7 @@ private fun ExperiencePlayerScreen(
     onMovePlayback: (Int) -> Unit,
     onSelectPlayback: (Int) -> Unit,
     onBack: () -> Unit,
+    onMinimise: () -> Unit,
     viewModel: ExperiencePlayerViewModel = hiltViewModel(),
 ) {
     val activeMediaFileId = playbackQueue.currentMediaFileId ?: mediaFileId
@@ -2474,35 +2658,12 @@ private fun ExperiencePlayerScreen(
     val controls by viewModel.controls.collectAsState()
     val playbackState by viewModel.player.state.collectAsState()
     var timeline by remember(activeMediaFileId) { mutableStateOf(PlayarrPlayerTimeline()) }
-    LaunchedEffect(activeMediaFileId, serverUrl) { viewModel.play(activeMediaFileId, serverUrl, playerDefaults) }
     LaunchedEffect(state, activeMediaFileId) {
         if (state !is ExperienceLoad.Ready) return@LaunchedEffect
         while (true) {
             timeline = viewModel.timelineSnapshot()
             kotlinx.coroutines.delay(250)
         }
-    }
-    LaunchedEffect(state, activeMediaFileId) {
-        if (state !is ExperienceLoad.Ready) return@LaunchedEffect
-        while (true) {
-            kotlinx.coroutines.delay(10_000)
-            viewModel.checkpoint()
-        }
-    }
-    if (state is ExperienceLoad.Ready) {
-        PlayarrMediaSession(
-            player = viewModel.player.rawPlayer,
-            canPrevious = playbackQueue.canPrevious,
-            canNext = playbackQueue.canNext,
-            onPlay = viewModel.player::play,
-            onPause = viewModel.player::pause,
-            onTogglePlayback = viewModel::togglePlayback,
-            onStop = { viewModel.stopPlayback(); onBack() },
-            onSeekBackward = { viewModel.seekBy(-10_000L) },
-            onSeekForward = { viewModel.seekBy(10_000L) },
-            onPrevious = { onMovePlayback(-1) },
-            onNext = { onMovePlayback(1) },
-        )
     }
     Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
         when (val current = state) {
@@ -2547,7 +2708,8 @@ private fun ExperiencePlayerScreen(
                 onPrevious = { onMovePlayback(-1) },
                 onNext = { onMovePlayback(1) },
                 onSelectQueueItem = onSelectPlayback,
-                onBack = { viewModel.stopPlayback(); onBack() },
+                onBack = onBack,
+                onMinimise = onMinimise,
                 onTogglePlayback = viewModel::togglePlayback,
                 onSeek = viewModel::seekToSourcePosition,
                 onQuality = viewModel::selectQuality,
@@ -2556,7 +2718,7 @@ private fun ExperiencePlayerScreen(
             )
         } else {
             IconButton(
-                onClick = { viewModel.stopPlayback(); onBack() },
+                onClick = onBack,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .windowInsetsPadding(WindowInsets.safeDrawing)

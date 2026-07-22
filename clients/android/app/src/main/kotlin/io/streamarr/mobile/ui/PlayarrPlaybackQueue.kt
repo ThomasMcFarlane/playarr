@@ -61,6 +61,12 @@ internal fun playarrAlbumPlaybackQueueItems(
     albumId: String,
 ): List<PlayarrPlaybackQueueItem> = items.filter { it.albumId == albumId }
 
+internal fun shouldAutoAdvancePlayarrMusic(
+    hasEnded: Boolean,
+    item: PlayarrPlaybackQueueItem?,
+    canNext: Boolean,
+): Boolean = hasEnded && item?.music == true && canNext
+
 internal fun WorkDetail.playarrPlaybackQueueItems(): List<PlayarrPlaybackQueueItem> = when (val tree = children) {
     WorkChildren.Movie -> listOfNotNull(
         mediaFileId?.let { PlayarrPlaybackQueueItem(it, work.title, artworkWork = work) },

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.HighQuality
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PictureInPictureAlt
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.SkipNext
@@ -92,6 +93,7 @@ internal fun PlayarrPlayerChrome(
     onNext: () -> Unit,
     onSelectQueueItem: (Int) -> Unit,
     onBack: () -> Unit,
+    onMinimise: () -> Unit,
     onTogglePlayback: () -> Unit,
     onSeek: (Long) -> Unit,
     onQuality: (String) -> Unit,
@@ -191,6 +193,18 @@ internal fun PlayarrPlayerChrome(
                     .background(Color.Black.copy(alpha = 0.62f), CircleShape),
             ) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = Color.White)
+            }
+        }
+
+        AnimatedVisibility(visible = visible, modifier = Modifier.align(Alignment.TopEnd)) {
+            IconButton(
+                onClick = { showControls(); onMinimise() },
+                modifier = Modifier
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(16.dp)
+                    .background(Color.Black.copy(alpha = 0.62f), CircleShape),
+            ) {
+                Icon(Icons.Outlined.PictureInPictureAlt, contentDescription = "Minimise player", tint = Color.White)
             }
         }
 
