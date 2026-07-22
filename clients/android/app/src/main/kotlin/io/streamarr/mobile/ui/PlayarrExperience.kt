@@ -700,6 +700,7 @@ private fun ExperienceNavHost(
         composable("experience-player/{mediaFileId}") { entry ->
             ExperiencePlayerScreen(
                 mediaFileId = entry.arguments?.getString("mediaFileId").orEmpty(),
+                serverUrl = serverUrl,
                 onBack = navController::popBackStack,
             )
         }
@@ -1736,7 +1737,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     val state = _state.asStateFlow()
     private var activeMediaFileId: String? = null
 
-    fun play(mediaFileId: String) {
+    fun play(mediaFileId: String, serverUrl: String) {
         viewModelScope.launch {
             activeMediaFileId = mediaFileId
             _state.value = ExperienceLoad.Loading
@@ -1761,7 +1762,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
             _state.value = when (val result = getPlaybackInfo(mediaFileId)) {
                 is StreamarrResult.Success -> {
                     player.prepare(
-                        result.value.url,
+                        resolveStreamarrPlaybackUrl(serverUrl, result.value.url),
                         if (result.value.mode == io.streamarr.shared.data.model.PlaybackMode.Hls) StreamFormat.Hls else StreamFormat.Direct,
                         resumePosition,
                     )
@@ -1796,11 +1797,12 @@ internal class ExperiencePlayerViewModel @Inject constructor(
 @Composable
 private fun ExperiencePlayerScreen(
     mediaFileId: String,
+    serverUrl: String,
     onBack: () -> Unit,
     viewModel: ExperiencePlayerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
-    LaunchedEffect(mediaFileId) { viewModel.play(mediaFileId) }
+    LaunchedEffect(mediaFileId, serverUrl) { viewModel.play(mediaFileId, serverUrl) }
     LaunchedEffect(state, mediaFileId) {
         if (state !is ExperienceLoad.Ready) return@LaunchedEffect
         while (true) {
@@ -1811,7 +1813,7 @@ private fun ExperiencePlayerScreen(
     Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
         when (val current = state) {
             ExperienceLoad.Loading -> CircularProgressIndicator(color = WebPink)
-            is ExperienceLoad.Failed -> ExperienceFailure(current.message) { viewModel.play(mediaFileId) }
+            is ExperienceLoad.Failed -> ExperienceFailure(current.message) { viewModel.play(mediaFileId, serverUrl) }
             is ExperienceLoad.Ready -> androidx.compose.ui.viewinterop.AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { context -> androidx.media3.ui.PlayerView(context).apply { player = viewModel.player.rawPlayer; useController = true } },
@@ -1822,6 +1824,12 @@ private fun ExperiencePlayerScreen(
         }
     }
 }
+
+internal fun resolveStreamarrPlaybackUrl(serverUrl: String, playbackUrl: String): String =
+    runCatching {
+        val base = URI(if (serverUrl.endsWith('/')) serverUrl else "$serverUrl/")
+        base.resolve(playbackUrl).toString()
+    }.getOrDefault(playbackUrl)
 
 @HiltViewModel
 internal class ExperienceSettingsViewModel @Inject constructor(private val tokenStore: TokenStore) : ViewModel() {

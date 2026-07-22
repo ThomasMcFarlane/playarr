@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Resolve Android's server-relative direct-play and HLS paths against the selected Streamarr
+  server before handing them to Media3, while preserving absolute peer URLs.
 - Send the current bearer token on Android live-player media and HLS requests by sharing the
   authenticated Media3 data source already used for offline downloads.
 - Offer only server-supported avatar presets on Android and render the account-backed avatar in
