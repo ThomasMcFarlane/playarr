@@ -86,6 +86,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -110,6 +112,7 @@ import io.streamarr.mobile.R
 import io.streamarr.shared.auth.TokenStore
 import io.streamarr.shared.data.model.ImageKind
 import io.streamarr.shared.data.model.Playlist
+import io.streamarr.shared.data.model.ProfileAvatarPreference
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
 import io.streamarr.shared.data.model.WorkDetail
@@ -216,6 +219,9 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     private val _progress = MutableStateFlow<List<WatchProgress>>(emptyList())
     val progress: StateFlow<List<WatchProgress>> = _progress.asStateFlow()
 
+    private val _profileAvatar = MutableStateFlow<ProfileAvatarPreference?>(null)
+    val profileAvatar: StateFlow<ProfileAvatarPreference?> = _profileAvatar.asStateFlow()
+
     val accessToken = tokenStore.accessToken.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     val currentUserId = tokenStore.currentUserId.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     val currentUserName = tokenStore.currentUserName.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -271,7 +277,14 @@ internal class PlayarrExperienceViewModel @Inject constructor(
         _search.value = ExperienceLoad.Ready(emptyList())
         loadAvailableKinds()
         loadHome()
-        viewModelScope.launch { refreshCapabilities() }
+        viewModelScope.launch {
+            refreshCapabilities()
+            refreshProfileAvatar()
+        }
+    }
+
+    fun refreshProfileAvatar() {
+        viewModelScope.launch { _profileAvatar.value = runCatching { api.getProfileAvatar().preference }.getOrNull() }
     }
 
     private suspend fun refreshCapabilities() {
@@ -403,6 +416,7 @@ internal fun PlayarrExperience(
     val token by viewModel.accessToken.collectAsState()
     val currentUserId by viewModel.currentUserId.collectAsState()
     val currentUserName by viewModel.currentUserName.collectAsState()
+    val profileAvatar by viewModel.profileAvatar.collectAsState()
     val availableKinds by viewModel.availableKinds.collectAsState()
     val canDownload by viewModel.canDownload.collectAsState()
     val isPlayer = currentRoute.startsWith("experience-player")
@@ -410,6 +424,9 @@ internal fun PlayarrExperience(
 
     LaunchedEffect(currentUserId) {
         if (currentUserId != null) viewModel.reloadForProfile()
+    }
+    LaunchedEffect(currentRoute, currentUserId) {
+        if (currentUserId != null) viewModel.refreshProfileAvatar()
     }
 
     Box(modifier = Modifier.fillMaxSize().background(WebBackground)) {
@@ -425,7 +442,9 @@ internal fun PlayarrExperience(
             )
             ProfileControl(
                 isTelevision = isTelevision,
+                userId = currentUserId.orEmpty(),
                 userName = currentUserName,
+                avatar = profileAvatar,
                 onClick = { navController.openExperienceTopLevel("profiles") },
                 modifier = Modifier.align(if (isTelevision) Alignment.BottomStart else Alignment.TopEnd),
             )
@@ -573,7 +592,14 @@ private fun ExperienceClock(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ProfileControl(isTelevision: Boolean, userName: String?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun ProfileControl(
+    isTelevision: Boolean,
+    userId: String,
+    userName: String?,
+    avatar: ProfileAvatarPreference?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier = modifier
             .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.safeDrawing)
@@ -582,7 +608,8 @@ private fun ProfileControl(isTelevision: Boolean, userName: String?, onClick: ()
     ) {
         Surface(
             onClick = onClick,
-            modifier = if (isTelevision) Modifier.height(46.dp) else Modifier.size(42.dp),
+            modifier = (if (isTelevision) Modifier.height(46.dp) else Modifier.size(42.dp))
+                .semantics { contentDescription = "Profiles for ${userName ?: "Viewer"}" },
             shape = CircleShape,
             color = WebSurfaceStrong.copy(alpha = 0.94f),
             contentColor = WebInkSoft,
@@ -594,7 +621,12 @@ private fun ProfileControl(isTelevision: Boolean, userName: String?, onClick: ()
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
             ) {
-                Icon(Icons.Outlined.Person, contentDescription = "Profiles", modifier = Modifier.size(22.dp))
+                PlayarrProfileAvatar(
+                    userId = userId,
+                    preference = avatar,
+                    modifier = Modifier.size(if (isTelevision) 32.dp else 42.dp),
+                    glyphSize = if (isTelevision) 17.sp else 20.sp,
+                )
                 if (isTelevision) {
                     Text(userName ?: "Viewer", fontSize = 9.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 9.dp))
                 }
@@ -686,8 +718,12 @@ private fun ExperienceNavHost(
             )
         }
         composable("profiles") {
+            val profileAvatar by viewModel.profileAvatar.collectAsState()
+            val currentUserId by viewModel.currentUserId.collectAsState()
             ExperienceProfilesScreen(
                 isTelevision = isTelevision,
+                currentUserId = currentUserId.orEmpty(),
+                currentAvatar = profileAvatar,
                 onHome = { navController.openExperienceTopLevel("home") },
                 onSettings = { navController.openExperienceTopLevel("settings") },
             )

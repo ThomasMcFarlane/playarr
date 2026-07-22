@@ -72,6 +72,8 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -520,6 +522,8 @@ internal class ProfilesViewModel @Inject constructor(
 @Composable
 internal fun ExperienceProfilesScreen(
     isTelevision: Boolean,
+    currentUserId: String,
+    currentAvatar: ProfileAvatarPreference?,
     onHome: () -> Unit,
     onSettings: () -> Unit,
     viewModel: ProfilesViewModel = hiltViewModel(),
@@ -546,6 +550,7 @@ internal fun ExperienceProfilesScreen(
                         items(current.value, key = AvailableProfile::id) { profile ->
                             ProfileChoice(
                                 profile = profile,
+                                avatar = if (profile.id == currentUserId) currentAvatar else null,
                                 selected = selectedId == profile.id,
                                 isTelevision = isTelevision,
                                 switching = switching,
@@ -581,6 +586,7 @@ internal fun ExperienceProfilesScreen(
 @Composable
 private fun ProfileChoice(
     profile: AvailableProfile,
+    avatar: ProfileAvatarPreference?,
     selected: Boolean,
     isTelevision: Boolean,
     switching: Boolean,
@@ -594,12 +600,21 @@ private fun ProfileChoice(
         Surface(
             onClick = onClick,
             enabled = !switching,
-            modifier = Modifier.size(size).scale(if (selected) 1.035f else 1f).then(if (selected) Modifier.border(4.dp, WebPink.copy(alpha = 0.42f), CircleShape) else Modifier),
+            modifier = Modifier
+                .size(size)
+                .scale(if (selected) 1.035f else 1f)
+                .then(if (selected) Modifier.border(4.dp, WebPink.copy(alpha = 0.42f), CircleShape) else Modifier)
+                .semantics { contentDescription = profile.displayName },
             shape = CircleShape,
             color = WebPink,
         ) {
-            Box(Modifier.background(Brush.linearGradient(listOf(WebPink.copy(alpha = 0.78f), Color(0xFFA82655)))), contentAlignment = Alignment.Center) {
-                Icon(Icons.Outlined.Person, contentDescription = profile.displayName, tint = Color.White.copy(alpha = 0.92f), modifier = Modifier.size(size * 0.42f))
+            Box(contentAlignment = Alignment.Center) {
+                PlayarrProfileAvatar(
+                    userId = profile.id,
+                    preference = avatar,
+                    modifier = Modifier.fillMaxSize(),
+                    glyphSize = if (isTelevision) 68.sp else 50.sp,
+                )
                 if (profile.pinLocked) Icon(Icons.Outlined.Lock, contentDescription = "PIN required", tint = Color.White, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).size(22.dp))
             }
         }
@@ -771,7 +786,32 @@ private fun SettingsSectionContent(
                     }
                 }
             }
-            SettingsSection.Avatar -> SettingChoices("Choose an avatar", listOf("orbit", "spark", "moon", "leaf"), snapshot.avatar.preference?.value) { viewModel.saveAvatar(it) }
+            SettingsSection.Avatar -> {
+                Text("Choose an avatar", color = WebInkSoft, fontSize = 12.sp)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(playarrProfileAvatarPresetIds) { preset ->
+                        val selected = snapshot.avatar.preference?.let {
+                            it.kind == ProfileAvatarKind.Preset && it.value == preset
+                        } == true
+                        Surface(
+                            onClick = { viewModel.saveAvatar(preset) },
+                            modifier = Modifier
+                                .size(76.dp)
+                                .then(if (selected) Modifier.border(3.dp, WebPink, CircleShape) else Modifier)
+                                .semantics { contentDescription = "$preset avatar" },
+                            shape = CircleShape,
+                            color = Color.Transparent,
+                        ) {
+                            PlayarrProfileAvatar(
+                                userId = preset,
+                                preference = ProfileAvatarPreference(ProfileAvatarKind.Preset, preset),
+                                modifier = Modifier.fillMaxSize(),
+                                glyphSize = 31.sp,
+                            )
+                        }
+                    }
+                }
+            }
             SettingsSection.Language -> SettingChoices(
                 "App language",
                 listOf("System", "English", "ไทย", "日本語"),

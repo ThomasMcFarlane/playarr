@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Offer only server-supported avatar presets on Android and render the account-backed avatar in
+  the shared profile control and profile selector, with Playarr Web's deterministic fallback.
 - Opt the Android download service and dependency wiring into the Media3 APIs they use so the
   repository's full Android lint gate completes without unsafe opt-in errors.
 - Show the native Android build version beneath the profile avatar while keeping it outside the
