@@ -1067,6 +1067,35 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
       setCurrentUserId(userId);
       setCurrentUserName(undefined);
       if (targetApiBaseUrl !== apiBaseUrl) applyApiBaseUrl(targetApiBaseUrl);
+
+      // The device-code/QR link flow (the only sign-in path IS_TV platforms --
+      // VIDAA, webOS, Tizen -- offer; see Login.tsx) never has the viewer type
+      // a username the way `login()` above does, so `name` above is only ever
+      // the generic placeholder. Fetch the real profile the token belongs to
+      // and correct it in place -- fire-and-forget so it doesn't block the
+      // redirect `finishLogin()` triggers right after this call returns.
+      const profileClient = createManagedApiClient({
+        baseUrl: targetApiBaseUrl,
+        fetchImpl: browserFetch,
+        defaultHeaders: PLAYARR_PLATFORM_HEADERS,
+        getAccessToken: async () => token.accessToken,
+      });
+      void profileClient
+        .listAvailableProfiles()
+        .then((profiles) => {
+          const realName = profiles.find((profile) => profile.id === userId)?.display_name;
+          // Bail if a logout/profile-switch already moved past this session
+          // by the time this resolves -- stale enrichment must not stomp it.
+          if (!realName || activeProfileRef.current?.profileKey !== profileKey) return;
+          activeProfileRef.current = { ...activeProfileRef.current, name: realName };
+          window.localStorage.setItem(CURRENT_USER_NAME_STORAGE_KEY, realName);
+          setCurrentUserName(realName);
+          persistProfileSession(targetApiBaseUrl, profileKey, userId, realName, deviceId, session);
+        })
+        .catch(() => {
+          // Best-effort enrichment only -- the placeholder name already
+          // covers the offline/unreachable case.
+        });
     },
     [apiBaseUrl, applyApiBaseUrl, persistProfileSession, t]
   );
