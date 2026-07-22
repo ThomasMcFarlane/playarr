@@ -53,6 +53,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Localise Android video details, episode and chapter rails, title action and playlist dialogs,
+  playback settings, and multi-server playback selection in English, Thai, and Japanese, with
+  locale-aware Web-compatible runtime labels and a natively scrollable playlist picker.
 - Localise Android Home, Search, and media-library surfaces in English, Thai, and Japanese with
   Playarr Web's rail, filter, count, synopsis, loading, and empty-state copy, plus its query-clear
   action on both phone and TV layouts.

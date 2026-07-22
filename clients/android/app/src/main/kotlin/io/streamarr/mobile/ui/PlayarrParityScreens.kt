@@ -196,22 +196,34 @@ internal fun AddToPlaylistDialog(
     LaunchedEffect(mediaType) { viewModel.load(mediaType) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add to playlist") },
+        title = { Text(playarrString(PlayarrString.ContextAddToPlaylistHeading)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.fillMaxWidth().height(360.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 when (val current = state) {
                     ParityLoad.Loading -> CircularProgressIndicator(color = WebPink)
                     is ParityLoad.Failed -> Text(current.message, color = MaterialTheme.colorScheme.error)
-                    is ParityLoad.Ready -> if (current.value.isEmpty()) Text("Create a personal playlist first.") else current.value.forEach { playlist ->
-                        Surface(onClick = { viewModel.add(playlist.id, workId, trackId, onDismiss) }, color = WebSurfaceSoft, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
-                            Text(playlist.name, modifier = Modifier.padding(14.dp), color = WebInk)
+                    is ParityLoad.Ready -> if (current.value.isEmpty()) {
+                        Text(
+                            playarrString(PlayarrString.ContextNoPersonalPlaylistsTitle),
+                            color = WebInk,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(playarrString(PlayarrString.ContextNoPersonalPlaylistsDescription), color = WebInkMuted)
+                    } else {
+                        current.value.forEach { playlist ->
+                            Surface(onClick = { viewModel.add(playlist.id, workId, trackId, onDismiss) }, color = WebSurfaceSoft, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                                Text(playlist.name, modifier = Modifier.padding(14.dp), color = WebInk)
+                            }
                         }
                     }
                 }
                 message?.let { Text(it, color = WebPink) }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.CommonClose)) } },
     )
 }
 

@@ -2135,10 +2135,14 @@ internal class MediaContextDownloadViewModel @Inject constructor(
      * movie needs this resolved just as much as a series/artist/author
      * container does to fan out to every child leaf.
      */
-    fun resolveDownloadCandidates(work: Work, onResolved: (List<DownloadCandidate>) -> Unit) {
+    fun resolveDownloadCandidates(
+        work: Work,
+        language: PlayarrLanguageState,
+        onResolved: (List<DownloadCandidate>) -> Unit,
+    ) {
         viewModelScope.launch {
             val candidates = when (val result = getWorkDetails(work.id)) {
-                is StreamarrResult.Success -> result.value.toDownloadCandidates()
+                is StreamarrResult.Success -> result.value.toDownloadCandidates(language)
                 is StreamarrResult.Failure -> emptyList()
             }
             onResolved(candidates)
@@ -2155,6 +2159,7 @@ private fun MediaContextDialog(
     canDownload: Boolean,
     viewModel: MediaContextDownloadViewModel = hiltViewModel(),
 ) {
+    val language = LocalPlayarrLanguage.current
     var addToPlaylist by remember(work.id) { mutableStateOf(false) }
     var resolvingDownload by remember(work.id) { mutableStateOf(false) }
     var downloadCandidates by remember(work.id) { mutableStateOf<List<DownloadCandidate>?>(null) }
@@ -2163,26 +2168,40 @@ private fun MediaContextDialog(
         title = { Text(work.title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onOpen, modifier = Modifier.fillMaxWidth()) { Text("Open") }
-                OutlinedButton(onClick = { addToPlaylist = true }, modifier = Modifier.fillMaxWidth()) { Text("Add to playlist") }
+                Button(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
+                    Text(playarrString(PlayarrString.ContextOpen))
+                }
+                OutlinedButton(onClick = { addToPlaylist = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(playarrString(PlayarrString.ContextAddToPlaylist))
+                }
                 if (canDownload) {
                     OutlinedButton(
                         onClick = {
                             resolvingDownload = true
-                            viewModel.resolveDownloadCandidates(work) { candidates ->
+                            viewModel.resolveDownloadCandidates(work, language) { candidates ->
                                 resolvingDownload = false
                                 downloadCandidates = candidates
                             }
                         },
                         enabled = !resolvingDownload,
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text(if (resolvingDownload) "Resolving…" else "Download") }
+                    ) {
+                        Text(
+                            playarrString(
+                                if (resolvingDownload) PlayarrString.ContextResolving else PlayarrString.ContextDownload,
+                            ),
+                        )
+                    }
                 }
-                OutlinedButton(onClick = { onMark(true) }, modifier = Modifier.fillMaxWidth()) { Text("Mark as watched") }
-                OutlinedButton(onClick = { onMark(false) }, modifier = Modifier.fillMaxWidth()) { Text("Mark as unwatched") }
+                OutlinedButton(onClick = { onMark(true) }, modifier = Modifier.fillMaxWidth()) {
+                    Text(playarrString(PlayarrString.ContextMarkWatched))
+                }
+                OutlinedButton(onClick = { onMark(false) }, modifier = Modifier.fillMaxWidth()) {
+                    Text(playarrString(PlayarrString.ContextMarkUnwatched))
+                }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.CommonClose)) } },
     )
     if (addToPlaylist) {
         AddToPlaylistDialog(
@@ -2198,7 +2217,7 @@ private fun MediaContextDialog(
 }
 
 /** Every playable leaf under [WorkDetail.children], mapped to what [DownloadRepository.enqueue] needs -- shared by [MediaContextDialog]'s fan-out and `DetailChildren`'s per-row/"download all" actions. */
-private fun WorkDetail.toDownloadCandidates(): List<DownloadCandidate> {
+private fun WorkDetail.toDownloadCandidates(language: PlayarrLanguageState): List<DownloadCandidate> {
     val posterUrl = work.images.firstOrNull { it.kind == ImageKind.Poster }?.url
     return when (val tree = children) {
         WorkChildren.Movie -> listOfNotNull(
@@ -2206,7 +2225,17 @@ private fun WorkDetail.toDownloadCandidates(): List<DownloadCandidate> {
         )
         is WorkChildren.Series -> tree.seasons.flatMap { it.episodes }.mapNotNull { episode ->
             episode.mediaFileId?.let {
-                DownloadCandidate(it, work.id, episode.episode.title ?: "Episode ${episode.episode.episodeNumber}", work.title, posterUrl, "episode")
+                DownloadCandidate(
+                    it,
+                    work.id,
+                    episode.episode.title ?: language.text(
+                        PlayarrString.DetailEpisodeNumber,
+                        mapOf("number" to episode.episode.episodeNumber),
+                    ),
+                    work.title,
+                    posterUrl,
+                    "episode",
+                )
             }
         }
         is WorkChildren.Artist -> tree.albums.flatMap { it.tracks }.mapNotNull { track ->
@@ -2225,6 +2254,11 @@ private fun WorkDetail.mediaFileIds(): List<String> = when (val tree = children)
     is WorkChildren.Author -> tree.books.mapNotNull { it.mediaFileId }
 }
 
+internal sealed interface ExperienceDetailMessage {
+    data object PlaybackSettingsSaved : ExperienceDetailMessage
+    data class Failure(val text: String) : ExperienceDetailMessage
+}
+
 @HiltViewModel
 internal class ExperienceDetailViewModel @Inject constructor(
     private val getWorkDetails: GetWorkDetailsUseCase,
@@ -2233,7 +2267,7 @@ internal class ExperienceDetailViewModel @Inject constructor(
 ) : ViewModel() {
     private val _state = MutableStateFlow<ExperienceLoad<ExperienceDetailSnapshot>>(ExperienceLoad.Loading)
     val state = _state.asStateFlow()
-    private val _message = MutableStateFlow<String?>(null)
+    private val _message = MutableStateFlow<ExperienceDetailMessage?>(null)
     val message = _message.asStateFlow()
     private val _sourceChoices = MutableStateFlow<ExperienceLoad<List<PlayarrWorkSourceChoice>>>(ExperienceLoad.Loading)
     val sourceChoices = _sourceChoices.asStateFlow()
@@ -2332,9 +2366,11 @@ internal class ExperienceDetailViewModel @Inject constructor(
             result.onSuccess { options ->
                 val current = (_state.value as? ExperienceLoad.Ready)?.value ?: return@onSuccess
                 _state.value = ExperienceLoad.Ready(current.copy(moviePlaybackOptions = options))
-                _message.value = "Playback preferences saved."
+                _message.value = ExperienceDetailMessage.PlaybackSettingsSaved
             }.onFailure {
-                _message.value = it.message ?: "Couldn’t save playback preferences."
+                _message.value = ExperienceDetailMessage.Failure(
+                    it.message ?: "Couldn’t save playback preferences.",
+                )
             }
         }
     }
@@ -2430,7 +2466,7 @@ private fun ExperienceDetailScreen(
     var pendingSourcePlayback by remember(workId) { mutableStateOf<PendingSourcePlayback?>(null) }
     LaunchedEffect(workId) { viewModel.load(workId) }
     when (val current = state) {
-        ExperienceLoad.Loading -> ExperienceLoading("Loading title")
+        ExperienceLoad.Loading -> ExperienceLoading(playarrString(PlayarrString.DetailLoadingDetails))
         is ExperienceLoad.Failed -> ExperienceFailure(current.message) { viewModel.load(workId) }
         is ExperienceLoad.Ready -> {
             val detail = current.value.detail
@@ -2528,7 +2564,11 @@ private fun ExperienceDetailScreen(
                             .padding(start = if (isTelevision) 104.dp else 16.dp, top = 16.dp)
                             .background(WebSurfaceStrong.copy(alpha = 0.8f), CircleShape),
                     ) {
-                        Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = WebInk)
+                        Icon(
+                            Icons.Outlined.ArrowBack,
+                            contentDescription = playarrString(PlayarrString.CommonBack),
+                            tint = WebInk,
+                        )
                     }
                     if (isTelevision) {
                         Box(Modifier.fillMaxWidth(0.38f).fillMaxHeight().padding(start = 154.dp, top = 259.dp, end = 24.dp), contentAlignment = Alignment.TopStart) { FeatureCopy(detail.work, true) }
@@ -2562,15 +2602,20 @@ private fun ExperienceDetailScreen(
                     }
                 }
                 message?.let { currentMessage ->
+                    val success = currentMessage == ExperienceDetailMessage.PlaybackSettingsSaved
+                    val text = when (currentMessage) {
+                        ExperienceDetailMessage.PlaybackSettingsSaved -> playarrString(PlayarrString.DetailPlaybackSaved)
+                        is ExperienceDetailMessage.Failure -> currentMessage.text
+                    }
                     Surface(
                         onClick = viewModel::clearMessage,
                         color = WebSurfaceStrong,
-                        contentColor = if (currentMessage.contains("saved")) WebPink else MaterialTheme.colorScheme.error,
+                        contentColor = if (success) WebPink else MaterialTheme.colorScheme.error,
                         shape = RoundedCornerShape(12.dp),
                         shadowElevation = 16.dp,
                         modifier = Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(top = 18.dp),
                     ) {
-                        Text(currentMessage, modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp), fontWeight = FontWeight.SemiBold)
+                        Text(text, modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp), fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -2640,7 +2685,7 @@ private fun PlayarrServerChoiceDialog(
     }
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text("Where do you want to play $title?") },
+        title = { Text(playarrString(PlayarrString.ServerChoiceWhere, "title" to title)) },
         text = {
             Column(
                 Modifier.fillMaxWidth().height(360.dp).verticalScroll(rememberScrollState()),
@@ -2649,15 +2694,19 @@ private fun PlayarrServerChoiceDialog(
                 when (choices) {
                     ExperienceLoad.Loading -> {
                         CircularProgressIndicator(color = WebPink)
-                        Text("Loading available servers…", color = WebInkMuted)
+                        Text(playarrString(PlayarrString.ServerChoiceLoading), color = WebInkMuted)
                     }
                     is ExperienceLoad.Failed -> {
                         Text(choices.message, color = MaterialTheme.colorScheme.error)
-                        OutlinedButton(onClick = onRetry) { Text("Try again") }
+                        OutlinedButton(onClick = onRetry) { Text(playarrString(PlayarrString.CommonTryAgain)) }
                     }
                     is ExperienceLoad.Ready -> {
-                        Text("Available on ${choices.value.size} servers", color = WebPink, fontSize = 11.sp)
-                        Text("Choose which server should provide this item.", color = WebInkMuted)
+                        Text(
+                            playarrString(PlayarrString.ServerChoiceAvailable, "count" to choices.value.size),
+                            color = WebPink,
+                            fontSize = 11.sp,
+                        )
+                        Text(playarrString(PlayarrString.ServerChoiceChoose), color = WebInkMuted)
                         choices.value.forEachIndexed { index, choice ->
                             OutlinedButton(
                                 onClick = { onSelect(choice) },
@@ -2670,7 +2719,7 @@ private fun PlayarrServerChoiceDialog(
                                     Text(choice.label, fontWeight = FontWeight.SemiBold)
                                     Text(
                                         if ((selection as? PlayarrSourceSelection.Selecting)?.serverUrl == choice.serverUrl) {
-                                            "Connecting…"
+                                            playarrString(PlayarrString.ServerChoiceConnecting)
                                         } else {
                                             choice.serverUrl
                                         },
@@ -2688,7 +2737,7 @@ private fun PlayarrServerChoiceDialog(
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onCancel) { Text(playarrString(PlayarrString.CommonCancel)) } },
     )
 }
 
@@ -2776,7 +2825,11 @@ private fun ExperienceVideoDetailContent(
                 .padding(start = if (isTelevision) 104.dp else 16.dp, top = 16.dp)
                 .background(WebSurfaceStrong.copy(alpha = 0.82f), CircleShape),
         ) {
-            Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = WebInk)
+            Icon(
+                Icons.Outlined.ArrowBack,
+                contentDescription = playarrString(PlayarrString.CommonBack),
+                tint = WebInk,
+            )
         }
 
         if (isTelevision) {
@@ -2940,13 +2993,14 @@ private fun VideoDetailCopy(
     movieRuntimeMs: Long?,
     isTelevision: Boolean,
 ) {
+    val language = LocalPlayarrLanguage.current
     val episodeNumber = episode?.episode?.episodeNumber
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             if (episodeNumber != null) {
                 "S${seasonNumber.toString().padStart(2, '0')} · E${episodeNumber.toString().padStart(2, '0')}"
             } else {
-                (work.genres.firstOrNull() ?: work.kind.label()).uppercase()
+                (work.genres.firstOrNull() ?: work.kind.playarrSingularLabel()).uppercase(language.locale)
             },
             color = WebPink,
             fontSize = 11.sp,
@@ -2968,9 +3022,11 @@ private fun VideoDetailCopy(
         }
         Text(
             buildList {
-                episode?.episode?.runtimeMinutes?.let { add("$it min") }
+                episode?.episode?.runtimeMinutes?.let {
+                    add(playarrString(PlayarrString.DetailRuntimeMinutes, "minutes" to it))
+                }
                 if (episode == null && movieRuntimeMs != null && movieRuntimeMs > 0L) {
-                    add(formatPlayarrVideoRuntime(movieRuntimeMs))
+                    add(formatPlayarrVideoRuntime(movieRuntimeMs, language))
                 }
                 episode?.episode?.airDate?.let { add(it.toString()) }
                 addAll(work.genres.take(3))
@@ -2983,7 +3039,9 @@ private fun VideoDetailCopy(
         Text(
             episode?.episode?.overview?.takeIf(String::isNotBlank)
                 ?: work.overview?.takeIf(String::isNotBlank)
-                ?: if (episode == null) "No synopsis is available." else "No episode synopsis is available.",
+                ?: playarrString(
+                    if (episode == null) PlayarrString.DetailNoSynopsis else PlayarrString.DetailNoEpisodeSynopsis,
+                ),
             color = WebInkMuted,
             fontSize = 13.sp,
             lineHeight = 20.sp,
@@ -2992,7 +3050,10 @@ private fun VideoDetailCopy(
         )
         if (progress?.state == WatchState.PartWatched && progress.durationMs > 0L) {
             Text(
-                "Resume from ${formatPlayarrPlayerTime(progress.positionMs)}",
+                playarrString(
+                    PlayarrString.DetailResumeFrom,
+                    "position" to formatPlayarrPlayerTime(progress.positionMs),
+                ),
                 color = WebInkSoft,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -3001,18 +3062,19 @@ private fun VideoDetailCopy(
     }
 }
 
-internal fun formatPlayarrVideoRuntime(runtimeMs: Long): String {
+internal fun formatPlayarrVideoRuntime(runtimeMs: Long, language: PlayarrLanguageState): String {
     val totalMinutes = maxOf(
         1,
         kotlin.math.floor(runtimeMs.coerceAtLeast(0L) / 60_000.0 + 0.5).toInt(),
     )
     val hours = totalMinutes / 60
     val minutes = totalMinutes % 60
-    return when {
-        hours <= 0 -> "$minutes min"
-        minutes == 0 -> "$hours hr"
-        else -> "$hours hr $minutes min"
+    val key = when {
+        hours <= 0 -> PlayarrString.DetailRuntimeMinutes
+        minutes == 0 -> PlayarrString.DetailRuntimeHours
+        else -> PlayarrString.DetailRuntimeHoursMinutes
     }
+    return language.text(key, mapOf("hours" to hours, "minutes" to minutes))
 }
 
 @Composable
@@ -3030,24 +3092,37 @@ private fun VideoDetailActions(
     onDownload: (List<DownloadCandidate>) -> Unit,
 ) {
     if (mediaFileId == null) {
-        Text("This title is not available to play.", color = WebInkMuted)
+        Text(playarrString(PlayarrString.DetailNoPlayableMedia), color = WebInkMuted)
         return
     }
-    val title = episode?.episode?.title ?: work.title
+    val title = episode?.episode?.title
+        ?: episode?.let {
+            playarrString(PlayarrString.DetailEpisodeNumber, "number" to it.episode.episodeNumber)
+        }
+        ?: work.title
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Button(onClick = { onPlay(mediaFileId, null, launchSettings) }) {
             Icon(Icons.Outlined.PlayArrow, contentDescription = null)
-            Text(if (progress?.state == WatchState.PartWatched) "Resume" else "Play")
+            Text(
+                if (progress?.state == WatchState.PartWatched) {
+                    playarrString(
+                        PlayarrString.DetailResumeFrom,
+                        "position" to formatPlayarrPlayerTime(progress.positionMs),
+                    )
+                } else {
+                    playarrString(PlayarrString.DetailPlay)
+                },
+            )
         }
         OutlinedButton(onClick = { onAddToPlaylist(episode?.episode?.id) }) {
             Icon(Icons.Outlined.Add, contentDescription = null)
-            Text("Playlist")
+            Text(playarrString(PlayarrString.ContextAddToPlaylist))
         }
         onPlaybackSettings?.let { openSettings ->
-            OutlinedButton(onClick = openSettings) { Text("Playback") }
+            OutlinedButton(onClick = openSettings) { Text(playarrString(PlayarrString.DetailPlayback)) }
         }
         if (canDownload) {
             IconButton(
@@ -3066,7 +3141,11 @@ private fun VideoDetailActions(
                     )
                 },
             ) {
-                Icon(Icons.Outlined.Download, contentDescription = "Download $title", tint = WebInk)
+                Icon(
+                    Icons.Outlined.Download,
+                    contentDescription = playarrString(PlayarrString.DetailDownloadTitle, "title" to title),
+                    tint = WebInk,
+                )
             }
         }
     }
@@ -3083,27 +3162,27 @@ private fun MoviePlaybackOptionsDialog(
     var subtitleTrackId by remember(options) { mutableStateOf(options.preferences.subtitleTrackId) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Playback options") },
+        title = { Text(playarrString(PlayarrString.DetailPlaybackSettingsTitle)) },
         text = {
             Column(
                 Modifier.fillMaxWidth().height(420.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
                 MoviePlaybackChoiceGroup(
-                    title = "Quality",
+                    title = playarrString(PlayarrString.DetailQuality),
                     choices = options.qualityOptions.map { it.id to it.label },
                     selected = qualityId,
                     onSelected = { qualityId = it },
                 )
                 MoviePlaybackChoiceGroup(
-                    title = "Audio",
-                    choices = listOf("" to "Automatic") + options.audioTracks.map { it.id to it.label },
+                    title = playarrString(PlayarrString.DetailAudio),
+                    choices = listOf("" to playarrString(PlayarrString.DetailAutomatic)) + options.audioTracks.map { it.id to it.label },
                     selected = audioTrackId.orEmpty(),
                     onSelected = { audioTrackId = it.ifBlank { null } },
                 )
                 MoviePlaybackChoiceGroup(
-                    title = "Subtitles",
-                    choices = listOf("" to "Off") + options.subtitleTracks.map { it.id to it.label },
+                    title = playarrString(PlayarrString.DetailSubtitles),
+                    choices = listOf("" to playarrString(PlayarrString.DetailSubtitlesOff)) + options.subtitleTracks.map { it.id to it.label },
                     selected = subtitleTrackId.orEmpty(),
                     onSelected = { subtitleTrackId = it.ifBlank { null } },
                 )
@@ -3120,9 +3199,9 @@ private fun MoviePlaybackOptionsDialog(
                         ),
                     )
                 },
-            ) { Text("Save") }
+            ) { Text(playarrString(PlayarrString.DetailSave)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.CommonCancel)) } },
     )
 }
 
@@ -3166,7 +3245,7 @@ private fun SeriesEpisodeBrowser(
     modifier: Modifier = Modifier,
 ) {
     if (seasons.isEmpty()) {
-        ExperienceEmpty("No playable episodes are available.")
+        ExperienceEmpty(playarrString(PlayarrString.DetailNoPlayableMedia))
         return
     }
     val posterUrl = work.images.firstOrNull { it.kind == ImageKind.Poster }?.url
@@ -3176,14 +3255,22 @@ private fun SeriesEpisodeBrowser(
             .padding(if (isTelevision) 22.dp else 14.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        Text("Seasons & episodes", color = WebInk, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            playarrString(PlayarrString.DetailTitleSeasonsAndEpisodes, "title" to work.title),
+            color = WebInk,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
         val content: @Composable (SeasonDetail) -> Unit = { season ->
             val candidates = season.episodes.mapNotNull { episode ->
                 episode.mediaFileId?.let { mediaId ->
                     DownloadCandidate(
                         mediaId,
                         work.id,
-                        episode.episode.title ?: "Episode ${episode.episode.episodeNumber}",
+                        episode.episode.title ?: playarrString(
+                            PlayarrString.DetailEpisodeNumber,
+                            "number" to episode.episode.episodeNumber,
+                        ),
                         work.title,
                         posterUrl,
                         "episode",
@@ -3191,7 +3278,10 @@ private fun SeriesEpisodeBrowser(
                 }
             }
             SectionHeaderRow(
-                season.season.title ?: "Season ${season.season.seasonNumber}",
+                season.season.title ?: playarrString(
+                    PlayarrString.DetailSeasonNumber,
+                    "number" to season.season.seasonNumber,
+                ),
                 if (canDownload) candidates else emptyList(),
                 onDownload,
             )
@@ -3289,7 +3379,10 @@ private fun EpisodeDetailCard(
             }
         }
         Text(
-            episode.episode.title ?: "Episode ${episode.episode.episodeNumber}",
+            episode.episode.title ?: playarrString(
+                PlayarrString.DetailEpisodeNumber,
+                "number" to episode.episode.episodeNumber,
+            ),
             color = if (available) WebInk else WebInkMuted,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
@@ -3297,8 +3390,14 @@ private fun EpisodeDetailCard(
             modifier = Modifier.padding(top = 8.dp),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            episode.episode.runtimeMinutes?.let { Text("$it min", color = WebInkMuted, fontSize = 10.sp) }
-            if (!available) Text("Unavailable", color = WebInkMuted, fontSize = 10.sp)
+            episode.episode.runtimeMinutes?.let {
+                Text(
+                    playarrString(PlayarrString.DetailRuntimeMinutes, "minutes" to it),
+                    color = WebInkMuted,
+                    fontSize = 10.sp,
+                )
+            }
+            if (!available) Text(playarrString(PlayarrString.DetailUnavailable), color = WebInkMuted, fontSize = 10.sp)
         }
     }
 }
@@ -3325,7 +3424,7 @@ private fun MovieDetailBrowser(
     Column(container, verticalArrangement = Arrangement.spacedBy(22.dp)) {
         if (chapters.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Chapters", color = WebInk, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                Text(playarrString(PlayarrString.DetailChapters), color = WebInk, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
                     items(chapters, key = MediaChapter::index) { chapter ->
                         Surface(
@@ -3336,7 +3435,10 @@ private fun MovieDetailBrowser(
                         ) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                 Text(
-                                    chapter.title ?: "Chapter ${chapter.index + 1}",
+                                    chapter.title ?: playarrString(
+                                        PlayarrString.DetailChapterNumber,
+                                        "number" to chapter.index + 1,
+                                    ),
                                     color = WebInk,
                                     fontWeight = FontWeight.SemiBold,
                                     maxLines = 1,
@@ -3357,7 +3459,7 @@ private fun MovieDetailBrowser(
 @Composable
 private fun DetailCreditsRail(credits: List<CreditResponse>) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Cast", color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Text(playarrString(PlayarrString.DetailCast), color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
             items(credits, key = CreditResponse::id) { credit ->
                 Column(Modifier.width(104.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -3409,7 +3511,7 @@ private fun SimilarWorksRail(
     onOpenWork: (String) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Similar titles", color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Text(playarrString(PlayarrString.DetailSimilarTitles), color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
             items(works, key = Work::id) { work ->
                 Column(Modifier.width(150.dp)) {

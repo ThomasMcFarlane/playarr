@@ -307,9 +307,15 @@ class PlayarrPlaybackQueueTest {
 
     @Test
     fun `video runtime uses web minute rounding`() {
-        assertEquals("1 min", formatPlayarrVideoRuntime(30_000L))
-        assertEquals("1 hr 31 min", formatPlayarrVideoRuntime(5_430_000L))
-        assertEquals("2 hr", formatPlayarrVideoRuntime(7_200_000L))
+        val english = PlayarrLanguageState("en", PlayarrResolvedLanguage.English)
+        val thai = PlayarrLanguageState("th", PlayarrResolvedLanguage.Thai)
+        val japanese = PlayarrLanguageState("ja", PlayarrResolvedLanguage.Japanese)
+
+        assertEquals("1 min", formatPlayarrVideoRuntime(30_000L, english))
+        assertEquals("1h 31m", formatPlayarrVideoRuntime(5_430_000L, english))
+        assertEquals("2h", formatPlayarrVideoRuntime(7_200_000L, english))
+        assertEquals("1 ชม. 31 นาที", formatPlayarrVideoRuntime(5_430_000L, thai))
+        assertEquals("2時間", formatPlayarrVideoRuntime(7_200_000L, japanese))
     }
 
     private fun work(id: String, kind: WorkKind, title: String) = Work(
