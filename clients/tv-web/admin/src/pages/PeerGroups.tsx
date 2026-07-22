@@ -12,6 +12,7 @@ import {
   type PeerJoinTokenResponse,
   type PeerNode,
   type PeerNodeStatus,
+  type SourceInstanceResponse,
 } from "@streamarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
@@ -196,6 +197,8 @@ export function PeerGroupsPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [nodes, setNodes] = useState<PeerNode[]>([]);
+  const [sources, setSources] = useState<SourceInstanceResponse[]>([]);
+  const [folderMappings, setFolderMappings] = useState<Record<string, Record<string, string>>>({});
   const [bundle, setBundle] = useState<PeerAddressBundle | null>(null);
   const [nodeName, setNodeName] = useState("");
   const [addresses, setAddresses] = useState<AddressDraft[]>(() => [newAddressDraft()]);
@@ -217,12 +220,15 @@ export function PeerGroupsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [nextNodes, nextBundle] = await Promise.all([
+      const [nextNodes, nextBundle, nextSources] = await Promise.all([
         client.listPeerNodes(),
         client.getPeerAddressBundle(),
+        client.listSourceInstances(),
       ]);
       setNodes(nextNodes);
       setBundle(nextBundle);
+      setSources(nextSources);
+      setFolderMappings(Object.fromEntries(nextSources.map((source) => [source.id, source.folder_mappings])));
       const nextSelf = nextNodes.find((node) => node.is_self);
       if (nextSelf) {
         setNodeName(nextSelf.name);
@@ -337,6 +343,29 @@ export function PeerGroupsPage() {
           ? `Left the peer group. ${result.unreachable_peers} unreachable ${result.unreachable_peers === 1 ? "peer was" : "peers were"} not notified.`
           : "This node left the peer group."
       );
+      await refresh();
+    } catch (err) {
+      setError(describeApiError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSaveFolderMappings(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    setNotice(null);
+    try {
+      setBusy(true);
+      for (const source of sources) {
+        const mappings: Record<string, string> = {};
+        for (const [nodeId, rawPath] of Object.entries(folderMappings[source.id] ?? {})) {
+          const path = rawPath.trim();
+          if (path) mappings[nodeId] = path;
+        }
+        await client.updateSourceFolderMappings(source.id, { folder_mappings: mappings });
+      }
+      setNotice("Source folder mappings saved and queued for peer synchronisation.");
       await refresh();
     } catch (err) {
       setError(describeApiError(err));
@@ -665,6 +694,45 @@ export function PeerGroupsPage() {
                 </article>
               ))}
             </div>
+          </section>
+
+          <section className="card peer-card peer-card-wide">
+            <div>
+              <h2 className="section-title">Source folder mappings</h2>
+              <p className="muted">
+                Map each Source instance&apos;s reported root to the equivalent physical folder on every node.
+                These mappings sync as part of the normal Source instance and power the Library source matrix.
+              </p>
+            </div>
+            {sources.length === 0 ? (
+              <p className="muted">No Source instances are configured.</p>
+            ) : (
+              <form className="peer-folder-mappings" onSubmit={(event) => void handleSaveFolderMappings(event)}>
+                {sources.map((source) => (
+                  <fieldset className="peer-source-mapping" key={source.id} disabled={busy}>
+                    <legend><strong>{source.name}</strong> <span className="muted">({source.kind})</span></legend>
+                    <p className="hint">Reported root: <code>{source.default_root_folder_id ?? "Not reported"}</code></p>
+                    <div className="peer-source-mapping-grid">
+                      {nodes.map((node) => (
+                        <label key={node.id}>
+                          <span>{node.name}{node.is_self ? " (this node)" : ""}</span>
+                          <input
+                            className="input peer-monospace"
+                            value={folderMappings[source.id]?.[node.id] ?? ""}
+                            placeholder={source.default_root_folder_id ?? "/path/on/this/node"}
+                            onChange={(event) => setFolderMappings((current) => ({
+                              ...current,
+                              [source.id]: { ...current[source.id], [node.id]: event.target.value },
+                            }))}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                ))}
+                <div><button className="btn btn-primary" type="submit" disabled={busy}>{busy ? "Saving..." : "Save folder mappings"}</button></div>
+              </form>
+            )}
           </section>
         </div>
       )}

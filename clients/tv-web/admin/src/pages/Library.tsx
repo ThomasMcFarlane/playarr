@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { describeApiError, type Work, type WorkKind } from "@streamarr-tv/api-client";
+import { describeApiError, type SourceMatrixResponse, type Work, type WorkKind } from "@streamarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
-import { LibraryToolbarMenus } from "../components/LibraryToolbarMenus";
+import { LibraryToolbarMenus, type LibraryViewMode } from "../components/LibraryToolbarMenus";
+import { SourceMatrixView, type MatrixSort } from "../components/SourceMatrixView";
 import { PosterCard } from "../components/PosterCard";
 import { ALPHA_RAIL_LETTERS, AlphabetIndexRail, bucketLetter } from "../components/AlphabetIndexRail";
 
@@ -22,6 +23,14 @@ const WORK_KINDS: readonly WorkKind[] = [
 
 function parseKind(value: string | null): WorkKind | null {
   return value !== null && (WORK_KINDS as readonly string[]).includes(value) ? (value as WorkKind) : null;
+}
+
+function parseView(value: string | null): LibraryViewMode {
+  return value === "list" || value === "matrix" ? value : "grid";
+}
+
+function parseMatrixSort(value: string | null): MatrixSort {
+  return value === "folder" ? "folder" : "library";
 }
 
 /**
@@ -67,14 +76,17 @@ export function LibraryPage() {
   const kind = parseKind(searchParams.get("kind"));
   const sourceInstanceId = searchParams.get("source_instance_id");
   const searchActive = query.trim().length > 0;
+  const view = parseView(searchParams.get("view"));
+  const matrixSort = parseMatrixSort(searchParams.get("matrix_sort"));
 
   const [items, setItems] = useState<Work[] | null>(null);
   const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [matrix, setMatrix] = useState<SourceMatrixResponse | null>(null);
 
   const generation = useRef(0);
-  const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
+  const itemRefs = useRef<Record<string, HTMLElement | null>>({});
 
   function setKind(next: WorkKind | null) {
     setSearchParams((prev) => {
@@ -93,6 +105,28 @@ export function LibraryPage() {
       return params;
     });
   }
+
+  function setView(next: LibraryViewMode) {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      if (next === "grid") params.delete("view"); else params.set("view", next);
+      return params;
+    });
+  }
+
+  function setMatrixSort(next: MatrixSort) {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      if (next === "library") params.delete("matrix_sort"); else params.set("matrix_sort", next);
+      return params;
+    });
+  }
+
+  useEffect(() => {
+    if (view !== "matrix") return;
+    setMatrix(null);
+    client.getSourceMatrix().then(setMatrix).catch((err: unknown) => setError(describeApiError(err)));
+  }, [client, view]);
 
   useEffect(() => {
     const myGeneration = ++generation.current;
@@ -133,7 +167,7 @@ export function LibraryPage() {
           sort: "title",
           order: "asc",
           kind: kind ?? undefined,
-          source_instance_id: sourceInstanceId ?? undefined,
+          source_instance_id: view === "matrix" ? undefined : sourceInstanceId ?? undefined,
           limit: BATCH_SIZE,
           offset,
         });
@@ -156,7 +190,7 @@ export function LibraryPage() {
         if (generation.current === myGeneration) setLoading(false);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, query, kind, sourceInstanceId, searchActive]);
+  }, [client, query, kind, sourceInstanceId, searchActive, view]);
 
   const firstIdByLetter = useMemo(() => {
     const map: Record<string, string> = {};
@@ -192,6 +226,10 @@ export function LibraryPage() {
       <div className="library-toolbar">
         <span className="library-toolbar-count">{toolbarLabel}</span>
         <LibraryToolbarMenus
+          view={view}
+          onViewChange={setView}
+          matrixSort={matrixSort}
+          onMatrixSortChange={setMatrixSort}
           kind={kind}
           onKindChange={setKind}
           sourceInstanceId={sourceInstanceId}
@@ -207,7 +245,18 @@ export function LibraryPage() {
       )}
 
       <div className="library-content-row">
-        <div className="poster-grid-scroll">
+        {view === "matrix" && items !== null && matrix !== null ? (
+          <SourceMatrixView items={items} matrix={matrix} sort={matrixSort} />
+        ) : (
+        <div
+          className="poster-grid-scroll"
+          data-tv-scroll-container
+          data-tv-scroll-axis="vertical"
+          data-navigation-scroll-key={`admin-library-${view}`}
+        >
+          {view === "matrix" && matrix === null && !error && (
+            <p className="muted">Loading source matrix...</p>
+          )}
           {items !== null && items.length === 0 && !loading && (
             <p className="muted">
               {searchActive
@@ -215,7 +264,7 @@ export function LibraryPage() {
                 : "Nothing has synced yet -- check Source instances and Tasks."}
             </p>
           )}
-          {items !== null && items.length > 0 && (
+          {view === "grid" && items !== null && items.length > 0 && (
             <ul className="poster-grid">
               {items.map((work) => (
                 <PosterCard
@@ -228,8 +277,15 @@ export function LibraryPage() {
               ))}
             </ul>
           )}
+          {view === "list" && items !== null && items.length > 0 && (
+            <table className="library-list-table">
+              <thead><tr><th>Title</th><th>Type</th><th>Availability</th><th>Released</th><th>Added</th></tr></thead>
+              <tbody>{items.map((work) => <tr key={work.id} ref={(element) => { itemRefs.current[work.id] = element; }}><th>{work.title}</th><td>{work.kind}</td><td>{work.availability.replaceAll("_", " ")}</td><td>{work.release_date ? new Date(work.release_date).toLocaleDateString() : "—"}</td><td>{new Date(work.added_at).toLocaleDateString()}</td></tr>)}</tbody>
+            </table>
+          )}
         </div>
-        {!searchActive && <AlphabetIndexRail onSelect={handleAlphaSelect} />}
+        )}
+        {!searchActive && view !== "matrix" && <AlphabetIndexRail onSelect={handleAlphaSelect} />}
       </div>
     </div>
   );

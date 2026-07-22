@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import type { SourceInstanceResponse, WorkKind } from "@streamarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { KIND_LABELS } from "./PosterCard";
+import type { MatrixSort } from "./SourceMatrixView";
+
+export type LibraryViewMode = "grid" | "list" | "matrix";
 
 const KIND_OPTIONS: WorkKind[] = [
   "movie",
@@ -31,6 +34,14 @@ function LibraryIcon() {
       <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
     </svg>
   );
+}
+
+function ViewIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>;
+}
+
+function SortIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M3 6h18M6 12h12M10 18h4"/></svg>;
 }
 
 function CheckIcon() {
@@ -137,6 +148,10 @@ function ToolbarMenu({
 }
 
 interface LibraryToolbarMenusProps {
+  view: LibraryViewMode;
+  onViewChange: (view: LibraryViewMode) => void;
+  matrixSort: MatrixSort;
+  onMatrixSortChange: (sort: MatrixSort) => void;
   kind: WorkKind | null;
   onKindChange: (kind: WorkKind | null) => void;
   sourceInstanceId: string | null;
@@ -162,6 +177,10 @@ interface LibraryToolbarMenusProps {
  * for them.
  */
 export function LibraryToolbarMenus({
+  view,
+  onViewChange,
+  matrixSort,
+  onMatrixSortChange,
   kind,
   onKindChange,
   sourceInstanceId,
@@ -191,6 +210,33 @@ export function LibraryToolbarMenus({
   return (
     <div className="library-toolbar-menus">
       <ToolbarMenu
+        label="View"
+        icon={<ViewIcon />}
+        value={view}
+        options={[
+          { value: "grid", label: "Grid" },
+          { value: "list", label: "List" },
+          { value: "matrix", label: "Source matrix" },
+        ]}
+        onChange={(value) => onViewChange(value as LibraryViewMode)}
+      />
+      {view === "matrix" && (
+        <>
+          <div className="toolbar-separator" />
+          <ToolbarMenu
+            label="Group"
+            icon={<SortIcon />}
+            value={matrixSort}
+            options={[
+              { value: "library", label: "By library" },
+              { value: "folder", label: "By folder" },
+            ]}
+            onChange={(value) => onMatrixSortChange(value as MatrixSort)}
+          />
+        </>
+      )}
+      <div className="toolbar-separator" />
+      <ToolbarMenu
         label="Type"
         icon={<TypeIcon />}
         value={kind}
@@ -206,7 +252,7 @@ export function LibraryToolbarMenus({
             value={sourceInstanceId}
             options={libraryOptions}
             onChange={onSourceInstanceChange}
-            disabled={searchActive}
+            disabled={searchActive || view === "matrix"}
           />
         </>
       )}

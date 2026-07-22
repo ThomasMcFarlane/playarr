@@ -23,6 +23,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add Grid, List, and Source matrix Library views, with expandable library/folder trees,
+  per-Source physical file details, and peer-group folder-mapping controls.
 - Let peer groups map each normal Source instance's reported root folder to its equivalent path
   on every node, synchronise those mappings with the Source configuration, and expose the mapped
   physical-file inventory to admin clients.
