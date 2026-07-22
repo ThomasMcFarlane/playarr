@@ -4327,6 +4327,7 @@ dependencies = [
  "streamarr-tdarr-client",
  "streamarr-telemetry",
  "streamarr-transcode",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "toml",

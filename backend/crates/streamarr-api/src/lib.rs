@@ -39,6 +39,7 @@ pub mod oauth;
 pub mod openapi_docs;
 pub mod peer;
 pub mod peer_extractor;
+mod physical_path;
 pub mod playback;
 pub mod playlists;
 pub mod readiness;

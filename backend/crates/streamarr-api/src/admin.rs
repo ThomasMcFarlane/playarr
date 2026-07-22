@@ -26,6 +26,7 @@ use uuid::Uuid;
 
 use crate::auth_extractor::AdminUser;
 use crate::error::ApiError;
+use crate::physical_path::{existing_physical_file, map_source_path};
 use crate::AppState;
 
 async fn health_check(client: &ArrClient) -> Result<(), streamarr_arr_client::ArrClientError> {
@@ -179,38 +180,6 @@ pub struct SourceMatrixResponse {
     pub files: Vec<SourceMatrixFileResponse>,
 }
 
-fn map_source_path(
-    path: &str,
-    source_root: Option<&str>,
-    mapped_root: Option<&str>,
-) -> (String, bool) {
-    let (Some(source_root), Some(mapped_root)) = (source_root, mapped_root) else {
-        return (path.to_string(), false);
-    };
-    let normalise = |value: &str| value.replace('\\', "/").trim_end_matches('/').to_string();
-    let path_normalised = normalise(path);
-    let source_normalised = normalise(source_root);
-    let suffix = if path_normalised == source_normalised {
-        ""
-    } else if let Some(suffix) = path_normalised.strip_prefix(&(source_normalised.clone() + "/")) {
-        suffix
-    } else {
-        return (path.to_string(), false);
-    };
-    let separator = if mapped_root.contains('\\') && !mapped_root.contains('/') {
-        "\\"
-    } else {
-        "/"
-    };
-    let root = mapped_root.trim_end_matches(['/', '\\']);
-    let mapped = if suffix.is_empty() {
-        root.to_string()
-    } else {
-        format!("{root}{separator}{}", suffix.replace('/', separator))
-    };
-    (mapped, true)
-}
-
 /// Physical media-file inventory reported by every node in this peer group.
 #[utoipa::path(
     get,
@@ -256,39 +225,40 @@ pub async fn source_matrix_handler(
         }
     }
 
-    let mut files: Vec<SourceMatrixFileResponse> = state
+    let local_media_files = state
         .media_file_repo
         .list_all()
         .await
-        .map_err(|error| ApiError::internal(format!("failed to list media files: {error}")))?
-        .into_iter()
-        .filter_map(|file| {
-            let source = by_id.get(&file.source_instance_id)?;
-            let leaf_selector = leaf_selectors.get(&file.id)?.clone();
-            let path = file.path.to_string_lossy().into_owned();
-            let mapped_root = source.folder_mappings.get(&self_peer_id);
-            let (mapped_path, mapped) = map_source_path(
-                &path,
-                source.default_root_folder_id.as_deref(),
-                mapped_root.map(String::as_str),
-            );
-            Some(SourceMatrixFileResponse {
-                id: file.id,
-                work_id: file.work_id,
-                leaf_selector,
-                peer_node_id: self_peer_id,
-                source_instance_id: file.source_instance_id,
-                path,
-                mapped_path,
-                mapped,
-                container: Some(file.container),
-                codec: Some(file.codec),
-                bitrate: file.bitrate,
-                duration_ms: file.duration_ms,
-                size_bytes: Some(file.size_bytes),
-            })
-        })
-        .collect();
+        .map_err(|error| ApiError::internal(format!("failed to list media files: {error}")))?;
+    let mut files = Vec::new();
+    for file in local_media_files {
+        let Some(source) = by_id.get(&file.source_instance_id) else {
+            continue;
+        };
+        let Some(leaf_selector) = leaf_selectors.get(&file.id).cloned() else {
+            continue;
+        };
+        let path = file.path.to_string_lossy().into_owned();
+        let Some((mapped_path, mapped)) = existing_physical_file(source, self_peer_id, &path).await
+        else {
+            continue;
+        };
+        files.push(SourceMatrixFileResponse {
+            id: file.id,
+            work_id: file.work_id,
+            leaf_selector,
+            peer_node_id: self_peer_id,
+            source_instance_id: file.source_instance_id,
+            path,
+            mapped_path,
+            mapped,
+            container: Some(file.container),
+            codec: Some(file.codec),
+            bitrate: file.bitrate,
+            duration_ms: file.duration_ms,
+            size_bytes: Some(file.size_bytes),
+        });
+    }
 
     for peer in peer_nodes.iter().filter(|peer| !peer.is_self) {
         let rows = state
@@ -742,32 +712,6 @@ mod tests {
     use crate::test_support::{
         bearer_header, mint_access_token, seed_admin_user, seed_streaming_user, test_state,
     };
-
-    #[test]
-    fn source_paths_map_across_unix_and_windows_roots() {
-        assert_eq!(
-            super::map_source_path(
-                "/source/movies/Voyage (2016)/Voyage.mkv",
-                Some("/source/movies"),
-                Some("/mnt/media/movies"),
-            ),
-            (
-                "/mnt/media/movies/Voyage (2016)/Voyage.mkv".to_string(),
-                true,
-            )
-        );
-        assert_eq!(
-            super::map_source_path(
-                r"D:\Movies\Voyage (2016)\Voyage.mkv",
-                Some(r"D:\Movies"),
-                Some(r"E:\Media\Movies"),
-            ),
-            (
-                r"E:\Media\Movies\Voyage (2016)\Voyage.mkv".to_string(),
-                true
-            )
-        );
-    }
 
     #[tokio::test]
     async fn register_confirms_reachability_before_accepting() {

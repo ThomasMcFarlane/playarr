@@ -53,6 +53,7 @@ use uuid::Uuid;
 
 use crate::error::ApiError;
 use crate::peer_extractor::PeerSignedRequest;
+use crate::physical_path::existing_physical_file;
 use crate::AppState;
 
 /// Request body for [`enroll_handler`] -- exactly `docs/architecture/
@@ -781,6 +782,9 @@ pub struct AvailabilityResponse {
 /// module doc comment: "Never written for `peer_node_id` = self"). `since`
 /// has no meaning here and is ignored (see [`availability_handler`]'s own
 /// doc comment) -- every call recomputes the full, current set.
+/// A replicated `MediaFile` row is only catalogue metadata: its source path,
+/// after applying this peer's root mapping when configured, must also resolve
+/// to a regular file visible to this process before the leaf is advertised.
 ///
 /// Per-leaf tree shape (season/episode numbers, disc/track numbers, a
 /// book's ordinal position) comes from `AppState::catalog`
@@ -889,13 +893,14 @@ async fn derive_own_availability(
     state: &AppState,
     now: DateTime<Utc>,
 ) -> Result<Vec<PeerAvailabilityRow>, ApiError> {
-    let group_library_by_source: HashMap<Uuid, Option<Uuid>> = state
+    let self_peer_id = this_node_peer_id(state).await?;
+    let sources: HashMap<Uuid, streamarr_model::SourceInstance> = state
         .source_instance_repo
         .list_all()
         .await
         .map_err(|err| ApiError::internal(format!("failed to list source instances: {err}")))?
         .into_iter()
-        .map(|instance| (instance.id, instance.group_library_id))
+        .map(|instance| (instance.id, instance))
         .collect();
 
     let work_ids =
@@ -934,24 +939,28 @@ async fn derive_own_availability(
                     continue;
                 }
             };
-            let group_library_id = group_library_by_source
-                .get(&media_file.source_instance_id)
-                .copied()
-                .flatten();
+            let Some(source) = sources.get(&media_file.source_instance_id) else {
+                continue;
+            };
+            let reported_path = media_file.path.to_string_lossy().into_owned();
+            if existing_physical_file(source, self_peer_id, &reported_path)
+                .await
+                .is_none()
+            {
+                continue;
+            }
 
             rows.push(PeerAvailabilityRow {
                 media_file_id: media_file.id,
                 source_instance_id: media_file.source_instance_id,
-                path: media_file.path.to_string_lossy().into_owned(),
+                path: reported_path,
                 provider: external_ref.provider.clone(),
                 external_id: external_ref.external_id.clone(),
                 leaf_selector,
-                group_library_id,
-                // A row is only ever emitted for a leaf this node already
-                // has a synced `MediaFile` for -- leaf-granularity
-                // availability, so "we have this leaf" is unconditionally
-                // `Available` (the design's `PartiallyAvailable` concept
-                // lives one level up, at the aggregate `Work`, not here).
+                group_library_id: source.group_library_id,
+                // Replicated catalogue rows are not proof that this peer
+                // holds the media. A row only reaches this point after its
+                // peer-mapped physical path was verified as a regular file.
                 availability: Availability::Available,
                 container: Some(media_file.container.clone()),
                 codec: Some(media_file.codec.clone()),
@@ -2269,6 +2278,16 @@ mod sync_endpoint_tests {
         let peer_id = Uuid::new_v4();
         let key = signing_key();
         seed_group_and_signed_peer(&state, peer_id, &key).await;
+        let self_peer_id = state
+            .app
+            .node_identity_repo
+            .get()
+            .await
+            .unwrap()
+            .unwrap()
+            .peer_id;
+        let media_root = tempfile::tempdir().unwrap();
+        std::fs::write(media_root.path().join("file.mkv"), b"media").unwrap();
 
         let group_library_id = Uuid::new_v4();
         let source_instance_id = Uuid::new_v4();
@@ -2282,8 +2301,13 @@ mod sync_endpoint_tests {
                 base_url: "https://radarr.example.com".to_string(),
                 api_key_encrypted: Sensitive::new("key".to_string()),
                 priority: 0,
-                default_root_folder_id: None,
-                folder_mappings: Default::default(),
+                default_root_folder_id: Some("/media".to_string()),
+                folder_mappings: [(
+                    self_peer_id,
+                    media_root.path().to_string_lossy().into_owned(),
+                )]
+                .into_iter()
+                .collect(),
                 default_quality_profile_id: None,
                 best_effort: false,
                 group_library_id: Some(group_library_id),
@@ -2314,6 +2338,7 @@ mod sync_endpoint_tests {
         seed_media_file(&state, work_id, LeafRef::Work, source_instance_id).await;
 
         let response = router
+            .clone()
             .oneshot(signed_get("/api/v1/peer/availability", peer_id, &key))
             .await
             .unwrap();
@@ -2336,6 +2361,19 @@ mod sync_endpoint_tests {
         assert_eq!(row["title"], "Sample Movie Kilo");
         assert_eq!(row["kind"], "movie");
         assert!(body["server_time"].as_str().unwrap().parse::<i64>().is_ok());
+
+        std::fs::remove_file(media_root.path().join("file.mkv")).unwrap();
+        let response = router
+            .oneshot(signed_get("/api/v1/peer/availability", peer_id, &key))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body_json(response).await;
+        assert_eq!(
+            body["rows"].as_array().unwrap().len(),
+            0,
+            "a replicated MediaFile row must not advertise a missing physical file"
+        );
     }
 
     #[tokio::test]

@@ -66,3 +66,4 @@ tower = { workspace = true, features = ["util"] }
 wiremock = "0.6"
 sqlx = { workspace = true, features = ["any", "sqlite"] }
 tracing-subscriber = { workspace = true }
+tempfile = "3"
