@@ -1,5 +1,8 @@
 package io.streamarr.mobile.ui
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -67,6 +70,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,6 +80,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -85,13 +90,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.streamarr.mobile.BuildConfig
 import io.streamarr.mobile.connected.PlayarrServerClientProvider
 import io.streamarr.mobile.di.PrimaryStreamarrApi
+import io.streamarr.mobile.update.AndroidSelfUpdater
+import io.streamarr.mobile.update.AndroidUpdateEvent
 import io.streamarr.shared.auth.ConnectedServerSessionManager
 import io.streamarr.shared.auth.ConnectedServerSessionStore
 import io.streamarr.shared.auth.KnownServerGroupStore
@@ -1295,26 +1304,61 @@ private fun WorkDetail.mediaFileFor(item: PlaylistItem): String? = when (val tre
     is WorkChildren.Author -> tree.books.firstOrNull { it.book.id == item.trackId || item.trackId == null }?.mediaFileId
 }
 
+internal data class ProfilesSnapshot(
+    val profiles: List<AvailableProfile>,
+    val loadWarning: String? = null,
+)
+
 @HiltViewModel
 internal class ProfilesViewModel @Inject constructor(
     private val api: StreamarrApi,
     private val loginApi: LoginApi,
     private val tokenStore: TokenStore,
 ) : ViewModel() {
-    private val _state = MutableStateFlow<ParityLoad<List<AvailableProfile>>>(ParityLoad.Loading)
+    private val _state = MutableStateFlow<ParityLoad<ProfilesSnapshot>>(ParityLoad.Loading)
     val state = _state.asStateFlow()
-    private val _switching = MutableStateFlow(false)
-    val switching = _switching.asStateFlow()
+    private val _switchingProfileId = MutableStateFlow<String?>(null)
+    val switchingProfileId = _switchingProfileId.asStateFlow()
 
     init { load() }
 
     fun load() = viewModelScope.launch {
-        _state.value = runCatching { api.listAvailableProfiles() }
-            .fold({ ParityLoad.Ready(it) }, { ParityLoad.Failed(it.playarrMessage("profiles")) })
+        _state.value = ParityLoad.Loading
+        _state.value = runCatching { api.listAvailableProfiles() }.fold(
+            onSuccess = { ParityLoad.Ready(ProfilesSnapshot(it)) },
+            onFailure = { failure ->
+                val userId = tokenStore.currentUserId.first()
+                if (userId == null) {
+                    ParityLoad.Failed(failure.playarrMessage("profiles"))
+                } else {
+                    val displayName = tokenStore.currentUserName.first().orEmpty()
+                    ParityLoad.Ready(
+                        ProfilesSnapshot(
+                            profiles = listOf(
+                                AvailableProfile(
+                                    id = userId,
+                                    username = displayName,
+                                    displayName = displayName,
+                                    isCurrent = true,
+                                    pinLocked = false,
+                                ),
+                            ),
+                            loadWarning = failure.playarrMessage("profiles"),
+                        ),
+                    )
+                }
+            },
+        )
     }
 
-    fun switch(profile: AvailableProfile, pin: String?, isTelevision: Boolean, onSuccess: () -> Unit) = viewModelScope.launch {
-        _switching.value = true
+    fun switch(
+        profile: AvailableProfile,
+        pin: String?,
+        isTelevision: Boolean,
+        onSuccess: () -> Unit,
+        onFailure: (Throwable) -> Unit,
+    ) = viewModelScope.launch {
+        _switchingProfileId.value = profile.id
         runCatching {
             val response = loginApi.login(
                 LoginRequest(
@@ -1329,12 +1373,58 @@ internal class ProfilesViewModel @Inject constructor(
             tokenStore.save(response.toTokenResponse())
             tokenStore.saveIdentity(response.userId, profile.displayName)
         }.onSuccess { onSuccess() }
-            .onFailure { _state.value = ParityLoad.Failed(it.playarrMessage("profile")) }
-        _switching.value = false
+            .onFailure(onFailure)
+        _switchingProfileId.value = null
     }
 
     fun signOut() = viewModelScope.launch { tokenStore.clear() }
 }
+
+internal enum class ProfileAction { Select, Settings }
+
+internal sealed interface ProfileActionResolution {
+    data class Navigate(val action: ProfileAction) : ProfileActionResolution
+    data class PromptForPin(val action: ProfileAction) : ProfileActionResolution
+    data class Switch(val action: ProfileAction) : ProfileActionResolution
+}
+
+internal fun resolveProfileAction(
+    profile: AvailableProfile,
+    action: ProfileAction,
+): ProfileActionResolution = when {
+    profile.isCurrent -> ProfileActionResolution.Navigate(action)
+    profile.pinLocked -> ProfileActionResolution.PromptForPin(action)
+    else -> ProfileActionResolution.Switch(action)
+}
+
+private data class ProfilesUpdateControl(
+    val event: AndroidUpdateEvent?,
+    val check: () -> Unit,
+)
+
+@Composable
+private fun rememberProfilesUpdateControl(enabled: Boolean): ProfilesUpdateControl {
+    var event by remember { mutableStateOf<AndroidUpdateEvent?>(null) }
+    val activity = LocalContext.current.findActivity()
+    val scope = rememberCoroutineScope()
+    val updater = remember(activity, scope, enabled) {
+        if (enabled && activity != null) {
+            AndroidSelfUpdater(activity = activity, scope = scope, onEvent = { event = it })
+        } else {
+            null
+        }
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { updater?.resumePendingInstall() }
+    return ProfilesUpdateControl(event) { updater?.checkForUpdates() }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> if (baseContext === this) null else baseContext.findActivity()
+    else -> null
+}
+
+private const val AddProfileId = "__add_profile__"
 
 @Composable
 internal fun ExperienceProfilesScreen(
@@ -1346,43 +1436,163 @@ internal fun ExperienceProfilesScreen(
     viewModel: ProfilesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
-    val switching by viewModel.switching.collectAsState()
+    val switchingProfileId by viewModel.switchingProfileId.collectAsState()
+    val updateControl = rememberProfilesUpdateControl(isTelevision)
     var selectedId by remember { mutableStateOf<String?>(null) }
     var pinProfile by remember { mutableStateOf<AvailableProfile?>(null) }
+    var pinAction by remember { mutableStateOf(ProfileAction.Select) }
     var pin by remember { mutableStateOf("") }
+    var pinError by remember { mutableStateOf<String?>(null) }
+    var actionError by remember { mutableStateOf<String?>(null) }
+    val pinNotAccepted = playarrString(PlayarrString.ProfilesPinNotAccepted)
+    val navigateForAction: (ProfileAction) -> Unit = { action ->
+        when (action) {
+            ProfileAction.Select -> onHome()
+            ProfileAction.Settings -> onSettings()
+        }
+    }
+    val switchProfile: (AvailableProfile, ProfileAction, String?, (Throwable) -> Unit) -> Unit =
+        { profile, action, requestedPin, onFailure ->
+            viewModel.switch(
+                profile = profile,
+                pin = requestedPin,
+                isTelevision = isTelevision,
+                onSuccess = {
+                    pinProfile = null
+                    pin = ""
+                    pinError = null
+                    actionError = null
+                    navigateForAction(action)
+                },
+                onFailure = onFailure,
+            )
+        }
+    val requestAction: (AvailableProfile, ProfileAction) -> Unit = requestAction@{ profile, action ->
+        selectedId = profile.id
+        actionError = null
+        when (resolveProfileAction(profile, action)) {
+            is ProfileActionResolution.Navigate -> navigateForAction(action)
+            is ProfileActionResolution.PromptForPin -> {
+                pinProfile = profile
+                pinAction = action
+                pin = ""
+                pinError = null
+            }
+            is ProfileActionResolution.Switch -> switchProfile(profile, action, null) { failure ->
+                actionError = failure.playarrMessage("profile")
+            }
+        }
+    }
     Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(WebSurface, WebBackground)))) {
         when (val current = state) {
-            ParityLoad.Loading -> ParityLoading("Loading profiles")
+            ParityLoad.Loading -> ParityLoading(playarrString(PlayarrString.ProfilesLoading))
             is ParityLoad.Failed -> ParityFailure(current.message, viewModel::load)
             is ParityLoad.Ready -> {
-                LaunchedEffect(current.value) { selectedId = current.value.firstOrNull { it.isCurrent }?.id ?: current.value.firstOrNull()?.id }
-                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("PROFILES", color = WebPink, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.4.sp, modifier = Modifier.padding(top = if (isTelevision) 90.dp else 110.dp))
-                    Text("Who’s watching?", color = WebInk, fontSize = if (isTelevision) 54.sp else 38.sp, fontWeight = FontWeight.Medium, letterSpacing = (-2).sp)
-                    LazyRow(
-                        modifier = Modifier.fillMaxWidth().padding(top = if (isTelevision) 80.dp else 50.dp),
-                        horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 38.dp else 22.dp),
-                        contentPadding = PaddingValues(horizontal = if (isTelevision) 120.dp else 34.dp),
-                    ) {
-                        items(current.value, key = AvailableProfile::id) { profile ->
-                            ProfileChoice(
-                                profile = profile,
-                                avatar = if (profile.id == currentUserId) currentAvatar else null,
-                                selected = selectedId == profile.id,
-                                isTelevision = isTelevision,
-                                switching = switching,
-                                onFocus = { selectedId = profile.id },
-                                onClick = {
-                                    selectedId = profile.id
-                                    when {
-                                        profile.isCurrent -> onHome()
-                                        profile.pinLocked -> pinProfile = profile
-                                        else -> viewModel.switch(profile, null, isTelevision, onHome)
-                                    }
-                                },
-                                onSettings = onSettings,
-                                onSignOut = viewModel::signOut,
+                val profiles = current.value.profiles.map { profile ->
+                    if (profile.displayName.isBlank()) {
+                        profile.copy(displayName = playarrString(PlayarrString.ProfileViewerFallback))
+                    } else {
+                        profile
+                    }
+                }
+                LaunchedEffect(profiles) {
+                    selectedId = profiles.firstOrNull { it.isCurrent }?.id ?: profiles.firstOrNull()?.id
+                }
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    contentPadding = PaddingValues(bottom = 36.dp),
+                ) {
+                    item {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                playarrString(PlayarrString.ProfilesTitle).uppercase(LocalPlayarrLanguage.current.locale),
+                                color = WebPink,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 1.4.sp,
+                                modifier = Modifier.padding(top = if (isTelevision) 90.dp else 78.dp),
                             )
+                            Text(
+                                playarrString(PlayarrString.ProfilesHeading),
+                                color = WebInk,
+                                fontSize = if (isTelevision) 54.sp else 38.sp,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = (-2).sp,
+                            )
+                        }
+                    }
+                    item {
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth().padding(top = if (isTelevision) 72.dp else 42.dp),
+                            horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 38.dp else 22.dp),
+                            contentPadding = PaddingValues(horizontal = if (isTelevision) 120.dp else 34.dp),
+                        ) {
+                            items(profiles, key = AvailableProfile::id) { profile ->
+                                ProfileChoice(
+                                    profile = profile,
+                                    avatar = if (profile.id == currentUserId) currentAvatar else null,
+                                    selected = selectedId == profile.id,
+                                    isTelevision = isTelevision,
+                                    switching = switchingProfileId == profile.id,
+                                    enabled = switchingProfileId == null,
+                                    onFocus = { selectedId = profile.id },
+                                    onClick = { requestAction(profile, ProfileAction.Select) },
+                                    onSettings = { requestAction(profile, ProfileAction.Settings) },
+                                    onSignOut = if (profile.isCurrent) ({ viewModel.signOut() }) else null,
+                                )
+                            }
+                            item(AddProfileId) {
+                                AddProfileChoice(
+                                    selected = selectedId == AddProfileId,
+                                    isTelevision = isTelevision,
+                                    enabled = switchingProfileId == null,
+                                    onFocus = { selectedId = AddProfileId },
+                                    onClick = viewModel::signOut,
+                                )
+                            }
+                        }
+                    }
+                    actionError?.let { error ->
+                        item { Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(18.dp)) }
+                    }
+                    current.value.loadWarning?.let { warning ->
+                        item {
+                            Text(
+                                playarrString(PlayarrString.ProfilesErrorShowingSaved, "message" to warning),
+                                color = WebInkMuted,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(18.dp),
+                            )
+                        }
+                    }
+                    if (isTelevision) {
+                        item {
+                            val event = updateControl.event
+                            val busy = event is AndroidUpdateEvent.Checking ||
+                                event is AndroidUpdateEvent.Downloading ||
+                                event is AndroidUpdateEvent.Installing
+                            val label = when (event) {
+                                AndroidUpdateEvent.Checking -> playarrString(PlayarrString.ProfilesUpdateChecking)
+                                is AndroidUpdateEvent.UpToDate -> playarrString(PlayarrString.ProfilesUpdateCurrent)
+                                is AndroidUpdateEvent.Downloading -> event.progress?.let { progress ->
+                                    playarrString(PlayarrString.ProfilesUpdateDownloadingProgress, "progress" to progress)
+                                } ?: playarrString(PlayarrString.ProfilesUpdateDownloading)
+                                is AndroidUpdateEvent.PermissionRequired -> playarrString(PlayarrString.ProfilesUpdateAllowInstall)
+                                is AndroidUpdateEvent.Installing -> playarrString(PlayarrString.ProfilesUpdateInstalling)
+                                is AndroidUpdateEvent.Error -> playarrString(PlayarrString.ProfilesUpdateRetry)
+                                null -> playarrString(PlayarrString.ProfilesCheckForUpdates)
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                OutlinedButton(
+                                    onClick = updateControl.check,
+                                    enabled = !busy,
+                                    modifier = Modifier.padding(top = 28.dp),
+                                ) { Text(label) }
+                                if (event is AndroidUpdateEvent.Error) {
+                                    Text(event.message, color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                                }
+                            }
                         }
                     }
                 }
@@ -1390,12 +1600,53 @@ internal fun ExperienceProfilesScreen(
         }
     }
     pinProfile?.let { profile ->
+        val busy = switchingProfileId == profile.id
         AlertDialog(
-            onDismissRequest = { pinProfile = null; pin = "" },
-            title = { Text("Enter profile PIN") },
-            text = { OutlinedTextField(pin, { if (it.length <= 4 && it.all(Char::isDigit)) pin = it }, label = { Text("4-digit PIN") }, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), singleLine = true) },
-            confirmButton = { TextButton(enabled = pin.length == 4, onClick = { viewModel.switch(profile, pin, isTelevision, onHome); pinProfile = null; pin = "" }) { Text("Continue") } },
-            dismissButton = { TextButton(onClick = { pinProfile = null; pin = "" }) { Text("Cancel") } },
+            onDismissRequest = { if (!busy) { pinProfile = null; pin = ""; pinError = null } },
+            title = { Text(playarrString(PlayarrString.ProfilesSwitchProfile)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PlayarrProfileAvatar(profile.id, null, Modifier.align(Alignment.CenterHorizontally).size(88.dp))
+                    Text(profile.displayName, color = WebInk, fontWeight = FontWeight.SemiBold, modifier = Modifier.align(Alignment.CenterHorizontally))
+                    OutlinedTextField(
+                        value = pin,
+                        onValueChange = { value ->
+                            if (value.length <= 4 && value.all(Char::isDigit)) { pin = value; pinError = null }
+                        },
+                        label = { Text(playarrString(PlayarrString.ProfilesEnterPin)) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        singleLine = true,
+                        enabled = !busy,
+                    )
+                    pinError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
+                    TextButton(onClick = viewModel::signOut, enabled = !busy, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                        Text(playarrString(PlayarrString.ProfilesUseAccountSignIn))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = pin.length == 4 && !busy,
+                    onClick = {
+                        switchProfile(profile, pinAction, pin) { failure ->
+                            pinError = if (failure is HttpException && failure.code() == 401) {
+                                pinNotAccepted
+                            } else {
+                                failure.playarrMessage("profile")
+                            }
+                        }
+                    },
+                ) {
+                    Text(playarrString(if (busy) PlayarrString.ProfilesChecking else PlayarrString.ProfilesContinue))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { pinProfile = null; pin = ""; pinError = null },
+                    enabled = !busy,
+                ) { Text(playarrString(PlayarrString.CommonCancel)) }
+            },
         )
     }
 }
@@ -1407,21 +1658,27 @@ private fun ProfileChoice(
     selected: Boolean,
     isTelevision: Boolean,
     switching: Boolean,
+    enabled: Boolean,
     onFocus: () -> Unit,
     onClick: () -> Unit,
     onSettings: () -> Unit,
-    onSignOut: () -> Unit,
+    onSignOut: (() -> Unit)?,
 ) {
     val size = if (isTelevision) 176.dp else 132.dp
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(size + 28.dp).onFocusChanged { if (it.isFocused) onFocus() }.focusable()) {
+    val avatarDescription = playarrString(
+        if (profile.isCurrent) PlayarrString.ProfilesAvatarLabelCurrent else PlayarrString.ProfilesAvatarLabel,
+        "name" to profile.displayName,
+    )
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(size + 28.dp)) {
         Surface(
             onClick = onClick,
-            enabled = !switching,
+            enabled = enabled,
             modifier = Modifier
                 .size(size)
                 .scale(if (selected) 1.035f else 1f)
                 .then(if (selected) Modifier.border(4.dp, WebPink.copy(alpha = 0.42f), CircleShape) else Modifier)
-                .semantics { contentDescription = profile.displayName },
+                .onFocusChanged { if (it.isFocused) onFocus() }
+                .semantics { contentDescription = avatarDescription },
             shape = CircleShape,
             color = WebPink,
         ) {
@@ -1432,15 +1689,83 @@ private fun ProfileChoice(
                     modifier = Modifier.fillMaxSize(),
                     glyphSize = if (isTelevision) 68.sp else 50.sp,
                 )
-                if (profile.pinLocked) Icon(Icons.Outlined.Lock, contentDescription = "PIN required", tint = Color.White, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).size(22.dp))
+                if (profile.pinLocked) {
+                    Icon(
+                        Icons.Outlined.Lock,
+                        contentDescription = playarrString(PlayarrString.ProfilesStatusPinRequired),
+                        tint = Color.White,
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).size(22.dp),
+                    )
+                }
             }
         }
         Text(profile.displayName, color = WebInk, fontSize = if (isTelevision) 16.sp else 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(top = 13.dp))
-        Text(if (profile.isCurrent) "CURRENT PROFILE" else if (profile.pinLocked) "PIN REQUIRED" else "READY", color = WebInkMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+        Text(
+            playarrString(
+                when {
+                    switching -> PlayarrString.ProfilesStatusSwitching
+                    profile.isCurrent -> PlayarrString.ProfilesStatusCurrent
+                    profile.pinLocked -> PlayarrString.ProfilesStatusPinRequired
+                    else -> PlayarrString.ProfilesStatusReady
+                },
+            ).uppercase(LocalPlayarrLanguage.current.locale),
+            color = WebInkMuted,
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Bold,
+        )
         if (selected) Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            IconButton(onClick = onSettings, modifier = Modifier.background(WebSurfaceStrong, CircleShape)) { Icon(Icons.Outlined.Settings, "Settings", tint = WebPink) }
-            OutlinedButton(onClick = onSignOut) { Text("Sign out") }
+            IconButton(onClick = onSettings, enabled = enabled, modifier = Modifier.background(WebSurfaceStrong, CircleShape)) {
+                Icon(
+                    Icons.Outlined.Settings,
+                    playarrString(PlayarrString.ProfilesSettingsFor, "name" to profile.displayName),
+                    tint = WebPink,
+                )
+            }
+            onSignOut?.let { action ->
+                OutlinedButton(onClick = action, enabled = enabled) { Text(playarrString(PlayarrString.ProfilesSignOut)) }
+            }
         }
+    }
+}
+
+@Composable
+private fun AddProfileChoice(
+    selected: Boolean,
+    isTelevision: Boolean,
+    enabled: Boolean,
+    onFocus: () -> Unit,
+    onClick: () -> Unit,
+) {
+    val size = if (isTelevision) 176.dp else 132.dp
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(size + 28.dp)) {
+        Surface(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier
+                .size(size)
+                .scale(if (selected) 1.035f else 1f)
+                .then(if (selected) Modifier.border(4.dp, WebPink.copy(alpha = 0.42f), CircleShape) else Modifier)
+                .onFocusChanged { if (it.isFocused) onFocus() },
+            shape = CircleShape,
+            color = WebSurfaceStrong,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text("+", color = WebPink, fontSize = if (isTelevision) 68.sp else 52.sp, fontWeight = FontWeight.Light)
+            }
+        }
+        Text(
+            playarrString(PlayarrString.ProfilesSignIn),
+            color = WebInk,
+            fontSize = if (isTelevision) 16.sp else 14.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(top = 13.dp),
+        )
+        Text(
+            playarrString(PlayarrString.ProfilesAddAnother).uppercase(LocalPlayarrLanguage.current.locale),
+            color = WebInkMuted,
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 

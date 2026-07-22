@@ -53,6 +53,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Align Android's profile chooser with Playarr Web through localized status and PIN flows,
+  action-aware profile switching, account sign-in, and the native Android TV update control.
 - Bring Android playlist details to Playarr Web parity with nested tracks, localized empty and item
   controls, per-track playback queues and reordering, sub-playlist creation, safe parent editing,
   and cascade-aware delete confirmation.
