@@ -29,6 +29,12 @@ data class DownloadMetadataEntity(
     val serverUrl: String,
     /** `null` means "keep forever". */
     val keepUntilEpochMillis: Long?,
+    /** Non-null only for an unresolved `AfterWatched` policy. */
+    val keepUntilAmount: Int? = null,
+    /** `"days" | "weeks"`; non-null only with [keepUntilAmount]. */
+    val keepUntilUnit: String? = null,
+    /** Actual local/server watched timestamp used to resolve an `AfterWatched` policy. */
+    val watchedAtEpochMillis: Long? = null,
     val addedAtEpochMillis: Long,
 )
 
@@ -49,6 +55,24 @@ interface DownloadMetadataDao {
     @Query("DELETE FROM download_metadata WHERE mediaFileId = :mediaFileId")
     suspend fun delete(mediaFileId: String)
 
-    @Query("UPDATE download_metadata SET keepUntilEpochMillis = :keepUntilEpochMillis WHERE mediaFileId = :mediaFileId")
-    suspend fun updateKeepUntil(mediaFileId: String, keepUntilEpochMillis: Long?)
+    @Query(
+        """
+        UPDATE download_metadata
+        SET keepUntilEpochMillis = :keepUntilEpochMillis,
+            keepUntilAmount = :keepUntilAmount,
+            keepUntilUnit = :keepUntilUnit,
+            watchedAtEpochMillis = :watchedAtEpochMillis
+        WHERE mediaFileId = :mediaFileId
+        """,
+    )
+    suspend fun updateKeepUntil(
+        mediaFileId: String,
+        keepUntilEpochMillis: Long?,
+        keepUntilAmount: Int?,
+        keepUntilUnit: String?,
+        watchedAtEpochMillis: Long?,
+    )
+
+    @Query("UPDATE download_metadata SET watchedAtEpochMillis = :watchedAtEpochMillis WHERE mediaFileId = :mediaFileId")
+    suspend fun updateWatchedAt(mediaFileId: String, watchedAtEpochMillis: Long)
 }

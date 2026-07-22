@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -20,7 +21,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
@@ -40,6 +43,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -56,9 +60,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -77,7 +84,6 @@ import io.streamarr.shared.download.DownloadRepository
 import io.streamarr.shared.download.DownloadState
 import io.streamarr.shared.download.KeepUntilSelection
 import io.streamarr.shared.download.KeepUntilUnit
-import io.streamarr.shared.download.resolveEpochMillis
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -108,16 +114,36 @@ internal class DownloadsViewModel @Inject constructor(
 
     fun cancel(mediaFileId: String) = downloadRepository.cancel(mediaFileId)
 
-    fun setKeepUntil(mediaFileId: String, keepUntilEpochMillis: Long?) {
-        viewModelScope.launch { downloadRepository.setKeepUntil(mediaFileId, keepUntilEpochMillis) }
+    fun setKeepUntil(mediaFileId: String, keepUntil: KeepUntilSelection) {
+        viewModelScope.launch { downloadRepository.setKeepUntil(mediaFileId, keepUntil) }
     }
 }
+
+internal enum class PlayarrDownloadGroup(val title: PlayarrString) {
+    Active(PlayarrString.DownloadsActiveHeading),
+    NeedsAttention(PlayarrString.DownloadsNeedsAttentionHeading),
+    Completed(PlayarrString.DownloadsCompletedHeading),
+}
+
+internal fun DownloadState.playarrDownloadGroup(): PlayarrDownloadGroup = when (this) {
+    DownloadState.Failed -> PlayarrDownloadGroup.NeedsAttention
+    DownloadState.Completed -> PlayarrDownloadGroup.Completed
+    else -> PlayarrDownloadGroup.Active
+}
+
+internal fun DownloadEntity.playarrPlaybackQueueItem(): PlayarrPlaybackQueueItem = PlayarrPlaybackQueueItem(
+    mediaFileId = mediaFileId,
+    title = title,
+    subtitle = workTitle.takeUnless { it == title },
+    music = kind == "track",
+)
 
 @Composable
 internal fun ExperienceDownloadsScreen(
     serverUrl: String,
     accessToken: String?,
     isTelevision: Boolean,
+    onPlay: (DownloadEntity) -> Unit,
     viewModel: DownloadsViewModel = hiltViewModel(),
 ) {
     val downloads by viewModel.downloads.collectAsState()
@@ -133,24 +159,56 @@ internal fun ExperienceDownloadsScreen(
                 top = if (isTelevision) 40.dp else 24.dp,
             ),
     ) {
-        Text("Downloads", color = WebInk, fontSize = if (isTelevision) 44.sp else 30.sp, fontWeight = FontWeight.Medium, letterSpacing = (-1).sp)
+        Text(
+            playarrString(PlayarrString.DownloadsOffline).uppercase(LocalPlayarrLanguage.current.locale),
+            color = WebPink,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 1.4.sp,
+        )
+        Text(
+            playarrString(PlayarrString.DownloadsTitle),
+            color = WebInk,
+            fontSize = if (isTelevision) 44.sp else 30.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = (-1).sp,
+        )
         if (downloads.isEmpty()) {
-            ExperienceEmpty("Nothing downloaded yet. Use the download icon on any title to save it for offline playback.")
+            ExperienceEmpty(
+                playarrString(PlayarrString.DownloadsEmptyTitle),
+                playarrString(PlayarrString.DownloadsEmptyDescription),
+            )
         } else {
+            val grouped = remember(downloads) { downloads.groupBy { it.state.playarrDownloadGroup() } }
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(top = 20.dp),
                 contentPadding = PaddingValues(bottom = 104.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                items(downloads, key = DownloadEntity::mediaFileId) { entry ->
-                    DownloadListItem(
-                        entry = entry,
-                        serverUrl = serverUrl,
-                        accessToken = accessToken,
-                        onTogglePauseOrRetry = { viewModel.togglePauseOrRetry(entry) },
-                        onCancel = { viewModel.cancel(entry.mediaFileId) },
-                        onEditKeepUntil = { keepUntilTarget = entry },
-                    )
+                PlayarrDownloadGroup.entries.forEach { group ->
+                    val entries = grouped[group].orEmpty()
+                    if (entries.isNotEmpty()) {
+                        item(key = "heading-${group.name}") {
+                            Text(
+                                playarrString(group.title),
+                                color = WebInk,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+                        items(entries, key = DownloadEntity::mediaFileId) { entry ->
+                            DownloadListItem(
+                                entry = entry,
+                                serverUrl = serverUrl,
+                                accessToken = accessToken,
+                                onPlay = { onPlay(entry) },
+                                onTogglePauseOrRetry = { viewModel.togglePauseOrRetry(entry) },
+                                onCancel = { viewModel.cancel(entry.mediaFileId) },
+                                onEditKeepUntil = { keepUntilTarget = entry },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -160,7 +218,7 @@ internal fun ExperienceDownloadsScreen(
             entry = entry,
             onDismiss = { keepUntilTarget = null },
             onConfirm = { selection ->
-                viewModel.setKeepUntil(entry.mediaFileId, selection.resolveEpochMillis())
+                viewModel.setKeepUntil(entry.mediaFileId, selection)
                 keepUntilTarget = null
             },
         )
@@ -172,11 +230,20 @@ private fun DownloadListItem(
     entry: DownloadEntity,
     serverUrl: String,
     accessToken: String?,
+    onPlay: () -> Unit,
     onTogglePauseOrRetry: () -> Unit,
     onCancel: () -> Unit,
     onEditKeepUntil: () -> Unit,
 ) {
-    Surface(color = WebSurfaceSoft.copy(alpha = 0.72f), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+    val language = LocalPlayarrLanguage.current
+    val playable = entry.state == DownloadState.Completed
+    Surface(
+        onClick = onPlay,
+        enabled = playable,
+        color = WebSurfaceSoft.copy(alpha = 0.72f),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             DownloadThumbnail(
                 posterUrl = entry.posterUrl,
@@ -192,7 +259,7 @@ private fun DownloadListItem(
                 Spacer(Modifier.height(6.dp))
                 DownloadStatusLine(entry)
                 Text(
-                    entry.keepUntilEpochMillis?.let { "Keep until ${formatDate(it)}" } ?: "Keep forever",
+                    downloadKeepUntilLabel(entry.keepUntilSelection, language.locale),
                     color = WebInkMuted,
                     fontSize = 10.sp,
                     modifier = Modifier.padding(top = 4.dp).clickable(onClick = onEditKeepUntil),
@@ -203,13 +270,25 @@ private fun DownloadListItem(
                     val resuming = entry.state == DownloadState.Paused || entry.state == DownloadState.Failed
                     Icon(
                         if (resuming) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
-                        contentDescription = if (resuming) "Resume" else "Pause",
+                        contentDescription = playarrString(
+                            if (resuming) PlayarrString.DownloadsResume else PlayarrString.DownloadsPause,
+                        ),
                         tint = WebInkMuted,
                     )
                 }
             }
             IconButton(onClick = onCancel) {
-                Icon(Icons.Outlined.Delete, contentDescription = "Remove download", tint = WebInkMuted)
+                Icon(
+                    Icons.Outlined.Delete,
+                    contentDescription = playarrString(
+                        if (entry.state in setOf(DownloadState.Queued, DownloadState.Downloading, DownloadState.Paused)) {
+                            PlayarrString.DownloadsCancel
+                        } else {
+                            PlayarrString.DownloadsDelete
+                        },
+                    ),
+                    tint = WebInkMuted,
+                )
             }
         }
     }
@@ -218,12 +297,12 @@ private fun DownloadListItem(
 @Composable
 private fun DownloadStatusLine(entry: DownloadEntity) {
     val (icon, label) = when (entry.state) {
-        DownloadState.Queued -> Icons.Outlined.Schedule to "Queued"
+        DownloadState.Queued -> Icons.Outlined.Schedule to playarrString(PlayarrString.DownloadsStatusQueued)
         DownloadState.Downloading -> Icons.Outlined.Downloading to downloadProgressLabel(entry)
-        DownloadState.Paused -> Icons.Outlined.Pause to "Paused"
-        DownloadState.Completed -> Icons.Outlined.DownloadDone to "Downloaded"
-        DownloadState.Failed -> Icons.Outlined.Error to (entry.failureMessage ?: "Failed")
-        DownloadState.Removing -> Icons.Outlined.Delete to "Removing…"
+        DownloadState.Paused -> Icons.Outlined.Pause to playarrString(PlayarrString.DownloadsStatusPaused)
+        DownloadState.Completed -> Icons.Outlined.DownloadDone to playarrString(PlayarrString.DownloadsStatusReady)
+        DownloadState.Failed -> Icons.Outlined.Error to (entry.failureMessage ?: playarrString(PlayarrString.DownloadsStatusFailed))
+        DownloadState.Removing -> Icons.Outlined.Delete to playarrString(PlayarrString.DownloadsStatusRemoving)
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, contentDescription = null, tint = WebInkMuted, modifier = Modifier.size(14.dp))
@@ -238,6 +317,23 @@ private fun downloadProgressLabel(entry: DownloadEntity): String {
     } else {
         formatDownloadSize(entry.bytesDownloaded, isEstimate = false)
     }
+}
+
+@Composable
+private fun downloadKeepUntilLabel(selection: KeepUntilSelection, locale: Locale): String = when (selection) {
+    KeepUntilSelection.Forever -> playarrString(PlayarrString.DownloadsKeepForever)
+    is KeepUntilSelection.SpecificDate -> playarrString(
+        PlayarrString.DownloadsKeepUntilDate,
+        "date" to formatDate(selection.epochMillis, locale),
+    )
+    is KeepUntilSelection.AfterWatched -> playarrString(
+        if (selection.unit == KeepUntilUnit.Weeks) {
+            PlayarrString.DownloadsKeepAfterWatchedWeeks
+        } else {
+            PlayarrString.DownloadsKeepAfterWatchedDays
+        },
+        "count" to selection.amount,
+    )
 }
 
 @Composable
@@ -271,15 +367,25 @@ private fun DownloadThumbnail(posterUrl: String?, serverUrl: String, accessToken
 private fun KeepUntilEditDialog(entry: DownloadEntity, onDismiss: () -> Unit, onConfirm: (KeepUntilSelection) -> Unit) {
     var selection by remember(entry.mediaFileId) {
         mutableStateOf<KeepUntilSelection>(
-            entry.keepUntilEpochMillis?.let { KeepUntilSelection.SpecificDate(it) } ?: KeepUntilSelection.Forever,
+            entry.keepUntilSelection,
         )
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Keep until") },
-        text = { KeepUntilPicker(selection) { selection = it } },
-        confirmButton = { TextButton(onClick = { onConfirm(selection) }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        title = {
+            Text(playarrString(PlayarrString.DownloadsEditKeepUntil, "title" to entry.title))
+        },
+        text = {
+            Box(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                KeepUntilPicker(selection) { selection = it }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(selection) }) { Text(playarrString(PlayarrString.DownloadsSave)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.CommonCancel)) }
+        },
     )
 }
 
@@ -298,14 +404,14 @@ internal class DownloadOptionsViewModel @Inject constructor(
             _options.value = runCatching { downloadRepository.listQualityOptions(mediaFileId) }
                 .fold(
                     onSuccess = { ExperienceLoad.Ready(it) },
-                    onFailure = { ExperienceLoad.Failed(it.message ?: "Could not load download qualities.") },
+                    onFailure = { ExperienceLoad.Failed(it.message.orEmpty()) },
                 )
         }
     }
 
-    fun enqueue(candidates: List<DownloadCandidate>, qualityId: String, keepUntilEpochMillis: Long?, onDone: () -> Unit) {
+    fun enqueue(candidates: List<DownloadCandidate>, qualityId: String, keepUntil: KeepUntilSelection, onDone: () -> Unit) {
         viewModelScope.launch {
-            downloadRepository.enqueue(candidates, qualityId, keepUntilEpochMillis)
+            downloadRepository.enqueue(candidates, qualityId, keepUntil)
             onDone()
         }
     }
@@ -345,55 +451,104 @@ internal fun DownloadOptionsSheet(
 
     val sheetState = rememberModalBottomSheetState()
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp),
+        ) {
             Text(
-                if (candidates.size == 1) "Download “${candidates.first().title}”" else "Download ${candidates.size} items",
+                playarrString(PlayarrString.DownloadDrawerKicker).uppercase(LocalPlayarrLanguage.current.locale),
+                color = WebPink,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.2.sp,
+            )
+            Text(
+                if (candidates.size == 1) {
+                    playarrString(PlayarrString.DownloadDrawerDialogLabel, "title" to candidates.first().title)
+                } else {
+                    playarrString(PlayarrString.ContextDownloadCount, "count" to candidates.size)
+                },
                 color = WebInk,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold,
             )
             Spacer(Modifier.height(16.dp))
             when (val current = state) {
-                ExperienceLoad.Loading -> Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                ExperienceLoad.Loading -> Column(
+                    Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
                     CircularProgressIndicator(color = WebPink)
+                    Text(playarrString(PlayarrString.DownloadDrawerLoading), color = WebInkMuted)
                 }
-                is ExperienceLoad.Failed -> Text(current.message, color = MaterialTheme.colorScheme.error)
+                is ExperienceLoad.Failed -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(playarrString(PlayarrString.DownloadDrawerLoadError), color = MaterialTheme.colorScheme.error)
+                    current.message.takeIf(String::isNotBlank)?.let { Text(it, color = WebInkMuted, fontSize = 11.sp) }
+                }
                 is ExperienceLoad.Ready -> {
                     LaunchedEffect(current.value) {
                         if (selectedQualityId == null) {
                             selectedQualityId = current.value.firstOrNull { it.id == "original" }?.id ?: current.value.firstOrNull()?.id
                         }
                     }
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        current.value.forEach { option ->
-                            val sizeLabel = option.estimatedSizeBytes
-                                ?.let { formatDownloadSize(it, option.sizeIsEstimate) }
-                                ?: "Unknown size"
-                            Row(
-                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-                                    .clickable { selectedQualityId = option.id }.padding(vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                RadioButton(selected = selectedQualityId == option.id, onClick = { selectedQualityId = option.id })
-                                Column(Modifier.padding(start = 4.dp)) {
-                                    Text(option.label, color = WebInk)
-                                    Text(sizeLabel, color = WebInkMuted, fontSize = 11.sp)
+                    if (current.value.isEmpty()) {
+                        Text(playarrString(PlayarrString.DownloadDrawerNoPlayable), color = WebInkMuted)
+                    } else {
+                        Text(
+                            playarrString(PlayarrString.DownloadDrawerQuality),
+                            color = WebInk,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            current.value.forEach { option ->
+                                val baseSizeLabel = option.estimatedSizeBytes
+                                    ?.let { formatDownloadSize(it, option.sizeIsEstimate) }
+                                    ?: playarrString(PlayarrString.DownloadsUnknownSize)
+                                val sizeLabel = if (candidates.size > 1) {
+                                    playarrString(
+                                        PlayarrString.DownloadDrawerPerItemSize,
+                                        "size" to baseSizeLabel,
+                                        "count" to candidates.size,
+                                    )
+                                } else {
+                                    baseSizeLabel
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                                        .clickable { selectedQualityId = option.id }.padding(vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    RadioButton(selected = selectedQualityId == option.id, onClick = { selectedQualityId = option.id })
+                                    Column(Modifier.padding(start = 4.dp)) {
+                                        Text(option.label, color = WebInk)
+                                        Text(sizeLabel, color = WebInkMuted, fontSize = 11.sp)
+                                    }
                                 }
                             }
                         }
+                        Spacer(Modifier.height(12.dp))
+                        KeepUntilPicker(keepUntilSelection) { keepUntilSelection = it }
+                        Spacer(Modifier.height(20.dp))
+                        Button(
+                            onClick = {
+                                val qualityId = selectedQualityId ?: return@Button
+                                enqueuing = true
+                                viewModel.enqueue(candidates, qualityId, keepUntilSelection, onDismiss)
+                            },
+                            enabled = selectedQualityId != null && !enqueuing,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                playarrString(
+                                    if (enqueuing) PlayarrString.DownloadDrawerStarting else PlayarrString.DownloadDrawerDownload,
+                                ),
+                            )
+                        }
                     }
-                    Spacer(Modifier.height(12.dp))
-                    KeepUntilPicker(keepUntilSelection) { keepUntilSelection = it }
-                    Spacer(Modifier.height(20.dp))
-                    Button(
-                        onClick = {
-                            val qualityId = selectedQualityId ?: return@Button
-                            enqueuing = true
-                            viewModel.enqueue(candidates, qualityId, keepUntilSelection.resolveEpochMillis(), onDismiss)
-                        },
-                        enabled = selectedQualityId != null && !enqueuing,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(if (enqueuing) "Starting…" else "Download") }
                 }
             }
         }
@@ -404,32 +559,123 @@ internal fun DownloadOptionsSheet(
 @Composable
 private fun KeepUntilPicker(selection: KeepUntilSelection, onSelectionChange: (KeepUntilSelection) -> Unit) {
     var showDatePicker by remember { mutableStateOf(false) }
+    var afterWatchedAmount by remember {
+        mutableStateOf((selection as? KeepUntilSelection.AfterWatched)?.amount?.toString() ?: DEFAULT_AFTER_WATCHED_AMOUNT.toString())
+    }
+    val language = LocalPlayarrLanguage.current
+    val afterWatched = selection as? KeepUntilSelection.AfterWatched
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text("Keep until", color = WebInk, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = Modifier.padding(bottom = 4.dp))
-        KeepUntilChoiceRow("Forever", selection == KeepUntilSelection.Forever) { onSelectionChange(KeepUntilSelection.Forever) }
+        Text(
+            playarrString(PlayarrString.DownloadDrawerKeepUntil),
+            color = WebInk,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
         KeepUntilChoiceRow(
-            "30 days after watched",
-            selection is KeepUntilSelection.AfterWatched && selection.amount == 30 && selection.unit == KeepUntilUnit.Days,
-        ) { onSelectionChange(KeepUntilSelection.AfterWatched(30, KeepUntilUnit.Days)) }
+            playarrString(PlayarrString.DownloadDrawerForever),
+            selection == KeepUntilSelection.Forever,
+        ) { onSelectionChange(KeepUntilSelection.Forever) }
+        val dateLabel = (selection as? KeepUntilSelection.SpecificDate)?.let {
+            playarrString(
+                PlayarrString.DownloadsKeepUntilDate,
+                "date" to formatDate(it.epochMillis, language.locale),
+            )
+        } ?: playarrString(PlayarrString.DownloadDrawerOnDate)
         KeepUntilChoiceRow(
-            "2 weeks after watched",
-            selection is KeepUntilSelection.AfterWatched && selection.amount == 2 && selection.unit == KeepUntilUnit.Weeks,
-        ) { onSelectionChange(KeepUntilSelection.AfterWatched(2, KeepUntilUnit.Weeks)) }
-        val specificDateLabel = (selection as? KeepUntilSelection.SpecificDate)?.let { "Until ${formatDate(it.epochMillis)}" } ?: "Specific date…"
-        KeepUntilChoiceRow(specificDateLabel, selection is KeepUntilSelection.SpecificDate) { showDatePicker = true }
+            dateLabel,
+            selection is KeepUntilSelection.SpecificDate,
+        ) { showDatePicker = true }
+        KeepUntilChoiceRow(
+            playarrString(PlayarrString.DownloadDrawerAfterWatched),
+            afterWatched != null,
+        ) {
+            onSelectionChange(
+                KeepUntilSelection.AfterWatched(
+                    afterWatchedAmount.toIntOrNull()?.coerceAtLeast(1) ?: DEFAULT_AFTER_WATCHED_AMOUNT,
+                    afterWatched?.unit ?: KeepUntilUnit.Days,
+                ),
+            )
+        }
+        if (afterWatched != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 48.dp, top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedTextField(
+                    value = afterWatchedAmount,
+                    onValueChange = { value ->
+                        val digits = value.filter(Char::isDigit)
+                        afterWatchedAmount = digits
+                        digits.toIntOrNull()?.takeIf { it > 0 }?.let { amount ->
+                            onSelectionChange(KeepUntilSelection.AfterWatched(amount, afterWatched.unit))
+                        }
+                    },
+                    label = { Text(playarrString(PlayarrString.DownloadDrawerAmount)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.width(104.dp),
+                )
+                KeepUntilUnitButton(
+                    label = playarrString(PlayarrString.DownloadDrawerDays),
+                    selected = afterWatched.unit == KeepUntilUnit.Days,
+                ) {
+                    onSelectionChange(
+                        KeepUntilSelection.AfterWatched(
+                            afterWatchedAmount.toIntOrNull()?.coerceAtLeast(1) ?: DEFAULT_AFTER_WATCHED_AMOUNT,
+                            KeepUntilUnit.Days,
+                        ),
+                    )
+                }
+                KeepUntilUnitButton(
+                    label = playarrString(PlayarrString.DownloadDrawerWeeks),
+                    selected = afterWatched.unit == KeepUntilUnit.Weeks,
+                ) {
+                    onSelectionChange(
+                        KeepUntilSelection.AfterWatched(
+                            afterWatchedAmount.toIntOrNull()?.coerceAtLeast(1) ?: DEFAULT_AFTER_WATCHED_AMOUNT,
+                            KeepUntilUnit.Weeks,
+                        ),
+                    )
+                }
+            }
+            Text(
+                playarrString(PlayarrString.DownloadDrawerAfterWatchedHint),
+                color = WebInkMuted,
+                fontSize = 10.sp,
+                modifier = Modifier.padding(start = 48.dp, top = 4.dp),
+            )
+        }
     }
     if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
+        val initialDate = (selection as? KeepUntilSelection.SpecificDate)?.epochMillis
+            ?: System.currentTimeMillis() + DEFAULT_KEEP_UNTIL_DAYS * MILLIS_PER_DAY
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialDate)
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { onSelectionChange(KeepUntilSelection.SpecificDate(it)) }
                     showDatePicker = false
-                }) { Text("Set") }
+                }) { Text(playarrString(PlayarrString.DownloadsSave)) }
             },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text(playarrString(PlayarrString.CommonCancel)) }
+            },
         ) { DatePicker(state = datePickerState) }
+    }
+}
+
+@Composable
+private fun KeepUntilUnitButton(label: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        color = if (selected) WebPink else WebSurfaceSoft,
+        contentColor = if (selected) Color.White else WebInk,
+        shape = RoundedCornerShape(8.dp),
+    ) {
+        Text(label, modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp), fontSize = 11.sp)
     }
 }
 
@@ -444,15 +690,19 @@ private fun KeepUntilChoiceRow(label: String, selected: Boolean, onClick: () -> 
     }
 }
 
-private fun formatDate(epochMillis: Long): String =
-    SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(epochMillis))
+private fun formatDate(epochMillis: Long, locale: Locale): String =
+    SimpleDateFormat("d MMM yyyy", locale).format(Date(epochMillis))
 
 private fun formatDownloadSize(bytes: Long, isEstimate: Boolean): String {
     val prefix = if (isEstimate) "~" else ""
     val gb = bytes / 1_000_000_000.0
     return if (gb >= 1) {
-        "$prefix${"%.1f".format(gb)} GB"
+        "$prefix${"%.1f".format(Locale.ROOT, gb)} GB"
     } else {
         "$prefix${(bytes / 1_000_000).coerceAtLeast(if (bytes > 0) 1 else 0)} MB"
     }
 }
+
+private const val DEFAULT_AFTER_WATCHED_AMOUNT = 30
+private const val DEFAULT_KEEP_UNTIL_DAYS = 30L
+private const val MILLIS_PER_DAY = 24L * 60L * 60L * 1000L

@@ -1179,9 +1179,20 @@ private fun ExperienceNavHost(
         composable("settings") { ExperienceParitySettingsScreen(serverUrl, isTelevision) }
         composable("downloads") {
             when (canDownload) {
-                null -> ExperienceLoading("Loading downloads")
+                null -> ExperienceLoading(playarrString(PlayarrString.DownloadsLoading))
                 false -> ExperienceNotFoundScreen()
-                true -> ExperienceDownloadsScreen(serverUrl, accessToken, isTelevision)
+                true -> ExperienceDownloadsScreen(
+                    serverUrl = serverUrl,
+                    accessToken = accessToken,
+                    isTelevision = isTelevision,
+                    onPlay = { download ->
+                        val item = download.playarrPlaybackQueueItem()
+                        viewModel.startPlayback(download.mediaFileId, listOf(item))
+                        if (!item.music) {
+                            navController.navigate("experience-player/${Uri.encode(download.mediaFileId)}")
+                        }
+                    },
+                )
             }
         }
     }

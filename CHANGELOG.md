@@ -53,6 +53,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Bring Android Downloads to Playarr Web parity with localized grouped states, playable completed
+  downloads, scrollable quality options, and arbitrary date or after-watched retention controls,
+  including a migration-safe policy whose expiry starts at the actual watched event.
 - Align Android player loading and error states, busy indicator, controls, playback option dialogs,
   and season-grouped Up Next queue with Playarr Web across English, Thai, and Japanese on phone and TV.
 - Bring Android music details to Playarr Web parity with localized artist, album, track, empty,

@@ -7,13 +7,16 @@ import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.media3.exoplayer.offline.DownloadRequest
 import io.streamarr.shared.data.model.CreateDownloadTicketRequest
 import io.streamarr.shared.data.model.DownloadQualityOption
+import io.streamarr.shared.data.model.WatchState
 import io.streamarr.shared.data.remote.StreamarrApi
 import io.streamarr.shared.data.remote.StreamarrServerAccessResolver
 import io.streamarr.shared.download.db.DownloadMetadataDao
 import io.streamarr.shared.download.db.DownloadMetadataEntity
+import io.streamarr.shared.download.db.PendingProgressDao
 import java.io.File
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.time.Instant
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,7 +57,7 @@ interface DownloadRepository {
      * failing to stage (e.g. its library ACL narrowed mid-batch) does not
      * abort the rest of a season/album "download all".
      */
-    suspend fun enqueue(candidates: List<DownloadCandidate>, qualityId: String, keepUntilEpochMillis: Long?)
+    suspend fun enqueue(candidates: List<DownloadCandidate>, qualityId: String, keepUntil: KeepUntilSelection)
 
     fun pause(mediaFileId: String)
     fun resume(mediaFileId: String)
@@ -62,7 +65,7 @@ interface DownloadRepository {
     /** Removes the local download and best-effort cancels its server ticket. */
     fun cancel(mediaFileId: String)
 
-    suspend fun setKeepUntil(mediaFileId: String, keepUntilEpochMillis: Long?)
+    suspend fun setKeepUntil(mediaFileId: String, keepUntil: KeepUntilSelection)
 
     /**
      * A real [File] only when [mediaFileId]'s completed download is cached
@@ -84,6 +87,7 @@ class DefaultDownloadRepository @Inject constructor(
     private val api: StreamarrApi,
     private val serverAccessResolver: StreamarrServerAccessResolver,
     private val dao: DownloadMetadataDao,
+    private val pendingProgressDao: PendingProgressDao,
     private val downloadManager: DownloadManager,
     private val cache: Cache,
     private val serviceStarter: StreamarrDownloadServiceStarter,
@@ -115,6 +119,7 @@ class DefaultDownloadRepository @Inject constructor(
                     bytesDownloaded = download?.bytesDownloaded ?: 0L,
                     totalBytes = download?.contentLength?.takeIf { it > 0 },
                     keepUntilEpochMillis = metadata.keepUntilEpochMillis,
+                    keepUntilSelection = metadata.keepUntilSelection(),
                     failureMessage = download?.failureMessageOrNull(),
                     addedAtEpochMillis = metadata.addedAtEpochMillis,
                 )
@@ -140,8 +145,9 @@ class DefaultDownloadRepository @Inject constructor(
     override suspend fun listQualityOptions(mediaFileId: String): List<DownloadQualityOption> =
         api.getDownloadOptions(mediaFileId).options
 
-    override suspend fun enqueue(candidates: List<DownloadCandidate>, qualityId: String, keepUntilEpochMillis: Long?) {
+    override suspend fun enqueue(candidates: List<DownloadCandidate>, qualityId: String, keepUntil: KeepUntilSelection) {
         val now = System.currentTimeMillis()
+        val policy = keepUntil.persistedDownloadPolicy()
         for (candidate in candidates) {
             // Best-effort fan-out (see this method's KDoc): a candidate
             // that fails to stage is skipped, not fatal to the batch.
@@ -166,7 +172,10 @@ class DefaultDownloadRepository @Inject constructor(
                     qualityId = qualityId,
                     ticketId = ticket.id,
                     serverUrl = serverAccess.serverUrl,
-                    keepUntilEpochMillis = keepUntilEpochMillis,
+                    keepUntilEpochMillis = policy.epochMillis,
+                    keepUntilAmount = policy.amount,
+                    keepUntilUnit = policy.unit,
+                    watchedAtEpochMillis = null,
                     addedAtEpochMillis = now,
                 ),
             )
@@ -192,8 +201,15 @@ class DefaultDownloadRepository @Inject constructor(
         }
     }
 
-    override suspend fun setKeepUntil(mediaFileId: String, keepUntilEpochMillis: Long?) {
-        dao.updateKeepUntil(mediaFileId, keepUntilEpochMillis)
+    override suspend fun setKeepUntil(mediaFileId: String, keepUntil: KeepUntilSelection) {
+        val policy = keepUntil.persistedDownloadPolicy()
+        dao.updateKeepUntil(
+            mediaFileId = mediaFileId,
+            keepUntilEpochMillis = policy.epochMillis,
+            keepUntilAmount = policy.amount,
+            keepUntilUnit = policy.unit,
+            watchedAtEpochMillis = null,
+        )
     }
 
     override suspend fun localFile(mediaFileId: String): File? = withContext(Dispatchers.IO) {
@@ -214,8 +230,35 @@ class DefaultDownloadRepository @Inject constructor(
 
     override suspend fun sweepExpired() {
         val now = System.currentTimeMillis()
-        dao.getAllOnce()
-            .filter { it.keepUntilEpochMillis != null && it.keepUntilEpochMillis <= now }
+        val rows = dao.getAllOnce()
+        val pendingWatchedAt = pendingProgressDao.getAll()
+            .asSequence()
+            .filter { it.completed }
+            .groupBy { it.mediaFileId }
+            .mapValues { (_, values) -> values.minOf { it.occurredAtEpochMillis } }
+        val serverWatchedAt = runCatching { api.listWatchProgress() }
+            .getOrDefault(emptyList())
+            .asSequence()
+            .filter { it.state == WatchState.Watched }
+            .associate { progress ->
+                progress.mediaFileId to (
+                    progress.updatedAt?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+                        ?: now
+                    )
+            }
+        val resolvedRows = rows.map { row ->
+            if (row.keepUntilAmount == null || row.watchedAtEpochMillis != null) return@map row
+            val watchedAt = pendingWatchedAt[row.mediaFileId] ?: serverWatchedAt[row.mediaFileId] ?: return@map row
+            dao.updateWatchedAt(row.mediaFileId, watchedAt)
+            row.copy(watchedAtEpochMillis = watchedAt)
+        }
+        resolvedRows
+            .filter { it.downloadExpiryEpochMillis()?.let { expiry -> expiry <= now } == true }
+            .filter { metadata ->
+                val download = downloadManager.currentDownloads.firstOrNull { it.request.id == metadata.mediaFileId }
+                    ?: runCatching { downloadManager.downloadIndex.getDownload(metadata.mediaFileId) }.getOrNull()
+                download?.state == Download.STATE_COMPLETED
+            }
             .forEach { expired ->
                 serviceStarter.removeDownload(expired.mediaFileId)
                 expired.ticketId?.let { ticketId -> runCatching { api.cancelDownloadTicket(ticketId) } }
@@ -228,6 +271,42 @@ class DefaultDownloadRepository @Inject constructor(
         const val STOP_REASON_PAUSED_BY_USER = 1
     }
 }
+
+internal data class PersistedDownloadPolicy(
+    val epochMillis: Long?,
+    val amount: Int?,
+    val unit: String?,
+)
+
+internal fun KeepUntilSelection.persistedDownloadPolicy(): PersistedDownloadPolicy = when (this) {
+    KeepUntilSelection.Forever -> PersistedDownloadPolicy(null, null, null)
+    is KeepUntilSelection.SpecificDate -> PersistedDownloadPolicy(epochMillis, null, null)
+    is KeepUntilSelection.AfterWatched -> PersistedDownloadPolicy(
+        epochMillis = null,
+        amount = amount.coerceAtLeast(1),
+        unit = if (unit == KeepUntilUnit.Weeks) "weeks" else "days",
+    )
+}
+
+internal fun DownloadMetadataEntity.keepUntilSelection(): KeepUntilSelection = when {
+    keepUntilAmount != null && keepUntilUnit != null -> KeepUntilSelection.AfterWatched(
+        amount = keepUntilAmount.coerceAtLeast(1),
+        unit = if (keepUntilUnit == "weeks") KeepUntilUnit.Weeks else KeepUntilUnit.Days,
+    )
+    keepUntilEpochMillis != null -> KeepUntilSelection.SpecificDate(keepUntilEpochMillis)
+    else -> KeepUntilSelection.Forever
+}
+
+internal fun DownloadMetadataEntity.downloadExpiryEpochMillis(): Long? {
+    keepUntilEpochMillis?.let { return it }
+    val amount = keepUntilAmount?.coerceAtLeast(1) ?: return null
+    val watchedAt = watchedAtEpochMillis ?: return null
+    val days = if (keepUntilUnit == "weeks") amount.toLong() * 7L else amount.toLong()
+    val durationMillis = runCatching { Math.multiplyExact(days, MILLIS_PER_DAY) }.getOrElse { Long.MAX_VALUE }
+    return runCatching { Math.addExact(watchedAt, durationMillis) }.getOrElse { Long.MAX_VALUE }
+}
+
+private const val MILLIS_PER_DAY = 24L * 60L * 60L * 1000L
 
 internal fun downloadTicketFileUrl(serverUrl: String, ticketId: String): String =
     "${serverUrl.trimEnd('/')}/api/v1/downloads/${ticketId.downloadPathSegment()}/file"

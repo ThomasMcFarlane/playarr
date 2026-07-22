@@ -28,6 +28,7 @@ import io.streamarr.shared.download.db.DownloadMetadataDao
 import io.streamarr.shared.download.db.PendingProgressDao
 import io.streamarr.shared.download.db.StreamarrDownloadDatabase
 import io.streamarr.shared.download.db.STREAMARR_DOWNLOAD_MIGRATION_1_2
+import io.streamarr.shared.download.db.STREAMARR_DOWNLOAD_MIGRATION_2_3
 import java.io.File
 import java.util.concurrent.Executors
 import javax.inject.Singleton
@@ -152,7 +153,7 @@ abstract class DownloadModule {
         @Singleton
         fun provideStreamarrDownloadDatabase(@ApplicationContext context: Context): StreamarrDownloadDatabase =
             Room.databaseBuilder(context, StreamarrDownloadDatabase::class.java, "streamarr_downloads.db")
-                .addMigrations(STREAMARR_DOWNLOAD_MIGRATION_1_2)
+                .addMigrations(STREAMARR_DOWNLOAD_MIGRATION_1_2, STREAMARR_DOWNLOAD_MIGRATION_2_3)
                 .build()
 
         @Provides

@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.streamarr.shared.download.db.STREAMARR_DOWNLOAD_MIGRATION_1_2
+import io.streamarr.shared.download.db.STREAMARR_DOWNLOAD_MIGRATION_2_3
 import io.streamarr.shared.download.db.StreamarrDownloadDatabase
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -80,17 +81,20 @@ class StreamarrDownloadMigrationTest {
     }
 
     @Test
-    fun migrationPreservesRowsAndAddsOwningServerOrigin() = runBlocking {
+    fun migrationsPreserveRowsAndAddServerAndRetentionColumns() = runBlocking {
         val database = Room.databaseBuilder(context, StreamarrDownloadDatabase::class.java, databaseName)
-            .addMigrations(STREAMARR_DOWNLOAD_MIGRATION_1_2)
+            .addMigrations(STREAMARR_DOWNLOAD_MIGRATION_1_2, STREAMARR_DOWNLOAD_MIGRATION_2_3)
             .build()
         try {
             val row = database.downloadMetadataDao().get("media-1")
 
-            assertEquals(2, database.openHelper.readableDatabase.version)
+            assertEquals(3, database.openHelper.readableDatabase.version)
             assertEquals("media-1", row?.mediaFileId)
             assertEquals("ticket-1", row?.ticketId)
             assertEquals("", row?.serverUrl)
+            assertEquals(null, row?.keepUntilAmount)
+            assertEquals(null, row?.keepUntilUnit)
+            assertEquals(null, row?.watchedAtEpochMillis)
         } finally {
             database.close()
         }

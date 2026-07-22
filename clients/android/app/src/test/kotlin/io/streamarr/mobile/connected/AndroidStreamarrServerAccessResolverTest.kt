@@ -127,6 +127,13 @@ class AndroidStreamarrServerAccessResolverTest {
         override suspend fun getAllOnce(): List<DownloadMetadataEntity> = rows.toList()
         override suspend fun upsert(entity: DownloadMetadataEntity) = Unit
         override suspend fun delete(mediaFileId: String) = Unit
-        override suspend fun updateKeepUntil(mediaFileId: String, keepUntilEpochMillis: Long?) = Unit
+        override suspend fun updateKeepUntil(
+            mediaFileId: String,
+            keepUntilEpochMillis: Long?,
+            keepUntilAmount: Int?,
+            keepUntilUnit: String?,
+            watchedAtEpochMillis: Long?,
+        ) = Unit
+        override suspend fun updateWatchedAt(mediaFileId: String, watchedAtEpochMillis: Long) = Unit
     }
 }

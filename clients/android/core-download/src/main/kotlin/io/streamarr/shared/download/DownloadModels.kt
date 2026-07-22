@@ -36,6 +36,10 @@ data class DownloadEntity(
     val totalBytes: Long?,
     /** `null` means "keep forever". */
     val keepUntilEpochMillis: Long?,
+    /** Retains the unresolved Web-compatible policy so "after watched" begins at the actual watch event. */
+    val keepUntilSelection: KeepUntilSelection = keepUntilEpochMillis
+        ?.let(KeepUntilSelection::SpecificDate)
+        ?: KeepUntilSelection.Forever,
     val failureMessage: String?,
     val addedAtEpochMillis: Long,
 )
