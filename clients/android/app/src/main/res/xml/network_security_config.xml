@@ -10,6 +10,8 @@
   operator configures in Settings. This mirrors how other self-hosted
   media clients (Jellyfin, Plex) handle the same constraint.
 -->
-<network-security-config>
-    <base-config cleartextTrafficPermitted="true" />
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <base-config
+        cleartextTrafficPermitted="true"
+        tools:ignore="InsecureBaseConfiguration" />
 </network-security-config>

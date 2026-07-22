@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Shrink unused resources from minified Android releases and provide a monochrome adaptive icon
+  for themed Android launchers while retaining the self-hosted HTTP and television banner policy.
 - Use direction-aware Android back and playlist icons and conform shared QR and media-card
   composables to the standard Modifier contract without changing left-to-right layouts.
 

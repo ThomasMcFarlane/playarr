@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- AAPT requires adaptive-icon XML in an API-qualified resource directory even though the
+         app's minSdk is 26; moving these files to mipmap-anydpi makes the launcher resources
+         disappear during processDebugResources. -->
+    <issue id="ObsoleteSdkInt">
+        <ignore path="src/main/res/mipmap-anydpi-v26" />
+    </issue>
+</lint>
