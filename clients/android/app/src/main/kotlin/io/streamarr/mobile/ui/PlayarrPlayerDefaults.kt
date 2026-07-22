@@ -1,5 +1,6 @@
 package io.streamarr.mobile.ui
 
+import io.streamarr.shared.data.model.MediaPlaybackOptionsResponse
 import io.streamarr.shared.data.model.PlaybackSubtitleTrackOption
 
 internal enum class PlayarrSubtitleDefault(val storageValue: String) {
@@ -131,4 +132,25 @@ internal fun selectPlayarrDefaultSubtitleTrackId(
     return eligible.firstOrNull { normalisePlayarrTrackLanguage(it.language) == language }?.id
         ?: eligible.firstOrNull(PlaybackSubtitleTrackOption::isDefault)?.id
         ?: eligible.first().id
+}
+
+internal fun resolvePlayarrPlaybackLaunchSettings(
+    options: MediaPlaybackOptionsResponse,
+    defaults: PlayarrPlayerDefaults,
+): PlayarrPlaybackLaunchSettings {
+    val preferredQualityId = if (options.preferences.qualityId == "original") {
+        defaults.qualityId
+    } else {
+        options.preferences.qualityId
+    }
+    val quality = options.qualityOptions.firstOrNull { it.id == preferredQualityId }
+    val audio = options.audioTracks.firstOrNull { it.id == options.preferences.audioTrackId }
+    return PlayarrPlaybackLaunchSettings(
+        qualityId = quality?.id ?: "original",
+        profile = quality?.profile,
+        forceTranscode = quality?.id != null && quality.id != "original",
+        audioStreamIndex = audio?.streamIndex,
+        subtitleTrackId = options.preferences.subtitleTrackId
+            ?: selectPlayarrDefaultSubtitleTrackId(options.subtitleTracks, defaults),
+    )
 }

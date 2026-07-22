@@ -6,6 +6,7 @@ import io.streamarr.shared.data.model.AlbumType
 import io.streamarr.shared.data.model.Availability
 import io.streamarr.shared.data.model.Episode
 import io.streamarr.shared.data.model.EpisodeDetail
+import io.streamarr.shared.data.model.MediaChapter
 import io.streamarr.shared.data.model.Season
 import io.streamarr.shared.data.model.SeasonDetail
 import io.streamarr.shared.data.model.Track
@@ -50,6 +51,17 @@ class PlayarrPlaybackQueueTest {
         assertEquals("Now playing", queue.currentItem?.title)
         assertFalse(queue.canPrevious)
         assertFalse(queue.canNext)
+    }
+
+    @Test
+    fun `chapter playback overrides only the selected queue item start`() {
+        val first = PlayarrPlaybackQueueItem("first", "First")
+        val second = PlayarrPlaybackQueueItem("second", "Second")
+
+        val queue = playarrPlaybackQueue("second", listOf(first, second), 65_432L)
+
+        assertEquals(null, queue.items.first().startPositionMs)
+        assertEquals(65_432L, queue.currentItem?.startPositionMs)
     }
 
     @Test
@@ -174,5 +186,47 @@ class PlayarrPlaybackQueueTest {
         assertEquals(listOf(1, 2), playable.map { it.season.seasonNumber })
         assertEquals(listOf(1, 2), playable.last().episodes.map { it.episode.episodeNumber })
         assertTrue(playable.flatMap { it.episodes }.all { it.mediaFileId != null })
+    }
+
+    @Test
+    fun `movie chapter fallback uses the web interval ladder`() {
+        val generated = playarrDisplayedMovieChapters(emptyList(), 7_200_000L)
+        val real = listOf(MediaChapter(0, 42_000L, title = "Real chapter"))
+
+        assertEquals(
+            listOf(0L, 900_000L, 1_800_000L, 2_700_000L, 3_600_000L, 4_500_000L, 5_400_000L, 6_300_000L),
+            generated.map { it.startMs },
+        )
+        assertEquals(7_200_000L, generated.last().endMs)
+        assertEquals(real, playarrDisplayedMovieChapters(real, 7_200_000L))
+    }
+
+    @Test
+    fun `similar title fallback uses web genre kind and year scoring`() {
+        val target = Work(
+            id = "target",
+            kind = WorkKind.Movie,
+            title = "Target",
+            sortTitle = "Target",
+            genres = listOf("Action", "Drama"),
+            releaseDate = Instant.parse("2000-01-01T00:00:00Z"),
+            addedAt = Instant.EPOCH,
+            monitored = true,
+            availability = Availability.Available,
+        )
+        val candidate = target.copy(
+            id = "candidate",
+            genres = listOf("action", "Comedy"),
+            releaseDate = Instant.parse("2010-01-01T00:00:00Z"),
+        )
+
+        assertEquals(113.0, playarrRelatedWorkScore(target, candidate), 0.0)
+    }
+
+    @Test
+    fun `video runtime uses web minute rounding`() {
+        assertEquals("1 min", formatPlayarrVideoRuntime(30_000L))
+        assertEquals("1 hr 31 min", formatPlayarrVideoRuntime(5_430_000L))
+        assertEquals("2 hr", formatPlayarrVideoRuntime(7_200_000L))
     }
 }

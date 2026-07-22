@@ -1,5 +1,9 @@
 package io.streamarr.mobile.ui
 
+import io.streamarr.shared.data.model.MediaPlaybackOptionsResponse
+import io.streamarr.shared.data.model.MediaPlaybackPreferenceResponse
+import io.streamarr.shared.data.model.PlaybackAudioTrackOption
+import io.streamarr.shared.data.model.PlaybackQualityOption
 import io.streamarr.shared.data.model.PlaybackSubtitleTrackOption
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -67,6 +71,36 @@ class PlayarrPlayerDefaultsTest {
                 PlayarrPlayerDefaults(subtitleMode = PlayarrSubtitleDefault.Always, subtitleLanguage = "th"),
             ),
         )
+    }
+
+    @Test
+    fun `movie launch combines saved choices with device defaults like web`() {
+        val options = MediaPlaybackOptionsResponse(
+            qualityOptions = listOf(
+                PlaybackQualityOption("original", "Original"),
+                PlaybackQualityOption("h264-1080p-8mbps", "FHD", profile = "h264-1080p-8mbps"),
+            ),
+            audioTracks = listOf(PlaybackAudioTrackOption("english", 2, "English")),
+            subtitleTracks = listOf(subtitle("forced", "eng", forced = true)),
+            preferences = MediaPlaybackPreferenceResponse(
+                qualityId = "original",
+                audioTrackId = "english",
+            ),
+        )
+
+        val settings = resolvePlayarrPlaybackLaunchSettings(
+            options,
+            PlayarrPlayerDefaults(
+                qualityId = "h264-1080p-8mbps",
+                subtitleMode = PlayarrSubtitleDefault.Forced,
+                subtitleLanguage = "en",
+            ),
+        )
+
+        assertEquals("h264-1080p-8mbps", settings.qualityId)
+        assertEquals(2, settings.audioStreamIndex)
+        assertEquals("forced", settings.subtitleTrackId)
+        assertEquals(true, settings.forceTranscode)
     }
 
     private fun subtitle(

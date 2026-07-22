@@ -110,6 +110,8 @@ data class Work(
     /** Free-form user/automation tags, distinct from [genres]. */
     val tags: List<String> = emptyList(),
     @Serializable(with = InstantIsoSerializer::class)
+    val releaseDate: Instant? = null,
+    @Serializable(with = InstantIsoSerializer::class)
     val addedAt: Instant,
     /** Whether Streamarr should actively track/request missing children of this work. */
     val monitored: Boolean,

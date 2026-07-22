@@ -397,7 +397,7 @@ internal fun ExperiencePlaylistDetailScreen(
     isTelevision: Boolean,
     onBack: () -> Unit,
     onOpenWork: (String) -> Unit,
-    onPlay: (String, List<PlayarrPlaybackQueueItem>) -> Unit,
+    onPlay: (String, List<PlayarrPlaybackQueueItem>, Long?, PlayarrPlaybackLaunchSettings?) -> Unit,
     viewModel: PlaylistDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -458,7 +458,7 @@ internal fun ExperiencePlaylistDetailScreen(
                                             Text("Item ${item.position + 1}", color = WebInkMuted, fontSize = 10.sp)
                                         }
                                         if (mediaFileId != null) {
-                                            IconButton(onClick = { onPlay(mediaFileId, orderedItems) }) {
+                                            IconButton(onClick = { onPlay(mediaFileId, orderedItems, null, null) }) {
                                                 Icon(Icons.Outlined.PlayArrow, "Play", tint = WebPink)
                                             }
                                         }

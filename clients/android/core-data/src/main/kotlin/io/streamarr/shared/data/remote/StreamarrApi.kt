@@ -10,6 +10,9 @@ import io.streamarr.shared.data.model.DownloadOptionsResponse
 import io.streamarr.shared.data.model.DownloadQualityOption
 import io.streamarr.shared.data.model.DownloadStatus
 import io.streamarr.shared.data.model.DownloadTicketResponse
+import io.streamarr.shared.data.model.MediaChapter
+import io.streamarr.shared.data.model.MediaMetadata
+import io.streamarr.shared.data.model.MediaPlaybackOptionsResponse
 import io.streamarr.shared.data.model.PlayerPreferences
 import io.streamarr.shared.data.model.OptionalUserInviteRequest
 import io.streamarr.shared.data.model.Playlist
@@ -21,6 +24,7 @@ import io.streamarr.shared.data.model.ProfilePinSetting
 import io.streamarr.shared.data.model.ReorderPlaylistItemsRequest
 import io.streamarr.shared.data.model.SelfCapabilitiesResponse
 import io.streamarr.shared.data.model.UpdatePlayerPreferencesRequest
+import io.streamarr.shared.data.model.UpdateMediaPlaybackPreferencesRequest
 import io.streamarr.shared.data.model.UpdatePlaylistRequest
 import io.streamarr.shared.data.model.UpdateProfileAvatarRequest
 import io.streamarr.shared.data.model.UpdateProfilePinRequest
@@ -32,6 +36,7 @@ import io.streamarr.shared.data.model.VerifyProfilePinResponse
 import io.streamarr.shared.data.model.WatchProgress
 import io.streamarr.shared.data.model.VersionEnvelope
 import io.streamarr.shared.data.model.Work
+import io.streamarr.shared.data.model.WorkCreditsResponse
 import io.streamarr.shared.data.model.WorkDetail
 import io.streamarr.shared.data.model.WorkKind
 import kotlinx.serialization.json.JsonElement
@@ -130,6 +135,15 @@ interface StreamarrApi {
     @GET("api/v1/catalog/{id}")
     suspend fun getWork(@Path("id") id: String): WorkDetail
 
+    @GET("api/v1/catalog/{id}/credits")
+    suspend fun getWorkCredits(@Path("id") id: String): WorkCreditsResponse
+
+    @GET("api/v1/catalog/{id}/similar")
+    suspend fun getSimilarWorks(
+        @Path("id") id: String,
+        @Query("limit") limit: Long? = null,
+    ): List<Work>
+
     // ---- playback --------------------------------------------------------------
 
     /**
@@ -173,6 +187,23 @@ interface StreamarrApi {
         @Path("media_file_id") mediaFileId: String,
         @Body request: UpdateWatchProgressRequest,
     ): WatchProgress
+
+    @GET("api/v1/media/{media_file_id}/chapters")
+    suspend fun getMediaChapters(@Path("media_file_id") mediaFileId: String): List<MediaChapter>
+
+    @GET("api/v1/media/{media_file_id}/metadata")
+    suspend fun getMediaMetadata(@Path("media_file_id") mediaFileId: String): MediaMetadata
+
+    @GET("api/v1/media/{media_file_id}/playback-options")
+    suspend fun getMediaPlaybackOptions(
+        @Path("media_file_id") mediaFileId: String,
+    ): MediaPlaybackOptionsResponse
+
+    @PATCH("api/v1/media/{media_file_id}/playback-options")
+    suspend fun updateMediaPlaybackOptions(
+        @Path("media_file_id") mediaFileId: String,
+        @Body request: UpdateMediaPlaybackPreferencesRequest,
+    ): MediaPlaybackOptionsResponse
 
     // ---- downloads -----------------------------------------------------------
 

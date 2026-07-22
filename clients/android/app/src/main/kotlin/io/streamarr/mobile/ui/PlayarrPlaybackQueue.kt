@@ -1,6 +1,7 @@
 package io.streamarr.mobile.ui
 
 import io.streamarr.shared.data.model.PlaylistItem
+import io.streamarr.shared.data.model.MediaChapter
 import io.streamarr.shared.data.model.SeasonDetail
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
@@ -15,6 +16,16 @@ internal data class PlayarrPlaybackQueueItem(
     val music: Boolean = false,
     val albumId: String? = null,
     val artworkWork: Work? = null,
+    val startPositionMs: Long? = null,
+    val launchSettings: PlayarrPlaybackLaunchSettings? = null,
+)
+
+internal data class PlayarrPlaybackLaunchSettings(
+    val qualityId: String,
+    val profile: String?,
+    val forceTranscode: Boolean,
+    val audioStreamIndex: Int?,
+    val subtitleTrackId: String?,
 )
 
 internal data class PlayarrPlaybackQueue(
@@ -46,15 +57,30 @@ internal data class PlayarrPlaybackQueue(
 internal fun playarrPlaybackQueue(
     mediaFileId: String,
     orderedItems: List<PlayarrPlaybackQueueItem>,
+    startPositionMs: Long? = null,
+    launchSettings: PlayarrPlaybackLaunchSettings? = null,
 ): PlayarrPlaybackQueue {
     val candidates = orderedItems.filter { it.mediaFileId.isNotBlank() }
         .ifEmpty { listOf(PlayarrPlaybackQueueItem(mediaFileId, "Now playing")) }
     val selectedIndex = candidates.indexOfFirst { it.mediaFileId == mediaFileId }.takeIf { it >= 0 }
-    return if (selectedIndex != null) {
+    val queue = if (selectedIndex != null) {
         PlayarrPlaybackQueue(candidates, selectedIndex)
     } else {
         PlayarrPlaybackQueue(candidates + PlayarrPlaybackQueueItem(mediaFileId, "Now playing"), candidates.size)
     }
+    if (startPositionMs == null && launchSettings == null) return queue
+    return queue.copy(
+        items = queue.items.mapIndexed { index, item ->
+            if (index == queue.currentIndex) {
+                item.copy(
+                    startPositionMs = startPositionMs?.coerceAtLeast(0L),
+                    launchSettings = launchSettings,
+                )
+            } else {
+                item
+            }
+        },
+    )
 }
 
 internal fun playarrAlbumPlaybackQueueItems(
@@ -79,6 +105,27 @@ internal fun playarrPlayableSeasons(series: WorkChildren.Series): List<SeasonDet
             )
         }
         .filter { it.episodes.isNotEmpty() }
+
+internal fun playarrDisplayedMovieChapters(
+    chapters: List<MediaChapter>,
+    runtimeMs: Long,
+): List<MediaChapter> {
+    if (chapters.isNotEmpty()) return chapters
+    if (runtimeMs <= 0L) return emptyList()
+    val targetIntervalMs = runtimeMs / 10.0
+    val intervals = listOf(5L, 10L, 15L, 20L, 30L).map { it * 60_000L }
+    val intervalMs = intervals.firstOrNull { it >= targetIntervalMs } ?: intervals.last()
+    val chapterCount = ((runtimeMs + intervalMs - 1L) / intervalMs).coerceAtLeast(1L).toInt()
+    return List(chapterCount) { index ->
+        val startMs = index * intervalMs
+        MediaChapter(
+            index = index,
+            startMs = startMs,
+            endMs = minOf(runtimeMs, startMs + intervalMs),
+            title = "Chapter ${index + 1}",
+        )
+    }
+}
 
 internal fun WorkDetail.playarrPlaybackQueueItems(): List<PlayarrPlaybackQueueItem> = when (val tree = children) {
     WorkChildren.Movie -> listOfNotNull(

@@ -47,6 +47,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Enrich Android movie and series details with fixed runtime, real or generated chapters, cast,
+  similar titles, per-file playback choices, and exact chapter-start playback.
 - Replace Android's generic movie and series rows with a responsive video detail surface that
   matches the active episode's metadata, watch progress, actions, and season-scoped episode rails.
 - Keep Android playback and session heartbeats alive across navigation with an artwork-rich

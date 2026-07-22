@@ -4,6 +4,8 @@ import io.streamarr.shared.data.model.AlbumDetail
 import io.streamarr.shared.data.model.Availability
 import io.streamarr.shared.data.model.CatalogPage
 import io.streamarr.shared.data.model.ExternalProvider
+import io.streamarr.shared.data.model.MediaChapter
+import io.streamarr.shared.data.model.MediaPlaybackOptionsResponse
 import io.streamarr.shared.data.model.PlaybackMode
 import io.streamarr.shared.data.model.PlaybackInfoResponse
 import io.streamarr.shared.data.model.OptionalUserInviteRequest
@@ -16,6 +18,7 @@ import io.streamarr.shared.data.model.WatchProgress
 import io.streamarr.shared.data.model.WatchState
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
+import io.streamarr.shared.data.model.WorkCreditsResponse
 import io.streamarr.shared.data.model.WorkDetail
 import io.streamarr.shared.data.model.WorkKind
 import org.junit.Assert.assertEquals
@@ -49,6 +52,7 @@ class StreamarrJsonModelTest {
               "images": [{"kind": "poster", "url": "https://example.com/poster.jpg", "width": 500, "height": 750}],
               "genres": ["Action", "Sci-Fi"],
               "tags": [],
+              "release_date": "1999-03-31T00:00:00Z",
               "added_at": "2026-01-01T00:00:00Z",
               "monitored": true,
               "availability": "available"
@@ -61,6 +65,7 @@ class StreamarrJsonModelTest {
         assertEquals(Availability.Available, work.availability)
         assertEquals(ExternalProvider.Tmdb, work.externalRefs.single().provider)
         assertEquals("603", work.externalRefs.single().externalId)
+        assertEquals(1999, work.releaseDate?.atZone(java.time.ZoneOffset.UTC)?.year)
     }
 
     @Test
@@ -148,6 +153,49 @@ class StreamarrJsonModelTest {
         assertEquals("eng", playback.audioTracks.single().language)
         assertTrue(playback.subtitleTracks.single().forced)
         assertEquals("/api/v1/media/mf-1/subtitles/3?source_offset_ms=0", playback.subtitleTracks.single().url)
+    }
+
+    @Test
+    fun `decodes rich media detail contracts used by the web detail page`() {
+        val credits = json.decodeFromString(
+            WorkCreditsResponse.serializer(),
+            """
+            {
+              "cast": [{
+                "id": "credit-1",
+                "person": {"id": "person-1", "name": "Lead Actor", "headshot_url": "https://example.com/headshot.jpg"},
+                "character": "The Lead",
+                "department": null,
+                "job": null
+              }],
+              "crew": []
+            }
+            """.trimIndent(),
+        )
+        val chapters = json.decodeFromString(
+            kotlinx.serialization.builtins.ListSerializer(MediaChapter.serializer()),
+            """[{"index":0,"start_ms":0,"end_ms":65432,"title":"Opening Titles"}]""",
+        )
+        val options = json.decodeFromString(
+            MediaPlaybackOptionsResponse.serializer(),
+            """
+            {
+              "quality_options": [{"id":"original","label":"Original"}],
+              "audio_tracks": [{"id":"source-audio-1","stream_index":1,"label":"English","is_default":true}],
+              "subtitle_tracks": [{
+                "id":"source-subtitle-3","stream_index":3,"label":"English SDH","codec":"subrip",
+                "is_default":true,"forced":false,"url":"/api/v1/media/mf-1/subtitles/3"
+              }],
+              "preferences": {"quality_id":"original","audio_track_id":"source-audio-1","subtitle_track_id":null}
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals("Lead Actor", credits.cast.single().person.name)
+        assertEquals("The Lead", credits.cast.single().character)
+        assertEquals(65_432L, chapters.single().endMs)
+        assertEquals("source-audio-1", options.preferences.audioTrackId)
+        assertEquals("source-subtitle-3", options.subtitleTracks.single().id)
     }
 
     @Test

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -121,8 +122,12 @@ import io.streamarr.mobile.BuildConfig
 import io.streamarr.mobile.R
 import io.streamarr.shared.auth.TokenStore
 import io.streamarr.shared.data.model.AlbumDetail
+import io.streamarr.shared.data.model.CreditResponse
 import io.streamarr.shared.data.model.EpisodeDetail
 import io.streamarr.shared.data.model.ImageKind
+import io.streamarr.shared.data.model.MediaChapter
+import io.streamarr.shared.data.model.MediaMetadata
+import io.streamarr.shared.data.model.MediaPlaybackOptionsResponse
 import io.streamarr.shared.data.model.Playlist
 import io.streamarr.shared.data.model.PlaybackEventRequest
 import io.streamarr.shared.data.model.PlaybackInfoResponse
@@ -134,8 +139,10 @@ import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
 import io.streamarr.shared.data.model.WorkDetail
 import io.streamarr.shared.data.model.WorkKind
+import io.streamarr.shared.data.model.WorkCreditsResponse
 import io.streamarr.shared.data.model.WatchProgress
 import io.streamarr.shared.data.model.WatchState
+import io.streamarr.shared.data.model.UpdateMediaPlaybackPreferencesRequest
 import io.streamarr.shared.data.model.UpdateWatchProgressRequest
 import io.streamarr.shared.data.model.wireName
 import io.streamarr.shared.data.remote.StreamarrApi
@@ -382,8 +389,13 @@ internal class PlayarrExperienceViewModel @Inject constructor(
         }
     }
 
-    fun startPlayback(mediaFileId: String, orderedItems: List<PlayarrPlaybackQueueItem>) {
-        _playbackQueue.value = playarrPlaybackQueue(mediaFileId, orderedItems)
+    fun startPlayback(
+        mediaFileId: String,
+        orderedItems: List<PlayarrPlaybackQueueItem>,
+        startPositionMs: Long? = null,
+        launchSettings: PlayarrPlaybackLaunchSettings? = null,
+    ) {
+        _playbackQueue.value = playarrPlaybackQueue(mediaFileId, orderedItems, startPositionMs, launchSettings)
     }
 
     fun movePlayback(delta: Int) {
@@ -486,8 +498,10 @@ internal fun PlayarrExperience(
     LaunchedEffect(currentRoute, currentUserId) {
         if (currentUserId != null) viewModel.refreshProfileAvatar()
     }
-    LaunchedEffect(activePlaybackItem?.mediaFileId, serverUrl, playerDefaults) {
-        activePlaybackItem?.let { playerViewModel.play(it.mediaFileId, serverUrl, playerDefaults) }
+    LaunchedEffect(activePlaybackItem, serverUrl, playerDefaults) {
+        activePlaybackItem?.let {
+            playerViewModel.play(it.mediaFileId, serverUrl, playerDefaults, it.startPositionMs, it.launchSettings)
+        }
     }
     LaunchedEffect(playbackState.hasEnded, activePlaybackItem?.mediaFileId, playbackQueue.canNext) {
         if (shouldAutoAdvancePlayarrMusic(playbackState.hasEnded, activePlaybackItem, playbackQueue.canNext)) {
@@ -896,8 +910,9 @@ private fun ExperienceNavHost(
                 isTelevision = isTelevision,
                 canDownload = canDownload == true,
                 onBack = navController::popBackStack,
-                onPlay = { mediaFileId, orderedItems ->
-                    viewModel.startPlayback(mediaFileId, orderedItems)
+                onOpenWork = { navController.navigate("experience-detail/$it") },
+                onPlay = { mediaFileId, orderedItems, startPositionMs, launchSettings ->
+                    viewModel.startPlayback(mediaFileId, orderedItems, startPositionMs, launchSettings)
                     if (orderedItems.none { it.music }) {
                         navController.navigate("experience-player/${Uri.encode(mediaFileId)}")
                     }
@@ -933,8 +948,8 @@ private fun ExperienceNavHost(
                 isTelevision = isTelevision,
                 onBack = navController::popBackStack,
                 onOpenWork = { navController.navigate("experience-detail/$it") },
-                onPlay = { mediaFileId, orderedItems ->
-                    viewModel.startPlayback(mediaFileId, orderedItems)
+                onPlay = { mediaFileId, orderedItems, startPositionMs, launchSettings ->
+                    viewModel.startPlayback(mediaFileId, orderedItems, startPositionMs, launchSettings)
                     if (orderedItems.none { it.music }) {
                         navController.navigate("experience-player/${Uri.encode(mediaFileId)}")
                     }
@@ -1713,29 +1728,126 @@ internal class ExperienceDetailViewModel @Inject constructor(
 ) : ViewModel() {
     private val _state = MutableStateFlow<ExperienceLoad<ExperienceDetailSnapshot>>(ExperienceLoad.Loading)
     val state = _state.asStateFlow()
+    private val _message = MutableStateFlow<String?>(null)
+    val message = _message.asStateFlow()
+    private var loadJob: Job? = null
 
     fun load(id: String) {
-        viewModelScope.launch {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             _state.value = ExperienceLoad.Loading
-            _state.value = when (val result = getWorkDetails(id)) {
+            when (val result = getWorkDetails(id)) {
                 is StreamarrResult.Success -> {
-                    val progress = runCatching { api.listWatchProgress() }.getOrDefault(emptyList())
-                    ExperienceLoad.Ready(
-                        ExperienceDetailSnapshot(
-                            detail = result.value,
-                            progressByMedia = progress.associateBy(WatchProgress::mediaFileId),
-                        ),
-                    )
+                    val detail = result.value
+                    val videoDetail = detail.children == WorkChildren.Movie || detail.children is WorkChildren.Series
+                    _state.value = ExperienceLoad.Ready(ExperienceDetailSnapshot(detail, emptyMap()))
+                    launch {
+                        val progress = runCatching { api.listWatchProgress() }.getOrDefault(emptyList())
+                        updateSnapshot(detail.work.id) {
+                            copy(progressByMedia = progress.associateBy(WatchProgress::mediaFileId))
+                        }
+                    }
+                    if (!videoDetail) return@launch
+                    launch {
+                        val credits = runCatching { api.getWorkCredits(detail.work.id) }
+                            .getOrDefault(WorkCreditsResponse())
+                        updateSnapshot(detail.work.id) { copy(credits = credits) }
+                    }
+                    launch {
+                        val similar = loadPlayarrSimilarWorks(detail.work)
+                        updateSnapshot(detail.work.id) { copy(similarWorks = similar) }
+                    }
+                    val movieMediaFileId = detail.mediaFileId.takeIf { detail.children == WorkChildren.Movie }
+                    if (movieMediaFileId == null) return@launch
+                    launch {
+                        val chapters = runCatching { api.getMediaChapters(movieMediaFileId) }.getOrDefault(emptyList())
+                        updateSnapshot(detail.work.id) { copy(movieChapters = chapters) }
+                    }
+                    launch {
+                        val metadata = runCatching { api.getMediaMetadata(movieMediaFileId) }.getOrNull()
+                        updateSnapshot(detail.work.id) { copy(movieMetadata = metadata) }
+                    }
+                    launch {
+                        val options = runCatching { api.getMediaPlaybackOptions(movieMediaFileId) }.getOrNull()
+                        updateSnapshot(detail.work.id) { copy(moviePlaybackOptions = options) }
+                    }
                 }
-                is StreamarrResult.Failure -> ExperienceLoad.Failed(result.error.userMessageForExperience("title"))
+                is StreamarrResult.Failure -> {
+                    _state.value = ExperienceLoad.Failed(result.error.userMessageForExperience("title"))
+                }
             }
         }
     }
+
+    private fun updateSnapshot(workId: String, transform: ExperienceDetailSnapshot.() -> ExperienceDetailSnapshot) {
+        val current = (_state.value as? ExperienceLoad.Ready)?.value ?: return
+        if (current.detail.work.id != workId) return
+        _state.value = ExperienceLoad.Ready(current.transform())
+    }
+
+    private suspend fun loadPlayarrSimilarWorks(work: Work): List<Work> {
+        val semantic = runCatching { api.getSimilarWorks(work.id, 20) }.getOrNull()
+        if (!semantic.isNullOrEmpty()) return semantic.filterNot { it.id == work.id }
+        val pages = if (work.genres.isNotEmpty()) {
+            work.genres.take(3).map { genre ->
+                runCatching {
+                    api.browseCatalog(genre = genre, availableOnly = true, limit = 100)
+                }.getOrNull()
+            }
+        } else {
+            listOf(
+                runCatching {
+                    api.browseCatalog(kind = work.kind.wireName(), availableOnly = true, sort = "recent", limit = 100)
+                }.getOrNull(),
+            )
+        }
+        return pages.flatMap { it?.items.orEmpty() }
+            .distinctBy(Work::id)
+            .filterNot { it.id == work.id }
+            .sortedByDescending { playarrRelatedWorkScore(work, it) }
+            .take(20)
+    }
+
+    fun saveMoviePlaybackOptions(mediaFileId: String, request: UpdateMediaPlaybackPreferencesRequest) {
+        viewModelScope.launch {
+            val result = runCatching { api.updateMediaPlaybackOptions(mediaFileId, request) }
+            result.onSuccess { options ->
+                val current = (_state.value as? ExperienceLoad.Ready)?.value ?: return@onSuccess
+                _state.value = ExperienceLoad.Ready(current.copy(moviePlaybackOptions = options))
+                _message.value = "Playback preferences saved."
+            }.onFailure {
+                _message.value = it.message ?: "Couldn’t save playback preferences."
+            }
+        }
+    }
+
+    fun clearMessage() {
+        _message.value = null
+    }
+}
+
+internal fun playarrRelatedWorkScore(target: Work, candidate: Work): Double {
+    val targetGenres = target.genres.map { it.trim().lowercase() }.toSet()
+    val sharedGenres = candidate.genres.count { it.trim().lowercase() in targetGenres }
+    val sameKind = if (target.kind == candidate.kind) 1 else 0
+    val targetYear = target.releaseDate?.atZone(java.time.ZoneOffset.UTC)?.year
+    val candidateYear = candidate.releaseDate?.atZone(java.time.ZoneOffset.UTC)?.year
+    val yearProximity = if (targetYear != null && candidateYear != null) {
+        maxOf(0.0, 5.0 - kotlin.math.abs(targetYear - candidateYear) / 5.0)
+    } else {
+        0.0
+    }
+    return sharedGenres * 100.0 + sameKind * 10.0 + yearProximity
 }
 
 internal data class ExperienceDetailSnapshot(
     val detail: WorkDetail,
     val progressByMedia: Map<String, WatchProgress>,
+    val credits: WorkCreditsResponse = WorkCreditsResponse(),
+    val similarWorks: List<Work> = emptyList(),
+    val movieChapters: List<MediaChapter> = emptyList(),
+    val movieMetadata: MediaMetadata? = null,
+    val moviePlaybackOptions: MediaPlaybackOptionsResponse? = null,
 )
 
 @Composable
@@ -1746,10 +1858,12 @@ private fun ExperienceDetailScreen(
     isTelevision: Boolean,
     canDownload: Boolean,
     onBack: () -> Unit,
-    onPlay: (String, List<PlayarrPlaybackQueueItem>) -> Unit,
+    onOpenWork: (String) -> Unit,
+    onPlay: (String, List<PlayarrPlaybackQueueItem>, Long?, PlayarrPlaybackLaunchSettings?) -> Unit,
     viewModel: ExperienceDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    val message by viewModel.message.collectAsState()
     LaunchedEffect(workId) { viewModel.load(workId) }
     when (val current = state) {
         ExperienceLoad.Loading -> ExperienceLoading("Loading title")
@@ -1758,8 +1872,9 @@ private fun ExperienceDetailScreen(
             val detail = current.value.detail
             val progressByMedia = current.value.progressByMedia
             val orderedItems = remember(detail) { detail.playarrPlaybackQueueItems() }
-            val playInContext: (String) -> Unit = { mediaFileId ->
-                onPlay(mediaFileId, orderedItems)
+            val playInContext: (String, Long?, PlayarrPlaybackLaunchSettings?) -> Unit =
+                { mediaFileId, startPositionMs, launchSettings ->
+                    onPlay(mediaFileId, orderedItems, startPositionMs, launchSettings)
             }
             var pendingPlaylistTrackId by remember(detail.work.id) { mutableStateOf<String?>(null) }
             var addWorkToPlaylist by remember(detail.work.id) { mutableStateOf(false) }
@@ -1776,7 +1891,7 @@ private fun ExperienceDetailScreen(
                         canDownload = canDownload,
                         onBack = onBack,
                         onPlay = { mediaFileId, albumId ->
-                            onPlay(mediaFileId, playarrAlbumPlaybackQueueItems(orderedItems, albumId))
+                            onPlay(mediaFileId, playarrAlbumPlaybackQueueItems(orderedItems, albumId), null, null)
                         },
                         onAddToPlaylist = { trackId ->
                             pendingPlaylistTrackId = trackId
@@ -1788,12 +1903,19 @@ private fun ExperienceDetailScreen(
                     ExperienceVideoDetailContent(
                         detail = detail,
                         progressByMedia = progressByMedia,
+                        credits = current.value.credits,
+                        similarWorks = current.value.similarWorks,
+                        movieChapters = current.value.movieChapters,
+                        movieMetadata = current.value.movieMetadata,
+                        moviePlaybackOptions = current.value.moviePlaybackOptions,
                         serverUrl = serverUrl,
                         accessToken = accessToken,
                         isTelevision = isTelevision,
                         canDownload = canDownload,
                         onBack = onBack,
+                        onOpenWork = onOpenWork,
                         onPlay = playInContext,
+                        onSavePlaybackOptions = viewModel::saveMoviePlaybackOptions,
                         onAddToPlaylist = { leafId ->
                             pendingPlaylistTrackId = leafId
                             addWorkToPlaylist = true
@@ -1827,7 +1949,7 @@ private fun ExperienceDetailScreen(
                             shape = RoundedCornerShape(2.dp),
                         ) {
                             DetailChildren(
-                                detail, playInContext,
+                                detail, { mediaFileId -> playInContext(mediaFileId, null, null) },
                                 { trackId -> pendingPlaylistTrackId = trackId; addWorkToPlaylist = true },
                                 { candidates -> pendingDownloadCandidates = candidates },
                                 canDownload,
@@ -1840,7 +1962,7 @@ private fun ExperienceDetailScreen(
                             item { Spacer(Modifier.height(22.dp)) }
                             item {
                                 DetailChildren(
-                                    detail, playInContext,
+                                    detail, { mediaFileId -> playInContext(mediaFileId, null, null) },
                                     { trackId -> pendingPlaylistTrackId = trackId; addWorkToPlaylist = true },
                                     { candidates -> pendingDownloadCandidates = candidates },
                                     canDownload,
@@ -1848,6 +1970,18 @@ private fun ExperienceDetailScreen(
                                 )
                             }
                         }
+                    }
+                }
+                message?.let { currentMessage ->
+                    Surface(
+                        onClick = viewModel::clearMessage,
+                        color = WebSurfaceStrong,
+                        contentColor = if (currentMessage.contains("saved")) WebPink else MaterialTheme.colorScheme.error,
+                        shape = RoundedCornerShape(12.dp),
+                        shadowElevation = 16.dp,
+                        modifier = Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(top = 18.dp),
+                    ) {
+                        Text(currentMessage, modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp), fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -1870,12 +2004,19 @@ private fun ExperienceDetailScreen(
 private fun ExperienceVideoDetailContent(
     detail: WorkDetail,
     progressByMedia: Map<String, WatchProgress>,
+    credits: WorkCreditsResponse,
+    similarWorks: List<Work>,
+    movieChapters: List<MediaChapter>,
+    movieMetadata: MediaMetadata?,
+    moviePlaybackOptions: MediaPlaybackOptionsResponse?,
     serverUrl: String,
     accessToken: String?,
     isTelevision: Boolean,
     canDownload: Boolean,
     onBack: () -> Unit,
-    onPlay: (String) -> Unit,
+    onOpenWork: (String) -> Unit,
+    onPlay: (String, Long?, PlayarrPlaybackLaunchSettings?) -> Unit,
+    onSavePlaybackOptions: (String, UpdateMediaPlaybackPreferencesRequest) -> Unit,
     onAddToPlaylist: (String?) -> Unit,
     onDownload: (List<DownloadCandidate>) -> Unit,
 ) {
@@ -1897,6 +2038,9 @@ private fun ExperienceVideoDetailContent(
     val mediaFileId = detail.mediaFileId ?: selectedEpisode?.mediaFileId
     val activeProgress = mediaFileId?.let(progressByMedia::get)
     val posterUrl = detail.work.images.firstOrNull { it.kind == ImageKind.Poster }?.url
+    val playerDefaults = LocalPlayarrDisplayPreferences.current.playerDefaults
+    val movieLaunchSettings = moviePlaybackOptions?.let { resolvePlayarrPlaybackLaunchSettings(it, playerDefaults) }
+    var playbackSettingsOpen by remember(mediaFileId) { mutableStateOf(false) }
 
     fun selectEpisode(episode: EpisodeDetail, seasonNumber: Int) {
         selectedSeasonNumber = seasonNumber
@@ -1941,7 +2085,14 @@ private fun ExperienceVideoDetailContent(
                     .padding(start = 154.dp, top = 224.dp, end = 28.dp, bottom = 64.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
-                VideoDetailCopy(detail.work, selectedSeason?.season?.seasonNumber, selectedEpisode, activeProgress, true)
+                VideoDetailCopy(
+                    detail.work,
+                    selectedSeason?.season?.seasonNumber,
+                    selectedEpisode,
+                    activeProgress,
+                    movieMetadata?.durationMs,
+                    true,
+                )
                 VideoDetailActions(
                     work = detail.work,
                     episode = selectedEpisode,
@@ -1950,6 +2101,8 @@ private fun ExperienceVideoDetailContent(
                     canDownload = canDownload,
                     posterUrl = posterUrl,
                     onPlay = onPlay,
+                    launchSettings = movieLaunchSettings,
+                    onPlaybackSettings = moviePlaybackOptions?.let { { playbackSettingsOpen = true } },
                     onAddToPlaylist = onAddToPlaylist,
                     onDownload = onDownload,
                 )
@@ -1965,8 +2118,29 @@ private fun ExperienceVideoDetailContent(
                     isTelevision = true,
                     canDownload = canDownload,
                     onSelect = ::selectEpisode,
-                    onPlay = onPlay,
+                    onPlay = { mediaFileId -> onPlay(mediaFileId, null, null) },
                     onDownload = onDownload,
+                    credits = credits,
+                    similarWorks = similarWorks,
+                    onOpenWork = onOpenWork,
+                    modifier = Modifier
+                        .fillMaxWidth(0.57f)
+                        .fillMaxHeight(0.72f)
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 50.dp),
+                )
+            } else if (mediaFileId != null) {
+                MovieDetailBrowser(
+                    mediaFileId = mediaFileId,
+                    chapters = playarrDisplayedMovieChapters(movieChapters, movieMetadata?.durationMs ?: 0L),
+                    credits = credits,
+                    similarWorks = similarWorks,
+                    serverUrl = serverUrl,
+                    accessToken = accessToken,
+                    isTelevision = true,
+                    launchSettings = movieLaunchSettings,
+                    onPlay = onPlay,
+                    onOpenWork = onOpenWork,
                     modifier = Modifier
                         .fillMaxWidth(0.57f)
                         .fillMaxHeight(0.72f)
@@ -1981,7 +2155,14 @@ private fun ExperienceVideoDetailContent(
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
                 item {
-                    VideoDetailCopy(detail.work, selectedSeason?.season?.seasonNumber, selectedEpisode, activeProgress, false)
+                    VideoDetailCopy(
+                        detail.work,
+                        selectedSeason?.season?.seasonNumber,
+                        selectedEpisode,
+                        activeProgress,
+                        movieMetadata?.durationMs,
+                        false,
+                    )
                 }
                 item {
                     VideoDetailActions(
@@ -1992,6 +2173,8 @@ private fun ExperienceVideoDetailContent(
                         canDownload = canDownload,
                         posterUrl = posterUrl,
                         onPlay = onPlay,
+                        launchSettings = movieLaunchSettings,
+                        onPlaybackSettings = moviePlaybackOptions?.let { { playbackSettingsOpen = true } },
                         onAddToPlaylist = onAddToPlaylist,
                         onDownload = onDownload,
                     )
@@ -2008,13 +2191,41 @@ private fun ExperienceVideoDetailContent(
                             isTelevision = false,
                             canDownload = canDownload,
                             onSelect = ::selectEpisode,
-                            onPlay = onPlay,
+                            onPlay = { mediaFileId -> onPlay(mediaFileId, null, null) },
                             onDownload = onDownload,
+                            credits = credits,
+                            similarWorks = similarWorks,
+                            onOpenWork = onOpenWork,
+                        )
+                    }
+                } else if (mediaFileId != null) {
+                    item {
+                        MovieDetailBrowser(
+                            mediaFileId = mediaFileId,
+                            chapters = playarrDisplayedMovieChapters(movieChapters, movieMetadata?.durationMs ?: 0L),
+                            credits = credits,
+                            similarWorks = similarWorks,
+                            serverUrl = serverUrl,
+                            accessToken = accessToken,
+                            isTelevision = false,
+                            launchSettings = movieLaunchSettings,
+                            onPlay = onPlay,
+                            onOpenWork = onOpenWork,
                         )
                     }
                 }
             }
         }
+    }
+    if (playbackSettingsOpen && mediaFileId != null && moviePlaybackOptions != null) {
+        MoviePlaybackOptionsDialog(
+            options = moviePlaybackOptions,
+            onDismiss = { playbackSettingsOpen = false },
+            onSave = { request ->
+                onSavePlaybackOptions(mediaFileId, request)
+                playbackSettingsOpen = false
+            },
+        )
     }
 }
 
@@ -2024,6 +2235,7 @@ private fun VideoDetailCopy(
     seasonNumber: Int?,
     episode: EpisodeDetail?,
     progress: WatchProgress?,
+    movieRuntimeMs: Long?,
     isTelevision: Boolean,
 ) {
     val episodeNumber = episode?.episode?.episodeNumber
@@ -2055,6 +2267,9 @@ private fun VideoDetailCopy(
         Text(
             buildList {
                 episode?.episode?.runtimeMinutes?.let { add("$it min") }
+                if (episode == null && movieRuntimeMs != null && movieRuntimeMs > 0L) {
+                    add(formatPlayarrVideoRuntime(movieRuntimeMs))
+                }
                 episode?.episode?.airDate?.let { add(it.toString()) }
                 addAll(work.genres.take(3))
             }.joinToString(" · "),
@@ -2084,6 +2299,20 @@ private fun VideoDetailCopy(
     }
 }
 
+internal fun formatPlayarrVideoRuntime(runtimeMs: Long): String {
+    val totalMinutes = maxOf(
+        1,
+        kotlin.math.floor(runtimeMs.coerceAtLeast(0L) / 60_000.0 + 0.5).toInt(),
+    )
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+    return when {
+        hours <= 0 -> "$minutes min"
+        minutes == 0 -> "$hours hr"
+        else -> "$hours hr $minutes min"
+    }
+}
+
 @Composable
 private fun VideoDetailActions(
     work: Work,
@@ -2092,7 +2321,9 @@ private fun VideoDetailActions(
     progress: WatchProgress?,
     canDownload: Boolean,
     posterUrl: String?,
-    onPlay: (String) -> Unit,
+    launchSettings: PlayarrPlaybackLaunchSettings?,
+    onPlaybackSettings: (() -> Unit)?,
+    onPlay: (String, Long?, PlayarrPlaybackLaunchSettings?) -> Unit,
     onAddToPlaylist: (String?) -> Unit,
     onDownload: (List<DownloadCandidate>) -> Unit,
 ) {
@@ -2101,14 +2332,20 @@ private fun VideoDetailActions(
         return
     }
     val title = episode?.episode?.title ?: work.title
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Button(onClick = { onPlay(mediaFileId) }) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Button(onClick = { onPlay(mediaFileId, null, launchSettings) }) {
             Icon(Icons.Outlined.PlayArrow, contentDescription = null)
             Text(if (progress?.state == WatchState.PartWatched) "Resume" else "Play")
         }
         OutlinedButton(onClick = { onAddToPlaylist(episode?.episode?.id) }) {
             Icon(Icons.Outlined.Add, contentDescription = null)
             Text("Playlist")
+        }
+        onPlaybackSettings?.let { openSettings ->
+            OutlinedButton(onClick = openSettings) { Text("Playback") }
         }
         if (canDownload) {
             IconButton(
@@ -2134,6 +2371,81 @@ private fun VideoDetailActions(
 }
 
 @Composable
+private fun MoviePlaybackOptionsDialog(
+    options: MediaPlaybackOptionsResponse,
+    onDismiss: () -> Unit,
+    onSave: (UpdateMediaPlaybackPreferencesRequest) -> Unit,
+) {
+    var qualityId by remember(options) { mutableStateOf(options.preferences.qualityId) }
+    var audioTrackId by remember(options) { mutableStateOf(options.preferences.audioTrackId) }
+    var subtitleTrackId by remember(options) { mutableStateOf(options.preferences.subtitleTrackId) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Playback options") },
+        text = {
+            Column(
+                Modifier.fillMaxWidth().height(420.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
+                MoviePlaybackChoiceGroup(
+                    title = "Quality",
+                    choices = options.qualityOptions.map { it.id to it.label },
+                    selected = qualityId,
+                    onSelected = { qualityId = it },
+                )
+                MoviePlaybackChoiceGroup(
+                    title = "Audio",
+                    choices = listOf("" to "Automatic") + options.audioTracks.map { it.id to it.label },
+                    selected = audioTrackId.orEmpty(),
+                    onSelected = { audioTrackId = it.ifBlank { null } },
+                )
+                MoviePlaybackChoiceGroup(
+                    title = "Subtitles",
+                    choices = listOf("" to "Off") + options.subtitleTracks.map { it.id to it.label },
+                    selected = subtitleTrackId.orEmpty(),
+                    onSelected = { subtitleTrackId = it.ifBlank { null } },
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onSave(
+                        UpdateMediaPlaybackPreferencesRequest(
+                            qualityId = qualityId,
+                            audioTrackId = audioTrackId,
+                            subtitleTrackId = subtitleTrackId,
+                        ),
+                    )
+                },
+            ) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun MoviePlaybackChoiceGroup(
+    title: String,
+    choices: List<Pair<String, String>>,
+    selected: String,
+    onSelected: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, color = WebInk, fontWeight = FontWeight.SemiBold)
+        choices.forEach { (id, label) ->
+            OutlinedButton(
+                onClick = { onSelected(id) },
+                enabled = id != selected,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(label, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+@Composable
 private fun SeriesEpisodeBrowser(
     seasons: List<SeasonDetail>,
     selectedEpisodeId: String?,
@@ -2146,6 +2458,9 @@ private fun SeriesEpisodeBrowser(
     onSelect: (EpisodeDetail, Int) -> Unit,
     onPlay: (String) -> Unit,
     onDownload: (List<DownloadCandidate>) -> Unit,
+    credits: WorkCreditsResponse,
+    similarWorks: List<Work>,
+    onOpenWork: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (seasons.isEmpty()) {
@@ -2204,9 +2519,17 @@ private fun SeriesEpisodeBrowser(
         if (isTelevision) {
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(seasons, key = { it.season.id }) { content(it) }
+                if (credits.cast.isNotEmpty()) {
+                    item { DetailCreditsRail(credits.cast) }
+                }
+                if (similarWorks.isNotEmpty()) {
+                    item { SimilarWorksRail(similarWorks, serverUrl, accessToken, onOpenWork) }
+                }
             }
         } else {
             for (season in seasons) content(season)
+            if (credits.cast.isNotEmpty()) DetailCreditsRail(credits.cast)
+            if (similarWorks.isNotEmpty()) SimilarWorksRail(similarWorks, serverUrl, accessToken, onOpenWork)
         }
     }
 }
@@ -2274,6 +2597,146 @@ private fun EpisodeDetailCard(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             episode.episode.runtimeMinutes?.let { Text("$it min", color = WebInkMuted, fontSize = 10.sp) }
             if (!available) Text("Unavailable", color = WebInkMuted, fontSize = 10.sp)
+        }
+    }
+}
+
+@Composable
+private fun MovieDetailBrowser(
+    mediaFileId: String,
+    chapters: List<MediaChapter>,
+    credits: WorkCreditsResponse,
+    similarWorks: List<Work>,
+    serverUrl: String,
+    accessToken: String?,
+    isTelevision: Boolean,
+    launchSettings: PlayarrPlaybackLaunchSettings?,
+    onPlay: (String, Long?, PlayarrPlaybackLaunchSettings?) -> Unit,
+    onOpenWork: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (chapters.isEmpty() && credits.cast.isEmpty() && similarWorks.isEmpty()) return
+    val container = modifier
+        .background(WebSurfaceStrong.copy(alpha = 0.9f), RoundedCornerShape(16.dp))
+        .then(if (isTelevision) Modifier.verticalScroll(rememberScrollState()) else Modifier)
+        .padding(if (isTelevision) 22.dp else 14.dp)
+    Column(container, verticalArrangement = Arrangement.spacedBy(22.dp)) {
+        if (chapters.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Chapters", color = WebInk, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
+                    items(chapters, key = MediaChapter::index) { chapter ->
+                        Surface(
+                            onClick = { onPlay(mediaFileId, chapter.startMs, launchSettings) },
+                            color = WebSurfaceSoft,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.width(if (isTelevision) 190.dp else 156.dp),
+                        ) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                Text(
+                                    chapter.title ?: "Chapter ${chapter.index + 1}",
+                                    color = WebInk,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(formatPlayarrPlayerTime(chapter.startMs), color = WebInkMuted, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (credits.cast.isNotEmpty()) DetailCreditsRail(credits.cast)
+        if (similarWorks.isNotEmpty()) SimilarWorksRail(similarWorks, serverUrl, accessToken, onOpenWork)
+    }
+}
+
+@Composable
+private fun DetailCreditsRail(credits: List<CreditResponse>) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Cast", color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
+            items(credits, key = CreditResponse::id) { credit ->
+                Column(Modifier.width(104.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        Modifier
+                            .size(78.dp)
+                            .clip(CircleShape)
+                            .background(WebSurfaceSoft),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            credit.person.name.firstOrNull()?.uppercase() ?: "?",
+                            color = WebInkMuted,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        credit.person.headshotUrl?.let { url ->
+                            AsyncImage(
+                                model = url,
+                                contentDescription = credit.person.name,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
+                    Text(
+                        credit.person.name,
+                        color = WebInk,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 7.dp),
+                    )
+                    credit.character?.let {
+                        Text(it, color = WebInkMuted, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SimilarWorksRail(
+    works: List<Work>,
+    serverUrl: String,
+    accessToken: String?,
+    onOpenWork: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Similar titles", color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
+            items(works, key = Work::id) { work ->
+                Column(Modifier.width(150.dp)) {
+                    Surface(
+                        onClick = { onOpenWork(work.id) },
+                        color = WebSurfaceSoft,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
+                    ) {
+                        AuthenticatedArtwork(
+                            work = work,
+                            kinds = listOf(ImageKind.Backdrop, ImageKind.Poster),
+                            serverUrl = serverUrl,
+                            accessToken = accessToken,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    Text(
+                        work.title,
+                        color = WebInk,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 7.dp),
+                    )
+                }
+            }
         }
     }
 }
@@ -2739,7 +3202,13 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         }
     }
 
-    fun play(mediaFileId: String, serverUrl: String, defaults: PlayarrPlayerDefaults) {
+    fun play(
+        mediaFileId: String,
+        serverUrl: String,
+        defaults: PlayarrPlayerDefaults,
+        requestedStartPositionMs: Long? = null,
+        launchSettings: PlayarrPlaybackLaunchSettings? = null,
+    ) {
         prepareJob?.cancel()
         switchJob?.cancel()
         prepareJob = viewModelScope.launch {
@@ -2755,7 +3224,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
             automaticRecoveryUrl = null
             _controls.value = PlayarrPlaybackControls()
             _state.value = ExperienceLoad.Loading
-            val resumePosition = runCatching { api.getWatchProgress(mediaFileId) }
+            val resumePosition = requestedStartPositionMs ?: runCatching { api.getWatchProgress(mediaFileId) }
                 .getOrNull()
                 ?.takeIf { it.state == WatchState.PartWatched }
                 ?.positionMs
@@ -2773,18 +3242,25 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                 return@launch
             }
 
-            val selectedQuality = parsePlayarrQualityDefault(defaults.qualityId)
+            val selectedQuality = launchSettings?.qualityId ?: parsePlayarrQualityDefault(defaults.qualityId)
             _state.value = when (val result = getPlaybackInfo(
                 mediaFileId = mediaFileId,
                 containers = playarrAndroidContainers,
                 videoCodecs = playarrAndroidVideoCodecs,
                 audioCodecs = playarrAndroidAudioCodecs,
-                profile = selectedQuality.takeUnless { it == "original" },
-                forceTranscode = selectedQuality != "original",
+                profile = launchSettings?.profile ?: selectedQuality.takeUnless { it == "original" },
+                forceTranscode = launchSettings?.forceTranscode ?: (selectedQuality != "original"),
                 startPositionMs = resumePosition,
+                audioStreamIndex = launchSettings?.audioStreamIndex,
+                ignoreSavedPreferences = launchSettings == null && selectedQuality == "original",
             )) {
                 is StreamarrResult.Success -> {
-                    prepareNegotiatedPlayback(result.value, resumePosition, shouldPlay = true)
+                    prepareNegotiatedPlayback(
+                        result.value,
+                        resumePosition,
+                        shouldPlay = true,
+                        preferredSubtitleId = launchSettings?.subtitleTrackId,
+                    )
                     ExperienceLoad.Ready(Unit)
                 }
                 is StreamarrResult.Failure -> ExperienceLoad.Failed(result.error.userMessageForExperience("media"))
