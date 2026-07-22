@@ -14,6 +14,7 @@ import { createLocalNetworkFetch } from "../lib/localNetworkFetch";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
+import { ProfileAuthLayout } from "../components/ProfileAuthLayout";
 
 // Matches `ApiClientProvider.tsx`'s own module-scoped instance: stateless
 // (just routes each request through the Local Network Access exemption its
@@ -105,61 +106,48 @@ export function DeviceLinkPage() {
   }
 
   return (
-    <div className="auth-page device-link-page">
-      <div className="auth-backdrop" aria-hidden="true" />
-      <div className="auth-card device-link-card">
-        <div className="auth-header">
-          <span className="app-logo">
-            <img
-              className="app-logo-icon"
-              src="/playarr-icon.svg"
-              alt=""
-            />
-            <span><span className="app-logo-accent">Play</span>arr</span>
-          </span>
-        </div>
-        <p className="page-kicker">{t("pages.deviceLink.kicker")}</p>
-        <h1 className="auth-title">{t("pages.deviceLink.title")}</h1>
+    <ProfileAuthLayout className="device-link-profile-page">
+      <p className="page-kicker">{t("pages.deviceLink.kicker")}</p>
+      <h1 className="auth-title">{t("pages.deviceLink.title")}</h1>
 
-        {linked ? (
-          <div className="device-link-success" role="status">
-            <p className="device-link-success-mark" aria-hidden="true">✓</p>
-            <h2>{t("pages.deviceLink.linkedHeading")}</h2>
-            <p className="muted">{t("pages.deviceLink.linkedBody")}</p>
-          </div>
-        ) : (
-          <form onSubmit={(event) => void handleSubmit(event)}>
-            <p className="muted auth-description">
-              {t("pages.deviceLink.description")}
-            </p>
-            <label className="auth-label" htmlFor="device-user-code">{t("pages.deviceLink.codeLabel")}</label>
-            <input
-              id="device-user-code"
-              className={`input auth-input device-link-input${error ? " is-error" : ""}`}
-              name="user-code"
-              autoComplete="one-time-code"
-              autoCapitalize="characters"
-              spellCheck={false}
-              inputMode="text"
-              maxLength={9}
-              autoFocus
-              required
-              value={userCode}
-              onChange={(event) => setUserCode(normaliseDeviceCode(event.target.value))}
-              placeholder={t("pages.deviceLink.codePlaceholder")}
-            />
-            {error && <p className="error-text auth-error">{error}</p>}
-            <button
-              type="submit"
-              className="btn btn-primary auth-submit"
-              disabled={submitting || !isCompleteDeviceCode(userCode)}
-            >
-              {submitting ? t("pages.deviceLink.linking") : t("pages.deviceLink.linkButton")}
-            </button>
-          </form>
-        )}
-      </div>
-    </div>
+      {linked ? (
+        <div className="device-link-success" role="status">
+          <p className="device-link-success-mark" aria-hidden="true">✓</p>
+          <h2>{t("pages.deviceLink.linkedHeading")}</h2>
+          <p className="muted">{t("pages.deviceLink.linkedBody")}</p>
+        </div>
+      ) : (
+        <form onSubmit={(event) => void handleSubmit(event)}>
+          <p className="muted auth-description">
+            {t("pages.deviceLink.description")}
+          </p>
+          <label className="auth-label" htmlFor="device-user-code">{t("pages.deviceLink.codeLabel")}</label>
+          <input
+            id="device-user-code"
+            className={`input auth-input device-link-input${error ? " is-error" : ""}`}
+            name="user-code"
+            autoComplete="one-time-code"
+            autoCapitalize="characters"
+            spellCheck={false}
+            inputMode="text"
+            maxLength={9}
+            autoFocus
+            required
+            value={userCode}
+            onChange={(event) => setUserCode(normaliseDeviceCode(event.target.value))}
+            placeholder={t("pages.deviceLink.codePlaceholder")}
+          />
+          {error && <p className="error-text auth-error">{error}</p>}
+          <button
+            type="submit"
+            className="btn btn-primary auth-submit"
+            disabled={submitting || !isCompleteDeviceCode(userCode)}
+          >
+            {submitting ? t("pages.deviceLink.linking") : t("pages.deviceLink.linkButton")}
+          </button>
+        </form>
+      )}
+    </ProfileAuthLayout>
   );
 }
 

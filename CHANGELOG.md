@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Match the hosted TV-link page to the profile selector's shared full-screen layout, and always
+  include the required OAuth device grant type when Android completes an approved link so the
+  Streamarr token request cannot fail with HTTP 422.
 - Keep the Android Clients download button on the version-independent latest APK instead of a
   stale versioned release, and recognise vendor TV firmware through its Leanback or television
   hardware features so first launch cannot fall back to the mobile Server URL form.

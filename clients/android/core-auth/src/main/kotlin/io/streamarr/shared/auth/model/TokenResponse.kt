@@ -12,7 +12,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class DeviceTokenRequest(
     @SerialName("device_code") val deviceCode: String,
-    @SerialName("grant_type") val grantType: String = DEVICE_CODE_GRANT_TYPE,
+    @SerialName("grant_type") val grantType: String,
 ) {
     companion object {
         /** The only `grant_type` this server accepts; anything else is rejected `unsupported_grant_type`. */

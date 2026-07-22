@@ -42,7 +42,12 @@ class DeviceAuthClient @Inject constructor(
      */
     suspend fun pollOnce(deviceCode: String): DevicePollResult {
         val response = try {
-            api.pollForToken(DeviceTokenRequest(deviceCode = deviceCode))
+            api.pollForToken(
+                DeviceTokenRequest(
+                    deviceCode = deviceCode,
+                    grantType = DeviceTokenRequest.DEVICE_CODE_GRANT_TYPE,
+                ),
+            )
         } catch (e: IOException) {
             return DevicePollResult.Failed(e.message ?: "Network error while polling for token")
         }

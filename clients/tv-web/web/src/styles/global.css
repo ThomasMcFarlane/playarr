@@ -2639,8 +2639,24 @@ code {
   text-transform: uppercase;
 }
 
+.device-link-profile-page .profile-auth-panel {
+  width: min(100%, 620px);
+}
+
+.device-link-profile-page .profile-auth-panel form {
+  width: min(100%, 520px);
+  margin-inline: auto;
+}
+
+.device-link-profile-page .auth-submit {
+  width: 100%;
+}
+
 .device-link-success {
+  display: grid;
+  justify-items: center;
   margin-top: 2rem;
+  text-align: center;
 }
 
 .device-link-success h2 {
@@ -2653,7 +2669,7 @@ code {
   height: 64px;
   display: grid;
   place-items: center;
-  margin: 0;
+  margin: 0 auto;
   border-radius: 50%;
   background: var(--success);
   color: #fff;

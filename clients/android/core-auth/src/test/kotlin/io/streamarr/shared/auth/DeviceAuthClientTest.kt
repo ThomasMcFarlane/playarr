@@ -8,6 +8,10 @@ import io.streamarr.shared.auth.model.DeviceTokenRequest
 import io.streamarr.shared.auth.model.TokenResponse
 import io.streamarr.shared.auth.remote.DeviceAuthApi
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
@@ -23,6 +27,21 @@ import retrofit2.Response
  * can't be exercised against a live server in this environment).
  */
 class DeviceAuthClientTest {
+
+    @Test
+    fun `device token wire body always includes the required grant type`() {
+        val body = DeviceTokenRequest(
+            deviceCode = "device-code",
+            grantType = DeviceTokenRequest.DEVICE_CODE_GRANT_TYPE,
+        )
+        val encoded = Json.parseToJsonElement(Json.encodeToString(body)).jsonObject
+
+        assertEquals("device-code", encoded.getValue("device_code").jsonPrimitive.content)
+        assertEquals(
+            DeviceTokenRequest.DEVICE_CODE_GRANT_TYPE,
+            encoded.getValue("grant_type").jsonPrimitive.content,
+        )
+    }
 
     private fun errorResponse(code: String): Response<TokenResponse> = Response.error(
         400,
