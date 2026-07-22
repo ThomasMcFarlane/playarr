@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Transparently renegotiate expired Android on-demand HLS sessions after a server restart, resume
+  at the absolute playhead, and guard each failed session URL from an automatic recovery loop.
 - Make Android report the same playback session heartbeat and terminal lifecycle as Playarr Web,
   while mapping resumed on-demand HLS playheads back to absolute source time exactly once.
 - Resolve Android's server-relative direct-play and HLS paths against the selected Streamarr

@@ -1784,6 +1784,8 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     private var activeSourceOffsetMs = 0L
     private var activeSourceDurationMs = 0L
     private var activeOnDemandHls = false
+    private var activePlaybackUrl = ""
+    private var automaticRecoveryUrl: String? = null
     private var previousPlayerState = player.state.value
     private val telemetryMutex = Mutex()
 
@@ -1801,11 +1803,22 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                         closeActiveSession(PlaybackStopReason.Completed)
                     }
                     currentError != null && previous.error == null -> {
-                        persistProgress()
-                        closeActiveSession(PlaybackStopReason.Error, currentError.message)
-                        _state.value = ExperienceLoad.Failed(
-                            "Playback failed: ${currentError.message.replace('_', ' ').lowercase()}",
-                        )
+                        if (
+                            shouldRecoverPlayarrHlsSession(
+                                activeOnDemandHls,
+                                currentError.httpStatus,
+                                currentError.requestUri,
+                            ) && automaticRecoveryUrl != activePlaybackUrl
+                        ) {
+                            automaticRecoveryUrl = activePlaybackUrl
+                            recoverExpiredHlsSession(currentError.message)
+                        } else {
+                            persistProgress()
+                            closeActiveSession(PlaybackStopReason.Error, currentError.message)
+                            _state.value = ExperienceLoad.Failed(
+                                "Playback failed: ${currentError.message.replace('_', ' ').lowercase()}",
+                            )
+                        }
                     }
                     previous.isPlaying && !current.isPlaying && !current.isBuffering -> checkpoint()
                 }
@@ -1823,6 +1836,8 @@ internal class ExperiencePlayerViewModel @Inject constructor(
             activeSourceOffsetMs = 0L
             activeSourceDurationMs = 0L
             activeOnDemandHls = false
+            activePlaybackUrl = ""
+            automaticRecoveryUrl = null
             _controls.value = PlayarrPlaybackControls()
             _state.value = ExperienceLoad.Loading
             val resumePosition = runCatching { api.getWatchProgress(mediaFileId) }
@@ -1898,15 +1913,18 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         audioStreamIndex: Int?,
         ignoreSavedPreferences: Boolean,
         requestedSourcePositionMs: Long? = null,
+        stopReason: PlaybackStopReason = PlaybackStopReason.UserStopped,
+        errorMessage: String? = null,
+        shouldPlayOverride: Boolean? = null,
     ) {
         val mediaFileId = activeMediaFileId ?: return
         viewModelScope.launch {
             val sourcePosition = requestedSourcePositionMs ?: currentSourcePositionMs()
-            val shouldPlay = player.state.value.isPlaying || player.rawPlayer.playWhenReady
+            val shouldPlay = shouldPlayOverride ?: player.state.value.playWhenReady
             persistProgress(ensureCompletion = true)
             player.pause()
             _controls.value = _controls.value.copy(switching = true, error = null)
-            closeActiveSessionAndWait(PlaybackStopReason.UserStopped)
+            closeActiveSessionAndWait(stopReason, errorMessage)
             when (val result = getPlaybackInfo(
                 mediaFileId = mediaFileId,
                 containers = playarrAndroidContainers,
@@ -1952,6 +1970,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         activeSourceDurationMs = playback.durationMs.coerceAtLeast(0L)
         activeOnDemandHls = playback.mode == io.streamarr.shared.data.model.PlaybackMode.Hls &&
             isPlayarrOnDemandHls(playback.url)
+        activePlaybackUrl = playback.url
         val selectedSubtitleId = preferredSubtitleId
             ?.takeIf { selected -> playback.subtitleTracks.any { it.id == selected } }
             ?: playback.selectedSubtitleTrackId
@@ -2045,6 +2064,21 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         }
         player.seekTo(playarrEnginePositionMs(sourcePosition, activeSourceOffsetMs))
         checkpoint()
+    }
+
+    private fun recoverExpiredHlsSession(errorMessage: String) {
+        val quality = _controls.value.qualityOptions
+            .firstOrNull { it.id == _controls.value.activeQualityId }
+        switchNegotiatedPlayback(
+            profile = quality?.profile ?: quality?.id?.takeUnless { it == "original" },
+            forceTranscode = quality?.id != null && quality.id != "original",
+            audioStreamIndex = selectedAudioStreamIndex(),
+            ignoreSavedPreferences = false,
+            requestedSourcePositionMs = currentSourcePositionMs(),
+            stopReason = PlaybackStopReason.Error,
+            errorMessage = errorMessage,
+            shouldPlayOverride = true,
+        )
     }
 
     fun timelineSnapshot(): PlayarrPlayerTimeline {

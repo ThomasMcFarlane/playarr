@@ -21,6 +21,12 @@ internal fun playarrSourcePositionMs(
 internal fun isPlayarrOnDemandHls(playbackUrl: String): Boolean =
     playbackUrl.contains("/api/v1/media/sessions/")
 
+internal fun shouldRecoverPlayarrHlsSession(
+    activeOnDemandHls: Boolean,
+    httpStatus: Int?,
+    requestUri: String?,
+): Boolean = activeOnDemandHls && httpStatus == 404 && requestUri?.let(::isPlayarrOnDemandHls) == true
+
 internal fun formatPlayarrPlayerTime(totalMs: Long): String {
     val totalSeconds = totalMs.coerceAtLeast(0L) / 1_000L
     val hours = totalSeconds / 3_600L

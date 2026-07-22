@@ -25,4 +25,6 @@ data class PlaybackState(
 data class PlaybackError(
     val message: String,
     val isRetryable: Boolean,
+    val httpStatus: Int? = null,
+    val requestUri: String? = null,
 )

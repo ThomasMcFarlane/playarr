@@ -10,6 +10,7 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,11 +55,16 @@ class ExoPlayerStreamarrPlayer private constructor(
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                val httpError = generateSequence<Throwable>(error) { it.cause }
+                    .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
+                    .firstOrNull()
                 _state.update {
                     it.copy(
                         error = PlaybackError(
                             message = error.errorCodeName,
                             isRetryable = error.errorCode in RETRYABLE_ERROR_CODES,
+                            httpStatus = httpError?.responseCode,
+                            requestUri = httpError?.dataSpec?.uri?.toString(),
                         ),
                     )
                 }

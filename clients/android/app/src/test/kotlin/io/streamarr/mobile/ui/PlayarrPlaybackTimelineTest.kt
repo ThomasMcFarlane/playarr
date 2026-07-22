@@ -30,4 +30,14 @@ class PlayarrPlaybackTimelineTest {
         assertEquals(true, isPlayarrOnDemandHls("/api/v1/media/sessions/s1/playlist.m3u8"))
         assertEquals(false, isPlayarrOnDemandHls("/api/v1/media/mf-1/content"))
     }
+
+    @Test
+    fun `only expired on demand manifests trigger automatic recovery`() {
+        val sessionUrl = "https://playarr.example/api/v1/media/sessions/s1/playlist.m3u8"
+
+        assertEquals(true, shouldRecoverPlayarrHlsSession(true, 404, sessionUrl))
+        assertEquals(false, shouldRecoverPlayarrHlsSession(true, 500, sessionUrl))
+        assertEquals(false, shouldRecoverPlayarrHlsSession(false, 404, sessionUrl))
+        assertEquals(false, shouldRecoverPlayarrHlsSession(true, 404, "https://playarr.example/media.mp4"))
+    }
 }
