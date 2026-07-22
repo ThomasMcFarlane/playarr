@@ -43,6 +43,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Give Android the same device-local default quality and subtitle controls and profile-backed
+  audio-language choices as Playarr Web, and apply the selected quality, audio track, and subtitle
+  policy during playback.
 - Let Android viewers persist the same Thumbnail or Cover home-rail artwork choice as Playarr
   Web, including matching wide and portrait card geometry on phones and televisions.
 - Add complete developer-mode sideload instructions to the Roku client page, including the

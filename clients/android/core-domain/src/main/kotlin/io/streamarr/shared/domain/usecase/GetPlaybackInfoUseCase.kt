@@ -23,6 +23,8 @@ class GetPlaybackInfoUseCase @Inject constructor(
         audioCodecs: String? = null,
         maxBitrateBps: Long? = null,
         profile: String? = null,
+        forceTranscode: Boolean? = null,
+        startPositionMs: Long? = null,
     ): StreamarrResult<PlaybackInfoResponse> = runCatchingStreamarr {
         playbackRepository.getPlaybackInfo(
             mediaFileId = mediaFileId,
@@ -31,6 +33,8 @@ class GetPlaybackInfoUseCase @Inject constructor(
             audioCodecs = audioCodecs,
             maxBitrateBps = maxBitrateBps,
             profile = profile,
+            forceTranscode = forceTranscode,
+            startPositionMs = startPositionMs,
         )
     }
 }

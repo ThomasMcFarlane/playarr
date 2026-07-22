@@ -25,9 +25,13 @@ internal data class PlayarrDisplayPreferences(
     val theme: PlayarrThemePreference,
     val homeView: PlayarrHomeViewPreference,
     val language: String,
+    val playerDefaults: PlayarrPlayerDefaults,
     val setTheme: (PlayarrThemePreference) -> Unit,
     val setHomeView: (PlayarrHomeViewPreference) -> Unit,
     val setLanguage: (String) -> Unit,
+    val setPlayerQuality: (String) -> Unit,
+    val setSubtitleMode: (PlayarrSubtitleDefault) -> Unit,
+    val setSubtitleLanguage: (String) -> Unit,
 )
 
 internal val LocalPlayarrDisplayPreferences = compositionLocalOf<PlayarrDisplayPreferences> {
@@ -52,6 +56,9 @@ internal fun rememberPlayarrDisplayPreferences(context: Context): RememberedPlay
         mutableStateOf(parsePlayarrHomeViewPreference(store.getString("home_view", null)))
     }
     var language by remember { mutableStateOf(store.getString("language", "system") ?: "system") }
+    var playerQuality by remember { mutableStateOf(parsePlayarrQualityDefault(store.getString("player_quality", null))) }
+    var subtitleMode by remember { mutableStateOf(parsePlayarrSubtitleDefault(store.getString("subtitle_mode", null))) }
+    var subtitleLanguage by remember { mutableStateOf(parsePlayarrSubtitleLanguage(store.getString("subtitle_language", null))) }
     val darkTheme = when (theme) {
         PlayarrThemePreference.System -> isSystemInDarkTheme()
         PlayarrThemePreference.Light -> false
@@ -61,6 +68,7 @@ internal fun rememberPlayarrDisplayPreferences(context: Context): RememberedPlay
         theme = theme,
         homeView = homeView,
         language = language,
+        playerDefaults = PlayarrPlayerDefaults(playerQuality, subtitleMode, subtitleLanguage),
         setTheme = {
             theme = it
             store.edit().putString("theme", it.name).apply()
@@ -77,6 +85,18 @@ internal fun rememberPlayarrDisplayPreferences(context: Context): RememberedPlay
         setLanguage = {
             language = it
             store.edit().putString("language", it).apply()
+        },
+        setPlayerQuality = {
+            playerQuality = parsePlayarrQualityDefault(it)
+            store.edit().putString("player_quality", playerQuality).apply()
+        },
+        setSubtitleMode = {
+            subtitleMode = it
+            store.edit().putString("subtitle_mode", it.storageValue).apply()
+        },
+        setSubtitleLanguage = {
+            subtitleLanguage = parsePlayarrSubtitleLanguage(it)
+            store.edit().putString("subtitle_language", subtitleLanguage).apply()
         },
     )
     return RememberedPlayarrDisplayPreferences(value, darkTheme)

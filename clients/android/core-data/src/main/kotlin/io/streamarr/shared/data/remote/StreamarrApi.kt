@@ -149,6 +149,7 @@ interface StreamarrApi {
         @Query("audio_codecs") audioCodecs: String? = null,
         @Query("max_bitrate_bps") maxBitrateBps: Long? = null,
         @Query("profile") profile: String? = null,
+        @Query("force_transcode") forceTranscode: Boolean? = null,
         @Query("start_position_ms") startPositionMs: Long? = null,
     ): PlaybackInfoResponse
 

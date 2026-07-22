@@ -20,6 +20,8 @@ interface PlaybackRepository {
         audioCodecs: String? = null,
         maxBitrateBps: Long? = null,
         profile: String? = null,
+        forceTranscode: Boolean? = null,
+        startPositionMs: Long? = null,
     ): PlaybackInfoResponse
 }
 
@@ -34,6 +36,8 @@ class DefaultPlaybackRepository @Inject constructor(
         audioCodecs: String?,
         maxBitrateBps: Long?,
         profile: String?,
+        forceTranscode: Boolean?,
+        startPositionMs: Long?,
     ): PlaybackInfoResponse = api.getPlaybackInfo(
         mediaFileId = mediaFileId,
         containers = containers,
@@ -41,5 +45,7 @@ class DefaultPlaybackRepository @Inject constructor(
         audioCodecs = audioCodecs,
         maxBitrateBps = maxBitrateBps,
         profile = profile,
+        forceTranscode = forceTranscode,
+        startPositionMs = startPositionMs,
     )
 }

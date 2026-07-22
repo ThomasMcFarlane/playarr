@@ -108,6 +108,36 @@ class StreamarrJsonModelTest {
     }
 
     @Test
+    fun `decodes playback source tracks used by native player defaults`() {
+        val playback = json.decodeFromString(
+            PlaybackInfoResponse.serializer(),
+            """
+            {
+              "mode": "direct",
+              "url": "/api/v1/media/mf-1/stream?playback_session_id=s1",
+              "audio_tracks": [{
+                "id": "source-audio-2", "stream_index": 2, "label": "English 5.1",
+                "language": "eng", "codec": "ac3", "channels": 6, "is_default": true
+              }],
+              "selected_audio_track_id": "source-audio-2",
+              "subtitle_tracks": [{
+                "id": "source-subtitle-3", "stream_index": 3, "label": "English forced",
+                "language": "eng", "codec": "subrip", "is_default": false, "forced": true,
+                "url": "/api/v1/media/mf-1/subtitles/3?source_offset_ms=0"
+              }],
+              "selected_subtitle_track_id": null,
+              "selected_quality_id": "original"
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals("source-audio-2", playback.selectedAudioTrackId)
+        assertEquals("eng", playback.audioTracks.single().language)
+        assertTrue(playback.subtitleTracks.single().forced)
+        assertEquals("/api/v1/media/mf-1/subtitles/3?source_offset_ms=0", playback.subtitleTracks.single().url)
+    }
+
+    @Test
     fun `decodes WorkDetail with WorkChildren Movie as a bare string`() {
         val detail = json.decodeFromString(workDetailSerializer, """{"work": $movieWorkJson, "children": "Movie"}""")
         assertEquals(WorkChildren.Movie, detail.children)

@@ -133,6 +133,7 @@ import io.streamarr.shared.download.DownloadRepository
 import io.streamarr.shared.download.OfflineProgressRepository
 import io.streamarr.shared.player.StreamFormat
 import io.streamarr.shared.player.StreamarrPlayer
+import io.streamarr.shared.player.StreamarrSubtitleTrack
 import java.net.URI
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -1737,7 +1738,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     val state = _state.asStateFlow()
     private var activeMediaFileId: String? = null
 
-    fun play(mediaFileId: String, serverUrl: String) {
+    fun play(mediaFileId: String, serverUrl: String, defaults: PlayarrPlayerDefaults) {
         viewModelScope.launch {
             activeMediaFileId = mediaFileId
             _state.value = ExperienceLoad.Loading
@@ -1759,12 +1760,36 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                 return@launch
             }
 
-            _state.value = when (val result = getPlaybackInfo(mediaFileId)) {
+            val selectedQuality = parsePlayarrQualityDefault(defaults.qualityId)
+            _state.value = when (val result = getPlaybackInfo(
+                mediaFileId = mediaFileId,
+                profile = selectedQuality.takeUnless { it == "original" },
+                forceTranscode = selectedQuality != "original",
+                startPositionMs = resumePosition,
+            )) {
                 is StreamarrResult.Success -> {
+                    val selectedSubtitleId = result.value.selectedSubtitleTrackId
+                        ?: selectPlayarrDefaultSubtitleTrackId(result.value.subtitleTracks, defaults)
+                    val selectedAudioLanguage = result.value.audioTracks
+                        .firstOrNull { it.id == result.value.selectedAudioTrackId }
+                        ?.language
                     player.prepare(
                         resolveStreamarrPlaybackUrl(serverUrl, result.value.url),
                         if (result.value.mode == io.streamarr.shared.data.model.PlaybackMode.Hls) StreamFormat.Hls else StreamFormat.Direct,
                         resumePosition,
+                        subtitles = result.value.subtitleTracks.map { subtitle ->
+                            StreamarrSubtitleTrack(
+                                id = subtitle.id,
+                                url = resolveStreamarrPlaybackUrl(serverUrl, subtitle.url),
+                                label = subtitle.label,
+                                language = subtitle.language,
+                                isDefault = subtitle.isDefault,
+                                forced = subtitle.forced,
+                            )
+                        },
+                        selectedSubtitleId = selectedSubtitleId,
+                        preferredAudioLanguage = selectedAudioLanguage,
+                        preferredSubtitleLanguage = defaults.subtitleLanguage,
                     )
                     player.play()
                     ExperienceLoad.Ready(Unit)
@@ -1801,8 +1826,9 @@ private fun ExperiencePlayerScreen(
     onBack: () -> Unit,
     viewModel: ExperiencePlayerViewModel = hiltViewModel(),
 ) {
+    val playerDefaults = LocalPlayarrDisplayPreferences.current.playerDefaults
     val state by viewModel.state.collectAsState()
-    LaunchedEffect(mediaFileId, serverUrl) { viewModel.play(mediaFileId, serverUrl) }
+    LaunchedEffect(mediaFileId, serverUrl) { viewModel.play(mediaFileId, serverUrl, playerDefaults) }
     LaunchedEffect(state, mediaFileId) {
         if (state !is ExperienceLoad.Ready) return@LaunchedEffect
         while (true) {
@@ -1813,7 +1839,9 @@ private fun ExperiencePlayerScreen(
     Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
         when (val current = state) {
             ExperienceLoad.Loading -> CircularProgressIndicator(color = WebPink)
-            is ExperienceLoad.Failed -> ExperienceFailure(current.message) { viewModel.play(mediaFileId, serverUrl) }
+            is ExperienceLoad.Failed -> ExperienceFailure(current.message) {
+                viewModel.play(mediaFileId, serverUrl, playerDefaults)
+            }
             is ExperienceLoad.Ready -> androidx.compose.ui.viewinterop.AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { context -> androidx.media3.ui.PlayerView(context).apply { player = viewModel.player.rawPlayer; useController = true } },

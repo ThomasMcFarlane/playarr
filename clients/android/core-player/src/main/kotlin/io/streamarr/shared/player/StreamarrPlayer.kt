@@ -20,6 +20,15 @@ enum class StreamFormat {
     Hls,
 }
 
+data class StreamarrSubtitleTrack(
+    val id: String,
+    val url: String,
+    val label: String,
+    val language: String?,
+    val isDefault: Boolean,
+    val forced: Boolean,
+)
+
 /**
  * Thin wrapper interface around Media3/ExoPlayer that the universal Android
  * application drives to play whatever
@@ -55,7 +64,15 @@ interface StreamarrPlayer {
      * (some `on-demand` transcode session URLs don't end in `.m3u8`),
      * while [StreamFormat.Direct] lets Media3 infer the container itself.
      */
-    fun prepare(mediaUrl: String, format: StreamFormat = StreamFormat.Direct, startPositionMs: Long = 0L)
+    fun prepare(
+        mediaUrl: String,
+        format: StreamFormat = StreamFormat.Direct,
+        startPositionMs: Long = 0L,
+        subtitles: List<StreamarrSubtitleTrack> = emptyList(),
+        selectedSubtitleId: String? = null,
+        preferredAudioLanguage: String? = null,
+        preferredSubtitleLanguage: String? = null,
+    )
 
     fun play()
     fun pause()

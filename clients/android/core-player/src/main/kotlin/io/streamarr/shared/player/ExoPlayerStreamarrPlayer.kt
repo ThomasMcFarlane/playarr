@@ -1,6 +1,8 @@
 package io.streamarr.shared.player
 
 import android.content.Context
+import android.net.Uri
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
@@ -62,10 +64,38 @@ class ExoPlayerStreamarrPlayer private constructor(
         })
     }
 
-    override fun prepare(mediaUrl: String, format: StreamFormat, startPositionMs: Long) {
+    override fun prepare(
+        mediaUrl: String,
+        format: StreamFormat,
+        startPositionMs: Long,
+        subtitles: List<StreamarrSubtitleTrack>,
+        selectedSubtitleId: String?,
+        preferredAudioLanguage: String?,
+        preferredSubtitleLanguage: String?,
+    ) {
         _state.update { PlaybackState() }
+        rawPlayer.trackSelectionParameters = rawPlayer.trackSelectionParameters
+            .buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, selectedSubtitleId == null)
+            .setPreferredAudioLanguage(preferredAudioLanguage)
+            .setPreferredTextLanguage(preferredSubtitleLanguage)
+            .build()
         val mediaItem = MediaItem.Builder()
             .setUri(mediaUrl)
+            .setSubtitleConfigurations(
+                subtitles.map { subtitle ->
+                    MediaItem.SubtitleConfiguration.Builder(Uri.parse(subtitle.url))
+                        .setId(subtitle.id)
+                        .setLabel(subtitle.label)
+                        .setLanguage(subtitle.language)
+                        .setMimeType(MimeTypes.TEXT_VTT)
+                        .setSelectionFlags(
+                            (if (subtitle.isDefault || subtitle.id == selectedSubtitleId) C.SELECTION_FLAG_DEFAULT else 0) or
+                                (if (subtitle.forced) C.SELECTION_FLAG_FORCED else 0),
+                        )
+                        .build()
+                },
+            )
             .apply {
                 // Forces Media3's HLS extractor for on-demand transcode
                 // session URLs, which don't necessarily end in `.m3u8`

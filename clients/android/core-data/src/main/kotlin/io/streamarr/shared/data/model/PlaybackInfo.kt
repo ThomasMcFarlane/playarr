@@ -24,4 +24,32 @@ enum class PlaybackMode {
 data class PlaybackInfoResponse(
     val mode: PlaybackMode,
     val url: String,
+    val audioTracks: List<PlaybackAudioTrackOption> = emptyList(),
+    val selectedAudioTrackId: String? = null,
+    val subtitleTracks: List<PlaybackSubtitleTrackOption> = emptyList(),
+    val selectedSubtitleTrackId: String? = null,
+    val selectedQualityId: String = "original",
+)
+
+@Serializable
+data class PlaybackAudioTrackOption(
+    val id: String,
+    val streamIndex: Int,
+    val label: String,
+    val language: String? = null,
+    val codec: String? = null,
+    val channels: Int? = null,
+    val isDefault: Boolean = false,
+)
+
+@Serializable
+data class PlaybackSubtitleTrackOption(
+    val id: String,
+    val streamIndex: Int,
+    val label: String,
+    val language: String? = null,
+    val codec: String,
+    val isDefault: Boolean = false,
+    val forced: Boolean = false,
+    val url: String,
 )

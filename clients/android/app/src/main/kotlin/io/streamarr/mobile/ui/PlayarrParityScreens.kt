@@ -820,9 +820,74 @@ private fun SettingsSectionContent(
                 display.setLanguage(mapOf("System" to "system", "English" to "en", "ไทย" to "th", "日本語" to "ja").getValue(selected))
             }
             SettingsSection.Player -> {
-                var language by remember(snapshot.player.preferredAudioLanguage) { mutableStateOf(snapshot.player.preferredAudioLanguage) }
-                OutlinedTextField(language, { language = it }, label = { Text("Preferred audio language") }, singleLine = true)
-                Button(onClick = { viewModel.savePlayerLanguage(language) }) { Text("Save player settings") }
+                PlayerDefaultHeading(
+                    "Default quality",
+                    "Start playback at this quality when the server can provide it.",
+                )
+                OutlinedButton(
+                    onClick = { display.setPlayerQuality("original") },
+                    enabled = display.playerDefaults.qualityId != "original",
+                ) { Text("Original · Best available source") }
+                playarrQualityTiers.forEach { tier ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.width(62.dp)) {
+                            Text(tier.label, color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(tier.resolution, color = WebInkMuted, fontSize = 9.sp)
+                        }
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                            items(tier.options) { option ->
+                                OutlinedButton(
+                                    onClick = { display.setPlayerQuality(option.id) },
+                                    enabled = display.playerDefaults.qualityId != option.id,
+                                ) { Text("${option.bitrateMbps} Mbps\n${option.level}", fontSize = 9.sp) }
+                            }
+                        }
+                    }
+                }
+                PlayerDefaultHeading(
+                    "Default subtitles",
+                    "Keep subtitles off, show forced dialogue only, or turn them on automatically.",
+                )
+                SettingChoices(
+                    "Mode",
+                    listOf("Off", "Forced only", "Always on"),
+                    when (display.playerDefaults.subtitleMode) {
+                        PlayarrSubtitleDefault.Off -> "Off"
+                        PlayarrSubtitleDefault.Forced -> "Forced only"
+                        PlayarrSubtitleDefault.Always -> "Always on"
+                    },
+                ) { choice ->
+                    display.setSubtitleMode(
+                        when (choice) {
+                            "Forced only" -> PlayarrSubtitleDefault.Forced
+                            "Always on" -> PlayarrSubtitleDefault.Always
+                            else -> PlayarrSubtitleDefault.Off
+                        },
+                    )
+                }
+                if (display.playerDefaults.subtitleMode != PlayarrSubtitleDefault.Off) {
+                    PlayerLanguageChoices(
+                        "Default subtitle language",
+                        display.playerDefaults.subtitleLanguage,
+                        display.setSubtitleLanguage,
+                    )
+                }
+                PlayerDefaultHeading(
+                    "Default audio track",
+                    "Prefer this audio language whenever a matching track is available.",
+                )
+                PlayerLanguageChoices(
+                    "Default audio track language",
+                    snapshot.player.preferredAudioLanguage.takeIf { saved ->
+                        playarrLanguageOptions.any { option -> option.code == saved }
+                    } ?: "en",
+                    viewModel::savePlayerLanguage,
+                )
+                Text(
+                    "Quality and subtitle defaults are saved on this device. Audio language follows your profile.",
+                    color = WebInkMuted,
+                    fontSize = 10.sp,
+                )
             }
             SettingsSection.Server -> {
                 var value by remember(serverUrl) { mutableStateOf(serverUrl) }
@@ -852,6 +917,33 @@ private fun SettingsSectionContent(
                     }
                 }
                 invite?.let { Text("https://playarr.app/signup?invite=${it.inviteToken}&server=${serverUrl}", color = WebInk, fontSize = 11.sp) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlayerDefaultHeading(title: String, description: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(title, color = WebInk, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text(description, color = WebInkMuted, fontSize = 11.sp)
+    }
+}
+
+@Composable
+private fun PlayerLanguageChoices(
+    label: String,
+    selected: String,
+    onSelected: (String) -> Unit,
+) {
+    Text(label, color = WebInkSoft, fontSize = 12.sp)
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(playarrLanguageOptions) { option ->
+            OutlinedButton(onClick = { onSelected(option.code) }, enabled = option.code != selected) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(option.label, fontSize = 10.sp)
+                    Text(option.code, color = WebInkMuted, fontSize = 8.sp)
+                }
             }
         }
     }

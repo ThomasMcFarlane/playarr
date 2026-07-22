@@ -93,6 +93,35 @@ class StreamarrHttpClientAuthTest {
         }
     }
 
+    @Test
+    fun `playback quality defaults use the documented force transcode query`() = runBlocking {
+        val server = MockWebServer()
+        server.enqueue(jsonResponse("""{"mode":"hls","url":"/api/v1/media/sessions/s1/playlist.m3u8"}"""))
+        server.start()
+        try {
+            val api = StreamarrHttpClient.create(
+                baseUrlProvider = { server.url("/").toString() },
+                clientPlatform = ClientPlatform.AndroidMobile,
+                clientVersion = "0.2.7",
+                accessTokenProvider = { "token" },
+            )
+
+            api.getPlaybackInfo(
+                mediaFileId = "mf-1",
+                profile = "h264-1080p-8mbps",
+                forceTranscode = true,
+                startPositionMs = 12_345,
+            )
+
+            assertEquals(
+                "/api/v1/playback/mf-1?profile=h264-1080p-8mbps&force_transcode=true&start_position_ms=12345",
+                server.takeRequest().path,
+            )
+        } finally {
+            server.close()
+        }
+    }
+
     private fun jsonResponse(body: String) = MockResponse()
         .setResponseCode(200)
         .setHeader("Content-Type", "application/json")
