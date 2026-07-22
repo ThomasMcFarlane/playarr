@@ -17,6 +17,9 @@ class PlayarrPlayerDefaultsTest {
         assertEquals("h264-1080p-8mbps", parsePlayarrQualityDefault("h264-1080p-8mbps"))
         assertEquals("original", parsePlayarrQualityDefault("4k"))
         assertEquals("original", parsePlayarrQualityDefault(null))
+        assertEquals(PlayarrString.SettingsQualityLow, playarrQualityTiers.first().options[0].playarrQualityLevelKey())
+        assertEquals(PlayarrString.SettingsQualityMedium, playarrQualityTiers.first().options[1].playarrQualityLevelKey())
+        assertEquals(PlayarrString.SettingsQualityHigh, playarrQualityTiers.first().options[2].playarrQualityLevelKey())
     }
 
     @Test

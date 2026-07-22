@@ -53,6 +53,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Localize Android appearance, language, and player preference controls and replace English-only
+  settings success detection with typed notices across profile, invite, and server updates.
 - Align Android's profile chooser with Playarr Web through localized status and PIN flows,
   action-aware profile switching, account sign-in, and the native Android TV update control.
 - Bring Android playlist details to Playarr Web parity with nested tracks, localized empty and item

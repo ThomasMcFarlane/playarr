@@ -1792,6 +1792,16 @@ internal sealed interface SettingsConnectionTest {
     data class Failed(val message: String) : SettingsConnectionTest
 }
 
+internal data class SettingsNotice(
+    val key: PlayarrString? = null,
+    val text: String? = null,
+    val success: Boolean,
+) {
+    init {
+        require((key == null) != (text == null))
+    }
+}
+
 private data class SettingsServerObservation(
     val profileUserId: String?,
     val hasKnownServerGroup: Boolean,
@@ -1810,7 +1820,7 @@ internal class ParitySettingsViewModel @Inject constructor(
 ) : ViewModel() {
     private val _state = MutableStateFlow<ParityLoad<SettingsSnapshot>>(ParityLoad.Loading)
     val state = _state.asStateFlow()
-    private val _message = MutableStateFlow<String?>(null)
+    private val _message = MutableStateFlow<SettingsNotice?>(null)
     val message = _message.asStateFlow()
     private val _invite = MutableStateFlow<PlayarrGeneratedInvite?>(null)
     val invite = _invite.asStateFlow()
@@ -1845,9 +1855,19 @@ internal class ParitySettingsViewModel @Inject constructor(
         }.fold({ ParityLoad.Ready(it) }, { ParityLoad.Failed(it.playarrMessage("settings")) })
     }
 
-    fun savePlayerLanguage(language: String) = update("Player settings saved") { api.updatePlayerPreferences(UpdatePlayerPreferencesRequest(language)) }
-    fun savePin(pin: String?) = update("Profile lock saved") { api.updateProfilePinSetting(UpdateProfilePinRequest(pin)) }
-    fun saveAvatar(preference: ProfileAvatarPreference) = update("Profile avatar saved") {
+    fun savePlayerLanguage(language: String) = update(PlayarrString.SettingsPlayerSaved) {
+        api.updatePlayerPreferences(UpdatePlayerPreferencesRequest(language))
+    }
+    fun savePin(pin: String?) = update(
+        when {
+            pin == null -> PlayarrString.SettingsProfilePinRemoved
+            ((_state.value as? ParityLoad.Ready)?.value?.pin?.pinLocked == true) -> {
+                PlayarrString.SettingsProfilePinReplaced
+            }
+            else -> PlayarrString.SettingsProfilePinSet
+        },
+    ) { api.updateProfilePinSetting(UpdateProfilePinRequest(pin)) }
+    fun saveAvatar(preference: ProfileAvatarPreference) = update(PlayarrString.SettingsAvatarSaved) {
         api.updateProfileAvatar(UpdateProfileAvatarRequest(preference))
     }
     fun requestInvite(message: String) = viewModelScope.launch {
@@ -1856,9 +1876,9 @@ internal class ParitySettingsViewModel @Inject constructor(
         runCatching { api.createUserInviteRequest(CreateUserInviteRequest(message.ifBlank { null })) }
             .onSuccess {
                 updateInviteRequest(it)
-                _message.value = "Invitation request sent"
+                _message.value = SettingsNotice(key = PlayarrString.SettingsInviteRequestSent, success = true)
             }
-            .onFailure { _message.value = it.playarrMessage("invitation") }
+            .onFailure { _message.value = SettingsNotice(text = it.playarrMessage("invitation"), success = false) }
         _inviteBusy.value = false
     }
     fun generateInvite(serverUrl: String) = viewModelScope.launch {
@@ -1877,8 +1897,10 @@ internal class ParitySettingsViewModel @Inject constructor(
         }.onSuccess {
             _invite.value = it
             runCatching { refreshInviteRequestNow() }
-            _message.value = "Invitation generated"
-        }.onFailure { _message.value = it.playarrMessage("invitation") }
+            _message.value = SettingsNotice(key = PlayarrString.SettingsInviteGenerated, success = true)
+        }.onFailure {
+            _message.value = SettingsNotice(text = it.playarrMessage("invitation"), success = false)
+        }
         _inviteBusy.value = false
     }
     fun dismissInvite() { _invite.value = null }
@@ -1908,21 +1930,31 @@ internal class ParitySettingsViewModel @Inject constructor(
                 deviceName = "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
             )
         }.onSuccess {
-            _message.value = "Server connected"
+            _message.value = SettingsNotice(key = PlayarrString.SettingsServerConnected, success = true)
             onSuccess()
-        }.onFailure { _message.value = it.playarrServerConnectionMessage() }
+        }.onFailure {
+            _message.value = SettingsNotice(text = it.playarrServerConnectionMessage(), success = false)
+        }
         _serverBusy.value = false
     }
     fun disconnectServer(serverUrl: String) = viewModelScope.launch {
         val profileUserId = tokenStore.currentUserId.first() ?: return@launch
         runCatching { connectedServerSessionManager.disconnect(profileUserId, serverUrl) }
-            .onSuccess { _message.value = "Server disconnected" }
-            .onFailure { _message.value = it.playarrMessage("server connection") }
+            .onSuccess {
+                _message.value = SettingsNotice(key = PlayarrString.SettingsServerDisconnected, success = true)
+            }
+            .onFailure {
+                _message.value = SettingsNotice(text = it.playarrMessage("server connection"), success = false)
+            }
     }
     fun forgetKnownServerGroup() = viewModelScope.launch {
         runCatching { knownServerGroupStore.forgetGroup() }
-            .onSuccess { _message.value = "Server group forgotten" }
-            .onFailure { _message.value = it.playarrMessage("server group") }
+            .onSuccess {
+                _message.value = SettingsNotice(key = PlayarrString.SettingsServerGroupForgotten, success = true)
+            }
+            .onFailure {
+                _message.value = SettingsNotice(text = it.playarrMessage("server group"), success = false)
+            }
     }
     fun testPrimaryConnection() = viewModelScope.launch {
         if (_connectionTest.value == SettingsConnectionTest.Testing) return@launch
@@ -1933,7 +1965,14 @@ internal class ParitySettingsViewModel @Inject constructor(
             }
     }
     fun changeServer(value: String) = viewModelScope.launch {
-        runCatching { normaliseServerUrl(value) }.onSuccess { serverConfigStore.setBaseUrl(it); tokenStore.clear() }.onFailure { _message.value = "Enter a valid HTTP or HTTPS server URL." }
+        runCatching { normaliseServerUrl(value) }
+            .onSuccess { serverConfigStore.setBaseUrl(it); tokenStore.clear() }
+            .onFailure {
+                _message.value = SettingsNotice(
+                    text = "Enter a valid HTTP or HTTPS server URL.",
+                    success = false,
+                )
+            }
     }
     fun signOut() = viewModelScope.launch { tokenStore.clear() }
     fun clearMessage() { _message.value = null }
@@ -1997,8 +2036,12 @@ internal class ParitySettingsViewModel @Inject constructor(
         _state.value = ParityLoad.Ready(current.copy(inviteRequest = request))
     }
 
-    private fun update(success: String, block: suspend () -> Any) = viewModelScope.launch {
-        runCatching { block() }.onSuccess { _message.value = success; load() }.onFailure { _message.value = it.playarrMessage("settings") }
+    private fun update(success: PlayarrString, block: suspend () -> Any) = viewModelScope.launch {
+        runCatching { block() }
+            .onSuccess { _message.value = SettingsNotice(key = success, success = true); load() }
+            .onFailure {
+                _message.value = SettingsNotice(text = it.playarrMessage("settings"), success = false)
+            }
     }
 }
 
@@ -2083,22 +2126,26 @@ internal fun ExperienceParitySettingsScreen(
                         )
                     }
                 }
-                message?.let { item { Text(it, color = if (isPlayarrSettingsSuccess(it)) WebPink else MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable { viewModel.clearMessage() }) } }
-                item { OutlinedButton(onClick = viewModel::signOut, modifier = Modifier.fillMaxWidth()) { Text("Sign out", color = MaterialTheme.colorScheme.error) } }
+                message?.let { notice ->
+                    item {
+                        Text(
+                            notice.key?.let { playarrString(it) } ?: notice.text.orEmpty(),
+                            color = if (notice.success) WebPink else MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable { viewModel.clearMessage() },
+                        )
+                    }
+                }
+                item {
+                    OutlinedButton(onClick = viewModel::signOut, modifier = Modifier.fillMaxWidth()) {
+                        Text(playarrString(PlayarrString.ProfilesSignOut), color = MaterialTheme.colorScheme.error)
+                    }
+                }
             }
         }
     }
     invite?.let { PlayarrInviteDialog(it, viewModel::dismissInvite) }
 }
-
-private fun isPlayarrSettingsSuccess(message: String): Boolean = listOf(
-    "saved",
-    "sent",
-    "generated",
-    "connected",
-    "disconnected",
-    "forgotten",
-).any { marker -> marker in message.lowercase(Locale.ROOT) }
 
 internal fun playarrServerFallbackLabel(serverUrl: String): String = runCatching {
     URI(serverUrl).host?.takeIf(String::isNotBlank)
@@ -2118,41 +2165,45 @@ private fun SettingsSectionContent(
     viewModel: ParitySettingsViewModel,
 ) {
     val display = LocalPlayarrDisplayPreferences.current
-    SettingsCard(playarrString(section.label)) {
+    var localNotice by remember(section) { mutableStateOf<PlayarrString?>(null) }
+    val description = when (section) {
+        SettingsSection.Appearance -> playarrString(PlayarrString.SettingsAppearanceDescription)
+        SettingsSection.Language -> playarrString(PlayarrString.SettingsLanguageDescription)
+        SettingsSection.Player -> playarrString(PlayarrString.SettingsPlayerDescription)
+        else -> null
+    }
+    SettingsCard(playarrString(section.label), description) {
         when (section) {
             SettingsSection.Appearance -> {
-                SettingChoices(
-                    "Colour theme",
-                    PlayarrThemePreference.entries.map(PlayarrThemePreference::name),
-                    display.theme.name,
-                ) { display.setTheme(PlayarrThemePreference.valueOf(it)) }
+                SettingChoiceOptions(
+                    label = playarrString(PlayarrString.SettingsColourTheme),
+                    choices = listOf(
+                        PlayarrThemePreference.System to playarrString(PlayarrString.SettingsThemeSystem),
+                        PlayarrThemePreference.Light to playarrString(PlayarrString.SettingsThemeLight),
+                        PlayarrThemePreference.Dark to playarrString(PlayarrString.SettingsThemeDark),
+                    ),
+                    selected = display.theme,
+                ) { choice ->
+                    display.setTheme(choice)
+                    localNotice = PlayarrString.SettingsThemeSaved
+                }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Home screen artwork", color = WebInkSoft, fontSize = 12.sp)
+                    Text(playarrString(PlayarrString.SettingsHomeViewTitle), color = WebInkSoft, fontSize = 12.sp)
                     Text(
-                        "Show portrait covers instead of wide media thumbnails on the home screen.",
+                        playarrString(PlayarrString.SettingsHomeViewDescription),
                         color = WebInkMuted,
                         fontSize = 11.sp,
                     )
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(listOf("Thumbnails", "Covers")) { choice ->
-                            val selected = if (display.homeView == PlayarrHomeViewPreference.Cover) {
-                                choice == "Covers"
-                            } else {
-                                choice == "Thumbnails"
-                            }
-                            OutlinedButton(
-                                onClick = {
-                                    display.setHomeView(
-                                        if (choice == "Covers") {
-                                            PlayarrHomeViewPreference.Cover
-                                        } else {
-                                            PlayarrHomeViewPreference.Thumbnail
-                                        },
-                                    )
-                                },
-                                enabled = !selected,
-                            ) { Text(choice) }
-                        }
+                    SettingChoiceOptions(
+                        label = "",
+                        choices = listOf(
+                            PlayarrHomeViewPreference.Thumbnail to playarrString(PlayarrString.SettingsHomeViewThumbnail),
+                            PlayarrHomeViewPreference.Cover to playarrString(PlayarrString.SettingsHomeViewCover),
+                        ),
+                        selected = display.homeView,
+                    ) { choice ->
+                        display.setHomeView(choice)
+                        localNotice = PlayarrString.SettingsHomeViewSaved
                     }
                 }
             }
@@ -2171,18 +2222,29 @@ private fun SettingsSectionContent(
                     options.map { it.second },
                     options.firstOrNull { it.first.preference == display.language }?.second,
                 ) { selected ->
-                    options.firstOrNull { it.second == selected }?.let { display.setLanguage(it.first.preference) }
+                    options.firstOrNull { it.second == selected }?.let {
+                        display.setLanguage(it.first.preference)
+                        localNotice = PlayarrString.SettingsLanguageSaved
+                    }
                 }
             }
             SettingsSection.Player -> {
                 PlayerDefaultHeading(
-                    "Default quality",
-                    "Start playback at this quality when the server can provide it.",
+                    playarrString(PlayarrString.SettingsPlayerQualityTitle),
+                    playarrString(PlayarrString.SettingsPlayerQualityDescription),
                 )
                 OutlinedButton(
-                    onClick = { display.setPlayerQuality("original") },
+                    onClick = {
+                        display.setPlayerQuality("original")
+                        localNotice = PlayarrString.SettingsPlayerDefaultsSaved
+                    },
                     enabled = display.playerDefaults.qualityId != "original",
-                ) { Text("Original · Best available source") }
+                ) {
+                    Text(
+                        "${playarrString(PlayarrString.SettingsQualityOriginal)} · " +
+                            playarrString(PlayarrString.SettingsQualityOriginalDetail),
+                    )
+                }
                 playarrQualityTiers.forEach { tier ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.width(62.dp)) {
@@ -2192,54 +2254,69 @@ private fun SettingsSectionContent(
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                             items(tier.options) { option ->
                                 OutlinedButton(
-                                    onClick = { display.setPlayerQuality(option.id) },
+                                    onClick = {
+                                        display.setPlayerQuality(option.id)
+                                        localNotice = PlayarrString.SettingsPlayerDefaultsSaved
+                                    },
                                     enabled = display.playerDefaults.qualityId != option.id,
-                                ) { Text("${option.bitrateMbps} Mbps\n${option.level}", fontSize = 9.sp) }
+                                ) {
+                                    Text(
+                                        playarrString(
+                                            PlayarrString.SettingsQualityBitrate,
+                                            "value" to option.bitrateMbps,
+                                        ) + "\n" + playarrString(option.playarrQualityLevelKey()),
+                                        fontSize = 9.sp,
+                                    )
+                                }
                             }
                         }
                     }
                 }
                 PlayerDefaultHeading(
-                    "Default subtitles",
-                    "Keep subtitles off, show forced dialogue only, or turn them on automatically.",
+                    playarrString(PlayarrString.SettingsPlayerSubtitlesTitle),
+                    playarrString(PlayarrString.SettingsPlayerSubtitlesDescription),
                 )
-                SettingChoices(
-                    "Mode",
-                    listOf("Off", "Forced only", "Always on"),
-                    when (display.playerDefaults.subtitleMode) {
-                        PlayarrSubtitleDefault.Off -> "Off"
-                        PlayarrSubtitleDefault.Forced -> "Forced only"
-                        PlayarrSubtitleDefault.Always -> "Always on"
-                    },
+                SettingChoiceOptions(
+                    label = playarrString(PlayarrString.SettingsPlayerSubtitlesMode),
+                    choices = listOf(
+                        PlayarrSubtitleDefault.Off to playarrString(PlayarrString.SettingsPlayerSubtitlesOff),
+                        PlayarrSubtitleDefault.Forced to playarrString(PlayarrString.SettingsPlayerSubtitlesForced),
+                        PlayarrSubtitleDefault.Always to playarrString(PlayarrString.SettingsPlayerSubtitlesAlways),
+                    ),
+                    selected = display.playerDefaults.subtitleMode,
                 ) { choice ->
-                    display.setSubtitleMode(
-                        when (choice) {
-                            "Forced only" -> PlayarrSubtitleDefault.Forced
-                            "Always on" -> PlayarrSubtitleDefault.Always
-                            else -> PlayarrSubtitleDefault.Off
-                        },
-                    )
+                    display.setSubtitleMode(choice)
+                    localNotice = PlayarrString.SettingsPlayerDefaultsSaved
                 }
                 if (display.playerDefaults.subtitleMode != PlayarrSubtitleDefault.Off) {
                     PlayerLanguageChoices(
-                        "Default subtitle language",
+                        playarrString(PlayarrString.SettingsPlayerSubtitleLanguage),
                         display.playerDefaults.subtitleLanguage,
-                        display.setSubtitleLanguage,
-                    )
+                    ) { language ->
+                        display.setSubtitleLanguage(language)
+                        localNotice = PlayarrString.SettingsPlayerDefaultsSaved
+                    }
                 }
                 PlayerDefaultHeading(
-                    "Default audio track",
-                    "Prefer this audio language whenever a matching track is available.",
+                    playarrString(PlayarrString.SettingsPlayerAudioTitle),
+                    playarrString(PlayarrString.SettingsPlayerAudioDescription),
                 )
+                val selectedAudio = snapshot.player.preferredAudioLanguage.takeIf { saved ->
+                    playarrLanguageOptions.any { option -> option.code == saved }
+                } ?: "en"
                 PlayerLanguageChoices(
-                    "Default audio track language",
-                    snapshot.player.preferredAudioLanguage.takeIf { saved ->
-                        playarrLanguageOptions.any { option -> option.code == saved }
-                    } ?: "en",
+                    playarrString(PlayarrString.SettingsPlayerAudioLanguage),
+                    selectedAudio,
                     viewModel::savePlayerLanguage,
                 )
+                val selectedAudioLabel = playarrLanguageOptions.firstOrNull { it.code == selectedAudio }?.label ?: "English"
                 Text(
-                    "Quality and subtitle defaults are saved on this device. Audio language follows your profile.",
+                    playarrString(PlayarrString.SettingsPlayerStatusReady, "language" to selectedAudioLabel),
+                    color = WebInkSoft,
+                    fontSize = 10.sp,
+                )
+                Text(
+                    playarrString(PlayarrString.SettingsPlayerDeviceNote),
                     color = WebInkMuted,
                     fontSize = 10.sp,
                 )
@@ -2296,7 +2373,22 @@ private fun SettingsSectionContent(
                 PlayarrApprovalNotifications()
             }
         }
+        localNotice?.let { notice ->
+            Text(
+                playarrString(notice),
+                color = WebPink,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable { localNotice = null },
+            )
+        }
     }
+}
+
+internal fun PlayarrQualityOption.playarrQualityLevelKey(): PlayarrString = when (level.lowercase(Locale.ROOT)) {
+    "low" -> PlayarrString.SettingsQualityLow
+    "medium" -> PlayarrString.SettingsQualityMedium
+    else -> PlayarrString.SettingsQualityHigh
 }
 
 @Composable
@@ -2459,10 +2551,15 @@ private fun PlayerLanguageChoices(
 }
 
 @Composable
-private fun SettingsCard(title: String, content: @Composable ColumnScope.() -> Unit) {
+private fun SettingsCard(
+    title: String,
+    description: String? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Surface(color = WebSurfaceStrong, shape = RoundedCornerShape(18.dp), border = androidx.compose.foundation.BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.2f)), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(title, color = WebInk, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+            description?.let { Text(it, color = WebInkMuted, fontSize = 11.sp) }
             content()
         }
     }
@@ -2483,7 +2580,7 @@ private fun <T> SettingChoiceOptions(
     selected: T,
     onSelected: (T) -> Unit,
 ) {
-    Text(label, color = WebInkSoft, fontSize = 12.sp)
+    if (label.isNotBlank()) Text(label, color = WebInkSoft, fontSize = 12.sp)
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(choices, key = { it.first.toString() }) { (value, choiceLabel) ->
             OutlinedButton(onClick = { onSelected(value) }, enabled = value != selected) { Text(choiceLabel) }
