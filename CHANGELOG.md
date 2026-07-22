@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Fix VIDAA custom-store installation on firmware that reports an absent custom-app list as a failed read.
 - Show Playarr's shared logo and language selector on the Android profile stage across phone and
   television layouts, matching the Web profile selector chrome.
 - Enrich Android TV's focused download online with the same episode context, release year, genres,

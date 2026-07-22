@@ -43,11 +43,27 @@
       path: APPINFO_PATH,
       mode: APPINFO_MODE
     });
-    if (!current || current.ret !== true || typeof current.msg !== 'string' || current.msg.length > 2097152) {
+    if (!current || typeof current.ret !== 'boolean') {
       throw new Error('The installed app list could not be read safely. No changes were made.');
     }
 
-    var apps = JSON.parse(current.msg);
+    // Some newer firmware returns ret:false when no custom-app list exists yet.
+    // That is distinct from a malformed response: create the list from an empty
+    // structure, while continuing to reject any successful but unsafe payload.
+    var apps;
+    if (current.ret === false) {
+      apps = { AppInfo: [] };
+    } else {
+      if (typeof current.msg !== 'string' || current.msg.length > 2097152) {
+        throw new Error('The installed app list could not be read safely. No changes were made.');
+      }
+      try {
+        apps = JSON.parse(current.msg);
+      } catch (error) {
+        throw new Error('The installed app list could not be read safely. No changes were made.');
+      }
+    }
+
     if (!apps || !Array.isArray(apps.AppInfo) || apps.AppInfo.length > 1000) {
       throw new Error('The installed app list has an unexpected format. No changes were made.');
     }
