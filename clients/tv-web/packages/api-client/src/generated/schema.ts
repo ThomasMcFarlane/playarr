@@ -59,7 +59,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Physical media-file inventory across every normal Source instance. */
+        /** Physical media-file inventory reported by every node in this peer group. */
         get: operations["source_matrix_handler"];
         put?: never;
         post?: never;
@@ -2524,30 +2524,6 @@ export interface components {
             seed_address: string;
         };
         /**
-         * @description Identifies exactly which leaf of a [`crate::Work`] a [`MediaFile`] is
-         *     the source for. A movie's file points straight at the work; a TV/music/
-         *     book file points at the specific episode/track/book child.
-         */
-        LeafRef: {
-            /** @enum {string} */
-            leaf_kind: "work";
-        } | {
-            /** Format: uuid */
-            leaf_id: string;
-            /** @enum {string} */
-            leaf_kind: "episode";
-        } | {
-            /** Format: uuid */
-            leaf_id: string;
-            /** @enum {string} */
-            leaf_kind: "track";
-        } | {
-            /** Format: uuid */
-            leaf_id: string;
-            /** @enum {string} */
-            leaf_kind: "book";
-        };
-        /**
          * @description Portable leaf identity -- never a peer-local `LeafRef`/`Uuid`, which is
          *     meaningless off the node that minted it. A receiving peer resolves
          *     `(provider, external_id, LeafSelector)` against its own child rows to
@@ -2791,11 +2767,16 @@ export interface components {
             group_library_id?: string | null;
             kind: components["schemas"]["WorkKind"];
             leaf_selector: components["schemas"]["LeafSelector"];
+            /** Format: uuid */
+            media_file_id: string;
+            path: string;
             provider: components["schemas"]["ExternalProvider"];
             /** Format: date-time */
             release_date?: string | null;
             /** Format: int64 */
             size_bytes?: number | null;
+            /** Format: uuid */
+            source_instance_id: string;
             title: string;
             /** Format: date-time */
             updated_at: string;
@@ -2869,6 +2850,13 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
             join_token: string;
+        };
+        PeerMatrixNodeResponse: {
+            /** Format: uuid */
+            id: string;
+            is_self: boolean;
+            name: string;
+            status: components["schemas"]["PeerNodeStatus"];
         };
         /**
          * @description One known member of a [`PeerGroup`], including a row for this node
@@ -3816,18 +3804,20 @@ export interface components {
         SourceMatrixFileResponse: {
             /** Format: int64 */
             bitrate?: number | null;
-            codec: string;
-            container: string;
+            codec?: string | null;
+            container?: string | null;
             /** Format: int64 */
             duration_ms?: number | null;
             /** Format: uuid */
             id: string;
-            leaf_ref: components["schemas"]["LeafRef"];
+            leaf_selector: components["schemas"]["LeafSelector"];
             mapped: boolean;
             mapped_path: string;
             path: string;
+            /** Format: uuid */
+            peer_node_id: string;
             /** Format: int64 */
-            size_bytes: number;
+            size_bytes?: number | null;
             /** Format: uuid */
             source_instance_id: string;
             /** Format: uuid */
@@ -3835,6 +3825,7 @@ export interface components {
         };
         SourceMatrixResponse: {
             files: components["schemas"]["SourceMatrixFileResponse"][];
+            peers: components["schemas"]["PeerMatrixNodeResponse"][];
             sources: components["schemas"]["SourceInstanceResponse"][];
         };
         StopReason: "completed" | "user_stopped" | "error" | "device_disconnected" | "session_revoked" | "concurrent_limit_exceeded" | "idle_timeout" | {
@@ -4344,7 +4335,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Sources and their imported physical files */
+            /** @description Peer nodes and their reported physical files */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -376,6 +376,9 @@ async fn delegate_forwards_the_entire_negotiation_and_rewrites_the_url_for_redir
         .peer_leaf_availability_repo
         .upsert(&PeerLeafAvailability {
             peer_node_id: node_b_peer_id,
+            media_file_id: media_file_b.id,
+            source_instance_id: source_instance_b,
+            path: media_file_b.path.to_string_lossy().into_owned(),
             provider: ExternalProvider::Tmdb,
             external_id: "603".to_string(),
             leaf_selector: LeafSelector::Movie,

@@ -598,12 +598,18 @@ impl CatalogService {
             };
             let peer_name =
                 Self::resolve_peer_name(sources, row.peer_node_id, &mut peer_names).await?;
-            badges.entry(work_id).or_default().push(AvailabilityBadge {
-                peer_node_id: row.peer_node_id,
-                peer_name,
-                availability: row.availability,
-                updated_at: row.updated_at,
-            });
+            let work_badges = badges.entry(work_id).or_default();
+            if !work_badges
+                .iter()
+                .any(|badge| badge.peer_node_id == row.peer_node_id)
+            {
+                work_badges.push(AvailabilityBadge {
+                    peer_node_id: row.peer_node_id,
+                    peer_name,
+                    availability: row.availability,
+                    updated_at: row.updated_at,
+                });
+            }
         }
         Ok(badges)
     }
@@ -653,7 +659,7 @@ impl CatalogService {
                     updated_at: row.updated_at,
                 };
                 let key = (row.provider.clone(), row.external_id.clone());
-                merged
+                let remote = merged
                     .entry(key)
                     .or_insert_with(|| RemoteOnlyWork {
                         provider: row.provider.clone(),
@@ -662,9 +668,14 @@ impl CatalogService {
                         kind: row.kind,
                         release_date: row.release_date.map(|date| date.to_rfc3339()),
                         available_on: Vec::new(),
-                    })
+                    });
+                if !remote
                     .available_on
-                    .push(badge);
+                    .iter()
+                    .any(|existing| existing.peer_node_id == badge.peer_node_id)
+                {
+                    remote.available_on.push(badge);
+                }
             }
         }
 
@@ -3186,6 +3197,9 @@ mod tests {
     ) -> streamarr_model::PeerLeafAvailability {
         streamarr_model::PeerLeafAvailability {
             peer_node_id,
+            media_file_id: Uuid::new_v4(),
+            source_instance_id: Uuid::new_v4(),
+            path: "/media/remote.mkv".to_string(),
             provider,
             external_id: external_id.to_string(),
             leaf_selector: LeafSelector::Movie,
@@ -3216,6 +3230,18 @@ mod tests {
         let group_id = seed_peer_group(&pool).await;
         let peer_id = seed_peer_node(&pool, group_id, "east").await;
         let availability_repo = SqlxPeerLeafAvailabilityRepo::new(pool.clone());
+        availability_repo
+            .upsert(&sample_availability(
+                peer_id,
+                work.external_refs[0].provider.clone(),
+                &work.external_refs[0].external_id,
+                Some(work.id),
+                None,
+            ))
+            .await
+            .unwrap();
+        // A second physical Source copy on the same peer must not duplicate
+        // that peer's work-level availability badge.
         availability_repo
             .upsert(&sample_availability(
                 peer_id,

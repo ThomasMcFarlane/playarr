@@ -63,6 +63,9 @@ pub enum AvailabilitySyncError {
 /// row to read a title/kind from in that case.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AvailabilityRow {
+    pub media_file_id: Uuid,
+    pub source_instance_id: Uuid,
+    pub path: String,
     pub provider: ExternalProvider,
     pub external_id: String,
     pub leaf_selector: LeafSelector,
@@ -178,12 +181,21 @@ pub async fn apply_availability_response(
     sync_state_repo: &Arc<dyn streamarr_db::PeerSyncStateRepo>,
 ) -> Result<usize, AvailabilitySyncError> {
     const ENTITY: &str = "availability";
-    let mut applied = 0usize;
+    let mut resolved = Vec::with_capacity(response.rows.len());
     for row in &response.rows {
-        let local_work_id = resolve_local_work(work_repo, row).await?;
+        resolved.push((row, resolve_local_work(work_repo, row).await?));
+    }
+    // The endpoint deliberately returns a complete live inventory even when
+    // a cursor is supplied, so replace the cache to remove deleted/moved files.
+    availability_repo.delete_for_peer(peer_node_id).await?;
+    let mut applied = 0usize;
+    for (row, local_work_id) in resolved {
         availability_repo
             .upsert(&PeerLeafAvailability {
                 peer_node_id,
+                media_file_id: row.media_file_id,
+                source_instance_id: row.source_instance_id,
+                path: row.path.clone(),
                 provider: row.provider.clone(),
                 external_id: row.external_id.clone(),
                 leaf_selector: row.leaf_selector.clone(),
@@ -379,6 +391,9 @@ mod tests {
         title: &str,
     ) -> AvailabilityRow {
         AvailabilityRow {
+            media_file_id: Uuid::new_v4(),
+            source_instance_id: Uuid::new_v4(),
+            path: "/media/sample.mkv".to_string(),
             provider,
             external_id: external_id.to_string(),
             leaf_selector: LeafSelector::Movie,
@@ -525,6 +540,8 @@ mod tests {
             .and(path("/api/v1/peer/availability"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "rows": [{
+                    "media_file_id": Uuid::new_v4(), "source_instance_id": Uuid::new_v4(),
+                    "path": "/media/movies/Sample Movie Kilo.mkv",
                     "provider": "tmdb", "external_id": "603", "leaf_selector": "movie",
                     "group_library_id": null, "availability": "available",
                     "container": "mkv", "codec": "h264", "bitrate": 8000000,
@@ -582,6 +599,8 @@ mod tests {
             .and(path("/api/v1/peer/availability"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "rows": [{
+                    "media_file_id": Uuid::new_v4(), "source_instance_id": Uuid::new_v4(),
+                    "path": "/media/movies/Nobody Has This.mkv",
                     "provider": "tmdb", "external_id": "999", "leaf_selector": "movie",
                     "group_library_id": null, "availability": "available",
                     "container": null, "codec": null, "bitrate": null,

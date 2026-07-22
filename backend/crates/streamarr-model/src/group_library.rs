@@ -58,6 +58,14 @@ pub enum LeafSelector {
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PeerLeafAvailability {
     pub peer_node_id: Uuid,
+    /// The reporting peer's own media-file id. It is opaque off that peer,
+    /// but keeps multiple physical copies of the same portable leaf distinct.
+    pub media_file_id: Uuid,
+    /// Group-synchronised Source instance that reported this physical file.
+    pub source_instance_id: Uuid,
+    /// Physical path as reported by the peer. Consumers may translate its
+    /// configured source root through that Source instance's folder mapping.
+    pub path: String,
     pub provider: ExternalProvider,
     pub external_id: String,
     pub leaf_selector: LeafSelector,

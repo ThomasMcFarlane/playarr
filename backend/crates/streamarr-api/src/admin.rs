@@ -13,14 +13,14 @@
 //! key gets a clear 502 immediately, not a silent no-op that only surfaces
 //! later as `arr-sync` reconciliation failures nobody's watching yet.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use axum::extract::{Path, State};
 use axum::Json;
 use serde::{Deserialize, Serialize};
 use streamarr_arr_client::ArrConnector;
 use streamarr_arr_sync::ArrClient;
-use streamarr_model::{SourceInstance, SourceKind};
+use streamarr_model::{LeafSelector, PeerNodeStatus, SourceInstance, SourceKind};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -151,20 +151,30 @@ pub async fn update_source_folder_mappings_handler(
 pub struct SourceMatrixFileResponse {
     pub id: Uuid,
     pub work_id: Uuid,
-    pub leaf_ref: streamarr_model::media::LeafRef,
+    pub leaf_selector: LeafSelector,
+    pub peer_node_id: Uuid,
     pub source_instance_id: Uuid,
     pub path: String,
     pub mapped_path: String,
     pub mapped: bool,
-    pub container: String,
-    pub codec: String,
+    pub container: Option<String>,
+    pub codec: Option<String>,
     pub bitrate: Option<u64>,
     pub duration_ms: Option<u64>,
-    pub size_bytes: u64,
+    pub size_bytes: Option<u64>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PeerMatrixNodeResponse {
+    pub id: Uuid,
+    pub name: String,
+    pub is_self: bool,
+    pub status: PeerNodeStatus,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SourceMatrixResponse {
+    pub peers: Vec<PeerMatrixNodeResponse>,
     pub sources: Vec<SourceInstanceResponse>,
     pub files: Vec<SourceMatrixFileResponse>,
 }
@@ -201,13 +211,13 @@ fn map_source_path(
     (mapped, true)
 }
 
-/// Physical media-file inventory across every normal Source instance.
+/// Physical media-file inventory reported by every node in this peer group.
 #[utoipa::path(
     get,
     path = "/api/v1/admin/library/source-matrix",
     tag = "admin",
     responses(
-        (status = 200, description = "Sources and their imported physical files", body = SourceMatrixResponse),
+        (status = 200, description = "Peer nodes and their reported physical files", body = SourceMatrixResponse),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin")
     )
@@ -221,14 +231,32 @@ pub async fn source_matrix_handler(
         .get()
         .await
         .map_err(|error| ApiError::internal(format!("failed to load node identity: {error}")))?
-        .map(|identity| identity.peer_id);
+        .map(|identity| identity.peer_id)
+        .ok_or_else(|| ApiError::internal("node identity is missing"))?;
+    let peer_nodes = state
+        .peer_node_repo
+        .list_all()
+        .await
+        .map_err(|error| ApiError::internal(format!("failed to list peer nodes: {error}")))?;
     let instances = state.source_instances.all();
-    let by_id: std::collections::HashMap<Uuid, SourceInstance> = instances
+    let by_id: HashMap<Uuid, SourceInstance> = instances
         .iter()
         .cloned()
         .map(|instance| (instance.id, instance))
         .collect();
-    let files = state
+    let mut leaf_selectors = HashMap::new();
+    for work_id in state
+        .media_file_repo
+        .list_work_ids()
+        .await
+        .map_err(|error| ApiError::internal(format!("failed to list media-file works: {error}")))?
+    {
+        if let Ok(detail) = state.catalog.get_by_id(work_id, None).await {
+            leaf_selectors.extend(crate::peer::leaf_selectors_for(&detail));
+        }
+    }
+
+    let mut files: Vec<SourceMatrixFileResponse> = state
         .media_file_repo
         .list_all()
         .await
@@ -236,8 +264,9 @@ pub async fn source_matrix_handler(
         .into_iter()
         .filter_map(|file| {
             let source = by_id.get(&file.source_instance_id)?;
+            let leaf_selector = leaf_selectors.get(&file.id)?.clone();
             let path = file.path.to_string_lossy().into_owned();
-            let mapped_root = self_peer_id.and_then(|id| source.folder_mappings.get(&id));
+            let mapped_root = source.folder_mappings.get(&self_peer_id);
             let (mapped_path, mapped) = map_source_path(
                 &path,
                 source.default_root_folder_id.as_deref(),
@@ -246,20 +275,69 @@ pub async fn source_matrix_handler(
             Some(SourceMatrixFileResponse {
                 id: file.id,
                 work_id: file.work_id,
-                leaf_ref: file.leaf_ref,
+                leaf_selector,
+                peer_node_id: self_peer_id,
                 source_instance_id: file.source_instance_id,
                 path,
                 mapped_path,
                 mapped,
-                container: file.container,
-                codec: file.codec,
+                container: Some(file.container),
+                codec: Some(file.codec),
                 bitrate: file.bitrate,
                 duration_ms: file.duration_ms,
-                size_bytes: file.size_bytes,
+                size_bytes: Some(file.size_bytes),
             })
         })
         .collect();
+
+    for peer in peer_nodes.iter().filter(|peer| !peer.is_self) {
+        let rows = state
+            .peer_leaf_availability_repo
+            .list_for_peer(peer.id)
+            .await
+            .map_err(|error| {
+                ApiError::internal(format!(
+                    "failed to list inventory for peer {}: {error}",
+                    peer.id
+                ))
+            })?;
+        files.extend(rows.into_iter().filter_map(|row| {
+            let work_id = row.local_work_id?;
+            let source = by_id.get(&row.source_instance_id)?;
+            let mapped_root = source.folder_mappings.get(&peer.id);
+            let (mapped_path, mapped) = map_source_path(
+                &row.path,
+                source.default_root_folder_id.as_deref(),
+                mapped_root.map(String::as_str),
+            );
+            Some(SourceMatrixFileResponse {
+                id: row.media_file_id,
+                work_id,
+                leaf_selector: row.leaf_selector,
+                peer_node_id: peer.id,
+                source_instance_id: row.source_instance_id,
+                path: row.path,
+                mapped_path,
+                mapped,
+                container: row.container,
+                codec: row.codec,
+                bitrate: row.bitrate,
+                duration_ms: row.duration_ms,
+                size_bytes: row.size_bytes,
+            })
+        }));
+    }
     Ok(Json(SourceMatrixResponse {
+        peers: peer_nodes
+            .into_iter()
+            .filter(|peer| peer.status != PeerNodeStatus::Left)
+            .map(|peer| PeerMatrixNodeResponse {
+                id: peer.id,
+                name: peer.name,
+                is_self: peer.is_self,
+                status: peer.status,
+            })
+            .collect(),
         sources: instances
             .into_iter()
             .map(SourceInstanceResponse::from)

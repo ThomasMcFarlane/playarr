@@ -216,7 +216,7 @@ export function LibraryToolbarMenus({
         options={[
           { value: "grid", label: "Grid" },
           { value: "list", label: "List" },
-          { value: "matrix", label: "Source matrix" },
+          { value: "matrix", label: "Peer group matrix" },
         ]}
         onChange={(value) => onViewChange(value as LibraryViewMode)}
       />
@@ -228,7 +228,8 @@ export function LibraryToolbarMenus({
             icon={<SortIcon />}
             value={matrixSort}
             options={[
-              { value: "library", label: "By library" },
+              { value: "source", label: "By Source instance" },
+              { value: "type", label: "By media type" },
               { value: "folder", label: "By folder" },
             ]}
             onChange={(value) => onMatrixSortChange(value as MatrixSort)}

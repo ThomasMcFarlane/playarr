@@ -2,11 +2,11 @@
 //! `docs/architecture/peer-groups.md` (see that document's §2.3/§4 for the
 //! full design and rationale).
 //!
-//! One row per leaf (movie / episode / track / book) an OTHER peer reports
-//! having, keyed by the table's own primary key --
-//! `(peer_node_id, provider, external_id, leaf_selector)`. Never written for
-//! `peer_node_id` = self: this node's own availability is a live read of its
-//! own [`crate::repo::MediaFileRepo`], not cached here. Never a second
+//! One row per physical media file an OTHER peer reports having, keyed by
+//! `(peer_node_id, media_file_id)`. The portable leaf identity remains
+//! queryable, while distinct Source copies of the same leaf can coexist.
+//! Never written for `peer_node_id` = self: this node's own availability is
+//! a live read of its own [`crate::repo::MediaFileRepo`], not cached here. Never a second
 //! writer of `works`/`media_files` -- see §4.1 for why `Work`/`MediaFile`
 //! stay strictly node-local and single-writer, with `availability_sync.rs`
 //! (`streamarr-peer-sync`) as this table's only writer.
@@ -40,6 +40,9 @@ use crate::pool::{Backend, DbPool};
 
 fn from_row(row: &AnyRow) -> Result<PeerLeafAvailability, DbError> {
     let peer_node_id: String = row.try_get("peer_node_id")?;
+    let media_file_id: String = row.try_get("media_file_id")?;
+    let source_instance_id: String = row.try_get("source_instance_id")?;
+    let path: String = row.try_get("path")?;
     let provider: String = row.try_get("provider")?;
     let external_id: String = row.try_get("external_id")?;
     let leaf_selector: String = row.try_get("leaf_selector")?;
@@ -58,6 +61,9 @@ fn from_row(row: &AnyRow) -> Result<PeerLeafAvailability, DbError> {
 
     Ok(PeerLeafAvailability {
         peer_node_id: parse_uuid(&peer_node_id)?,
+        media_file_id: parse_uuid(&media_file_id)?,
+        source_instance_id: parse_uuid(&source_instance_id)?,
+        path,
         provider: provider_from_str(&provider),
         external_id,
         leaf_selector: serde_json::from_str(&leaf_selector)?,
@@ -80,7 +86,8 @@ fn from_row(row: &AnyRow) -> Result<PeerLeafAvailability, DbError> {
     })
 }
 
-const COLUMNS: &str = "peer_node_id, provider, external_id, leaf_selector, group_library_id, \
+const COLUMNS: &str = "peer_node_id, media_file_id, source_instance_id, path, \
+                        provider, external_id, leaf_selector, group_library_id, \
                         availability, container, codec, bitrate, size_bytes, duration_ms, \
                         local_work_id, title, kind, release_date, updated_at";
 
@@ -90,10 +97,14 @@ const COLUMNS: &str = "peer_node_id, provider, external_id, leaf_selector, group
 #[async_trait]
 pub trait PeerLeafAvailabilityRepo: Send + Sync {
     /// Insert-or-update keyed by the table's own primary key --
-    /// `(peer_node_id, provider, external_id, leaf_selector)` -- exactly
+    /// `(peer_node_id, media_file_id)` -- exactly
     /// what `availability_sync.rs`'s ingest loop calls for every row a peer
     /// reports via `GET /api/v1/peer/availability` (§3.1/§4.2).
     async fn upsert(&self, availability: &PeerLeafAvailability) -> Result<(), DbError>;
+
+    /// Removes one peer's derived snapshot before a full replacement. The
+    /// availability endpoint always returns a complete current inventory.
+    async fn delete_for_peer(&self, peer_node_id: Uuid) -> Result<(), DbError>;
 
     /// Every leaf availability row ingested from one specific peer -- the
     /// full-refresh starting point for `availability_sync.rs`, and the
@@ -124,9 +135,7 @@ pub trait PeerLeafAvailabilityRepo: Send + Sync {
         group_library_id: Uuid,
     ) -> Result<Vec<PeerLeafAvailability>, DbError>;
 
-    /// Every peer's reported row for one exact leaf -- keyed on the same
-    /// `(provider, external_id, leaf_selector)` triple that, together with
-    /// `peer_node_id`, forms this table's own primary key. Phase 3's
+    /// Every peer's reported row for one exact portable leaf. Phase 3's
     /// routing-context gathering (`streamarr-api::playback::
     /// resolve_route_for_local_media_file`/
     /// `by_external_ref_playback_info_handler`, `docs/architecture/
@@ -160,11 +169,15 @@ impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
         let sql = match self.backend {
             Backend::Sqlite => {
                 "INSERT INTO peer_leaf_availability \
-                 (peer_node_id, provider, external_id, leaf_selector, group_library_id, \
+                 (peer_node_id, media_file_id, source_instance_id, path, \
+                 provider, external_id, leaf_selector, group_library_id, \
                  availability, container, codec, bitrate, size_bytes, duration_ms, \
                  local_work_id, title, kind, release_date, updated_at) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
-                 ON CONFLICT (peer_node_id, provider, external_id, leaf_selector) DO UPDATE SET \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+                 ON CONFLICT (peer_node_id, media_file_id) DO UPDATE SET \
+                 source_instance_id = excluded.source_instance_id, path = excluded.path, \
+                 provider = excluded.provider, external_id = excluded.external_id, \
+                 leaf_selector = excluded.leaf_selector, \
                  group_library_id = excluded.group_library_id, \
                  availability = excluded.availability, container = excluded.container, \
                  codec = excluded.codec, bitrate = excluded.bitrate, \
@@ -175,11 +188,15 @@ impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
             }
             Backend::Postgres => {
                 "INSERT INTO peer_leaf_availability \
-                 (peer_node_id, provider, external_id, leaf_selector, group_library_id, \
+                 (peer_node_id, media_file_id, source_instance_id, path, \
+                 provider, external_id, leaf_selector, group_library_id, \
                  availability, container, codec, bitrate, size_bytes, duration_ms, \
                  local_work_id, title, kind, release_date, updated_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) \
-                 ON CONFLICT (peer_node_id, provider, external_id, leaf_selector) DO UPDATE SET \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) \
+                 ON CONFLICT (peer_node_id, media_file_id) DO UPDATE SET \
+                 source_instance_id = excluded.source_instance_id, path = excluded.path, \
+                 provider = excluded.provider, external_id = excluded.external_id, \
+                 leaf_selector = excluded.leaf_selector, \
                  group_library_id = excluded.group_library_id, \
                  availability = excluded.availability, container = excluded.container, \
                  codec = excluded.codec, bitrate = excluded.bitrate, \
@@ -191,6 +208,9 @@ impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
         };
         sqlx::query(sql)
             .bind(availability.peer_node_id.to_string())
+            .bind(availability.media_file_id.to_string())
+            .bind(availability.source_instance_id.to_string())
+            .bind(availability.path.as_str())
             .bind(provider_to_str(&availability.provider))
             .bind(availability.external_id.as_str())
             .bind(leaf_selector)
@@ -206,6 +226,18 @@ impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
             .bind(work_kind_to_str(availability.kind))
             .bind(availability.release_date.map(format_datetime))
             .bind(format_datetime(availability.updated_at))
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn delete_for_peer(&self, peer_node_id: Uuid) -> Result<(), DbError> {
+        let sql = match self.backend {
+            Backend::Sqlite => "DELETE FROM peer_leaf_availability WHERE peer_node_id = ?",
+            Backend::Postgres => "DELETE FROM peer_leaf_availability WHERE peer_node_id = $1",
+        };
+        sqlx::query(sql)
+            .bind(peer_node_id.to_string())
             .execute(&self.pool)
             .await?;
         Ok(())
@@ -339,6 +371,9 @@ mod tests {
         let now = Utc::now().trunc_subsecs(3);
         PeerLeafAvailability {
             peer_node_id,
+            media_file_id: Uuid::new_v4(),
+            source_instance_id: Uuid::new_v4(),
+            path: "/media/sample.mkv".to_string(),
             provider,
             external_id: external_id.to_string(),
             leaf_selector,
@@ -411,8 +446,7 @@ mod tests {
     async fn upsert_same_title_different_leaf_selector_is_a_distinct_row() {
         // The same `(peer_node_id, provider, external_id)` with two
         // different `LeafSelector`s (e.g. two episodes of the same series)
-        // must coexist -- confirms `leaf_selector` is really part of the
-        // conflict target, not silently collapsed away.
+        // must coexist as distinct physical-file rows.
         let pool = test_sqlite_pool().await;
         let repo = SqlxPeerLeafAvailabilityRepo::new(pool);
         let peer_node_id = Uuid::new_v4();
@@ -440,6 +474,31 @@ mod tests {
 
         let all = repo.list_for_peer(peer_node_id).await.unwrap();
         assert_eq!(all.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn same_leaf_in_two_source_instances_keeps_both_physical_files() {
+        let pool = test_sqlite_pool().await;
+        let repo = SqlxPeerLeafAvailabilityRepo::new(pool);
+        let peer_node_id = Uuid::new_v4();
+        let first = sample(
+            peer_node_id,
+            streamarr_model::ExternalProvider::Tmdb,
+            "603",
+            LeafSelector::Movie,
+        );
+        let mut second = first.clone();
+        second.media_file_id = Uuid::new_v4();
+        second.source_instance_id = Uuid::new_v4();
+        second.path = "/media/alternate/Sample Movie Kilo.mkv".to_string();
+
+        repo.upsert(&first).await.unwrap();
+        repo.upsert(&second).await.unwrap();
+
+        let all = repo.list_for_peer(peer_node_id).await.unwrap();
+        assert_eq!(all.len(), 2);
+        assert!(all.contains(&first));
+        assert!(all.contains(&second));
     }
 
     #[tokio::test]

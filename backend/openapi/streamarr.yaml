@@ -57,11 +57,11 @@ paths:
     get:
       tags:
       - admin
-      summary: Physical media-file inventory across every normal Source instance.
+      summary: Physical media-file inventory reported by every node in this peer group.
       operationId: source_matrix_handler
       responses:
         '200':
-          description: Sources and their imported physical files
+          description: Peer nodes and their reported physical files
           content:
             application/json:
               schema:
@@ -5680,57 +5680,6 @@ components:
           description: |-
             Base URL of a node already in the target group, e.g.
             `"https://home.example.com"` -- the doc's "bootstrap address".
-    LeafRef:
-      oneOf:
-      - type: object
-        description: The file *is* the work (movies).
-        required:
-        - leaf_kind
-        properties:
-          leaf_kind:
-            type: string
-            enum:
-            - work
-      - type: object
-        required:
-        - leaf_id
-        - leaf_kind
-        properties:
-          leaf_id:
-            type: string
-            format: uuid
-          leaf_kind:
-            type: string
-            enum:
-            - episode
-      - type: object
-        required:
-        - leaf_id
-        - leaf_kind
-        properties:
-          leaf_id:
-            type: string
-            format: uuid
-          leaf_kind:
-            type: string
-            enum:
-            - track
-      - type: object
-        required:
-        - leaf_id
-        - leaf_kind
-        properties:
-          leaf_id:
-            type: string
-            format: uuid
-          leaf_kind:
-            type: string
-            enum:
-            - book
-      description: |-
-        Identifies exactly which leaf of a [`crate::Work`] a [`MediaFile`] is
-        the source for. A movie's file points straight at the work; a TV/music/
-        book file points at the specific episode/track/book child.
     LeafSelector:
       oneOf:
       - type: string
@@ -6160,6 +6109,9 @@ components:
         both ends for each of those fields, so there is nothing for this DTO's
         definition to drift out of sync with.
       required:
+      - media_file_id
+      - source_instance_id
+      - path
       - provider
       - external_id
       - leaf_selector
@@ -6201,6 +6153,11 @@ components:
           $ref: '#/components/schemas/WorkKind'
         leaf_selector:
           $ref: '#/components/schemas/LeafSelector'
+        media_file_id:
+          type: string
+          format: uuid
+        path:
+          type: string
         provider:
           $ref: '#/components/schemas/ExternalProvider'
         release_date:
@@ -6214,6 +6171,9 @@ components:
           - 'null'
           format: int64
           minimum: 0
+        source_instance_id:
+          type: string
+          format: uuid
         title:
           type: string
         updated_at:
@@ -6365,6 +6325,23 @@ components:
           format: date-time
         join_token:
           type: string
+    PeerMatrixNodeResponse:
+      type: object
+      required:
+      - id
+      - name
+      - is_self
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        is_self:
+          type: boolean
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/PeerNodeStatus'
     PeerNode:
       type: object
       description: |-
@@ -8145,14 +8122,12 @@ components:
       required:
       - id
       - work_id
-      - leaf_ref
+      - leaf_selector
+      - peer_node_id
       - source_instance_id
       - path
       - mapped_path
       - mapped
-      - container
-      - codec
-      - size_bytes
       properties:
         bitrate:
           type:
@@ -8161,9 +8136,13 @@ components:
           format: int64
           minimum: 0
         codec:
-          type: string
+          type:
+          - string
+          - 'null'
         container:
-          type: string
+          type:
+          - string
+          - 'null'
         duration_ms:
           type:
           - integer
@@ -8173,16 +8152,21 @@ components:
         id:
           type: string
           format: uuid
-        leaf_ref:
-          $ref: '#/components/schemas/LeafRef'
+        leaf_selector:
+          $ref: '#/components/schemas/LeafSelector'
         mapped:
           type: boolean
         mapped_path:
           type: string
         path:
           type: string
+        peer_node_id:
+          type: string
+          format: uuid
         size_bytes:
-          type: integer
+          type:
+          - integer
+          - 'null'
           format: int64
           minimum: 0
         source_instance_id:
@@ -8194,6 +8178,7 @@ components:
     SourceMatrixResponse:
       type: object
       required:
+      - peers
       - sources
       - files
       properties:
@@ -8201,6 +8186,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SourceMatrixFileResponse'
+        peers:
+          type: array
+          items:
+            $ref: '#/components/schemas/PeerMatrixNodeResponse'
         sources:
           type: array
           items:

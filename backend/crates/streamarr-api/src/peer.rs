@@ -745,6 +745,9 @@ pub async fn libraries_handler(
 /// definition to drift out of sync with.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PeerAvailabilityRow {
+    pub media_file_id: Uuid,
+    pub source_instance_id: Uuid,
+    pub path: String,
     pub provider: ExternalProvider,
     pub external_id: String,
     pub leaf_selector: LeafSelector,
@@ -937,6 +940,9 @@ async fn derive_own_availability(
                 .flatten();
 
             rows.push(PeerAvailabilityRow {
+                media_file_id: media_file.id,
+                source_instance_id: media_file.source_instance_id,
+                path: media_file.path.to_string_lossy().into_owned(),
                 provider: external_ref.provider.clone(),
                 external_id: external_ref.external_id.clone(),
                 leaf_selector,
@@ -1207,6 +1213,9 @@ async fn build_push_request(
             .await?
             .into_iter()
             .map(|row| availability_sync::AvailabilityRow {
+                media_file_id: row.media_file_id,
+                source_instance_id: row.source_instance_id,
+                path: row.path,
                 provider: row.provider,
                 external_id: row.external_id,
                 leaf_selector: row.leaf_selector,

@@ -221,10 +221,8 @@ pub fn compute_delivery_mode(mode: DeliveryMode, peer: &PeerNode) -> DeliveryMod
     }
 }
 
-/// `true` if `availability` has an `Available`/`PartiallyAvailable` row for
-/// `peer_id` matching `ctx`'s specific leaf -- the exact primary key
-/// `peer_leaf_availability` itself is keyed on
-/// (`peer_node_id, provider, external_id, leaf_selector`).
+/// `true` if `availability` has any `Available`/`PartiallyAvailable`
+/// physical-file row for `peer_id` matching `ctx`'s portable leaf.
 fn peer_reports_available(
     peer_id: Uuid,
     ctx: &RoutingContext,
@@ -392,6 +390,9 @@ mod tests {
         let now = Utc::now().trunc_subsecs(3);
         PeerLeafAvailability {
             peer_node_id: peer_id,
+            media_file_id: Uuid::new_v4(),
+            source_instance_id: Uuid::new_v4(),
+            path: "/media/sample.mkv".to_string(),
             provider: ctx.provider.clone(),
             external_id: ctx.external_id.clone(),
             leaf_selector: ctx.leaf_selector.clone(),

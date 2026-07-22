@@ -30,7 +30,7 @@ function parseView(value: string | null): LibraryViewMode {
 }
 
 function parseMatrixSort(value: string | null): MatrixSort {
-  return value === "folder" ? "folder" : "library";
+  return value === "type" || value === "folder" ? value : "source";
 }
 
 /**
@@ -117,7 +117,7 @@ export function LibraryPage() {
   function setMatrixSort(next: MatrixSort) {
     setSearchParams((prev) => {
       const params = new URLSearchParams(prev);
-      if (next === "library") params.delete("matrix_sort"); else params.set("matrix_sort", next);
+      if (next === "source") params.delete("matrix_sort"); else params.set("matrix_sort", next);
       return params;
     });
   }
