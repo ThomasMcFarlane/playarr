@@ -90,6 +90,34 @@ class PlayarrPlaylistsTest {
         assertEquals(listOf(work.id), playlistCoverWorks(directory, root.id).map(Work::id))
     }
 
+    @Test
+    fun `detail resolves the root and every nested track in natural order`() {
+        val root = playlist("root", "Root")
+        val ten = playlist("ten", "Track 10", parent = root.id)
+        val two = playlist("two", "Track 2", parent = root.id)
+        val nested = playlist("nested", "Nested", parent = two.id)
+        val playlists = listOf(ten, nested, root, two)
+
+        assertEquals(root.id, nested.rootPlaylist(playlists).id)
+        assertEquals(listOf(two.id, nested.id, ten.id), root.descendantPlaylists(playlists).map(Playlist::id))
+    }
+
+    @Test
+    fun `edit parent options exclude self descendants shared and mismatched media`() {
+        val root = playlist("root", "Root")
+        val active = playlist("active", "Active", parent = root.id)
+        val descendant = playlist("descendant", "Descendant", parent = active.id)
+        val destination = playlist("destination", "Destination")
+        val shared = playlist("shared", "Shared", system = true)
+        val audio = playlist("audio", "Audio", mediaType = PlaylistMediaType.Audio)
+
+        assertEquals(
+            listOf(destination.id, root.id),
+            playlistParentOptions(active, listOf(root, active, descendant, destination, shared, audio)).map(Playlist::id),
+        )
+        assertEquals("Root › Active › Descendant", descendant.playlistPath(listOf(root, active, descendant)))
+    }
+
     private fun directory(vararg playlists: Playlist) = ResolvedPlaylistDirectory(
         playlists = playlists.toList(),
         itemsByPlaylist = emptyMap(),
@@ -101,11 +129,12 @@ class PlayarrPlaylistsTest {
         name: String,
         system: Boolean = false,
         parent: String? = null,
+        mediaType: PlaylistMediaType = PlaylistMediaType.Video,
     ) = Playlist(
         id = id,
         name = name,
         isSystem = system,
-        mediaType = PlaylistMediaType.Video,
+        mediaType = mediaType,
         createdAt = "2026-01-01T00:00:00Z",
         updatedAt = "2026-01-01T00:00:00Z",
         parentPlaylistId = parent,

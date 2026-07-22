@@ -53,6 +53,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Bring Android playlist details to Playarr Web parity with nested tracks, localized empty and item
+  controls, per-track playback queues and reordering, sub-playlist creation, safe parent editing,
+  and cascade-aware delete confirmation.
 - Align Android's playlist directory with Playarr Web through localized hierarchy-aware roots,
   inherited cover artwork, shared/personal and natural-name ordering filters, folder metadata, and
   parent-aware video or audio playlist creation.

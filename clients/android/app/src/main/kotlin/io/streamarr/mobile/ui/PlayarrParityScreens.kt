@@ -43,6 +43,7 @@ import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Person
@@ -115,6 +116,7 @@ import io.streamarr.shared.data.model.ProfileAvatarSetting
 import io.streamarr.shared.data.model.ProfilePinSetting
 import io.streamarr.shared.data.model.ReorderPlaylistItemsRequest
 import io.streamarr.shared.data.model.UpdatePlayerPreferencesRequest
+import io.streamarr.shared.data.model.UpdatePlaylistRequest
 import io.streamarr.shared.data.model.UpdateProfileAvatarRequest
 import io.streamarr.shared.data.model.UpdateProfilePinRequest
 import io.streamarr.shared.data.model.UserInviteRequest
@@ -566,6 +568,7 @@ private fun PlaylistParentChoices(
     parents: List<Playlist>,
     selectedId: String?,
     enabled: Boolean,
+    labels: Map<String, String> = emptyMap(),
     onSelected: (String?) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -579,7 +582,7 @@ private fun PlaylistParentChoices(
                 onClick = { onSelected(parent.id) },
                 enabled = enabled && selectedId != parent.id,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text(parent.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            ) { Text(labels[parent.id] ?: parent.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
     }
 }
@@ -672,10 +675,16 @@ internal fun PlaylistCard(
     }
 }
 
-internal data class ResolvedPlaylist(
+internal data class ResolvedPlaylistTrack(
     val playlist: Playlist,
     val items: List<PlaylistItem>,
+)
+
+internal data class ResolvedPlaylist(
+    val root: Playlist,
+    val tracks: List<ResolvedPlaylistTrack>,
     val details: Map<String, WorkDetail>,
+    val allPlaylists: List<Playlist>,
 )
 
 @HiltViewModel
@@ -694,42 +703,144 @@ internal class PlaylistDetailViewModel @Inject constructor(private val api: Stre
         _state.value = ParityLoad.Loading
         _state.value = runCatching {
             coroutineScope {
-                val playlist = async { api.getPlaylist(id) }
-                val items = api.listPlaylistItems(id)
-                val details = items.distinctBy(PlaylistItem::workId).map { item ->
-                    async { item.workId to api.getWork(item.workId) }
-                }.awaitAll().toMap()
-                ResolvedPlaylist(playlist.await(), items, details)
+                val listed = api.listPlaylists()
+                val requested = listed.firstOrNull { it.id == id } ?: api.getPlaylist(id)
+                val playlists = if (listed.any { it.id == requested.id }) listed else listed + requested
+                val root = requested.rootPlaylist(playlists)
+                val trackPlaylists = listOf(root) + root.descendantPlaylists(playlists)
+                val itemGroups = trackPlaylists.map { playlist ->
+                    async {
+                        ResolvedPlaylistTrack(
+                            playlist,
+                            runCatching { api.listPlaylistItems(playlist.id) }.getOrDefault(emptyList())
+                                .sortedBy(PlaylistItem::position),
+                        )
+                    }
+                }.awaitAll()
+                val details = itemGroups.flatMap(ResolvedPlaylistTrack::items).distinctBy(PlaylistItem::workId).map { item ->
+                    async { runCatching { item.workId to api.getWork(item.workId) }.getOrNull() }
+                }.awaitAll().filterNotNull().toMap()
+                ResolvedPlaylist(root, itemGroups, details, playlists)
             }
         }.fold({ ParityLoad.Ready(it) }, { ParityLoad.Failed(it.playarrMessage("playlist")) })
     }
 
-    fun remove(itemId: String) = mutate { current ->
-        api.removePlaylistItem(current.playlist.id, itemId)
-        refresh(current.playlist.id)
+    fun remove(playlistId: String, itemId: String) = mutate { current ->
+        api.removePlaylistItem(playlistId, itemId)
+        refresh(current.root.id)
     }
 
-    fun move(itemId: String, delta: Int) = mutate { current ->
-        val order = current.items.map(PlaylistItem::id).toMutableList()
+    fun move(playlistId: String, itemId: String, delta: Int) = mutate { current ->
+        val order = current.tracks.firstOrNull { it.playlist.id == playlistId }
+            ?.items?.map(PlaylistItem::id)?.toMutableList() ?: return@mutate
         val from = order.indexOf(itemId)
+        if (from < 0) return@mutate
         val to = (from + delta).coerceIn(0, order.lastIndex)
-        if (from >= 0 && from != to) {
+        if (from != to) {
             order.add(to, order.removeAt(from))
-            api.reorderPlaylistItems(current.playlist.id, ReorderPlaylistItemsRequest(order))
-            refresh(current.playlist.id)
+            api.reorderPlaylistItems(playlistId, ReorderPlaylistItemsRequest(order))
+            refresh(current.root.id)
         }
     }
 
-    fun delete(onDeleted: () -> Unit) = mutate { current ->
-        api.deletePlaylist(current.playlist.id)
-        onDeleted()
+    fun createChild(parent: Playlist, name: String, onCreated: () -> Unit, onFailure: (Throwable) -> Unit) =
+        viewModelScope.launch {
+            runCatching {
+                val created = api.createPlaylist(CreatePlaylistRequest(name.trim(), parent.mediaType, parent.id))
+                if (created.mediaType != parent.mediaType) {
+                    runCatching { api.deletePlaylist(created.id) }
+                    throw PlaylistMediaTypeMismatchException()
+                }
+                created
+            }.onSuccess {
+                onCreated()
+                refresh((_state.value as? ParityLoad.Ready)?.value?.root?.id ?: parent.id)
+            }.onFailure(onFailure)
+        }
+
+    fun update(
+        playlistId: String,
+        name: String,
+        parentPlaylistId: String?,
+        onUpdated: () -> Unit,
+        onFailure: (Throwable) -> Unit,
+    ) = viewModelScope.launch {
+        runCatching { api.updatePlaylist(playlistId, UpdatePlaylistRequest(name.trim(), parentPlaylistId)) }
+            .onSuccess { updated ->
+                onUpdated()
+                refresh(updated.rootPlaylist((_state.value as? ParityLoad.Ready)?.value?.allPlaylists.orEmpty()).id)
+            }
+            .onFailure(onFailure)
     }
 
-    private fun mutate(block: suspend (ResolvedPlaylist) -> Unit) = viewModelScope.launch {
+    fun delete(playlistId: String, onDeleted: (Boolean) -> Unit, onFailure: (Throwable) -> Unit) = mutate(
+        onFailure = onFailure,
+    ) { current ->
+        api.deletePlaylist(playlistId)
+        val deletedRoot = playlistId == current.root.id
+        onDeleted(deletedRoot)
+        if (!deletedRoot) refresh(current.root.id)
+    }
+
+    private fun mutate(
+        onFailure: (Throwable) -> Unit = { error ->
+            _state.value = ParityLoad.Failed(error.playarrMessage("playlist"))
+        },
+        block: suspend (ResolvedPlaylist) -> Unit,
+    ) = viewModelScope.launch {
         val current = (_state.value as? ParityLoad.Ready)?.value ?: return@launch
         runCatching { block(current) }
-            .onFailure { _state.value = ParityLoad.Failed(it.playarrMessage("playlist")) }
+            .onFailure(onFailure)
     }
+}
+
+internal fun Playlist.rootPlaylist(playlists: List<Playlist>): Playlist {
+    val byId = playlists.associateBy(Playlist::id)
+    var current = this
+    val visited = mutableSetOf(id)
+    while (true) {
+        val parentId = current.parentPlaylistId ?: break
+        if (!visited.add(parentId)) break
+        current = byId[parentId] ?: break
+    }
+    return current
+}
+
+internal fun Playlist.descendantPlaylists(playlists: List<Playlist>): List<Playlist> {
+    val children = playlists.groupBy(Playlist::parentPlaylistId)
+    val descendants = mutableListOf<Playlist>()
+    val visited = mutableSetOf(id)
+    fun visit(parentId: String) {
+        children[parentId].orEmpty()
+            .sortedWith { left, right -> comparePlaylistNames(left.name, right.name, Locale.getDefault()) }
+            .forEach { child ->
+                if (!visited.add(child.id)) return@forEach
+                descendants += child
+                visit(child.id)
+            }
+    }
+    visit(id)
+    return descendants
+}
+
+internal fun playlistParentOptions(active: Playlist, playlists: List<Playlist>): List<Playlist> {
+    val excluded = active.descendantPlaylists(playlists).mapTo(mutableSetOf(active.id), Playlist::id)
+    return playlists.filter { candidate ->
+        !candidate.isSystem && candidate.mediaType == active.mediaType && candidate.id !in excluded
+    }.sortedWith { left, right -> comparePlaylistNames(left.name, right.name, Locale.getDefault()) }
+}
+
+internal fun Playlist.playlistPath(playlists: List<Playlist>): String {
+    val byId = playlists.associateBy(Playlist::id)
+    val names = mutableListOf(name)
+    val visited = mutableSetOf(id)
+    var parentId = parentPlaylistId
+    while (parentId != null && visited.add(parentId)) {
+        val parent = byId[parentId] ?: break
+        names.add(0, parent.name)
+        parentId = parent.parentPlaylistId
+    }
+    return names.joinToString(" › ")
 }
 
 @Composable
@@ -744,15 +855,15 @@ internal fun ExperiencePlaylistDetailScreen(
     viewModel: PlaylistDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    var creatingUnder by remember { mutableStateOf<Playlist?>(null) }
+    var editing by remember { mutableStateOf<Playlist?>(null) }
+    var deleting by remember { mutableStateOf<Playlist?>(null) }
     LaunchedEffect(playlistId) { viewModel.load(playlistId) }
     when (val current = state) {
-        ParityLoad.Loading -> ParityLoading("Loading playlist")
+        ParityLoad.Loading -> ParityLoading(playarrString(PlayarrString.PlaylistsLoading))
         is ParityLoad.Failed -> ParityFailure(current.message) { viewModel.load(playlistId) }
         is ParityLoad.Ready -> {
             val value = current.value
-            val orderedItems = remember(value) {
-                value.items.mapNotNull { item -> value.details[item.workId]?.playarrPlaybackQueueItem(item) }
-            }
             Box(Modifier.fillMaxSize().background(WebSurface)) {
                 Column(
                     Modifier.fillMaxSize().padding(
@@ -763,62 +874,418 @@ internal fun ExperiencePlaylistDetailScreen(
                     ),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowBack, "Back", tint = WebInk) }
-                        Column(Modifier.weight(1f).padding(start = 8.dp)) {
-                            Text(value.playlist.name, color = WebInk, fontSize = if (isTelevision) 34.sp else 25.sp, fontWeight = FontWeight.Medium)
-                            Text("${value.items.size} items", color = WebInkMuted, fontSize = 10.sp)
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.Outlined.ArrowBack,
+                                playarrString(PlayarrString.PlaylistsBack),
+                                tint = WebInk,
+                            )
                         }
-                        if (!value.playlist.isSystem) {
-                            IconButton(onClick = { viewModel.delete(onBack) }) { Icon(Icons.Outlined.Delete, "Delete playlist", tint = MaterialTheme.colorScheme.error) }
+                        Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                            Text(
+                                value.root.name,
+                                color = WebInk,
+                                fontSize = if (isTelevision) 34.sp else 25.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Text(
+                                playarrString(
+                                    if (value.tracks.size == 1) {
+                                        PlayarrString.PlaylistsTrackCountOne
+                                    } else {
+                                        PlayarrString.PlaylistsTrackCountOther
+                                    },
+                                    "count" to value.tracks.size,
+                                ),
+                                color = WebInkMuted,
+                                fontSize = 10.sp,
+                            )
+                        }
+                        if (!value.root.isSystem) {
+                            IconButton(onClick = { creatingUnder = value.root }) {
+                                Icon(
+                                    Icons.Outlined.Add,
+                                    playarrString(PlayarrString.PlaylistsCreateSubPlaylist),
+                                    tint = WebInk,
+                                )
+                            }
                         }
                     }
-                    if (value.items.isEmpty()) {
-                        ParityEmpty("This playlist is empty.")
-                    } else {
-                        LazyColumn(Modifier.fillMaxSize().padding(top = 22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            items(value.items, key = PlaylistItem::id) { item ->
-                                val detail = value.details[item.workId]
-                                val mediaFileId = detail?.mediaFileFor(item)
-                                Surface(
-                                    onClick = { onOpenWork(item.workId) },
-                                    color = WebSurfaceStrong,
-                                    shape = RoundedCornerShape(14.dp),
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) {
-                                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        if (detail != null) {
-                                            AuthenticatedArtwork(
-                                                detail.work,
-                                                listOf(io.streamarr.shared.data.model.ImageKind.Thumb, io.streamarr.shared.data.model.ImageKind.Backdrop),
-                                                serverUrl,
-                                                accessToken,
-                                                androidx.compose.ui.layout.ContentScale.Crop,
-                                                Modifier.width(if (isTelevision) 150.dp else 100.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(9.dp)),
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().padding(top = 22.dp),
+                        contentPadding = PaddingValues(bottom = 32.dp),
+                        verticalArrangement = Arrangement.spacedBy(22.dp),
+                    ) {
+                        items(value.tracks, key = { "track:${it.playlist.id}" }) { track ->
+                            val queue = track.items.mapNotNull { item ->
+                                value.details[item.workId]?.playarrPlaybackQueueItem(item)
+                            }
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(track.playlist.name, color = WebInk, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+                                        val count = track.items.size
+                                        val mediaTypeLabel = playarrString(
+                                            if (track.playlist.mediaType == PlaylistMediaType.Audio) {
+                                                PlayarrString.PlaylistsMediaTypeAudio
+                                            } else {
+                                                PlayarrString.PlaylistsMediaTypeVideo
+                                            },
+                                        )
+                                        val itemCountLabel =
+                                            if (track.playlist.id == value.root.id) {
+                                                playarrString(
+                                                    if (count == 1) {
+                                                        PlayarrString.PlaylistsDirectItemsOne
+                                                    } else {
+                                                        PlayarrString.PlaylistsDirectItemsOther
+                                                    },
+                                                    "count" to count,
+                                                )
+                                            } else {
+                                                playarrString(
+                                                    if (count == 1) {
+                                                        PlayarrString.PlaylistsItemCountOne
+                                                    } else {
+                                                        PlayarrString.PlaylistsItemCountOther
+                                                    },
+                                                    "count" to count,
+                                                )
+                                            }
+                                        Text(
+                                            "$mediaTypeLabel · $itemCountLabel",
+                                            color = WebInkMuted,
+                                            fontSize = 10.sp,
+                                        )
+                                    }
+                                    if (!track.playlist.isSystem) {
+                                        IconButton(onClick = { editing = track.playlist }) {
+                                            Icon(
+                                                Icons.Outlined.Edit,
+                                                playarrString(PlayarrString.PlaylistActionsEdit),
+                                                tint = WebInkMuted,
                                             )
                                         }
-                                        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-                                            Text(detail?.work?.title ?: "Unavailable title", color = WebInk, fontWeight = FontWeight.SemiBold)
-                                            Text("Item ${item.position + 1}", color = WebInkMuted, fontSize = 10.sp)
-                                        }
-                                        if (mediaFileId != null) {
-                                            IconButton(onClick = { onPlay(mediaFileId, orderedItems, null, null) }) {
-                                                Icon(Icons.Outlined.PlayArrow, "Play", tint = WebPink)
-                                            }
-                                        }
-                                        if (!value.playlist.isSystem) {
-                                            IconButton(onClick = { viewModel.move(item.id, -1) }) { Icon(Icons.Outlined.ArrowUpward, "Move up", tint = WebInkMuted) }
-                                            IconButton(onClick = { viewModel.move(item.id, 1) }) { Icon(Icons.Outlined.ArrowDownward, "Move down", tint = WebInkMuted) }
-                                            IconButton(onClick = { viewModel.remove(item.id) }) { Icon(Icons.Outlined.Delete, "Remove", tint = WebInkMuted) }
+                                        IconButton(onClick = { deleting = track.playlist }) {
+                                            Icon(
+                                                Icons.Outlined.Delete,
+                                                playarrString(PlayarrString.PlaylistActionsDelete),
+                                                tint = MaterialTheme.colorScheme.error,
+                                            )
                                         }
                                     }
+                                }
+                                if (track.items.isEmpty()) {
+                                    Surface(color = WebSurfaceStrong, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                                        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text(
+                                                playarrString(PlayarrString.PlaylistsEmptyTrackTitle),
+                                                color = WebInk,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                            Text(
+                                                playarrString(PlayarrString.PlaylistsEmptyTrackDescription),
+                                                color = WebInkMuted,
+                                                fontSize = 11.sp,
+                                            )
+                                        }
+                                    }
+                                }
+                                track.items.forEachIndexed { index, item ->
+                                    PlaylistDetailItem(
+                                        item = item,
+                                        detail = value.details[item.workId],
+                                        serverUrl = serverUrl,
+                                        accessToken = accessToken,
+                                        isTelevision = isTelevision,
+                                        editable = !track.playlist.isSystem,
+                                        canMoveUp = index > 0,
+                                        canMoveDown = index < track.items.lastIndex,
+                                        onOpen = { onOpenWork(item.workId) },
+                                        onPlay = { mediaFileId -> onPlay(mediaFileId, queue, null, null) },
+                                        onMoveUp = { viewModel.move(track.playlist.id, item.id, -1) },
+                                        onMoveDown = { viewModel.move(track.playlist.id, item.id, 1) },
+                                        onRemove = { viewModel.remove(track.playlist.id, item.id) },
+                                    )
                                 }
                             }
                         }
                     }
                 }
             }
+
+            creatingUnder?.let { parent ->
+                CreateSubPlaylistDialog(
+                    parent = parent,
+                    onDismiss = { creatingUnder = null },
+                    onCreate = { name, onCreated, onFailure ->
+                        viewModel.createChild(parent, name, onCreated, onFailure)
+                    },
+                )
+            }
+            editing?.let { playlist ->
+                EditPlaylistDialog(
+                    playlist = playlist,
+                    parentOptions = playlistParentOptions(playlist, value.allPlaylists),
+                    allPlaylists = value.allPlaylists,
+                    onDismiss = { editing = null },
+                    onSave = { name, parentId, onUpdated, onFailure ->
+                        viewModel.update(playlist.id, name, parentId, onUpdated, onFailure)
+                    },
+                )
+            }
+            deleting?.let { playlist ->
+                DeletePlaylistDialog(
+                    playlist = playlist,
+                    onDismiss = { deleting = null },
+                    onDelete = { onDeleted, onFailure ->
+                        viewModel.delete(
+                            playlistId = playlist.id,
+                            onDeleted = { deletedRoot ->
+                                deleting = null
+                                onDeleted()
+                                if (deletedRoot) onBack()
+                            },
+                            onFailure = onFailure,
+                        )
+                    },
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun PlaylistDetailItem(
+    item: PlaylistItem,
+    detail: WorkDetail?,
+    serverUrl: String,
+    accessToken: String?,
+    isTelevision: Boolean,
+    editable: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onOpen: () -> Unit,
+    onPlay: (String) -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    val mediaFileId = detail?.mediaFileFor(item)
+    val queueItem = detail?.playarrPlaybackQueueItem(item)
+    Surface(
+        onClick = onOpen,
+        color = WebSurfaceStrong,
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (detail != null) {
+                    AuthenticatedArtwork(
+                        detail.work,
+                        listOf(io.streamarr.shared.data.model.ImageKind.Thumb, io.streamarr.shared.data.model.ImageKind.Backdrop),
+                        serverUrl,
+                        accessToken,
+                        androidx.compose.ui.layout.ContentScale.Crop,
+                        Modifier.width(if (isTelevision) 150.dp else 100.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(9.dp)),
+                    )
+                }
+                Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+                    Text(
+                        queueItem?.title ?: playarrString(PlayarrString.PlaylistsUnavailableTitle),
+                        color = WebInk,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    queueItem?.subtitle?.let { Text(it, color = WebInkMuted, fontSize = 10.sp) }
+                    Text(
+                        playarrString(PlayarrString.PlaylistsItemPosition, "position" to item.position + 1),
+                        color = WebInkMuted,
+                        fontSize = 10.sp,
+                    )
+                }
+                if (mediaFileId != null) {
+                    IconButton(onClick = { onPlay(mediaFileId) }) {
+                        Icon(Icons.Outlined.PlayArrow, playarrString(PlayarrString.PlaylistItemPlay), tint = WebPink)
+                    }
+                }
+            }
+            if (editable) {
+                Row(Modifier.align(Alignment.End)) {
+                    IconButton(onClick = onMoveUp, enabled = canMoveUp) {
+                        Icon(Icons.Outlined.ArrowUpward, playarrString(PlayarrString.PlaylistItemMoveUp), tint = WebInkMuted)
+                    }
+                    IconButton(onClick = onMoveDown, enabled = canMoveDown) {
+                        Icon(Icons.Outlined.ArrowDownward, playarrString(PlayarrString.PlaylistItemMoveDown), tint = WebInkMuted)
+                    }
+                    IconButton(onClick = onRemove) {
+                        Icon(Icons.Outlined.Delete, playarrString(PlayarrString.PlaylistItemRemove), tint = WebInkMuted)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CreateSubPlaylistDialog(
+    parent: Playlist,
+    onDismiss: () -> Unit,
+    onCreate: (String, () -> Unit, (Throwable) -> Unit) -> Unit,
+) {
+    var name by remember(parent.id) { mutableStateOf("") }
+    var busy by remember(parent.id) { mutableStateOf(false) }
+    var error by remember(parent.id) { mutableStateOf<String?>(null) }
+    val typeLabel = playarrString(
+        if (parent.mediaType == PlaylistMediaType.Audio) {
+            PlayarrString.PlaylistsMediaTypeAudio
+        } else {
+            PlayarrString.PlaylistsMediaTypeVideo
+        },
+    )
+    val mediaTypeMismatchMessage = playarrString(PlayarrString.PlaylistsMediaTypeMismatch)
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text(playarrString(PlayarrString.PlaylistsCreateSubPlaylist)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(parent.name, color = WebInkMuted, fontSize = 11.sp)
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it; error = null },
+                    label = { Text(playarrString(PlayarrString.PlaylistsName)) },
+                    placeholder = { Text(playarrString(PlayarrString.PlaylistsNamePlaceholder)) },
+                    singleLine = true,
+                    enabled = !busy,
+                )
+                Text("${playarrString(PlayarrString.PlaylistsMediaType)} · $typeLabel", color = WebInkMuted, fontSize = 11.sp)
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = name.isNotBlank() && !busy,
+                onClick = {
+                    busy = true
+                    onCreate(
+                        name,
+                        { busy = false; onDismiss() },
+                        { failure ->
+                            busy = false
+                            error = if (failure is PlaylistMediaTypeMismatchException) {
+                                mediaTypeMismatchMessage
+                            } else {
+                                failure.playarrMessage("playlist")
+                            }
+                        },
+                    )
+                },
+            ) { Text(playarrString(if (busy) PlayarrString.PlaylistsCreating else PlayarrString.PlaylistsCreate)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !busy) { Text(playarrString(PlayarrString.CommonCancel)) }
+        },
+    )
+}
+
+@Composable
+private fun EditPlaylistDialog(
+    playlist: Playlist,
+    parentOptions: List<Playlist>,
+    allPlaylists: List<Playlist>,
+    onDismiss: () -> Unit,
+    onSave: (String, String?, () -> Unit, (Throwable) -> Unit) -> Unit,
+) {
+    var name by remember(playlist.id) { mutableStateOf(playlist.name) }
+    var parentId by remember(playlist.id) { mutableStateOf(playlist.parentPlaylistId) }
+    var busy by remember(playlist.id) { mutableStateOf(false) }
+    var error by remember(playlist.id) { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text(playarrString(PlayarrString.PlaylistActionsEdit)) },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 440.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it; error = null },
+                    label = { Text(playarrString(PlayarrString.PlaylistsName)) },
+                    singleLine = true,
+                    enabled = !busy,
+                )
+                Text(playarrString(PlayarrString.PlaylistsParent), color = WebInkSoft, fontSize = 12.sp)
+                PlaylistParentChoices(
+                    parents = parentOptions,
+                    selectedId = parentId,
+                    enabled = !busy,
+                    labels = parentOptions.associate { it.id to it.playlistPath(allPlaylists) },
+                    onSelected = { parentId = it },
+                )
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = name.isNotBlank() && !busy,
+                onClick = {
+                    busy = true
+                    onSave(
+                        name,
+                        parentId,
+                        { busy = false; onDismiss() },
+                        { failure -> busy = false; error = failure.playarrMessage("playlist") },
+                    )
+                },
+            ) { Text(playarrString(if (busy) PlayarrString.PlaylistActionsSaving else PlayarrString.PlaylistActionsSave)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !busy) { Text(playarrString(PlayarrString.CommonCancel)) }
+        },
+    )
+}
+
+@Composable
+private fun DeletePlaylistDialog(
+    playlist: Playlist,
+    onDismiss: () -> Unit,
+    onDelete: (() -> Unit, (Throwable) -> Unit) -> Unit,
+) {
+    var busy by remember(playlist.id) { mutableStateOf(false) }
+    var error by remember(playlist.id) { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text(playarrString(PlayarrString.PlaylistActionsConfirmDelete)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(playarrString(PlayarrString.PlaylistActionsDeleteDescription, "name" to playlist.name))
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !busy,
+                onClick = {
+                    busy = true
+                    onDelete(
+                        { busy = false },
+                        { failure -> busy = false; error = failure.playarrMessage("playlist") },
+                    )
+                },
+            ) {
+                Text(
+                    playarrString(
+                        if (busy) PlayarrString.PlaylistActionsDeleting else PlayarrString.PlaylistActionsConfirmDelete,
+                    ),
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !busy) { Text(playarrString(PlayarrString.CommonCancel)) }
+        },
+    )
 }
 
 private fun WorkDetail.mediaFileFor(item: PlaylistItem): String? = when (val tree = children) {
