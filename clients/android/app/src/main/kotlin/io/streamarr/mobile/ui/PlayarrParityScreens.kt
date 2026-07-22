@@ -1826,6 +1826,8 @@ internal class ParitySettingsViewModel @Inject constructor(
     val invite = _invite.asStateFlow()
     private val _inviteBusy = MutableStateFlow(false)
     val inviteBusy = _inviteBusy.asStateFlow()
+    private val _pinBusy = MutableStateFlow(false)
+    val pinBusy = _pinBusy.asStateFlow()
     private val _servers = MutableStateFlow<List<SettingsServerEntry>>(emptyList())
     val servers = _servers.asStateFlow()
     private val _hasKnownServerGroup = MutableStateFlow(false)
@@ -1858,15 +1860,27 @@ internal class ParitySettingsViewModel @Inject constructor(
     fun savePlayerLanguage(language: String) = update(PlayarrString.SettingsPlayerSaved) {
         api.updatePlayerPreferences(UpdatePlayerPreferencesRequest(language))
     }
-    fun savePin(pin: String?) = update(
-        when {
+    fun savePin(pin: String?, onSuccess: () -> Unit = {}) = viewModelScope.launch {
+        if (_pinBusy.value) return@launch
+        val success = when {
             pin == null -> PlayarrString.SettingsProfilePinRemoved
             ((_state.value as? ParityLoad.Ready)?.value?.pin?.pinLocked == true) -> {
                 PlayarrString.SettingsProfilePinReplaced
             }
             else -> PlayarrString.SettingsProfilePinSet
-        },
-    ) { api.updateProfilePinSetting(UpdateProfilePinRequest(pin)) }
+        }
+        _pinBusy.value = true
+        runCatching { api.updateProfilePinSetting(UpdateProfilePinRequest(pin)) }
+            .onSuccess { setting ->
+                updatePinSetting(setting)
+                _message.value = SettingsNotice(key = success, success = true)
+                onSuccess()
+            }
+            .onFailure {
+                _message.value = SettingsNotice(text = it.playarrMessage("profile lock"), success = false)
+            }
+        _pinBusy.value = false
+    }
     fun saveAvatar(preference: ProfileAvatarPreference) = update(PlayarrString.SettingsAvatarSaved) {
         api.updateProfileAvatar(UpdateProfileAvatarRequest(preference))
     }
@@ -2036,6 +2050,11 @@ internal class ParitySettingsViewModel @Inject constructor(
         _state.value = ParityLoad.Ready(current.copy(inviteRequest = request))
     }
 
+    private fun updatePinSetting(setting: ProfilePinSetting) {
+        val current = (_state.value as? ParityLoad.Ready)?.value ?: return
+        _state.value = ParityLoad.Ready(current.copy(pin = setting))
+    }
+
     private fun update(success: PlayarrString, block: suspend () -> Any) = viewModelScope.launch {
         runCatching { block() }
             .onSuccess { _message.value = SettingsNotice(key = success, success = true); load() }
@@ -2065,6 +2084,7 @@ internal fun ExperienceParitySettingsScreen(
     val message by viewModel.message.collectAsState()
     val invite by viewModel.invite.collectAsState()
     val inviteBusy by viewModel.inviteBusy.collectAsState()
+    val pinBusy by viewModel.pinBusy.collectAsState()
     val servers by viewModel.servers.collectAsState()
     val hasKnownServerGroup by viewModel.hasKnownServerGroup.collectAsState()
     val serverBusy by viewModel.serverBusy.collectAsState()
@@ -2118,6 +2138,7 @@ internal fun ExperienceParitySettingsScreen(
                             serverUrl = serverUrl,
                             isTelevision = isTelevision,
                             inviteBusy = inviteBusy,
+                            pinBusy = pinBusy,
                             servers = servers,
                             hasKnownServerGroup = hasKnownServerGroup,
                             serverBusy = serverBusy,
@@ -2158,6 +2179,7 @@ private fun SettingsSectionContent(
     serverUrl: String,
     isTelevision: Boolean,
     inviteBusy: Boolean,
+    pinBusy: Boolean,
     servers: List<SettingsServerEntry>,
     hasKnownServerGroup: Boolean,
     serverBusy: Boolean,
@@ -2170,6 +2192,11 @@ private fun SettingsSectionContent(
         SettingsSection.Appearance -> playarrString(PlayarrString.SettingsAppearanceDescription)
         SettingsSection.Language -> playarrString(PlayarrString.SettingsLanguageDescription)
         SettingsSection.Player -> playarrString(PlayarrString.SettingsPlayerDescription)
+        SettingsSection.Lock -> playarrString(
+            PlayarrString.SettingsProfileLockDescription,
+            "name" to snapshot.userName,
+        )
+        SettingsSection.Invite -> playarrString(PlayarrString.SettingsInviteDescription)
         else -> null
     }
     SettingsCard(playarrString(section.label), description) {
@@ -2335,12 +2362,57 @@ private fun SettingsSectionContent(
             }
             SettingsSection.Lock -> {
                 var pin by remember { mutableStateOf("") }
-                Text(if (snapshot.pin.pinLocked) "This profile is protected." else "No profile PIN is set.", color = WebInkSoft)
-                OutlinedTextField(pin, { if (it.length <= 4 && it.all(Char::isDigit)) pin = it }, label = { Text("New 4-digit PIN") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), singleLine = true)
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = { if (it.length <= 4 && it.all(Char::isDigit)) pin = it },
+                    enabled = !pinBusy,
+                    label = {
+                        Text(
+                            playarrString(
+                                if (snapshot.pin.pinLocked) {
+                                    PlayarrString.SettingsProfileLockReplacePin
+                                } else {
+                                    PlayarrString.SettingsProfileLockNewPin
+                                },
+                            ),
+                        )
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(enabled = pin.length == 4, onClick = { viewModel.savePin(pin) }) { Text("Set PIN") }
-                    OutlinedButton(enabled = snapshot.pin.pinLocked, onClick = { viewModel.savePin(null) }) { Text("Remove PIN") }
+                    Button(
+                        enabled = pin.length == 4 && !pinBusy,
+                        onClick = { viewModel.savePin(pin) { pin = "" } },
+                    ) {
+                        Text(
+                            playarrString(
+                                when {
+                                    pinBusy -> PlayarrString.SettingsProfileLockSaving
+                                    snapshot.pin.pinLocked -> PlayarrString.SettingsProfileLockReplace
+                                    else -> PlayarrString.SettingsProfileLockSetPin
+                                },
+                            ),
+                        )
+                    }
+                    if (snapshot.pin.pinLocked) {
+                        OutlinedButton(
+                            enabled = !pinBusy,
+                            onClick = { viewModel.savePin(null) { pin = "" } },
+                        ) { Text(playarrString(PlayarrString.SettingsProfileLockRemovePin)) }
+                    }
                 }
+                Text(
+                    playarrString(
+                        when {
+                            pinBusy -> PlayarrString.SettingsProfileLockUpdating
+                            snapshot.pin.pinLocked -> PlayarrString.SettingsProfileLockOn
+                            else -> PlayarrString.SettingsProfileLockOff
+                        },
+                    ),
+                    color = WebInkSoft,
+                )
             }
             SettingsSection.Invite -> {
                 var requestMessage by remember { mutableStateOf("") }
@@ -2348,26 +2420,47 @@ private fun SettingsSectionContent(
                 LaunchedEffect(request?.status) {
                     if (request?.status == InviteRequestStatus.Pending) requestMessage = ""
                 }
-                Text(request?.status?.name?.replace('_', ' ')?.uppercase(Locale.getDefault()) ?: "NO REQUEST", color = WebPink, fontWeight = FontWeight.Bold)
+                Text(
+                    playarrString(request?.status.playarrInviteStatusKey()),
+                    color = WebInkSoft,
+                )
                 when (request?.status) {
                     InviteRequestStatus.Approved -> Button(
                         onClick = { viewModel.generateInvite(serverUrl) },
                         enabled = !inviteBusy,
-                    ) { Text(if (inviteBusy) "Working…" else "Generate QR") }
-                    InviteRequestStatus.Pending -> Text("Your request is waiting for approval.", color = WebInkSoft)
+                    ) {
+                        Text(
+                            playarrString(
+                                if (inviteBusy) PlayarrString.SettingsInviteWorking
+                                else PlayarrString.SettingsInviteGenerateQr,
+                            ),
+                        )
+                    }
+                    InviteRequestStatus.Pending -> Button(onClick = {}, enabled = false) {
+                        Text(playarrString(PlayarrString.SettingsInviteRequestPending))
+                    }
                     else -> {
                         OutlinedTextField(
                             requestMessage,
                             { if (it.length <= 500) requestMessage = it },
-                            label = { Text("Optional message") },
+                            label = { Text(playarrString(PlayarrString.SettingsInviteMessageLabel)) },
+                            placeholder = { Text(playarrString(PlayarrString.SettingsInviteMessagePlaceholder)) },
                             minLines = 4,
                             maxLines = 4,
+                            enabled = !inviteBusy,
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Button(
                             onClick = { viewModel.requestInvite(requestMessage) },
                             enabled = !inviteBusy,
-                        ) { Text(if (inviteBusy) "Working…" else "Request invitation") }
+                        ) {
+                            Text(
+                                playarrString(
+                                    if (inviteBusy) PlayarrString.SettingsInviteWorking
+                                    else PlayarrString.SettingsInviteRequestQr,
+                                ),
+                            )
+                        }
                     }
                 }
                 PlayarrApprovalNotifications()

@@ -53,6 +53,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Align Android profile-lock and friend-invite settings with Playarr Web through localized status,
+  guarded PIN updates, request-state guidance, QR details, and approval-notification controls.
 - Localize Android profile-avatar presets, upload validation, photo preparation, and the complete
   crop editor while retaining the Web workflow's supported formats, limits, and labels.
 - Localize Android appearance, language, and player preference controls and replace English-only

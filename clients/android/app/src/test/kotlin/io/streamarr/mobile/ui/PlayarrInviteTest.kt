@@ -1,6 +1,7 @@
 package io.streamarr.mobile.ui
 
 import io.streamarr.shared.data.model.PeerAddressEntry
+import io.streamarr.shared.data.model.InviteRequestStatus
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
@@ -42,6 +43,27 @@ class PlayarrInviteTest {
         assertEquals(
             listOf(PeerAddressEntry("", "https://connected.example.com")),
             playarrInviteAddresses(emptyList(), "https://connected.example.com"),
+        )
+    }
+
+    @Test
+    fun `invite request states use the exact localized web status copy`() {
+        assertEquals(PlayarrString.SettingsInviteStatusNone, null.playarrInviteStatusKey())
+        assertEquals(
+            PlayarrString.SettingsInviteStatusPending,
+            InviteRequestStatus.Pending.playarrInviteStatusKey(),
+        )
+        assertEquals(
+            PlayarrString.SettingsInviteStatusApproved,
+            InviteRequestStatus.Approved.playarrInviteStatusKey(),
+        )
+        assertEquals(
+            PlayarrString.SettingsInviteStatusDenied,
+            InviteRequestStatus.Denied.playarrInviteStatusKey(),
+        )
+        assertEquals(
+            PlayarrString.SettingsInviteStatusGenerated,
+            InviteRequestStatus.Generated.playarrInviteStatusKey(),
         )
     }
 
