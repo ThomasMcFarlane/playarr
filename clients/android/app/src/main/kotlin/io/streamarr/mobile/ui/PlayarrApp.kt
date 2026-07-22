@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -396,7 +398,6 @@ private fun LoginScreen(
                 state = pairingState,
                 onStart = viewModel::pairTelevision,
             )
-            PlayarrLanguageDropdown(Modifier.align(Alignment.TopEnd).padding(34.dp))
             return@BoxWithConstraints
         }
         MobileLoginScreen(
@@ -546,67 +547,131 @@ private fun TelevisionPairingScreen(
     state: PairingState,
     onStart: () -> Unit,
 ) {
-    val instructions = playarrString(
-        PlayarrString.DeviceLoginInstructions,
-        "url" to "playarr.app/link",
-    )
     Row(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceEvenly,
+        modifier = Modifier.fillMaxSize(),
     ) {
-        Column(Modifier.weight(0.9f).padding(50.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            PlayarrMark()
-            Text(playarrString(PlayarrString.DeviceLoginKicker), color = WebPink, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Text(playarrString(PlayarrString.DeviceLoginTitle), color = WebInk, fontSize = 42.sp, fontWeight = FontWeight.Medium)
-            Text(instructions, color = WebInkMuted, fontSize = 15.sp, lineHeight = 22.sp)
-        }
-        Surface(
-            modifier = Modifier.weight(1.1f).padding(44.dp),
-            color = WebSurfaceStrong.copy(alpha = 0.95f),
-            shape = RoundedCornerShape(28.dp),
+        Box(
+            modifier = Modifier
+                .weight(0.55f)
+                .fillMaxHeight()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(WebPink.copy(alpha = 0.08f), WebSurface),
+                        radius = 740f,
+                    ),
+                ),
+        )
+        Box(
+            modifier = Modifier.weight(1.45f).fillMaxHeight(),
+            contentAlignment = Alignment.Center,
         ) {
-            Column(Modifier.padding(32.dp), verticalArrangement = Arrangement.spacedBy(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                modifier = Modifier.widthIn(max = 880.dp).fillMaxWidth().padding(70.dp),
+                horizontalAlignment = Alignment.Start,
+            ) {
+                PlayarrPairingBrand()
+                Spacer(Modifier.height(70.dp))
+                Text(
+                    playarrString(PlayarrString.DeviceLoginKicker).uppercase(LocalPlayarrLanguage.current.locale),
+                    color = WebInkMuted,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 2.sp,
+                )
+                Text(
+                    playarrString(PlayarrString.DeviceLoginTitle),
+                    color = WebInk,
+                    fontSize = 82.sp,
+                    fontWeight = FontWeight.Normal,
+                    letterSpacing = (-4).sp,
+                    lineHeight = 86.sp,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                Spacer(Modifier.height(52.dp))
                 when (state) {
                     PairingState.Idle, PairingState.Requesting -> {
-                        CircularProgressIndicator(color = WebPink)
-                        Text(playarrString(PlayarrString.DeviceLoginCreatingCode), color = WebInkMuted)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(18.dp),
+                        ) {
+                            CircularProgressIndicator(color = WebPink)
+                            Text(playarrString(PlayarrString.DeviceLoginCreatingCode), color = WebInkMuted)
+                        }
                     }
                     is PairingState.Waiting -> {
                         val pairingDescription = playarrString(
                             PlayarrString.DeviceLoginPairingCode,
                             "code" to state.code.userCode,
                         )
-                        PlayarrQrCode(
-                            state.code.verificationUriComplete,
-                            playarrString(PlayarrString.DeviceLoginQrLabel),
-                            Modifier.size(220.dp),
-                        )
-                        Text(
-                            state.code.userCode,
-                            color = WebInk,
-                            fontSize = 42.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 5.sp,
-                            modifier = Modifier.semantics { contentDescription = pairingDescription },
-                        )
-                        Text(instructions, color = WebInkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        Text(playarrString(PlayarrString.DeviceLoginWaitingApproval), color = WebPink, fontWeight = FontWeight.SemiBold)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(72.dp),
+                        ) {
+                            PlayarrQrCode(
+                                state.code.verificationUriComplete,
+                                playarrString(PlayarrString.DeviceLoginQrLabel),
+                                Modifier.size(240.dp),
+                            )
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Text(playarrString(PlayarrString.DeviceLoginScanQr), color = WebInkMuted, fontSize = 18.sp)
+                                Text(
+                                    state.code.verificationUri,
+                                    color = WebInk,
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(playarrString(PlayarrString.DeviceLoginEnterCode), color = WebInkMuted, fontSize = 18.sp)
+                                Text(
+                                    state.code.userCode,
+                                    color = WebInk,
+                                    fontSize = 68.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 9.sp,
+                                    maxLines = 1,
+                                    modifier = Modifier.semantics { contentDescription = pairingDescription },
+                                )
+                                Text(
+                                    playarrString(PlayarrString.DeviceLoginWaitingApproval),
+                                    color = WebInkMuted,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                        }
                     }
                     is PairingState.Failed -> {
-                        Text(
-                            when (val failure = state.failure) {
-                                is PairingFailure.Localized -> playarrString(failure.key)
-                                is PairingFailure.Message -> failure.text
-                            },
-                            color = MaterialTheme.colorScheme.error,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        )
-                        Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text(playarrString(PlayarrString.DeviceLoginTryAgain)) }
+                        Column(
+                            modifier = Modifier.widthIn(max = 520.dp),
+                            verticalArrangement = Arrangement.spacedBy(18.dp),
+                        ) {
+                            Text(
+                                when (val failure = state.failure) {
+                                    is PairingFailure.Localized -> playarrString(failure.key)
+                                    is PairingFailure.Message -> failure.text
+                                },
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                            Button(onClick = onStart) { Text(playarrString(PlayarrString.DeviceLoginTryAgain)) }
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PlayarrPairingBrand() {
+    Column(horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(
+            painter = painterResource(R.drawable.playarr_mark),
+            contentDescription = null,
+            tint = Color.Unspecified,
+            modifier = Modifier.size(48.dp),
+        )
+        Text("Playarr", color = WebInkSoft, fontSize = 24.sp, fontWeight = FontWeight.Bold)
     }
 }
 

@@ -79,6 +79,12 @@ internal enum class PlayarrString(
         "สแกนคิวอาร์โค้ด หรือไปที่ {{url}} แล้วป้อนรหัสนี้",
         "QRコードを読み取るか、{{url}}にアクセスしてこのコードを入力してください。",
     ),
+    DeviceLoginScanQr(
+        "Scan the QR code, or visit",
+        "สแกนคิวอาร์โค้ด หรือเข้าไปที่",
+        "QRコードを読み取るか、こちらにアクセスしてください",
+    ),
+    DeviceLoginEnterCode("and enter this code", "แล้วป้อนรหัสนี้", "このコードを入力してください"),
     DeviceLoginPairingCode("Pairing code {{code}}", "รหัสจับคู่ {{code}}", "ペアリングコード {{code}}"),
     DeviceLoginWaitingApproval("Waiting for approval…", "กำลังรอการอนุมัติ…", "承認をお待ちください…"),
     DeviceLoginTryAgain("Try again", "ลองอีกครั้ง", "もう一度試す"),

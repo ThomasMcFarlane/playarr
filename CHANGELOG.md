@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Match Android TV's pairing hierarchy to Playarr Web's split auth layout, keeping the branding,
+  heading, QR code, verification URL, pairing code, and status together in the auth panel.
 - Adopt Android KTX helpers for bitmap, URI, and preference operations and explicitly retain the
   Firebase legacy token callback and Hilt parameter target required by the current SDKs.
 - Shrink unused resources from minified Android releases and provide a monochrome adaptive icon
