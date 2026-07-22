@@ -45,6 +45,19 @@ class PlayarrAppTest {
     }
 
     @Test
+    fun `connected server fallback label uses the origin host`() {
+        assertEquals(
+            "secondary.example.com",
+            playarrServerFallbackLabel("https://secondary.example.com:9443"),
+        )
+    }
+
+    @Test
+    fun `connected server fallback label preserves an unparseable value`() {
+        assertEquals("not a URL", playarrServerFallbackLabel("not a URL"))
+    }
+
+    @Test
     fun `relative artwork URL resolves against the selected account server`() {
         assertEquals(
             "https://streamarr.example.com/api/v1/artwork/work-1/backdrop",

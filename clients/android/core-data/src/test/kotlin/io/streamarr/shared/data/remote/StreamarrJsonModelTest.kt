@@ -18,6 +18,7 @@ import io.streamarr.shared.data.model.SelfCapabilitiesResponse
 import io.streamarr.shared.data.model.WatchProgress
 import io.streamarr.shared.data.model.WatchState
 import io.streamarr.shared.data.model.ViewSummary
+import io.streamarr.shared.data.model.VersionEnvelope
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
 import io.streamarr.shared.data.model.WorkCreditsResponse
@@ -385,6 +386,16 @@ class StreamarrJsonModelTest {
         )
 
         assertTrue(capabilities.canDownload)
+    }
+
+    @Test
+    fun `decodes the server instance name from the version envelope`() {
+        val version = json.decodeFromString(
+            VersionEnvelope.serializer(),
+            """{"instance_name":"Living Room","server_version":"0.1.0","api_version":"v1","compatibility":[]}""",
+        )
+
+        assertEquals("Living Room", version.instanceName)
     }
 
     @Test

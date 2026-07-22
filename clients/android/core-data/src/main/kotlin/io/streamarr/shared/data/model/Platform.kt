@@ -43,6 +43,7 @@ data class CompatibilityEntry(
 /** Response body for `GET /api/system/version`. */
 @Serializable
 data class VersionEnvelope(
+    val instanceName: String,
     val serverVersion: String,
     val apiVersion: String,
     val buildSha: String? = null,

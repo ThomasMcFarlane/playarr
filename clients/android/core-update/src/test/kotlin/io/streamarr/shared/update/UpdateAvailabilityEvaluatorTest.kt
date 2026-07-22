@@ -17,6 +17,7 @@ import org.junit.Test
 class UpdateAvailabilityEvaluatorTest {
 
     private fun envelopeWith(vararg entries: CompatibilityEntry): VersionEnvelope = VersionEnvelope(
+        instanceName = "Test Streamarr",
         serverVersion = "2.4.1",
         apiVersion = "17",
         compatibility = entries.toList(),

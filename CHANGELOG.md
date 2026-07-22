@@ -53,6 +53,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add Android mobile and TV Settings controls for listing independently connected Playarr servers,
+  connecting and disconnecting profile-scoped sessions, showing instance names, testing the
+  primary connection, and forgetting only the primary deployment's remembered failover group.
 - Bring Android friend invitations to Playarr Web parity with live approval refresh, notification
   enablement, grouped-server links, QR and expiry display, clipboard copying, and fallback routing.
 - Add Android phone photo avatars with Playarr Web-compatible pan, zoom, square crop, and

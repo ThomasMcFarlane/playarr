@@ -86,6 +86,11 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.streamarr.mobile.BuildConfig
+import io.streamarr.mobile.connected.PlayarrServerClientProvider
+import io.streamarr.mobile.di.PrimaryStreamarrApi
+import io.streamarr.shared.auth.ConnectedServerSessionManager
+import io.streamarr.shared.auth.ConnectedServerSessionStore
+import io.streamarr.shared.auth.KnownServerGroupStore
 import io.streamarr.shared.auth.TokenStore
 import io.streamarr.shared.auth.model.ClientPlatform
 import io.streamarr.shared.auth.model.LoginRequest
@@ -110,9 +115,11 @@ import io.streamarr.shared.data.model.UpdatePlayerPreferencesRequest
 import io.streamarr.shared.data.model.UpdateProfileAvatarRequest
 import io.streamarr.shared.data.model.UpdateProfilePinRequest
 import io.streamarr.shared.data.model.UserInviteRequest
+import io.streamarr.shared.data.model.VersionEnvelope
 import io.streamarr.shared.data.model.WorkChildren
 import io.streamarr.shared.data.model.WorkDetail
 import io.streamarr.shared.data.remote.StreamarrApi
+import java.net.URI
 import java.util.Locale
 import javax.inject.Inject
 import kotlinx.coroutines.async
@@ -121,6 +128,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
@@ -653,17 +662,42 @@ private fun ProfileChoice(
 
 internal data class SettingsSnapshot(
     val userId: String,
+    val userName: String,
     val player: PlayerPreferences,
     val pin: ProfilePinSetting,
     val avatar: ProfileAvatarSetting,
     val inviteRequest: UserInviteRequest?,
 )
 
+internal data class SettingsServerEntry(
+    val serverUrl: String,
+    val label: String,
+    val username: String,
+    val primary: Boolean,
+)
+
+internal sealed interface SettingsConnectionTest {
+    data object Idle : SettingsConnectionTest
+    data object Testing : SettingsConnectionTest
+    data class Success(val version: VersionEnvelope) : SettingsConnectionTest
+    data class Failed(val message: String) : SettingsConnectionTest
+}
+
+private data class SettingsServerObservation(
+    val profileUserId: String?,
+    val hasKnownServerGroup: Boolean,
+)
+
 @HiltViewModel
 internal class ParitySettingsViewModel @Inject constructor(
     private val api: StreamarrApi,
+    @param:PrimaryStreamarrApi private val primaryApi: StreamarrApi,
     private val tokenStore: TokenStore,
     private val serverConfigStore: ServerConfigStore,
+    private val connectedServerSessionManager: ConnectedServerSessionManager,
+    private val connectedServerSessionStore: ConnectedServerSessionStore,
+    private val knownServerGroupStore: KnownServerGroupStore,
+    private val serverClientProvider: PlayarrServerClientProvider,
 ) : ViewModel() {
     private val _state = MutableStateFlow<ParityLoad<SettingsSnapshot>>(ParityLoad.Loading)
     val state = _state.asStateFlow()
@@ -673,14 +707,26 @@ internal class ParitySettingsViewModel @Inject constructor(
     val invite = _invite.asStateFlow()
     private val _inviteBusy = MutableStateFlow(false)
     val inviteBusy = _inviteBusy.asStateFlow()
+    private val _servers = MutableStateFlow<List<SettingsServerEntry>>(emptyList())
+    val servers = _servers.asStateFlow()
+    private val _hasKnownServerGroup = MutableStateFlow(false)
+    val hasKnownServerGroup = _hasKnownServerGroup.asStateFlow()
+    private val _serverBusy = MutableStateFlow(false)
+    val serverBusy = _serverBusy.asStateFlow()
+    private val _connectionTest = MutableStateFlow<SettingsConnectionTest>(SettingsConnectionTest.Idle)
+    val connectionTest = _connectionTest.asStateFlow()
 
-    init { load() }
+    init {
+        load()
+        observeConnectedServers()
+    }
 
     fun load() = viewModelScope.launch {
         _state.value = runCatching {
             coroutineScope {
                 SettingsSnapshot(
                     tokenStore.currentUserId.first().orEmpty(),
+                    tokenStore.currentUserName.first() ?: "Viewer",
                     async { api.getPlayerPreferences() }.await(),
                     async { api.getProfilePinSetting() }.await(),
                     async { api.getProfileAvatar() }.await(),
@@ -728,11 +774,100 @@ internal class ParitySettingsViewModel @Inject constructor(
     }
     fun dismissInvite() { _invite.value = null }
     fun refreshInviteRequest() = viewModelScope.launch { runCatching { refreshInviteRequestNow() } }
+    fun connectServer(
+        serverUrl: String,
+        username: String,
+        password: String,
+        isTelevision: Boolean,
+        onSuccess: () -> Unit,
+    ) = viewModelScope.launch {
+        if (_serverBusy.value) return@launch
+        _serverBusy.value = true
+        runCatching {
+            val profileUserId = tokenStore.currentUserId.first()
+                ?: error("Sign in before connecting another server.")
+            val targetUrl = normaliseServerUrl(serverUrl)
+            val primaryUrl = normaliseServerUrl(serverConfigStore.baseUrl.first())
+            require(targetUrl != primaryUrl) { "That is already your primary server." }
+            connectedServerSessionManager.connect(
+                profileUserId = profileUserId,
+                serverUrl = targetUrl,
+                username = username.trim(),
+                password = password,
+                clientPlatform = if (isTelevision) ClientPlatform.AndroidTv else ClientPlatform.AndroidMobile,
+                clientVersion = BuildConfig.VERSION_NAME,
+                deviceName = "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
+            )
+        }.onSuccess {
+            _message.value = "Server connected"
+            onSuccess()
+        }.onFailure { _message.value = it.playarrServerConnectionMessage() }
+        _serverBusy.value = false
+    }
+    fun disconnectServer(serverUrl: String) = viewModelScope.launch {
+        val profileUserId = tokenStore.currentUserId.first() ?: return@launch
+        runCatching { connectedServerSessionManager.disconnect(profileUserId, serverUrl) }
+            .onSuccess { _message.value = "Server disconnected" }
+            .onFailure { _message.value = it.playarrMessage("server connection") }
+    }
+    fun forgetKnownServerGroup() = viewModelScope.launch {
+        runCatching { knownServerGroupStore.forgetGroup() }
+            .onSuccess { _message.value = "Server group forgotten" }
+            .onFailure { _message.value = it.playarrMessage("server group") }
+    }
+    fun testPrimaryConnection() = viewModelScope.launch {
+        if (_connectionTest.value == SettingsConnectionTest.Testing) return@launch
+        _connectionTest.value = SettingsConnectionTest.Testing
+        _connectionTest.value = runCatching { primaryApi.getVersion() }
+            .fold(SettingsConnectionTest::Success) {
+                SettingsConnectionTest.Failed(it.playarrMessage("server connection"))
+            }
+    }
     fun changeServer(value: String) = viewModelScope.launch {
         runCatching { normaliseServerUrl(value) }.onSuccess { serverConfigStore.setBaseUrl(it); tokenStore.clear() }.onFailure { _message.value = "Enter a valid HTTP or HTTPS server URL." }
     }
     fun signOut() = viewModelScope.launch { tokenStore.clear() }
     fun clearMessage() { _message.value = null }
+
+    private fun observeConnectedServers() = viewModelScope.launch {
+        combine(
+            tokenStore.currentUserId,
+            connectedServerSessionStore.sessions,
+            knownServerGroupStore.group,
+        ) { profileUserId, _, knownServerGroup ->
+            SettingsServerObservation(profileUserId, knownServerGroup != null)
+        }.collectLatest { observation ->
+            _hasKnownServerGroup.value = observation.hasKnownServerGroup
+            if (observation.profileUserId == null) {
+                _servers.value = emptyList()
+                return@collectLatest
+            }
+            val clients = serverClientProvider.clients()
+            _servers.value = clients.map { client ->
+                SettingsServerEntry(
+                    serverUrl = client.url,
+                    label = playarrServerFallbackLabel(client.url),
+                    username = client.username,
+                    primary = client.primary,
+                )
+            }
+            _servers.value = coroutineScope {
+                clients.map { client ->
+                    async {
+                        val instanceName = runCatching { client.api.getVersion().instanceName }
+                            .getOrNull()
+                            ?.takeIf(String::isNotBlank)
+                        SettingsServerEntry(
+                            serverUrl = client.url,
+                            label = instanceName ?: playarrServerFallbackLabel(client.url),
+                            username = client.username,
+                            primary = client.primary,
+                        )
+                    }
+                }.awaitAll()
+            }
+        }
+    }
 
     private suspend fun resolveInviteAddresses(serverUrl: String): List<PeerAddressEntry> {
         val bundle = try {
@@ -772,6 +907,10 @@ internal fun ExperienceParitySettingsScreen(
     val message by viewModel.message.collectAsState()
     val invite by viewModel.invite.collectAsState()
     val inviteBusy by viewModel.inviteBusy.collectAsState()
+    val servers by viewModel.servers.collectAsState()
+    val hasKnownServerGroup by viewModel.hasKnownServerGroup.collectAsState()
+    val serverBusy by viewModel.serverBusy.collectAsState()
+    val connectionTest by viewModel.connectionTest.collectAsState()
     var section by remember { mutableStateOf(SettingsSection.Appearance) }
     LaunchedEffect(section) {
         if (section != SettingsSection.Invite) return@LaunchedEffect
@@ -815,16 +954,40 @@ internal fun ExperienceParitySettingsScreen(
                     when (val current = state) {
                         ParityLoad.Loading -> Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebPink) }
                         is ParityLoad.Failed -> ParityFailure(current.message, viewModel::load)
-                        is ParityLoad.Ready -> SettingsSectionContent(section, current.value, serverUrl, isTelevision, inviteBusy, viewModel)
+                        is ParityLoad.Ready -> SettingsSectionContent(
+                            section = section,
+                            snapshot = current.value,
+                            serverUrl = serverUrl,
+                            isTelevision = isTelevision,
+                            inviteBusy = inviteBusy,
+                            servers = servers,
+                            hasKnownServerGroup = hasKnownServerGroup,
+                            serverBusy = serverBusy,
+                            connectionTest = connectionTest,
+                            viewModel = viewModel,
+                        )
                     }
                 }
-                message?.let { item { Text(it, color = if (it.contains("saved") || it.contains("sent") || it.contains("generated")) WebPink else MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable { viewModel.clearMessage() }) } }
+                message?.let { item { Text(it, color = if (isPlayarrSettingsSuccess(it)) WebPink else MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable { viewModel.clearMessage() }) } }
                 item { OutlinedButton(onClick = viewModel::signOut, modifier = Modifier.fillMaxWidth()) { Text("Sign out", color = MaterialTheme.colorScheme.error) } }
             }
         }
     }
     invite?.let { PlayarrInviteDialog(it, viewModel::dismissInvite) }
 }
+
+private fun isPlayarrSettingsSuccess(message: String): Boolean = listOf(
+    "saved",
+    "sent",
+    "generated",
+    "connected",
+    "disconnected",
+    "forgotten",
+).any { marker -> marker in message.lowercase(Locale.ROOT) }
+
+internal fun playarrServerFallbackLabel(serverUrl: String): String = runCatching {
+    URI(serverUrl).host?.takeIf(String::isNotBlank)
+}.getOrNull() ?: serverUrl
 
 @Composable
 private fun SettingsSectionContent(
@@ -833,6 +996,10 @@ private fun SettingsSectionContent(
     serverUrl: String,
     isTelevision: Boolean,
     inviteBusy: Boolean,
+    servers: List<SettingsServerEntry>,
+    hasKnownServerGroup: Boolean,
+    serverBusy: Boolean,
+    connectionTest: SettingsConnectionTest,
     viewModel: ParitySettingsViewModel,
 ) {
     val display = LocalPlayarrDisplayPreferences.current
@@ -960,10 +1127,16 @@ private fun SettingsSectionContent(
                 )
             }
             SettingsSection.Server -> {
-                var value by remember(serverUrl) { mutableStateOf(serverUrl) }
-                OutlinedTextField(value, { value = it }, label = { Text("Server URL") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Button(onClick = { viewModel.changeServer(value) }) { Text("Save server") }
-                Text("Changing server returns you to sign-in. This device always connects directly to the selected Streamarr server.", color = WebInkMuted, fontSize = 11.sp)
+                SettingsServerSection(
+                    primaryServerUrl = serverUrl,
+                    defaultUsername = snapshot.userName,
+                    isTelevision = isTelevision,
+                    servers = servers,
+                    hasKnownServerGroup = hasKnownServerGroup,
+                    serverBusy = serverBusy,
+                    connectionTest = connectionTest,
+                    viewModel = viewModel,
+                )
             }
             SettingsSection.Lock -> {
                 var pin by remember { mutableStateOf("") }
@@ -1006,6 +1179,138 @@ private fun SettingsSectionContent(
             }
         }
     }
+}
+
+@Composable
+private fun SettingsServerSection(
+    primaryServerUrl: String,
+    defaultUsername: String,
+    isTelevision: Boolean,
+    servers: List<SettingsServerEntry>,
+    hasKnownServerGroup: Boolean,
+    serverBusy: Boolean,
+    connectionTest: SettingsConnectionTest,
+    viewModel: ParitySettingsViewModel,
+) {
+    var serverUrl by remember { mutableStateOf("") }
+    var username by remember(defaultUsername) { mutableStateOf(defaultUsername) }
+    var password by remember { mutableStateOf("") }
+    var primaryValue by remember(primaryServerUrl) { mutableStateOf(primaryServerUrl) }
+
+    Text("Connected servers", color = WebInkSoft, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    if (servers.isEmpty()) {
+        Text("Loading server connections…", color = WebInkMuted, fontSize = 11.sp)
+    }
+    servers.forEach { server ->
+        Surface(
+            color = WebSurfaceSoft,
+            shape = RoundedCornerShape(14.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.2f)),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(server.label, color = WebInk, fontWeight = FontWeight.SemiBold)
+                    Text(server.username, color = WebInkSoft, fontSize = 11.sp)
+                    Text(server.serverUrl, color = WebInkMuted, fontSize = 10.sp)
+                }
+                if (server.primary) {
+                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Text("PRIMARY", color = WebPink, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold)
+                        if (hasKnownServerGroup) {
+                            OutlinedButton(onClick = viewModel::forgetKnownServerGroup) {
+                                Text("Forget server", fontSize = 10.sp)
+                            }
+                        }
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = { viewModel.disconnectServer(server.serverUrl) },
+                        enabled = !serverBusy,
+                    ) { Text("Disconnect", fontSize = 10.sp) }
+                }
+            }
+        }
+    }
+
+    Text("Add another server", color = WebInk, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    Text(
+        "Sign in to an independent Playarr server to join its catalogue with this profile.",
+        color = WebInkMuted,
+        fontSize = 11.sp,
+    )
+    OutlinedTextField(
+        value = serverUrl,
+        onValueChange = { serverUrl = it },
+        label = { Text("Server address") },
+        placeholder = { Text("https://playarr.example") },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    OutlinedTextField(
+        value = username,
+        onValueChange = { username = it },
+        label = { Text("Username") },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    OutlinedTextField(
+        value = password,
+        onValueChange = { password = it },
+        label = { Text("Password") },
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Button(
+        onClick = {
+            viewModel.connectServer(serverUrl, username, password, isTelevision) {
+                serverUrl = ""
+                password = ""
+            }
+        },
+        enabled = serverUrl.isNotBlank() && !serverBusy,
+    ) { Text(if (serverBusy) "Connecting…" else "Connect") }
+
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        OutlinedButton(
+            onClick = viewModel::testPrimaryConnection,
+            enabled = connectionTest != SettingsConnectionTest.Testing,
+        ) { Text(if (connectionTest == SettingsConnectionTest.Testing) "Testing…" else "Test connection") }
+        when (connectionTest) {
+            SettingsConnectionTest.Idle, SettingsConnectionTest.Testing -> Unit
+            is SettingsConnectionTest.Success -> Text(
+                "Connected · Server ${connectionTest.version.serverVersion} · API ${connectionTest.version.apiVersion}",
+                color = WebPink,
+                fontSize = 10.sp,
+            )
+            is SettingsConnectionTest.Failed -> Text(
+                connectionTest.message,
+                color = MaterialTheme.colorScheme.error,
+                fontSize = 10.sp,
+            )
+        }
+    }
+
+    Text("Primary app server", color = WebInk, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    OutlinedTextField(
+        value = primaryValue,
+        onValueChange = { primaryValue = it },
+        label = { Text("Server URL") },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Button(onClick = { viewModel.changeServer(primaryValue) }) { Text("Save primary server") }
+    Text(
+        "Changing the primary server returns you to sign-in. Forget server only clears remembered failover addresses; it does not disconnect independent servers.",
+        color = WebInkMuted,
+        fontSize = 11.sp,
+    )
 }
 
 @Composable
@@ -1084,4 +1389,13 @@ private fun Throwable.playarrMessage(subject: String): String = when (this) {
         else -> "The server returned error ${code()}."
     }
     else -> message ?: "Couldn’t load $subject."
+}
+
+private fun Throwable.playarrServerConnectionMessage(): String = when (this) {
+    is HttpException -> when (code()) {
+        401 -> "The username or password was not accepted."
+        404 -> "No Playarr server was found at that address."
+        else -> "The server returned error ${code()}."
+    }
+    else -> message ?: "Couldn’t connect to that server."
 }
