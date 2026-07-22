@@ -47,6 +47,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Register Android playback with the platform media session so hardware play, pause, stop, seek,
+  Previous, and Next actions match Playarr Web's global media controls.
 - Carry ordered episode, track, and playlist context into Android playback so the Playarr player
   exposes boundary-safe Previous and Next controls on phones and televisions.
 - Expose Android playback quality, source audio, and subtitle menus backed by the same server

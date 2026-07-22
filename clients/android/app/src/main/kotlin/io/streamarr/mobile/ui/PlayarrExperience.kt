@@ -2043,6 +2043,10 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         }
     }
 
+    fun seekBy(deltaMs: Long) {
+        seekToSourcePosition(currentSourcePositionMs() + deltaMs)
+    }
+
     fun seekToSourcePosition(positionMs: Long) {
         val sourceDuration = currentSourceDurationMs()
         val sourcePosition = if (sourceDuration > 0L) {
@@ -2186,6 +2190,21 @@ private fun ExperiencePlayerScreen(
             kotlinx.coroutines.delay(10_000)
             viewModel.checkpoint()
         }
+    }
+    if (state is ExperienceLoad.Ready) {
+        PlayarrMediaSession(
+            player = viewModel.player.rawPlayer,
+            canPrevious = playbackQueue.canPrevious,
+            canNext = playbackQueue.canNext,
+            onPlay = viewModel.player::play,
+            onPause = viewModel.player::pause,
+            onTogglePlayback = viewModel::togglePlayback,
+            onStop = { viewModel.stopPlayback(); onBack() },
+            onSeekBackward = { viewModel.seekBy(-10_000L) },
+            onSeekForward = { viewModel.seekBy(10_000L) },
+            onPrevious = { onMovePlayback(-1) },
+            onNext = { onMovePlayback(1) },
+        )
     }
     Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
         when (val current = state) {
