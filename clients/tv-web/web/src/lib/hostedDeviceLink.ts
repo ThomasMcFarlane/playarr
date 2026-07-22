@@ -46,9 +46,13 @@ export interface HostedLinkPollOptions extends HostedLinkRequestOptions {
 
 export function shouldUseHostedDeviceLink(
   isPackagedTv: boolean,
-  configuredApiBaseUrl?: string
+  configuredApiBaseUrl?: string,
+  clientPlatform?: ClientPlatform
 ): boolean {
-  return isPackagedTv && !configuredApiBaseUrl?.trim();
+  return (
+    (isPackagedTv || clientPlatform === "tv-vidaa") &&
+    !configuredApiBaseUrl?.trim()
+  );
 }
 
 function hostedLinkFetch(fetchImpl?: typeof fetch): typeof fetch {
@@ -75,7 +79,7 @@ function waitForHostedLink(milliseconds: number, signal?: AbortSignal): Promise<
 
 /** Starts first-contact TV linking against playarr.app, before a TV knows any Streamarr URL. */
 export async function requestHostedDeviceLink(
-  clientPlatform: Extract<ClientPlatform, "tv-webos" | "tv-tizen">,
+  clientPlatform: Extract<ClientPlatform, "tv-webos" | "tv-tizen" | "tv-vidaa">,
   options: HostedLinkRequestOptions = {}
 ): Promise<HostedLinkCode> {
   const response = await hostedLinkFetch(options.fetchImpl)(`${HOSTED_LINK_ORIGIN}/api/link/code`, {

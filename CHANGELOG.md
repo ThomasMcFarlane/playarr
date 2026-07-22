@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Route VIDAA TV linking through the same hosted QR/link-code broker and first-contact flow used by Android TV.
 - Fix VIDAA custom-store installation on firmware that reports an absent custom-app list as a failed read.
 - Show Playarr's shared logo and language selector on the Android profile stage across phone and
   television layouts, matching the Web profile selector chrome.

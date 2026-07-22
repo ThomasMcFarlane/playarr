@@ -18,7 +18,14 @@ describe("hosted device linking", () => {
     expect(shouldUseHostedDeviceLink(false)).toBe(false);
   });
 
-  it.each(["tv-webos", "tv-tizen"] as const)(
+  it("uses the same hosted first-contact flow for VIDAA as packaged TVs", () => {
+    expect(shouldUseHostedDeviceLink(false, undefined, "tv-vidaa")).toBe(true);
+    expect(
+      shouldUseHostedDeviceLink(false, "https://streamarr.example.test", "tv-vidaa")
+    ).toBe(false);
+  });
+
+  it.each(["tv-webos", "tv-tizen", "tv-vidaa"] as const)(
     "requests a first-contact code for packaged %s clients",
     async (clientPlatform) => {
       const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>

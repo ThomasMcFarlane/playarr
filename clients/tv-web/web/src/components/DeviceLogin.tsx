@@ -55,10 +55,11 @@ export function DeviceLogin({
       if (
         shouldUseHostedDeviceLink(
           IS_PACKAGED_TV,
-          window.PlayarrPackagedConfig?.apiBaseUrl
+          window.PlayarrPackagedConfig?.apiBaseUrl,
+          PLAYARR_CLIENT_PLATFORM
         )
       ) {
-        const platform = PLAYARR_CLIENT_PLATFORM as "tv-webos" | "tv-tizen";
+        const platform = PLAYARR_CLIENT_PLATFORM as "tv-webos" | "tv-tizen" | "tv-vidaa";
         const code = await requestHostedDeviceLink(platform);
         if (cancelled) return;
         setDeviceCode(code);
