@@ -37,6 +37,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Let Android viewers persist the same Thumbnail or Cover home-rail artwork choice as Playarr
+  Web, including matching wide and portrait card geometry on phones and televisions.
 - Add complete developer-mode sideload instructions to the Roku client page, including the
   remote sequence, web installer login, unchanged ZIP upload, first-launch linking, and Roku's
   one-sideloaded-app limitation.

@@ -12,11 +12,21 @@ import androidx.compose.runtime.setValue
 
 internal enum class PlayarrThemePreference { System, Light, Dark }
 
+internal enum class PlayarrHomeViewPreference { Thumbnail, Cover }
+
+internal fun parsePlayarrHomeViewPreference(value: String?): PlayarrHomeViewPreference =
+    if (value == "cover") PlayarrHomeViewPreference.Cover else PlayarrHomeViewPreference.Thumbnail
+
+internal fun PlayarrHomeViewPreference.persistedValue(): String? =
+    if (this == PlayarrHomeViewPreference.Cover) "cover" else null
+
 @Immutable
 internal data class PlayarrDisplayPreferences(
     val theme: PlayarrThemePreference,
+    val homeView: PlayarrHomeViewPreference,
     val language: String,
     val setTheme: (PlayarrThemePreference) -> Unit,
+    val setHomeView: (PlayarrHomeViewPreference) -> Unit,
     val setLanguage: (String) -> Unit,
 )
 
@@ -38,6 +48,9 @@ internal fun rememberPlayarrDisplayPreferences(context: Context): RememberedPlay
                 .getOrDefault(PlayarrThemePreference.System),
         )
     }
+    var homeView by remember {
+        mutableStateOf(parsePlayarrHomeViewPreference(store.getString("home_view", null)))
+    }
     var language by remember { mutableStateOf(store.getString("language", "system") ?: "system") }
     val darkTheme = when (theme) {
         PlayarrThemePreference.System -> isSystemInDarkTheme()
@@ -46,10 +59,20 @@ internal fun rememberPlayarrDisplayPreferences(context: Context): RememberedPlay
     }
     val value = PlayarrDisplayPreferences(
         theme = theme,
+        homeView = homeView,
         language = language,
         setTheme = {
             theme = it
             store.edit().putString("theme", it.name).apply()
+        },
+        setHomeView = {
+            homeView = it
+            val persisted = it.persistedValue()
+            if (persisted == null) {
+                store.edit().remove("home_view").apply()
+            } else {
+                store.edit().putString("home_view", persisted).apply()
+            }
         },
         setLanguage = {
             language = it

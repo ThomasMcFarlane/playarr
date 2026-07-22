@@ -735,11 +735,42 @@ private fun SettingsSectionContent(
     val display = LocalPlayarrDisplayPreferences.current
     SettingsCard(section.label) {
         when (section) {
-            SettingsSection.Appearance -> SettingChoices(
-                "Theme",
-                PlayarrThemePreference.entries.map(PlayarrThemePreference::name),
-                display.theme.name,
-            ) { display.setTheme(PlayarrThemePreference.valueOf(it)) }
+            SettingsSection.Appearance -> {
+                SettingChoices(
+                    "Colour theme",
+                    PlayarrThemePreference.entries.map(PlayarrThemePreference::name),
+                    display.theme.name,
+                ) { display.setTheme(PlayarrThemePreference.valueOf(it)) }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Home screen artwork", color = WebInkSoft, fontSize = 12.sp)
+                    Text(
+                        "Show portrait covers instead of wide media thumbnails on the home screen.",
+                        color = WebInkMuted,
+                        fontSize = 11.sp,
+                    )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(listOf("Thumbnails", "Covers")) { choice ->
+                            val selected = if (display.homeView == PlayarrHomeViewPreference.Cover) {
+                                choice == "Covers"
+                            } else {
+                                choice == "Thumbnails"
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    display.setHomeView(
+                                        if (choice == "Covers") {
+                                            PlayarrHomeViewPreference.Cover
+                                        } else {
+                                            PlayarrHomeViewPreference.Thumbnail
+                                        },
+                                    )
+                                },
+                                enabled = !selected,
+                            ) { Text(choice) }
+                        }
+                    }
+                }
+            }
             SettingsSection.Avatar -> SettingChoices("Choose an avatar", listOf("orbit", "spark", "moon", "leaf"), snapshot.avatar.preference?.value) { viewModel.saveAvatar(it) }
             SettingsSection.Language -> SettingChoices(
                 "App language",

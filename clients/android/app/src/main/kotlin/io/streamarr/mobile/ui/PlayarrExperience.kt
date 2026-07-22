@@ -712,6 +712,7 @@ private fun ExperienceHomeScreen(
     navController: NavHostController,
     viewModel: PlayarrExperienceViewModel,
 ) {
+    val homeView = LocalPlayarrDisplayPreferences.current.homeView
     val state by viewModel.home.collectAsState()
     val progress by viewModel.progress.collectAsState()
     val progressByWork = remember(progress) { progress.associateBy(WatchProgress::workId) }
@@ -750,6 +751,7 @@ private fun ExperienceHomeScreen(
                                 serverUrl = serverUrl,
                                 accessToken = accessToken,
                                 isTelevision = isTelevision,
+                                homeView = homeView,
                                 selectedId = selectedId,
                                 progressByWork = progressByWork,
                                 onSelected = { selectedId = it.id },
@@ -856,6 +858,7 @@ private fun ExperienceMediaRail(
     serverUrl: String,
     accessToken: String?,
     isTelevision: Boolean,
+    homeView: PlayarrHomeViewPreference,
     selectedId: String,
     progressByWork: Map<String, WatchProgress>,
     onSelected: (Work) -> Unit,
@@ -875,7 +878,11 @@ private fun ExperienceMediaRail(
                     work = work,
                     serverUrl = serverUrl,
                     accessToken = accessToken,
-                    width = if (isTelevision) 219.dp else 178.dp,
+                    width = when (homeView) {
+                        PlayarrHomeViewPreference.Thumbnail -> if (isTelevision) 219.dp else 150.dp
+                        PlayarrHomeViewPreference.Cover -> if (isTelevision) 172.dp else 118.dp
+                    },
+                    homeView = homeView,
                     selected = selectedId == work.id,
                     progress = progressByWork[work.id],
                     onSelected = { onSelected(work) },
@@ -899,6 +906,7 @@ private fun ExperienceLandscapeCard(
     onClick: () -> Unit,
     onContext: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    homeView: PlayarrHomeViewPreference = PlayarrHomeViewPreference.Thumbnail,
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) 1.045f else 1f, label = "playarrCardFocus")
@@ -914,12 +922,18 @@ private fun ExperienceLandscapeCard(
             ),
     ) {
         Box(
-            Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)).background(WebSurfaceSoft)
+            Modifier.fillMaxWidth()
+                .aspectRatio(if (homeView == PlayarrHomeViewPreference.Cover) 2f / 3f else 16f / 9f)
+                .clip(RoundedCornerShape(10.dp)).background(WebSurfaceSoft)
                 .then(if (focused || selected) Modifier.border(1.dp, WebInk.copy(alpha = 0.62f), RoundedCornerShape(10.dp)) else Modifier),
         ) {
             AuthenticatedArtwork(
                 work = work,
-                kinds = listOf(ImageKind.Backdrop, ImageKind.Thumb, ImageKind.Poster),
+                kinds = if (homeView == PlayarrHomeViewPreference.Cover) {
+                    listOf(ImageKind.Poster, ImageKind.Backdrop)
+                } else {
+                    listOf(ImageKind.Backdrop, ImageKind.Thumb, ImageKind.Poster)
+                },
                 serverUrl = serverUrl,
                 accessToken = accessToken,
                 contentScale = ContentScale.Crop,
