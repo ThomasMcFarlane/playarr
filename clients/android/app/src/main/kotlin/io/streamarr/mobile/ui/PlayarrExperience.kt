@@ -105,10 +105,12 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import coil3.compose.AsyncImage
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
@@ -302,8 +304,24 @@ internal class PlayarrExperienceViewModel @Inject constructor(
                 kind to ((result as? StreamarrResult.Success)?.value ?: emptyList())
             }
             val progress = progressRequest.await()
+            val onDeck = progress
+                .asSequence()
+                .filter { it.state == WatchState.PartWatched }
+                .sortedByDescending { it.updatedAt.orEmpty() }
+                .distinctBy(WatchProgress::workId)
+                .take(10)
+                .map { row ->
+                    async {
+                        runCatching { api.getWork(row.workId) }
+                            .getOrNull()
+                            ?.let { resolvePlayarrOnDeckEntry(it, row) }
+                    }
+                }
+                .toList()
+                .awaitAll()
+                .filterNotNull()
             _progress.value = progress
-            _home.value = ExperienceLoad.Ready(buildPlayarrHomeRails(byKind, progress))
+            _home.value = ExperienceLoad.Ready(buildPlayarrHomeRails(byKind, onDeck))
         }
     }
 
@@ -913,9 +931,19 @@ private fun ExperienceNavHost(
                 ExperienceLibraryScreen(kind, serverUrl, accessToken, isTelevision, canDownload == true, navController, viewModel)
             }
         }
-        composable("experience-detail/{workId}") { entry ->
+        composable(
+            route = "experience-detail/{workId}?mediaFileId={mediaFileId}",
+            arguments = listOf(
+                navArgument("mediaFileId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { entry ->
             ExperienceDetailScreen(
                 workId = entry.arguments?.getString("workId").orEmpty(),
+                initialMediaFileId = entry.arguments?.getString("mediaFileId"),
                 serverUrl = serverUrl,
                 accessToken = accessToken,
                 isTelevision = isTelevision,
@@ -1041,7 +1069,15 @@ private fun ExperienceHomeScreen(
                                 selectedId = selectedId,
                                 progressByWork = progressByWork,
                                 onSelected = { selectedId = it.id },
-                                onClick = { navController.navigate("experience-detail/${it.id}") },
+                                onClick = { work, onDeck ->
+                                    val mediaFileId = onDeck?.episode?.mediaFileId
+                                        ?: onDeck?.progress?.mediaFileId
+                                    val route = "experience-detail/${Uri.encode(work.id)}"
+                                    navController.navigate(
+                                        if (mediaFileId == null) route
+                                        else "$route?mediaFileId=${Uri.encode(mediaFileId)}",
+                                    )
+                                },
                                 onContext = { contextWork = it },
                             )
                         }
@@ -1148,7 +1184,7 @@ private fun ExperienceMediaRail(
     selectedId: String,
     progressByWork: Map<String, WatchProgress>,
     onSelected: (Work) -> Unit,
-    onClick: (Work) -> Unit,
+    onClick: (Work, PlayarrOnDeckEntry?) -> Unit,
     onContext: (Work) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(start = if (isTelevision) 46.dp else 16.dp)) {
@@ -1160,6 +1196,8 @@ private fun ExperienceMediaRail(
             horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 24.dp else 12.dp),
         ) {
             items(rail.works, key = Work::id) { work ->
+                val onDeck = rail.onDeckByWork[work.id]
+                val episode = onDeck?.episode
                 ExperienceLandscapeCard(
                     work = work,
                     serverUrl = serverUrl,
@@ -1170,10 +1208,15 @@ private fun ExperienceMediaRail(
                     },
                     homeView = homeView,
                     selected = selectedId == work.id,
-                    progress = progressByWork[work.id],
+                    progress = onDeck?.progress ?: progressByWork[work.id],
                     onSelected = { onSelected(work) },
-                    onClick = { onClick(work) },
+                    onClick = { onClick(work, onDeck) },
                     onContext = { onContext(work) },
+                    mediaFileId = episode?.mediaFileId ?: onDeck?.progress?.mediaFileId,
+                    displayTitle = episode?.title ?: work.title,
+                    displaySubtitle = episode?.let {
+                        "${work.title} · S${it.seasonNumber.toString().padStart(2, '0')} E${it.episodeNumber.toString().padStart(2, '0')}"
+                    } ?: work.kind.label(),
                 )
             }
         }
@@ -1193,6 +1236,9 @@ private fun ExperienceLandscapeCard(
     onContext: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     homeView: PlayarrHomeViewPreference = PlayarrHomeViewPreference.Thumbnail,
+    mediaFileId: String? = null,
+    displayTitle: String = work.title,
+    displaySubtitle: String = work.kind.label(),
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) 1.045f else 1f, label = "playarrCardFocus")
@@ -1225,14 +1271,23 @@ private fun ExperienceLandscapeCard(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
+            if (mediaFileId != null && homeView == PlayarrHomeViewPreference.Thumbnail) {
+                AuthenticatedMediaThumbnail(
+                    mediaFileId = mediaFileId,
+                    serverUrl = serverUrl,
+                    accessToken = accessToken,
+                    contentDescription = displayTitle,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             progress?.takeIf { it.state != WatchState.Unseen }?.let {
                 Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.28f))) {
                     Box(Modifier.fillMaxWidth(it.fraction).fillMaxHeight().background(WebPink))
                 }
             }
         }
-        Text(work.title, color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp))
-        Text(work.kind.label(), color = WebInkMuted, fontSize = 10.sp, maxLines = 1)
+        Text(displayTitle, color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp))
+        Text(displaySubtitle, color = WebInkMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -1864,6 +1919,7 @@ internal data class ExperienceDetailSnapshot(
 @Composable
 private fun ExperienceDetailScreen(
     workId: String,
+    initialMediaFileId: String?,
     serverUrl: String,
     accessToken: String?,
     isTelevision: Boolean,
@@ -1919,6 +1975,7 @@ private fun ExperienceDetailScreen(
                         movieChapters = current.value.movieChapters,
                         movieMetadata = current.value.movieMetadata,
                         moviePlaybackOptions = current.value.moviePlaybackOptions,
+                        initialMediaFileId = initialMediaFileId,
                         serverUrl = serverUrl,
                         accessToken = accessToken,
                         isTelevision = isTelevision,
@@ -2020,6 +2077,7 @@ private fun ExperienceVideoDetailContent(
     movieChapters: List<MediaChapter>,
     movieMetadata: MediaMetadata?,
     moviePlaybackOptions: MediaPlaybackOptionsResponse?,
+    initialMediaFileId: String?,
     serverUrl: String,
     accessToken: String?,
     isTelevision: Boolean,
@@ -2035,13 +2093,22 @@ private fun ExperienceVideoDetailContent(
     val playableSeasons = remember(detail) {
         series?.let(::playarrPlayableSeasons).orEmpty()
     }
-    var selectedSeasonNumber by remember(detail.work.id) {
-        mutableStateOf(playableSeasons.firstOrNull()?.season?.seasonNumber)
+    val initialEpisode = remember(detail.work.id, initialMediaFileId) {
+        playableSeasons.firstNotNullOfOrNull { season ->
+            season.episodes.firstOrNull { it.mediaFileId == initialMediaFileId }
+                ?.let { season.season.seasonNumber to it }
+        }
+    }
+    var selectedSeasonNumber by remember(detail.work.id, initialMediaFileId) {
+        mutableStateOf(initialEpisode?.first ?: playableSeasons.firstOrNull()?.season?.seasonNumber)
     }
     val selectedSeason = playableSeasons.firstOrNull { it.season.seasonNumber == selectedSeasonNumber }
         ?: playableSeasons.firstOrNull()
-    var selectedEpisodeId by remember(detail.work.id) {
-        mutableStateOf(selectedSeason?.episodes?.firstOrNull { it.mediaFileId != null }?.episode?.id)
+    var selectedEpisodeId by remember(detail.work.id, initialMediaFileId) {
+        mutableStateOf(
+            initialEpisode?.second?.episode?.id
+                ?: selectedSeason?.episodes?.firstOrNull { it.mediaFileId != null }?.episode?.id,
+        )
     }
     val selectedEpisode = selectedSeason?.episodes
         ?.firstOrNull { it.episode.id == selectedEpisodeId && it.mediaFileId != null }
@@ -3907,6 +3974,36 @@ internal fun AuthenticatedArtwork(
         model = request,
         contentDescription = work.title,
         contentScale = contentScale,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun AuthenticatedMediaThumbnail(
+    mediaFileId: String,
+    serverUrl: String,
+    accessToken: String?,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val url = remember(serverUrl, mediaFileId) {
+        "${serverUrl.trimEnd('/')}/api/v1/media/${Uri.encode(mediaFileId)}/thumbnail"
+    }
+    val request = remember(url, accessToken) {
+        ImageRequest.Builder(context)
+            .data(url)
+            .apply {
+                if (!accessToken.isNullOrBlank()) {
+                    httpHeaders(NetworkHeaders.Builder().set("Authorization", "Bearer $accessToken").build())
+                }
+            }
+            .build()
+    }
+    AsyncImage(
+        model = request,
+        contentDescription = contentDescription,
+        contentScale = ContentScale.Crop,
         modifier = modifier,
     )
 }
