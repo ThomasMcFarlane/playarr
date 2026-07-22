@@ -646,6 +646,7 @@ internal fun PlayarrExperience(
     isTelevision: Boolean,
     initialRoute: String = "home",
     onAddProfile: () -> Unit = {},
+    onRouteChanged: (String) -> Unit = {},
     viewModel: PlayarrExperienceViewModel = hiltViewModel(),
     playerViewModel: ExperiencePlayerViewModel = hiltViewModel(),
 ) {
@@ -666,7 +667,20 @@ internal fun PlayarrExperience(
     val isPlayer = currentRoute.startsWith("experience-player")
     val isProfiles = currentRoute == "profiles"
     val online by rememberPlayarrOnlineStatus()
+    var profileReturnRoute by remember { mutableStateOf(initialRoute) }
+    val restorableRoute = restorableExperienceRoute(
+        route = entry?.destination?.route,
+        workId = entry?.arguments?.getString("workId"),
+        mediaFileId = entry?.arguments?.getString("mediaFileId"),
+        playlistId = entry?.arguments?.getString("playlistId"),
+    )
 
+    LaunchedEffect(restorableRoute) {
+        restorableRoute?.let {
+            profileReturnRoute = it
+            onRouteChanged(it)
+        }
+    }
     LaunchedEffect(currentUserId) {
         if (currentUserId != null) viewModel.reloadForProfile()
     }
@@ -728,6 +742,7 @@ internal fun PlayarrExperience(
                 canDownload,
                 online,
                 initialRoute,
+                profileReturnRoute,
                 onAddProfile,
                 viewModel,
                 playerViewModel,
@@ -1124,6 +1139,7 @@ private fun ExperienceNavHost(
     canDownload: Boolean?,
     isOnline: Boolean,
     initialRoute: String,
+    profileReturnRoute: String,
     onAddProfile: () -> Unit,
     viewModel: PlayarrExperienceViewModel,
     playerViewModel: ExperiencePlayerViewModel,
@@ -1229,7 +1245,7 @@ private fun ExperienceNavHost(
                 isTelevision = isTelevision,
                 currentUserId = currentUserId.orEmpty(),
                 currentAvatar = profileAvatar,
-                onHome = { navController.openExperienceTopLevel("home") },
+                onHome = { navController.openExperienceTopLevel(profileReturnRoute) },
                 onSettings = { navController.openExperienceTopLevel("settings") },
                 onAddProfile = onAddProfile,
             )
@@ -1257,6 +1273,27 @@ private fun ExperienceNavHost(
             }
         }
     }
+}
+
+internal fun restorableExperienceRoute(
+    route: String?,
+    workId: String? = null,
+    mediaFileId: String? = null,
+    playlistId: String? = null,
+): String? = when (route) {
+    "home", "search", "series", "movies", "sites", "music", "playlists", "settings", "downloads" -> route
+    "experience-detail/{workId}?mediaFileId={mediaFileId}" -> workId?.takeIf(String::isNotBlank)?.let { id ->
+        buildString {
+            append("experience-detail/")
+            append(id.asUrlPathSegment())
+            mediaFileId?.takeIf(String::isNotBlank)?.let {
+                append("?mediaFileId=")
+                append(it.asUrlPathSegment())
+            }
+        }
+    }
+    "playlists/{playlistId}" -> playlistId?.takeIf(String::isNotBlank)?.let { "playlists/${it.asUrlPathSegment()}" }
+    else -> null
 }
 
 @Composable

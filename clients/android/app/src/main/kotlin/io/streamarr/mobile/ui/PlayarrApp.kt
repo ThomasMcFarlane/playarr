@@ -155,7 +155,6 @@ class PlayarrRootViewModel @Inject constructor(
 
     fun addProfile() {
         viewModelScope.launch {
-            postAuthRoute.value = "home"
             loginRequested.value = true
             tokenStore.clearCurrent()
         }
@@ -165,9 +164,17 @@ class PlayarrRootViewModel @Inject constructor(
         loginRequested.value = false
     }
 
+    fun resumeAfterProfile() {
+        loginRequested.value = false
+    }
+
     fun openAfterProfile(route: String) {
         postAuthRoute.value = route
         loginRequested.value = false
+    }
+
+    fun rememberRoute(route: String) {
+        postAuthRoute.value = route
     }
 }
 
@@ -397,7 +404,7 @@ fun PlayarrApp(
                         isTelevision = isTelevision,
                         currentUserId = "",
                         currentAvatar = null,
-                        onHome = { rootViewModel.openAfterProfile("home") },
+                        onHome = rootViewModel::resumeAfterProfile,
                         onSettings = { rootViewModel.openAfterProfile("settings") },
                         onAddProfile = rootViewModel::addProfile,
                     )
@@ -408,12 +415,16 @@ fun PlayarrApp(
                         onBack = (rootViewModel::returnToProfiles).takeIf { current.canReturnToProfiles },
                     )
                 }
-                is RootState.SignedIn -> PlayarrExperience(
-                    serverUrl = current.serverUrl,
-                    isTelevision = isTelevision,
-                    initialRoute = current.initialRoute,
-                    onAddProfile = rootViewModel::addProfile,
-                )
+                is RootState.SignedIn -> {
+                    val initialRoute = remember(current.serverUrl) { current.initialRoute }
+                    PlayarrExperience(
+                        serverUrl = current.serverUrl,
+                        isTelevision = isTelevision,
+                        initialRoute = initialRoute,
+                        onAddProfile = rootViewModel::addProfile,
+                        onRouteChanged = rootViewModel::rememberRoute,
+                    )
+                }
             }
         }
     }

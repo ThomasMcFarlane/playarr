@@ -24,6 +24,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Preserve Android's exact top-level, playlist-detail, or media-detail destination through profile
+  switching, Add Profile, and expired-session reauthentication, matching Playarr Web's return path.
 - Match Playarr Web's shell offline state on Android while keeping Downloads, downloaded playback,
   and saved profiles available, and consume Back to close a minimised player before navigating.
 - Reject Android releases signed by the debug or an unexpected certificate, and verify the APK
