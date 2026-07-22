@@ -1199,11 +1199,14 @@ private fun ExperienceHomeScreen(
     val progress by viewModel.progress.collectAsState()
     val progressByWork = remember(progress) { progress.associateBy(WatchProgress::workId) }
     when (val current = state) {
-        ExperienceLoad.Loading -> ExperienceLoading("Preparing home")
+        ExperienceLoad.Loading -> ExperienceLoading(playarrString(PlayarrString.HomePreparing))
         is ExperienceLoad.Failed -> ExperienceFailure(current.message, viewModel::loadHome)
         is ExperienceLoad.Ready -> {
             if (current.value.isEmpty()) {
-                ExperienceEmpty("Your library is ready for its first title.")
+                ExperienceEmpty(
+                    playarrString(PlayarrString.HomeEmptyTitle),
+                    playarrString(PlayarrString.HomeEmptyDescription),
+                )
                 return
             }
             val allWorks = current.value.flatMap(HomeRail::works)
@@ -1311,9 +1314,12 @@ private fun ExperienceStage(
 
 @Composable
 private fun FeatureCopy(work: Work, isTelevision: Boolean = false) {
+    val language = LocalPlayarrLanguage.current
+    val kind = work.kind.playarrSingularLabel()
+    val genre = work.genres.firstOrNull() ?: playarrString(PlayarrString.HomeDefaultGenre)
     Column {
         Text(
-            listOfNotNull(work.kind.label(), work.genres.firstOrNull()).joinToString(" · ").uppercase(),
+            playarrString(PlayarrString.HomeKindGenre, "kind" to kind, "genre" to genre).uppercase(language.locale),
             color = WebPink,
             fontSize = 11.sp,
             fontWeight = FontWeight.ExtraBold,
@@ -1328,17 +1334,15 @@ private fun FeatureCopy(work: Work, isTelevision: Boolean = false) {
             lineHeight = if (isTelevision) 62.sp else 38.sp,
             modifier = Modifier.padding(top = 20.dp),
         )
-        work.overview?.takeIf(String::isNotBlank)?.let {
-            Text(
-                it,
-                color = WebInkMuted,
-                fontSize = 14.sp,
-                lineHeight = 21.sp,
-                maxLines = 5,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 20.dp),
-            )
-        }
+        Text(
+            work.overview?.takeIf(String::isNotBlank) ?: playarrString(PlayarrString.HomeNoSynopsis),
+            color = WebInkMuted,
+            fontSize = 14.sp,
+            lineHeight = 21.sp,
+            maxLines = 5,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 20.dp),
+        )
     }
 }
 
@@ -1355,9 +1359,15 @@ private fun ExperienceMediaRail(
     onClick: (Work, PlayarrOnDeckEntry?) -> Unit,
     onContext: (Work) -> Unit,
 ) {
+    val collection = playarrString(PlayarrString.LibraryCollectionTitles)
     Column(modifier = Modifier.fillMaxWidth().padding(start = if (isTelevision) 46.dp else 16.dp)) {
-        Text(rail.title, color = WebInk, fontSize = if (isTelevision) 18.sp else 16.sp, fontWeight = FontWeight.SemiBold)
-        Text("${rail.works.size} titles", color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp))
+        Text(playarrString(rail.title), color = WebInk, fontSize = if (isTelevision) 18.sp else 16.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            playarrString(PlayarrString.LibraryCollectionCount, "count" to rail.works.size, "collection" to collection),
+            color = WebInkMuted,
+            fontSize = 10.sp,
+            modifier = Modifier.padding(top = 2.dp),
+        )
         LazyRow(
             modifier = Modifier.fillMaxWidth().padding(top = 7.dp),
             contentPadding = PaddingValues(end = 20.dp, top = 6.dp, bottom = 12.dp),
@@ -1381,10 +1391,19 @@ private fun ExperienceMediaRail(
                     onClick = { onClick(work, onDeck) },
                     onContext = { onContext(work) },
                     mediaFileId = episode?.mediaFileId ?: onDeck?.progress?.mediaFileId,
-                    displayTitle = episode?.title ?: work.title,
+                    displayTitle = episode?.title?.takeIf(String::isNotBlank)
+                        ?: episode?.let {
+                            playarrString(PlayarrString.HomeEpisodeLabel, "number" to it.episodeNumber)
+                        }
+                        ?: work.title,
                     displaySubtitle = episode?.let {
-                        "${work.title} · S${it.seasonNumber.toString().padStart(2, '0')} E${it.episodeNumber.toString().padStart(2, '0')}"
-                    } ?: work.kind.label(),
+                        playarrString(
+                            PlayarrString.HomeEpisodeProvider,
+                            "title" to work.title,
+                            "season" to it.seasonNumber.toString().padStart(2, '0'),
+                            "episode" to it.episodeNumber.toString().padStart(2, '0'),
+                        )
+                    } ?: work.kind.playarrSingularLabel(),
                 )
             }
         }
@@ -1406,8 +1425,9 @@ private fun ExperienceLandscapeCard(
     homeView: PlayarrHomeViewPreference = PlayarrHomeViewPreference.Thumbnail,
     mediaFileId: String? = null,
     displayTitle: String = work.title,
-    displaySubtitle: String = work.kind.label(),
+    displaySubtitle: String? = null,
 ) {
+    val resolvedSubtitle = displaySubtitle ?: work.kind.playarrSingularLabel()
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) 1.045f else 1f, label = "playarrCardFocus")
     Column(
@@ -1455,7 +1475,7 @@ private fun ExperienceLandscapeCard(
             }
         }
         Text(displayTitle, color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp))
-        Text(displaySubtitle, color = WebInkMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(resolvedSubtitle, color = WebInkMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -1584,16 +1604,64 @@ private fun LibraryFiltersDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Library filters") },
+        title = { Text(playarrString(PlayarrString.LibraryFilters)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                LibraryFilterChoices("View", LibraryViewMode.entries, viewMode, onViewMode)
-                LibraryFilterChoices("Artwork size", LibraryArtworkSize.entries, artworkSize, onArtworkSize)
-                LibraryFilterChoices("Sort by", listOf("title", "recent"), sortMode, onSortMode)
-                LibraryFilterChoices("Order", listOf(false, true), descending, onDescending, label = { if (it) "Descending" else "Ascending" })
+                LibraryFilterChoices(
+                    playarrString(PlayarrString.LibraryView),
+                    LibraryViewMode.entries,
+                    viewMode,
+                    onViewMode,
+                ) {
+                    playarrString(
+                        when (it) {
+                            LibraryViewMode.List -> PlayarrString.LibraryViewList
+                            LibraryViewMode.Screen -> PlayarrString.LibraryViewScreen
+                            LibraryViewMode.Cover -> PlayarrString.LibraryViewCover
+                            LibraryViewMode.CoverFlow -> PlayarrString.LibraryViewCoverFlow
+                        },
+                    )
+                }
+                LibraryFilterChoices(
+                    playarrString(PlayarrString.LibraryArtworkSize),
+                    LibraryArtworkSize.entries,
+                    artworkSize,
+                    onArtworkSize,
+                ) {
+                    playarrString(
+                        when (it) {
+                            LibraryArtworkSize.Small -> PlayarrString.LibrarySizeSmall
+                            LibraryArtworkSize.Medium -> PlayarrString.LibrarySizeMedium
+                            LibraryArtworkSize.Large -> PlayarrString.LibrarySizeLarge
+                        },
+                    )
+                }
+                LibraryFilterChoices(
+                    playarrString(PlayarrString.LibrarySortBy),
+                    listOf("title", "recent"),
+                    sortMode,
+                    onSortMode,
+                ) {
+                    playarrString(if (it == "title") PlayarrString.LibrarySortTitle else PlayarrString.LibrarySortDateAdded)
+                }
+                LibraryFilterChoices(
+                    playarrString(PlayarrString.LibraryOrder),
+                    listOf(false, true),
+                    descending,
+                    onDescending,
+                ) {
+                    playarrString(
+                        when {
+                            sortMode == "title" && !it -> PlayarrString.LibrarySortAscAlpha
+                            sortMode == "title" -> PlayarrString.LibrarySortDescAlpha
+                            !it -> PlayarrString.LibrarySortAscDate
+                            else -> PlayarrString.LibrarySortDescDate
+                        },
+                    )
+                }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.LibraryCloseFilters)) } },
     )
 }
 
@@ -1603,10 +1671,11 @@ private fun <T> LibraryFilterChoices(
     values: List<T>,
     selected: T,
     onSelected: (T) -> Unit,
-    label: (T) -> String = { it.toString().replace("CoverFlow", "Cover flow") },
+    label: @Composable (T) -> String,
 ) {
+    val language = LocalPlayarrLanguage.current
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title.uppercase(), color = WebInkMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Text(title.uppercase(language.locale), color = WebInkMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             items(values) { value -> OutlinedButton(onClick = { onSelected(value) }, enabled = value != selected) { Text(label(value)) } }
         }
@@ -1626,13 +1695,21 @@ private fun ExperienceLibraryScreen(
     val states by viewModel.libraries.collectAsState()
     val progress by viewModel.progress.collectAsState()
     val progressByWork = remember(progress) { progress.associateBy(WatchProgress::workId) }
+    val language = LocalPlayarrLanguage.current
+    val plural = kind.playarrPluralLabel()
+    val collection = kind.playarrCollectionNoun()
     LaunchedEffect(kind) { viewModel.loadLibrary(kind) }
     when (val state = states[kind] ?: ExperienceLoad.Loading) {
-        ExperienceLoad.Loading -> ExperienceLoading("Loading ${kind.label().lowercase()}")
+        ExperienceLoad.Loading -> ExperienceLoading(
+            playarrString(PlayarrString.LibraryLoading, "label" to plural),
+        )
         is ExperienceLoad.Failed -> ExperienceFailure(state.message) { viewModel.loadLibrary(kind) }
         is ExperienceLoad.Ready -> {
             if (state.value.isEmpty()) {
-                ExperienceEmpty("No ${kind.label().lowercase()} are available.")
+                ExperienceEmpty(
+                    playarrString(PlayarrString.LibraryEmptyTitle, "plural" to plural.lowercase(language.locale)),
+                    playarrString(PlayarrString.LibraryEmptyDescription, "collection" to collection),
+                )
                 return
             }
             var selectedId by remember(state.value) { mutableStateOf(state.value.first().id) }
@@ -1668,8 +1745,13 @@ private fun ExperienceLibraryScreen(
                         .background(if (isTelevision) WebSurfaceStrong.copy(alpha = 0.93f) else Color.Transparent)
                         .padding(top = if (isTelevision) 76.dp else 18.dp),
                 ) {
-                    Text(kind.label(), color = WebInk, fontSize = if (isTelevision) 28.sp else 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(horizontal = if (isTelevision) 32.dp else 16.dp))
-                    Text("${state.value.size} titles", color = WebInkMuted, fontSize = 11.sp, modifier = Modifier.padding(horizontal = if (isTelevision) 32.dp else 16.dp, vertical = 4.dp))
+                    Text(plural, color = WebInk, fontSize = if (isTelevision) 28.sp else 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(horizontal = if (isTelevision) 32.dp else 16.dp))
+                    Text(
+                        playarrString(PlayarrString.LibraryCollectionCount, "count" to state.value.size, "collection" to collection),
+                        color = WebInkMuted,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(horizontal = if (isTelevision) 32.dp else 16.dp, vertical = 4.dp),
+                    )
                     LibraryResults(
                         works = filteredWorks,
                         viewMode = viewMode,
@@ -1693,7 +1775,11 @@ private fun ExperienceLibraryScreen(
                         .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.statusBars)
                         .padding(top = if (isTelevision) 116.dp else 14.dp, end = if (isTelevision) 14.dp else 66.dp)
                         .size(44.dp),
-                ) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.FilterList, "Filters", tint = WebInkMuted) } }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.FilterList, playarrString(PlayarrString.LibraryFilters), tint = WebInkMuted)
+                    }
+                }
                 if (isTelevision && sortMode == "title") {
                     LazyColumn(
                         modifier = Modifier.align(Alignment.CenterEnd).width(28.dp).fillMaxHeight(0.72f),
@@ -1792,7 +1878,7 @@ private fun ExperienceSearchScreen(
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
-                "Search",
+                playarrString(PlayarrString.SearchTitle),
                 color = WebInk,
                 fontSize = if (isTelevision) 44.sp else 30.sp,
                 fontWeight = FontWeight.Medium,
@@ -1800,9 +1886,12 @@ private fun ExperienceSearchScreen(
             )
             if (query.isNotBlank()) {
                 val resultStatus = when (val current = state) {
-                    ExperienceLoad.Loading -> "Searching…"
-                    is ExperienceLoad.Ready -> if (current.value.count == 1) "1 result" else "${current.value.count} results"
-                    is ExperienceLoad.Failed -> "0 results"
+                    ExperienceLoad.Loading -> playarrString(PlayarrString.SearchSearching)
+                    is ExperienceLoad.Ready -> playarrString(
+                        if (current.value.count == 1) PlayarrString.SearchResultCountOne else PlayarrString.SearchResultCountOther,
+                        "count" to current.value.count,
+                    )
+                    is ExperienceLoad.Failed -> playarrString(PlayarrString.SearchZeroResults)
                 }
                 Text(
                     resultStatus,
@@ -1819,8 +1908,22 @@ private fun ExperienceSearchScreen(
                 viewModel.search(it, mediaFilter, libraryId, debounce = true)
             },
             modifier = Modifier.fillMaxWidth(if (isTelevision) 0.58f else 1f).padding(top = 18.dp),
-            placeholder = { Text("Search your library") },
+            placeholder = { Text(playarrString(PlayarrString.SearchPlaceholder)) },
             leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+            trailingIcon = if (query.isNotEmpty()) {
+                {
+                    TextButton(
+                        onClick = {
+                            query = ""
+                            viewModel.search("", mediaFilter, libraryId, debounce = false)
+                        },
+                    ) {
+                        Text(playarrString(PlayarrString.SearchClear))
+                    }
+                }
+            } else {
+                null
+            },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { submitSearch(debounce = false) }),
@@ -1832,13 +1935,19 @@ private fun ExperienceSearchScreen(
             shape = RoundedCornerShape(14.dp),
         ) {
             Icon(Icons.Outlined.FilterList, contentDescription = null, modifier = Modifier.size(18.dp))
-            Text(
-                "Filters · ${mediaFilter.label} · ${activeLibrary?.name ?: "All libraries"}",
-                modifier = Modifier.padding(start = 7.dp),
-            )
+            Column(modifier = Modifier.padding(start = 7.dp)) {
+                Text(playarrString(PlayarrString.SearchFilters))
+                Text(
+                    playarrString(mediaFilter.label) + playarrString(
+                        PlayarrString.SearchLibraryFilter,
+                        "library" to (activeLibrary?.name ?: playarrString(PlayarrString.SearchAllLibraries)),
+                    ),
+                    fontSize = 10.sp,
+                )
+            }
         }
         if (filtersOpen) {
-            Text("Type", color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 10.dp))
+            Text(playarrString(PlayarrString.SearchType), color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 10.dp))
             LazyRow(
                 modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1853,10 +1962,10 @@ private fun ExperienceSearchScreen(
                         enabled = mediaFilter != type,
                         modifier = Modifier.height(36.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp),
-                    ) { Text(type.label, fontSize = 10.sp) }
+                    ) { Text(playarrString(type.label), fontSize = 10.sp) }
                 }
             }
-            Text("Library", color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
+            Text(playarrString(PlayarrString.SearchLibrary), color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
             LazyRow(
                 modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1870,7 +1979,7 @@ private fun ExperienceSearchScreen(
                         enabled = libraryId != null,
                         modifier = Modifier.height(36.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp),
-                    ) { Text("All", fontSize = 10.sp) }
+                    ) { Text(playarrString(PlayarrString.SearchAll), fontSize = 10.sp) }
                 }
                 items(views, key = ViewSummary::id) { view ->
                     OutlinedButton(
@@ -1900,9 +2009,15 @@ private fun ExperienceSearchScreen(
             ExperienceLoad.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebPink) }
             is ExperienceLoad.Failed -> ExperienceFailure(current.message) { submitSearch(debounce = false) }
             is ExperienceLoad.Ready -> if (query.isBlank()) {
-                Text("Find films, series, sites, and music.", color = WebInkMuted, modifier = Modifier.padding(top = 26.dp))
+                ExperienceEmpty(
+                    playarrString(PlayarrString.SearchIdleTitle),
+                    playarrString(PlayarrString.SearchEmptyPrompt),
+                )
             } else if (current.value.works.isEmpty() && current.value.playlists.isEmpty()) {
-                Text("No results for ‘$query’.", color = WebInkMuted, modifier = Modifier.padding(top = 26.dp))
+                ExperienceEmpty(
+                    playarrString(PlayarrString.SearchNoResultsTitle),
+                    playarrString(PlayarrString.SearchNoResultsDescription),
+                )
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(if (isTelevision) 210.dp else 164.dp),
@@ -1959,7 +2074,13 @@ private fun ExperienceSearchPreview(
     ) {
         Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
             if (work != null) {
-                Text(work.searchKindLabel().uppercase(), color = WebPink, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                val language = LocalPlayarrLanguage.current
+                Text(
+                    work.kind.playarrSingularLabel().uppercase(language.locale),
+                    color = WebPink,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                )
                 Text(
                     work.title,
                     color = WebInk,
@@ -1974,7 +2095,7 @@ private fun ExperienceSearchPreview(
                     Text(metadata.joinToString(" · "), color = WebInkMuted, fontSize = 10.sp, maxLines = 1)
                 }
                 Text(
-                    work.overview ?: "No synopsis is available.",
+                    work.overview?.takeIf(String::isNotBlank) ?: playarrString(PlayarrString.SearchNoSynopsis),
                     color = WebInkSoft,
                     fontSize = 11.sp,
                     maxLines = if (isTelevision) 2 else 3,
@@ -1982,8 +2103,11 @@ private fun ExperienceSearchPreview(
                     modifier = Modifier.padding(top = 5.dp),
                 )
             } else if (playlist != null) {
+                val language = LocalPlayarrLanguage.current
                 Text(
-                    if (playlist.isSystem) "SYSTEM PLAYLIST" else "PLAYLIST",
+                    playarrString(
+                        if (playlist.isSystem) PlayarrString.SearchSystemPlaylist else PlayarrString.SearchPlaylist,
+                    ).uppercase(language.locale),
                     color = WebPink,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
@@ -1999,14 +2123,6 @@ private fun ExperienceSearchPreview(
             }
         }
     }
-}
-
-private fun Work.searchKindLabel(): String = when (kind) {
-    WorkKind.Movie -> "Movie"
-    WorkKind.Series -> "Series"
-    WorkKind.Site -> "Site"
-    WorkKind.Artist -> "Artist"
-    WorkKind.Author -> "Author"
 }
 
 @HiltViewModel
@@ -4582,15 +4698,33 @@ internal fun ExperienceFailure(message: String, retry: () -> Unit) {
     Box(Modifier.fillMaxSize().background(WebSurface), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(32.dp)) {
             Text(message, color = MaterialTheme.colorScheme.error)
-            Button(onClick = retry) { Text("Try again") }
+            Button(onClick = retry) { Text(playarrString(PlayarrString.CommonTryAgain)) }
         }
     }
 }
 
 @Composable
-internal fun ExperienceEmpty(message: String) {
+internal fun ExperienceEmpty(message: String, description: String? = null) {
     Box(Modifier.fillMaxSize().background(WebSurface), contentAlignment = Alignment.Center) {
-        Text(message, color = WebInkMuted, modifier = Modifier.padding(32.dp))
+        Column(
+            modifier = Modifier.padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                message,
+                color = if (description == null) WebInkMuted else WebInk,
+                fontWeight = if (description == null) null else FontWeight.SemiBold,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            description?.let {
+                Text(
+                    it,
+                    color = WebInkMuted,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            }
+        }
     }
 }
 
@@ -4606,6 +4740,33 @@ private fun ExperienceNotFoundScreen() {
         Text("The address does not match an available Playarr view.", color = WebInkMuted, modifier = Modifier.padding(top = 10.dp))
     }
 }
+
+@Composable
+private fun WorkKind.playarrSingularLabel(): String = playarrString(
+    when (this) {
+        WorkKind.Movie -> PlayarrString.WorkKindMovie
+        WorkKind.Series -> PlayarrString.WorkKindSeries
+        WorkKind.Site -> PlayarrString.WorkKindSite
+        WorkKind.Artist -> PlayarrString.WorkKindArtist
+        WorkKind.Author -> PlayarrString.WorkKindAuthor
+    },
+)
+
+@Composable
+private fun WorkKind.playarrPluralLabel(): String = playarrString(
+    when (this) {
+        WorkKind.Movie -> PlayarrString.WorkKindMovies
+        WorkKind.Series -> PlayarrString.WorkKindSeries
+        WorkKind.Site -> PlayarrString.WorkKindSites
+        WorkKind.Artist -> PlayarrString.WorkKindMusic
+        WorkKind.Author -> PlayarrString.WorkKindBooks
+    },
+)
+
+@Composable
+private fun WorkKind.playarrCollectionNoun(): String = playarrString(
+    if (this == WorkKind.Artist) PlayarrString.LibraryCollectionArtists else PlayarrString.LibraryCollectionTitles,
+)
 
 private fun WorkKind.label(): String = when (this) {
     WorkKind.Movie -> "Movies"

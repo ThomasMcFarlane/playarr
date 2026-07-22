@@ -6,15 +6,15 @@ import io.streamarr.shared.data.model.WorkKind
 
 internal enum class PlayarrSearchMediaType(
     val value: String,
-    val label: String,
+    val label: PlayarrString,
     val workKind: WorkKind? = null,
 ) {
-    All("all", "All"),
-    Movie("movie", "Movies", WorkKind.Movie),
-    Series("series", "Series", WorkKind.Series),
-    Site("site", "Sites", WorkKind.Site),
-    Artist("artist", "Music", WorkKind.Artist),
-    Playlist("playlist", "Playlists"),
+    All("all", PlayarrString.SearchAll),
+    Movie("movie", PlayarrString.SearchFilterMovies, WorkKind.Movie),
+    Series("series", PlayarrString.SearchFilterSeries, WorkKind.Series),
+    Site("site", PlayarrString.SearchFilterSites, WorkKind.Site),
+    Artist("artist", PlayarrString.SearchFilterMusic, WorkKind.Artist),
+    Playlist("playlist", PlayarrString.SearchFilterPlaylists),
 }
 
 internal data class PlayarrSearchResults(

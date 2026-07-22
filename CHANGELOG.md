@@ -53,6 +53,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Localise Android Home, Search, and media-library surfaces in English, Thai, and Japanese with
+  Playarr Web's rail, filter, count, synopsis, loading, and empty-state copy, plus its query-clear
+  action on both phone and TV layouts.
 - Honour Auto, English, Thai, and Japanese Android UI language preferences across mobile and TV
   sign-in, primary navigation, and Settings section chrome, including an accessible TV sign-in
   language picker and regression coverage for locale resolution and translation interpolation.

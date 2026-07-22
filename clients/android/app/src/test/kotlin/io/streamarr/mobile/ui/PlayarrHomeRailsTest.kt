@@ -29,9 +29,9 @@ class PlayarrHomeRailsTest {
             ),
         )
 
-        assertEquals("On deck", rails.first().title)
+        assertEquals(PlayarrString.HomeRailOnDeck, rails.first().title)
         assertEquals(listOf(series.id, movie.id), rails.first().works.map(Work::id))
-        assertFalse(rails.any { it.title == "Start watching" })
+        assertFalse(rails.any { it.title == PlayarrString.HomeRailStartWatching })
     }
 
     @Test
@@ -40,7 +40,14 @@ class PlayarrHomeRailsTest {
         val rails = buildPlayarrHomeRails(mapOf(WorkKind.Movie to movies), emptyList())
         val ids = rails.flatMap(HomeRail::works).map(Work::id)
 
-        assertEquals(listOf("Start watching", "New movies", "More movies"), rails.map(HomeRail::title))
+        assertEquals(
+            listOf(
+                PlayarrString.HomeRailStartWatching,
+                PlayarrString.HomeRailNewMovies,
+                PlayarrString.HomeRailMoreMovies,
+            ),
+            rails.map(HomeRail::title),
+        )
         assertEquals(ids.size, ids.distinct().size)
         assertEquals(25, ids.size)
     }

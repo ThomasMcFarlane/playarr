@@ -9,7 +9,7 @@ import io.streamarr.shared.data.model.WorkKind
 internal data class PlayarrOnDeckEpisode(
     val id: String,
     val mediaFileId: String,
-    val title: String,
+    val title: String?,
     val seasonNumber: Int,
     val episodeNumber: Int,
 )
@@ -21,7 +21,7 @@ internal data class PlayarrOnDeckEntry(
 )
 
 internal data class HomeRail(
-    val title: String,
+    val title: PlayarrString,
     val works: List<Work>,
     val onDeckByWork: Map<String, PlayarrOnDeckEntry> = emptyMap(),
 )
@@ -40,7 +40,7 @@ internal fun resolvePlayarrOnDeckEntry(
             episode = PlayarrOnDeckEpisode(
                 id = episode.episode.id,
                 mediaFileId = progress.mediaFileId,
-                title = episode.episode.title ?: "Episode ${episode.episode.episodeNumber}",
+                title = episode.episode.title,
                 seasonNumber = season.season.seasonNumber,
                 episodeNumber = episode.episode.episodeNumber,
             ),
@@ -75,17 +75,17 @@ internal fun buildPlayarrHomeRails(
     val primaryIds = primary.mapTo(mutableSetOf(), Work::id)
     return listOf(
         HomeRail(
-            title = if (onDeck.isNotEmpty()) "On deck" else "Start watching",
+            title = if (onDeck.isNotEmpty()) PlayarrString.HomeRailOnDeck else PlayarrString.HomeRailStartWatching,
             works = primary,
             onDeckByWork = onDeck
                 .filter { it.work.id in primaryIds }
                 .associateBy { it.work.id },
         ),
-        HomeRail("New movies", takeUnused(movies, 12)),
-        HomeRail("New series", takeUnused(series, 12)),
-        HomeRail("New sites", takeUnused(sites, 12)),
-        HomeRail("More movies", takeUnused(movies, 12)),
-        HomeRail("More series", takeUnused(series, 12)),
-        HomeRail("More sites", takeUnused(sites, 12)),
+        HomeRail(PlayarrString.HomeRailNewMovies, takeUnused(movies, 12)),
+        HomeRail(PlayarrString.HomeRailNewSeries, takeUnused(series, 12)),
+        HomeRail(PlayarrString.HomeRailNewSites, takeUnused(sites, 12)),
+        HomeRail(PlayarrString.HomeRailMoreMovies, takeUnused(movies, 12)),
+        HomeRail(PlayarrString.HomeRailMoreSeries, takeUnused(series, 12)),
+        HomeRail(PlayarrString.HomeRailMoreSites, takeUnused(sites, 12)),
     ).filter { it.works.isNotEmpty() }
 }
