@@ -12,6 +12,7 @@ internal data class PlayarrPlaybackQueueItem(
     val seasonNumber: Int? = null,
     val episodeNumber: Int? = null,
     val music: Boolean = false,
+    val albumId: String? = null,
     val artworkWork: Work? = null,
 )
 
@@ -87,6 +88,7 @@ internal fun WorkDetail.playarrPlaybackQueueItems(): List<PlayarrPlaybackQueueIt
                     title = track.track.title,
                     subtitle = "${work.title} · ${album.album.title}",
                     music = true,
+                    albumId = album.album.id,
                     artworkWork = work,
                 )
             }

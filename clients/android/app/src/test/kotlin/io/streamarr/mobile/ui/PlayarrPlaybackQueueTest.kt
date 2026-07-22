@@ -96,6 +96,15 @@ class PlayarrPlaybackQueueTest {
         assertEquals("Track name", item.title)
         assertEquals("Artist name · Album name", item.subtitle)
         assertTrue(item.music)
+        assertEquals("album", item.albumId)
         assertEquals(artist, item.artworkWork)
+    }
+
+    @Test
+    fun `album artwork URL authenticates against the selected server`() {
+        assertEquals(
+            "https://media.example/api/v1/artwork/album/artist%20id/album%2Fid/poster",
+            resolveAlbumArtworkUrl("https://media.example/", "artist id", "album/id"),
+        )
     }
 }

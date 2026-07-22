@@ -2,7 +2,12 @@ package io.streamarr.mobile.ui
 
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -138,6 +143,8 @@ import io.streamarr.shared.player.StreamFormat
 import io.streamarr.shared.player.StreamarrPlayer
 import io.streamarr.shared.player.StreamarrSubtitleTrack
 import java.net.URI
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -2220,15 +2227,28 @@ private fun ExperiencePlayerScreen(
             is ExperienceLoad.Failed -> ExperienceFailure(current.message) {
                 viewModel.play(activeMediaFileId, serverUrl, playerDefaults)
             }
-            is ExperienceLoad.Ready -> androidx.compose.ui.viewinterop.AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { context ->
-                    androidx.media3.ui.PlayerView(context).apply {
-                        player = viewModel.player.rawPlayer
-                        useController = false
-                    }
-                },
-            )
+            is ExperienceLoad.Ready -> {
+                val item = playbackQueue.currentItem
+                if (item?.music == true) {
+                    PlayarrMusicPlayerVisual(
+                        item = item,
+                        serverUrl = serverUrl,
+                        accessToken = accessToken,
+                        isTelevision = isTelevision,
+                        playing = playbackState.playWhenReady,
+                    )
+                } else {
+                    androidx.compose.ui.viewinterop.AndroidView(
+                        modifier = Modifier.fillMaxSize(),
+                        factory = { context ->
+                            androidx.media3.ui.PlayerView(context).apply {
+                                player = viewModel.player.rawPlayer
+                                useController = false
+                            }
+                        },
+                    )
+                }
+            }
         }
         if (state is ExperienceLoad.Ready) {
             PlayarrPlayerChrome(
@@ -2262,6 +2282,161 @@ private fun ExperiencePlayerScreen(
             ) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = Color.White)
             }
+        }
+    }
+}
+
+@Composable
+private fun PlayarrMusicPlayerVisual(
+    item: PlayarrPlaybackQueueItem,
+    serverUrl: String,
+    accessToken: String?,
+    isTelevision: Boolean,
+    playing: Boolean,
+) {
+    val work = item.artworkWork
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        work?.let {
+            AuthenticatedArtwork(
+                work = it,
+                kinds = listOf(ImageKind.Backdrop, ImageKind.Poster),
+                serverUrl = serverUrl,
+                accessToken = accessToken,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        listOf(Color.Black.copy(alpha = 0.28f), Color.Black.copy(alpha = 0.88f)),
+                    ),
+                ),
+        )
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(bottom = if (isTelevision) 72.dp else 92.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(if (isTelevision) 390.dp else 260.dp)
+                    .clip(RoundedCornerShape(if (isTelevision) 12.dp else 18.dp))
+                    .background(WebSurfaceStrong),
+            ) {
+                work?.let {
+                    AuthenticatedAlbumArtwork(
+                        artistWork = it,
+                        albumId = item.albumId,
+                        serverUrl = serverUrl,
+                        accessToken = accessToken,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                PlayarrMusicVisualiser(
+                    active = playing,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(18.dp),
+                )
+            }
+            Text(
+                item.title,
+                color = Color.White,
+                fontSize = if (isTelevision) 30.sp else 22.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
+            item.subtitle?.let { subtitle ->
+                Text(
+                    subtitle,
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = if (isTelevision) 16.sp else 13.sp,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AuthenticatedAlbumArtwork(
+    artistWork: Work,
+    albumId: String?,
+    serverUrl: String,
+    accessToken: String?,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    Box(modifier) {
+        AuthenticatedArtwork(
+            work = artistWork,
+            kinds = listOf(ImageKind.Poster, ImageKind.Backdrop),
+            serverUrl = serverUrl,
+            accessToken = accessToken,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+        albumId?.let {
+            val resolved = remember(serverUrl, artistWork.id, albumId) {
+                resolveAlbumArtworkUrl(serverUrl, artistWork.id, albumId)
+            }
+            val request = remember(resolved, accessToken) {
+                ImageRequest.Builder(context)
+                    .data(resolved)
+                    .apply {
+                        if (!accessToken.isNullOrBlank()) {
+                            httpHeaders(NetworkHeaders.Builder().set("Authorization", "Bearer $accessToken").build())
+                        }
+                    }
+                    .build()
+            }
+            AsyncImage(
+                model = request,
+                contentDescription = itemAlbumArtworkDescription(artistWork.title),
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+internal fun resolveAlbumArtworkUrl(serverUrl: String, artistWorkId: String, albumId: String): String =
+    "${serverUrl.trimEnd('/')}/api/v1/artwork/album/${artistWorkId.asUrlPathSegment()}/${albumId.asUrlPathSegment()}/poster"
+
+private fun String.asUrlPathSegment(): String =
+    URLEncoder.encode(this, StandardCharsets.UTF_8.name()).replace("+", "%20")
+
+internal fun itemAlbumArtworkDescription(artistTitle: String): String = "$artistTitle album artwork"
+
+@Composable
+private fun PlayarrMusicVisualiser(active: Boolean, modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "music visualiser")
+    val levels = listOf(410, 570, 460, 630, 520).mapIndexed { index, duration ->
+        transition.animateFloat(
+            initialValue = 0.24f + (index * 0.04f),
+            targetValue = 1f - (index * 0.05f),
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = duration),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "music bar $index",
+        ).value
+    }
+    Row(
+        modifier = modifier.height(56.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        levels.forEach { level ->
+            Box(
+                Modifier
+                    .width(5.dp)
+                    .height(if (active) 50.dp * level else 10.dp)
+                    .background(WebPink, RoundedCornerShape(3.dp)),
+            )
         }
     }
 }

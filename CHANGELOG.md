@@ -47,6 +47,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Render Android music playback on an authenticated album-art stage with track metadata and an
+  animated playing visualiser instead of a blank video surface.
 - Add Android player now-playing metadata and an authenticated, natively scrollable Up Next panel
   with direct episode and track selection on phone and TV.
 - Register Android playback with the platform media session so hardware play, pause, stop, seek,
