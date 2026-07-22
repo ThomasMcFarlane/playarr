@@ -566,9 +566,13 @@ internal val experienceDestinations = listOf(
 internal fun visibleExperienceDestinations(
     availableKinds: Set<WorkKind>?,
     canDownload: Boolean?,
-): List<ExperienceDestination> = experienceDestinations.filter { destination ->
-    (destination.kind == null || availableKinds?.contains(destination.kind) == true) &&
-        (destination.route != "downloads" || canDownload == true)
+): List<ExperienceDestination> = if (availableKinds == null) {
+    emptyList()
+} else {
+    experienceDestinations.filter { destination ->
+        (destination.kind == null || availableKinds.contains(destination.kind)) &&
+            (destination.route != "downloads" || canDownload == true)
+    }
 }
 
 internal fun televisionDestinationGroups(
@@ -749,13 +753,16 @@ internal fun PlayarrExperience(
             )
 
             if (!isPlayer && !isProfiles) {
-                ExperienceNavigation(
-                    destinations = visibleExperienceDestinations(availableKinds, canDownload),
-                    currentRoute = currentRoute,
-                    isTelevision = isTelevision,
-                    onNavigate = { navController.openExperienceTopLevel(it) },
-                    modifier = Modifier.align(if (isTelevision) Alignment.CenterStart else Alignment.BottomCenter),
-                )
+                val visibleDestinations = visibleExperienceDestinations(availableKinds, canDownload)
+                if (visibleDestinations.isNotEmpty()) {
+                    ExperienceNavigation(
+                        destinations = visibleDestinations,
+                        currentRoute = currentRoute,
+                        isTelevision = isTelevision,
+                        onNavigate = { navController.openExperienceTopLevel(it) },
+                        modifier = Modifier.align(if (isTelevision) Alignment.CenterStart else Alignment.BottomCenter),
+                    )
+                }
                 ProfileControl(
                     isTelevision = isTelevision,
                     userId = currentUserId.orEmpty(),

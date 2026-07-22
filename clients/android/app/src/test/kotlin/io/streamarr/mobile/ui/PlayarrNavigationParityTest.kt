@@ -10,7 +10,8 @@ class PlayarrNavigationParityTest {
     private val allKinds = setOf(WorkKind.Series, WorkKind.Movie, WorkKind.Site, WorkKind.Artist)
 
     @Test
-    fun `mobile destinations follow Playarr Web order and hide downloads until granted`() {
+    fun `mobile destinations wait for catalogue access and hide downloads until granted`() {
+        assertTrue(visibleExperienceDestinations(availableKinds = null, canDownload = true).isEmpty())
         assertEquals(
             listOf("search", "home", "series", "movies", "sites", "music", "playlists"),
             visibleExperienceDestinations(allKinds, canDownload = null).map(ExperienceDestination::route),

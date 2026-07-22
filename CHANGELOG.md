@@ -24,6 +24,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Hide Android's authenticated navigation until catalogue-kind access resolves, matching Playarr
+  Web and preventing a partially authorized navigation bar from flashing during profile changes.
 - Preserve Android's exact top-level, playlist-detail, or media-detail destination through profile
   switching, Add Profile, and expired-session reauthentication, matching Playarr Web's return path.
 - Match Playarr Web's shell offline state on Android while keeping Downloads, downloaded playback,
