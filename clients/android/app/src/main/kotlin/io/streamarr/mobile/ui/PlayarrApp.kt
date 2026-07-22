@@ -618,7 +618,7 @@ private fun LoginField(
             singleLine = true,
             visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = imeAction),
-            modifier = Modifier.fillMaxWidth().height(60.dp),
+            modifier = Modifier.fillMaxWidth().height(60.dp).playarrSingleLineArrowNavigation(),
             shape = RoundedCornerShape(0.dp),
         )
     }

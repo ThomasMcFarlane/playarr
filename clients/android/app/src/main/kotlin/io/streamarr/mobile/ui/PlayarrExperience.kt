@@ -2154,7 +2154,10 @@ private fun ExperienceSearchScreen(
                 query = it
                 viewModel.search(it, mediaFilter, libraryId, debounce = true)
             },
-            modifier = Modifier.fillMaxWidth(if (isTelevision) 0.58f else 1f).padding(top = 18.dp),
+            modifier = Modifier
+                .fillMaxWidth(if (isTelevision) 0.58f else 1f)
+                .padding(top = 18.dp)
+                .playarrSingleLineArrowNavigation(),
             placeholder = { Text(playarrString(PlayarrString.SearchPlaceholder)) },
             leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
             trailingIcon = if (query.isNotEmpty()) {

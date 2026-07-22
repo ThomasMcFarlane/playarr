@@ -482,6 +482,7 @@ internal fun ExperiencePlaylistsScreen(
                         placeholder = { Text(playarrString(PlayarrString.PlaylistsNamePlaceholder)) },
                         singleLine = true,
                         enabled = !createBusy,
+                        modifier = Modifier.fillMaxWidth().playarrSingleLineArrowNavigation(),
                     )
                     Text(playarrString(PlayarrString.PlaylistsMediaType), color = WebInkSoft, fontSize = 12.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1178,6 +1179,7 @@ private fun CreateSubPlaylistDialog(
                     placeholder = { Text(playarrString(PlayarrString.PlaylistsNamePlaceholder)) },
                     singleLine = true,
                     enabled = !busy,
+                    modifier = Modifier.fillMaxWidth().playarrSingleLineArrowNavigation(),
                 )
                 Text("${playarrString(PlayarrString.PlaylistsMediaType)} · $typeLabel", color = WebInkMuted, fontSize = 11.sp)
                 error?.let { Text(playarrText(it), color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
@@ -1235,6 +1237,7 @@ private fun EditPlaylistDialog(
                     label = { Text(playarrString(PlayarrString.PlaylistsName)) },
                     singleLine = true,
                     enabled = !busy,
+                    modifier = Modifier.fillMaxWidth().playarrSingleLineArrowNavigation(),
                 )
                 Text(playarrString(PlayarrString.PlaylistsParent), color = WebInkSoft, fontSize = 12.sp)
                 PlaylistParentChoices(
@@ -1708,6 +1711,7 @@ internal fun ExperienceProfilesScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         singleLine = true,
                         enabled = !busy,
+                        modifier = Modifier.fillMaxWidth().playarrSingleLineArrowNavigation(),
                     )
                     pinError?.let {
                         Text(playarrText(it), color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
@@ -2535,7 +2539,7 @@ private fun SettingsSectionContent(
                     },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().playarrSingleLineArrowNavigation(),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
@@ -2726,7 +2730,7 @@ private fun SettingsServerSection(
         enabled = !serverBusy,
         label = { Text(playarrString(PlayarrString.SettingsServerAddress)) },
         singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().playarrSingleLineArrowNavigation(),
     )
     OutlinedTextField(
         value = username,
@@ -2734,7 +2738,7 @@ private fun SettingsServerSection(
         enabled = !serverBusy,
         label = { Text(playarrString(PlayarrString.SettingsServerUsername)) },
         singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().playarrSingleLineArrowNavigation(),
     )
     OutlinedTextField(
         value = password,
@@ -2744,7 +2748,7 @@ private fun SettingsServerSection(
         visualTransformation = PasswordVisualTransformation(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
         singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().playarrSingleLineArrowNavigation(),
     )
     Button(
         onClick = {
@@ -2827,7 +2831,7 @@ private fun SettingsServerSection(
         onValueChange = { primaryValue = it },
         label = { Text(playarrString(PlayarrString.LoginServerUrl)) },
         singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().playarrSingleLineArrowNavigation(),
     )
     Button(
         onClick = { viewModel.changeServer(primaryValue) },

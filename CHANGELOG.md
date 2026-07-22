@@ -29,6 +29,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Release ArrowUp and ArrowDown from every Android single-line text field into spatial focus
+  navigation after the on-screen keyboard closes, while preserving Left and Right caret movement.
 - Keep Android phone library headings below the system status bar while leaving television layouts
   edge-to-edge, so Series, Movies, Sites, and Music no longer overlap system chrome.
 - Keep sideloaded Android phone builds and devices without Play services running when Play Core's

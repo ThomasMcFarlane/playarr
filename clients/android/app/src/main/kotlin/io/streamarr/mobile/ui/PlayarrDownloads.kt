@@ -1017,7 +1017,7 @@ private fun KeepUntilPicker(selection: KeepUntilSelection, onSelectionChange: (K
                     label = { Text(playarrString(PlayarrString.DownloadDrawerAmount)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
-                    modifier = Modifier.width(104.dp),
+                    modifier = Modifier.width(104.dp).playarrSingleLineArrowNavigation(),
                 )
                 KeepUntilUnitButton(
                     label = playarrString(PlayarrString.DownloadDrawerDays),
