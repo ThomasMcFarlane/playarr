@@ -36,3 +36,8 @@ internal fun formatPlayarrPlayerTime(totalMs: Long): String {
     if (hours == 0L) return "$minutes:$paddedSeconds"
     return "$hours:${minutes.toString().padStart(2, '0')}:$paddedSeconds"
 }
+
+internal fun playarrPlaybackProgress(positionMs: Long, durationMs: Long): Float {
+    if (durationMs <= 0L) return 0f
+    return (positionMs.toDouble() / durationMs.toDouble()).coerceIn(0.0, 1.0).toFloat()
+}

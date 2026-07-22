@@ -50,7 +50,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Home
@@ -58,13 +57,10 @@ import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PictureInPictureAlt
 import androidx.compose.material.icons.outlined.PlaylistPlay
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.SkipNext
-import androidx.compose.material.icons.outlined.SkipPrevious
 import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
@@ -577,12 +573,6 @@ internal fun PlayarrExperience(
                 serverUrl = serverUrl,
                 accessToken = token,
                 isTelevision = isTelevision,
-                canPrevious = playbackQueue.canPrevious,
-                canNext = playbackQueue.canNext,
-                onPrevious = { viewModel.movePlayback(-1) },
-                onTogglePlayback = playerViewModel::togglePlayback,
-                onNext = { viewModel.movePlayback(1) },
-                onClose = closePlayback,
                 onMaximise = {
                     navController.navigate("experience-player/${Uri.encode(activePlaybackItem.mediaFileId)}")
                 },
@@ -599,12 +589,6 @@ private fun PlayarrMiniPlayer(
     serverUrl: String,
     accessToken: String?,
     isTelevision: Boolean,
-    canPrevious: Boolean,
-    canNext: Boolean,
-    onPrevious: () -> Unit,
-    onTogglePlayback: () -> Unit,
-    onNext: () -> Unit,
-    onClose: () -> Unit,
     onMaximise: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -624,12 +608,11 @@ private fun PlayarrMiniPlayer(
             )
             .semantics { contentDescription = "Now playing ${item.title}. Open player." },
     ) {
-        Row(
-            modifier = Modifier.height(if (isTelevision) 88.dp else 76.dp).padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            val artworkModifier = Modifier.size(if (isTelevision) 72.dp else 60.dp).clip(RoundedCornerShape(12.dp))
+        BoxWithConstraints(Modifier.height(if (isTelevision) 118.dp else 82.dp)) {
+            val artworkModifier = Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(0.48f)
+                .clip(RoundedCornerShape(topStart = 18.dp, bottomStart = 18.dp))
             item.artworkWork?.let { work ->
                 if (item.music) {
                     AuthenticatedAlbumArtwork(work, item.albumId, serverUrl, accessToken, artworkModifier)
@@ -643,35 +626,82 @@ private fun PlayarrMiniPlayer(
                         modifier = artworkModifier,
                     )
                 }
-            }
-            Column(Modifier.weight(1f)) {
-                Text(item.title, color = WebInk, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                item.subtitle?.let { Text(it, color = WebInkMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            }
-            if (isTelevision) {
-                IconButton(onClick = onPrevious, enabled = canPrevious) {
-                    Icon(Icons.Outlined.SkipPrevious, contentDescription = "Previous", tint = if (canPrevious) WebInk else WebInkMuted.copy(alpha = 0.4f))
-                }
-            }
-            IconButton(onClick = onTogglePlayback) {
-                Icon(
-                    if (playbackState.playWhenReady) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
-                    contentDescription = if (playbackState.playWhenReady) "Pause" else "Play",
-                    tint = WebPink,
+            } ?: Box(
+                artworkModifier.background(
+                    Brush.radialGradient(
+                        listOf(WebPink.copy(alpha = 0.5f), Color(0xFF0D090B)),
+                    ),
+                ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    item.title.take(1).uppercase(),
+                    color = Color.White.copy(alpha = 0.78f),
+                    fontSize = if (isTelevision) 44.sp else 30.sp,
+                    fontWeight = FontWeight.Light,
                 )
             }
-            if (isTelevision) {
-                IconButton(onClick = onNext, enabled = canNext) {
-                    Icon(Icons.Outlined.SkipNext, contentDescription = "Next", tint = if (canNext) WebInk else WebInkMuted.copy(alpha = 0.4f))
+
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            0.28f to Color.Transparent,
+                            0.43f to Color(0x9E090708),
+                            0.58f to Color(0xF5090708),
+                        ),
+                    ),
+            )
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = maxWidth * 0.43f, end = 42.dp),
+                verticalArrangement = Arrangement.spacedBy(if (isTelevision) 7.dp else 5.dp),
+            ) {
+                Text(
+                    item.title,
+                    color = Color.White,
+                    fontSize = if (isTelevision) 14.sp else 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    "${formatPlayarrPlayerTime(playbackState.positionMs)} / ${formatPlayarrPlayerTime(playbackState.durationMs)}",
+                    color = Color.White.copy(alpha = 0.64f),
+                    fontSize = if (isTelevision) 10.sp else 9.sp,
+                    maxLines = 1,
+                )
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.2f)),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(playarrPlaybackProgress(playbackState.positionMs, playbackState.durationMs))
+                            .fillMaxHeight()
+                            .clip(CircleShape)
+                            .background(WebPink),
+                    )
                 }
             }
-            if (isTelevision) {
-                IconButton(onClick = onMaximise) {
-                    Icon(Icons.Outlined.PictureInPictureAlt, contentDescription = "Open full player", tint = WebInkMuted)
-                }
-            }
-            IconButton(onClick = onClose) {
-                Icon(Icons.Outlined.Close, contentDescription = "Stop playback", tint = WebInkMuted)
+
+            Surface(
+                color = Color.White.copy(alpha = 0.12f),
+                contentColor = Color.White.copy(alpha = 0.78f),
+                shape = CircleShape,
+                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).size(24.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.PictureInPictureAlt,
+                    contentDescription = null,
+                    modifier = Modifier.padding(5.dp),
+                )
             }
         }
     }

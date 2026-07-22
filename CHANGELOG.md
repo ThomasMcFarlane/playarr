@@ -212,6 +212,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Match the Web minimized-player surface on Android phone and TV with a single expand target,
+  responsive Web dimensions, live elapsed and duration text, a bounded progress rail, artwork
+  fade, and maximize affordance.
 - Make Android player-surface taps toggle playback and match Playarr Web's TV remote policy: centre
   toggles, Left/Right seek five seconds, Up focuses Back, and Down focuses the seek control.
 - Replace Android's stock Media3 player chrome with Playarr controls that show the absolute source

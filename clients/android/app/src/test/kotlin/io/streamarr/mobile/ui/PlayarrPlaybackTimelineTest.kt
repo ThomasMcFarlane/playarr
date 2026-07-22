@@ -26,6 +26,14 @@ class PlayarrPlaybackTimelineTest {
     }
 
     @Test
+    fun `minimised player progress matches the web rail and stays bounded`() {
+        assertEquals(0f, playarrPlaybackProgress(5_000L, 0L))
+        assertEquals(0f, playarrPlaybackProgress(-1_000L, 10_000L))
+        assertEquals(0.25f, playarrPlaybackProgress(2_500L, 10_000L))
+        assertEquals(1f, playarrPlaybackProgress(12_000L, 10_000L))
+    }
+
+    @Test
     fun `on demand session urls use source renegotiation for seeks`() {
         assertEquals(true, isPlayarrOnDemandHls("/api/v1/media/sessions/s1/playlist.m3u8"))
         assertEquals(false, isPlayarrOnDemandHls("/api/v1/media/mf-1/content"))
