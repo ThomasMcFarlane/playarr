@@ -26,6 +26,9 @@ class InviteApprovalMessagingService : FirebaseMessagingService() {
         registerWithStreamarr(installationId)
     }
 
+    // Firebase Messaging 25 still dispatches ACTION_NEW_TOKEN here alongside the newer
+    // installation registration callback, so retain it until the SDK removes that action.
+    @Suppress("OVERRIDE_DEPRECATION")
     override fun onNewToken(token: String) {
         registerWithStreamarr(token)
     }

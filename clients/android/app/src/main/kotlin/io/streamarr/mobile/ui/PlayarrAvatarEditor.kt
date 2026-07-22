@@ -12,6 +12,7 @@ import android.os.Build
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.graphics.createBitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -125,7 +126,7 @@ internal fun renderPlayarrAvatarBitmap(
     crop: PlayarrAvatarCrop,
     size: Int,
 ): Bitmap {
-    val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val output = createBitmap(size, size)
     val rect = playarrAvatarDrawRect(source.width, source.height, crop, size)
     Canvas(output).drawBitmap(
         source,

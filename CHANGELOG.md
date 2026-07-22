@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Adopt Android KTX helpers for bitmap, URI, and preference operations and explicitly retain the
+  Firebase legacy token callback and Hilt parameter target required by the current SDKs.
 - Shrink unused resources from minified Android releases and provide a monochrome adaptive icon
   for themed Android launchers while retaining the self-hosted HTTP and television banner policy.
 - Use direction-aware Android back and playlist icons and conform shared QR and media-card

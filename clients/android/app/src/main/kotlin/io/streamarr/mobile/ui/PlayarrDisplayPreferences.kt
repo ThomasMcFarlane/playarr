@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.core.content.edit
 
 internal enum class PlayarrThemePreference { System, Light, Dark }
 
@@ -71,36 +72,32 @@ internal fun rememberPlayarrDisplayPreferences(context: Context): RememberedPlay
         playerDefaults = PlayarrPlayerDefaults(playerQuality, subtitleMode, subtitleLanguage),
         setTheme = {
             theme = it
-            store.edit().putString("theme", it.name).apply()
+            store.edit { putString("theme", it.name) }
         },
         setHomeView = {
             homeView = it
             val persisted = it.persistedValue()
-            if (persisted == null) {
-                store.edit().remove("home_view").apply()
-            } else {
-                store.edit().putString("home_view", persisted).apply()
+            store.edit {
+                if (persisted == null) remove("home_view") else putString("home_view", persisted)
             }
         },
         setLanguage = {
             language = parsePlayarrLanguagePreference(it)
-            if (language == "system") {
-                store.edit().remove("language").apply()
-            } else {
-                store.edit().putString("language", language).apply()
+            store.edit {
+                if (language == "system") remove("language") else putString("language", language)
             }
         },
         setPlayerQuality = {
             playerQuality = parsePlayarrQualityDefault(it)
-            store.edit().putString("player_quality", playerQuality).apply()
+            store.edit { putString("player_quality", playerQuality) }
         },
         setSubtitleMode = {
             subtitleMode = it
-            store.edit().putString("subtitle_mode", it.storageValue).apply()
+            store.edit { putString("subtitle_mode", it.storageValue) }
         },
         setSubtitleLanguage = {
             subtitleLanguage = parsePlayarrSubtitleLanguage(it)
-            store.edit().putString("subtitle_language", subtitleLanguage).apply()
+            store.edit { putString("subtitle_language", subtitleLanguage) }
         },
     )
     return RememberedPlayarrDisplayPreferences(value, darkTheme)

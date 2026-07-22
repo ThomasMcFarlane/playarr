@@ -18,7 +18,7 @@ import javax.inject.Inject
  */
 @UnstableApi
 class DefaultStreamarrDownloadServiceStarter @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
 ) : StreamarrDownloadServiceStarter {
 
     override fun addDownload(request: DownloadRequest) {
