@@ -215,6 +215,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Authenticate Android secondary servers with a stable per-server device identity, discard
+  passwords after login, serialize refresh-token rotation, reuse concurrent refresh winners, and
+  disconnect only after a definitive refresh rejection.
 - Add a profile-scoped Android credential boundary for independently authenticated connected
   servers, keeping rotating secondary token pairs distinct from peer-group failover addresses and
   exposing only token-free summaries to Settings presentation code.
