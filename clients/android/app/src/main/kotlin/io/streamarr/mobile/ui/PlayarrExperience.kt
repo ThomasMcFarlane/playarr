@@ -134,11 +134,13 @@ import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 private data class WebPalette(
@@ -206,6 +208,9 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     private val _availableKinds = MutableStateFlow<Set<WorkKind>?>(null)
     val availableKinds: StateFlow<Set<WorkKind>?> = _availableKinds.asStateFlow()
 
+    private val _canDownload = MutableStateFlow<Boolean?>(null)
+    val canDownload: StateFlow<Boolean?> = _canDownload.asStateFlow()
+
     private val _progress = MutableStateFlow<List<WatchProgress>>(emptyList())
     val progress: StateFlow<List<WatchProgress>> = _progress.asStateFlow()
 
@@ -216,6 +221,12 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     init {
         loadAvailableKinds()
         loadHome()
+        viewModelScope.launch {
+            while (isActive) {
+                refreshCapabilities()
+                delay(CAPABILITIES_POLL_MS)
+            }
+        }
     }
 
     private fun loadAvailableKinds() {
@@ -253,10 +264,16 @@ internal class PlayarrExperienceViewModel @Inject constructor(
 
     fun reloadForProfile() {
         _availableKinds.value = null
+        _canDownload.value = null
         _libraries.value = emptyMap()
         _search.value = ExperienceLoad.Ready(emptyList())
         loadAvailableKinds()
         loadHome()
+        viewModelScope.launch { refreshCapabilities() }
+    }
+
+    private suspend fun refreshCapabilities() {
+        _canDownload.value = runCatching { api.getSelfCapabilities().canDownload }.getOrDefault(false)
     }
 
     fun loadLibrary(kind: WorkKind) {
@@ -333,7 +350,7 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     }
 }
 
-private data class ExperienceDestination(
+internal data class ExperienceDestination(
     val route: String,
     val label: String,
     val icon: ImageVector,
@@ -343,7 +360,8 @@ private data class ExperienceDestination(
 private enum class LibraryViewMode { List, Screen, Cover, CoverFlow }
 private enum class LibraryArtworkSize { Small, Medium, Large }
 
-private val experienceDestinations = listOf(
+internal val experienceDestinations = listOf(
+    ExperienceDestination("downloads", "Downloads", Icons.Outlined.Download),
     ExperienceDestination("search", "Search", Icons.Outlined.Search),
     ExperienceDestination("home", "Home", Icons.Outlined.Home),
     ExperienceDestination("series", "Series", Icons.Outlined.Tv, WorkKind.Series),
@@ -351,12 +369,25 @@ private val experienceDestinations = listOf(
     ExperienceDestination("sites", "Sites", Icons.Outlined.Language, WorkKind.Site),
     ExperienceDestination("music", "Music", Icons.Outlined.MusicNote, WorkKind.Artist),
     ExperienceDestination("playlists", "Playlists", Icons.Outlined.PlaylistPlay),
-    // kind = null: shown unconditionally, like "playlists" above, not
-    // filtered by which catalog kinds this server currently has -- every
-    // catalog entity kind this client supports can be downloaded (see
-    // PlayarrDownloads.kt), so there's no library-kind gate to apply here.
-    ExperienceDestination("downloads", "Downloads", Icons.Outlined.Download),
 )
+
+internal fun visibleExperienceDestinations(
+    availableKinds: Set<WorkKind>?,
+    canDownload: Boolean?,
+): List<ExperienceDestination> = experienceDestinations.filter { destination ->
+    (destination.kind == null || availableKinds?.contains(destination.kind) == true) &&
+        (destination.route != "downloads" || canDownload == true)
+}
+
+internal fun televisionDestinationGroups(
+    destinations: List<ExperienceDestination>,
+): List<List<ExperienceDestination>> = listOf(
+    destinations.filter { it.route in setOf("downloads", "search") },
+    destinations.filter { it.route in setOf("home", "series", "movies", "sites", "music") },
+    destinations.filter { it.route == "playlists" },
+).filter(List<ExperienceDestination>::isNotEmpty)
+
+private const val CAPABILITIES_POLL_MS = 60_000L
 
 @Composable
 internal fun PlayarrExperience(
@@ -371,6 +402,7 @@ internal fun PlayarrExperience(
     val currentUserId by viewModel.currentUserId.collectAsState()
     val currentUserName by viewModel.currentUserName.collectAsState()
     val availableKinds by viewModel.availableKinds.collectAsState()
+    val canDownload by viewModel.canDownload.collectAsState()
     val isPlayer = currentRoute.startsWith("experience-player")
     val isProfiles = currentRoute == "profiles"
 
@@ -379,13 +411,11 @@ internal fun PlayarrExperience(
     }
 
     Box(modifier = Modifier.fillMaxSize().background(WebBackground)) {
-        ExperienceNavHost(navController, serverUrl, token, isTelevision, viewModel)
+        ExperienceNavHost(navController, serverUrl, token, isTelevision, canDownload, viewModel)
 
         if (!isPlayer && !isProfiles) {
             ExperienceNavigation(
-                destinations = experienceDestinations.filter { destination ->
-                    destination.kind == null || availableKinds?.contains(destination.kind) == true
-                },
+                destinations = visibleExperienceDestinations(availableKinds, canDownload),
                 currentRoute = currentRoute,
                 isTelevision = isTelevision,
                 onNavigate = { navController.openExperienceTopLevel(it) },
@@ -485,11 +515,7 @@ private fun TelevisionNavigation(
     onNavigate: (String) -> Unit,
     modifier: Modifier,
 ) {
-    val groups = listOf(
-        destinations.filter { it.route == "search" },
-        destinations.filter { it.route in setOf("home", "series", "movies", "sites", "music") },
-        destinations.filter { it.route == "playlists" },
-    ).filter(List<ExperienceDestination>::isNotEmpty)
+    val groups = televisionDestinationGroups(destinations)
     Column(
         modifier = modifier.padding(start = 42.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp),
@@ -587,14 +613,15 @@ private fun ExperienceNavHost(
     serverUrl: String,
     accessToken: String?,
     isTelevision: Boolean,
+    canDownload: Boolean?,
     viewModel: PlayarrExperienceViewModel,
 ) {
     NavHost(navController, startDestination = "home", modifier = Modifier.fillMaxSize()) {
         composable("home") {
-            ExperienceHomeScreen(serverUrl, accessToken, isTelevision, navController, viewModel)
+            ExperienceHomeScreen(serverUrl, accessToken, isTelevision, canDownload == true, navController, viewModel)
         }
         composable("search") {
-            ExperienceSearchScreen(serverUrl, accessToken, isTelevision, navController, viewModel)
+            ExperienceSearchScreen(serverUrl, accessToken, isTelevision, canDownload == true, navController, viewModel)
         }
         listOf(
             "series" to WorkKind.Series,
@@ -603,7 +630,7 @@ private fun ExperienceNavHost(
             "music" to WorkKind.Artist,
         ).forEach { (route, kind) ->
             composable(route) {
-                ExperienceLibraryScreen(kind, serverUrl, accessToken, isTelevision, navController, viewModel)
+                ExperienceLibraryScreen(kind, serverUrl, accessToken, isTelevision, canDownload == true, navController, viewModel)
             }
         }
         composable("experience-detail/{workId}") { entry ->
@@ -612,6 +639,7 @@ private fun ExperienceNavHost(
                 serverUrl = serverUrl,
                 accessToken = accessToken,
                 isTelevision = isTelevision,
+                canDownload = canDownload == true,
                 onBack = navController::popBackStack,
                 onPlay = { navController.navigate("experience-player/${Uri.encode(it)}") },
             )
@@ -644,7 +672,13 @@ private fun ExperienceNavHost(
             )
         }
         composable("settings") { ExperienceParitySettingsScreen(serverUrl, isTelevision) }
-        composable("downloads") { ExperienceDownloadsScreen(serverUrl, accessToken, isTelevision) }
+        composable("downloads") {
+            when (canDownload) {
+                null -> ExperienceLoading("Loading downloads")
+                false -> ExperienceNotFoundScreen()
+                true -> ExperienceDownloadsScreen(serverUrl, accessToken, isTelevision)
+            }
+        }
     }
 }
 
@@ -653,6 +687,7 @@ private fun ExperienceHomeScreen(
     serverUrl: String,
     accessToken: String?,
     isTelevision: Boolean,
+    canDownload: Boolean,
     navController: NavHostController,
     viewModel: PlayarrExperienceViewModel,
 ) {
@@ -710,6 +745,7 @@ private fun ExperienceHomeScreen(
                     onDismiss = { contextWork = null },
                     onOpen = { contextWork = null; navController.navigate("experience-detail/${work.id}") },
                     onMark = { watched -> viewModel.markWork(work, watched); contextWork = null },
+                    canDownload = canDownload,
                 )
             }
         }
@@ -1039,6 +1075,7 @@ private fun ExperienceLibraryScreen(
     serverUrl: String,
     accessToken: String?,
     isTelevision: Boolean,
+    canDownload: Boolean,
     navController: NavHostController,
     viewModel: PlayarrExperienceViewModel,
 ) {
@@ -1150,6 +1187,7 @@ private fun ExperienceLibraryScreen(
                     onDismiss = { contextWork = null },
                     onOpen = { contextWork = null; navController.navigate("experience-detail/${work.id}") },
                     onMark = { watched -> viewModel.markWork(work, watched); contextWork = null },
+                    canDownload = canDownload,
                 )
             }
         }
@@ -1161,6 +1199,7 @@ private fun ExperienceSearchScreen(
     serverUrl: String,
     accessToken: String?,
     isTelevision: Boolean,
+    canDownload: Boolean,
     navController: NavHostController,
     viewModel: PlayarrExperienceViewModel,
 ) {
@@ -1267,6 +1306,7 @@ private fun ExperienceSearchScreen(
             onDismiss = { contextWork = null },
             onOpen = { contextWork = null; navController.navigate("experience-detail/${work.id}") },
             onMark = { watched -> viewModel.markWork(work, watched); contextWork = null },
+            canDownload = canDownload,
         )
     }
 }
@@ -1298,6 +1338,7 @@ private fun MediaContextDialog(
     onDismiss: () -> Unit,
     onOpen: () -> Unit,
     onMark: (Boolean) -> Unit,
+    canDownload: Boolean,
     viewModel: MediaContextDownloadViewModel = hiltViewModel(),
 ) {
     var addToPlaylist by remember(work.id) { mutableStateOf(false) }
@@ -1310,17 +1351,19 @@ private fun MediaContextDialog(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onOpen, modifier = Modifier.fillMaxWidth()) { Text("Open") }
                 OutlinedButton(onClick = { addToPlaylist = true }, modifier = Modifier.fillMaxWidth()) { Text("Add to playlist") }
-                OutlinedButton(
-                    onClick = {
-                        resolvingDownload = true
-                        viewModel.resolveDownloadCandidates(work) { candidates ->
-                            resolvingDownload = false
-                            downloadCandidates = candidates
-                        }
-                    },
-                    enabled = !resolvingDownload,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text(if (resolvingDownload) "Resolving…" else "Download") }
+                if (canDownload) {
+                    OutlinedButton(
+                        onClick = {
+                            resolvingDownload = true
+                            viewModel.resolveDownloadCandidates(work) { candidates ->
+                                resolvingDownload = false
+                                downloadCandidates = candidates
+                            }
+                        },
+                        enabled = !resolvingDownload,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(if (resolvingDownload) "Resolving…" else "Download") }
+                }
                 OutlinedButton(onClick = { onMark(true) }, modifier = Modifier.fillMaxWidth()) { Text("Mark as watched") }
                 OutlinedButton(onClick = { onMark(false) }, modifier = Modifier.fillMaxWidth()) { Text("Mark as unwatched") }
             }
@@ -1392,6 +1435,7 @@ private fun ExperienceDetailScreen(
     serverUrl: String,
     accessToken: String?,
     isTelevision: Boolean,
+    canDownload: Boolean,
     onBack: () -> Unit,
     onPlay: (String) -> Unit,
     viewModel: ExperienceDetailViewModel = hiltViewModel(),
@@ -1436,6 +1480,7 @@ private fun ExperienceDetailScreen(
                             detail, onPlay,
                             { trackId -> pendingPlaylistTrackId = trackId; addWorkToPlaylist = true },
                             { candidates -> pendingDownloadCandidates = candidates },
+                            canDownload,
                             PaddingValues(30.dp), scrollable = true,
                         )
                     }
@@ -1448,6 +1493,7 @@ private fun ExperienceDetailScreen(
                                 detail, onPlay,
                                 { trackId -> pendingPlaylistTrackId = trackId; addWorkToPlaylist = true },
                                 { candidates -> pendingDownloadCandidates = candidates },
+                                canDownload,
                                 PaddingValues(0.dp), scrollable = false,
                             )
                         }
@@ -1475,6 +1521,7 @@ private fun DetailChildren(
     onPlay: (String) -> Unit,
     onAddToPlaylist: (String?) -> Unit,
     onDownload: (List<DownloadCandidate>) -> Unit,
+    canDownload: Boolean,
     padding: PaddingValues,
     scrollable: Boolean,
 ) {
@@ -1492,8 +1539,14 @@ private fun DetailChildren(
                     title = "Play ${detail.work.title}",
                     available = true,
                     onAddToPlaylist = { onAddToPlaylist(null) },
-                    onDownload = {
-                        onDownload(listOf(DownloadCandidate(id, detail.work.id, detail.work.title, detail.work.title, posterUrl, "movie")))
+                    onDownload = if (canDownload) {
+                        {
+                            onDownload(
+                                listOf(DownloadCandidate(id, detail.work.id, detail.work.title, detail.work.title, posterUrl, "movie")),
+                            )
+                        }
+                    } else {
+                        null
                     },
                 ) { onPlay(id) }
             } ?: Text("This title is not available to play.", color = WebInkMuted)
@@ -1503,13 +1556,13 @@ private fun DetailChildren(
                         DownloadCandidate(it, detail.work.id, episode.episode.title ?: "Episode ${episode.episode.episodeNumber}", detail.work.title, posterUrl, "episode")
                     }
                 }
-                SectionHeaderRow("Season ${season.season.seasonNumber}", seasonCandidates) { onDownload(it) }
+                SectionHeaderRow("Season ${season.season.seasonNumber}", if (canDownload) seasonCandidates else emptyList()) { onDownload(it) }
                 season.episodes.forEach { episode ->
                     PlayRow(
                         title = episode.episode.title ?: "Episode ${episode.episode.episodeNumber}",
                         available = episode.mediaFileId != null,
                         onAddToPlaylist = { onAddToPlaylist(episode.episode.id) },
-                        onDownload = episode.mediaFileId?.let { id ->
+                        onDownload = episode.mediaFileId?.takeIf { canDownload }?.let { id ->
                             {
                                 onDownload(
                                     listOf(
@@ -1529,13 +1582,13 @@ private fun DetailChildren(
                 val albumCandidates = album.tracks.mapNotNull { track ->
                     track.mediaFileId?.let { DownloadCandidate(it, detail.work.id, track.track.title, detail.work.title, posterUrl, "track") }
                 }
-                SectionHeaderRow(album.album.title, albumCandidates) { onDownload(it) }
+                SectionHeaderRow(album.album.title, if (canDownload) albumCandidates else emptyList()) { onDownload(it) }
                 album.tracks.forEach { track ->
                     PlayRow(
                         title = track.track.title,
                         available = track.mediaFileId != null,
                         onAddToPlaylist = { onAddToPlaylist(track.track.id) },
-                        onDownload = track.mediaFileId?.let { id ->
+                        onDownload = track.mediaFileId?.takeIf { canDownload }?.let { id ->
                             { onDownload(listOf(DownloadCandidate(id, detail.work.id, track.track.title, detail.work.title, posterUrl, "track"))) }
                         },
                     ) { track.mediaFileId?.let(onPlay) }
@@ -1546,7 +1599,7 @@ private fun DetailChildren(
                     title = book.book.title,
                     available = book.mediaFileId != null,
                     onAddToPlaylist = { onAddToPlaylist(book.book.id) },
-                    onDownload = book.mediaFileId?.let { id ->
+                    onDownload = book.mediaFileId?.takeIf { canDownload }?.let { id ->
                         { onDownload(listOf(DownloadCandidate(id, detail.work.id, book.book.title, detail.work.title, posterUrl, "book"))) }
                     },
                 ) { book.mediaFileId?.let(onPlay) }
@@ -1818,6 +1871,19 @@ internal fun ExperienceFailure(message: String, retry: () -> Unit) {
 internal fun ExperienceEmpty(message: String) {
     Box(Modifier.fillMaxSize().background(WebSurface), contentAlignment = Alignment.Center) {
         Text(message, color = WebInkMuted, modifier = Modifier.padding(32.dp))
+    }
+}
+
+@Composable
+private fun ExperienceNotFoundScreen() {
+    Column(
+        modifier = Modifier.fillMaxSize().background(WebSurface).padding(48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text("404", color = WebPink, fontSize = 68.sp, fontWeight = FontWeight.Bold)
+        Text("That page drifted out of range.", color = WebInk, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+        Text("The address does not match an available Playarr view.", color = WebInkMuted, modifier = Modifier.padding(top = 10.dp))
     }
 }
 

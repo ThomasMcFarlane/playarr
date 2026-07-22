@@ -11,6 +11,7 @@ import io.streamarr.shared.data.model.AvailableProfile
 import io.streamarr.shared.data.model.Playlist
 import io.streamarr.shared.data.model.PlaylistItem
 import io.streamarr.shared.data.model.PlaylistMediaType
+import io.streamarr.shared.data.model.SelfCapabilitiesResponse
 import io.streamarr.shared.data.model.WatchProgress
 import io.streamarr.shared.data.model.WatchState
 import io.streamarr.shared.data.model.Work
@@ -249,6 +250,16 @@ class StreamarrJsonModelTest {
 
         assertEquals("Guest", profile.displayName)
         assertTrue(profile.pinLocked)
+    }
+
+    @Test
+    fun `decodes the signed in users download capability`() {
+        val capabilities = json.decodeFromString(
+            SelfCapabilitiesResponse.serializer(),
+            """{"can_download":true}""",
+        )
+
+        assertTrue(capabilities.canDownload)
     }
 
     @Test

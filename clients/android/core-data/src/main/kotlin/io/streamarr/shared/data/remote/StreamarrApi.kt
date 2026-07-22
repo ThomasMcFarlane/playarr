@@ -18,6 +18,7 @@ import io.streamarr.shared.data.model.PlaybackInfoResponse
 import io.streamarr.shared.data.model.ProfileAvatarSetting
 import io.streamarr.shared.data.model.ProfilePinSetting
 import io.streamarr.shared.data.model.ReorderPlaylistItemsRequest
+import io.streamarr.shared.data.model.SelfCapabilitiesResponse
 import io.streamarr.shared.data.model.UpdatePlayerPreferencesRequest
 import io.streamarr.shared.data.model.UpdatePlaylistRequest
 import io.streamarr.shared.data.model.UpdateProfileAvatarRequest
@@ -209,6 +210,9 @@ interface StreamarrApi {
 
     @GET("api/v1/users/profiles")
     suspend fun listAvailableProfiles(): List<AvailableProfile>
+
+    @GET("api/v1/users/me/capabilities")
+    suspend fun getSelfCapabilities(): SelfCapabilitiesResponse
 
     @POST("api/v1/users/profiles/{id}/verify-pin")
     suspend fun verifyProfilePin(

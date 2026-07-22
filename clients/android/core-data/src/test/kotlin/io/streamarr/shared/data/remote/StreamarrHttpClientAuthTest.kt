@@ -56,6 +56,7 @@ class StreamarrHttpClientAuthTest {
         server.enqueue(jsonResponse("""{"id":"p1","name":"Friday","is_system":false,"media_type":"video","created_at":"now","updated_at":"now"}"""))
         server.enqueue(jsonResponse("""{"id":"i1","playlist_id":"p1","work_id":"w1","position":0,"added_at":"now"}"""))
         server.enqueue(jsonResponse("[]"))
+        server.enqueue(jsonResponse("""{"can_download":true}"""))
         server.enqueue(jsonResponse("null"))
         server.start()
         try {
@@ -71,6 +72,7 @@ class StreamarrHttpClientAuthTest {
             api.createPlaylist(CreatePlaylistRequest("Friday", PlaylistMediaType.Video))
             api.addPlaylistItem("p1", AddPlaylistItemRequest("w1"))
             api.listAvailableProfiles()
+            assertEquals(true, api.getSelfCapabilities().canDownload)
             assertEquals(null, api.getMyUserInviteRequest().value)
 
             assertEquals("/api/v1/playback/progress", server.takeRequest().path)
@@ -84,6 +86,7 @@ class StreamarrHttpClientAuthTest {
             assertEquals("/api/v1/playlists/p1/items", add.path)
             assertEquals("POST", add.method)
             assertEquals("/api/v1/users/profiles", server.takeRequest().path)
+            assertEquals("/api/v1/users/me/capabilities", server.takeRequest().path)
             assertEquals("/api/v1/users/me/user-invite-request", server.takeRequest().path)
         } finally {
             server.close()

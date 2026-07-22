@@ -50,6 +50,11 @@ data class UpdateWatchProgressRequest(
 )
 
 @Serializable
+data class SelfCapabilitiesResponse(
+    @SerialName("can_download") val canDownload: Boolean,
+)
+
+@Serializable
 enum class PlaylistMediaType {
     @SerialName("video") Video,
     @SerialName("audio") Audio,
