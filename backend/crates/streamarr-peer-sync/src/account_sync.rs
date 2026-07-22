@@ -92,6 +92,8 @@ pub enum AccountSyncError {
     Db(#[from] streamarr_db::DbError),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+    #[error("peer sent identity-only source instance {0}; retry after it upgrades")]
+    IncompleteSourceInstance(Uuid),
 }
 
 // ---------------------------------------------------------------------
@@ -694,6 +696,18 @@ pub async fn apply_libraries_response(
     conflict_log_repo: &Arc<dyn SyncConflictLogRepo>,
 ) -> Result<usize, AccountSyncError> {
     const ENTITY: &str = "libraries";
+
+    // Do not advance a pull or push cursor past an older node's identity-only
+    // payload. Returning an error makes both transports retry the same page;
+    // once that peer upgrades, the complete source rows can be installed.
+    if let Some(row) = response
+        .source_instances
+        .iter()
+        .find(|row| row.base_url.is_none() || row.api_key_encrypted.is_none())
+    {
+        return Err(AccountSyncError::IncompleteSourceInstance(row.id));
+    }
+
     let mut applied = 0usize;
     for library in &response.group_libraries {
         let existing = group_library_repo.get(library.id).await?;
@@ -722,11 +736,10 @@ pub async fn apply_libraries_response(
     }
 
     for row in &response.source_instances {
-        let Some(instance) = row.clone().into_instance() else {
-            // Rolling-upgrade compatibility: older peers send identity-only
-            // rows. Do not turn them into unusable normal source instances.
-            continue;
-        };
+        let instance = row
+            .clone()
+            .into_instance()
+            .expect("complete source rows were validated before apply");
         let metadata = SyncMetadata {
             updated_at: row.updated_at,
             origin_peer_id: row.origin_peer_id.or(Some(peer_node_id)),
@@ -1634,6 +1647,59 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(cursor.cursor.as_deref(), Some("cursor-1"));
+    }
+
+    #[tokio::test]
+    async fn identity_only_source_page_is_retried_without_advancing_cursor() {
+        let harness = harness().await;
+        let peer_node_id = Uuid::new_v4();
+        let source_id = Uuid::new_v4();
+
+        let result = apply_libraries_response(
+            LibrariesResponse {
+                source_instances: vec![SourceInstanceSyncRow {
+                    id: source_id,
+                    kind: SourceKind::Radarr,
+                    name: "Legacy identity".to_string(),
+                    base_url: None,
+                    api_key_encrypted: None,
+                    priority: 0,
+                    default_root_folder_id: None,
+                    default_quality_profile_id: None,
+                    best_effort: false,
+                    group_library_id: None,
+                    updated_at: Utc::now(),
+                    origin_peer_id: None,
+                    deleted_at: None,
+                }],
+                group_libraries: vec![],
+                server_time: "must-not-advance".to_string(),
+            },
+            peer_node_id,
+            Uuid::new_v4(),
+            &harness.group_library_repo,
+            &harness.source_instance_repo,
+            &harness.sync_state_repo,
+            &harness.conflict_log_repo,
+        )
+        .await;
+
+        assert!(matches!(
+            result,
+            Err(AccountSyncError::IncompleteSourceInstance(id)) if id == source_id
+        ));
+        assert!(harness
+            .sync_state_repo
+            .get(peer_node_id, "libraries")
+            .await
+            .unwrap()
+            .is_none());
+        assert!(harness
+            .source_instance_repo
+            .list_all()
+            .await
+            .unwrap()
+            .is_empty());
     }
 
     #[tokio::test]

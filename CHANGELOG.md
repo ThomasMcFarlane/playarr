@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Retry identity-only source pages during rolling upgrades without advancing the peer cursor.
 - Replicate complete source-instance configurations into every peer's normal source list so
   synced sources remain visible and usable instead of being isolated as identity-only records.
 - Reuse the configured SQLite busy-timeout value during connection initialisation, keeping
