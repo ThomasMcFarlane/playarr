@@ -47,6 +47,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add Android phone photo avatars with Playarr Web-compatible pan, zoom, square crop, and
+  server-backed 512 px JPEG output while retaining preset-only selection on TV.
 - Enrich Android movie and series details with fixed runtime, real or generated chapters, cast,
   similar titles, per-file playback choices, and exact chapter-start playback.
 - Replace Android's generic movie and series rows with a responsive video detail surface that

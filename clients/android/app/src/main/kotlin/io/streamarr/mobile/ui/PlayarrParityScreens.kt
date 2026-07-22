@@ -101,7 +101,6 @@ import io.streamarr.shared.data.model.PlayerPreferences
 import io.streamarr.shared.data.model.Playlist
 import io.streamarr.shared.data.model.PlaylistItem
 import io.streamarr.shared.data.model.PlaylistMediaType
-import io.streamarr.shared.data.model.ProfileAvatarKind
 import io.streamarr.shared.data.model.ProfileAvatarPreference
 import io.streamarr.shared.data.model.ProfileAvatarSetting
 import io.streamarr.shared.data.model.ProfilePinSetting
@@ -121,6 +120,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 internal sealed interface ParityLoad<out T> {
@@ -635,6 +635,7 @@ private fun ProfileChoice(
 }
 
 internal data class SettingsSnapshot(
+    val userId: String,
     val player: PlayerPreferences,
     val pin: ProfilePinSetting,
     val avatar: ProfileAvatarSetting,
@@ -660,6 +661,7 @@ internal class ParitySettingsViewModel @Inject constructor(
         _state.value = runCatching {
             coroutineScope {
                 SettingsSnapshot(
+                    tokenStore.currentUserId.first().orEmpty(),
                     async { api.getPlayerPreferences() }.await(),
                     async { api.getProfilePinSetting() }.await(),
                     async { api.getProfileAvatar() }.await(),
@@ -671,7 +673,9 @@ internal class ParitySettingsViewModel @Inject constructor(
 
     fun savePlayerLanguage(language: String) = update("Player settings saved") { api.updatePlayerPreferences(UpdatePlayerPreferencesRequest(language)) }
     fun savePin(pin: String?) = update("Profile lock saved") { api.updateProfilePinSetting(UpdateProfilePinRequest(pin)) }
-    fun saveAvatar(preset: String) = update("Profile avatar saved") { api.updateProfileAvatar(UpdateProfileAvatarRequest(ProfileAvatarPreference(ProfileAvatarKind.Preset, preset))) }
+    fun saveAvatar(preference: ProfileAvatarPreference) = update("Profile avatar saved") {
+        api.updateProfileAvatar(UpdateProfileAvatarRequest(preference))
+    }
     fun requestInvite(message: String) = update("Invitation request sent") { api.createUserInviteRequest(CreateUserInviteRequest(message.ifBlank { null })) }
     fun generateInvite() = viewModelScope.launch {
         runCatching { api.generateApprovedUserInvite() }.onSuccess { _invite.value = it; _message.value = "Invitation generated" }.onFailure { _message.value = it.playarrMessage("invitation") }
@@ -736,7 +740,7 @@ internal fun ExperienceParitySettingsScreen(
                     when (val current = state) {
                         ParityLoad.Loading -> Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebPink) }
                         is ParityLoad.Failed -> ParityFailure(current.message, viewModel::load)
-                        is ParityLoad.Ready -> SettingsSectionContent(section, current.value, serverUrl, invite, viewModel)
+                        is ParityLoad.Ready -> SettingsSectionContent(section, current.value, serverUrl, invite, isTelevision, viewModel)
                     }
                 }
                 message?.let { item { Text(it, color = if (it.contains("saved") || it.contains("sent") || it.contains("generated")) WebPink else MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable { viewModel.clearMessage() }) } }
@@ -752,6 +756,7 @@ private fun SettingsSectionContent(
     snapshot: SettingsSnapshot,
     serverUrl: String,
     invite: UserInvite?,
+    isTelevision: Boolean,
     viewModel: ParitySettingsViewModel,
 ) {
     val display = LocalPlayarrDisplayPreferences.current
@@ -794,30 +799,12 @@ private fun SettingsSectionContent(
                 }
             }
             SettingsSection.Avatar -> {
-                Text("Choose an avatar", color = WebInkSoft, fontSize = 12.sp)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(playarrProfileAvatarPresetIds) { preset ->
-                        val selected = snapshot.avatar.preference?.let {
-                            it.kind == ProfileAvatarKind.Preset && it.value == preset
-                        } == true
-                        Surface(
-                            onClick = { viewModel.saveAvatar(preset) },
-                            modifier = Modifier
-                                .size(76.dp)
-                                .then(if (selected) Modifier.border(3.dp, WebPink, CircleShape) else Modifier)
-                                .semantics { contentDescription = "$preset avatar" },
-                            shape = CircleShape,
-                            color = Color.Transparent,
-                        ) {
-                            PlayarrProfileAvatar(
-                                userId = preset,
-                                preference = ProfileAvatarPreference(ProfileAvatarKind.Preset, preset),
-                                modifier = Modifier.fillMaxSize(),
-                                glyphSize = 31.sp,
-                            )
-                        }
-                    }
-                }
+                PlayarrAvatarSettings(
+                    userId = snapshot.userId,
+                    preference = snapshot.avatar.preference,
+                    isTelevision = isTelevision,
+                    onSaveAvatar = viewModel::saveAvatar,
+                )
             }
             SettingsSection.Language -> SettingChoices(
                 "App language",
