@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Opt the Android core download and player implementations and download-state tests into the
+  unstable Media3 contracts they deliberately consume so the top-level lint gate can validate
+  every module, not only the app target.
 - Transparently renegotiate expired Android on-demand HLS sessions after a server restart, resume
   at the absolute playhead, and guard each failed session URL from an automatic recovery loop.
 - Make Android report the same playback session heartbeat and terminal lifecycle as Playarr Web,
