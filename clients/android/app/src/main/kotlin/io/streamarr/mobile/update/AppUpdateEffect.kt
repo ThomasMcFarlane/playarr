@@ -22,8 +22,10 @@ import io.streamarr.shared.update.AppUpdateAction
 import io.streamarr.shared.update.AppUpdateCheck
 import io.streamarr.shared.update.AppUpdateCoordinator
 import io.streamarr.shared.update.UpdateAvailabilityEvaluator
+import io.streamarr.shared.update.UpdateSeverity
 import io.streamarr.shared.update.resolveUpdateAction
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -61,7 +63,11 @@ class AppUpdateViewModel @Inject constructor(
                 platform = ClientPlatform.AndroidMobile,
                 envelope = envelope,
             )
-            val check = appUpdateCoordinator.checkForUpdate()
+            // Do not bind Play Core unless the server actually reports a
+            // newer Android build. Sideloads and devices without Play can
+            // legitimately have no update service at all.
+            if (severity == UpdateSeverity.None) return@launch
+            val check = bestEffortUpdateCheck { appUpdateCoordinator.checkForUpdate() } ?: return@launch
             when (val action = resolveUpdateAction(severity, check.snapshot)) {
                 is AppUpdateAction.Start -> _pendingStart.value = PendingUpdateStart(check, action.appUpdateType)
                 AppUpdateAction.None -> Unit
@@ -73,9 +79,29 @@ class AppUpdateViewModel @Inject constructor(
     fun startPendingUpdate(launcher: ActivityResultLauncher<IntentSenderRequest>) {
         val pending = _pendingStart.value ?: return
         _pendingStart.value = null
-        appUpdateCoordinator.startUpdateFlow(pending.check.info, pending.appUpdateType, launcher)
+        bestEffortUpdateStart {
+            appUpdateCoordinator.startUpdateFlow(pending.check.info, pending.appUpdateType, launcher)
+        }
     }
 }
+
+/** Play Core is optional at runtime: sideloads and non-Play devices must remain usable. */
+internal suspend fun bestEffortUpdateCheck(block: suspend () -> AppUpdateCheck): AppUpdateCheck? =
+    try {
+        block()
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    } catch (_: Exception) {
+        null
+    }
+
+/** Starting the Play-owned UI is likewise best-effort once a check has succeeded. */
+internal fun bestEffortUpdateStart(block: () -> Boolean): Boolean =
+    try {
+        block()
+    } catch (_: Exception) {
+        false
+    }
 
 /**
  * Renders nothing; mount once near the root of the Compose tree (see
