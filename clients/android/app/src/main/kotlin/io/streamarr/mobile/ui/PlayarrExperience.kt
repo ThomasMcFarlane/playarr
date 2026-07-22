@@ -193,6 +193,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -284,8 +286,9 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     private val _progress = MutableStateFlow<List<WatchProgress>>(emptyList())
     val progress: StateFlow<List<WatchProgress>> = _progress.asStateFlow()
 
-    private val _profileAvatar = MutableStateFlow<ProfileAvatarPreference?>(null)
-    val profileAvatar: StateFlow<ProfileAvatarPreference?> = _profileAvatar.asStateFlow()
+    val profileAvatar: StateFlow<ProfileAvatarPreference?> = tokenStore.currentProfileAvatar
+        .map { it?.toPlayarrProfileAvatarPreference() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val _playbackQueue = MutableStateFlow(PlayarrPlaybackQueue())
     val playbackQueue: StateFlow<PlayarrPlaybackQueue> = _playbackQueue.asStateFlow()
@@ -373,7 +376,12 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     }
 
     fun refreshProfileAvatar() {
-        viewModelScope.launch { _profileAvatar.value = runCatching { api.getProfileAvatar().preference }.getOrNull() }
+        viewModelScope.launch {
+            val preference = runCatching { api.getProfileAvatar().preference }.getOrNull() ?: return@launch
+            val serverUrl = tokenStore.currentServerUrl.first() ?: return@launch
+            val userId = tokenStore.currentUserId.first() ?: return@launch
+            tokenStore.saveProfileAvatar(serverUrl, userId, preference.toSavedProfileAvatar())
+        }
     }
 
     private suspend fun refreshCapabilities() {

@@ -1319,6 +1319,7 @@ private fun WorkDetail.mediaFileFor(item: PlaylistItem): String? = when (val tre
 internal data class ProfilesSnapshot(
     val profiles: List<AvailableProfile>,
     val savedProfileIds: Set<String>,
+    val profileAvatars: Map<String, ProfileAvatarPreference> = emptyMap(),
     val loadWarning: PlayarrMessage? = null,
 )
 
@@ -1355,17 +1356,18 @@ internal class ProfilesViewModel @Inject constructor(
     private val _switchingProfileId = MutableStateFlow<String?>(null)
     val switchingProfileId = _switchingProfileId.asStateFlow()
 
-    init { load() }
-
     fun load() = viewModelScope.launch {
         _state.value = ParityLoad.Loading
         val serverUrl = serverConfigStore.baseUrl.first()
         val saved = tokenStore.savedProfilesForServer(serverUrl).first()
         val savedIds = saved.mapTo(mutableSetOf(), SavedProfile::userId)
+        val savedAvatars = saved.mapNotNull { profile ->
+            profile.avatar?.toPlayarrProfileAvatarPreference()?.let { profile.userId to it }
+        }.toMap()
         val currentUserId = tokenStore.currentUserId.first()
         val fallback = savedAndroidProfiles(saved, currentUserId)
         if (currentUserId == null) {
-            _state.value = ParityLoad.Ready(ProfilesSnapshot(fallback, savedIds))
+            _state.value = ParityLoad.Ready(ProfilesSnapshot(fallback, savedIds, savedAvatars))
             return@launch
         }
         _state.value = runCatching { api.listAvailableProfiles() }.fold(
@@ -1374,6 +1376,7 @@ internal class ProfilesViewModel @Inject constructor(
                     ProfilesSnapshot(
                         selectAndroidDeviceProfiles(it, savedIds, currentUserId),
                         savedIds,
+                        savedAvatars,
                     ),
                 )
             },
@@ -1382,6 +1385,7 @@ internal class ProfilesViewModel @Inject constructor(
                     ProfilesSnapshot(
                         profiles = fallback,
                         savedProfileIds = savedIds,
+                        profileAvatars = savedAvatars,
                         loadWarning = failure.playarrMessage(PlayarrFailureSubject.Profiles),
                     ),
                 )
@@ -1492,6 +1496,7 @@ internal fun ExperienceProfilesScreen(
     var pin by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<PlayarrMessage?>(null) }
     var actionError by remember { mutableStateOf<PlayarrMessage?>(null) }
+    LaunchedEffect(currentUserId, currentAvatar) { viewModel.load() }
     val navigateForAction: (ProfileAction) -> Unit = { action ->
         when (action) {
             ProfileAction.Select -> onHome()
@@ -1578,7 +1583,11 @@ internal fun ExperienceProfilesScreen(
                             items(profiles, key = AvailableProfile::id) { profile ->
                                 ProfileChoice(
                                     profile = profile,
-                                    avatar = if (profile.id == currentUserId) currentAvatar else null,
+                                    avatar = if (profile.id == currentUserId) {
+                                        currentAvatar ?: current.value.profileAvatars[profile.id]
+                                    } else {
+                                        current.value.profileAvatars[profile.id]
+                                    },
                                     selected = selectedId == profile.id,
                                     isTelevision = isTelevision,
                                     switching = switchingProfileId == profile.id,
@@ -1666,7 +1675,15 @@ internal fun ExperienceProfilesScreen(
             title = { Text(playarrString(PlayarrString.ProfilesSwitchProfile)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PlayarrProfileAvatar(profile.id, null, Modifier.align(Alignment.CenterHorizontally).size(88.dp))
+                    PlayarrProfileAvatar(
+                        profile.id,
+                        if (profile.id == currentUserId) {
+                            currentAvatar ?: (state as? ParityLoad.Ready)?.value?.profileAvatars?.get(profile.id)
+                        } else {
+                            (state as? ParityLoad.Ready)?.value?.profileAvatars?.get(profile.id)
+                        },
+                        Modifier.align(Alignment.CenterHorizontally).size(88.dp),
+                    )
                     Text(profile.displayName, color = WebInk, fontWeight = FontWeight.SemiBold, modifier = Modifier.align(Alignment.CenterHorizontally))
                     OutlinedTextField(
                         value = pin,
@@ -1955,7 +1972,14 @@ internal class ParitySettingsViewModel @Inject constructor(
         _pinBusy.value = false
     }
     fun saveAvatar(preference: ProfileAvatarPreference) = update(PlayarrString.SettingsAvatarSaved) {
-        api.updateProfileAvatar(UpdateProfileAvatarRequest(preference))
+        val saved = api.updateProfileAvatar(UpdateProfileAvatarRequest(preference))
+        val cached = saved.preference ?: preference
+        val serverUrl = tokenStore.currentServerUrl.first()
+        val userId = tokenStore.currentUserId.first()
+        if (serverUrl != null && userId != null) {
+            tokenStore.saveProfileAvatar(serverUrl, userId, cached.toSavedProfileAvatar())
+        }
+        saved
     }
     fun requestInvite(message: String) = viewModelScope.launch {
         if (_inviteBusy.value) return@launch

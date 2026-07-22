@@ -1,5 +1,6 @@
 package io.streamarr.mobile.ui
 
+import io.streamarr.shared.auth.SavedProfileAvatar
 import io.streamarr.shared.data.model.ProfileAvatarKind
 import io.streamarr.shared.data.model.ProfileAvatarPreference
 import org.junit.Assert.assertEquals
@@ -38,5 +39,15 @@ class PlayarrProfileAvatarTest {
 
         assertEquals(preset, resolvedPlayarrProfileAvatarPreference("user", preset))
         assertEquals(custom, resolvedPlayarrProfileAvatarPreference("user", custom))
+    }
+
+    @Test
+    fun `saved session avatars round trip through the wire preference types`() {
+        val preset = ProfileAvatarPreference(ProfileAvatarKind.Preset, "robot")
+        val custom = ProfileAvatarPreference(ProfileAvatarKind.Custom, "data:image/jpeg;base64,AA==")
+
+        assertEquals(preset, preset.toSavedProfileAvatar().toPlayarrProfileAvatarPreference())
+        assertEquals(custom, custom.toSavedProfileAvatar().toPlayarrProfileAvatarPreference())
+        assertEquals(null, SavedProfileAvatar("unexpected", "robot").toPlayarrProfileAvatarPreference())
     }
 }

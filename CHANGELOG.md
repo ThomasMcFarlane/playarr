@@ -26,6 +26,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Cache Android avatar choices by server and saved profile so every profile keeps its chosen avatar
+  offline and the shared shell reflects settings changes immediately, matching Playarr Web.
 - Mount Android's Play Store update effect on phone builds so resume-time recommended and required
   update checks actually run, while retaining the TV profile screen's sideload updater.
 - Hide Android's authenticated navigation until catalogue-kind access resolves, matching Playarr

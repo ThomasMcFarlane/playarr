@@ -19,7 +19,10 @@ data class SavedProfile(
     val serverUrl: String,
     val userId: String,
     val name: String?,
+    val avatar: SavedProfileAvatar? = null,
 )
+
+data class SavedProfileAvatar(val kind: String, val value: String)
 
 @Serializable
 private data class StoredProfileSession(
@@ -29,6 +32,8 @@ private data class StoredProfileSession(
     val accessToken: String,
     val refreshToken: String,
     val tokenType: String,
+    val avatarKind: String? = null,
+    val avatarValue: String? = null,
 )
 
 /**
@@ -52,9 +57,16 @@ class TokenStore @Inject constructor(
     val currentUserId: Flow<String?> = dataStore.data.map { it[USER_ID_KEY] }
     val currentUserName: Flow<String?> = dataStore.data.map { it[USER_NAME_KEY] }
     val currentServerUrl: Flow<String?> = dataStore.data.map { it[CURRENT_SERVER_URL_KEY] }
+    val currentProfileAvatar: Flow<SavedProfileAvatar?> = dataStore.data.map { preferences ->
+        val serverUrl = preferences[CURRENT_SERVER_URL_KEY]
+        val userId = preferences[USER_ID_KEY]
+        preferences.storedProfileSessions()
+            .firstOrNull { it.serverUrl == serverUrl && it.userId == userId }
+            ?.savedAvatar()
+    }
     val savedProfiles: Flow<List<SavedProfile>> = dataStore.data.map { preferences ->
         preferences.storedProfileSessions().map { session ->
-            SavedProfile(session.serverUrl, session.userId, session.name)
+            SavedProfile(session.serverUrl, session.userId, session.name, session.savedAvatar())
         }
     }
 
@@ -131,6 +143,20 @@ class TokenStore @Inject constructor(
         dataStore.data.first().storedProfileSessions().any {
             it.serverUrl == serverUrl && it.userId == userId
         }
+
+    suspend fun saveProfileAvatar(serverUrl: String, userId: String, avatar: SavedProfileAvatar) {
+        if (serverUrl.isBlank() || userId.isBlank() || avatar.kind.isBlank() || avatar.value.isBlank()) return
+        dataStore.edit { prefs ->
+            val sessions = prefs.storedProfileSessions()
+            val index = sessions.indexOfFirst { it.serverUrl == serverUrl && it.userId == userId }
+            if (index < 0) return@edit
+            prefs[SAVED_PROFILE_SESSIONS_KEY] = profileJson.encodeToString(
+                sessions.toMutableList().apply {
+                    this[index] = this[index].copy(avatarKind = avatar.kind, avatarValue = avatar.value)
+                },
+            )
+        }
+    }
 
     suspend fun logoutProfile(serverUrl: String, userId: String) {
         dataStore.edit { prefs ->
@@ -215,8 +241,20 @@ private fun Preferences.currentStoredProfile(token: TokenResponse? = null): Stor
     return StoredProfileSession(serverUrl, userId, this[TokenStore.USER_NAME_KEY], accessToken, refreshToken, tokenType)
 }
 
-private fun List<StoredProfileSession>.upsert(session: StoredProfileSession): List<StoredProfileSession> =
-    filterNot { it.serverUrl == session.serverUrl && it.userId == session.userId } + session
+private fun List<StoredProfileSession>.upsert(session: StoredProfileSession): List<StoredProfileSession> {
+    val previous = firstOrNull { it.serverUrl == session.serverUrl && it.userId == session.userId }
+    val merged = session.copy(
+        avatarKind = session.avatarKind ?: previous?.avatarKind,
+        avatarValue = session.avatarValue ?: previous?.avatarValue,
+    )
+    return filterNot { it.serverUrl == session.serverUrl && it.userId == session.userId } + merged
+}
+
+private fun StoredProfileSession.savedAvatar(): SavedProfileAvatar? {
+    val kind = avatarKind?.takeIf(String::isNotBlank) ?: return null
+    val value = avatarValue?.takeIf(String::isNotBlank) ?: return null
+    return SavedProfileAvatar(kind, value)
+}
 
 private fun MutablePreferences.clearCurrentSession() {
     remove(TokenStore.ACCESS_TOKEN_KEY)

@@ -61,6 +61,27 @@ class TokenStoreTest {
     }
 
     @Test
+    fun `profile avatars survive token rotation and remain scoped by server and profile`() = runBlocking {
+        val store = TokenStore(TokenStoreFakeDataStore())
+        store.save(token("old-access", "old-refresh"))
+        store.saveIdentity("profile-a", "Alex", "https://playarr.example")
+        store.saveProfileAvatar(
+            "https://playarr.example",
+            "profile-a",
+            SavedProfileAvatar("preset", "robot"),
+        )
+
+        store.save(token("new-access", "new-refresh"))
+
+        assertEquals(SavedProfileAvatar("preset", "robot"), store.currentProfileAvatar.first())
+        assertEquals(
+            SavedProfileAvatar("preset", "robot"),
+            store.savedProfilesForServer("https://playarr.example").first().single().avatar,
+        )
+        assertEquals(emptyList<SavedProfile>(), store.savedProfilesForServer("https://other.example").first())
+    }
+
+    @Test
     fun `binding a server migrates an existing single active profile`() = runBlocking {
         val store = TokenStore(TokenStoreFakeDataStore())
         store.save(token("access-a", "refresh-a"))

@@ -21,6 +21,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
+import io.streamarr.shared.auth.SavedProfileAvatar
 import io.streamarr.shared.data.model.ProfileAvatarKind
 import io.streamarr.shared.data.model.ProfileAvatarPreference
 
@@ -31,6 +32,23 @@ internal val playarrProfileAvatarPresetIds = listOf(
     "robot",
     "pirate",
     "alien",
+)
+
+internal fun SavedProfileAvatar.toPlayarrProfileAvatarPreference(): ProfileAvatarPreference? {
+    val avatarKind = when (kind) {
+        "preset" -> ProfileAvatarKind.Preset
+        "custom" -> ProfileAvatarKind.Custom
+        else -> return null
+    }
+    return ProfileAvatarPreference(avatarKind, value)
+}
+
+internal fun ProfileAvatarPreference.toSavedProfileAvatar(): SavedProfileAvatar = SavedProfileAvatar(
+    kind = when (kind) {
+        ProfileAvatarKind.Preset -> "preset"
+        ProfileAvatarKind.Custom -> "custom"
+    },
+    value = value,
 )
 
 private data class ProfileAvatarPresetVisual(
