@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Opt the Android download service and dependency wiring into the Media3 APIs they use so the
+  repository's full Android lint gate completes without unsafe opt-in errors.
 - Show the native Android build version beneath the profile avatar while keeping it outside the
   profile button's hit area, matching Playarr Web on mobile and television layouts.
 - Gate every native Android download surface on the signed-in profile's live capability and keep

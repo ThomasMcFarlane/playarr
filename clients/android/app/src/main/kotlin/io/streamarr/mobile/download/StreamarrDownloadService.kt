@@ -1,6 +1,7 @@
 package io.streamarr.mobile.download
 
 import android.app.Notification
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.media3.exoplayer.offline.DownloadNotificationHelper
@@ -25,6 +26,7 @@ import javax.inject.Inject
  * the foreground while any download is active and demotes when idle.
  */
 @AndroidEntryPoint
+@UnstableApi
 class StreamarrDownloadService : DownloadService(
     NOTIFICATION_ID,
     FOREGROUND_NOTIFICATION_UPDATE_INTERVAL_MS,

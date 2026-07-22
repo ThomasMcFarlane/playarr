@@ -1,6 +1,7 @@
 package io.streamarr.mobile.download
 
 import android.content.Context
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.offline.DownloadRequest
 import androidx.media3.exoplayer.offline.DownloadService
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -15,6 +16,7 @@ import javax.inject.Inject
  * exactly why the interface exists on the `core-download` side (see its
  * KDoc).
  */
+@UnstableApi
 class DefaultStreamarrDownloadServiceStarter @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : StreamarrDownloadServiceStarter {
