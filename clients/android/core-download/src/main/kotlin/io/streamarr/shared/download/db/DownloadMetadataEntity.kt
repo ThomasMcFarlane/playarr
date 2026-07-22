@@ -23,6 +23,7 @@ data class DownloadMetadataEntity(
     /** `"movie" | "episode" | "track" | "book"`. */
     val kind: String,
     val qualityId: String,
+    val qualityLabel: String = qualityId,
     /** The server `DownloadTicket` id this download's bytes are fetched from. */
     val ticketId: String?,
     /** Owning server origin; blank only for rows migrated from the original primary-only schema. */

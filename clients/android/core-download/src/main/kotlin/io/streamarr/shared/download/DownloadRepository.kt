@@ -57,7 +57,12 @@ interface DownloadRepository {
      * failing to stage (e.g. its library ACL narrowed mid-batch) does not
      * abort the rest of a season/album "download all".
      */
-    suspend fun enqueue(candidates: List<DownloadCandidate>, qualityId: String, keepUntil: KeepUntilSelection)
+    suspend fun enqueue(
+        candidates: List<DownloadCandidate>,
+        qualityId: String,
+        keepUntil: KeepUntilSelection,
+        qualityLabel: String = qualityId,
+    )
 
     fun pause(mediaFileId: String)
     fun resume(mediaFileId: String)
@@ -113,6 +118,7 @@ class DefaultDownloadRepository @Inject constructor(
                     posterUrl = metadata.posterUrl,
                     kind = metadata.kind,
                     qualityId = metadata.qualityId,
+                    qualityLabel = metadata.qualityLabel.ifBlank { metadata.qualityId },
                     ticketId = metadata.ticketId,
                     serverUrl = metadata.serverUrl,
                     state = download?.state?.toDownloadState() ?: DownloadState.Queued,
@@ -145,7 +151,12 @@ class DefaultDownloadRepository @Inject constructor(
     override suspend fun listQualityOptions(mediaFileId: String): List<DownloadQualityOption> =
         api.getDownloadOptions(mediaFileId).options
 
-    override suspend fun enqueue(candidates: List<DownloadCandidate>, qualityId: String, keepUntil: KeepUntilSelection) {
+    override suspend fun enqueue(
+        candidates: List<DownloadCandidate>,
+        qualityId: String,
+        keepUntil: KeepUntilSelection,
+        qualityLabel: String,
+    ) {
         val now = System.currentTimeMillis()
         val policy = keepUntil.persistedDownloadPolicy()
         for (candidate in candidates) {
@@ -170,6 +181,7 @@ class DefaultDownloadRepository @Inject constructor(
                     posterUrl = candidate.posterUrl,
                     kind = candidate.kind,
                     qualityId = qualityId,
+                    qualityLabel = qualityLabel,
                     ticketId = ticket.id,
                     serverUrl = serverAccess.serverUrl,
                     keepUntilEpochMillis = policy.epochMillis,

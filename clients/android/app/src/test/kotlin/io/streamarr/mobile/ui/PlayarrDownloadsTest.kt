@@ -35,6 +35,24 @@ class PlayarrDownloadsTest {
         }
     }
 
+    @Test
+    fun `device storage matches downloaded bytes and remaining capacity`() {
+        val first = download(kind = "movie", title = "First", workTitle = "First")
+            .copy(bytesDownloaded = 100, totalBytes = 200)
+        val second = download(kind = "movie", title = "Second", workTitle = "Second")
+            .copy(mediaFileId = "second", bytesDownloaded = 300, totalBytes = 300)
+
+        assertEquals(
+            DownloadStorageUsage(usedBytes = 400, quotaBytes = 1_000, percent = 40),
+            calculateDownloadStorageUsage(listOf(first, second), availableBytes = 600),
+        )
+    }
+
+    @Test
+    fun `legacy download quality id remains a visible label fallback`() {
+        assertEquals("original", download(kind = "movie", title = "Movie", workTitle = "Movie").qualityLabel)
+    }
+
     private fun download(kind: String, title: String, workTitle: String) = DownloadEntity(
         mediaFileId = "media",
         workId = "work",

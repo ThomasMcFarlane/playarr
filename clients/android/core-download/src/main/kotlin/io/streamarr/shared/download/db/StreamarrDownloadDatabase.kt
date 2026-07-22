@@ -11,13 +11,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * Media3's own offline-download stack (see `DownloadRepository`'s KDoc);
  * this is only the two things it doesn't track.
  *
- * `exportSchema = false`: no `schemas/` directory is checked in yet. Schema 3 preserves existing
+ * `exportSchema = false`: no `schemas/` directory is checked in yet. Schema 4 preserves existing
  * primary-server rows through [STREAMARR_DOWNLOAD_MIGRATION_1_2]; future migrations should enable
  * checked-in schema export so Room can validate their complete history.
  */
 @Database(
     entities = [DownloadMetadataEntity::class, PendingProgressEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class StreamarrDownloadDatabase : RoomDatabase() {
@@ -36,5 +36,11 @@ val STREAMARR_DOWNLOAD_MIGRATION_2_3 = object : Migration(2, 3) {
         db.execSQL("ALTER TABLE download_metadata ADD COLUMN keepUntilAmount INTEGER")
         db.execSQL("ALTER TABLE download_metadata ADD COLUMN keepUntilUnit TEXT")
         db.execSQL("ALTER TABLE download_metadata ADD COLUMN watchedAtEpochMillis INTEGER")
+    }
+}
+
+val STREAMARR_DOWNLOAD_MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE download_metadata ADD COLUMN qualityLabel TEXT NOT NULL DEFAULT ''")
     }
 }

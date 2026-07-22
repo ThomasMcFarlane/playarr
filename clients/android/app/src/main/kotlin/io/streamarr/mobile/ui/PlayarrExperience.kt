@@ -1247,6 +1247,7 @@ private fun ExperienceNavHost(
                     serverUrl = serverUrl,
                     accessToken = accessToken,
                     isTelevision = isTelevision,
+                    isOnline = isOnline,
                     onPlay = { download ->
                         val item = download.playarrPlaybackQueueItem()
                         viewModel.startPlayback(download.mediaFileId, listOf(item))

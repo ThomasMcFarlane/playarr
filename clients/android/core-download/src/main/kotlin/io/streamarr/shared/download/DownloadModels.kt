@@ -26,6 +26,7 @@ data class DownloadEntity(
     /** `"movie" | "episode" | "track" | "book"`. */
     val kind: String,
     val qualityId: String,
+    val qualityLabel: String = qualityId,
     /** The server `DownloadTicket` id this download's bytes were fetched from, if any resolved yet. */
     val ticketId: String?,
     /** Owning server origin, retained so artwork, retries, and offline progress keep the right auth boundary. */

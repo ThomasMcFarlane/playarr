@@ -1,9 +1,11 @@
 package io.streamarr.mobile.ui
 
+import android.os.StatFs
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -29,6 +31,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.DownloadDone
 import androidx.compose.material.icons.outlined.Downloading
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Error
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -41,6 +44,7 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -88,6 +92,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -125,6 +130,26 @@ internal enum class PlayarrDownloadGroup(val title: PlayarrString) {
     Completed(PlayarrString.DownloadsCompletedHeading),
 }
 
+internal data class DownloadStorageUsage(
+    val usedBytes: Long,
+    val quotaBytes: Long,
+    val percent: Int,
+)
+
+internal fun calculateDownloadStorageUsage(
+    downloads: List<DownloadEntity>,
+    availableBytes: Long,
+): DownloadStorageUsage {
+    val usedBytes = downloads.sumOf { it.bytesDownloaded.coerceAtLeast(0L) }
+    val quotaBytes = usedBytes + availableBytes.coerceAtLeast(0L)
+    val percent = if (quotaBytes > 0L) {
+        ((usedBytes.toDouble() / quotaBytes.toDouble()) * 100.0).roundToInt().coerceIn(0, 100)
+    } else {
+        0
+    }
+    return DownloadStorageUsage(usedBytes, quotaBytes, percent)
+}
+
 internal fun DownloadState.playarrDownloadGroup(): PlayarrDownloadGroup = when (this) {
     DownloadState.Failed -> PlayarrDownloadGroup.NeedsAttention
     DownloadState.Completed -> PlayarrDownloadGroup.Completed
@@ -143,10 +168,18 @@ internal fun ExperienceDownloadsScreen(
     serverUrl: String,
     accessToken: String?,
     isTelevision: Boolean,
+    isOnline: Boolean,
     onPlay: (DownloadEntity) -> Unit,
     viewModel: DownloadsViewModel = hiltViewModel(),
 ) {
     val downloads by viewModel.downloads.collectAsState()
+    val context = LocalContext.current
+    val storageUsage = remember(downloads, context.filesDir) {
+        calculateDownloadStorageUsage(
+            downloads,
+            runCatching { StatFs(context.filesDir.absolutePath).availableBytes }.getOrDefault(0L),
+        )
+    }
     var keepUntilTarget by remember { mutableStateOf<DownloadEntity?>(null) }
     Column(
         modifier = Modifier
@@ -159,19 +192,42 @@ internal fun ExperienceDownloadsScreen(
                 top = if (isTelevision) 40.dp else 24.dp,
             ),
     ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                playarrString(PlayarrString.DownloadsTitle),
+                color = WebInk,
+                fontSize = if (isTelevision) 44.sp else 30.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = (-1).sp,
+            )
+            if (!isOnline) {
+                Surface(color = WebPink.copy(alpha = 0.16f), shape = RoundedCornerShape(20.dp)) {
+                    Text(
+                        playarrString(PlayarrString.DownloadsOffline).uppercase(LocalPlayarrLanguage.current.locale),
+                        color = WebPink,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 1.sp,
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                    )
+                }
+            }
+        }
         Text(
-            playarrString(PlayarrString.DownloadsOffline).uppercase(LocalPlayarrLanguage.current.locale),
-            color = WebPink,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.ExtraBold,
-            letterSpacing = 1.4.sp,
+            playarrString(
+                PlayarrString.DownloadsStorageUsed,
+                "used" to formatDownloadSize(storageUsage.usedBytes, isEstimate = false),
+                "quota" to formatDownloadSize(storageUsage.quotaBytes, isEstimate = false),
+            ),
+            color = WebInkMuted,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 6.dp),
         )
-        Text(
-            playarrString(PlayarrString.DownloadsTitle),
-            color = WebInk,
-            fontSize = if (isTelevision) 44.sp else 30.sp,
-            fontWeight = FontWeight.Medium,
-            letterSpacing = (-1).sp,
+        LinearProgressIndicator(
+            progress = { storageUsage.percent / 100f },
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp).height(4.dp),
+            color = WebPink,
+            trackColor = WebSurfaceSoft,
         )
         if (downloads.isEmpty()) {
             ExperienceEmpty(
@@ -187,7 +243,7 @@ internal fun ExperienceDownloadsScreen(
             ) {
                 PlayarrDownloadGroup.entries.forEach { group ->
                     val entries = grouped[group].orEmpty()
-                    if (entries.isNotEmpty()) {
+                    if (entries.isNotEmpty() || group == PlayarrDownloadGroup.Completed) {
                         item(key = "heading-${group.name}") {
                             Text(
                                 playarrString(group.title),
@@ -197,16 +253,26 @@ internal fun ExperienceDownloadsScreen(
                                 modifier = Modifier.padding(top = 8.dp),
                             )
                         }
-                        items(entries, key = DownloadEntity::mediaFileId) { entry ->
-                            DownloadListItem(
-                                entry = entry,
-                                serverUrl = serverUrl,
-                                accessToken = accessToken,
-                                onPlay = { onPlay(entry) },
-                                onTogglePauseOrRetry = { viewModel.togglePauseOrRetry(entry) },
-                                onCancel = { viewModel.cancel(entry.mediaFileId) },
-                                onEditKeepUntil = { keepUntilTarget = entry },
-                            )
+                        if (entries.isEmpty()) {
+                            item(key = "empty-${group.name}") {
+                                Text(
+                                    playarrString(PlayarrString.DownloadsNoCompletedYet),
+                                    color = WebInkMuted,
+                                    fontSize = 11.sp,
+                                )
+                            }
+                        } else {
+                            items(entries, key = DownloadEntity::mediaFileId) { entry ->
+                                DownloadListItem(
+                                    entry = entry,
+                                    serverUrl = serverUrl,
+                                    accessToken = accessToken,
+                                    onPlay = { onPlay(entry) },
+                                    onTogglePauseOrRetry = { viewModel.togglePauseOrRetry(entry) },
+                                    onCancel = { viewModel.cancel(entry.mediaFileId) },
+                                    onEditKeepUntil = { keepUntilTarget = entry },
+                                )
+                            }
                         }
                     }
                 }
@@ -244,53 +310,144 @@ private fun DownloadListItem(
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            DownloadThumbnail(
-                posterUrl = entry.posterUrl,
-                serverUrl = entry.serverUrl.ifBlank { serverUrl },
-                accessToken = accessToken,
-                modifier = Modifier.width(58.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)),
-            )
-            Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                Text(entry.title, color = WebInk, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (entry.workTitle != entry.title) {
-                    Text(entry.workTitle, color = WebInkMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                Spacer(Modifier.height(6.dp))
-                DownloadStatusLine(entry)
-                Text(
-                    downloadKeepUntilLabel(entry.keepUntilSelection, language.locale),
-                    color = WebInkMuted,
-                    fontSize = 10.sp,
-                    modifier = Modifier.padding(top = 4.dp).clickable(onClick = onEditKeepUntil),
-                )
-            }
-            if (entry.state != DownloadState.Completed && entry.state != DownloadState.Removing) {
-                IconButton(onClick = onTogglePauseOrRetry) {
-                    val resuming = entry.state == DownloadState.Paused || entry.state == DownloadState.Failed
-                    Icon(
-                        if (resuming) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
-                        contentDescription = playarrString(
-                            if (resuming) PlayarrString.DownloadsResume else PlayarrString.DownloadsPause,
-                        ),
-                        tint = WebInkMuted,
+        BoxWithConstraints {
+            val compact = maxWidth < 600.dp
+            if (compact) {
+                Column(Modifier.padding(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        DownloadListArtwork(entry, serverUrl, accessToken)
+                        DownloadListCopy(entry, language.locale, Modifier.weight(1f).padding(start = 12.dp))
+                    }
+                    DownloadListActions(
+                        entry,
+                        onEditKeepUntil,
+                        onTogglePauseOrRetry,
+                        onCancel,
+                        Modifier.align(Alignment.End),
                     )
                 }
+            } else {
+                Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    DownloadListArtwork(entry, serverUrl, accessToken)
+                    DownloadListCopy(entry, language.locale, Modifier.weight(1f).padding(horizontal = 12.dp))
+                    DownloadListActions(entry, onEditKeepUntil, onTogglePauseOrRetry, onCancel)
+                }
             }
-            IconButton(onClick = onCancel) {
+        }
+    }
+}
+
+@Composable
+private fun DownloadListArtwork(entry: DownloadEntity, serverUrl: String, accessToken: String?) {
+    DownloadThumbnail(
+        posterUrl = entry.posterUrl,
+        serverUrl = entry.serverUrl.ifBlank { serverUrl },
+        accessToken = accessToken,
+        modifier = Modifier.width(58.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)),
+    )
+}
+
+@Composable
+private fun DownloadListCopy(entry: DownloadEntity, locale: Locale, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(entry.title, color = WebInk, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (entry.workTitle != entry.title) {
+            Text(entry.workTitle, color = WebInkMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            listOfNotNull(downloadTypeLabel(entry.kind), entry.qualityLabel.takeIf(String::isNotBlank)).joinToString(" · "),
+            color = WebInkMuted,
+            fontSize = 10.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        DownloadStatusLine(entry)
+        if (entry.state in setOf(DownloadState.Queued, DownloadState.Downloading, DownloadState.Paused)) {
+            val total = entry.totalBytes
+            if (total != null && total > 0L) {
+                LinearProgressIndicator(
+                    progress = { (entry.bytesDownloaded.toFloat() / total.toFloat()).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().padding(top = 5.dp).height(4.dp),
+                    color = WebPink,
+                    trackColor = WebSurfaceSoft,
+                )
+            } else {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().padding(top = 5.dp).height(4.dp),
+                    color = WebPink,
+                    trackColor = WebSurfaceSoft,
+                )
+            }
+        }
+        Text(downloadSizeLabel(entry), color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+        Text(
+            downloadKeepUntilLabel(entry.keepUntilSelection, locale),
+            color = WebInkMuted,
+            fontSize = 10.sp,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+    }
+}
+
+@Composable
+private fun DownloadListActions(
+    entry: DownloadEntity,
+    onEditKeepUntil: () -> Unit,
+    onTogglePauseOrRetry: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier) {
+        IconButton(onClick = onEditKeepUntil) {
+            Icon(Icons.Outlined.Edit, contentDescription = playarrString(PlayarrString.DownloadsEdit), tint = WebInkMuted)
+        }
+        if (entry.state != DownloadState.Completed && entry.state != DownloadState.Removing) {
+            IconButton(onClick = onTogglePauseOrRetry) {
+                val resuming = entry.state == DownloadState.Paused || entry.state == DownloadState.Failed
                 Icon(
-                    Icons.Outlined.Delete,
+                    if (resuming) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
                     contentDescription = playarrString(
-                        if (entry.state in setOf(DownloadState.Queued, DownloadState.Downloading, DownloadState.Paused)) {
-                            PlayarrString.DownloadsCancel
-                        } else {
-                            PlayarrString.DownloadsDelete
-                        },
+                        if (resuming) PlayarrString.DownloadsResume else PlayarrString.DownloadsPause,
                     ),
                     tint = WebInkMuted,
                 )
             }
         }
+        IconButton(onClick = onCancel) {
+            Icon(
+                Icons.Outlined.Delete,
+                contentDescription = playarrString(
+                    if (entry.state in setOf(DownloadState.Queued, DownloadState.Downloading, DownloadState.Paused)) {
+                        PlayarrString.DownloadsCancel
+                    } else {
+                        PlayarrString.DownloadsDelete
+                    },
+                ),
+                tint = WebInkMuted,
+            )
+        }
+    }
+}
+
+@Composable
+private fun downloadTypeLabel(kind: String): String? = when (kind) {
+    "movie" -> playarrString(PlayarrString.DownloadsTypeMovie)
+    "episode" -> playarrString(PlayarrString.DownloadsTypeEpisode)
+    "track" -> playarrString(PlayarrString.DownloadsTypeTrack)
+    "book" -> playarrString(PlayarrString.DownloadsTypeBook)
+    else -> null
+}
+
+@Composable
+private fun downloadSizeLabel(entry: DownloadEntity): String {
+    val downloaded = formatDownloadSize(entry.bytesDownloaded, isEstimate = false)
+    val total = entry.totalBytes?.let { formatDownloadSize(it, isEstimate = false) }
+        ?: playarrString(PlayarrString.DownloadsUnknownSize)
+    return if (entry.state in setOf(DownloadState.Queued, DownloadState.Downloading, DownloadState.Paused)) {
+        playarrString(PlayarrString.DownloadsBytesOfTotal, "downloaded" to downloaded, "total" to total)
+    } else {
+        entry.totalBytes?.let { formatDownloadSize(it, isEstimate = false) } ?: downloaded
     }
 }
 
@@ -409,9 +566,15 @@ internal class DownloadOptionsViewModel @Inject constructor(
         }
     }
 
-    fun enqueue(candidates: List<DownloadCandidate>, qualityId: String, keepUntil: KeepUntilSelection, onDone: () -> Unit) {
+    fun enqueue(
+        candidates: List<DownloadCandidate>,
+        qualityId: String,
+        qualityLabel: String,
+        keepUntil: KeepUntilSelection,
+        onDone: () -> Unit,
+    ) {
         viewModelScope.launch {
-            downloadRepository.enqueue(candidates, qualityId, keepUntil)
+            downloadRepository.enqueue(candidates, qualityId, keepUntil, qualityLabel)
             onDone()
         }
     }
@@ -538,8 +701,9 @@ internal fun DownloadOptionsSheet(
                         Button(
                             onClick = {
                                 val qualityId = selectedQualityId ?: return@Button
+                                val qualityLabel = current.value.first { it.id == qualityId }.label
                                 enqueuing = true
-                                viewModel.enqueue(candidates, qualityId, keepUntilSelection, onDismiss)
+                                viewModel.enqueue(candidates, qualityId, qualityLabel, keepUntilSelection, onDismiss)
                             },
                             enabled = selectedQualityId != null && !enqueuing,
                             modifier = Modifier.fillMaxWidth(),
