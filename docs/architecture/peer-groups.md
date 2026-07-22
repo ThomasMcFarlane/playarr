@@ -81,7 +81,7 @@ call this document makes. Full rationale is in the referenced section.
 | Cross-node library identity | New `GroupLibrary` entity, `SourceInstance.group_library_id` maps a node's own local library into it (§5.1) | Routing/grants keyed directly on a local `SourceInstance.id` (does not work: that id is minted independently per node and is not the same value across peers, so a routing rule referencing it would only ever match on the node that created it) |
 | Does `Work`/`MediaFile` itself sync across peers? | No. Stays strictly node-local, single writer (`ReconciliationPoller`, unchanged). A new `peer_leaf_availability` table is a read-only annotation (§4) | Replicating `Work` rows peer-to-peer keyed by external ref: creates a second writer of the same local `works` table `ReconciliationPoller`'s own poll-as-truth diff already owns exclusively, and its `SyncOp::Delete` path (a title has left the local *arr instance) has no way to distinguish "genuinely gone" from "a peer just re-upserted it" without new scoping work this design does not want to make foundational |
 | Refresh tokens across peers | Not synced. Client retries the *same* refresh call against the next remembered address before falling back to full (credentials-only, never address-only) re-login (§3.7) | Syncing `refresh_token_families` with a max-generation-wins merge rule: technically arguable, but leaves an unresolved race if the same token is redeemed against two peers inside one sync interval, and two of the three source proposals independently declined to build it for exactly that reason |
-| RFC 8628 device-pairing state across peers | Not synced. The approving client fans its approval call out in parallel to the address bundle carried on the pairing artifact itself (§6.3) | Syncing `DeviceAuthorization` on the normal ~60s poll cadence: correctness risk against a ~10 minute, security-sensitive, human-paced flow that a lagging sync pass could visibly break |
+| RFC 8628 device-pairing state across peers | Not synced. Android first contact uses a ten-minute `playarr.app` broker record; the selected browser profile creates and approves the real per-peer device credential, which Android redeems directly (§6.3) | Syncing `DeviceAuthorization` on the normal ~60s poll cadence: correctness risk against a ~10 minute, security-sensitive, human-paced flow that a lagging sync pass could visibly break |
 | TV pairing artifact address awareness | The issuing peer embeds a `PeerAddressBundle` (§6.1, reused) directly into `verification_uri_complete` via the same `servers=` param the invite flow uses, so the QR/code itself is self-contained (§6.3) | Relying only on the approving device's own remembered `KnownServerGroup` for fan-out, with no address data in the artifact itself: fails for an approver who has never talked to this group before (a guest's phone, a different household member's browser with a stale cache) and does not literally satisfy the user's explicit requirement that "the QR code encodes the multiple server addresses" |
 | Redirect vs. proxy delivery | Per-rule `DeliveryMode::Auto` (default) computes Redirect-if-target-address-is-client-reachable-else-Proxy per request from an operator-set flag; `Redirect`/`Proxy` remain available as explicit overrides (§5.3) | A single static field with no computed default: correct only if the admin never misconfigures reachability, and doesn't fail safe when they do |
 | Where routing is evaluated | The **entire** playback negotiation (direct-play/rendition/transcode decision) is forwarded to the owning peer, not just the final stream URL (§5.2) | Swapping only the response URL while still running local negotiation logic: silently wrong, because `can_direct_play`/rendition selection/on-demand transcode all require probing the actual file, which the entry node does not have |
@@ -96,10 +96,11 @@ call this document makes. Full rationale is in the referenced section.
   portable wrapper (matching a title across peers by external ref +
   `LeafSelector`, §4.2) is a natural, low-risk follow-up once this lands,
   noted in §8 as future work, not built here.
-- No hosted broker/relay service is introduced. Every mechanism below is
-  peer-to-peer, including the outbound push exchange used when a peer cannot
-  accept inbound connections, or reuses the existing static `playarr.app`/
-  hosted-brand client shell, which remains stateless.
+- No hosted media or peer-sync relay is introduced. Android first-contact
+  linking is the narrow exception: `playarr.app` stores a ten-minute pairing
+  record containing a single-use Streamarr device code, but never a password,
+  browser bearer token, refresh token, or media request. The Android client
+  still redeems the credential and reaches Streamarr directly.
 
 ---
 
@@ -1120,11 +1121,12 @@ hold the `device_code`/`user_code` pair, and §3.8 already established that
 pending-authorization state itself is not synced. What changes is what
 that one peer tells both ends about the *group*, not the pairing state:
 
-- The **TV client** requesting a device code tries every address in its
-  own remembered group (§7) in turn, exactly as before: it doesn't matter
-  which peer answers, and this remains the one place a device still needs
-  a starting address at all (see the unavoidable-manual-step bullet
-  below) — nothing here removes that first-contact requirement.
+- The **Android TV client** requests its visible QR/manual code from the
+  hosted `playarr.app` Durable Object broker, so first contact needs no
+  Streamarr address. After the browser claims that code with its selected
+  profile, Android receives a single-use per-peer device code and the
+  profile's address bundle, then redeems directly against Streamarr. Other
+  TV clients continue to try their remembered addresses in order.
 - **`request_verification_uri`** (`streamarr-api/src/oauth.rs:122`)
   changes: the device-code response's `verification_uri_complete` now
   embeds a `PeerAddressBundle` (§6.1, reused as-is) via the identical
@@ -1156,20 +1158,12 @@ that one peer tells both ends about the *group*, not the pairing state:
   harmlessly. Client-only change (`DeviceLink.tsx` and native
   equivalents, §6.4), no new server endpoint beyond the `oauth.rs` change
   above.
-- **The one genuinely unavoidable manual step**, stated rather than
-  glossed over: without a hosted broker (a confirmed non-goal), *some*
-  device in a household must be told a server address at least once, to
-  make that very first `POST /api/v1/oauth/device/code` call: via manual
-  entry, an invite link (§6.1), or the TV app's existing
-  `streamarr-config.json` runtime-config mechanism (`RUNTIME_CONFIG_FILE_NAME`,
-  `clients/tv-web/packages/domain/src/index.ts:79`), whose single
-  `apiBaseUrl` field becomes `apiBaseUrls: string[]` (plural read when
-  present, singular still accepted) so an operator can pre-seed a group's
-  full address list onto a device image. This design's contribution is
-  making that a **one-time, per-household event**: every subsequent
-  device pairs against a peer it already knows, or against whichever peer
-  its device-code request happens to reach, and from that first response
-  onward the full group bundle travels with the pairing artifact itself.
+- The prior first-contact server-entry requirement is removed for Android
+  TV by the narrowly scoped hosted broker. Manual address entry and
+  `streamarr-config.json` remain compatibility paths for clients that have
+  not adopted hosted pairing; once any client receives a Streamarr device
+  response, the full group bundle still travels with the artifact and is
+  remembered locally.
 
 ### 6.4 Native client mirrors
 

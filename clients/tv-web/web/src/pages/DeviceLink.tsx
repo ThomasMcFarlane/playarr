@@ -2,8 +2,14 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ApiClient, ApiError } from "@streamarr-tv/api-client";
 import { authorizeDeviceAcrossServers, parseServersParam } from "@streamarr-tv/device-auth";
-import { useApiClient, useAuth } from "../lib/ApiClientProvider";
+import {
+  useApiBaseUrl,
+  useApiClient,
+  useAuth,
+  usePrimaryApiClient,
+} from "../lib/ApiClientProvider";
 import { isCompleteDeviceCode, normaliseDeviceCode } from "../lib/deviceCode";
+import { authoriseHostedLink, inspectHostedLink } from "../lib/hostedDeviceLink";
 import { createLocalNetworkFetch } from "../lib/localNetworkFetch";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
@@ -19,6 +25,8 @@ export function DeviceLinkPage() {
   const { t } = useLanguage();
   useDocumentTitle(t("pages.deviceLink.title"));
   const client = useApiClient();
+  const primaryClient = usePrimaryApiClient();
+  const [apiBaseUrl] = useApiBaseUrl();
   const { currentUserId } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -39,6 +47,28 @@ export function DeviceLinkPage() {
     setSubmitting(true);
     setError(null);
     try {
+      const hostedSession = await inspectHostedLink(code);
+      if (hostedSession) {
+        if (hostedSession.linked) {
+          setLinked(true);
+          return;
+        }
+        if (!currentUserId) {
+          navigate("/profiles", {
+            replace: true,
+            state: { loginFrom: `/link?user_code=${encodeURIComponent(code)}` },
+          });
+          return;
+        }
+        await authoriseHostedLink({
+          userCode: code,
+          session: hostedSession,
+          serverUrl: apiBaseUrl,
+          client: primaryClient,
+        });
+        setLinked(true);
+        return;
+      }
       // `docs/architecture/peer-groups.md` §6.3: a `servers=` bundle on this
       // very link (carried by `verification_uri_complete`, the QR-encoded
       // form) means the issuing peer told us the whole group's addresses --
@@ -63,9 +93,9 @@ export function DeviceLinkPage() {
       setLinked(true);
     } catch (reason) {
       if (!currentUserId) {
-        navigate("/login", {
+        navigate("/profiles", {
           replace: true,
-          state: { from: `/link?user_code=${encodeURIComponent(code)}` },
+          state: { loginFrom: `/link?user_code=${encodeURIComponent(code)}` },
         });
         return;
       }

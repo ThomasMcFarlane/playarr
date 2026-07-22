@@ -48,8 +48,10 @@ normally with push registration disabled.
 - Wide and television layouts use the same native components with Playarr's
   editorial stage, right-hand content rails, immersive mode, and D-pad focus
   scaling.
-- Sign-in owns the account's Streamarr URL. No server URL is compiled into the
-  application.
+- Television sign-in starts at `playarr.app`: the app displays a QR and manual code, and the
+  profile selected in the browser supplies the short-lived Streamarr device credential plus its
+  server-address bundle. No server URL is entered or compiled into the television application.
+- Touch-device username/password sign-in still accepts a direct Streamarr URL for account setup.
 - All visible screens are native Compose and playback uses Media3. There is no
   WebView presentation layer.
 

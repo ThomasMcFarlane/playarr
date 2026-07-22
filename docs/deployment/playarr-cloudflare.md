@@ -16,6 +16,11 @@ continuing to serve ordinary application routes from Static Assets. Releases als
 short-lived latest-version manifest and an immutable, versioned APK route used by the native
 television self-update action.
 
+The Worker also owns the short-lived Android first-contact broker under `/api/link/*`. Each
+generated code is isolated in a Durable Object and expires after ten minutes. The record contains
+only the Android device secret, the selected Streamarr server addresses, and a single-use
+Streamarr device code; it never receives a password, browser bearer token, or refresh token.
+
 ## One-time Cloudflare and GitHub setup
 
 1. In Cloudflare, create an API token from the **Edit Cloudflare Workers**
@@ -29,11 +34,11 @@ television self-update action.
    `CLOUDFLARE_R2_API_TOKEN` secret with only Account R2 Storage Edit access to
    the `release-android` environment.
 5. Run the **Deploy Playarr Web** workflow once, or deploy locally. The first
-   deployment creates the `playarr-web` Worker and attaches the `playarr.app`
-   custom domain. Cloudflare manages its DNS record and TLS certificate.
+   deployment creates the `playarr-web` Worker, its `LinkSession` Durable Object namespace, and
+   the `playarr.app` custom domain. Cloudflare manages its DNS record and TLS certificate.
 
 Do not put either credential in a tracked file. The deployment needs no
-runtime secrets because the Worker only serves static assets.
+runtime secrets; the linking broker uses only Durable Object storage and Web Crypto randomness.
 
 ## Automatic production deployment
 
@@ -76,11 +81,12 @@ For non-interactive local use, export `CLOUDFLARE_API_TOKEN` and
 
 ## Connect the hosted client to Streamarr
 
-Playarr is only the static playback client; each viewer still connects it to
-their own Streamarr server. Enter an IP address such as
+Playarr does not proxy playback or API traffic; each viewer still connects it to
+their own Streamarr server. In a browser, enter an IP address such as
 `http://192.168.1.50:8484` or `http://203.0.113.10:8484` on the sign-in screen.
-Cloudflare never proxies the API, and the client stores server-specific profile
-sessions in the browser.
+On Android TV, scan or enter the generated `playarr.app/link` code and select an existing browser
+profile instead; its server URLs are transferred automatically. Cloudflare never proxies the
+Streamarr API, and the client stores server-specific profile sessions locally.
 
 On browsers that implement Local Network Access, approve the browser prompt
 the first time `playarr.app` connects to a private or loopback IP. Playarr marks

@@ -25,6 +25,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Let Android TV generate its QR and manual sign-in code through `playarr.app`, so selecting a
+  signed-in Playarr profile transfers a short-lived Streamarr device credential and remembered
+  server addresses without entering a Server URL on the television.
 - Add Grid, List, and Peer group matrix Library views, with peer-node columns, expandable
   Source-instance/media-type/folder trees, per-node physical file details, and peer-group
   folder-mapping controls.

@@ -6,6 +6,157 @@ const DOWNLOADS = new Map([
 const VERSIONED_ANDROID_DOWNLOAD =
   /^\/downloads\/android\/releases\/(\d+\.\d+\.\d+)\/(playarr-android\.apk|SHA256SUMS)$/;
 
+const LINK_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const LINK_CODE_TTL_MS = 10 * 60 * 1000;
+const LINK_CODE_POLL_SECONDS = 2;
+
+function json(body, init = {}) {
+  const headers = new Headers(init.headers);
+  headers.set("Content-Type", "application/json; charset=utf-8");
+  headers.set("Cache-Control", "no-store");
+  return new Response(JSON.stringify(body), { ...init, headers });
+}
+
+function randomToken(byteLength = 32) {
+  const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function randomUserCode() {
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  const compact = Array.from(bytes, (byte) => LINK_CODE_ALPHABET[byte % LINK_CODE_ALPHABET.length]).join("");
+  return `${compact.slice(0, 4)}-${compact.slice(4)}`;
+}
+
+function normaliseUserCode(value) {
+  const compact = String(value ?? "")
+    .replace(/[^a-z0-9]/gi, "")
+    .toUpperCase();
+  return compact.length === 8 ? `${compact.slice(0, 4)}-${compact.slice(4)}` : compact;
+}
+
+function isHttpUrl(value) {
+  if (typeof value !== "string" || value.length > 2048) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function linkObject(env, userCode) {
+  const id = env.LINK_SESSIONS.idFromName(normaliseUserCode(userCode));
+  return env.LINK_SESSIONS.get(id);
+}
+
+async function createLinkSession(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const clientPlatform = body.client_platform === "android-mobile" ? "android-mobile" : "android-tv";
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const userCode = randomUserCode();
+    const deviceSecret = `${userCode.replace("-", "")}.${randomToken()}`;
+    const expiresAt = Date.now() + LINK_CODE_TTL_MS;
+    const response = await linkObject(env, userCode).fetch("https://link.internal/init", {
+      method: "POST",
+      body: JSON.stringify({ user_code: userCode, device_secret: deviceSecret, client_platform: clientPlatform, expires_at: expiresAt }),
+    });
+    if (response.status === 409) continue;
+    if (!response.ok) return response;
+    return json({
+      device_code: deviceSecret,
+      user_code: userCode,
+      verification_uri: "https://playarr.app/link",
+      verification_uri_complete: `https://playarr.app/link?user_code=${encodeURIComponent(userCode)}`,
+      expires_in: LINK_CODE_TTL_MS / 1000,
+      interval: LINK_CODE_POLL_SECONDS,
+    });
+  }
+  return json({ error: "temporarily_unavailable" }, { status: 503 });
+}
+
+async function pollLinkSession(deviceSecret, env) {
+  const compactCode = deviceSecret.split(".", 1)[0];
+  if (!/^[A-Z2-9]{8}$/.test(compactCode)) return json({ error: "expired_token" }, { status: 404 });
+  return linkObject(env, compactCode).fetch(
+    `https://link.internal/status?device_secret=${encodeURIComponent(deviceSecret)}`
+  );
+}
+
+async function inspectLinkSession(userCode, env) {
+  const code = normaliseUserCode(userCode);
+  if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code)) return json({ error: "not_found" }, { status: 404 });
+  return linkObject(env, code).fetch("https://link.internal/inspect");
+}
+
+async function authoriseLinkSession(request, env) {
+  const body = await request.json().catch(() => null);
+  const userCode = normaliseUserCode(body?.user_code);
+  if (!body || !/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(userCode)) {
+    return json({ error: "invalid_request" }, { status: 400 });
+  }
+  return linkObject(env, userCode).fetch("https://link.internal/authorize", {
+    method: "POST",
+    body: JSON.stringify({ ...body, user_code: userCode }),
+  });
+}
+
+export class LinkSession {
+  constructor(state) {
+    this.state = state;
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    const current = await this.state.storage.get("session");
+    if (url.pathname === "/init" && request.method === "POST") {
+      if (current && current.expires_at > Date.now()) return json({ error: "code_collision" }, { status: 409 });
+      const session = await request.json();
+      await this.state.storage.put("session", session);
+      await this.state.storage.setAlarm(session.expires_at);
+      return json({ ok: true }, { status: 201 });
+    }
+    if (!current || current.expires_at <= Date.now()) return json({ error: "not_found" }, { status: 404 });
+    if (url.pathname === "/inspect" && request.method === "GET") {
+      return json({
+        client_platform: current.client_platform,
+        expires_at: current.expires_at,
+        linked: Boolean(current.claim),
+      });
+    }
+    if (url.pathname === "/authorize" && request.method === "POST") {
+      if (current.claim) return json({ error: "already_authorized" }, { status: 409 });
+      const claim = await request.json();
+      if (
+        !isHttpUrl(claim.server_url) ||
+        typeof claim.server_device_code !== "string" ||
+        claim.server_device_code.length < 16 ||
+        claim.server_device_code.length > 512 ||
+        !Array.isArray(claim.server_urls) ||
+        claim.server_urls.length > 32 ||
+        claim.server_urls.some((value) => !isHttpUrl(value))
+      ) {
+        return json({ error: "invalid_request" }, { status: 400 });
+      }
+      await this.state.storage.put("session", { ...current, claim });
+      return json({ linked: true });
+    }
+    if (url.pathname === "/status" && request.method === "GET") {
+      if (url.searchParams.get("device_secret") !== current.device_secret) {
+        return json({ error: "expired_token" }, { status: 404 });
+      }
+      return current.claim
+        ? json(current.claim)
+        : json({ error: "authorization_pending" }, { status: 202 });
+    }
+    return json({ error: "not_found" }, { status: 404 });
+  }
+
+  async alarm() {
+    await this.state.storage.deleteAll();
+  }
+}
+
 function downloadKey(pathname) {
   const stableKey = DOWNLOADS.get(pathname);
   if (stableKey) return stableKey;
@@ -16,6 +167,18 @@ function downloadKey(pathname) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/api/link/code" && request.method === "POST") {
+      return createLinkSession(request, env);
+    }
+    if (url.pathname.startsWith("/api/link/code/") && request.method === "GET") {
+      return pollLinkSession(decodeURIComponent(url.pathname.slice("/api/link/code/".length)), env);
+    }
+    if (url.pathname === "/api/link/session" && request.method === "GET") {
+      return inspectLinkSession(url.searchParams.get("user_code"), env);
+    }
+    if (url.pathname === "/api/link/authorize" && request.method === "POST") {
+      return authoriseLinkSession(request, env);
+    }
     const key = downloadKey(url.pathname);
     if (!key) return env.ASSETS.fetch(request);
 

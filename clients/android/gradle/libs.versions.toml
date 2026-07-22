@@ -72,6 +72,7 @@ espressoCore = "3.7.0"
 
 # --- Misc ---------------------------------------------------------------
 javaxInject = "1"
+zxing = "3.5.4"
 
 [libraries]
 # AndroidX core
@@ -164,6 +165,7 @@ androidx-test-espresso-core = { group = "androidx.test.espresso", name = "espres
 
 # Misc
 javax-inject = { group = "javax.inject", name = "javax.inject", version.ref = "javaxInject" }
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

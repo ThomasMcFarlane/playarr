@@ -14,6 +14,7 @@ import io.streamarr.shared.auth.remote.AuthHttpClient
 import io.streamarr.shared.auth.remote.DeviceAuthApi
 import io.streamarr.shared.auth.remote.LoginApi
 import io.streamarr.shared.auth.remote.LoginApiForUrl
+import io.streamarr.shared.auth.remote.HostedDeviceLinkApi
 import io.streamarr.shared.auth.remote.RefreshApi
 import io.streamarr.shared.auth.remote.RefreshApiForUrl
 import io.streamarr.shared.data.config.ServerConfigStore
@@ -49,6 +50,11 @@ object AuthModule {
         // locally distributed debug-signed APKs.
         enableHttpLogging = false,
     )
+
+    @Provides
+    @Singleton
+    fun provideHostedDeviceLinkApi(): HostedDeviceLinkApi =
+        AuthHttpClient.createHostedDeviceLinkApi(enableHttpLogging = false)
 
     /** Backs [io.streamarr.shared.auth.SessionManager]'s transparent `POST /api/v1/auth/login` call. */
     @Provides

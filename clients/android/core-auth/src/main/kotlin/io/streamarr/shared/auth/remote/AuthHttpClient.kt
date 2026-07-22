@@ -44,6 +44,10 @@ object AuthHttpClient {
     fun createRefreshApi(baseUrlProvider: () -> String, enableHttpLogging: Boolean = false): RefreshApi =
         buildRetrofit(baseUrlProvider, enableHttpLogging).create(RefreshApi::class.java)
 
+    /** Fixed-origin client for the short-lived playarr.app first-contact broker. */
+    fun createHostedDeviceLinkApi(enableHttpLogging: Boolean = false): HostedDeviceLinkApi =
+        buildRetrofit({ PLAYARR_BASE_URL }, enableHttpLogging).create(HostedDeviceLinkApi::class.java)
+
     private fun buildRetrofit(baseUrlProvider: () -> String, enableHttpLogging: Boolean): Retrofit {
         val json = Json { ignoreUnknownKeys = true }
 
@@ -65,6 +69,7 @@ object AuthHttpClient {
 
     /** Never actually dialled -- see [create]'s KDoc. Must be a syntactically valid absolute URL for [Retrofit.Builder.baseUrl]. */
     private const val PLACEHOLDER_BASE_URL = "http://streamarr.invalid/"
+    private const val PLAYARR_BASE_URL = "https://playarr.app/"
 }
 
 /** See `io.streamarr.shared.data.remote`'s identical private helper -- duplicated rather than shared to keep this module core-data-free. */

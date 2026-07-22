@@ -14,6 +14,20 @@
       "bucket_name": "playarr-client-downloads"
     }
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "LINK_SESSIONS",
+        "class_name": "LinkSession"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["LinkSession"]
+    }
+  ],
   "routes": [
     {
       "pattern": "playarr.app",

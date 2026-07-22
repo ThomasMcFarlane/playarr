@@ -3,6 +3,7 @@ package io.streamarr.mobile.ui
 import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -57,6 +58,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -69,6 +71,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.set
 import androidx.media3.ui.PlayerView
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavHostController
@@ -81,9 +85,14 @@ import io.streamarr.mobile.BuildConfig
 import io.streamarr.mobile.R
 import io.streamarr.shared.auth.TokenStore
 import io.streamarr.shared.auth.DeviceAuthClient
+import io.streamarr.shared.auth.HostedDeviceLinkClient
+import io.streamarr.shared.auth.KnownServerGroupStore
 import io.streamarr.shared.auth.model.ClientPlatform
-import io.streamarr.shared.auth.model.DeviceCodeResponse
 import io.streamarr.shared.auth.model.DevicePollResult
+import io.streamarr.shared.auth.model.HostedLinkCodeResponse
+import io.streamarr.shared.auth.model.HostedLinkPollResult
+import io.streamarr.shared.auth.model.KnownServer
+import io.streamarr.shared.auth.model.KnownServerGroup
 import io.streamarr.shared.auth.model.LoginRequest
 import io.streamarr.shared.auth.model.toTokenResponse
 import io.streamarr.shared.auth.remote.LoginApi
@@ -103,6 +112,9 @@ import io.streamarr.shared.domain.usecase.GetPlaybackInfoUseCase
 import io.streamarr.shared.domain.usecase.GetWorkDetailsUseCase
 import io.streamarr.shared.player.StreamFormat
 import io.streamarr.shared.player.StreamarrPlayer
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
+import com.google.zxing.qrcode.QRCodeWriter
 import java.net.URI
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -153,7 +165,7 @@ sealed interface LoginState {
 sealed interface PairingState {
     data object Idle : PairingState
     data object Requesting : PairingState
-    data class Waiting(val code: DeviceCodeResponse) : PairingState
+    data class Waiting(val code: HostedLinkCodeResponse) : PairingState
     data class Failed(val message: String) : PairingState
 }
 
@@ -161,8 +173,10 @@ sealed interface PairingState {
 class LoginViewModel @Inject constructor(
     private val loginApi: LoginApi,
     private val deviceAuthClient: DeviceAuthClient,
+    private val hostedDeviceLinkClient: HostedDeviceLinkClient,
     private val tokenStore: TokenStore,
     private val serverConfigStore: ServerConfigStore,
+    private val knownServerGroupStore: KnownServerGroupStore,
     private val api: StreamarrApi,
 ) : ViewModel() {
     private val _state = MutableStateFlow<LoginState>(LoginState.Idle)
@@ -200,36 +214,51 @@ class LoginViewModel @Inject constructor(
         }
     }
 
-    fun pairTelevision(serverUrl: String) {
+    fun pairTelevision() {
         if (_pairing.value == PairingState.Requesting || _pairing.value is PairingState.Waiting) return
         viewModelScope.launch {
-            val normalisedUrl = runCatching { normaliseServerUrl(serverUrl) }.getOrElse {
-                _pairing.value = PairingState.Failed("Enter a valid Streamarr server address.")
-                return@launch
-            }
             _pairing.value = PairingState.Requesting
             runCatching {
-                serverConfigStore.setBaseUrl(normalisedUrl)
-                tokenStore.clear()
-                deviceAuthClient.requestDeviceCode(ClientPlatform.AndroidTv)
+                hostedDeviceLinkClient.requestCode(ClientPlatform.AndroidTv)
             }.onFailure {
-                _pairing.value = PairingState.Failed("Couldn’t start TV linking. Check the server address and try again.")
+                _pairing.value = PairingState.Failed("Couldn’t reach playarr.app to start linking. Check the connection and try again.")
             }.onSuccess { code ->
                 _pairing.value = PairingState.Waiting(code)
-                deviceAuthClient.pollUntilResolved(code.deviceCode, code.interval).collect { result ->
+                hostedDeviceLinkClient.pollUntilResolved(code).collect { result ->
                     when (result) {
-                        is DevicePollResult.Approved -> {
-                            tokenStore.save(result.token)
-                            val current = runCatching { api.listAvailableProfiles().firstOrNull { it.isCurrent } }.getOrNull()
-                            current?.let { tokenStore.saveIdentity(it.id, it.displayName) }
-                            _pairing.value = PairingState.Idle
-                        }
-                        DevicePollResult.AuthorizationPending, DevicePollResult.SlowDown -> Unit
-                        DevicePollResult.Expired -> _pairing.value = PairingState.Failed("That link code expired. Start again for a new code.")
-                        DevicePollResult.Denied -> _pairing.value = PairingState.Failed("This TV link request was declined.")
-                        is DevicePollResult.Failed -> _pairing.value = PairingState.Failed(result.message)
+                        HostedLinkPollResult.AuthorizationPending -> Unit
+                        HostedLinkPollResult.Expired -> _pairing.value = PairingState.Failed("That link code expired. Start again for a new code.")
+                        is HostedLinkPollResult.Failed -> _pairing.value = PairingState.Failed(result.message)
+                        is HostedLinkPollResult.Approved -> completeHostedPairing(result)
                     }
                 }
+            }
+        }
+    }
+
+    private suspend fun completeHostedPairing(result: HostedLinkPollResult.Approved) {
+        val claim = result.claim
+        serverConfigStore.setBaseUrl(claim.serverUrl)
+        tokenStore.clear()
+        val urls = (listOf(claim.serverUrl) + claim.serverUrls).distinct()
+        deviceAuthClient.pollUntilResolved(claim.serverDeviceCode, 1).collect { tokenResult ->
+            when (tokenResult) {
+                is DevicePollResult.Approved -> {
+                    tokenStore.save(tokenResult.token)
+                    knownServerGroupStore.rememberGroup(
+                        KnownServerGroup(
+                            servers = urls.map { KnownServer(url = it) },
+                            lastGoodUrl = claim.serverUrl,
+                        ),
+                    )
+                    val current = runCatching { api.listAvailableProfiles().firstOrNull { it.isCurrent } }.getOrNull()
+                    current?.let { tokenStore.saveIdentity(it.id, it.displayName) }
+                    _pairing.value = PairingState.Idle
+                }
+                DevicePollResult.AuthorizationPending, DevicePollResult.SlowDown -> Unit
+                DevicePollResult.Expired -> _pairing.value = PairingState.Failed("The Streamarr session expired before it could be saved. Start again.")
+                DevicePollResult.Denied -> _pairing.value = PairingState.Failed("This TV link request was declined.")
+                is DevicePollResult.Failed -> _pairing.value = PairingState.Failed(tokenResult.message)
             }
         }
     }
@@ -354,11 +383,10 @@ private fun LoginScreen(
     ) {
         val compact = maxHeight < 600.dp
         if (isTelevision) {
+            LaunchedEffect(Unit) { viewModel.pairTelevision() }
             TelevisionPairingScreen(
-                serverUrl = serverUrl,
-                onServerUrlChange = { serverUrl = it },
                 state = pairingState,
-                onStart = { viewModel.pairTelevision(serverUrl) },
+                onStart = viewModel::pairTelevision,
             )
             return@BoxWithConstraints
         }
@@ -487,8 +515,6 @@ private fun LoginField(
 
 @Composable
 private fun TelevisionPairingScreen(
-    serverUrl: String,
-    onServerUrlChange: (String) -> Unit,
     state: PairingState,
     onStart: () -> Unit,
 ) {
@@ -500,7 +526,7 @@ private fun TelevisionPairingScreen(
         Column(Modifier.weight(0.9f).padding(50.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             PlayarrMark()
             Text("Link this TV", color = WebInk, fontSize = 42.sp, fontWeight = FontWeight.Medium)
-            Text("Choose your Streamarr server, then approve this television from Playarr on another device.", color = WebInkMuted, fontSize = 15.sp, lineHeight = 22.sp)
+            Text("Scan the QR code or enter the generated code at playarr.app/link, then choose the Playarr profile for this TV.", color = WebInkMuted, fontSize = 15.sp, lineHeight = 22.sp)
         }
         Surface(
             modifier = Modifier.weight(1.1f).padding(44.dp),
@@ -508,20 +534,12 @@ private fun TelevisionPairingScreen(
             shape = RoundedCornerShape(28.dp),
         ) {
             Column(Modifier.padding(32.dp), verticalArrangement = Arrangement.spacedBy(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                OutlinedTextField(
-                    serverUrl,
-                    onServerUrlChange,
-                    label = { Text("Server URL") },
-                    placeholder = { Text("192.168.1.20:8484") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
                 when (state) {
-                    PairingState.Idle -> Button(onClick = onStart, enabled = serverUrl.isNotBlank(), modifier = Modifier.fillMaxWidth().height(54.dp)) { Text("Get link code") }
-                    PairingState.Requesting -> CircularProgressIndicator(color = WebPink)
+                    PairingState.Idle, PairingState.Requesting -> CircularProgressIndicator(color = WebPink)
                     is PairingState.Waiting -> {
+                        PairingQrCode(state.code.verificationUriComplete)
                         Text(state.code.userCode, color = WebInk, fontSize = 42.sp, fontWeight = FontWeight.Bold, letterSpacing = 5.sp)
-                        Text("Open ${state.code.verificationUri} and enter this code", color = WebInkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Text("Open playarr.app/link and enter this code", color = WebInkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         Text("Waiting for approval…", color = WebPink, fontWeight = FontWeight.SemiBold)
                     }
                     is PairingState.Failed -> {
@@ -531,6 +549,34 @@ private fun TelevisionPairingScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PairingQrCode(value: String) {
+    val bitmap = remember(value) {
+        val size = 260
+        val matrix = QRCodeWriter().encode(
+            value,
+            BarcodeFormat.QR_CODE,
+            size,
+            size,
+            mapOf(EncodeHintType.MARGIN to 1),
+        )
+        createBitmap(size, size).apply {
+            for (y in 0 until size) {
+                for (x in 0 until size) {
+                    this[x, y] = if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE
+                }
+            }
+        }
+    }
+    Surface(color = Color.White, shape = RoundedCornerShape(12.dp)) {
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = "QR code for playarr.app/link",
+            modifier = Modifier.size(220.dp).padding(8.dp),
+        )
     }
 }
 

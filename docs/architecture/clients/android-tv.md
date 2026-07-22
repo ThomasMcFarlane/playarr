@@ -23,12 +23,16 @@ Android form factors.
 
 ## Server and authentication
 
-There is no build-time or default Streamarr URL. The native television linking
-screen asks for the server URL, requests a device code from that server, and
-polls it until the viewer approves the television. A missing scheme is
-normalised to LAN-friendly HTTP and the selected URL is stored in
-`ServerConfigStore`. Signing out returns to linking so another account or
-server can be selected.
+There is no build-time or user-entered Streamarr URL on television. The native
+linking screen requests a one-time code from `playarr.app`, displays both that
+manual code and its QR link, and polls the hosted session while the viewer
+selects a profile at `playarr.app/link`. The signed-in browser requests and
+approves a short-lived device credential directly against that profile's
+Streamarr server; the hosted session hands only that credential and its server
+address bundle to the television. Android redeems it directly with Streamarr,
+stores the selected URL in `ServerConfigStore`, and stores all supplied peer
+addresses in `KnownServerGroupStore`. Signing out returns to linking so another
+profile can be selected without entering an address with a remote control.
 
 Requests identify as `android-tv` on television UI mode and `android-mobile`
 elsewhere. Both identities come from the same installed package.
