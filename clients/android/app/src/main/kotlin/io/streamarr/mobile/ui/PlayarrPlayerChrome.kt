@@ -48,6 +48,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -55,6 +56,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.contentDescription
@@ -68,6 +70,7 @@ import kotlinx.coroutines.delay
 private const val PLAYER_CONTROLS_TIMEOUT_MS = 3_500L
 
 private enum class PlayarrPlayerMenu { Quality, Audio, Subtitles }
+private enum class PlayarrPlayerFocusTarget { Back, Seek }
 
 @Composable
 internal fun PlayarrPlayerChrome(
@@ -91,7 +94,10 @@ internal fun PlayarrPlayerChrome(
     var activityEpoch by remember { mutableLongStateOf(0L) }
     var openMenu by remember { mutableStateOf<PlayarrPlayerMenu?>(null) }
     var scrubPositionMs by remember { mutableStateOf<Long?>(null) }
+    var pendingFocusTarget by remember { mutableStateOf<PlayarrPlayerFocusTarget?>(null) }
     val surfaceFocusRequester = remember { FocusRequester() }
+    val backFocusRequester = remember { FocusRequester() }
+    val seekFocusRequester = remember { FocusRequester() }
     val interactionSource = remember { MutableInteractionSource() }
 
     fun showControls() {
@@ -107,6 +113,16 @@ internal fun PlayarrPlayerChrome(
     }
 
     LaunchedEffect(Unit) { surfaceFocusRequester.requestFocus() }
+    LaunchedEffect(visible, pendingFocusTarget) {
+        val target = pendingFocusTarget ?: return@LaunchedEffect
+        if (!visible) return@LaunchedEffect
+        withFrameNanos { }
+        when (target) {
+            PlayarrPlayerFocusTarget.Back -> backFocusRequester.requestFocus()
+            PlayarrPlayerFocusTarget.Seek -> seekFocusRequester.requestFocus()
+        }
+        pendingFocusTarget = null
+    }
 
     Box(modifier.fillMaxSize()) {
         Box(
@@ -115,16 +131,43 @@ internal fun PlayarrPlayerChrome(
                 .focusRequester(surfaceFocusRequester)
                 .focusable()
                 .onKeyEvent { event ->
-                    if (event.type != KeyEventType.KeyDown || visible) return@onKeyEvent false
-                    showControls()
-                    true
+                    if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                    when (playarrPlayerSurfaceAction(event.key.keyCode.toInt())) {
+                        PlayarrPlayerSurfaceAction.TogglePlayback -> {
+                            showControls()
+                            onTogglePlayback()
+                            true
+                        }
+                        PlayarrPlayerSurfaceAction.SeekBackward -> {
+                            showControls()
+                            onSeek((timeline.positionMs - 5_000L).coerceAtLeast(0L))
+                            true
+                        }
+                        PlayarrPlayerSurfaceAction.SeekForward -> {
+                            showControls()
+                            val target = timeline.positionMs + 5_000L
+                            onSeek(if (timeline.durationMs > 0L) target.coerceAtMost(timeline.durationMs) else target)
+                            true
+                        }
+                        PlayarrPlayerSurfaceAction.FocusBack -> {
+                            showControls()
+                            pendingFocusTarget = PlayarrPlayerFocusTarget.Back
+                            true
+                        }
+                        PlayarrPlayerSurfaceAction.FocusSeek -> {
+                            showControls()
+                            pendingFocusTarget = PlayarrPlayerFocusTarget.Seek
+                            true
+                        }
+                        null -> false
+                    }
                 }
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,
                 ) {
-                    visible = !visible
-                    activityEpoch += 1L
+                    showControls()
+                    onTogglePlayback()
                 },
         )
 
@@ -132,6 +175,7 @@ internal fun PlayarrPlayerChrome(
             IconButton(
                 onClick = { showControls(); onBack() },
                 modifier = Modifier
+                    .focusRequester(backFocusRequester)
                     .windowInsetsPadding(WindowInsets.safeDrawing)
                     .padding(16.dp)
                     .background(Color.Black.copy(alpha = 0.62f), CircleShape),
@@ -146,6 +190,7 @@ internal fun PlayarrPlayerChrome(
                 timeline = timeline,
                 controls = controls,
                 isTelevision = isTelevision,
+                seekFocusRequester = seekFocusRequester,
                 canPrevious = canPrevious,
                 canNext = canNext,
                 scrubPositionMs = scrubPositionMs,
@@ -213,6 +258,7 @@ private fun PlayarrPlayerControlBar(
     timeline: PlayarrPlayerTimeline,
     controls: PlayarrPlaybackControls,
     isTelevision: Boolean,
+    seekFocusRequester: FocusRequester,
     canPrevious: Boolean,
     canNext: Boolean,
     scrubPositionMs: Long?,
@@ -254,6 +300,7 @@ private fun PlayarrPlayerControlBar(
             valueRange = 0f..durationMs.coerceAtLeast(1L).toFloat(),
             enabled = durationMs > 0L && !controls.switching,
             modifier = Modifier
+                .focusRequester(seekFocusRequester)
                 .fillMaxWidth()
                 .semantics {
                     contentDescription = "Seek ${formatPlayarrPlayerTime(displayedPositionMs)} of ${formatPlayarrPlayerTime(durationMs)}"

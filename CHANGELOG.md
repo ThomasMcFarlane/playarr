@@ -196,6 +196,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Make Android player-surface taps toggle playback and match Playarr Web's TV remote policy: centre
+  toggles, Left/Right seek five seconds, Up focuses Back, and Down focuses the seek control.
 - Replace Android's stock Media3 player chrome with Playarr controls that show the absolute source
   timeline, buffered progress, auto-hide behaviour, and phone/TV track selectors.
 - Change the catalogue search response from a bare item array to `{ items, remote_only }` so
