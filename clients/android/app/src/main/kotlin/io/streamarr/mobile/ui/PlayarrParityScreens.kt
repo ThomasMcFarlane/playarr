@@ -397,7 +397,7 @@ internal fun ExperiencePlaylistDetailScreen(
     isTelevision: Boolean,
     onBack: () -> Unit,
     onOpenWork: (String) -> Unit,
-    onPlay: (String) -> Unit,
+    onPlay: (String, List<String>) -> Unit,
     viewModel: PlaylistDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -407,6 +407,9 @@ internal fun ExperiencePlaylistDetailScreen(
         is ParityLoad.Failed -> ParityFailure(current.message) { viewModel.load(playlistId) }
         is ParityLoad.Ready -> {
             val value = current.value
+            val orderedMediaFileIds = remember(value) {
+                value.items.mapNotNull { item -> value.details[item.workId]?.mediaFileFor(item) }
+            }
             Box(Modifier.fillMaxSize().background(WebSurface)) {
                 Column(
                     Modifier.fillMaxSize().padding(
@@ -454,7 +457,11 @@ internal fun ExperiencePlaylistDetailScreen(
                                             Text(detail?.work?.title ?: "Unavailable title", color = WebInk, fontWeight = FontWeight.SemiBold)
                                             Text("Item ${item.position + 1}", color = WebInkMuted, fontSize = 10.sp)
                                         }
-                                        if (mediaFileId != null) IconButton(onClick = { onPlay(mediaFileId) }) { Icon(Icons.Outlined.PlayArrow, "Play", tint = WebPink) }
+                                        if (mediaFileId != null) {
+                                            IconButton(onClick = { onPlay(mediaFileId, orderedMediaFileIds) }) {
+                                                Icon(Icons.Outlined.PlayArrow, "Play", tint = WebPink)
+                                            }
+                                        }
                                         if (!value.playlist.isSystem) {
                                             IconButton(onClick = { viewModel.move(item.id, -1) }) { Icon(Icons.Outlined.ArrowUpward, "Move up", tint = WebInkMuted) }
                                             IconButton(onClick = { viewModel.move(item.id, 1) }) { Icon(Icons.Outlined.ArrowDownward, "Move down", tint = WebInkMuted) }

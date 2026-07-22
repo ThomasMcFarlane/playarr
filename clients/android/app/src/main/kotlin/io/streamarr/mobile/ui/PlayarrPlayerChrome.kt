@@ -28,6 +28,8 @@ import androidx.compose.material.icons.outlined.HighQuality
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.SkipNext
+import androidx.compose.material.icons.outlined.SkipPrevious
 import androidx.compose.material.icons.outlined.Subtitles
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -73,6 +75,10 @@ internal fun PlayarrPlayerChrome(
     timeline: PlayarrPlayerTimeline,
     controls: PlayarrPlaybackControls,
     isTelevision: Boolean,
+    canPrevious: Boolean,
+    canNext: Boolean,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
     onBack: () -> Unit,
     onTogglePlayback: () -> Unit,
     onSeek: (Long) -> Unit,
@@ -140,6 +146,8 @@ internal fun PlayarrPlayerChrome(
                 timeline = timeline,
                 controls = controls,
                 isTelevision = isTelevision,
+                canPrevious = canPrevious,
+                canNext = canNext,
                 scrubPositionMs = scrubPositionMs,
                 onScrub = { scrubPositionMs = it; showControls() },
                 onScrubFinished = {
@@ -148,6 +156,8 @@ internal fun PlayarrPlayerChrome(
                     showControls()
                 },
                 onTogglePlayback = { showControls(); onTogglePlayback() },
+                onPrevious = { showControls(); onPrevious() },
+                onNext = { showControls(); onNext() },
                 onMenu = { openMenu = it; showControls() },
             )
         }
@@ -203,10 +213,14 @@ private fun PlayarrPlayerControlBar(
     timeline: PlayarrPlayerTimeline,
     controls: PlayarrPlaybackControls,
     isTelevision: Boolean,
+    canPrevious: Boolean,
+    canNext: Boolean,
     scrubPositionMs: Long?,
     onScrub: (Long) -> Unit,
     onScrubFinished: () -> Unit,
     onTogglePlayback: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
     onMenu: (PlayarrPlayerMenu) -> Unit,
 ) {
     val durationMs = timeline.durationMs.coerceAtLeast(0L)
@@ -245,11 +259,27 @@ private fun PlayarrPlayerControlBar(
                     contentDescription = "Seek ${formatPlayarrPlayerTime(displayedPositionMs)} of ${formatPlayarrPlayerTime(durationMs)}"
                 },
         )
+        if (!isTelevision) {
+            Text(
+                "${formatPlayarrPlayerTime(displayedPositionMs)} / ${formatPlayarrPlayerTime(durationMs)}",
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.align(Alignment.End),
+            )
+        }
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 10.dp else 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            IconButton(onClick = onPrevious, enabled = canPrevious && !controls.switching) {
+                Icon(
+                    Icons.Outlined.SkipPrevious,
+                    contentDescription = "Previous",
+                    tint = if (canPrevious && !controls.switching) Color.White else Color.White.copy(alpha = 0.35f),
+                )
+            }
             IconButton(onClick = onTogglePlayback, enabled = !controls.switching) {
                 Icon(
                     if (playbackState.playWhenReady) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
@@ -258,12 +288,21 @@ private fun PlayarrPlayerControlBar(
                     modifier = Modifier.size(if (isTelevision) 34.dp else 28.dp),
                 )
             }
-            Text(
-                "${formatPlayarrPlayerTime(displayedPositionMs)} / ${formatPlayarrPlayerTime(durationMs)}",
-                color = Color.White,
-                fontSize = if (isTelevision) 15.sp else 12.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
+            IconButton(onClick = onNext, enabled = canNext && !controls.switching) {
+                Icon(
+                    Icons.Outlined.SkipNext,
+                    contentDescription = "Next",
+                    tint = if (canNext && !controls.switching) Color.White else Color.White.copy(alpha = 0.35f),
+                )
+            }
+            if (isTelevision) {
+                Text(
+                    "${formatPlayarrPlayerTime(displayedPositionMs)} / ${formatPlayarrPlayerTime(durationMs)}",
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
             Spacer(Modifier.weight(1f))
             if (controls.audioTracks.isNotEmpty()) {
                 PlayerMenuButton(Icons.Outlined.MusicNote, "Audio", isTelevision, !controls.switching) {

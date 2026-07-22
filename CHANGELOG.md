@@ -45,6 +45,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Carry ordered episode, track, and playlist context into Android playback so the Playarr player
+  exposes boundary-safe Previous and Next controls on phones and televisions.
 - Expose Android playback quality, source audio, and subtitle menus backed by the same server
   negotiation ladder and Media3 subtitle selection used by Playarr Web.
 - Give Android the same device-local default quality and subtitle controls and profile-backed
