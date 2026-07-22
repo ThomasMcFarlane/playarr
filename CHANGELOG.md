@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Route Android joined-server artwork, playback, progress, and offline-download bytes through the
+  owning server's rotating session, persist download ownership across restarts, and never attach a
+  Playarr bearer token to an unknown absolute media or artwork origin.
 - Opt the Android core download and player implementations and download-state tests into the
   unstable Media3 contracts they deliberately consume so the top-level lint gate can validate
   every module, not only the app target.

@@ -87,6 +87,10 @@ internal class PlayarrServerSourceRegistry {
 
     fun mediaServer(mediaFileId: String): PlayarrServerClient? = serverByMediaFileId[mediaFileId]
     @Synchronized
+    fun registerMediaServer(mediaFileId: String, server: PlayarrServerClient) {
+        if (server.isActive()) serverByMediaFileId[mediaFileId] = server
+    }
+    @Synchronized
     fun registerPlaybackSession(sessionId: String, server: PlayarrServerClient) {
         if (server.isActive()) serverByPlaybackSessionId[sessionId] = server
     }
@@ -270,12 +274,18 @@ internal class JoinedStreamarrApi(
 
     override suspend fun getDownloadTicket(id: String): DownloadTicketResponse {
         val clients = clients()
-        val server = registry.downloadTicketServer(id) ?: clients.first()
-        return server.api.getDownloadTicket(id).also { registry.registerDownloadTicket(it, server) }
+        registry.downloadTicketServer(id)?.let { server ->
+            return server.api.getDownloadTicket(id).also { registry.registerDownloadTicket(it, server) }
+        }
+        val resolved = successfulAcross(clients) { it.api.getDownloadTicket(id) }.first()
+        return resolved.second.also { registry.registerDownloadTicket(it, resolved.first) }
     }
 
-    override suspend fun cancelDownloadTicket(id: String) = clients().let {
-        (registry.downloadTicketServer(id)?.api ?: primary).cancelDownloadTicket(id)
+    override suspend fun cancelDownloadTicket(id: String) = clients().let { clients ->
+        val server = registry.downloadTicketServer(id) ?: successfulAcross(clients) {
+            it.api.getDownloadTicket(id)
+        }.first().also { (owner, ticket) -> registry.registerDownloadTicket(ticket, owner) }.first
+        server.api.cancelDownloadTicket(id)
     }
 
     private suspend fun serverForMedia(mediaFileId: String): PlayarrServerClient {

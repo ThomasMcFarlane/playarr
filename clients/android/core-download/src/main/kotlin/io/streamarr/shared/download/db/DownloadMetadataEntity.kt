@@ -25,6 +25,8 @@ data class DownloadMetadataEntity(
     val qualityId: String,
     /** The server `DownloadTicket` id this download's bytes are fetched from. */
     val ticketId: String?,
+    /** Owning server origin; blank only for rows migrated from the original primary-only schema. */
+    val serverUrl: String,
     /** `null` means "keep forever". */
     val keepUntilEpochMillis: Long?,
     val addedAtEpochMillis: Long,

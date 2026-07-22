@@ -180,7 +180,7 @@ private fun DownloadListItem(
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             DownloadThumbnail(
                 posterUrl = entry.posterUrl,
-                serverUrl = serverUrl,
+                serverUrl = entry.serverUrl.ifBlank { serverUrl },
                 accessToken = accessToken,
                 modifier = Modifier.width(58.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)),
             )
@@ -243,17 +243,23 @@ private fun downloadProgressLabel(entry: DownloadEntity): String {
 @Composable
 private fun DownloadThumbnail(posterUrl: String?, serverUrl: String, accessToken: String?, modifier: Modifier) {
     val context = LocalContext.current
-    val resolved = posterUrl?.let { resolveArtworkUrl(serverUrl, it) }
+    val serverAccess = rememberPlayarrUrlServerAccess(serverUrl, accessToken)
+    val resolved = serverAccess?.let { access -> posterUrl?.let { resolveArtworkUrl(access.serverUrl, it) } }
     if (resolved == null) {
         Box(modifier.background(WebSurfaceSoft))
         return
     }
-    val request = remember(resolved, accessToken) {
+    val requestToken = playarrAccessTokenForUrl(serverAccess, resolved)
+    val request = remember(resolved, requestToken) {
         ImageRequest.Builder(context)
             .data(resolved)
             .apply {
-                if (!accessToken.isNullOrBlank()) {
-                    httpHeaders(NetworkHeaders.Builder().set("Authorization", "Bearer $accessToken").build())
+                if (!requestToken.isNullOrBlank()) {
+                    httpHeaders(
+                        NetworkHeaders.Builder()
+                            .set("Authorization", "Bearer $requestToken")
+                            .build(),
+                    )
                 }
             }
             .build()

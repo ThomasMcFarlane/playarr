@@ -28,6 +28,8 @@ data class DownloadEntity(
     val qualityId: String,
     /** The server `DownloadTicket` id this download's bytes were fetched from, if any resolved yet. */
     val ticketId: String?,
+    /** Owning server origin, retained so artwork, retries, and offline progress keep the right auth boundary. */
+    val serverUrl: String,
     val state: DownloadState,
     val bytesDownloaded: Long,
     /** `null` when Media3 hasn't resolved the content length yet. */

@@ -18,7 +18,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.streamarr.mobile.download.DefaultStreamarrDownloadServiceStarter
-import io.streamarr.shared.auth.TokenStore
+import io.streamarr.shared.data.remote.StreamarrServerAccessResolver
 import io.streamarr.shared.download.DefaultDownloadRepository
 import io.streamarr.shared.download.DefaultOfflineProgressRepository
 import io.streamarr.shared.download.DownloadRepository
@@ -27,11 +27,12 @@ import io.streamarr.shared.download.StreamarrDownloadServiceStarter
 import io.streamarr.shared.download.db.DownloadMetadataDao
 import io.streamarr.shared.download.db.PendingProgressDao
 import io.streamarr.shared.download.db.StreamarrDownloadDatabase
+import io.streamarr.shared.download.db.STREAMARR_DOWNLOAD_MIGRATION_1_2
 import java.io.File
 import java.util.concurrent.Executors
 import javax.inject.Singleton
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 
 /**
@@ -91,27 +92,42 @@ abstract class DownloadModule {
          * Bearer-token-authenticated `DataSource.Factory` Media3's
          * `DownloadManager` reads download bytes through. Simpler than
          * `StreamarrHttpClient`'s: a download's URI already has the
-         * operator's base URL resolved into it at enqueue time (see
-         * `DefaultDownloadRepository.enqueue`), so this only needs to
-         * attach the current access token per request, not rewrite the
-         * host -- and it doesn't need the 401-retry `Authenticator` either,
-         * since a rejected download simply surfaces as a Media3
-         * `STATE_FAILED` the user can retry from the Downloads screen
-         * (whereas a live network request has a human waiting on it right
-         * now, worth transparently retrying once).
+         * owning server's base URL is resolved into each URI at enqueue time (see
+         * `DefaultDownloadRepository.enqueue`). The shared player/download transport resolves the
+         * current token by request origin and retries one 401 after rotating that exact server's
+         * session; it never forwards a primary token to an unknown absolute media origin.
          */
         @Provides
         @Singleton
-        fun provideDownloadDataSourceFactory(tokenStore: TokenStore): DataSource.Factory {
+        fun provideDownloadDataSourceFactory(
+            serverAccessResolver: StreamarrServerAccessResolver,
+        ): DataSource.Factory {
             val okHttpClient = OkHttpClient.Builder()
                 .addInterceptor { chain ->
-                    val token = runBlocking { tokenStore.accessToken.first() }
+                    val requestUrl = chain.request().url
+                    val origin = streamarrRequestOrigin(requestUrl)
+                    val token = runBlocking { serverAccessResolver.forServerUrl(origin).accessToken }
                     val request = if (token.isNullOrBlank()) {
                         chain.request()
                     } else {
                         chain.request().newBuilder().header("Authorization", "Bearer $token").build()
                     }
                     chain.proceed(request)
+                }
+                .authenticator { _, response ->
+                    if (response.priorResponse?.code == 401) return@authenticator null
+                    val rejectedToken = response.request.header("Authorization")
+                        ?.removePrefix("Bearer ")
+                        ?.takeIf(String::isNotBlank)
+                    val origin = streamarrRequestOrigin(response.request.url)
+                    val refreshed = runBlocking {
+                        serverAccessResolver.refreshForServerUrl(origin, rejectedToken)
+                    }
+                    if (refreshed.isNullOrBlank() || refreshed == rejectedToken) {
+                        null
+                    } else {
+                        response.request.newBuilder().header("Authorization", "Bearer $refreshed").build()
+                    }
                 }
                 .build()
             return OkHttpDataSource.Factory(okHttpClient)
@@ -135,7 +151,9 @@ abstract class DownloadModule {
         @Provides
         @Singleton
         fun provideStreamarrDownloadDatabase(@ApplicationContext context: Context): StreamarrDownloadDatabase =
-            Room.databaseBuilder(context, StreamarrDownloadDatabase::class.java, "streamarr_downloads.db").build()
+            Room.databaseBuilder(context, StreamarrDownloadDatabase::class.java, "streamarr_downloads.db")
+                .addMigrations(STREAMARR_DOWNLOAD_MIGRATION_1_2)
+                .build()
 
         @Provides
         @Singleton
@@ -149,4 +167,10 @@ abstract class DownloadModule {
 
         private const val DOWNLOAD_MANAGER_MAX_PARALLEL_DOWNLOADS = 3
     }
+}
+
+internal fun streamarrRequestOrigin(url: HttpUrl): String {
+    val host = url.host.let { if (':' in it) "[$it]" else it }
+    val defaultPort = url.port == 80 && url.scheme == "http" || url.port == 443 && url.scheme == "https"
+    return "${url.scheme}://$host${url.port.takeUnless { defaultPort }?.let { ":$it" }.orEmpty()}"
 }

@@ -7,9 +7,10 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.streamarr.mobile.BuildConfig
+import io.streamarr.mobile.connected.AndroidStreamarrServerAccessResolver
 import io.streamarr.mobile.connected.ConnectedServerApiFactory
 import io.streamarr.mobile.connected.JoinedStreamarrApi
-import io.streamarr.mobile.connected.PlayarrServerClient
+import io.streamarr.mobile.connected.PlayarrServerClientProvider
 import io.streamarr.mobile.connected.PlayarrServerSourceRegistry
 import io.streamarr.mobile.isTelevision
 import io.streamarr.shared.auth.ConnectedServerSessionManager
@@ -20,8 +21,9 @@ import io.streamarr.shared.data.config.ServerConfigStore
 import io.streamarr.shared.data.model.ClientPlatform
 import io.streamarr.shared.data.remote.StreamarrApi
 import io.streamarr.shared.data.remote.StreamarrHttpClient
-import javax.inject.Singleton
+import io.streamarr.shared.data.remote.StreamarrServerAccessResolver
 import javax.inject.Qualifier
+import javax.inject.Singleton
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
@@ -80,30 +82,35 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    internal fun provideStreamarrApi(
+    internal fun providePlayarrServerClientProvider(
         @PrimaryStreamarrApi primary: StreamarrApi,
         connectedServerApiFactory: ConnectedServerApiFactory,
-        sourceRegistry: PlayarrServerSourceRegistry,
         serverConfigStore: ServerConfigStore,
         tokenStore: TokenStore,
+        sessionRefresher: SessionRefresher,
+    ): PlayarrServerClientProvider = PlayarrServerClientProvider(
+        primary,
+        connectedServerApiFactory,
+        serverConfigStore,
+        tokenStore,
+        sessionRefresher,
+    )
+
+    @Provides
+    @Singleton
+    internal fun provideStreamarrServerAccessResolver(
+        resolver: AndroidStreamarrServerAccessResolver,
+    ): StreamarrServerAccessResolver = resolver
+
+    @Provides
+    @Singleton
+    internal fun provideStreamarrApi(
+        @PrimaryStreamarrApi primary: StreamarrApi,
+        clientProvider: PlayarrServerClientProvider,
+        sourceRegistry: PlayarrServerSourceRegistry,
     ): StreamarrApi = JoinedStreamarrApi(
         primary = primary,
-        clientsProvider = {
-            val profileUserId = tokenStore.currentUserId.first()
-            val primaryClient = PlayarrServerClient(
-                profileUserId = profileUserId.orEmpty(),
-                url = serverConfigStore.baseUrl.first(),
-                username = tokenStore.currentUserName.first() ?: "Viewer",
-                api = primary,
-                accessToken = { tokenStore.accessToken.first() },
-                primary = true,
-            )
-            listOf(primaryClient) + if (profileUserId == null) {
-                emptyList()
-            } else {
-                connectedServerApiFactory.clientsForProfile(profileUserId)
-            }
-        },
+        clientsProvider = clientProvider::clients,
         registry = sourceRegistry,
     )
 }

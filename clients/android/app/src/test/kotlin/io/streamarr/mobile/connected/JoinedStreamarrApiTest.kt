@@ -2,6 +2,8 @@ package io.streamarr.mobile.connected
 
 import io.streamarr.shared.data.model.Availability
 import io.streamarr.shared.data.model.CatalogPage
+import io.streamarr.shared.data.model.DownloadStatus
+import io.streamarr.shared.data.model.DownloadTicketResponse
 import io.streamarr.shared.data.model.ExternalProvider
 import io.streamarr.shared.data.model.ExternalRef
 import io.streamarr.shared.data.model.MediaChapter
@@ -19,6 +21,7 @@ import java.time.Instant
 import kotlin.coroutines.Continuation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.fail
@@ -140,12 +143,45 @@ class JoinedStreamarrApiTest {
         assertEquals(null, registry.mediaServer("late-stale-media-id"))
     }
 
+    @Test
+    fun `unknown persisted download ticket is discovered before secondary cancellation`() = runBlocking {
+        val ticket = DownloadTicketResponse(
+            id = "secondary-ticket",
+            mediaFileId = "secondary-media",
+            qualityId = "original",
+            status = DownloadStatus.Ready,
+            container = "mkv",
+            requestedAt = "2026-07-22T00:00:00Z",
+        )
+        val cancelled = mutableListOf<String>()
+        val primary = server("https://primary.example", fakeApi(
+            "getDownloadTicket" to { throw IOException("not found") },
+        ))
+        val secondary = server("https://secondary.example", fakeApi(
+            "getDownloadTicket" to { ticket },
+            "cancelDownloadTicket" to { arguments ->
+                cancelled += arguments.first() as String
+                retrofit2.Response.success(ByteArray(0).toResponseBody())
+            },
+        ))
+        val joined = JoinedStreamarrApi(
+            primary.api,
+            { listOf(primary, secondary) },
+            PlayarrServerSourceRegistry(),
+        )
+
+        joined.cancelDownloadTicket(ticket.id)
+
+        assertEquals(listOf(ticket.id), cancelled)
+    }
+
     private fun server(url: String, api: StreamarrApi) = PlayarrServerClient(
         profileUserId = "profile",
         url = url,
         username = "viewer",
         api = api,
         accessToken = { "token" },
+        refreshAccessToken = { "token" },
         primary = url.contains("primary"),
     )
 

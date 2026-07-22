@@ -5,22 +5,23 @@ import androidx.media3.datasource.cache.Cache
 import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.media3.exoplayer.offline.DownloadRequest
-import io.streamarr.shared.data.config.ServerConfigStore
 import io.streamarr.shared.data.model.CreateDownloadTicketRequest
 import io.streamarr.shared.data.model.DownloadQualityOption
 import io.streamarr.shared.data.remote.StreamarrApi
+import io.streamarr.shared.data.remote.StreamarrServerAccessResolver
 import io.streamarr.shared.download.db.DownloadMetadataDao
 import io.streamarr.shared.download.db.DownloadMetadataEntity
 import java.io.File
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -81,7 +82,7 @@ interface DownloadRepository {
 
 class DefaultDownloadRepository @Inject constructor(
     private val api: StreamarrApi,
-    private val serverConfigStore: ServerConfigStore,
+    private val serverAccessResolver: StreamarrServerAccessResolver,
     private val dao: DownloadMetadataDao,
     private val downloadManager: DownloadManager,
     private val cache: Cache,
@@ -109,6 +110,7 @@ class DefaultDownloadRepository @Inject constructor(
                     kind = metadata.kind,
                     qualityId = metadata.qualityId,
                     ticketId = metadata.ticketId,
+                    serverUrl = metadata.serverUrl,
                     state = download?.state?.toDownloadState() ?: DownloadState.Queued,
                     bytesDownloaded = download?.bytesDownloaded ?: 0L,
                     totalBytes = download?.contentLength?.takeIf { it > 0 },
@@ -139,7 +141,6 @@ class DefaultDownloadRepository @Inject constructor(
         api.getDownloadOptions(mediaFileId).options
 
     override suspend fun enqueue(candidates: List<DownloadCandidate>, qualityId: String, keepUntilEpochMillis: Long?) {
-        val baseUrl = serverConfigStore.baseUrl.first().trimEnd('/')
         val now = System.currentTimeMillis()
         for (candidate in candidates) {
             // Best-effort fan-out (see this method's KDoc): a candidate
@@ -148,7 +149,8 @@ class DefaultDownloadRepository @Inject constructor(
                 api.createDownloadTicket(CreateDownloadTicketRequest(candidate.mediaFileId, qualityId))
             }.getOrNull() ?: continue
 
-            val uri = Uri.parse("$baseUrl/api/v1/downloads/${ticket.id}/file")
+            val serverAccess = serverAccessResolver.forDownloadTicket(ticket.id)
+            val uri = Uri.parse(downloadTicketFileUrl(serverAccess.serverUrl, ticket.id))
             val request = DownloadRequest.Builder(candidate.mediaFileId, uri)
                 .setCustomCacheKey(candidate.mediaFileId)
                 .build()
@@ -163,6 +165,7 @@ class DefaultDownloadRepository @Inject constructor(
                     kind = candidate.kind,
                     qualityId = qualityId,
                     ticketId = ticket.id,
+                    serverUrl = serverAccess.serverUrl,
                     keepUntilEpochMillis = keepUntilEpochMillis,
                     addedAtEpochMillis = now,
                 ),
@@ -225,6 +228,12 @@ class DefaultDownloadRepository @Inject constructor(
         const val STOP_REASON_PAUSED_BY_USER = 1
     }
 }
+
+internal fun downloadTicketFileUrl(serverUrl: String, ticketId: String): String =
+    "${serverUrl.trimEnd('/')}/api/v1/downloads/${ticketId.downloadPathSegment()}/file"
+
+private fun String.downloadPathSegment(): String =
+    URLEncoder.encode(this, StandardCharsets.UTF_8.name()).replace("+", "%20")
 
 private fun Download.failureMessageOrNull(): String? =
     if (failureReason == Download.FAILURE_REASON_NONE) null else "Download failed (reason $failureReason)"

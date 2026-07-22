@@ -9,9 +9,8 @@ android {
 
     defaultConfig {
         minSdk = 26
-        // Room schema export isn't wired to a checked-in schemas/ directory
-        // (this app has no cross-version migration path to test yet -- see
-        // StreamarrDownloadDatabase's KDoc); left at the default (off).
+        // Room schema export isn't wired to a checked-in schemas/ directory yet; schema 2's
+        // explicit v1 migration is covered directly (see StreamarrDownloadDatabase's KDoc).
     }
 
     compileOptions {

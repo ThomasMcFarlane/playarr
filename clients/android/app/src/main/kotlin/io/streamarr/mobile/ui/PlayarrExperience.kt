@@ -74,12 +74,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -145,6 +148,8 @@ import io.streamarr.shared.data.model.UpdateWatchProgressRequest
 import io.streamarr.shared.data.model.ViewSummary
 import io.streamarr.shared.data.model.wireName
 import io.streamarr.shared.data.remote.StreamarrApi
+import io.streamarr.shared.data.remote.StreamarrServerAccess
+import io.streamarr.shared.data.remote.StreamarrServerAccessResolver
 import io.streamarr.shared.domain.model.StreamarrResult
 import io.streamarr.shared.domain.usecase.BrowseLibraryUseCase
 import io.streamarr.shared.domain.usecase.GetPlaybackInfoUseCase
@@ -235,6 +240,7 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     private val listCatalogKinds: ListCatalogKindsUseCase,
     private val tokenStore: TokenStore,
     private val api: StreamarrApi,
+    val serverAccessResolver: StreamarrServerAccessResolver,
 ) : ViewModel() {
     private val _home = MutableStateFlow<ExperienceLoad<List<HomeRail>>>(ExperienceLoad.Loading)
     val home: StateFlow<ExperienceLoad<List<HomeRail>>> = _home.asStateFlow()
@@ -557,6 +563,61 @@ private const val SEARCH_DEBOUNCE_MS = 320L
 private const val SEARCH_LIMIT = 60L
 private const val SEARCH_LIBRARY_LIMIT = 500L
 private const val SEARCH_AVAILABILITY_PAGE_SIZE = 500L
+private val LocalPlayarrServerAccessResolver = staticCompositionLocalOf<StreamarrServerAccessResolver?> { null }
+
+@Composable
+internal fun rememberPlayarrWorkServerAccess(
+    workId: String,
+    fallbackServerUrl: String,
+    fallbackAccessToken: String?,
+): StreamarrServerAccess? = rememberPlayarrServerAccess(
+    key = workId,
+    fallbackServerUrl = fallbackServerUrl,
+    fallbackAccessToken = fallbackAccessToken,
+) { resolver -> resolver.forWork(workId) }
+
+@Composable
+internal fun rememberPlayarrMediaServerAccess(
+    mediaFileId: String,
+    fallbackServerUrl: String,
+    fallbackAccessToken: String?,
+): StreamarrServerAccess? = rememberPlayarrServerAccess(
+    key = mediaFileId,
+    fallbackServerUrl = fallbackServerUrl,
+    fallbackAccessToken = fallbackAccessToken,
+) { resolver -> resolver.forMedia(mediaFileId) }
+
+@Composable
+internal fun rememberPlayarrUrlServerAccess(
+    serverUrl: String,
+    fallbackAccessToken: String?,
+): StreamarrServerAccess? = rememberPlayarrServerAccess(
+    key = serverUrl,
+    fallbackServerUrl = serverUrl,
+    fallbackAccessToken = fallbackAccessToken,
+) { resolver -> resolver.forServerUrl(serverUrl) }
+
+@Composable
+private fun rememberPlayarrServerAccess(
+    key: String,
+    fallbackServerUrl: String,
+    fallbackAccessToken: String?,
+    resolve: suspend (StreamarrServerAccessResolver) -> StreamarrServerAccess,
+): StreamarrServerAccess? {
+    val resolver = LocalPlayarrServerAccessResolver.current
+    val fallback = remember(fallbackServerUrl, fallbackAccessToken) {
+        StreamarrServerAccess(fallbackServerUrl, fallbackAccessToken)
+    }
+    val access by produceState<StreamarrServerAccess?>(
+        initialValue = if (resolver == null) fallback else null,
+        resolver,
+        key,
+        fallback,
+    ) {
+        if (resolver != null) value = runCatching { resolve(resolver) }.getOrNull()
+    }
+    return access
+}
 
 @Composable
 internal fun PlayarrExperience(
@@ -588,9 +649,9 @@ internal fun PlayarrExperience(
     LaunchedEffect(currentRoute, currentUserId) {
         if (currentUserId != null) viewModel.refreshProfileAvatar()
     }
-    LaunchedEffect(activePlaybackItem, serverUrl, playerDefaults) {
+    LaunchedEffect(activePlaybackItem, playerDefaults) {
         activePlaybackItem?.let {
-            playerViewModel.play(it.mediaFileId, serverUrl, playerDefaults, it.startPositionMs, it.launchSettings)
+            playerViewModel.play(it.mediaFileId, playerDefaults, it.startPositionMs, it.launchSettings)
         }
     }
     LaunchedEffect(playbackState.hasEnded, activePlaybackItem?.mediaFileId, playbackQueue.canNext) {
@@ -628,50 +689,52 @@ internal fun PlayarrExperience(
         )
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(WebBackground)) {
-        ExperienceNavHost(navController, serverUrl, token, isTelevision, canDownload, viewModel, playerViewModel)
+    CompositionLocalProvider(LocalPlayarrServerAccessResolver provides viewModel.serverAccessResolver) {
+        Box(modifier = Modifier.fillMaxSize().background(WebBackground)) {
+            ExperienceNavHost(navController, serverUrl, token, isTelevision, canDownload, viewModel, playerViewModel)
 
-        if (!isPlayer && !isProfiles) {
-            ExperienceNavigation(
-                destinations = visibleExperienceDestinations(availableKinds, canDownload),
-                currentRoute = currentRoute,
-                isTelevision = isTelevision,
-                onNavigate = { navController.openExperienceTopLevel(it) },
-                modifier = Modifier.align(if (isTelevision) Alignment.CenterStart else Alignment.BottomCenter),
-            )
-            ProfileControl(
-                isTelevision = isTelevision,
-                userId = currentUserId.orEmpty(),
-                userName = currentUserName,
-                avatar = profileAvatar,
-                onClick = { navController.openExperienceTopLevel("profiles") },
-                modifier = Modifier.align(if (isTelevision) Alignment.BottomStart else Alignment.TopEnd),
-            )
-            if (isTelevision) {
-                PlayarrLogo(
-                    modifier = Modifier.align(Alignment.TopStart).padding(start = 59.dp, top = 34.dp),
+            if (!isPlayer && !isProfiles) {
+                ExperienceNavigation(
+                    destinations = visibleExperienceDestinations(availableKinds, canDownload),
+                    currentRoute = currentRoute,
+                    isTelevision = isTelevision,
+                    onNavigate = { navController.openExperienceTopLevel(it) },
+                    modifier = Modifier.align(if (isTelevision) Alignment.CenterStart else Alignment.BottomCenter),
                 )
-                Box(
-                    modifier = Modifier.fillMaxWidth(0.38f).align(Alignment.TopStart).padding(top = 34.dp, end = 28.dp),
-                    contentAlignment = Alignment.TopEnd,
-                ) {
-                    ExperienceClock()
+                ProfileControl(
+                    isTelevision = isTelevision,
+                    userId = currentUserId.orEmpty(),
+                    userName = currentUserName,
+                    avatar = profileAvatar,
+                    onClick = { navController.openExperienceTopLevel("profiles") },
+                    modifier = Modifier.align(if (isTelevision) Alignment.BottomStart else Alignment.TopEnd),
+                )
+                if (isTelevision) {
+                    PlayarrLogo(
+                        modifier = Modifier.align(Alignment.TopStart).padding(start = 59.dp, top = 34.dp),
+                    )
+                    Box(
+                        modifier = Modifier.fillMaxWidth(0.38f).align(Alignment.TopStart).padding(top = 34.dp, end = 28.dp),
+                        contentAlignment = Alignment.TopEnd,
+                    ) {
+                        ExperienceClock()
+                    }
                 }
             }
-        }
 
-        if (!isPlayer && activePlaybackItem != null) {
-            PlayarrMiniPlayer(
-                item = activePlaybackItem,
-                playbackState = playbackState,
-                serverUrl = serverUrl,
-                accessToken = token,
-                isTelevision = isTelevision,
-                onMaximise = {
-                    navController.navigate("experience-player/${Uri.encode(activePlaybackItem.mediaFileId)}")
-                },
-                modifier = Modifier.align(if (isTelevision) Alignment.BottomEnd else Alignment.BottomCenter),
-            )
+            if (!isPlayer && activePlaybackItem != null) {
+                PlayarrMiniPlayer(
+                    item = activePlaybackItem,
+                    playbackState = playbackState,
+                    serverUrl = serverUrl,
+                    accessToken = token,
+                    isTelevision = isTelevision,
+                    onMaximise = {
+                        navController.navigate("experience-player/${Uri.encode(activePlaybackItem.mediaFileId)}")
+                    },
+                    modifier = Modifier.align(if (isTelevision) Alignment.BottomEnd else Alignment.BottomCenter),
+                )
+            }
         }
     }
 }
@@ -3471,6 +3534,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     val player: StreamarrPlayer,
     private val getPlaybackInfo: GetPlaybackInfoUseCase,
     private val api: StreamarrApi,
+    private val serverAccessResolver: StreamarrServerAccessResolver,
     private val downloadRepository: DownloadRepository,
     private val offlineProgressRepository: OfflineProgressRepository,
 ) : ViewModel() {
@@ -3531,7 +3595,6 @@ internal class ExperiencePlayerViewModel @Inject constructor(
 
     fun play(
         mediaFileId: String,
-        serverUrl: String,
         defaults: PlayarrPlayerDefaults,
         requestedStartPositionMs: Long? = null,
         launchSettings: PlayarrPlaybackLaunchSettings? = null,
@@ -3542,7 +3605,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
             if (activeMediaFileId != null) persistProgress(ensureCompletion = true)
             closeActiveSessionAndWait(PlaybackStopReason.UserStopped)
             activeMediaFileId = mediaFileId
-            activeServerUrl = serverUrl
+            activeServerUrl = serverAccessResolver.forMedia(mediaFileId).serverUrl
             activeDefaults = defaults
             activeSourceOffsetMs = 0L
             activeSourceDurationMs = 0L
@@ -3917,7 +3980,7 @@ private fun ExperiencePlayerScreen(
         when (val current = state) {
             ExperienceLoad.Loading -> CircularProgressIndicator(color = WebPink)
             is ExperienceLoad.Failed -> ExperienceFailure(current.message) {
-                viewModel.play(activeMediaFileId, serverUrl, playerDefaults)
+                viewModel.play(activeMediaFileId, playerDefaults)
             }
             is ExperienceLoad.Ready -> {
                 val item = playbackQueue.currentItem
@@ -4063,6 +4126,7 @@ private fun AuthenticatedAlbumArtwork(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val serverAccess = rememberPlayarrWorkServerAccess(artistWork.id, serverUrl, accessToken)
     Box(modifier) {
         AuthenticatedArtwork(
             work = artistWork,
@@ -4072,16 +4136,21 @@ private fun AuthenticatedAlbumArtwork(
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
         )
-        albumId?.let {
-            val resolved = remember(serverUrl, artistWork.id, albumId) {
-                resolveAlbumArtworkUrl(serverUrl, artistWork.id, albumId)
+        if (albumId != null && serverAccess != null) {
+            val resolved = remember(serverAccess.serverUrl, artistWork.id, albumId) {
+                resolveAlbumArtworkUrl(serverAccess.serverUrl, artistWork.id, albumId)
             }
-            val request = remember(resolved, accessToken) {
+            val requestToken = playarrAccessTokenForUrl(serverAccess, resolved)
+            val request = remember(resolved, requestToken) {
                 ImageRequest.Builder(context)
                     .data(resolved)
                     .apply {
-                        if (!accessToken.isNullOrBlank()) {
-                            httpHeaders(NetworkHeaders.Builder().set("Authorization", "Bearer $accessToken").build())
+                        if (!requestToken.isNullOrBlank()) {
+                            httpHeaders(
+                                NetworkHeaders.Builder()
+                                    .set("Authorization", "Bearer $requestToken")
+                                    .build(),
+                            )
                         }
                     }
                     .build()
@@ -4201,20 +4270,26 @@ internal fun AuthenticatedArtwork(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val serverAccess = rememberPlayarrWorkServerAccess(work.id, serverUrl, accessToken)
     val image = kinds.firstNotNullOfOrNull { kind -> work.images.firstOrNull { it.kind == kind } }
-    val resolved = image?.url?.let { resolveArtworkUrl(serverUrl, it) }
+    val resolved = serverAccess?.let { access -> image?.url?.let { resolveArtworkUrl(access.serverUrl, it) } }
     if (resolved == null) {
         Box(modifier.background(WebSurfaceSoft), contentAlignment = Alignment.Center) {
             Text(work.title, color = WebInkMuted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(12.dp))
         }
         return
     }
-    val request = remember(resolved, accessToken) {
+    val requestToken = playarrAccessTokenForUrl(serverAccess, resolved)
+    val request = remember(resolved, requestToken) {
         ImageRequest.Builder(context)
             .data(resolved)
             .apply {
-                if (!accessToken.isNullOrBlank()) {
-                    httpHeaders(NetworkHeaders.Builder().set("Authorization", "Bearer $accessToken").build())
+                if (!requestToken.isNullOrBlank()) {
+                    httpHeaders(
+                        NetworkHeaders.Builder()
+                            .set("Authorization", "Bearer $requestToken")
+                            .build(),
+                    )
                 }
             }
             .build()
@@ -4236,15 +4311,25 @@ private fun AuthenticatedMediaThumbnail(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val url = remember(serverUrl, mediaFileId) {
-        "${serverUrl.trimEnd('/')}/api/v1/media/${Uri.encode(mediaFileId)}/thumbnail"
+    val serverAccess = rememberPlayarrMediaServerAccess(mediaFileId, serverUrl, accessToken)
+    if (serverAccess == null) {
+        Box(modifier.background(WebSurfaceSoft))
+        return
     }
-    val request = remember(url, accessToken) {
+    val url = remember(serverAccess.serverUrl, mediaFileId) {
+        "${serverAccess.serverUrl.trimEnd('/')}/api/v1/media/${Uri.encode(mediaFileId)}/thumbnail"
+    }
+    val requestToken = playarrAccessTokenForUrl(serverAccess, url)
+    val request = remember(url, requestToken) {
         ImageRequest.Builder(context)
             .data(url)
             .apply {
-                if (!accessToken.isNullOrBlank()) {
-                    httpHeaders(NetworkHeaders.Builder().set("Authorization", "Bearer $accessToken").build())
+                if (!requestToken.isNullOrBlank()) {
+                    httpHeaders(
+                        NetworkHeaders.Builder()
+                            .set("Authorization", "Bearer $requestToken")
+                            .build(),
+                    )
                 }
             }
             .build()
@@ -4262,6 +4347,27 @@ internal fun resolveArtworkUrl(serverUrl: String, artworkUrl: String): String = 
     if (value.startsWith("http://") || value.startsWith("https://")) value
     else URI("${serverUrl.trimEnd('/')}/").resolve(value.trimStart('/')).toString()
 }.getOrDefault(artworkUrl)
+
+internal fun playarrAccessTokenForUrl(access: StreamarrServerAccess, requestUrl: String): String? {
+    val token = access.accessToken?.takeIf(String::isNotBlank) ?: return null
+    val server = serverOrigin(access.serverUrl) ?: return null
+    return token.takeIf { server == serverOrigin(requestUrl) }
+}
+
+private fun serverOrigin(value: String): Triple<String, String, Int>? = runCatching {
+    val uri = URI(value.trim())
+    val scheme = requireNotNull(uri.scheme?.lowercase())
+    val host = requireNotNull(uri.host?.lowercase())
+    Triple(
+        scheme,
+        host,
+        uri.port.takeIf { it >= 0 } ?: when (scheme) {
+            "http" -> 80
+            "https" -> 443
+            else -> -1
+        },
+    )
+}.getOrNull()
 
 /** `internal` (not `private`): reused by `PlayarrDownloads.kt`'s Downloads screen -- Kotlin's `private` on a top-level declaration is file-scoped, not package-scoped. */
 @Composable

@@ -15,6 +15,7 @@ internal data class PlayarrServerClient(
     val username: String,
     val api: StreamarrApi,
     val accessToken: suspend () -> String?,
+    val refreshAccessToken: suspend (String?) -> String?,
     val primary: Boolean = false,
 )
 
@@ -51,6 +52,9 @@ internal class ConnectedServerApiFactory(
                     )
                 },
                 accessToken = { store.find(profileUserId, session.serverUrl)?.accessToken },
+                refreshAccessToken = { rejectedToken ->
+                    sessionManager.refresh(profileUserId, session.serverUrl, rejectedToken)
+                },
             )
         }
 }
