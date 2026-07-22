@@ -4,6 +4,10 @@ import io.streamarr.shared.data.model.Album
 import io.streamarr.shared.data.model.AlbumDetail
 import io.streamarr.shared.data.model.AlbumType
 import io.streamarr.shared.data.model.Availability
+import io.streamarr.shared.data.model.Episode
+import io.streamarr.shared.data.model.EpisodeDetail
+import io.streamarr.shared.data.model.Season
+import io.streamarr.shared.data.model.SeasonDetail
 import io.streamarr.shared.data.model.Track
 import io.streamarr.shared.data.model.TrackDetail
 import io.streamarr.shared.data.model.Work
@@ -132,5 +136,43 @@ class PlayarrPlaybackQueueTest {
         assertFalse(shouldAutoAdvancePlayarrMusic(true, music, false))
         assertFalse(shouldAutoAdvancePlayarrMusic(false, music, true))
         assertFalse(shouldAutoAdvancePlayarrMusic(true, video, true))
+    }
+
+    @Test
+    fun `series browser keeps playable episodes in web season order`() {
+        fun episode(id: String, seasonId: String, number: Int, mediaFileId: String?) = EpisodeDetail(
+            episode = Episode(
+                id = id,
+                seasonId = seasonId,
+                episodeNumber = number,
+                title = "Episode $number",
+                monitored = true,
+                availability = if (mediaFileId == null) Availability.Pending else Availability.Available,
+            ),
+            mediaFileId = mediaFileId,
+        )
+        fun season(id: String, number: Int, episodes: List<EpisodeDetail>) = SeasonDetail(
+            season = Season(
+                id = id,
+                seriesWorkId = "series",
+                seasonNumber = number,
+                monitored = true,
+                availability = Availability.Available,
+            ),
+            episodes = episodes,
+        )
+        val series = WorkChildren.Series(
+            listOf(
+                season("s2", 2, listOf(episode("e2", "s2", 2, "media-2"), episode("e1", "s2", 1, "media-1"))),
+                season("empty", 3, listOf(episode("missing", "empty", 1, null))),
+                season("s1", 1, listOf(episode("pilot", "s1", 1, "pilot-media"))),
+            ),
+        )
+
+        val playable = playarrPlayableSeasons(series)
+
+        assertEquals(listOf(1, 2), playable.map { it.season.seasonNumber })
+        assertEquals(listOf(1, 2), playable.last().episodes.map { it.episode.episodeNumber })
+        assertTrue(playable.flatMap { it.episodes }.all { it.mediaFileId != null })
     }
 }

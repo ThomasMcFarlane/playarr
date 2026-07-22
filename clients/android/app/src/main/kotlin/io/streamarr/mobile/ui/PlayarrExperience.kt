@@ -121,12 +121,14 @@ import io.streamarr.mobile.BuildConfig
 import io.streamarr.mobile.R
 import io.streamarr.shared.auth.TokenStore
 import io.streamarr.shared.data.model.AlbumDetail
+import io.streamarr.shared.data.model.EpisodeDetail
 import io.streamarr.shared.data.model.ImageKind
 import io.streamarr.shared.data.model.Playlist
 import io.streamarr.shared.data.model.PlaybackEventRequest
 import io.streamarr.shared.data.model.PlaybackInfoResponse
 import io.streamarr.shared.data.model.PlaybackStopReason
 import io.streamarr.shared.data.model.ProfileAvatarPreference
+import io.streamarr.shared.data.model.SeasonDetail
 import io.streamarr.shared.data.model.TrackDetail
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
@@ -1707,20 +1709,34 @@ private fun WorkDetail.mediaFileIds(): List<String> = when (val tree = children)
 @HiltViewModel
 internal class ExperienceDetailViewModel @Inject constructor(
     private val getWorkDetails: GetWorkDetailsUseCase,
+    private val api: StreamarrApi,
 ) : ViewModel() {
-    private val _state = MutableStateFlow<ExperienceLoad<WorkDetail>>(ExperienceLoad.Loading)
+    private val _state = MutableStateFlow<ExperienceLoad<ExperienceDetailSnapshot>>(ExperienceLoad.Loading)
     val state = _state.asStateFlow()
 
     fun load(id: String) {
         viewModelScope.launch {
             _state.value = ExperienceLoad.Loading
             _state.value = when (val result = getWorkDetails(id)) {
-                is StreamarrResult.Success -> ExperienceLoad.Ready(result.value)
+                is StreamarrResult.Success -> {
+                    val progress = runCatching { api.listWatchProgress() }.getOrDefault(emptyList())
+                    ExperienceLoad.Ready(
+                        ExperienceDetailSnapshot(
+                            detail = result.value,
+                            progressByMedia = progress.associateBy(WatchProgress::mediaFileId),
+                        ),
+                    )
+                }
                 is StreamarrResult.Failure -> ExperienceLoad.Failed(result.error.userMessageForExperience("title"))
             }
         }
     }
 }
+
+internal data class ExperienceDetailSnapshot(
+    val detail: WorkDetail,
+    val progressByMedia: Map<String, WatchProgress>,
+)
 
 @Composable
 private fun ExperienceDetailScreen(
@@ -1739,7 +1755,8 @@ private fun ExperienceDetailScreen(
         ExperienceLoad.Loading -> ExperienceLoading("Loading title")
         is ExperienceLoad.Failed -> ExperienceFailure(current.message) { viewModel.load(workId) }
         is ExperienceLoad.Ready -> {
-            val detail = current.value
+            val detail = current.value.detail
+            val progressByMedia = current.value.progressByMedia
             val orderedItems = remember(detail) { detail.playarrPlaybackQueueItems() }
             val playInContext: (String) -> Unit = { mediaFileId ->
                 onPlay(mediaFileId, orderedItems)
@@ -1763,6 +1780,22 @@ private fun ExperienceDetailScreen(
                         },
                         onAddToPlaylist = { trackId ->
                             pendingPlaylistTrackId = trackId
+                            addWorkToPlaylist = true
+                        },
+                        onDownload = { candidates -> pendingDownloadCandidates = candidates },
+                    )
+                } else if (detail.children == WorkChildren.Movie || detail.children is WorkChildren.Series) {
+                    ExperienceVideoDetailContent(
+                        detail = detail,
+                        progressByMedia = progressByMedia,
+                        serverUrl = serverUrl,
+                        accessToken = accessToken,
+                        isTelevision = isTelevision,
+                        canDownload = canDownload,
+                        onBack = onBack,
+                        onPlay = playInContext,
+                        onAddToPlaylist = { leafId ->
+                            pendingPlaylistTrackId = leafId
                             addWorkToPlaylist = true
                         },
                         onDownload = { candidates -> pendingDownloadCandidates = candidates },
@@ -1829,6 +1862,418 @@ private fun ExperienceDetailScreen(
             pendingDownloadCandidates?.let { candidates ->
                 DownloadOptionsSheet(candidates = candidates, onDismiss = { pendingDownloadCandidates = null })
             }
+        }
+    }
+}
+
+@Composable
+private fun ExperienceVideoDetailContent(
+    detail: WorkDetail,
+    progressByMedia: Map<String, WatchProgress>,
+    serverUrl: String,
+    accessToken: String?,
+    isTelevision: Boolean,
+    canDownload: Boolean,
+    onBack: () -> Unit,
+    onPlay: (String) -> Unit,
+    onAddToPlaylist: (String?) -> Unit,
+    onDownload: (List<DownloadCandidate>) -> Unit,
+) {
+    val series = detail.children as? WorkChildren.Series
+    val playableSeasons = remember(detail) {
+        series?.let(::playarrPlayableSeasons).orEmpty()
+    }
+    var selectedSeasonNumber by remember(detail.work.id) {
+        mutableStateOf(playableSeasons.firstOrNull()?.season?.seasonNumber)
+    }
+    val selectedSeason = playableSeasons.firstOrNull { it.season.seasonNumber == selectedSeasonNumber }
+        ?: playableSeasons.firstOrNull()
+    var selectedEpisodeId by remember(detail.work.id) {
+        mutableStateOf(selectedSeason?.episodes?.firstOrNull { it.mediaFileId != null }?.episode?.id)
+    }
+    val selectedEpisode = selectedSeason?.episodes
+        ?.firstOrNull { it.episode.id == selectedEpisodeId && it.mediaFileId != null }
+        ?: selectedSeason?.episodes?.firstOrNull { it.mediaFileId != null }
+    val mediaFileId = detail.mediaFileId ?: selectedEpisode?.mediaFileId
+    val activeProgress = mediaFileId?.let(progressByMedia::get)
+    val posterUrl = detail.work.images.firstOrNull { it.kind == ImageKind.Poster }?.url
+
+    fun selectEpisode(episode: EpisodeDetail, seasonNumber: Int) {
+        selectedSeasonNumber = seasonNumber
+        selectedEpisodeId = episode.episode.id
+    }
+
+    Box(Modifier.fillMaxSize().background(WebSurface)) {
+        AuthenticatedArtwork(
+            work = detail.work,
+            kinds = listOf(ImageKind.Backdrop, ImageKind.Poster),
+            serverUrl = serverUrl,
+            accessToken = accessToken,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (isTelevision) Modifier.fillMaxWidth(0.55f) else Modifier.fillMaxHeight(0.48f)),
+        )
+        Box(
+            Modifier.fillMaxSize().background(
+                if (isTelevision) {
+                    Brush.horizontalGradient(listOf(WebSurface.copy(alpha = 0.18f), WebSurface.copy(alpha = 0.78f), WebSurface))
+                } else {
+                    Brush.verticalGradient(listOf(Color.Transparent, WebSurface.copy(alpha = 0.76f), WebSurface), endY = 960f)
+                },
+            ),
+        )
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(start = if (isTelevision) 104.dp else 16.dp, top = 16.dp)
+                .background(WebSurfaceStrong.copy(alpha = 0.82f), CircleShape),
+        ) {
+            Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = WebInk)
+        }
+
+        if (isTelevision) {
+            Column(
+                Modifier
+                    .fillMaxWidth(0.39f)
+                    .fillMaxHeight()
+                    .padding(start = 154.dp, top = 224.dp, end = 28.dp, bottom = 64.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
+                VideoDetailCopy(detail.work, selectedSeason?.season?.seasonNumber, selectedEpisode, activeProgress, true)
+                VideoDetailActions(
+                    work = detail.work,
+                    episode = selectedEpisode,
+                    mediaFileId = mediaFileId,
+                    progress = activeProgress,
+                    canDownload = canDownload,
+                    posterUrl = posterUrl,
+                    onPlay = onPlay,
+                    onAddToPlaylist = onAddToPlaylist,
+                    onDownload = onDownload,
+                )
+            }
+            if (series != null) {
+                SeriesEpisodeBrowser(
+                    seasons = playableSeasons,
+                    selectedEpisodeId = selectedEpisode?.episode?.id,
+                    work = detail.work,
+                    progressByMedia = progressByMedia,
+                    serverUrl = serverUrl,
+                    accessToken = accessToken,
+                    isTelevision = true,
+                    canDownload = canDownload,
+                    onSelect = ::selectEpisode,
+                    onPlay = onPlay,
+                    onDownload = onDownload,
+                    modifier = Modifier
+                        .fillMaxWidth(0.57f)
+                        .fillMaxHeight(0.72f)
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 50.dp),
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 245.dp, bottom = 112.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
+                item {
+                    VideoDetailCopy(detail.work, selectedSeason?.season?.seasonNumber, selectedEpisode, activeProgress, false)
+                }
+                item {
+                    VideoDetailActions(
+                        work = detail.work,
+                        episode = selectedEpisode,
+                        mediaFileId = mediaFileId,
+                        progress = activeProgress,
+                        canDownload = canDownload,
+                        posterUrl = posterUrl,
+                        onPlay = onPlay,
+                        onAddToPlaylist = onAddToPlaylist,
+                        onDownload = onDownload,
+                    )
+                }
+                if (series != null) {
+                    item {
+                        SeriesEpisodeBrowser(
+                            seasons = playableSeasons,
+                            selectedEpisodeId = selectedEpisode?.episode?.id,
+                            work = detail.work,
+                            progressByMedia = progressByMedia,
+                            serverUrl = serverUrl,
+                            accessToken = accessToken,
+                            isTelevision = false,
+                            canDownload = canDownload,
+                            onSelect = ::selectEpisode,
+                            onPlay = onPlay,
+                            onDownload = onDownload,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoDetailCopy(
+    work: Work,
+    seasonNumber: Int?,
+    episode: EpisodeDetail?,
+    progress: WatchProgress?,
+    isTelevision: Boolean,
+) {
+    val episodeNumber = episode?.episode?.episodeNumber
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            if (episodeNumber != null) {
+                "S${seasonNumber.toString().padStart(2, '0')} · E${episodeNumber.toString().padStart(2, '0')}"
+            } else {
+                (work.genres.firstOrNull() ?: work.kind.label()).uppercase()
+            },
+            color = WebPink,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 1.2.sp,
+        )
+        Text(
+            work.title,
+            color = WebInk,
+            fontSize = if (isTelevision) 48.sp else 38.sp,
+            lineHeight = if (isTelevision) 46.sp else 38.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = (-1.5).sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        episode?.episode?.title?.let { title ->
+            Text(title, color = WebInkSoft, fontSize = if (isTelevision) 20.sp else 18.sp, fontWeight = FontWeight.SemiBold)
+        }
+        Text(
+            buildList {
+                episode?.episode?.runtimeMinutes?.let { add("$it min") }
+                episode?.episode?.airDate?.let { add(it.toString()) }
+                addAll(work.genres.take(3))
+            }.joinToString(" · "),
+            color = WebInkMuted,
+            fontSize = 11.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            episode?.episode?.overview?.takeIf(String::isNotBlank)
+                ?: work.overview?.takeIf(String::isNotBlank)
+                ?: if (episode == null) "No synopsis is available." else "No episode synopsis is available.",
+            color = WebInkMuted,
+            fontSize = 13.sp,
+            lineHeight = 20.sp,
+            maxLines = if (isTelevision) 5 else 7,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (progress?.state == WatchState.PartWatched && progress.durationMs > 0L) {
+            Text(
+                "Resume from ${formatPlayarrPlayerTime(progress.positionMs)}",
+                color = WebInkSoft,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun VideoDetailActions(
+    work: Work,
+    episode: EpisodeDetail?,
+    mediaFileId: String?,
+    progress: WatchProgress?,
+    canDownload: Boolean,
+    posterUrl: String?,
+    onPlay: (String) -> Unit,
+    onAddToPlaylist: (String?) -> Unit,
+    onDownload: (List<DownloadCandidate>) -> Unit,
+) {
+    if (mediaFileId == null) {
+        Text("This title is not available to play.", color = WebInkMuted)
+        return
+    }
+    val title = episode?.episode?.title ?: work.title
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Button(onClick = { onPlay(mediaFileId) }) {
+            Icon(Icons.Outlined.PlayArrow, contentDescription = null)
+            Text(if (progress?.state == WatchState.PartWatched) "Resume" else "Play")
+        }
+        OutlinedButton(onClick = { onAddToPlaylist(episode?.episode?.id) }) {
+            Icon(Icons.Outlined.Add, contentDescription = null)
+            Text("Playlist")
+        }
+        if (canDownload) {
+            IconButton(
+                onClick = {
+                    onDownload(
+                        listOf(
+                            DownloadCandidate(
+                                mediaFileId,
+                                work.id,
+                                title,
+                                work.title,
+                                posterUrl,
+                                if (episode == null) "movie" else "episode",
+                            ),
+                        ),
+                    )
+                },
+            ) {
+                Icon(Icons.Outlined.Download, contentDescription = "Download $title", tint = WebInk)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SeriesEpisodeBrowser(
+    seasons: List<SeasonDetail>,
+    selectedEpisodeId: String?,
+    work: Work,
+    progressByMedia: Map<String, WatchProgress>,
+    serverUrl: String,
+    accessToken: String?,
+    isTelevision: Boolean,
+    canDownload: Boolean,
+    onSelect: (EpisodeDetail, Int) -> Unit,
+    onPlay: (String) -> Unit,
+    onDownload: (List<DownloadCandidate>) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (seasons.isEmpty()) {
+        ExperienceEmpty("No playable episodes are available.")
+        return
+    }
+    val posterUrl = work.images.firstOrNull { it.kind == ImageKind.Poster }?.url
+    Column(
+        modifier = modifier
+            .background(WebSurfaceStrong.copy(alpha = 0.9f), RoundedCornerShape(16.dp))
+            .padding(if (isTelevision) 22.dp else 14.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        Text("Seasons & episodes", color = WebInk, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        val content: @Composable (SeasonDetail) -> Unit = { season ->
+            val candidates = season.episodes.mapNotNull { episode ->
+                episode.mediaFileId?.let { mediaId ->
+                    DownloadCandidate(
+                        mediaId,
+                        work.id,
+                        episode.episode.title ?: "Episode ${episode.episode.episodeNumber}",
+                        work.title,
+                        posterUrl,
+                        "episode",
+                    )
+                }
+            }
+            SectionHeaderRow(
+                season.season.title ?: "Season ${season.season.seasonNumber}",
+                if (canDownload) candidates else emptyList(),
+                onDownload,
+            )
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(vertical = 6.dp),
+            ) {
+                items(season.episodes, key = { it.episode.id }) { episode ->
+                    EpisodeDetailCard(
+                        episode = episode,
+                        seasonNumber = season.season.seasonNumber,
+                        work = work,
+                        progress = episode.mediaFileId?.let(progressByMedia::get),
+                        serverUrl = serverUrl,
+                        accessToken = accessToken,
+                        selected = episode.episode.id == selectedEpisodeId,
+                        isTelevision = isTelevision,
+                        onSelect = { onSelect(episode, season.season.seasonNumber) },
+                        onPlay = {
+                            onSelect(episode, season.season.seasonNumber)
+                            episode.mediaFileId?.let(onPlay)
+                        },
+                    )
+                }
+            }
+        }
+        if (isTelevision) {
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                items(seasons, key = { it.season.id }) { content(it) }
+            }
+        } else {
+            for (season in seasons) content(season)
+        }
+    }
+}
+
+@Composable
+private fun EpisodeDetailCard(
+    episode: EpisodeDetail,
+    seasonNumber: Int,
+    work: Work,
+    progress: WatchProgress?,
+    serverUrl: String,
+    accessToken: String?,
+    selected: Boolean,
+    isTelevision: Boolean,
+    onSelect: () -> Unit,
+    onPlay: () -> Unit,
+) {
+    var focused by remember(episode.episode.id) { mutableStateOf(false) }
+    val available = episode.mediaFileId != null
+    Column(Modifier.width(if (isTelevision) 220.dp else 184.dp)) {
+        Surface(
+            onClick = onPlay,
+            enabled = available,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .scale(if (focused) 1.04f else 1f)
+                .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused) onSelect() }
+                .then(if (selected) Modifier.border(2.dp, WebPink, RoundedCornerShape(10.dp)) else Modifier),
+            shape = RoundedCornerShape(10.dp),
+            color = WebSurfaceSoft,
+        ) {
+            Box {
+                AuthenticatedArtwork(
+                    work = work,
+                    kinds = listOf(ImageKind.Backdrop, ImageKind.Thumb, ImageKind.Poster),
+                    serverUrl = serverUrl,
+                    accessToken = accessToken,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f)))))
+                Text(
+                    "S${seasonNumber.toString().padStart(2, '0')} · E${episode.episode.episodeNumber.toString().padStart(2, '0')}",
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(10.dp),
+                )
+                progress?.takeIf { it.state != WatchState.Unseen }?.let {
+                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.28f))) {
+                        Box(Modifier.fillMaxWidth(it.fraction).fillMaxHeight().background(WebPink))
+                    }
+                }
+            }
+        }
+        Text(
+            episode.episode.title ?: "Episode ${episode.episode.episodeNumber}",
+            color = if (available) WebInk else WebInkMuted,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            episode.episode.runtimeMinutes?.let { Text("$it min", color = WebInkMuted, fontSize = 10.sp) }
+            if (!available) Text("Unavailable", color = WebInkMuted, fontSize = 10.sp)
         }
     }
 }

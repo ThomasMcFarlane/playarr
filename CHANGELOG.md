@@ -47,6 +47,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Replace Android's generic movie and series rows with a responsive video detail surface that
+  matches the active episode's metadata, watch progress, actions, and season-scoped episode rails.
 - Keep Android playback and session heartbeats alive across navigation with an artwork-rich
   mini-player, explicit minimise/restore controls, platform controls, and automatic track advance.
 - Replace Android's generic artist list with a responsive album browser that uses authenticated

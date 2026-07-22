@@ -1,6 +1,7 @@
 package io.streamarr.mobile.ui
 
 import io.streamarr.shared.data.model.PlaylistItem
+import io.streamarr.shared.data.model.SeasonDetail
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
 import io.streamarr.shared.data.model.WorkDetail
@@ -66,6 +67,18 @@ internal fun shouldAutoAdvancePlayarrMusic(
     item: PlayarrPlaybackQueueItem?,
     canNext: Boolean,
 ): Boolean = hasEnded && item?.music == true && canNext
+
+internal fun playarrPlayableSeasons(series: WorkChildren.Series): List<SeasonDetail> =
+    series.seasons
+        .sortedBy { it.season.seasonNumber }
+        .map { season ->
+            season.copy(
+                episodes = season.episodes
+                    .filter { it.mediaFileId != null }
+                    .sortedBy { it.episode.episodeNumber },
+            )
+        }
+        .filter { it.episodes.isNotEmpty() }
 
 internal fun WorkDetail.playarrPlaybackQueueItems(): List<PlayarrPlaybackQueueItem> = when (val tree = children) {
     WorkChildren.Movie -> listOfNotNull(
