@@ -85,6 +85,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -104,6 +105,7 @@ import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
+import io.streamarr.mobile.BuildConfig
 import io.streamarr.mobile.R
 import io.streamarr.shared.auth.TokenStore
 import io.streamarr.shared.data.model.ImageKind
@@ -572,30 +574,49 @@ private fun ExperienceClock(modifier: Modifier = Modifier) {
 
 @Composable
 private fun ProfileControl(isTelevision: Boolean, userName: String?, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(
-        onClick = onClick,
+    Column(
         modifier = modifier
             .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.safeDrawing)
-            .padding(if (isTelevision) 42.dp else 16.dp)
-            .then(if (isTelevision) Modifier.height(46.dp) else Modifier.size(42.dp)),
-        shape = CircleShape,
-        color = WebSurfaceStrong.copy(alpha = 0.94f),
-        contentColor = WebInkSoft,
-        border = androidx.compose.foundation.BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.35f)),
-        shadowElevation = 12.dp,
+            .padding(if (isTelevision) 42.dp else 16.dp),
+        horizontalAlignment = Alignment.Start,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = if (isTelevision) 7.dp else 0.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
+        Surface(
+            onClick = onClick,
+            modifier = if (isTelevision) Modifier.height(46.dp) else Modifier.size(42.dp),
+            shape = CircleShape,
+            color = WebSurfaceStrong.copy(alpha = 0.94f),
+            contentColor = WebInkSoft,
+            border = androidx.compose.foundation.BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.35f)),
+            shadowElevation = 12.dp,
         ) {
-            Icon(Icons.Outlined.Person, contentDescription = "Profiles", modifier = Modifier.size(22.dp))
-            if (isTelevision) {
-                Text(userName ?: "Viewer", fontSize = 9.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 9.dp))
+            Row(
+                modifier = Modifier.padding(horizontal = if (isTelevision) 7.dp else 0.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Icon(Icons.Outlined.Person, contentDescription = "Profiles", modifier = Modifier.size(22.dp))
+                if (isTelevision) {
+                    Text(userName ?: "Viewer", fontSize = 9.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 9.dp))
+                }
             }
+        }
+        Box(
+            modifier = Modifier.width(if (isTelevision) 36.dp else 42.dp).padding(top = 5.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                profileVersionLabel(BuildConfig.VERSION_NAME),
+                color = WebInkMuted,
+                fontSize = if (isTelevision) 7.sp else 8.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.3.sp,
+                modifier = Modifier.clearAndSetSemantics { },
+            )
         }
     }
 }
+
+internal fun profileVersionLabel(versionName: String): String = "v$versionName"
 
 @Composable
 private fun PlayarrLogo(modifier: Modifier = Modifier) {

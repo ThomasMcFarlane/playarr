@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Show the native Android build version beneath the profile avatar while keeping it outside the
+  profile button's hit area, matching Playarr Web on mobile and television layouts.
 - Gate every native Android download surface on the signed-in profile's live capability and keep
   the Downloads destination in Playarr Web order on both mobile and television navigation.
 - Match the hosted TV-link page to the profile selector's shared full-screen layout, and always
