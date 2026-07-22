@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Remove Android mobile sign-in's inert back control and localize known Android TV link-start,
+  expiry, session-expiry, and declined states while retaining provider diagnostics.
 - Route Android joined-server artwork, playback, progress, and offline-download bytes through the
   owning server's rotating session, persist download ownership across restarts, and never attach a
   Playarr bearer token to an unknown absolute media or artwork origin.

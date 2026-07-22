@@ -87,6 +87,26 @@ internal enum class PlayarrString(
         "คิวอาร์โค้ดสำหรับลิงก์เข้าสู่ระบบ Playarr TV",
         "Playarr TVサインインリンクのQRコード",
     ),
+    DeviceLoginStartFailed(
+        "Couldn’t reach playarr.app to start linking. Check the connection and try again.",
+        "ไม่สามารถเชื่อมต่อ playarr.app เพื่อเริ่มการเชื่อมโยงได้ โปรดตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง",
+        "リンクを開始するためにplayarr.appへ接続できませんでした。接続を確認してもう一度お試しください。",
+    ),
+    DeviceLoginCodeExpired(
+        "That link code expired. Start again for a new code.",
+        "รหัสเชื่อมโยงหมดอายุแล้ว เริ่มใหม่เพื่อรับรหัสใหม่",
+        "リンクコードの有効期限が切れました。新しいコードでもう一度開始してください。",
+    ),
+    DeviceLoginSessionExpired(
+        "The Streamarr session expired before it could be saved. Start again.",
+        "เซสชัน Streamarr หมดอายุก่อนบันทึกได้ โปรดเริ่มใหม่",
+        "保存前にStreamarrセッションの有効期限が切れました。もう一度開始してください。",
+    ),
+    DeviceLoginDeclined(
+        "This TV link request was declined.",
+        "คำขอเชื่อมโยงทีวีนี้ถูกปฏิเสธ",
+        "このテレビのリンクリクエストは拒否されました。",
+    ),
 
     NavDownloads("Downloads", "ดาวน์โหลด", "ダウンロード"),
     NavSearch("Search", "ค้นหา", "検索"),

@@ -176,15 +176,20 @@ enum class LoginFailure {
     Connection,
 }
 
-sealed interface PairingState {
+internal sealed interface PairingState {
     data object Idle : PairingState
     data object Requesting : PairingState
     data class Waiting(val code: HostedLinkCodeResponse) : PairingState
-    data class Failed(val message: String) : PairingState
+    data class Failed(val failure: PairingFailure) : PairingState
+}
+
+internal sealed interface PairingFailure {
+    data class Localized(val key: PlayarrString) : PairingFailure
+    data class Message(val text: String) : PairingFailure
 }
 
 @HiltViewModel
-class LoginViewModel @Inject constructor(
+internal class LoginViewModel @Inject constructor(
     private val loginApi: LoginApi,
     private val deviceAuthClient: DeviceAuthClient,
     private val hostedDeviceLinkClient: HostedDeviceLinkClient,
@@ -235,14 +240,22 @@ class LoginViewModel @Inject constructor(
             runCatching {
                 hostedDeviceLinkClient.requestCode(ClientPlatform.AndroidTv)
             }.onFailure {
-                _pairing.value = PairingState.Failed("Couldn’t reach playarr.app to start linking. Check the connection and try again.")
+                _pairing.value = PairingState.Failed(
+                    PairingFailure.Localized(PlayarrString.DeviceLoginStartFailed),
+                )
             }.onSuccess { code ->
                 _pairing.value = PairingState.Waiting(code)
                 hostedDeviceLinkClient.pollUntilResolved(code).collect { result ->
                     when (result) {
                         HostedLinkPollResult.AuthorizationPending -> Unit
-                        HostedLinkPollResult.Expired -> _pairing.value = PairingState.Failed("That link code expired. Start again for a new code.")
-                        is HostedLinkPollResult.Failed -> _pairing.value = PairingState.Failed(result.message)
+                        HostedLinkPollResult.Expired -> {
+                            _pairing.value = PairingState.Failed(
+                                PairingFailure.Localized(PlayarrString.DeviceLoginCodeExpired),
+                            )
+                        }
+                        is HostedLinkPollResult.Failed -> {
+                            _pairing.value = PairingState.Failed(PairingFailure.Message(result.message))
+                        }
                         is HostedLinkPollResult.Approved -> completeHostedPairing(result)
                     }
                 }
@@ -270,9 +283,19 @@ class LoginViewModel @Inject constructor(
                     _pairing.value = PairingState.Idle
                 }
                 DevicePollResult.AuthorizationPending, DevicePollResult.SlowDown -> Unit
-                DevicePollResult.Expired -> _pairing.value = PairingState.Failed("The Streamarr session expired before it could be saved. Start again.")
-                DevicePollResult.Denied -> _pairing.value = PairingState.Failed("This TV link request was declined.")
-                is DevicePollResult.Failed -> _pairing.value = PairingState.Failed(tokenResult.message)
+                DevicePollResult.Expired -> {
+                    _pairing.value = PairingState.Failed(
+                        PairingFailure.Localized(PlayarrString.DeviceLoginSessionExpired),
+                    )
+                }
+                DevicePollResult.Denied -> {
+                    _pairing.value = PairingState.Failed(
+                        PairingFailure.Localized(PlayarrString.DeviceLoginDeclined),
+                    )
+                }
+                is DevicePollResult.Failed -> {
+                    _pairing.value = PairingState.Failed(PairingFailure.Message(tokenResult.message))
+                }
             }
         }
     }
@@ -455,13 +478,6 @@ private fun MobileLoginScreen(
                 tint = Color.Unspecified,
                 modifier = Modifier.size(30.dp),
             )
-            Surface(
-                onClick = {},
-                color = Color.Transparent,
-                border = androidx.compose.foundation.BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.3f)),
-                shape = CircleShape,
-                modifier = Modifier.padding(start = 22.dp).size(42.dp),
-            ) { Box(contentAlignment = Alignment.Center) { Text("←", color = WebInkSoft) } }
             Spacer(Modifier.weight(1f))
             PlayarrLanguageDropdown()
         }
@@ -618,7 +634,14 @@ private fun TelevisionPairingScreen(
                         Text(playarrString(PlayarrString.DeviceLoginWaitingApproval), color = WebPink, fontWeight = FontWeight.SemiBold)
                     }
                     is PairingState.Failed -> {
-                        Text(state.message, color = MaterialTheme.colorScheme.error, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Text(
+                            when (val failure = state.failure) {
+                                is PairingFailure.Localized -> playarrString(failure.key)
+                                is PairingFailure.Message -> failure.text
+                            },
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        )
                         Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text(playarrString(PlayarrString.DeviceLoginTryAgain)) }
                     }
                 }
