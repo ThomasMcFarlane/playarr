@@ -1,14 +1,13 @@
 package io.streamarr.mobile.di
 
-import android.app.UiModeManager
 import android.content.Context
-import android.content.res.Configuration
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.streamarr.mobile.BuildConfig
+import io.streamarr.mobile.isTelevision
 import io.streamarr.shared.auth.SessionRefresher
 import io.streamarr.shared.auth.TokenStore
 import io.streamarr.shared.data.config.ServerConfigStore
@@ -40,10 +39,11 @@ object NetworkModule {
         // KDoc), so a base URL saved from the Settings screen takes effect
         // immediately -- no need to rebuild this Retrofit instance.
         baseUrlProvider = { runBlocking { serverConfigStore.baseUrl.first() } },
-        clientPlatform = if (
-            context.getSystemService(UiModeManager::class.java).currentModeType ==
-            Configuration.UI_MODE_TYPE_TELEVISION
-        ) ClientPlatform.AndroidTv else ClientPlatform.AndroidMobile,
+        clientPlatform = if (isTelevision(context)) {
+            ClientPlatform.AndroidTv
+        } else {
+            ClientPlatform.AndroidMobile
+        },
         clientVersion = BuildConfig.VERSION_NAME,
         accessTokenProvider = { runBlocking { tokenStore.accessToken.first() } },
         refreshAccessToken = { rejectedToken ->

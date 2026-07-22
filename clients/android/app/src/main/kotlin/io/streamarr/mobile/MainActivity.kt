@@ -1,6 +1,8 @@
 package io.streamarr.mobile
 
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Bundle
@@ -23,7 +25,7 @@ import io.streamarr.shared.designsystem.theme.StreamarrTheme
 class MainActivity : ComponentActivity() {
     override fun attachBaseContext(newBase: Context) {
         val configuration = Configuration(newBase.resources.configuration)
-        if (isTelevision(configuration)) {
+        if (isTelevision(newBase)) {
             // Playarr Web's TV canvas is an explicit 1920x1080 CSS-pixel
             // viewport. Android TV commonly reports 320 dpi, which would
             // otherwise make every copied 64 px control render as 128 px.
@@ -38,7 +40,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        val isTelevision = isTelevision(resources.configuration)
+        val isTelevision = isTelevision(this) ||
+            intent.hasCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
         if (isTelevision) {
             @Suppress("DEPRECATION")
             window.decorView.systemUiVisibility =
@@ -63,6 +66,18 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-internal fun isTelevision(configuration: Configuration): Boolean =
-    configuration.uiMode and Configuration.UI_MODE_TYPE_MASK ==
-        Configuration.UI_MODE_TYPE_TELEVISION
+@Suppress("DEPRECATION")
+internal fun isTelevision(context: Context): Boolean = isTelevision(
+    uiModeType = context.resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK,
+    hasLeanbackFeature = context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK),
+    hasTelevisionFeature = context.packageManager.hasSystemFeature(PackageManager.FEATURE_TELEVISION),
+)
+
+internal fun isTelevision(
+    uiModeType: Int,
+    hasLeanbackFeature: Boolean,
+    hasTelevisionFeature: Boolean,
+): Boolean =
+    uiModeType == Configuration.UI_MODE_TYPE_TELEVISION ||
+        hasLeanbackFeature ||
+        hasTelevisionFeature

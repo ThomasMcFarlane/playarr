@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Keep the Android Clients download button on the version-independent latest APK instead of a
+  stale versioned release, and recognise vendor TV firmware through its Leanback or television
+  hardware features so first launch cannot fall back to the mobile Server URL form.
 - Only mark peer-matrix cells available when the peer's mapped physical file exists, preventing
   replicated Source catalogues from making storage-less nodes appear to hold media.
 - Retry identity-only source pages during rolling upgrades without advancing the peer cursor.

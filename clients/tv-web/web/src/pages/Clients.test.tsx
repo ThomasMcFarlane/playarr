@@ -112,8 +112,9 @@ describe("ClientsPage", () => {
       /id="client-android"[^>]*aria-current="page"/
     );
     expect(markup).toContain(
-      'href="/downloads/android/releases/0.2.7/playarr-android.apk"'
+      'href="/downloads/android/playarr-android.apk"'
     );
+    expect(markup).not.toMatch(/\/downloads\/android\/releases\/\d+\.\d+\.\d+\//);
     expect(markup).toContain('target="_blank"');
     expect(markup).toContain('rel="noopener noreferrer"');
     expect(markup).not.toContain('download=');
