@@ -1,6 +1,7 @@
 package io.streamarr.mobile.di
 
 import android.content.Context
+import androidx.media3.datasource.DataSource
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -15,6 +16,8 @@ import javax.inject.Singleton
 object PlayerModule {
     @Provides
     @Singleton
-    fun provideStreamarrPlayer(@ApplicationContext context: Context): StreamarrPlayer =
-        ExoPlayerStreamarrPlayer.create(context)
+    fun provideStreamarrPlayer(
+        @ApplicationContext context: Context,
+        dataSourceFactory: DataSource.Factory,
+    ): StreamarrPlayer = ExoPlayerStreamarrPlayer.create(context, dataSourceFactory)
 }

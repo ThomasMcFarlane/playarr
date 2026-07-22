@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Send the current bearer token on Android live-player media and HLS requests by sharing the
+  authenticated Media3 data source already used for offline downloads.
 - Offer only server-supported avatar presets on Android and render the account-backed avatar in
   the shared profile control and profile selector, with Playarr Web's deterministic fallback.
 - Opt the Android download service and dependency wiring into the Media3 APIs they use so the

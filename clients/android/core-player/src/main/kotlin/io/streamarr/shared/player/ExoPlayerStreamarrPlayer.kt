@@ -6,7 +6,9 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -111,7 +113,15 @@ class ExoPlayerStreamarrPlayer private constructor(
             PlaybackException.ERROR_CODE_TIMEOUT,
         )
 
-        fun create(context: Context): ExoPlayerStreamarrPlayer =
-            ExoPlayerStreamarrPlayer(ExoPlayer.Builder(context.applicationContext).build())
+        fun create(
+            context: Context,
+            dataSourceFactory: DataSource.Factory? = null,
+        ): ExoPlayerStreamarrPlayer {
+            val builder = ExoPlayer.Builder(context.applicationContext)
+            if (dataSourceFactory != null) {
+                builder.setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            }
+            return ExoPlayerStreamarrPlayer(builder.build())
+        }
     }
 }
