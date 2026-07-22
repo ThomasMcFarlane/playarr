@@ -19,7 +19,14 @@ internal data class PlayarrPlaybackQueueItem(
     val artworkWork: Work? = null,
     val startPositionMs: Long? = null,
     val launchSettings: PlayarrPlaybackLaunchSettings? = null,
+    val fallbackTitle: PlayarrString? = null,
+    val fallbackTitleParameters: Map<String, Any> = emptyMap(),
 )
+
+internal fun PlayarrPlaybackQueueItem.displayTitle(language: PlayarrLanguageState): String =
+    title.takeIf(String::isNotBlank)
+        ?: fallbackTitle?.let { language.text(it, fallbackTitleParameters) }
+        ?: language.text(PlayarrString.PlayerNowPlaying)
 
 internal data class PlayarrPlaybackLaunchSettings(
     val qualityId: String,
@@ -67,12 +74,21 @@ internal fun playarrPlaybackQueue(
     launchSettings: PlayarrPlaybackLaunchSettings? = null,
 ): PlayarrPlaybackQueue {
     val candidates = orderedItems.filter { it.mediaFileId.isNotBlank() }
-        .ifEmpty { listOf(PlayarrPlaybackQueueItem(mediaFileId, "Now playing")) }
+        .ifEmpty {
+            listOf(PlayarrPlaybackQueueItem(mediaFileId, "", fallbackTitle = PlayarrString.PlayerNowPlaying))
+        }
     val selectedIndex = candidates.indexOfFirst { it.mediaFileId == mediaFileId }.takeIf { it >= 0 }
     val queue = if (selectedIndex != null) {
         PlayarrPlaybackQueue(candidates, selectedIndex)
     } else {
-        PlayarrPlaybackQueue(candidates + PlayarrPlaybackQueueItem(mediaFileId, "Now playing"), candidates.size)
+        PlayarrPlaybackQueue(
+            candidates + PlayarrPlaybackQueueItem(
+                mediaFileId,
+                "",
+                fallbackTitle = PlayarrString.PlayerNowPlaying,
+            ),
+            candidates.size,
+        )
     }
     if (startPositionMs == null && launchSettings == null) return queue
     return queue.copy(
@@ -196,7 +212,9 @@ internal fun WorkDetail.playarrPlaybackQueueItems(): List<PlayarrPlaybackQueueIt
             episode.mediaFileId?.let { mediaFileId ->
                 PlayarrPlaybackQueueItem(
                     mediaFileId = mediaFileId,
-                    title = episode.episode.title ?: "Episode ${episode.episode.episodeNumber}",
+                    title = episode.episode.title.orEmpty(),
+                    fallbackTitle = PlayarrString.DetailEpisodeNumber,
+                    fallbackTitleParameters = mapOf("number" to episode.episode.episodeNumber),
                     subtitle = buildString {
                         append(work.title)
                         append(" · S")

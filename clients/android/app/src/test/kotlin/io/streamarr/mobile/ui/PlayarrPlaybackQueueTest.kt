@@ -48,7 +48,12 @@ class PlayarrPlaybackQueueTest {
         val queue = playarrPlaybackQueue("only", emptyList())
 
         assertEquals("only", queue.currentMediaFileId)
-        assertEquals("Now playing", queue.currentItem?.title)
+        assertEquals(
+            "Now playing",
+            queue.currentItem?.displayTitle(
+                PlayarrLanguageState("en", PlayarrResolvedLanguage.English),
+            ),
+        )
         assertFalse(queue.canPrevious)
         assertFalse(queue.canNext)
     }

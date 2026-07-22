@@ -122,6 +122,100 @@ internal enum class PlayarrString(
     CommonClose("Close", "ปิด", "閉じる"),
     CommonDone("Done", "เสร็จสิ้น", "完了"),
     CommonTryAgain("Try again", "ลองอีกครั้ง", "もう一度試す"),
+    ErrorSessionExpired(
+        "Your session has expired. Sign in again.",
+        "เซสชันของคุณหมดอายุแล้ว โปรดเข้าสู่ระบบอีกครั้ง",
+        "セッションの有効期限が切れました。もう一度サインインしてください。",
+    ),
+    ErrorProfileCannotAccess(
+        "This profile cannot access {{subject}}.",
+        "โปรไฟล์นี้ไม่มีสิทธิ์เข้าถึง{{subject}}",
+        "このプロフィールは{{subject}}にアクセスできません。",
+    ),
+    ErrorSubjectNotFound(
+        "{{subject}} could not be found.",
+        "ไม่พบ{{subject}}",
+        "{{subject}}が見つかりませんでした。",
+    ),
+    ErrorServerStatus(
+        "The server returned error {{code}}.",
+        "เซิร์ฟเวอร์ส่งคืนข้อผิดพลาด {{code}}",
+        "サーバーがエラー{{code}}を返しました。",
+    ),
+    ErrorCouldNotLoad(
+        "Couldn’t load {{subject}}.",
+        "ไม่สามารถโหลด{{subject}}ได้",
+        "{{subject}}を読み込めませんでした。",
+    ),
+    ErrorServerCredentialsRejected(
+        "The username or password was not accepted.",
+        "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
+        "ユーザー名またはパスワードが拒否されました。",
+    ),
+    ErrorServerNotFound(
+        "No Playarr server was found at that address.",
+        "ไม่พบเซิร์ฟเวอร์ Playarr ที่ที่อยู่นั้น",
+        "そのアドレスにPlayarrサーバーが見つかりませんでした。",
+    ),
+    ErrorCouldNotConnectServer(
+        "Couldn’t connect to that server.",
+        "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์นั้นได้",
+        "そのサーバーに接続できませんでした。",
+    ),
+    ErrorServerUnreachable(
+        "Can’t reach the Streamarr server. Check the server address and network.",
+        "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ Streamarr ได้ โปรดตรวจสอบที่อยู่เซิร์ฟเวอร์และเครือข่าย",
+        "Streamarrサーバーに接続できません。サーバーアドレスとネットワークを確認してください。",
+    ),
+    ErrorAccountCannotAccess(
+        "This account cannot access {{subject}}.",
+        "บัญชีนี้ไม่มีสิทธิ์เข้าถึง{{subject}}",
+        "このアカウントは{{subject}}にアクセスできません。",
+    ),
+    ErrorSomethingWrongLoading(
+        "Something went wrong loading {{subject}}.",
+        "เกิดข้อผิดพลาดขณะโหลด{{subject}}",
+        "{{subject}}の読み込み中に問題が発生しました。",
+    ),
+    ErrorUnableSearch(
+        "Unable to search your library.",
+        "ไม่สามารถค้นหาไลบรารีของคุณได้",
+        "ライブラリを検索できませんでした。",
+    ),
+    ErrorCouldNotSavePlaybackPreferences(
+        "Couldn’t save playback preferences.",
+        "ไม่สามารถบันทึกการตั้งค่าการเล่นได้",
+        "再生設定を保存できませんでした。",
+    ),
+    ErrorSourceSelectedUnavailable(
+        "That server does not have the selected item.",
+        "เซิร์ฟเวอร์นั้นไม่มีรายการที่เลือก",
+        "そのサーバーには選択した項目がありません。",
+    ),
+    ErrorSourceUseFailed(
+        "Couldn’t use that server.",
+        "ไม่สามารถใช้เซิร์ฟเวอร์นั้นได้",
+        "そのサーバーを使用できませんでした。",
+    ),
+    ErrorPlaybackFailed(
+        "Playback failed: {{message}}",
+        "เล่นไม่สำเร็จ: {{message}}",
+        "再生に失敗しました: {{message}}",
+    ),
+    ErrorSubjectPlaylists("playlists", "เพลย์ลิสต์", "プレイリスト"),
+    ErrorSubjectPlaylist("playlist", "เพลย์ลิสต์", "プレイリスト"),
+    ErrorSubjectProfiles("profiles", "โปรไฟล์", "プロフィール"),
+    ErrorSubjectProfile("profile", "โปรไฟล์", "プロフィール"),
+    ErrorSubjectSettings("settings", "การตั้งค่า", "設定"),
+    ErrorSubjectProfileLock("profile lock", "การล็อกโปรไฟล์", "プロフィールロック"),
+    ErrorSubjectInvitation("invitation", "คำเชิญ", "招待"),
+    ErrorSubjectServerConnection("server connection", "การเชื่อมต่อเซิร์ฟเวอร์", "サーバー接続"),
+    ErrorSubjectServerGroup("server group", "กลุ่มเซิร์ฟเวอร์", "サーバーグループ"),
+    ErrorSubjectHome("home", "หน้าแรก", "ホーム"),
+    ErrorSubjectSearch("search", "การค้นหา", "検索"),
+    ErrorSubjectTitle("title", "รายการ", "タイトル"),
+    ErrorSubjectMedia("media", "สื่อ", "メディア"),
+    ErrorSubjectAvailableServers("available servers", "เซิร์ฟเวอร์ที่พร้อมใช้งาน", "利用可能なサーバー"),
     NotFoundKicker("Lost in the library", "หลงทางในไลบรารี", "ライブラリで迷子になりました"),
     NotFoundHeading("Page not found", "ไม่พบหน้า", "ページが見つかりません"),
     NotFoundDescription(
@@ -1044,6 +1138,28 @@ internal data class PlayarrLanguageState(
         }
         return interpolatePlayarrTranslation(template, parameters)
     }
+
+    fun text(message: PlayarrMessage): String = when (message) {
+        is PlayarrMessage.Dynamic -> message.text
+        is PlayarrMessage.Localized -> text(
+            message.key,
+            message.parameters.mapValues { (_, value) ->
+                if (value is PlayarrString) text(value) else value
+            },
+        )
+    }
+}
+
+@Immutable
+internal sealed interface PlayarrMessage {
+    @Immutable
+    data class Localized(
+        val key: PlayarrString,
+        val parameters: Map<String, Any> = emptyMap(),
+    ) : PlayarrMessage
+
+    @Immutable
+    data class Dynamic(val text: String) : PlayarrMessage
 }
 
 internal val LocalPlayarrLanguage = compositionLocalOf {
@@ -1096,6 +1212,9 @@ internal fun rememberPlayarrLanguageState(preference: String): PlayarrLanguageSt
 @Composable
 internal fun playarrString(key: PlayarrString, vararg parameters: Pair<String, Any>): String =
     LocalPlayarrLanguage.current.text(key, parameters.toMap())
+
+@Composable
+internal fun playarrText(message: PlayarrMessage): String = LocalPlayarrLanguage.current.text(message)
 
 internal data class PlayarrUiLanguageOption(val preference: String, val nativeName: String?)
 

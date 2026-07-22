@@ -50,6 +50,42 @@ class PlayarrLocalizationTest {
     }
 
     @Test
+    fun `localized messages resolve nested subject keys while dynamic diagnostics remain unchanged`() {
+        val thai = PlayarrLanguageState("th", PlayarrResolvedLanguage.Thai)
+        assertEquals(
+            "โปรไฟล์นี้ไม่มีสิทธิ์เข้าถึงการตั้งค่า",
+            thai.text(
+                PlayarrMessage.Localized(
+                    PlayarrString.ErrorProfileCannotAccess,
+                    mapOf("subject" to PlayarrString.ErrorSubjectSettings),
+                ),
+            ),
+        )
+        assertEquals(
+            "upstream diagnostic 42",
+            thai.text(PlayarrMessage.Dynamic("upstream diagnostic 42")),
+        )
+    }
+
+    @Test
+    fun `playback queue fallback titles follow the active language`() {
+        val japanese = PlayarrLanguageState("ja", PlayarrResolvedLanguage.Japanese)
+        assertEquals(
+            "エピソード7",
+            PlayarrPlaybackQueueItem(
+                mediaFileId = "episode-7",
+                title = "",
+                fallbackTitle = PlayarrString.DetailEpisodeNumber,
+                fallbackTitleParameters = mapOf("number" to 7),
+            ).displayTitle(japanese),
+        )
+        assertEquals(
+            "再生中",
+            PlayarrPlaybackQueueItem("unknown", "").displayTitle(japanese),
+        )
+    }
+
+    @Test
     fun `player queue units match web singular plural and music rules`() {
         assertEquals(PlayarrString.PlayerUnitTrack, playarrPlayerQueueUnit(1, music = true))
         assertEquals(PlayarrString.PlayerUnitTracks, playarrPlayerQueueUnit(2, music = true))

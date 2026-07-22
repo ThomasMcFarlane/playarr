@@ -342,7 +342,7 @@ private fun PlayarrPlayerControlBar(
     ) {
         queue.currentItem?.let { item ->
             Text(
-                item.title,
+                item.displayTitle(LocalPlayarrLanguage.current),
                 color = Color.White,
                 fontSize = if (isTelevision) 19.sp else 15.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -588,7 +588,12 @@ private fun PlayarrPlayerPlaylistPanel(
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
                                 )
-                                Text(item.title, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                Text(
+                                    item.displayTitle(LocalPlayarrLanguage.current),
+                                    color = Color.White,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                )
                                 item.subtitle?.let { subtitle ->
                                     Text(subtitle, color = Color.White.copy(alpha = 0.58f), fontSize = 10.sp, maxLines = 1)
                                 }

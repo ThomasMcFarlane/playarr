@@ -404,7 +404,7 @@ internal class DownloadOptionsViewModel @Inject constructor(
             _options.value = runCatching { downloadRepository.listQualityOptions(mediaFileId) }
                 .fold(
                     onSuccess = { ExperienceLoad.Ready(it) },
-                    onFailure = { ExperienceLoad.Failed(it.message.orEmpty()) },
+                    onFailure = { ExperienceLoad.Failed(PlayarrMessage.Dynamic(it.message.orEmpty())) },
                 )
         }
     }
@@ -487,7 +487,9 @@ internal fun DownloadOptionsSheet(
                 }
                 is ExperienceLoad.Failed -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(playarrString(PlayarrString.DownloadDrawerLoadError), color = MaterialTheme.colorScheme.error)
-                    current.message.takeIf(String::isNotBlank)?.let { Text(it, color = WebInkMuted, fontSize = 11.sp) }
+                    playarrText(current.message).takeIf(String::isNotBlank)?.let {
+                        Text(it, color = WebInkMuted, fontSize = 11.sp)
+                    }
                 }
                 is ExperienceLoad.Ready -> {
                     LaunchedEffect(current.value) {

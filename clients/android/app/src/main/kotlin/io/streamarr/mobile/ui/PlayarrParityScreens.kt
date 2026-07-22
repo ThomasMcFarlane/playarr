@@ -151,7 +151,19 @@ import retrofit2.HttpException
 internal sealed interface ParityLoad<out T> {
     data object Loading : ParityLoad<Nothing>
     data class Ready<T>(val value: T) : ParityLoad<T>
-    data class Failed(val message: String) : ParityLoad<Nothing>
+    data class Failed(val message: PlayarrMessage) : ParityLoad<Nothing>
+}
+
+private enum class PlayarrFailureSubject(val key: PlayarrString) {
+    Playlists(PlayarrString.ErrorSubjectPlaylists),
+    Playlist(PlayarrString.ErrorSubjectPlaylist),
+    Profiles(PlayarrString.ErrorSubjectProfiles),
+    Profile(PlayarrString.ErrorSubjectProfile),
+    Settings(PlayarrString.ErrorSubjectSettings),
+    ProfileLock(PlayarrString.ErrorSubjectProfileLock),
+    Invitation(PlayarrString.ErrorSubjectInvitation),
+    ServerConnection(PlayarrString.ErrorSubjectServerConnection),
+    ServerGroup(PlayarrString.ErrorSubjectServerGroup),
 }
 
 internal data class ResolvedPlaylistDirectory(
@@ -189,7 +201,7 @@ internal class PlaylistsViewModel @Inject constructor(
                 ResolvedPlaylistDirectory(playlists, itemGroups, details)
             }
         }
-            .fold({ ParityLoad.Ready(it) }, { ParityLoad.Failed(it.playarrMessage("playlists")) })
+            .fold({ ParityLoad.Ready(it) }, { ParityLoad.Failed(it.playarrMessage(PlayarrFailureSubject.Playlists)) })
     }
 
     fun create(
@@ -278,18 +290,18 @@ private fun comparePlaylistNames(left: String, right: String, locale: Locale): I
 internal class PlaylistActionsViewModel @Inject constructor(private val api: StreamarrApi) : ViewModel() {
     private val _playlists = MutableStateFlow<ParityLoad<List<Playlist>>>(ParityLoad.Loading)
     val playlists = _playlists.asStateFlow()
-    private val _message = MutableStateFlow<String?>(null)
+    private val _message = MutableStateFlow<PlayarrMessage?>(null)
     val message = _message.asStateFlow()
 
     fun load(mediaType: PlaylistMediaType) = viewModelScope.launch {
         _playlists.value = runCatching { api.listPlaylists().filter { !it.isSystem && it.mediaType == mediaType } }
-            .fold({ ParityLoad.Ready(it) }, { ParityLoad.Failed(it.playarrMessage("playlists")) })
+            .fold({ ParityLoad.Ready(it) }, { ParityLoad.Failed(it.playarrMessage(PlayarrFailureSubject.Playlists)) })
     }
 
     fun add(playlistId: String, workId: String, trackId: String?, onAdded: () -> Unit) = viewModelScope.launch {
         runCatching { api.addPlaylistItem(playlistId, AddPlaylistItemRequest(workId, trackId)) }
             .onSuccess { onAdded() }
-            .onFailure { _message.value = it.playarrMessage("playlist") }
+            .onFailure { _message.value = it.playarrMessage(PlayarrFailureSubject.Playlist) }
     }
 
     fun clearMessage() { _message.value = null }
@@ -316,7 +328,7 @@ internal fun AddToPlaylistDialog(
             ) {
                 when (val current = state) {
                     ParityLoad.Loading -> CircularProgressIndicator(color = WebPink)
-                    is ParityLoad.Failed -> Text(current.message, color = MaterialTheme.colorScheme.error)
+                    is ParityLoad.Failed -> Text(playarrText(current.message), color = MaterialTheme.colorScheme.error)
                     is ParityLoad.Ready -> if (current.value.isEmpty()) {
                         Text(
                             playarrString(PlayarrString.ContextNoPersonalPlaylistsTitle),
@@ -332,7 +344,7 @@ internal fun AddToPlaylistDialog(
                         }
                     }
                 }
-                message?.let { Text(it, color = WebPink) }
+                message?.let { Text(playarrText(it), color = MaterialTheme.colorScheme.error) }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.CommonClose)) } },
@@ -355,11 +367,9 @@ internal fun ExperiencePlaylistsScreen(
     var name by remember { mutableStateOf("") }
     var mediaType by remember { mutableStateOf(PlaylistMediaType.Video) }
     var parentPlaylistId by remember { mutableStateOf<String?>(null) }
-    var createError by remember { mutableStateOf<String?>(null) }
+    var createError by remember { mutableStateOf<PlayarrMessage?>(null) }
     var createBusy by remember { mutableStateOf(false) }
     val language = LocalPlayarrLanguage.current
-    val nameRequiredMessage = playarrString(PlayarrString.PlaylistsNameRequired)
-    val mediaTypeMismatchMessage = playarrString(PlayarrString.PlaylistsMediaTypeMismatch)
     Box(Modifier.fillMaxSize().background(WebSurface)) {
         Column(
             Modifier.fillMaxSize().padding(
@@ -495,7 +505,9 @@ internal fun ExperiencePlaylistsScreen(
                         enabled = !createBusy,
                         onSelected = { parentPlaylistId = it },
                     )
-                    createError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
+                    createError?.let {
+                        Text(playarrText(it), color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                    }
                 }
             },
             confirmButton = {
@@ -503,7 +515,7 @@ internal fun ExperiencePlaylistsScreen(
                     enabled = name.isNotBlank() && !createBusy,
                     onClick = {
                         if (name.isBlank()) {
-                            createError = nameRequiredMessage
+                            createError = PlayarrMessage.Localized(PlayarrString.PlaylistsNameRequired)
                             return@TextButton
                         }
                         createBusy = true
@@ -522,9 +534,9 @@ internal fun ExperiencePlaylistsScreen(
                             onFailure = { error ->
                                 createBusy = false
                                 createError = if (error is PlaylistMediaTypeMismatchException) {
-                                    mediaTypeMismatchMessage
+                                    PlayarrMessage.Localized(PlayarrString.PlaylistsMediaTypeMismatch)
                                 } else {
-                                    error.playarrMessage("playlist")
+                                    error.playarrMessage(PlayarrFailureSubject.Playlist)
                                 }
                             },
                         )
@@ -731,7 +743,7 @@ internal class PlaylistDetailViewModel @Inject constructor(private val api: Stre
                 }.awaitAll().filterNotNull().toMap()
                 ResolvedPlaylist(root, itemGroups, details, playlists)
             }
-        }.fold({ ParityLoad.Ready(it) }, { ParityLoad.Failed(it.playarrMessage("playlist")) })
+        }.fold({ ParityLoad.Ready(it) }, { ParityLoad.Failed(it.playarrMessage(PlayarrFailureSubject.Playlist)) })
     }
 
     fun remove(playlistId: String, itemId: String) = mutate { current ->
@@ -793,7 +805,7 @@ internal class PlaylistDetailViewModel @Inject constructor(private val api: Stre
 
     private fun mutate(
         onFailure: (Throwable) -> Unit = { error ->
-            _state.value = ParityLoad.Failed(error.playarrMessage("playlist"))
+            _state.value = ParityLoad.Failed(error.playarrMessage(PlayarrFailureSubject.Playlist))
         },
         block: suspend (ResolvedPlaylist) -> Unit,
     ) = viewModelScope.launch {
@@ -1144,7 +1156,7 @@ private fun CreateSubPlaylistDialog(
 ) {
     var name by remember(parent.id) { mutableStateOf("") }
     var busy by remember(parent.id) { mutableStateOf(false) }
-    var error by remember(parent.id) { mutableStateOf<String?>(null) }
+    var error by remember(parent.id) { mutableStateOf<PlayarrMessage?>(null) }
     val typeLabel = playarrString(
         if (parent.mediaType == PlaylistMediaType.Audio) {
             PlayarrString.PlaylistsMediaTypeAudio
@@ -1152,7 +1164,6 @@ private fun CreateSubPlaylistDialog(
             PlayarrString.PlaylistsMediaTypeVideo
         },
     )
-    val mediaTypeMismatchMessage = playarrString(PlayarrString.PlaylistsMediaTypeMismatch)
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(playarrString(PlayarrString.PlaylistsCreateSubPlaylist)) },
@@ -1168,7 +1179,7 @@ private fun CreateSubPlaylistDialog(
                     enabled = !busy,
                 )
                 Text("${playarrString(PlayarrString.PlaylistsMediaType)} · $typeLabel", color = WebInkMuted, fontSize = 11.sp)
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
+                error?.let { Text(playarrText(it), color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
             }
         },
         confirmButton = {
@@ -1182,9 +1193,9 @@ private fun CreateSubPlaylistDialog(
                         { failure ->
                             busy = false
                             error = if (failure is PlaylistMediaTypeMismatchException) {
-                                mediaTypeMismatchMessage
+                                PlayarrMessage.Localized(PlayarrString.PlaylistsMediaTypeMismatch)
                             } else {
-                                failure.playarrMessage("playlist")
+                                failure.playarrMessage(PlayarrFailureSubject.Playlist)
                             }
                         },
                     )
@@ -1208,7 +1219,7 @@ private fun EditPlaylistDialog(
     var name by remember(playlist.id) { mutableStateOf(playlist.name) }
     var parentId by remember(playlist.id) { mutableStateOf(playlist.parentPlaylistId) }
     var busy by remember(playlist.id) { mutableStateOf(false) }
-    var error by remember(playlist.id) { mutableStateOf<String?>(null) }
+    var error by remember(playlist.id) { mutableStateOf<PlayarrMessage?>(null) }
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(playarrString(PlayarrString.PlaylistActionsEdit)) },
@@ -1232,7 +1243,7 @@ private fun EditPlaylistDialog(
                     labels = parentOptions.associate { it.id to it.playlistPath(allPlaylists) },
                     onSelected = { parentId = it },
                 )
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
+                error?.let { Text(playarrText(it), color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
             }
         },
         confirmButton = {
@@ -1244,7 +1255,7 @@ private fun EditPlaylistDialog(
                         name,
                         parentId,
                         { busy = false; onDismiss() },
-                        { failure -> busy = false; error = failure.playarrMessage("playlist") },
+                        { failure -> busy = false; error = failure.playarrMessage(PlayarrFailureSubject.Playlist) },
                     )
                 },
             ) { Text(playarrString(if (busy) PlayarrString.PlaylistActionsSaving else PlayarrString.PlaylistActionsSave)) }
@@ -1262,14 +1273,14 @@ private fun DeletePlaylistDialog(
     onDelete: (() -> Unit, (Throwable) -> Unit) -> Unit,
 ) {
     var busy by remember(playlist.id) { mutableStateOf(false) }
-    var error by remember(playlist.id) { mutableStateOf<String?>(null) }
+    var error by remember(playlist.id) { mutableStateOf<PlayarrMessage?>(null) }
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(playarrString(PlayarrString.PlaylistActionsConfirmDelete)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(playarrString(PlayarrString.PlaylistActionsDeleteDescription, "name" to playlist.name))
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
+                error?.let { Text(playarrText(it), color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
             }
         },
         confirmButton = {
@@ -1279,7 +1290,7 @@ private fun DeletePlaylistDialog(
                     busy = true
                     onDelete(
                         { busy = false },
-                        { failure -> busy = false; error = failure.playarrMessage("playlist") },
+                        { failure -> busy = false; error = failure.playarrMessage(PlayarrFailureSubject.Playlist) },
                     )
                 },
             ) {
@@ -1306,7 +1317,7 @@ private fun WorkDetail.mediaFileFor(item: PlaylistItem): String? = when (val tre
 
 internal data class ProfilesSnapshot(
     val profiles: List<AvailableProfile>,
-    val loadWarning: String? = null,
+    val loadWarning: PlayarrMessage? = null,
 )
 
 @HiltViewModel
@@ -1329,7 +1340,7 @@ internal class ProfilesViewModel @Inject constructor(
             onFailure = { failure ->
                 val userId = tokenStore.currentUserId.first()
                 if (userId == null) {
-                    ParityLoad.Failed(failure.playarrMessage("profiles"))
+                    ParityLoad.Failed(failure.playarrMessage(PlayarrFailureSubject.Profiles))
                 } else {
                     val displayName = tokenStore.currentUserName.first().orEmpty()
                     ParityLoad.Ready(
@@ -1343,7 +1354,7 @@ internal class ProfilesViewModel @Inject constructor(
                                     pinLocked = false,
                                 ),
                             ),
-                            loadWarning = failure.playarrMessage("profiles"),
+                            loadWarning = failure.playarrMessage(PlayarrFailureSubject.Profiles),
                         ),
                     )
                 }
@@ -1442,9 +1453,8 @@ internal fun ExperienceProfilesScreen(
     var pinProfile by remember { mutableStateOf<AvailableProfile?>(null) }
     var pinAction by remember { mutableStateOf(ProfileAction.Select) }
     var pin by remember { mutableStateOf("") }
-    var pinError by remember { mutableStateOf<String?>(null) }
-    var actionError by remember { mutableStateOf<String?>(null) }
-    val pinNotAccepted = playarrString(PlayarrString.ProfilesPinNotAccepted)
+    var pinError by remember { mutableStateOf<PlayarrMessage?>(null) }
+    var actionError by remember { mutableStateOf<PlayarrMessage?>(null) }
     val navigateForAction: (ProfileAction) -> Unit = { action ->
         when (action) {
             ProfileAction.Select -> onHome()
@@ -1479,7 +1489,7 @@ internal fun ExperienceProfilesScreen(
                 pinError = null
             }
             is ProfileActionResolution.Switch -> switchProfile(profile, action, null) { failure ->
-                actionError = failure.playarrMessage("profile")
+                actionError = failure.playarrMessage(PlayarrFailureSubject.Profile)
             }
         }
     }
@@ -1554,12 +1564,21 @@ internal fun ExperienceProfilesScreen(
                         }
                     }
                     actionError?.let { error ->
-                        item { Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(18.dp)) }
+                        item {
+                            Text(
+                                playarrText(error),
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(18.dp),
+                            )
+                        }
                     }
                     current.value.loadWarning?.let { warning ->
                         item {
                             Text(
-                                playarrString(PlayarrString.ProfilesErrorShowingSaved, "message" to warning),
+                                playarrString(
+                                    PlayarrString.ProfilesErrorShowingSaved,
+                                    "message" to playarrText(warning),
+                                ),
                                 color = WebInkMuted,
                                 fontSize = 11.sp,
                                 modifier = Modifier.padding(18.dp),
@@ -1619,7 +1638,9 @@ internal fun ExperienceProfilesScreen(
                         singleLine = true,
                         enabled = !busy,
                     )
-                    pinError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
+                    pinError?.let {
+                        Text(playarrText(it), color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                    }
                     TextButton(onClick = viewModel::signOut, enabled = !busy, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                         Text(playarrString(PlayarrString.ProfilesUseAccountSignIn))
                     }
@@ -1631,9 +1652,9 @@ internal fun ExperienceProfilesScreen(
                     onClick = {
                         switchProfile(profile, pinAction, pin) { failure ->
                             pinError = if (failure is HttpException && failure.code() == 401) {
-                                pinNotAccepted
+                                PlayarrMessage.Localized(PlayarrString.ProfilesPinNotAccepted)
                             } else {
-                                failure.playarrMessage("profile")
+                                failure.playarrMessage(PlayarrFailureSubject.Profile)
                             }
                         }
                     },
@@ -1789,7 +1810,7 @@ internal sealed interface SettingsConnectionTest {
     data object Idle : SettingsConnectionTest
     data object Testing : SettingsConnectionTest
     data class Success(val version: VersionEnvelope) : SettingsConnectionTest
-    data class Failed(val message: String) : SettingsConnectionTest
+    data class Failed(val message: PlayarrMessage) : SettingsConnectionTest
 }
 
 internal sealed interface SettingsServerOperation {
@@ -1809,14 +1830,9 @@ private class SettingsServerInputException(
 ) : IllegalArgumentException()
 
 internal data class SettingsNotice(
-    val key: PlayarrString? = null,
-    val text: String? = null,
+    val message: PlayarrMessage,
     val success: Boolean,
-) {
-    init {
-        require((key == null) != (text == null))
-    }
-}
+)
 
 private data class SettingsServerObservation(
     val profileUserId: String?,
@@ -1863,14 +1879,14 @@ internal class ParitySettingsViewModel @Inject constructor(
             coroutineScope {
                 SettingsSnapshot(
                     tokenStore.currentUserId.first().orEmpty(),
-                    tokenStore.currentUserName.first() ?: "Viewer",
+                    tokenStore.currentUserName.first().orEmpty(),
                     async { api.getPlayerPreferences() }.await(),
                     async { api.getProfilePinSetting() }.await(),
                     async { api.getProfileAvatar() }.await(),
                     async { api.getMyUserInviteRequest().value }.await(),
                 )
             }
-        }.fold({ ParityLoad.Ready(it) }, { ParityLoad.Failed(it.playarrMessage("settings")) })
+        }.fold({ ParityLoad.Ready(it) }, { ParityLoad.Failed(it.playarrMessage(PlayarrFailureSubject.Settings)) })
     }
 
     fun savePlayerLanguage(language: String) = update(PlayarrString.SettingsPlayerSaved) {
@@ -1889,11 +1905,11 @@ internal class ParitySettingsViewModel @Inject constructor(
         runCatching { api.updateProfilePinSetting(UpdateProfilePinRequest(pin)) }
             .onSuccess { setting ->
                 updatePinSetting(setting)
-                _message.value = SettingsNotice(key = success, success = true)
+                _message.value = SettingsNotice(PlayarrMessage.Localized(success), success = true)
                 onSuccess()
             }
             .onFailure {
-                _message.value = SettingsNotice(text = it.playarrMessage("profile lock"), success = false)
+                _message.value = SettingsNotice(it.playarrMessage(PlayarrFailureSubject.ProfileLock), success = false)
             }
         _pinBusy.value = false
     }
@@ -1906,9 +1922,14 @@ internal class ParitySettingsViewModel @Inject constructor(
         runCatching { api.createUserInviteRequest(CreateUserInviteRequest(message.ifBlank { null })) }
             .onSuccess {
                 updateInviteRequest(it)
-                _message.value = SettingsNotice(key = PlayarrString.SettingsInviteRequestSent, success = true)
+                _message.value = SettingsNotice(
+                    PlayarrMessage.Localized(PlayarrString.SettingsInviteRequestSent),
+                    success = true,
+                )
             }
-            .onFailure { _message.value = SettingsNotice(text = it.playarrMessage("invitation"), success = false) }
+            .onFailure {
+                _message.value = SettingsNotice(it.playarrMessage(PlayarrFailureSubject.Invitation), success = false)
+            }
         _inviteBusy.value = false
     }
     fun generateInvite(serverUrl: String) = viewModelScope.launch {
@@ -1927,9 +1948,12 @@ internal class ParitySettingsViewModel @Inject constructor(
         }.onSuccess {
             _invite.value = it
             runCatching { refreshInviteRequestNow() }
-            _message.value = SettingsNotice(key = PlayarrString.SettingsInviteGenerated, success = true)
+            _message.value = SettingsNotice(
+                PlayarrMessage.Localized(PlayarrString.SettingsInviteGenerated),
+                success = true,
+            )
         }.onFailure {
-            _message.value = SettingsNotice(text = it.playarrMessage("invitation"), success = false)
+            _message.value = SettingsNotice(it.playarrMessage(PlayarrFailureSubject.Invitation), success = false)
         }
         _inviteBusy.value = false
     }
@@ -1963,19 +1987,22 @@ internal class ParitySettingsViewModel @Inject constructor(
                 deviceName = "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
             )
         }.onSuccess {
-            _message.value = SettingsNotice(key = PlayarrString.SettingsServerConnected, success = true)
+            _message.value = SettingsNotice(
+                PlayarrMessage.Localized(PlayarrString.SettingsServerConnected),
+                success = true,
+            )
             onSuccess()
         }.onFailure {
             _message.value = (it as? SettingsServerInputException)?.failure?.let { failure ->
                 SettingsNotice(
-                    key = when (failure) {
+                    message = PlayarrMessage.Localized(when (failure) {
                         SettingsServerInputFailure.InvalidUrl -> PlayarrString.SettingsServerInvalidUrl
                         SettingsServerInputFailure.AlreadyPrimary -> PlayarrString.SettingsServerAlreadyPrimary
                         SettingsServerInputFailure.SignInRequired -> PlayarrString.SettingsServerSignInRequired
-                    },
+                    }),
                     success = false,
                 )
-            } ?: SettingsNotice(text = it.playarrServerConnectionMessage(), success = false)
+            } ?: SettingsNotice(it.playarrServerConnectionMessage(), success = false)
         }
         _serverOperation.value = null
     }
@@ -1985,10 +2012,16 @@ internal class ParitySettingsViewModel @Inject constructor(
         _serverOperation.value = SettingsServerOperation.Disconnecting(serverUrl)
         runCatching { connectedServerSessionManager.disconnect(profileUserId, serverUrl) }
             .onSuccess {
-                _message.value = SettingsNotice(key = PlayarrString.SettingsServerDisconnected, success = true)
+                _message.value = SettingsNotice(
+                    PlayarrMessage.Localized(PlayarrString.SettingsServerDisconnected),
+                    success = true,
+                )
             }
             .onFailure {
-                _message.value = SettingsNotice(text = it.playarrMessage("server connection"), success = false)
+                _message.value = SettingsNotice(
+                    it.playarrMessage(PlayarrFailureSubject.ServerConnection),
+                    success = false,
+                )
             }
         _serverOperation.value = null
     }
@@ -1997,10 +2030,16 @@ internal class ParitySettingsViewModel @Inject constructor(
         _serverOperation.value = SettingsServerOperation.Forgetting
         runCatching { knownServerGroupStore.forgetGroup() }
             .onSuccess {
-                _message.value = SettingsNotice(key = PlayarrString.SettingsServerGroupForgotten, success = true)
+                _message.value = SettingsNotice(
+                    PlayarrMessage.Localized(PlayarrString.SettingsServerGroupForgotten),
+                    success = true,
+                )
             }
             .onFailure {
-                _message.value = SettingsNotice(text = it.playarrMessage("server group"), success = false)
+                _message.value = SettingsNotice(
+                    it.playarrMessage(PlayarrFailureSubject.ServerGroup),
+                    success = false,
+                )
             }
         _serverOperation.value = null
     }
@@ -2009,7 +2048,7 @@ internal class ParitySettingsViewModel @Inject constructor(
         _connectionTest.value = SettingsConnectionTest.Testing
         _connectionTest.value = runCatching { primaryApi.getVersion() }
             .fold(SettingsConnectionTest::Success) {
-                SettingsConnectionTest.Failed(it.playarrMessage("server connection"))
+                SettingsConnectionTest.Failed(it.playarrMessage(PlayarrFailureSubject.ServerConnection))
             }
     }
     fun changeServer(value: String) = viewModelScope.launch {
@@ -2017,7 +2056,7 @@ internal class ParitySettingsViewModel @Inject constructor(
             .onSuccess { serverConfigStore.setBaseUrl(it); tokenStore.clear() }
             .onFailure {
                 _message.value = SettingsNotice(
-                    key = PlayarrString.SettingsServerInvalidUrl,
+                    message = PlayarrMessage.Localized(PlayarrString.SettingsServerInvalidUrl),
                     success = false,
                 )
             }
@@ -2091,9 +2130,12 @@ internal class ParitySettingsViewModel @Inject constructor(
 
     private fun update(success: PlayarrString, block: suspend () -> Any) = viewModelScope.launch {
         runCatching { block() }
-            .onSuccess { _message.value = SettingsNotice(key = success, success = true); load() }
+            .onSuccess {
+                _message.value = SettingsNotice(PlayarrMessage.Localized(success), success = true)
+                load()
+            }
             .onFailure {
-                _message.value = SettingsNotice(text = it.playarrMessage("settings"), success = false)
+                _message.value = SettingsNotice(it.playarrMessage(PlayarrFailureSubject.Settings), success = false)
             }
     }
 }
@@ -2184,7 +2226,7 @@ internal fun ExperienceParitySettingsScreen(
                 message?.let { notice ->
                     item {
                         Text(
-                            notice.key?.let { playarrString(it) } ?: notice.text.orEmpty(),
+                            playarrText(notice.message),
                             color = if (notice.success) WebPink else MaterialTheme.colorScheme.error,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.clickable { viewModel.clearMessage() },
@@ -2222,6 +2264,7 @@ private fun SettingsSectionContent(
 ) {
     val display = LocalPlayarrDisplayPreferences.current
     var localNotice by remember(section) { mutableStateOf<PlayarrString?>(null) }
+    val displayName = snapshot.userName.ifBlank { playarrString(PlayarrString.ProfileViewerFallback) }
     val description = when (section) {
         SettingsSection.Appearance -> playarrString(PlayarrString.SettingsAppearanceDescription)
         SettingsSection.Language -> playarrString(PlayarrString.SettingsLanguageDescription)
@@ -2229,7 +2272,7 @@ private fun SettingsSectionContent(
         SettingsSection.Server -> playarrString(PlayarrString.SettingsServerDescription)
         SettingsSection.Lock -> playarrString(
             PlayarrString.SettingsProfileLockDescription,
-            "name" to snapshot.userName,
+            "name" to displayName,
         )
         SettingsSection.Invite -> playarrString(PlayarrString.SettingsInviteDescription)
         else -> null
@@ -2677,7 +2720,10 @@ private fun SettingsServerSection(
                 fontSize = 10.sp,
             )
             is SettingsConnectionTest.Failed -> Text(
-                playarrString(PlayarrString.SettingsServerConnectError, "message" to connectionTest.message),
+                playarrString(
+                    PlayarrString.SettingsServerConnectError,
+                    "message" to playarrText(connectionTest.message),
+                ),
                 color = MaterialTheme.colorScheme.error,
                 fontSize = 10.sp,
             )
@@ -2792,9 +2838,9 @@ private fun ParityLoading(label: String) {
 }
 
 @Composable
-private fun ParityFailure(message: String, retry: () -> Unit) {
+private fun ParityFailure(message: PlayarrMessage, retry: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text(message, color = MaterialTheme.colorScheme.error)
+        Text(playarrText(message), color = MaterialTheme.colorScheme.error)
         Button(onClick = retry, modifier = Modifier.padding(top = 14.dp)) {
             Text(playarrString(PlayarrString.CommonTryAgain))
         }
@@ -2806,21 +2852,37 @@ private fun ParityEmpty(message: String) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(message, color = WebInkMuted) }
 }
 
-private fun Throwable.playarrMessage(subject: String): String = when (this) {
+private fun Throwable.playarrMessage(subject: PlayarrFailureSubject): PlayarrMessage = when (this) {
     is retrofit2.HttpException -> when (code()) {
-        401 -> "Your session has expired. Sign in again."
-        403 -> "This profile cannot access $subject."
-        404 -> "That $subject could not be found."
-        else -> "The server returned error ${code()}."
+        401 -> PlayarrMessage.Localized(PlayarrString.ErrorSessionExpired)
+        403 -> PlayarrMessage.Localized(
+            PlayarrString.ErrorProfileCannotAccess,
+            mapOf("subject" to subject.key),
+        )
+        404 -> PlayarrMessage.Localized(
+            PlayarrString.ErrorSubjectNotFound,
+            mapOf("subject" to subject.key),
+        )
+        else -> PlayarrMessage.Localized(
+            PlayarrString.ErrorServerStatus,
+            mapOf("code" to code()),
+        )
     }
-    else -> message ?: "Couldn’t load $subject."
+    else -> message?.let(PlayarrMessage::Dynamic) ?: PlayarrMessage.Localized(
+        PlayarrString.ErrorCouldNotLoad,
+        mapOf("subject" to subject.key),
+    )
 }
 
-private fun Throwable.playarrServerConnectionMessage(): String = when (this) {
+private fun Throwable.playarrServerConnectionMessage(): PlayarrMessage = when (this) {
     is HttpException -> when (code()) {
-        401 -> "The username or password was not accepted."
-        404 -> "No Playarr server was found at that address."
-        else -> "The server returned error ${code()}."
+        401 -> PlayarrMessage.Localized(PlayarrString.ErrorServerCredentialsRejected)
+        404 -> PlayarrMessage.Localized(PlayarrString.ErrorServerNotFound)
+        else -> PlayarrMessage.Localized(
+            PlayarrString.ErrorServerStatus,
+            mapOf("code" to code()),
+        )
     }
-    else -> message ?: "Couldn’t connect to that server."
+    else -> message?.let(PlayarrMessage::Dynamic)
+        ?: PlayarrMessage.Localized(PlayarrString.ErrorCouldNotConnectServer)
 }

@@ -243,8 +243,10 @@ internal val WebPink get() = webPalette.accent
 internal sealed interface ExperienceLoad<out T> {
     data object Loading : ExperienceLoad<Nothing>
     data class Ready<T>(val value: T) : ExperienceLoad<T>
-    data class Failed(val message: String) : ExperienceLoad<Nothing>
+    data class Failed(val message: PlayarrMessage) : ExperienceLoad<Nothing>
 }
+
+private class PlayarrMessageException(val playarrMessage: PlayarrMessage) : IllegalStateException()
 
 @HiltViewModel
 internal class PlayarrExperienceViewModel @Inject constructor(
@@ -324,7 +326,9 @@ internal class PlayarrExperienceViewModel @Inject constructor(
                 (result as? StreamarrResult.Failure)?.error
             }
             if (failure != null && results.all { it.second is StreamarrResult.Failure }) {
-                _home.value = ExperienceLoad.Failed(failure.userMessageForExperience("home"))
+                _home.value = ExperienceLoad.Failed(
+                    failure.userMessageForExperience(PlayarrString.ErrorSubjectHome),
+                )
                 return@launch
             }
             val byKind = results.associate { (kind, result) ->
@@ -384,7 +388,9 @@ internal class PlayarrExperienceViewModel @Inject constructor(
                 val result = browseLibrary(kind = kind, availableOnly = true, sort = "title", limit = 240)
             ) {
                 is StreamarrResult.Success -> ExperienceLoad.Ready(result.value)
-                is StreamarrResult.Failure -> ExperienceLoad.Failed(result.error.userMessageForExperience(kind.label()))
+                is StreamarrResult.Failure -> ExperienceLoad.Failed(
+                    result.error.userMessageForExperience(kind.playarrPluralKey()),
+                )
             })
         }
     }
@@ -416,8 +422,8 @@ internal class PlayarrExperienceViewModel @Inject constructor(
                     if (!includesWorks) return@async emptyList()
                     when (val result = searchCatalog(normalised, limit = SEARCH_LIMIT)) {
                         is StreamarrResult.Success -> result.value
-                        is StreamarrResult.Failure -> throw IllegalStateException(
-                            result.error.userMessageForExperience("search"),
+                        is StreamarrResult.Failure -> throw PlayarrMessageException(
+                            result.error.userMessageForExperience(PlayarrString.ErrorSubjectSearch),
                         )
                     }
                 }
@@ -466,7 +472,9 @@ internal class PlayarrExperienceViewModel @Inject constructor(
                 throw cancelled
             } catch (error: Throwable) {
                 _search.value = ExperienceLoad.Failed(
-                    error.message?.takeIf(String::isNotBlank) ?: "Unable to search your library.",
+                    (error as? PlayarrMessageException)?.playarrMessage
+                        ?: error.message?.takeIf(String::isNotBlank)?.let(PlayarrMessage::Dynamic)
+                        ?: PlayarrMessage.Localized(PlayarrString.ErrorUnableSearch),
                 )
             }
         }
@@ -762,7 +770,8 @@ private fun PlayarrMiniPlayer(
     onMaximise: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val maximiseDescription = playarrString(PlayarrString.PlayerMaximiseTitle, "title" to item.title)
+    val displayTitle = item.displayTitle(LocalPlayarrLanguage.current)
+    val maximiseDescription = playarrString(PlayarrString.PlayerMaximiseTitle, "title" to displayTitle)
     Surface(
         onClick = onMaximise,
         color = WebSurfaceStrong.copy(alpha = 0.97f),
@@ -806,7 +815,7 @@ private fun PlayarrMiniPlayer(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    item.title.take(1).uppercase(),
+                    displayTitle.take(1).uppercase(LocalPlayarrLanguage.current.locale),
                     color = Color.White.copy(alpha = 0.78f),
                     fontSize = if (isTelevision) 44.sp else 30.sp,
                     fontWeight = FontWeight.Light,
@@ -832,7 +841,7 @@ private fun PlayarrMiniPlayer(
                 verticalArrangement = Arrangement.spacedBy(if (isTelevision) 7.dp else 5.dp),
             ) {
                 Text(
-                    item.title,
+                    displayTitle,
                     color = Color.White,
                     fontSize = if (isTelevision) 14.sp else 12.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -1050,7 +1059,12 @@ private fun ProfileControl(
                     glyphSize = if (isTelevision) 17.sp else 20.sp,
                 )
                 if (isTelevision) {
-                    Text(userName ?: "Viewer", fontSize = 9.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 9.dp))
+                    Text(
+                        userName ?: playarrString(PlayarrString.ProfileViewerFallback),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 9.dp),
+                    )
                 }
             }
         }
@@ -2278,7 +2292,7 @@ private fun WorkDetail.mediaFileIds(): List<String> = when (val tree = children)
 
 internal sealed interface ExperienceDetailMessage {
     data object PlaybackSettingsSaved : ExperienceDetailMessage
-    data class Failure(val text: String) : ExperienceDetailMessage
+    data class Failure(val message: PlayarrMessage) : ExperienceDetailMessage
 }
 
 @HiltViewModel
@@ -2312,7 +2326,15 @@ internal class ExperienceDetailViewModel @Inject constructor(
                         _sourceChoices.value = runCatching { workSourceSelector.choices(detail.work.id) }
                             .fold(
                                 { ExperienceLoad.Ready(it) },
-                                { ExperienceLoad.Failed(it.message ?: "Couldn’t load available servers.") },
+                                {
+                                    ExperienceLoad.Failed(
+                                        it.message?.takeIf(String::isNotBlank)?.let(PlayarrMessage::Dynamic)
+                                            ?: PlayarrMessage.Localized(
+                                                PlayarrString.ErrorCouldNotLoad,
+                                                mapOf("subject" to PlayarrString.ErrorSubjectAvailableServers),
+                                            ),
+                                    )
+                                },
                             )
                     }
                     launch {
@@ -2347,7 +2369,9 @@ internal class ExperienceDetailViewModel @Inject constructor(
                     }
                 }
                 is StreamarrResult.Failure -> {
-                    _state.value = ExperienceLoad.Failed(result.error.userMessageForExperience("title"))
+                    _state.value = ExperienceLoad.Failed(
+                        result.error.userMessageForExperience(PlayarrString.ErrorSubjectTitle),
+                    )
                 }
             }
         }
@@ -2391,7 +2415,8 @@ internal class ExperienceDetailViewModel @Inject constructor(
                 _message.value = ExperienceDetailMessage.PlaybackSettingsSaved
             }.onFailure {
                 _message.value = ExperienceDetailMessage.Failure(
-                    it.message ?: "Couldn’t save playback preferences.",
+                    it.message?.takeIf(String::isNotBlank)?.let(PlayarrMessage::Dynamic)
+                        ?: PlayarrMessage.Localized(PlayarrString.ErrorCouldNotSavePlaybackPreferences),
                 )
             }
         }
@@ -2413,13 +2438,17 @@ internal class ExperienceDetailViewModel @Inject constructor(
             runCatching {
                 val sourceDetail = workSourceSelector.select(originalDetail.work.id, choice.serverUrl)
                 resolvePlayarrSourcePlayback(originalDetail, sourceDetail, requestedMediaFileId)
-                    ?: error("That server does not have the selected item.")
+                    ?: throw PlayarrMessageException(
+                        PlayarrMessage.Localized(PlayarrString.ErrorSourceSelectedUnavailable),
+                    )
             }.onSuccess {
                 _sourceSelection.value = PlayarrSourceSelection.Idle
                 onSelected(it)
             }.onFailure {
                 _sourceSelection.value = PlayarrSourceSelection.Failed(
-                    it.message ?: "Couldn’t use that server.",
+                    (it as? PlayarrMessageException)?.playarrMessage
+                        ?: it.message?.takeIf(String::isNotBlank)?.let(PlayarrMessage::Dynamic)
+                        ?: PlayarrMessage.Localized(PlayarrString.ErrorSourceUseFailed),
                 )
             }
         }
@@ -2457,7 +2486,7 @@ internal data class ExperienceDetailSnapshot(
 internal sealed interface PlayarrSourceSelection {
     data object Idle : PlayarrSourceSelection
     data class Selecting(val serverUrl: String) : PlayarrSourceSelection
-    data class Failed(val message: String) : PlayarrSourceSelection
+    data class Failed(val message: PlayarrMessage) : PlayarrSourceSelection
 }
 
 private data class PendingSourcePlayback(
@@ -2628,7 +2657,7 @@ private fun ExperienceDetailScreen(
                     val success = currentMessage == ExperienceDetailMessage.PlaybackSettingsSaved
                     val text = when (currentMessage) {
                         ExperienceDetailMessage.PlaybackSettingsSaved -> playarrString(PlayarrString.DetailPlaybackSaved)
-                        is ExperienceDetailMessage.Failure -> currentMessage.text
+                        is ExperienceDetailMessage.Failure -> playarrText(currentMessage.message)
                     }
                     Surface(
                         onClick = viewModel::clearMessage,
@@ -2720,7 +2749,7 @@ private fun PlayarrServerChoiceDialog(
                         Text(playarrString(PlayarrString.ServerChoiceLoading), color = WebInkMuted)
                     }
                     is ExperienceLoad.Failed -> {
-                        Text(choices.message, color = MaterialTheme.colorScheme.error)
+                        Text(playarrText(choices.message), color = MaterialTheme.colorScheme.error)
                         OutlinedButton(onClick = onRetry) { Text(playarrString(PlayarrString.CommonTryAgain)) }
                     }
                     is ExperienceLoad.Ready -> {
@@ -2755,7 +2784,7 @@ private fun PlayarrServerChoiceDialog(
                     }
                 }
                 if (selection is PlayarrSourceSelection.Failed) {
-                    Text(selection.message, color = MaterialTheme.colorScheme.error)
+                    Text(playarrText(selection.message), color = MaterialTheme.colorScheme.error)
                 }
             }
         },
@@ -4205,7 +4234,12 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                             persistProgress()
                             closeActiveSession(PlaybackStopReason.Error, currentError.message)
                             _state.value = ExperienceLoad.Failed(
-                                "Playback failed: ${currentError.message.replace('_', ' ').lowercase()}",
+                                PlayarrMessage.Localized(
+                                    PlayarrString.ErrorPlaybackFailed,
+                                    mapOf(
+                                        "message" to currentError.message.replace('_', ' ').lowercase(),
+                                    ),
+                                ),
                             )
                         }
                     }
@@ -4275,7 +4309,9 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                     )
                     ExperienceLoad.Ready(Unit)
                 }
-                is StreamarrResult.Failure -> ExperienceLoad.Failed(result.error.userMessageForExperience("media"))
+                is StreamarrResult.Failure -> ExperienceLoad.Failed(
+                    result.error.userMessageForExperience(PlayarrString.ErrorSubjectMedia),
+                )
             }
         }
     }
@@ -4307,7 +4343,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     fun selectSubtitleTrack(trackId: String?) {
         if (trackId != null && _controls.value.subtitleTracks.none { it.id == trackId }) return
         player.selectSubtitleTrack(trackId)
-        _controls.value = _controls.value.copy(selectedSubtitleTrackId = trackId, error = null)
+        _controls.value = _controls.value.copy(selectedSubtitleTrackId = trackId)
     }
 
     private fun switchNegotiatedPlayback(
@@ -4328,7 +4364,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
             val shouldPlay = shouldPlayOverride ?: player.state.value.playWhenReady
             persistProgress(ensureCompletion = true)
             player.pause()
-            _controls.value = _controls.value.copy(switching = true, error = null)
+            _controls.value = _controls.value.copy(switching = true)
             closeActiveSessionAndWait(stopReason, errorMessage)
             when (val result = getPlaybackInfo(
                 mediaFileId = mediaFileId,
@@ -4352,8 +4388,8 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                     _state.value = ExperienceLoad.Ready(Unit)
                 }
                 is StreamarrResult.Failure -> {
-                    val message = result.error.userMessageForExperience("media")
-                    _controls.value = _controls.value.copy(switching = false, error = message)
+                    val message = result.error.userMessageForExperience(PlayarrString.ErrorSubjectMedia)
+                    _controls.value = _controls.value.copy(switching = false)
                     _state.value = ExperienceLoad.Failed(message)
                 }
             }
@@ -4610,7 +4646,7 @@ private fun ExperiencePlayerScreen(
                 loading = false,
                 kicker = playarrString(PlayarrString.PlayerPlaybackUnavailable),
                 title = playarrString(PlayarrString.PlayerCouldNotStart),
-                message = current.message,
+                message = playarrText(current.message),
                 onRetry = { viewModel.play(activeMediaFileId, playerDefaults) },
                 onBack = onBack,
             )
@@ -4749,6 +4785,7 @@ private fun PlayarrMusicPlayerVisual(
     playing: Boolean,
 ) {
     val work = item.artworkWork
+    val displayTitle = item.displayTitle(LocalPlayarrLanguage.current)
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         work?.let {
             AuthenticatedArtwork(
@@ -4797,7 +4834,7 @@ private fun PlayarrMusicPlayerVisual(
                 )
             }
             Text(
-                item.title,
+                displayTitle,
                 color = Color.White,
                 fontSize = if (isTelevision) 30.sp else 22.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -5078,10 +5115,10 @@ internal fun ExperienceLoading(label: String) {
 }
 
 @Composable
-internal fun ExperienceFailure(message: String, retry: () -> Unit) {
+internal fun ExperienceFailure(message: PlayarrMessage, retry: () -> Unit) {
     Box(Modifier.fillMaxSize().background(WebSurface), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(32.dp)) {
-            Text(message, color = MaterialTheme.colorScheme.error)
+            Text(playarrText(message), color = MaterialTheme.colorScheme.error)
             Button(onClick = retry) { Text(playarrString(PlayarrString.CommonTryAgain)) }
         }
     }
@@ -5255,37 +5292,45 @@ private fun WorkKind.playarrSingularLabel(): String = playarrString(
     },
 )
 
-@Composable
-private fun WorkKind.playarrPluralLabel(): String = playarrString(
-    when (this) {
+private fun WorkKind.playarrPluralKey(): PlayarrString = when (this) {
         WorkKind.Movie -> PlayarrString.WorkKindMovies
         WorkKind.Series -> PlayarrString.WorkKindSeries
         WorkKind.Site -> PlayarrString.WorkKindSites
         WorkKind.Artist -> PlayarrString.WorkKindMusic
         WorkKind.Author -> PlayarrString.WorkKindBooks
-    },
-)
+}
+
+@Composable
+private fun WorkKind.playarrPluralLabel(): String = playarrString(playarrPluralKey())
 
 @Composable
 private fun WorkKind.playarrCollectionNoun(): String = playarrString(
     if (this == WorkKind.Artist) PlayarrString.LibraryCollectionArtists else PlayarrString.LibraryCollectionTitles,
 )
 
-private fun WorkKind.label(): String = when (this) {
-    WorkKind.Movie -> "Movies"
-    WorkKind.Series -> "Series"
-    WorkKind.Site -> "Sites"
-    WorkKind.Artist -> "Music"
-    WorkKind.Author -> "Books"
-}
-
-private fun io.streamarr.shared.domain.model.StreamarrError.userMessageForExperience(subject: String): String = when (this) {
-    is io.streamarr.shared.domain.model.StreamarrError.Network -> "Can’t reach the Streamarr server. Check the server address and network."
-    is io.streamarr.shared.domain.model.StreamarrError.Http -> when (code) {
-        401 -> "Your session has expired. Sign in again."
-        403 -> "This account cannot access that $subject."
-        404 -> "That $subject could not be found."
-        else -> "The server returned error $code."
+private fun io.streamarr.shared.domain.model.StreamarrError.userMessageForExperience(
+    subject: PlayarrString,
+): PlayarrMessage = when (this) {
+    is io.streamarr.shared.domain.model.StreamarrError.Network -> {
+        PlayarrMessage.Localized(PlayarrString.ErrorServerUnreachable)
     }
-    is io.streamarr.shared.domain.model.StreamarrError.Unknown -> "Something went wrong loading $subject."
+    is io.streamarr.shared.domain.model.StreamarrError.Http -> when (code) {
+        401 -> PlayarrMessage.Localized(PlayarrString.ErrorSessionExpired)
+        403 -> PlayarrMessage.Localized(
+            PlayarrString.ErrorAccountCannotAccess,
+            mapOf("subject" to subject),
+        )
+        404 -> PlayarrMessage.Localized(
+            PlayarrString.ErrorSubjectNotFound,
+            mapOf("subject" to subject),
+        )
+        else -> PlayarrMessage.Localized(
+            PlayarrString.ErrorServerStatus,
+            mapOf("code" to code),
+        )
+    }
+    is io.streamarr.shared.domain.model.StreamarrError.Unknown -> PlayarrMessage.Localized(
+        PlayarrString.ErrorSomethingWrongLoading,
+        mapOf("subject" to subject),
+    )
 }

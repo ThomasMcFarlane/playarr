@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Localize Android-generated HTTP, loading, server-source, playback, and queue-title fallback
+  messages at render time while preserving upstream diagnostics across phone and television.
 - Localize Android parity-screen retry actions, match Web's decorative album-art semantics, and
   remove an unobservable playlist-success message that was immediately dismissed.
 - Remove Android mobile sign-in's inert back control and localize known Android TV link-start,

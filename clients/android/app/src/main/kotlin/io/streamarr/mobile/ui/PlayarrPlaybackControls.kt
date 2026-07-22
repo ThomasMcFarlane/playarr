@@ -12,7 +12,6 @@ internal data class PlayarrPlaybackControls(
     val subtitleTracks: List<PlaybackSubtitleTrackOption> = emptyList(),
     val selectedSubtitleTrackId: String? = null,
     val switching: Boolean = false,
-    val error: String? = null,
 )
 
 internal const val playarrAndroidContainers = "mp4,webm,mkv,mp3,flac,m4a,ogg,opus,wav"
