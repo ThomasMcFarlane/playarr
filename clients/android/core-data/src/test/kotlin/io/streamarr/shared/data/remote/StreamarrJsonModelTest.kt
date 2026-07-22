@@ -130,7 +130,11 @@ class StreamarrJsonModelTest {
                 "url": "/api/v1/media/mf-1/subtitles/3?source_offset_ms=0"
               }],
               "selected_subtitle_track_id": null,
-              "selected_quality_id": "original"
+              "selected_quality_id": "original",
+              "quality_options": [
+                {"id":"original","label":"Original","profile":null,"height":null,"video_bitrate_bps":null},
+                {"id":"h264-1080p-8mbps","label":"1080p · 8 Mbps","profile":"h264-1080p-8mbps","height":1080,"video_bitrate_bps":8000000}
+              ]
             }
             """.trimIndent(),
         )
@@ -139,6 +143,8 @@ class StreamarrJsonModelTest {
         assertEquals("s1", playback.sessionId)
         assertEquals(7_200_000L, playback.durationMs)
         assertEquals(1_200_000L, playback.sourceOffsetMs)
+        assertEquals("h264-1080p-8mbps", playback.qualityOptions.last().profile)
+        assertEquals(8_000_000L, playback.qualityOptions.last().videoBitrateBps)
         assertEquals("eng", playback.audioTracks.single().language)
         assertTrue(playback.subtitleTracks.single().forced)
         assertEquals("/api/v1/media/mf-1/subtitles/3?source_offset_ms=0", playback.subtitleTracks.single().url)

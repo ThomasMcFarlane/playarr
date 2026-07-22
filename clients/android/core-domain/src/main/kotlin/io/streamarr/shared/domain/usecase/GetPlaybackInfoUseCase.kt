@@ -25,6 +25,8 @@ class GetPlaybackInfoUseCase @Inject constructor(
         profile: String? = null,
         forceTranscode: Boolean? = null,
         startPositionMs: Long? = null,
+        audioStreamIndex: Int? = null,
+        ignoreSavedPreferences: Boolean? = null,
     ): StreamarrResult<PlaybackInfoResponse> = runCatchingStreamarr {
         playbackRepository.getPlaybackInfo(
             mediaFileId = mediaFileId,
@@ -35,6 +37,8 @@ class GetPlaybackInfoUseCase @Inject constructor(
             profile = profile,
             forceTranscode = forceTranscode,
             startPositionMs = startPositionMs,
+            audioStreamIndex = audioStreamIndex,
+            ignoreSavedPreferences = ignoreSavedPreferences,
         )
     }
 }

@@ -33,6 +33,16 @@ data class PlaybackInfoResponse(
     val subtitleTracks: List<PlaybackSubtitleTrackOption> = emptyList(),
     val selectedSubtitleTrackId: String? = null,
     val selectedQualityId: String = "original",
+    val qualityOptions: List<PlaybackQualityOption> = emptyList(),
+)
+
+@Serializable
+data class PlaybackQualityOption(
+    val id: String,
+    val label: String,
+    val profile: String? = null,
+    val height: Int? = null,
+    val videoBitrateBps: Long? = null,
 )
 
 @Serializable

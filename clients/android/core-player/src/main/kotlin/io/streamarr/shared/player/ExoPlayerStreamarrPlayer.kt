@@ -8,6 +8,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -125,6 +126,25 @@ class ExoPlayerStreamarrPlayer private constructor(
 
     override fun setPlaybackSpeed(speed: Float) {
         rawPlayer.playbackParameters = PlaybackParameters(speed)
+    }
+
+    override fun selectSubtitleTrack(trackId: String?) {
+        val parameters = rawPlayer.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, trackId == null)
+        if (trackId != null) {
+            rawPlayer.currentTracks.groups
+                .asSequence()
+                .filter { it.type == C.TRACK_TYPE_TEXT }
+                .mapNotNull { group ->
+                    (0 until group.length)
+                        .firstOrNull { index -> group.getTrackFormat(index).id == trackId }
+                        ?.let { index -> TrackSelectionOverride(group.mediaTrackGroup, index) }
+                }
+                .firstOrNull()
+                ?.let(parameters::setOverrideForType)
+        }
+        rawPlayer.trackSelectionParameters = parameters.build()
     }
 
     override fun release() {

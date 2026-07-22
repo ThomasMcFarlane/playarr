@@ -152,6 +152,8 @@ interface StreamarrApi {
         @Query("profile") profile: String? = null,
         @Query("force_transcode") forceTranscode: Boolean? = null,
         @Query("start_position_ms") startPositionMs: Long? = null,
+        @Query("audio_stream_index") audioStreamIndex: Int? = null,
+        @Query("ignore_saved_preferences") ignoreSavedPreferences: Boolean? = null,
     ): PlaybackInfoResponse
 
     @POST("api/v1/playback/sessions/{session_id}/events")

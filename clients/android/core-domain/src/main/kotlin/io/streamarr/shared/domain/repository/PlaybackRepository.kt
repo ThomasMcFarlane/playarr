@@ -22,6 +22,8 @@ interface PlaybackRepository {
         profile: String? = null,
         forceTranscode: Boolean? = null,
         startPositionMs: Long? = null,
+        audioStreamIndex: Int? = null,
+        ignoreSavedPreferences: Boolean? = null,
     ): PlaybackInfoResponse
 }
 
@@ -38,6 +40,8 @@ class DefaultPlaybackRepository @Inject constructor(
         profile: String?,
         forceTranscode: Boolean?,
         startPositionMs: Long?,
+        audioStreamIndex: Int?,
+        ignoreSavedPreferences: Boolean?,
     ): PlaybackInfoResponse = api.getPlaybackInfo(
         mediaFileId = mediaFileId,
         containers = containers,
@@ -47,5 +51,7 @@ class DefaultPlaybackRepository @Inject constructor(
         profile = profile,
         forceTranscode = forceTranscode,
         startPositionMs = startPositionMs,
+        audioStreamIndex = audioStreamIndex,
+        ignoreSavedPreferences = ignoreSavedPreferences,
     )
 }

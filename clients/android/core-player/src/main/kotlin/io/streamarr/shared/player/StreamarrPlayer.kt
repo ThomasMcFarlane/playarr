@@ -78,6 +78,7 @@ interface StreamarrPlayer {
     fun pause()
     fun seekTo(positionMs: Long)
     fun setPlaybackSpeed(speed: Float)
+    fun selectSubtitleTrack(trackId: String?)
 
     /** Releases the underlying player. Must be called from the owning screen's lifecycle teardown. */
     fun release()

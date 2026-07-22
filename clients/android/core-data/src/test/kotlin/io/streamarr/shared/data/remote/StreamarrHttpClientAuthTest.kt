@@ -113,10 +113,12 @@ class StreamarrHttpClientAuthTest {
                 profile = "h264-1080p-8mbps",
                 forceTranscode = true,
                 startPositionMs = 12_345,
+                audioStreamIndex = 2,
+                ignoreSavedPreferences = true,
             )
 
             assertEquals(
-                "/api/v1/playback/mf-1?profile=h264-1080p-8mbps&force_transcode=true&start_position_ms=12345",
+                "/api/v1/playback/mf-1?profile=h264-1080p-8mbps&force_transcode=true&start_position_ms=12345&audio_stream_index=2&ignore_saved_preferences=true",
                 server.takeRequest().path,
             )
         } finally {
