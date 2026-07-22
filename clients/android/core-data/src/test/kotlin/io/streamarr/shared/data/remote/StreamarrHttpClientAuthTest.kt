@@ -4,6 +4,8 @@ import io.streamarr.shared.data.model.ClientPlatform
 import io.streamarr.shared.data.model.AddPlaylistItemRequest
 import io.streamarr.shared.data.model.CreatePlaylistRequest
 import io.streamarr.shared.data.model.PlaylistMediaType
+import io.streamarr.shared.data.model.PlaybackEventRequest
+import io.streamarr.shared.data.model.PlaybackStopReason
 import io.streamarr.shared.data.model.UpdateWatchProgressRequest
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
@@ -116,6 +118,44 @@ class StreamarrHttpClientAuthTest {
             assertEquals(
                 "/api/v1/playback/mf-1?profile=h264-1080p-8mbps&force_transcode=true&start_position_ms=12345",
                 server.takeRequest().path,
+            )
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun `playback lifecycle events use the session route and exact tagged bodies`() = runBlocking {
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setResponseCode(204))
+        server.enqueue(MockResponse().setResponseCode(204))
+        server.start()
+        try {
+            val api = StreamarrHttpClient.create(
+                baseUrlProvider = { server.url("/").toString() },
+                clientPlatform = ClientPlatform.AndroidMobile,
+                clientVersion = "0.2.7",
+                accessTokenProvider = { "token" },
+            )
+
+            api.recordPlaybackEvent("session-1", PlaybackEventRequest.heartbeat(125_000L))
+            api.recordPlaybackEvent(
+                "session-1",
+                PlaybackEventRequest.stop(PlaybackStopReason.UserStopped, 130_000L),
+            )
+
+            val heartbeat = server.takeRequest()
+            assertEquals("/api/v1/playback/sessions/session-1/events", heartbeat.path)
+            assertEquals("POST", heartbeat.method)
+            assertEquals("Bearer token", heartbeat.headers["Authorization"])
+            assertEquals(
+                "{\"kind\":\"heartbeat\",\"position_ms\":125000,\"bytes_streamed_total\":0}",
+                heartbeat.body.readUtf8(),
+            )
+            val stop = server.takeRequest()
+            assertEquals(
+                "{\"kind\":\"stop\",\"position_ms\":130000,\"reason\":\"user_stopped\"}",
+                stop.body.readUtf8(),
             )
         } finally {
             server.close()

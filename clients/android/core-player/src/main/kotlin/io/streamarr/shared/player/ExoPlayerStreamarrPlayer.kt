@@ -42,6 +42,7 @@ class ExoPlayerStreamarrPlayer private constructor(
                 _state.update {
                     it.copy(
                         isBuffering = playbackState == Player.STATE_BUFFERING,
+                        hasEnded = playbackState == Player.STATE_ENDED,
                         durationMs = rawPlayer.duration.coerceAtLeast(0L),
                     )
                 }

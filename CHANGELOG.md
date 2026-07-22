@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Make Android report the same playback session heartbeat and terminal lifecycle as Playarr Web,
+  while mapping resumed on-demand HLS playheads back to absolute source time exactly once.
 - Resolve Android's server-relative direct-play and HLS paths against the selected Streamarr
   server before handing them to Media3, while preserving absolute peer URLs.
 - Send the current bearer token on Android live-player media and HLS requests by sharing the

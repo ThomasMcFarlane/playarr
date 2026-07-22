@@ -24,6 +24,10 @@ enum class PlaybackMode {
 data class PlaybackInfoResponse(
     val mode: PlaybackMode,
     val url: String,
+    val sessionId: String? = null,
+    val mimeType: String? = null,
+    val durationMs: Long = 0L,
+    val sourceOffsetMs: Long = 0L,
     val audioTracks: List<PlaybackAudioTrackOption> = emptyList(),
     val selectedAudioTrackId: String? = null,
     val subtitleTracks: List<PlaybackSubtitleTrackOption> = emptyList(),
@@ -53,3 +57,37 @@ data class PlaybackSubtitleTrackOption(
     val forced: Boolean = false,
     val url: String,
 )
+
+@Serializable
+data class PlaybackEventRequest(
+    val kind: PlaybackEventKind,
+    val positionMs: Long? = null,
+    val bytesStreamedTotal: Long? = null,
+    val reason: PlaybackStopReason? = null,
+    val message: String? = null,
+) {
+    companion object {
+        fun heartbeat(positionMs: Long) = PlaybackEventRequest(
+            kind = PlaybackEventKind.Heartbeat,
+            positionMs = positionMs,
+            bytesStreamedTotal = 0L,
+        )
+        fun stop(reason: PlaybackStopReason, positionMs: Long) =
+            PlaybackEventRequest(PlaybackEventKind.Stop, positionMs = positionMs, reason = reason)
+        fun error(message: String) = PlaybackEventRequest(PlaybackEventKind.Error, message = message)
+    }
+}
+
+@Serializable
+enum class PlaybackEventKind {
+    @SerialName("heartbeat") Heartbeat,
+    @SerialName("stop") Stop,
+    @SerialName("error") Error,
+}
+
+@Serializable
+enum class PlaybackStopReason {
+    @SerialName("completed") Completed,
+    @SerialName("user_stopped") UserStopped,
+    @SerialName("error") Error,
+}

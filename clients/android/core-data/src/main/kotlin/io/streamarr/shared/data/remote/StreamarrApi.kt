@@ -15,6 +15,7 @@ import io.streamarr.shared.data.model.OptionalUserInviteRequest
 import io.streamarr.shared.data.model.Playlist
 import io.streamarr.shared.data.model.PlaylistItem
 import io.streamarr.shared.data.model.PlaybackInfoResponse
+import io.streamarr.shared.data.model.PlaybackEventRequest
 import io.streamarr.shared.data.model.ProfileAvatarSetting
 import io.streamarr.shared.data.model.ProfilePinSetting
 import io.streamarr.shared.data.model.ReorderPlaylistItemsRequest
@@ -152,6 +153,12 @@ interface StreamarrApi {
         @Query("force_transcode") forceTranscode: Boolean? = null,
         @Query("start_position_ms") startPositionMs: Long? = null,
     ): PlaybackInfoResponse
+
+    @POST("api/v1/playback/sessions/{session_id}/events")
+    suspend fun recordPlaybackEvent(
+        @Path("session_id") sessionId: String,
+        @Body request: PlaybackEventRequest,
+    )
 
     @GET("api/v1/playback/progress")
     suspend fun listWatchProgress(): List<WatchProgress>

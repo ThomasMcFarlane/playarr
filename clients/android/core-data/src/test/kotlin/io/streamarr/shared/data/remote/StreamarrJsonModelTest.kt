@@ -115,6 +115,10 @@ class StreamarrJsonModelTest {
             {
               "mode": "direct",
               "url": "/api/v1/media/mf-1/stream?playback_session_id=s1",
+              "session_id": "s1",
+              "mime_type": "video/mp4",
+              "duration_ms": 7200000,
+              "source_offset_ms": 1200000,
               "audio_tracks": [{
                 "id": "source-audio-2", "stream_index": 2, "label": "English 5.1",
                 "language": "eng", "codec": "ac3", "channels": 6, "is_default": true
@@ -132,6 +136,9 @@ class StreamarrJsonModelTest {
         )
 
         assertEquals("source-audio-2", playback.selectedAudioTrackId)
+        assertEquals("s1", playback.sessionId)
+        assertEquals(7_200_000L, playback.durationMs)
+        assertEquals(1_200_000L, playback.sourceOffsetMs)
         assertEquals("eng", playback.audioTracks.single().language)
         assertTrue(playback.subtitleTracks.single().forced)
         assertEquals("/api/v1/media/mf-1/subtitles/3?source_offset_ms=0", playback.subtitleTracks.single().url)

@@ -4,6 +4,7 @@ package io.streamarr.shared.player
 data class PlaybackState(
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
+    val hasEnded: Boolean = false,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val bufferedPercentage: Int = 0,

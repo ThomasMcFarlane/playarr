@@ -112,6 +112,8 @@ import io.streamarr.mobile.R
 import io.streamarr.shared.auth.TokenStore
 import io.streamarr.shared.data.model.ImageKind
 import io.streamarr.shared.data.model.Playlist
+import io.streamarr.shared.data.model.PlaybackEventRequest
+import io.streamarr.shared.data.model.PlaybackStopReason
 import io.streamarr.shared.data.model.ProfileAvatarPreference
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
@@ -140,7 +142,9 @@ import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -148,6 +152,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 private data class WebPalette(
     val background: Color,
@@ -1737,10 +1743,42 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     private val _state = MutableStateFlow<ExperienceLoad<Unit>>(ExperienceLoad.Loading)
     val state = _state.asStateFlow()
     private var activeMediaFileId: String? = null
+    private var activeSessionId: String? = null
+    private var activeSourceOffsetMs = 0L
+    private var activeSourceDurationMs = 0L
+    private var previousPlayerState = player.state.value
+    private val telemetryMutex = Mutex()
+
+    init {
+        viewModelScope.launch {
+            player.state.collect { current ->
+                val previous = previousPlayerState
+                val currentError = current.error
+                previousPlayerState = current
+                if (activeSessionId == null) return@collect
+
+                when {
+                    current.hasEnded && !previous.hasEnded -> {
+                        persistProgress(completed = true)
+                        closeActiveSession(PlaybackStopReason.Completed)
+                    }
+                    currentError != null && previous.error == null -> {
+                        persistProgress()
+                        closeActiveSession(PlaybackStopReason.Error, currentError.message)
+                    }
+                    previous.isPlaying && !current.isPlaying && !current.isBuffering -> checkpoint()
+                }
+            }
+        }
+    }
 
     fun play(mediaFileId: String, serverUrl: String, defaults: PlayarrPlayerDefaults) {
         viewModelScope.launch {
+            if (activeMediaFileId != null) persistProgress(ensureCompletion = true)
+            closeActiveSession(PlaybackStopReason.UserStopped)
             activeMediaFileId = mediaFileId
+            activeSourceOffsetMs = 0L
+            activeSourceDurationMs = 0L
             _state.value = ExperienceLoad.Loading
             val resumePosition = runCatching { api.getWatchProgress(mediaFileId) }
                 .getOrNull()
@@ -1768,6 +1806,9 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                 startPositionMs = resumePosition,
             )) {
                 is StreamarrResult.Success -> {
+                    activeSessionId = result.value.sessionId
+                    activeSourceOffsetMs = result.value.sourceOffsetMs.coerceAtLeast(0L)
+                    activeSourceDurationMs = result.value.durationMs.coerceAtLeast(0L)
                     val selectedSubtitleId = result.value.selectedSubtitleTrackId
                         ?: selectPlayarrDefaultSubtitleTrackId(result.value.subtitleTracks, defaults)
                     val selectedAudioLanguage = result.value.audioTracks
@@ -1776,7 +1817,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                     player.prepare(
                         resolveStreamarrPlaybackUrl(serverUrl, result.value.url),
                         if (result.value.mode == io.streamarr.shared.data.model.PlaybackMode.Hls) StreamFormat.Hls else StreamFormat.Direct,
-                        resumePosition,
+                        playarrEnginePositionMs(resumePosition, activeSourceOffsetMs),
                         subtitles = result.value.subtitleTracks.map { subtitle ->
                             StreamarrSubtitleTrack(
                                 id = subtitle.id,
@@ -1791,6 +1832,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                         preferredAudioLanguage = selectedAudioLanguage,
                         preferredSubtitleLanguage = defaults.subtitleLanguage,
                     )
+                    previousPlayerState = player.state.value
                     player.play()
                     ExperienceLoad.Ready(Unit)
                 }
@@ -1799,12 +1841,13 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         }
     }
 
-    fun persistProgress(completed: Boolean = false) {
+    fun persistProgress(completed: Boolean = false, ensureCompletion: Boolean = false) {
         val mediaFileId = activeMediaFileId ?: return
-        val position = player.rawPlayer.currentPosition.coerceAtLeast(0L)
-        val duration = player.rawPlayer.duration.coerceAtLeast(0L)
+        val position = currentSourcePositionMs()
+        val duration = currentSourceDurationMs()
         if (duration <= 0L) return
-        viewModelScope.launch {
+        val context = if (ensureCompletion) Dispatchers.IO + NonCancellable else Dispatchers.IO
+        viewModelScope.launch(context) {
             // Buffers locally (see OfflineProgressRepository) rather than
             // silently dropping the update when this device has no
             // network right now -- the expected case while watching a
@@ -1813,9 +1856,56 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         }
     }
 
-    override fun onCleared() {
+    fun checkpoint() {
         persistProgress()
+        val sessionId = activeSessionId ?: return
+        recordEvent(sessionId, PlaybackEventRequest.heartbeat(currentSourcePositionMs()))
+    }
+
+    fun stopPlayback() {
+        persistProgress(ensureCompletion = true)
+        closeActiveSession(PlaybackStopReason.UserStopped)
         player.pause()
+    }
+
+    private fun currentSourcePositionMs(): Long = playarrSourcePositionMs(
+        enginePositionMs = player.rawPlayer.currentPosition,
+        sourceOffsetMs = activeSourceOffsetMs,
+        sourceDurationMs = currentSourceDurationMs(),
+    )
+
+    private fun currentSourceDurationMs(): Long = activeSourceDurationMs.takeIf { it > 0L }
+        ?: player.rawPlayer.duration.coerceAtLeast(0L).let { engineDuration ->
+            if (engineDuration > 0L) engineDuration + activeSourceOffsetMs else 0L
+        }
+
+    private fun recordEvent(sessionId: String, event: PlaybackEventRequest) {
+        viewModelScope.launch(Dispatchers.IO) {
+            telemetryMutex.withLock {
+                runCatching { api.recordPlaybackEvent(sessionId, event) }
+            }
+        }
+    }
+
+    private fun closeActiveSession(reason: PlaybackStopReason, errorMessage: String? = null) {
+        val sessionId = activeSessionId ?: return
+        activeSessionId = null
+        val position = currentSourcePositionMs()
+        val terminal = if (reason == PlaybackStopReason.Error) {
+            PlaybackEventRequest.error(errorMessage ?: "Player entered a terminal error state")
+        } else {
+            PlaybackEventRequest.stop(reason, position)
+        }
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+            telemetryMutex.withLock {
+                runCatching { api.recordPlaybackEvent(sessionId, PlaybackEventRequest.heartbeat(position)) }
+                runCatching { api.recordPlaybackEvent(sessionId, terminal) }
+            }
+        }
+    }
+
+    override fun onCleared() {
+        stopPlayback()
     }
 }
 
@@ -1833,7 +1923,7 @@ private fun ExperiencePlayerScreen(
         if (state !is ExperienceLoad.Ready) return@LaunchedEffect
         while (true) {
             kotlinx.coroutines.delay(10_000)
-            viewModel.persistProgress()
+            viewModel.checkpoint()
         }
     }
     Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
@@ -1847,7 +1937,7 @@ private fun ExperiencePlayerScreen(
                 factory = { context -> androidx.media3.ui.PlayerView(context).apply { player = viewModel.player.rawPlayer; useController = true } },
             )
         }
-        IconButton(onClick = { viewModel.persistProgress(); onBack() }, modifier = Modifier.align(Alignment.TopStart).windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp).background(Color.Black.copy(alpha = 0.55f), CircleShape)) {
+        IconButton(onClick = { viewModel.stopPlayback(); onBack() }, modifier = Modifier.align(Alignment.TopStart).windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp).background(Color.Black.copy(alpha = 0.55f), CircleShape)) {
             Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = Color.White)
         }
     }
