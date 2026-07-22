@@ -33,7 +33,7 @@
 //! established `UserInviteResponse`/`UserInviteRequestResponse`
 //! precedent) are hand-mirrored field-by-field.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use axum::extract::{Path, Query, State};
@@ -45,7 +45,7 @@ use streamarr_catalog::WorkChildren;
 use streamarr_db::SyncMetadata;
 use streamarr_model::{
     Availability, ExternalProvider, GroupLibrary, LeafSelector, PeerAddress, PeerGroup, PeerNode,
-    PeerNodeStatus, Policy, RoutingRule, SourceInstanceIdentity, User, UserInvite,
+    PeerNodeStatus, Policy, RoutingRule, SourceInstanceSyncRow, User, UserInvite,
     UserInviteRequest, UserInviteRequestStatus, WorkKind,
 };
 use utoipa::ToSchema;
@@ -297,6 +297,16 @@ async fn this_node_group_id(state: &AppState) -> Result<Uuid, ApiError> {
                 "this node has no peer group, but received a validly peer-signed request",
             )
         })
+}
+
+async fn this_node_peer_id(state: &AppState) -> Result<Uuid, ApiError> {
+    state
+        .node_identity_repo
+        .get()
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to load node identity: {err}")))?
+        .map(|identity| identity.peer_id)
+        .ok_or_else(|| ApiError::internal("node identity is missing"))
 }
 
 // ---------------------------------------------------------------------
@@ -653,16 +663,16 @@ pub async fn invites_handler(
 // ---------------------------------------------------------------------
 
 /// Response body for [`libraries_handler`] -- `docs/architecture/
-/// peer-groups.md` §3.6: credential-free `source_instances` identity rows
-/// plus `group_libraries`.
+/// peer-groups.md` §3.6: complete `source_instances` rows plus
+/// `group_libraries`.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct LibrariesResponse {
-    pub source_instances: Vec<SourceInstanceIdentity>,
+    pub source_instances: Vec<SourceInstanceSyncRow>,
     pub group_libraries: Vec<GroupLibrary>,
     pub server_time: String,
 }
 
-/// This node's own `source_instances` (identity only) + this group's
+/// This node's own complete `source_instances` + this group's
 /// `group_libraries`, both updated since `since` -- the read behind
 /// `streamarr_peer_sync::account_sync::sync_libraries`.
 #[utoipa::path(
@@ -671,7 +681,7 @@ pub struct LibrariesResponse {
     tag = "peer-groups",
     params(SinceQueryParams),
     responses(
-        (status = 200, description = "source_instances identity rows + group_libraries updated since the given cursor", body = LibrariesResponse),
+        (status = 200, description = "source_instances + group_libraries updated since the given cursor", body = LibrariesResponse),
         (status = 400, description = "Malformed since cursor"),
         (status = 401, description = "Missing/invalid peer signature, or an unknown/left peer")
     )
@@ -683,6 +693,7 @@ pub async fn libraries_handler(
 ) -> Result<Json<LibrariesResponse>, ApiError> {
     let since = parse_since(params.since.as_deref())?;
     let now = Utc::now();
+    let self_peer_id = this_node_peer_id(&state).await?;
 
     let source_instances = state
         .source_instance_repo
@@ -694,14 +705,13 @@ pub async fn libraries_handler(
             ))
         })?
         .into_iter()
-        .map(|(instance, metadata)| SourceInstanceIdentity {
-            id: instance.id,
-            kind: instance.kind,
-            name: instance.name,
-            priority: instance.priority,
-            group_library_id: instance.group_library_id,
-            updated_at: metadata.updated_at,
-            deleted_at: metadata.deleted_at,
+        .map(|(instance, metadata)| {
+            SourceInstanceSyncRow::from_instance(
+                instance,
+                metadata.updated_at,
+                metadata.origin_peer_id.or(Some(self_peer_id)),
+                metadata.deleted_at,
+            )
         })
         .collect();
 
@@ -1078,7 +1088,7 @@ pub async fn push_sync_handler(
         &state.user_repo,
         &state.policy_repo,
         &state.group_library_repo,
-        &state.peer_source_instance_repo,
+        &state.source_instance_repo,
         &state.user_invite_repo,
         &state.user_invite_request_repo,
         &state.work_repo,
@@ -1089,6 +1099,22 @@ pub async fn push_sync_handler(
     )
     .await
     .map_err(|err| ApiError::internal(format!("failed to apply peer sync push: {err}")))?;
+
+    // Make pushed rows visible through the normal Admin source endpoint
+    // immediately, without waiting for the worker supervisor's next tick.
+    let active =
+        state.source_instance_repo.list_all().await.map_err(|err| {
+            ApiError::internal(format!("failed to refresh source instances: {err}"))
+        })?;
+    let active_ids: HashSet<Uuid> = active.iter().map(|instance| instance.id).collect();
+    for instance in active {
+        state.source_instances.upsert(instance);
+    }
+    for existing in state.source_instances.all() {
+        if !active_ids.contains(&existing.id) {
+            state.source_instances.remove(existing.id);
+        }
+    }
 
     Ok(Json(response))
 }
@@ -1102,6 +1128,7 @@ async fn build_push_request(
     let now = Utc::now();
     let server_time = cursor(now);
     let group_id = this_node_group_id(state).await?;
+    let self_peer_id = this_node_peer_id(state).await?;
 
     let membership = membership_sync::NodesResponse {
         rows: state
@@ -1159,14 +1186,13 @@ async fn build_push_request(
             .await
             .map_err(|err| ApiError::internal(format!("failed to list source instances: {err}")))?
             .into_iter()
-            .map(|(instance, metadata)| SourceInstanceIdentity {
-                id: instance.id,
-                kind: instance.kind,
-                name: instance.name,
-                priority: instance.priority,
-                group_library_id: instance.group_library_id,
-                updated_at: metadata.updated_at,
-                deleted_at: metadata.deleted_at,
+            .map(|(instance, metadata)| {
+                SourceInstanceSyncRow::from_instance(
+                    instance,
+                    metadata.updated_at,
+                    metadata.origin_peer_id.or(Some(self_peer_id)),
+                    metadata.deleted_at,
+                )
             })
             .collect(),
         group_libraries: state
@@ -2143,7 +2169,7 @@ mod sync_endpoint_tests {
     }
 
     #[tokio::test]
-    async fn libraries_handler_returns_identity_only_source_instances_and_group_libraries() {
+    async fn libraries_handler_returns_complete_source_instances_and_group_libraries() {
         let (router, state) = test_state().await;
         let peer_id = Uuid::new_v4();
         let key = signing_key();
@@ -2191,11 +2217,6 @@ mod sync_endpoint_tests {
             .await
             .unwrap();
         let raw = String::from_utf8(bytes.to_vec()).unwrap();
-        assert!(
-            !raw.contains("super-secret-api-key") && !raw.contains("radarr.internal.example"),
-            "api_key_encrypted/base_url must never appear on the wire: {raw}"
-        );
-
         let body: serde_json::Value = serde_json::from_str(&raw).unwrap();
         let instances = body["source_instances"].as_array().unwrap();
         let wire_instance = instances
@@ -2208,8 +2229,23 @@ mod sync_endpoint_tests {
             wire_instance["group_library_id"],
             group_library_id.to_string()
         );
-        assert!(wire_instance.get("base_url").is_none());
-        assert!(wire_instance.get("api_key_encrypted").is_none());
+        assert_eq!(
+            wire_instance["base_url"],
+            "https://radarr.internal.example"
+        );
+        assert_eq!(wire_instance["api_key_encrypted"], "super-secret-api-key");
+        let self_peer_id = state
+            .app
+            .node_identity_repo
+            .get()
+            .await
+            .unwrap()
+            .unwrap()
+            .peer_id;
+        assert_eq!(
+            wire_instance["origin_peer_id"],
+            self_peer_id.to_string()
+        );
 
         let libraries = body["group_libraries"].as_array().unwrap();
         assert!(libraries

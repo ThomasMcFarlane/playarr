@@ -10,8 +10,8 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use streamarr_db::{
-    GroupLibraryRepo, PeerLeafAvailabilityRepo, PeerNodeRepo, PeerSourceInstanceRepo,
-    PeerSyncStateRepo, PolicyRepo, RoutingRuleRepo, SyncConflictLogRepo, UserInviteRepo,
+    GroupLibraryRepo, PeerLeafAvailabilityRepo, PeerNodeRepo, PeerSyncStateRepo, PolicyRepo,
+    RoutingRuleRepo, SourceInstanceRepo, SyncConflictLogRepo, UserInviteRepo,
     UserInviteRequestRepo, UserRepo, WorkRepo,
 };
 use uuid::Uuid;
@@ -56,7 +56,7 @@ pub async fn apply_push(
     user_repo: &Arc<dyn UserRepo>,
     policy_repo: &Arc<dyn PolicyRepo>,
     group_library_repo: &Arc<dyn GroupLibraryRepo>,
-    peer_source_instance_repo: &Arc<dyn PeerSourceInstanceRepo>,
+    source_instance_repo: &Arc<dyn SourceInstanceRepo>,
     user_invite_repo: &Arc<dyn UserInviteRepo>,
     user_invite_request_repo: &Arc<dyn UserInviteRequestRepo>,
     work_repo: &Arc<dyn WorkRepo>,
@@ -95,7 +95,7 @@ pub async fn apply_push(
         source_peer_id,
         self_peer_id,
         group_library_repo,
-        peer_source_instance_repo,
+        source_instance_repo,
         sync_state_repo,
         conflict_log_repo,
     )

@@ -43,10 +43,8 @@ use axum::http::{Request, StatusCode};
 use serde_json::json;
 use streamarr_coordination::{ClusterCoordinator, SingleNodeCoordinator};
 use streamarr_db::repo::{
-    SqlxPeerLeafAvailabilityRepo, SqlxPeerSourceInstanceRepo, SqlxPeerSyncStateRepo,
-    SqlxSyncConflictLogRepo,
+    SqlxPeerLeafAvailabilityRepo, SqlxPeerSyncStateRepo, SqlxSyncConflictLogRepo,
 };
-use streamarr_db::PeerSourceInstanceRepo;
 use streamarr_model::{Policy, Sensitive, SourceInstance, SourceKind, User};
 use streamarr_peer_sync::{PeerClient, PeerIdentity, PeerSyncPoller};
 use tower::ServiceExt;
@@ -336,7 +334,6 @@ async fn two_peer_nodes_join_and_sync_over_the_real_wire_protocol() {
     let peer_client = PeerClient::new(reqwest::Client::new(), peer_identity_b);
     let coordinator: Arc<dyn ClusterCoordinator> = Arc::new(SingleNodeCoordinator::new());
     let availability_repo = Arc::new(SqlxPeerLeafAvailabilityRepo::new(state_b.pool.clone()));
-    let peer_source_instance_repo = Arc::new(SqlxPeerSourceInstanceRepo::new(state_b.pool.clone()));
     let sync_state_repo = Arc::new(SqlxPeerSyncStateRepo::new(state_b.pool.clone()));
     let conflict_log_repo = Arc::new(SqlxSyncConflictLogRepo::new(state_b.pool.clone()));
 
@@ -355,7 +352,7 @@ async fn two_peer_nodes_join_and_sync_over_the_real_wire_protocol() {
         state_b.app.user_repo.clone(),
         state_b.app.policy_repo.clone(),
         state_b.app.group_library_repo.clone(),
-        peer_source_instance_repo.clone(),
+        state_b.app.source_instance_repo.clone(),
         state_b.app.user_invite_repo.clone(),
         state_b.app.user_invite_request_repo.clone(),
         state_b.app.work_repo.clone(),
@@ -373,10 +370,7 @@ async fn two_peer_nodes_join_and_sync_over_the_real_wire_protocol() {
     let synced_user = tokio::time::timeout(StdDuration::from_secs(10), async {
         loop {
             let user = state_b.app.user_repo.find_by_id(new_user.id).await.unwrap();
-            let sources = peer_source_instance_repo
-                .list_for_peer(node_a_peer_id.parse().unwrap())
-                .await
-                .unwrap();
+            let sources = state_b.app.source_instance_repo.list_all().await.unwrap();
             if let Some(user) = user {
                 if sources.iter().any(|source| source.id == source_instance.id) {
                     return user;
@@ -386,7 +380,7 @@ async fn two_peer_nodes_join_and_sync_over_the_real_wire_protocol() {
         }
     })
     .await
-    .expect("node A's new user and source identity must reach node B in one real sync cycle");
+    .expect("node A's new user and complete source must reach node B in one real sync cycle");
     poller_handle.abort();
 
     assert_eq!(synced_user.username, "synced-user");

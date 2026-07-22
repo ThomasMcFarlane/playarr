@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Replicate complete source-instance configurations into every peer's normal source list so
+  synced sources remain visible and usable instead of being isolated as identity-only records.
 - Reuse the configured SQLite busy-timeout value during connection initialisation, keeping
   database builds free of a dead-code warning.
 - Run file-backed SQLite pools in WAL mode with a 30-second busy timeout so concurrent peer,
@@ -24,8 +26,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   responsive layouts.
 - Let peer nodes publish signed, incremental sync pages as well as pull them, so two-way
   convergence continues when one node can make outbound requests but cannot accept inbound ones.
-- Synchronise credential-free source-instance identities and deletion tombstones across peer-group
-  nodes while keeping each node's source URLs, API keys, and reconciliation settings local.
+- Synchronise complete source-instance configurations and deletion tombstones across peer-group
+  nodes through authenticated, signed peer requests.
 - Offer Low, Medium, and High playback bitrates across SD, HD, FHD, and UHD tiers in a
   three-column quality matrix shared by the live player and Player settings.
 - Let Playarr viewers switch home rails between thumbnail and cover artwork, add depth to media

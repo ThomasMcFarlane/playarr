@@ -1,6 +1,6 @@
 //! Syncs `users`/`policies` (via `GET /api/v1/peer/accounts`),
 //! `user_invites`/`user_invite_requests` (via `GET /api/v1/peer/invites`),
-//! and credential-free source-instance identities plus `group_libraries`
+//! and complete source-instance configurations plus `group_libraries`
 //! (via `GET /api/v1/peer/libraries`) --
 //! `docs/architecture/peer-groups.md` §3.5/§3.6.
 //!
@@ -74,11 +74,11 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use streamarr_db::{
-    GroupLibraryRepo, PeerSourceInstanceRepo, PolicyRepo, SyncConflictLog, SyncConflictLogRepo,
+    GroupLibraryRepo, PolicyRepo, SourceInstanceRepo, SyncConflictLog, SyncConflictLogRepo,
     SyncMetadata, UserInviteRepo, UserInviteRequestRepo, UserRepo,
 };
 use streamarr_model::{
-    GroupLibrary, Policy, SourceInstanceIdentity, User, UserInvite, UserInviteRequest,
+    GroupLibrary, Policy, SourceInstanceSyncRow, User, UserInvite, UserInviteRequest,
 };
 use uuid::Uuid;
 
@@ -140,13 +140,12 @@ pub struct InvitesResponse {
 }
 
 /// Wire shape of `GET /api/v1/peer/libraries?since=`'s response body.
-/// Source identities deliberately exclude URLs, API keys, and every other
-/// node-local reconciliation setting; the receiving node stores them in a
-/// dedicated peer cache rather than its own configured `source_instances`.
+/// Source rows carry the complete usable connection configuration. This DTO
+/// is only exchanged over authenticated, signed peer endpoints.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LibrariesResponse {
     #[serde(default)]
-    pub source_instances: Vec<SourceInstanceIdentity>,
+    pub source_instances: Vec<SourceInstanceSyncRow>,
     pub group_libraries: Vec<GroupLibrary>,
     pub server_time: String,
 }
@@ -647,7 +646,7 @@ pub async fn apply_invites_response(
     Ok(outcome)
 }
 
-/// Syncs credential-free source-instance identities and `group_libraries`
+/// Syncs complete source instances and `group_libraries`
 /// from `base_url`'s `GET /api/v1/peer/libraries`. Both use plain LWW by
 /// `updated_at`; neither has a privilege-bearing field requiring origin
 /// gating (§3.5).
@@ -657,7 +656,7 @@ pub async fn sync_libraries(
     peer_node_id: Uuid,
     self_peer_id: Uuid,
     group_library_repo: &Arc<dyn GroupLibraryRepo>,
-    peer_source_instance_repo: &Arc<dyn PeerSourceInstanceRepo>,
+    source_instance_repo: &Arc<dyn SourceInstanceRepo>,
     sync_state_repo: &Arc<dyn streamarr_db::PeerSyncStateRepo>,
     conflict_log_repo: &Arc<dyn SyncConflictLogRepo>,
 ) -> Result<usize, AccountSyncError> {
@@ -677,7 +676,7 @@ pub async fn sync_libraries(
         peer_node_id,
         self_peer_id,
         group_library_repo,
-        peer_source_instance_repo,
+        source_instance_repo,
         sync_state_repo,
         conflict_log_repo,
     )
@@ -690,7 +689,7 @@ pub async fn apply_libraries_response(
     peer_node_id: Uuid,
     self_peer_id: Uuid,
     group_library_repo: &Arc<dyn GroupLibraryRepo>,
-    peer_source_instance_repo: &Arc<dyn PeerSourceInstanceRepo>,
+    source_instance_repo: &Arc<dyn SourceInstanceRepo>,
     sync_state_repo: &Arc<dyn streamarr_db::PeerSyncStateRepo>,
     conflict_log_repo: &Arc<dyn SyncConflictLogRepo>,
 ) -> Result<usize, AccountSyncError> {
@@ -722,35 +721,46 @@ pub async fn apply_libraries_response(
         }
     }
 
-    for instance in &response.source_instances {
-        let existing = peer_source_instance_repo
-            .get(peer_node_id, instance.id)
-            .await?;
-        match existing {
-            None => {
-                peer_source_instance_repo
-                    .upsert(peer_node_id, instance)
-                    .await?;
-                applied += 1;
-            }
-            Some(existing_row) if instance.updated_at > existing_row.updated_at => {
-                peer_source_instance_repo
-                    .upsert(peer_node_id, instance)
-                    .await?;
-                applied += 1;
-            }
-            Some(_) => {
-                conflict_log_repo
-                    .create(&conflict_log(
-                        "source_instance",
-                        instance.id,
-                        self_peer_id,
-                        peer_node_id,
-                        serde_json::to_string(instance)?,
-                        false,
-                    ))
-                    .await?;
-            }
+    for row in &response.source_instances {
+        let Some(instance) = row.clone().into_instance() else {
+            // Rolling-upgrade compatibility: older peers send identity-only
+            // rows. Do not turn them into unusable normal source instances.
+            continue;
+        };
+        let metadata = SyncMetadata {
+            updated_at: row.updated_at,
+            origin_peer_id: row.origin_peer_id.or(Some(peer_node_id)),
+            deleted_at: row.deleted_at,
+        };
+        let existing = source_instance_repo.get_sync_metadata(instance.id).await?;
+        if existing
+            .as_ref()
+            .is_none_or(|local| metadata.updated_at > local.updated_at)
+        {
+            source_instance_repo
+                .apply_synced(&instance, metadata)
+                .await?;
+            applied += 1;
+        } else {
+            // Never place the connection URL or API key in the conflict log.
+            let redacted = serde_json::json!({
+                "id": row.id,
+                "kind": row.kind,
+                "name": row.name,
+                "updated_at": row.updated_at,
+                "origin_peer_id": row.origin_peer_id,
+                "deleted_at": row.deleted_at,
+            });
+            conflict_log_repo
+                .create(&conflict_log(
+                    "source_instance",
+                    instance.id,
+                    self_peer_id,
+                    peer_node_id,
+                    redacted.to_string(),
+                    false,
+                ))
+                .await?;
         }
     }
 
@@ -1033,7 +1043,7 @@ mod tests {
         user_repo: Arc<dyn UserRepo>,
         policy_repo: Arc<dyn PolicyRepo>,
         group_library_repo: Arc<dyn GroupLibraryRepo>,
-        peer_source_instance_repo: Arc<dyn PeerSourceInstanceRepo>,
+        source_instance_repo: Arc<dyn SourceInstanceRepo>,
         invite_repo: Arc<dyn UserInviteRepo>,
         invite_request_repo: Arc<dyn UserInviteRequestRepo>,
         sync_state_repo: Arc<dyn streamarr_db::PeerSyncStateRepo>,
@@ -1055,9 +1065,9 @@ mod tests {
             group_library_repo: Arc::new(streamarr_db::repo::SqlxGroupLibraryRepo::new(
                 pool.clone(),
             )),
-            peer_source_instance_repo: Arc::new(
-                streamarr_db::repo::SqlxPeerSourceInstanceRepo::new(pool.clone()),
-            ),
+            source_instance_repo: Arc::new(streamarr_db::repo::SqlxSourceInstanceRepo::new(
+                pool.clone(),
+            )),
             invite_repo: Arc::new(streamarr_db::repo::SqlxUserInviteRepo::new(pool.clone())),
             invite_request_repo: Arc::new(streamarr_db::repo::SqlxUserInviteRequestRepo::new(
                 pool.clone(),
@@ -1672,7 +1682,10 @@ mod tests {
                     "id": source_instance_id,
                     "kind": "radarr",
                     "name": "Remote Radarr",
+                    "base_url": "https://radarr.example.test",
+                    "api_key_encrypted": "test-api-key",
                     "priority": 2,
+                    "best_effort": false,
                     "group_library_id": new_library_id,
                     "updated_at": now,
                     "deleted_at": null,
@@ -1698,7 +1711,7 @@ mod tests {
             peer_node_id,
             self_peer_id,
             &harness.group_library_repo,
-            &harness.peer_source_instance_repo,
+            &harness.source_instance_repo,
             &harness.sync_state_repo,
             &harness.conflict_log_repo,
         )
@@ -1712,15 +1725,16 @@ mod tests {
             .await
             .unwrap()
             .is_some());
-        let remote_sources = harness
-            .peer_source_instance_repo
-            .list_for_peer(peer_node_id)
-            .await
-            .unwrap();
+        let remote_sources = harness.source_instance_repo.list_all().await.unwrap();
         assert_eq!(remote_sources.len(), 1);
         assert_eq!(remote_sources[0].id, source_instance_id);
         assert_eq!(remote_sources[0].kind, SourceKind::Radarr);
         assert_eq!(remote_sources[0].name, "Remote Radarr");
+        assert_eq!(remote_sources[0].base_url, "https://radarr.example.test");
+        assert_eq!(
+            remote_sources[0].api_key_encrypted.expose_secret(),
+            "test-api-key"
+        );
         assert_eq!(remote_sources[0].group_library_id, Some(new_library_id));
         let stale = harness
             .group_library_repo

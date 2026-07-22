@@ -302,6 +302,7 @@ ALTER TABLE policies ADD COLUMN deleted_at TEXT;
 ALTER TABLE policies ADD COLUMN origin_peer_id TEXT;
 ALTER TABLE source_instances ADD COLUMN updated_at TEXT;
 ALTER TABLE source_instances ADD COLUMN deleted_at TEXT;
+ALTER TABLE source_instances ADD COLUMN origin_peer_id TEXT;
 -- Backfill: every existing row's updated_at becomes its created_at (or
 -- now() where no created_at exists), so no existing row appears
 -- "just written" the moment sync turns on.
@@ -527,12 +528,12 @@ Added to the workspace `Cargo.toml` members list alongside the other
 
 | Syncs across the group | Stays node-local |
 |---|---|
-| `peer_groups` / `peer_nodes` (membership, gossip) | `SourceInstance.api_key_encrypted`, `base_url`: each node's own *arr credentials never leave it |
+| `peer_groups` / `peer_nodes` (membership, gossip) | Local runtime state and peer-sync cursors |
 | `users` (incl. `password_hash`: already a hash, replicating it is exactly what makes a password valid on every node), `policies` | `Device`, `Session` rows (bound to wherever the login happened) |
 | `user_invites`, `user_invite_requests` | `RefreshTokenRecord` / refresh-token families: explicitly not synced, §3.7 |
 | the managed-profile PIN table backing `ProfilePinRepo` (so PIN login works from any node) | RFC 8628 `DeviceAuthorization` pending state: explicitly not synced, §3.8/§6.3 |
 | `group_libraries`, `routing_rules` | `Work`, `MediaFile`, `Rendition` rows themselves: explicitly not synced, §4.1 |
-| `source_instances` **identity only** (id, kind, name, priority, `group_library_id`): never `api_key_encrypted` | `MediaFile.path` (filesystem path, meaningless/sensitive off-node) |
+| complete `source_instances` rows, including connection configuration and tombstones | `MediaFile.path` (filesystem path, meaningless/sensitive off-node) |
 | `peer_leaf_availability` (derived, read-only per peer) | `WatchProgress`, playback analytics, `TranscodeSession`/`cluster_leader` (Tier-2/3-local coordination, unrelated axis) |
 
 ### 3.2 Why a new crate, not a module in `streamarr-arr-sync`
@@ -716,7 +717,7 @@ token instead):
 | `GET /api/v1/peer/nodes` | full `peer_nodes` (small; always full-refresh gossip) |
 | `GET /api/v1/peer/accounts?since=` | `{users, policies}` upserts/tombstones |
 | `GET /api/v1/peer/invites?since=` | `user_invites`/`user_invite_requests` rows |
-| `GET /api/v1/peer/libraries?since=` | `source_instances` identity-only rows (no `api_key_encrypted`) + `group_libraries` |
+| `GET /api/v1/peer/libraries?since=` | complete `source_instances` rows + `group_libraries`; connection secrets are confined to this authenticated, signed peer endpoint |
 | `GET /api/v1/peer/availability?since=` | this peer's own `peer_leaf_availability`-shaped rows, derived live from its own `MediaFileRepo` |
 | `GET /api/v1/peer/routing-rules?since=` | `routing_rules` rows |
 | `POST /api/v1/peer/sync-push` | applies the caller's incremental entity pages through the normal pull merge rules |
@@ -1315,7 +1316,10 @@ limitation, not a bug.
 (`group_libraries`, `source_instances.group_library_id`, `policies.
 group_library_allow`), `{0038,0035}` (`peer_leaf_availability`);
 `streamarr-model/src/group_library.rs`; `streamarr-db/src/repo/
-{peer_sync_state,group_library,peer_leaf_availability,sync_conflict_log}.rs`.
+{peer_sync_state,group_library,peer_leaf_availability,sync_conflict_log}.rs`;
+follow-up migrations `{postgres/0042,sqlite/0039}` add
+`source_instances.origin_peer_id` and reset library/push cursors once so
+identity-only rows from older releases are replayed as complete sources.
 **Touches:** `streamarr-api/src/peer.rs` (real sync endpoints, now
 `PeerSignedRequest`-enforced), `catalog.rs` (`AvailabilityBadge`/
 `RemoteOnlyWork` DTOs), `auth_extractor.rs` (`group_library_allow` check);

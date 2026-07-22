@@ -6,7 +6,7 @@ use streamarr_model::{Sensitive, SourceInstance};
 use uuid::Uuid;
 
 use crate::codec::{
-    bool_from_i64, bool_to_i64, format_datetime, parse_uuid, source_kind_from_str,
+    bool_from_i64, bool_to_i64, format_datetime, parse_datetime, parse_uuid, source_kind_from_str,
     source_kind_to_str,
 };
 use crate::error::DbError;
@@ -31,9 +31,8 @@ use crate::pool::{Backend, DbPool};
 /// exist purely for cross-node sync bookkeeping and are deliberately not
 /// read into [`streamarr_model::SourceInstance`] here -- same rationale as
 /// `crate::repo::user`'s own doc comment. Unlike `users`/`policies`, this
-/// table gets no `origin_peer_id` column (see the migration's own SQL):
-/// group-library association, not row ownership, is how a `SourceInstance`
-/// participates in a group (§2.3), so there's no origin claim to default.
+/// `origin_peer_id` preserves the creator across forwarding so an incoming
+/// row can be applied without restamping it and generating a sync loop.
 #[async_trait]
 pub trait SourceInstanceRepo: Send + Sync {
     async fn list_all(&self) -> Result<Vec<SourceInstance>, DbError>;
@@ -41,6 +40,20 @@ pub trait SourceInstanceRepo: Send + Sync {
     /// Insert-or-update by `SourceInstance::id`. Always stamps `updated_at`
     /// with the current server time, never a caller-supplied value.
     async fn upsert(&self, instance: &SourceInstance) -> Result<(), DbError>;
+
+    async fn set_origin_peer_id_if_unset(&self, id: Uuid, peer_id: Uuid) -> Result<(), DbError>;
+
+    async fn get_sync_metadata(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<crate::repo::SyncMetadata>, DbError>;
+
+    /// Applies an incoming complete row while preserving its sync metadata.
+    async fn apply_synced(
+        &self,
+        instance: &SourceInstance,
+        metadata: crate::repo::SyncMetadata,
+    ) -> Result<(), DbError>;
 
     /// Soft-deletes by setting `deleted_at`, rather than a hard `DELETE`.
     /// A no-op (returns [`DbError::NotFound`]) if the row doesn't exist or
@@ -55,8 +68,8 @@ pub trait SourceInstanceRepo: Send + Sync {
     /// `crate::repo::user::UserRepo::list_updated_since`'s doc comment for
     /// why a tombstoned row must still be reported. Returns the **full**
     /// [`SourceInstance`], `api_key_encrypted` included, paired with its
-    /// sync metadata: the calling endpoint strips node-local fields before
-    /// the row goes out over the wire.
+    /// sync metadata. The signed peer endpoint sends the complete row so the
+    /// receiver can install it as an ordinary usable source instance.
     async fn list_updated_since(
         &self,
         since: Option<DateTime<Utc>>,
@@ -105,6 +118,7 @@ impl SqlxSourceInstanceRepo {
     ) -> Result<(SourceInstance, crate::repo::SyncMetadata), DbError> {
         let instance = Self::from_row(row)?;
         let updated_at: Option<String> = row.try_get("updated_at")?;
+        let origin_peer_id: Option<String> = row.try_get("origin_peer_id")?;
         let deleted_at: Option<String> = row.try_get("deleted_at")?;
         Ok((
             instance,
@@ -114,7 +128,7 @@ impl SqlxSourceInstanceRepo {
                     .map(crate::codec::parse_datetime)
                     .transpose()?
                     .unwrap_or_default(),
-                origin_peer_id: None,
+                origin_peer_id: origin_peer_id.as_deref().map(parse_uuid).transpose()?,
                 deleted_at: deleted_at
                     .as_deref()
                     .map(crate::codec::parse_datetime)
@@ -221,13 +235,87 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
         Ok(())
     }
 
+    async fn set_origin_peer_id_if_unset(&self, id: Uuid, peer_id: Uuid) -> Result<(), DbError> {
+        let sql = match self.backend {
+            Backend::Sqlite => "UPDATE source_instances SET origin_peer_id = ? WHERE id = ? AND origin_peer_id IS NULL",
+            Backend::Postgres => "UPDATE source_instances SET origin_peer_id = $1 WHERE id = $2 AND origin_peer_id IS NULL",
+        };
+        sqlx::query(sql)
+            .bind(peer_id.to_string())
+            .bind(id.to_string())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn get_sync_metadata(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<crate::repo::SyncMetadata>, DbError> {
+        let sql = match self.backend {
+            Backend::Sqlite => {
+                "SELECT updated_at, origin_peer_id, deleted_at FROM source_instances WHERE id = ?"
+            }
+            Backend::Postgres => {
+                "SELECT updated_at, origin_peer_id, deleted_at FROM source_instances WHERE id = $1"
+            }
+        };
+        let row = sqlx::query(sql)
+            .bind(id.to_string())
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(|row| {
+            let updated_at: Option<String> = row.try_get("updated_at")?;
+            let origin_peer_id: Option<String> = row.try_get("origin_peer_id")?;
+            let deleted_at: Option<String> = row.try_get("deleted_at")?;
+            Ok(crate::repo::SyncMetadata {
+                updated_at: updated_at
+                    .as_deref()
+                    .map(parse_datetime)
+                    .transpose()?
+                    .unwrap_or_default(),
+                origin_peer_id: origin_peer_id.as_deref().map(parse_uuid).transpose()?,
+                deleted_at: deleted_at.as_deref().map(parse_datetime).transpose()?,
+            })
+        })
+        .transpose()
+    }
+
+    async fn apply_synced(
+        &self,
+        instance: &SourceInstance,
+        metadata: crate::repo::SyncMetadata,
+    ) -> Result<(), DbError> {
+        let sql = match self.backend {
+            Backend::Sqlite => "INSERT INTO source_instances (id, kind, name, base_url, api_key_encrypted, priority, default_root_folder_id, default_quality_profile_id, best_effort, group_library_id, updated_at, origin_peer_id, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, name = excluded.name, base_url = excluded.base_url, api_key_encrypted = excluded.api_key_encrypted, priority = excluded.priority, default_root_folder_id = excluded.default_root_folder_id, default_quality_profile_id = excluded.default_quality_profile_id, best_effort = excluded.best_effort, group_library_id = excluded.group_library_id, updated_at = excluded.updated_at, origin_peer_id = excluded.origin_peer_id, deleted_at = excluded.deleted_at",
+            Backend::Postgres => "INSERT INTO source_instances (id, kind, name, base_url, api_key_encrypted, priority, default_root_folder_id, default_quality_profile_id, best_effort, group_library_id, updated_at, origin_peer_id, deleted_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, name = excluded.name, base_url = excluded.base_url, api_key_encrypted = excluded.api_key_encrypted, priority = excluded.priority, default_root_folder_id = excluded.default_root_folder_id, default_quality_profile_id = excluded.default_quality_profile_id, best_effort = excluded.best_effort, group_library_id = excluded.group_library_id, updated_at = excluded.updated_at, origin_peer_id = excluded.origin_peer_id, deleted_at = excluded.deleted_at",
+        };
+        sqlx::query(sql)
+            .bind(instance.id.to_string())
+            .bind(source_kind_to_str(instance.kind))
+            .bind(instance.name.as_str())
+            .bind(instance.base_url.as_str())
+            .bind(instance.api_key_encrypted.expose_secret().as_str())
+            .bind(instance.priority)
+            .bind(instance.default_root_folder_id.as_deref())
+            .bind(instance.default_quality_profile_id)
+            .bind(bool_to_i64(instance.best_effort))
+            .bind(instance.group_library_id.map(|id| id.to_string()))
+            .bind(format_datetime(metadata.updated_at))
+            .bind(metadata.origin_peer_id.map(|id| id.to_string()))
+            .bind(metadata.deleted_at.map(format_datetime))
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     async fn list_updated_since(
         &self,
         since: Option<DateTime<Utc>>,
     ) -> Result<Vec<(SourceInstance, crate::repo::SyncMetadata)>, DbError> {
         const SELECT: &str = "id, kind, name, base_url, api_key_encrypted, priority, \
                                default_root_folder_id, default_quality_profile_id, best_effort, \
-                               group_library_id, updated_at, deleted_at";
+                               group_library_id, updated_at, origin_peer_id, deleted_at";
         // Deliberately no `WHERE deleted_at IS NULL` -- see this trait
         // method's own doc comment.
         let sql = match (self.backend, since.is_some()) {
@@ -422,6 +510,53 @@ mod tests {
             parse_datetime(&updated_at.expect("upsert always sets updated_at")).unwrap();
         assert!(updated_at >= before);
         assert!(updated_at <= Utc::now());
+    }
+
+    #[tokio::test]
+    async fn apply_synced_round_trips_complete_row_and_metadata_verbatim() {
+        let pool = test_sqlite_pool().await;
+        let repo = SqlxSourceInstanceRepo::new(pool);
+        let instance = sample_instance(SourceKind::Radarr, "Replicated Radarr");
+        let metadata = crate::repo::SyncMetadata {
+            updated_at: (Utc::now() - chrono::Duration::minutes(5)).trunc_subsecs(3),
+            origin_peer_id: Some(Uuid::new_v4()),
+            deleted_at: None,
+        };
+
+        repo.apply_synced(&instance, metadata.clone())
+            .await
+            .unwrap();
+
+        assert_eq!(repo.list_all().await.unwrap(), vec![instance.clone()]);
+        assert_eq!(
+            repo.get_sync_metadata(instance.id).await.unwrap(),
+            Some(metadata)
+        );
+    }
+
+    #[tokio::test]
+    async fn apply_synced_tombstone_removes_source_from_normal_listing() {
+        let pool = test_sqlite_pool().await;
+        let repo = SqlxSourceInstanceRepo::new(pool);
+        let instance = sample_instance(SourceKind::Sonarr, "Replicated Tombstone");
+        let deleted_at = Utc::now().trunc_subsecs(3);
+
+        repo.apply_synced(
+            &instance,
+            crate::repo::SyncMetadata {
+                updated_at: deleted_at,
+                origin_peer_id: Some(Uuid::new_v4()),
+                deleted_at: Some(deleted_at),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(repo.list_all().await.unwrap().is_empty());
+        assert_eq!(
+            repo.list_updated_since(None).await.unwrap()[0].1.deleted_at,
+            Some(deleted_at)
+        );
     }
 
     #[tokio::test]

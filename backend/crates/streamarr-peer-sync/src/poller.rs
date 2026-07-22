@@ -58,8 +58,8 @@ use chrono::Utc;
 use streamarr_arr_sync::poller::{SyncRunStatus, SyncStatusReporter};
 use streamarr_coordination::ClusterCoordinator;
 use streamarr_db::{
-    GroupLibraryRepo, PeerLeafAvailabilityRepo, PeerNodeRepo, PeerSourceInstanceRepo,
-    PeerSyncStateRepo, PolicyRepo, RoutingRuleRepo, SyncConflictLogRepo, UserInviteRepo,
+    GroupLibraryRepo, PeerLeafAvailabilityRepo, PeerNodeRepo, PeerSyncStateRepo, PolicyRepo,
+    RoutingRuleRepo, SourceInstanceRepo, SyncConflictLogRepo, UserInviteRepo,
     UserInviteRequestRepo, UserRepo, WorkRepo,
 };
 use streamarr_model::PeerNodeStatus;
@@ -120,7 +120,7 @@ pub struct PeerSyncPoller {
     user_repo: Arc<dyn UserRepo>,
     policy_repo: Arc<dyn PolicyRepo>,
     group_library_repo: Arc<dyn GroupLibraryRepo>,
-    peer_source_instance_repo: Arc<dyn PeerSourceInstanceRepo>,
+    source_instance_repo: Arc<dyn SourceInstanceRepo>,
     user_invite_repo: Arc<dyn UserInviteRepo>,
     user_invite_request_repo: Arc<dyn UserInviteRequestRepo>,
     work_repo: Arc<dyn WorkRepo>,
@@ -145,7 +145,7 @@ impl PeerSyncPoller {
         user_repo: Arc<dyn UserRepo>,
         policy_repo: Arc<dyn PolicyRepo>,
         group_library_repo: Arc<dyn GroupLibraryRepo>,
-        peer_source_instance_repo: Arc<dyn PeerSourceInstanceRepo>,
+        source_instance_repo: Arc<dyn SourceInstanceRepo>,
         user_invite_repo: Arc<dyn UserInviteRepo>,
         user_invite_request_repo: Arc<dyn UserInviteRequestRepo>,
         work_repo: Arc<dyn WorkRepo>,
@@ -165,7 +165,7 @@ impl PeerSyncPoller {
             user_repo,
             policy_repo,
             group_library_repo,
-            peer_source_instance_repo,
+            source_instance_repo,
             user_invite_repo,
             user_invite_request_repo,
             work_repo,
@@ -341,7 +341,7 @@ impl PeerSyncPoller {
             self.peer_node_id,
             self.self_peer_id,
             &self.group_library_repo,
-            &self.peer_source_instance_repo,
+            &self.source_instance_repo,
             &self.sync_state_repo,
             &self.conflict_log_repo,
         )
@@ -415,7 +415,7 @@ mod tests {
         user_repo: Arc<dyn UserRepo>,
         policy_repo: Arc<dyn PolicyRepo>,
         group_library_repo: Arc<dyn GroupLibraryRepo>,
-        peer_source_instance_repo: Arc<dyn PeerSourceInstanceRepo>,
+        source_instance_repo: Arc<dyn SourceInstanceRepo>,
         user_invite_repo: Arc<dyn UserInviteRepo>,
         user_invite_request_repo: Arc<dyn UserInviteRequestRepo>,
         work_repo: Arc<dyn WorkRepo>,
@@ -441,9 +441,9 @@ mod tests {
             group_library_repo: Arc::new(streamarr_db::repo::SqlxGroupLibraryRepo::new(
                 pool.clone(),
             )),
-            peer_source_instance_repo: Arc::new(
-                streamarr_db::repo::SqlxPeerSourceInstanceRepo::new(pool.clone()),
-            ),
+            source_instance_repo: Arc::new(streamarr_db::repo::SqlxSourceInstanceRepo::new(
+                pool.clone(),
+            )),
             user_invite_repo: Arc::new(streamarr_db::repo::SqlxUserInviteRepo::new(pool.clone())),
             user_invite_request_repo: Arc::new(streamarr_db::repo::SqlxUserInviteRequestRepo::new(
                 pool.clone(),
@@ -482,7 +482,7 @@ mod tests {
             harness.user_repo.clone(),
             harness.policy_repo.clone(),
             harness.group_library_repo.clone(),
-            harness.peer_source_instance_repo.clone(),
+            harness.source_instance_repo.clone(),
             harness.user_invite_repo.clone(),
             harness.user_invite_request_repo.clone(),
             harness.work_repo.clone(),

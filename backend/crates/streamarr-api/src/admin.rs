@@ -170,6 +170,19 @@ pub async fn create_source_instance_handler(
             ))
         })?;
 
+    if let Some(identity) = state
+        .node_identity_repo
+        .get()
+        .await
+        .map_err(|err| ApiError::internal(format!("failed to load node identity: {err}")))?
+    {
+        state
+            .source_instance_repo
+            .set_origin_peer_id_if_unset(instance.id, identity.peer_id)
+            .await
+            .map_err(|err| ApiError::internal(format!("failed to set source origin: {err}")))?;
+    }
+
     state.source_instances.upsert(instance.clone());
 
     tracing::info!(

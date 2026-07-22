@@ -1559,7 +1559,7 @@ fn spawn_peer_sync_poller_for(
     user_repo: Arc<dyn streamarr_db::UserRepo>,
     policy_repo: Arc<dyn streamarr_db::PolicyRepo>,
     group_library_repo: Arc<dyn streamarr_db::GroupLibraryRepo>,
-    peer_source_instance_repo: Arc<dyn streamarr_db::PeerSourceInstanceRepo>,
+    source_instance_repo: Arc<dyn streamarr_db::SourceInstanceRepo>,
     user_invite_repo: Arc<dyn streamarr_db::UserInviteRepo>,
     user_invite_request_repo: Arc<dyn streamarr_db::UserInviteRequestRepo>,
     work_repo: Arc<dyn streamarr_db::WorkRepo>,
@@ -1583,7 +1583,7 @@ fn spawn_peer_sync_poller_for(
         user_repo,
         policy_repo,
         group_library_repo,
-        peer_source_instance_repo,
+        source_instance_repo,
         user_invite_repo,
         user_invite_request_repo,
         work_repo,
@@ -1623,15 +1623,15 @@ async fn boot_worker(
     use streamarr_db::repo::{
         SqlxCreditRepo, SqlxEmbeddingRepo, SqlxGroupLibraryRepo, SqlxMediaFileRepo,
         SqlxNodeIdentityRepo, SqlxPeerLeafAvailabilityRepo, SqlxPeerNodeRepo,
-        SqlxPeerSourceInstanceRepo, SqlxPeerSyncStateRepo, SqlxPolicyRepo, SqlxRoutingRuleRepo,
-        SqlxSourceInstanceRepo, SqlxSyncConflictLogRepo, SqlxUserInviteRepo,
-        SqlxUserInviteRequestRepo, SqlxUserRepo, SqlxWorkRepo,
+        SqlxPeerSyncStateRepo, SqlxPolicyRepo, SqlxRoutingRuleRepo, SqlxSourceInstanceRepo,
+        SqlxSyncConflictLogRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxUserRepo,
+        SqlxWorkRepo,
     };
     use streamarr_db::{
         CreditRepo, EmbeddingRepo, GroupLibraryRepo, MediaFileRepo, NodeIdentityRepo,
-        PeerLeafAvailabilityRepo, PeerNodeRepo, PeerSourceInstanceRepo, PeerSyncStateRepo,
-        PolicyRepo, RoutingRuleRepo, SourceInstanceRepo, SyncConflictLogRepo, UserInviteRepo,
-        UserInviteRequestRepo, UserRepo, WorkRepo,
+        PeerLeafAvailabilityRepo, PeerNodeRepo, PeerSyncStateRepo, PolicyRepo, RoutingRuleRepo,
+        SourceInstanceRepo, SyncConflictLogRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo,
+        WorkRepo,
     };
 
     let mut handles = Vec::new();
@@ -1655,8 +1655,6 @@ async fn boot_worker(
     let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
     let group_library_repo: Arc<dyn GroupLibraryRepo> =
         Arc::new(SqlxGroupLibraryRepo::new(pool.clone()));
-    let peer_source_instance_repo: Arc<dyn PeerSourceInstanceRepo> =
-        Arc::new(SqlxPeerSourceInstanceRepo::new(pool.clone()));
     let routing_rule_repo: Arc<dyn RoutingRuleRepo> =
         Arc::new(SqlxRoutingRuleRepo::new(pool.clone()));
     let user_invite_repo: Arc<dyn UserInviteRepo> = Arc::new(SqlxUserInviteRepo::new(pool.clone()));
@@ -1817,6 +1815,24 @@ async fn boot_worker(
 
             loop {
                 interval.tick().await;
+                match source_instance_repo.list_all().await {
+                    Ok(instances) => {
+                        let active_ids: HashSet<uuid::Uuid> =
+                            instances.iter().map(|instance| instance.id).collect();
+                        for instance in instances {
+                            source_instances.upsert(instance);
+                        }
+                        for existing in source_instances.all() {
+                            if !active_ids.contains(&existing.id) {
+                                source_instances.remove(existing.id);
+                            }
+                        }
+                    }
+                    Err(err) => tracing::error!(
+                        %err,
+                        "failed to refresh SourceInstanceRegistry from the database"
+                    ),
+                }
                 for instance in source_instances.all() {
                     if spawned_instance_ids.insert(instance.id) {
                         tracing::info!(
@@ -1896,7 +1912,7 @@ async fn boot_worker(
                                     user_repo.clone(),
                                     policy_repo.clone(),
                                     group_library_repo.clone(),
-                                    peer_source_instance_repo.clone(),
+                                    source_instance_repo.clone(),
                                     user_invite_repo.clone(),
                                     user_invite_request_repo.clone(),
                                     work_repo.clone(),

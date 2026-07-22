@@ -2900,7 +2900,7 @@ paths:
       tags:
       - peer-groups
       summary: |-
-        This node's own `source_instances` (identity only) + this group's
+        This node's own complete `source_instances` + this group's
         `group_libraries`, both updated since `since` -- the read behind
         `streamarr_peer_sync::account_sync::sync_libraries`.
       operationId: libraries_handler
@@ -2914,7 +2914,7 @@ paths:
           - 'null'
       responses:
         '200':
-          description: source_instances identity rows + group_libraries updated since the given cursor
+          description: source_instances + group_libraries updated since the given cursor
           content:
             application/json:
               schema:
@@ -5705,8 +5705,8 @@ components:
       type: object
       description: |-
         Response body for [`libraries_handler`] -- `docs/architecture/
-        peer-groups.md` §3.6: credential-free `source_instances` identity rows
-        plus `group_libraries`.
+        peer-groups.md` §3.6: complete `source_instances` rows plus
+        `group_libraries`.
       required:
       - source_instances
       - group_libraries
@@ -5721,7 +5721,7 @@ components:
         source_instances:
           type: array
           items:
-            $ref: '#/components/schemas/SourceInstanceIdentity'
+            $ref: '#/components/schemas/SourceInstanceSyncRow'
     LibraryViewRequest:
       type: object
       description: |-
@@ -7803,41 +7803,6 @@ components:
           type: string
         username:
           type: string
-    SourceInstanceIdentity:
-      type: object
-      description: |-
-        Credential-free identity of one source instance as shared with peer
-        nodes. Connection details stay local; timestamps carry updates and
-        tombstones safely through cursor-based peer synchronisation.
-      required:
-      - id
-      - kind
-      - name
-      - priority
-      properties:
-        deleted_at:
-          type:
-          - string
-          - 'null'
-          format: date-time
-        group_library_id:
-          type:
-          - string
-          - 'null'
-          format: uuid
-        id:
-          type: string
-          format: uuid
-        kind:
-          $ref: '#/components/schemas/SourceKind'
-        name:
-          type: string
-        priority:
-          type: integer
-          format: int32
-        updated_at:
-          type: string
-          format: date-time
     SourceInstanceRequest:
       type: object
       description: |-
@@ -7919,6 +7884,66 @@ components:
         priority:
           type: integer
           format: int32
+    SourceInstanceSyncRow:
+      type: object
+      description: |-
+        Complete source-instance configuration exchanged only over authenticated,
+        signed peer endpoints. The two connection fields are optional solely for
+        rolling compatibility with older nodes that sent identity-only rows; such
+        rows are ignored by newer receivers until a complete row arrives.
+      required:
+      - id
+      - kind
+      - name
+      - priority
+      properties:
+        api_key_encrypted:
+          type:
+          - string
+          - 'null'
+        base_url:
+          type:
+          - string
+          - 'null'
+        best_effort:
+          type: boolean
+        default_quality_profile_id:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        default_root_folder_id:
+          type:
+          - string
+          - 'null'
+        deleted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        group_library_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/SourceKind'
+        name:
+          type: string
+        origin_peer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        priority:
+          type: integer
+          format: int32
+        updated_at:
+          type: string
+          format: date-time
     SourceInstanceSyncStatusResponse:
       type: object
       description: |-
