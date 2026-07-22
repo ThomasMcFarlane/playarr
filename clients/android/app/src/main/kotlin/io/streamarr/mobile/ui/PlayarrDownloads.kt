@@ -64,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -169,7 +170,7 @@ internal fun ExperienceDownloadsScreen(
     accessToken: String?,
     isTelevision: Boolean,
     isOnline: Boolean,
-    onPlay: (DownloadEntity) -> Unit,
+    onOpen: (DownloadEntity) -> Unit,
     viewModel: DownloadsViewModel = hiltViewModel(),
 ) {
     val downloads by viewModel.downloads.collectAsState()
@@ -181,6 +182,13 @@ internal fun ExperienceDownloadsScreen(
         )
     }
     var keepUntilTarget by remember { mutableStateOf<DownloadEntity?>(null) }
+    var focusedId by remember { mutableStateOf<String?>(null) }
+    val focused = downloads.firstOrNull { it.mediaFileId == focusedId } ?: downloads.firstOrNull()
+    LaunchedEffect(downloads.map(DownloadEntity::mediaFileId)) {
+        if (focusedId !in downloads.map(DownloadEntity::mediaFileId)) {
+            focusedId = downloads.firstOrNull()?.mediaFileId
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -235,47 +243,45 @@ internal fun ExperienceDownloadsScreen(
                 playarrString(PlayarrString.DownloadsEmptyDescription),
             )
         } else {
-            val grouped = remember(downloads) { downloads.groupBy { it.state.playarrDownloadGroup() } }
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(top = 20.dp),
-                contentPadding = PaddingValues(bottom = 104.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                PlayarrDownloadGroup.entries.forEach { group ->
-                    val entries = grouped[group].orEmpty()
-                    if (entries.isNotEmpty() || group == PlayarrDownloadGroup.Completed) {
-                        item(key = "heading-${group.name}") {
-                            Text(
-                                playarrString(group.title),
-                                color = WebInk,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(top = 8.dp),
-                            )
-                        }
-                        if (entries.isEmpty()) {
-                            item(key = "empty-${group.name}") {
-                                Text(
-                                    playarrString(PlayarrString.DownloadsNoCompletedYet),
-                                    color = WebInkMuted,
-                                    fontSize = 11.sp,
-                                )
-                            }
-                        } else {
-                            items(entries, key = DownloadEntity::mediaFileId) { entry ->
-                                DownloadListItem(
-                                    entry = entry,
-                                    serverUrl = serverUrl,
-                                    accessToken = accessToken,
-                                    onPlay = { onPlay(entry) },
-                                    onTogglePauseOrRetry = { viewModel.togglePauseOrRetry(entry) },
-                                    onCancel = { viewModel.cancel(entry.mediaFileId) },
-                                    onEditKeepUntil = { keepUntilTarget = entry },
-                                )
-                            }
-                        }
+            if (isTelevision) {
+                Row(
+                    modifier = Modifier.fillMaxSize().padding(top = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(32.dp),
+                ) {
+                    focused?.let {
+                        DownloadPreview(
+                            entry = it,
+                            serverUrl = serverUrl,
+                            accessToken = accessToken,
+                            modifier = Modifier.weight(0.75f).fillMaxSize(),
+                        )
                     }
+                    DownloadsList(
+                        downloads = downloads,
+                        serverUrl = serverUrl,
+                        accessToken = accessToken,
+                        focusedId = focused?.mediaFileId,
+                        onFocus = { focusedId = it.mediaFileId },
+                        onOpen = onOpen,
+                        onTogglePauseOrRetry = viewModel::togglePauseOrRetry,
+                        onCancel = { viewModel.cancel(it.mediaFileId) },
+                        onEditKeepUntil = { keepUntilTarget = it },
+                        modifier = Modifier.weight(1.25f).fillMaxSize(),
+                    )
                 }
+            } else {
+                DownloadsList(
+                    downloads = downloads,
+                    serverUrl = serverUrl,
+                    accessToken = accessToken,
+                    focusedId = focused?.mediaFileId,
+                    onFocus = { focusedId = it.mediaFileId },
+                    onOpen = onOpen,
+                    onTogglePauseOrRetry = viewModel::togglePauseOrRetry,
+                    onCancel = { viewModel.cancel(it.mediaFileId) },
+                    onEditKeepUntil = { keepUntilTarget = it },
+                    modifier = Modifier.fillMaxSize().padding(top = 20.dp),
+                )
             }
         }
     }
@@ -292,23 +298,123 @@ internal fun ExperienceDownloadsScreen(
 }
 
 @Composable
+private fun DownloadsList(
+    downloads: List<DownloadEntity>,
+    serverUrl: String,
+    accessToken: String?,
+    focusedId: String?,
+    onFocus: (DownloadEntity) -> Unit,
+    onOpen: (DownloadEntity) -> Unit,
+    onTogglePauseOrRetry: (DownloadEntity) -> Unit,
+    onCancel: (DownloadEntity) -> Unit,
+    onEditKeepUntil: (DownloadEntity) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val grouped = remember(downloads) { downloads.groupBy { it.state.playarrDownloadGroup() } }
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(bottom = 104.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        PlayarrDownloadGroup.entries.forEach { group ->
+            val entries = grouped[group].orEmpty()
+            if (entries.isNotEmpty() || group == PlayarrDownloadGroup.Completed) {
+                item(key = "heading-${group.name}") {
+                    Text(
+                        playarrString(group.title),
+                        color = WebInk,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+                if (entries.isEmpty()) {
+                    item(key = "empty-${group.name}") {
+                        Text(playarrString(PlayarrString.DownloadsNoCompletedYet), color = WebInkMuted, fontSize = 11.sp)
+                    }
+                } else {
+                    items(entries, key = DownloadEntity::mediaFileId) { entry ->
+                        DownloadListItem(
+                            entry = entry,
+                            serverUrl = serverUrl,
+                            accessToken = accessToken,
+                            selected = entry.mediaFileId == focusedId,
+                            onFocus = { onFocus(entry) },
+                            onOpen = { onOpen(entry) },
+                            onTogglePauseOrRetry = { onTogglePauseOrRetry(entry) },
+                            onCancel = { onCancel(entry) },
+                            onEditKeepUntil = { onEditKeepUntil(entry) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DownloadPreview(
+    entry: DownloadEntity,
+    serverUrl: String,
+    accessToken: String?,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier.padding(horizontal = 24.dp, vertical = 18.dp), verticalArrangement = Arrangement.Center) {
+        DownloadThumbnail(
+            posterUrl = entry.posterUrl,
+            serverUrl = entry.serverUrl.ifBlank { serverUrl },
+            accessToken = accessToken,
+            modifier = Modifier.width(150.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(14.dp)),
+        )
+        Text(
+            (downloadTypeLabel(entry.kind) ?: entry.qualityLabel).uppercase(LocalPlayarrLanguage.current.locale),
+            color = WebPink,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.2.sp,
+            modifier = Modifier.padding(top = 18.dp),
+        )
+        Text(
+            entry.title,
+            color = WebInk,
+            fontSize = 36.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = (-1).sp,
+            lineHeight = 36.sp,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (entry.workTitle != entry.title) {
+            Text(entry.workTitle, color = WebInkSoft, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
+        }
+        Text(
+            listOf(entry.qualityLabel, downloadSizeLabel(entry)).filter(String::isNotBlank).joinToString(" · "),
+            color = WebInkMuted,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 12.dp),
+        )
+        DownloadStatusLine(entry)
+    }
+}
+
+@Composable
 private fun DownloadListItem(
     entry: DownloadEntity,
     serverUrl: String,
     accessToken: String?,
-    onPlay: () -> Unit,
+    selected: Boolean,
+    onFocus: () -> Unit,
+    onOpen: () -> Unit,
     onTogglePauseOrRetry: () -> Unit,
     onCancel: () -> Unit,
     onEditKeepUntil: () -> Unit,
 ) {
     val language = LocalPlayarrLanguage.current
-    val playable = entry.state == DownloadState.Completed
     Surface(
-        onClick = onPlay,
-        enabled = playable,
-        color = WebSurfaceSoft.copy(alpha = 0.72f),
+        onClick = { onFocus(); onOpen() },
+        color = WebSurfaceSoft.copy(alpha = if (selected) 0.92f else 0.62f),
         shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) onFocus() },
     ) {
         BoxWithConstraints {
             val compact = maxWidth < 600.dp

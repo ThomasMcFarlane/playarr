@@ -11,7 +11,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Match Playarr Web's Android Downloads presentation with an online-aware offline badge, device
   storage usage, persisted quality labels, type and byte metadata, determinate progress, explicit
-  retention editing, and an empty Downloaded-section state.
+  retention editing, an empty Downloaded-section state, detail-opening rows, and a focused TV
+  preview panel.
 - Match Android TV's pairing hierarchy to Playarr Web's split auth layout, keeping the branding,
   heading, QR code, verification URL, pairing code, and status together in the auth panel.
 - Adopt Android KTX helpers for bitmap, URI, and preference operations and explicitly retain the

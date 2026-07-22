@@ -1248,12 +1248,10 @@ private fun ExperienceNavHost(
                     accessToken = accessToken,
                     isTelevision = isTelevision,
                     isOnline = isOnline,
-                    onPlay = { download ->
-                        val item = download.playarrPlaybackQueueItem()
-                        viewModel.startPlayback(download.mediaFileId, listOf(item))
-                        if (!item.music) {
-                            navController.navigate("experience-player/${Uri.encode(download.mediaFileId)}")
-                        }
+                    onOpen = { download ->
+                        navController.navigate(
+                            "experience-detail/${download.workId}?mediaFileId=${Uri.encode(download.mediaFileId)}",
+                        )
                     },
                 )
             }
