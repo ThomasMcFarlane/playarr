@@ -7,7 +7,13 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.streamarr.mobile.BuildConfig
+import io.streamarr.mobile.connected.ConnectedServerApiFactory
+import io.streamarr.mobile.connected.JoinedStreamarrApi
+import io.streamarr.mobile.connected.PlayarrServerClient
+import io.streamarr.mobile.connected.PlayarrServerSourceRegistry
 import io.streamarr.mobile.isTelevision
+import io.streamarr.shared.auth.ConnectedServerSessionManager
+import io.streamarr.shared.auth.ConnectedServerSessionStore
 import io.streamarr.shared.auth.SessionRefresher
 import io.streamarr.shared.auth.TokenStore
 import io.streamarr.shared.data.config.ServerConfigStore
@@ -15,6 +21,7 @@ import io.streamarr.shared.data.model.ClientPlatform
 import io.streamarr.shared.data.remote.StreamarrApi
 import io.streamarr.shared.data.remote.StreamarrHttpClient
 import javax.inject.Singleton
+import javax.inject.Qualifier
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
@@ -29,7 +36,8 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideStreamarrApi(
+    @PrimaryStreamarrApi
+    fun providePrimaryStreamarrApi(
         @ApplicationContext context: Context,
         serverConfigStore: ServerConfigStore,
         tokenStore: TokenStore,
@@ -52,4 +60,54 @@ object NetworkModule {
         // Access tokens and private catalogue responses must not reach logcat.
         enableHttpLogging = false,
     )
+
+    @Provides
+    @Singleton
+    internal fun provideConnectedServerApiFactory(
+        @ApplicationContext context: Context,
+        store: ConnectedServerSessionStore,
+        sessionManager: ConnectedServerSessionManager,
+    ): ConnectedServerApiFactory = ConnectedServerApiFactory(
+        store = store,
+        sessionManager = sessionManager,
+        clientPlatform = if (isTelevision(context)) ClientPlatform.AndroidTv else ClientPlatform.AndroidMobile,
+        clientVersion = BuildConfig.VERSION_NAME,
+    )
+
+    @Provides
+    @Singleton
+    internal fun providePlayarrServerSourceRegistry(): PlayarrServerSourceRegistry = PlayarrServerSourceRegistry()
+
+    @Provides
+    @Singleton
+    internal fun provideStreamarrApi(
+        @PrimaryStreamarrApi primary: StreamarrApi,
+        connectedServerApiFactory: ConnectedServerApiFactory,
+        sourceRegistry: PlayarrServerSourceRegistry,
+        serverConfigStore: ServerConfigStore,
+        tokenStore: TokenStore,
+    ): StreamarrApi = JoinedStreamarrApi(
+        primary = primary,
+        clientsProvider = {
+            val profileUserId = tokenStore.currentUserId.first()
+            val primaryClient = PlayarrServerClient(
+                profileUserId = profileUserId.orEmpty(),
+                url = serverConfigStore.baseUrl.first(),
+                username = tokenStore.currentUserName.first() ?: "Viewer",
+                api = primary,
+                accessToken = { tokenStore.accessToken.first() },
+                primary = true,
+            )
+            listOf(primaryClient) + if (profileUserId == null) {
+                emptyList()
+            } else {
+                connectedServerApiFactory.clientsForProfile(profileUserId)
+            }
+        },
+        registry = sourceRegistry,
+    )
 }
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+internal annotation class PrimaryStreamarrApi

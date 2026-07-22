@@ -215,6 +215,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Join Android catalogue, search, kind, progress, media, playback-session, and download API calls
+  across independently authenticated connected servers, with Playarr Web-equivalent identity
+  merging, partial-success behaviour, source discovery, and ownership routing.
 - Authenticate Android secondary servers with a stable per-server device identity, discard
   passwords after login, serialize refresh-token rotation, reuse concurrent refresh winners, and
   disconnect only after a definitive refresh rejection.
