@@ -26,13 +26,13 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.HighQuality
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PictureInPictureAlt
 import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SkipPrevious
 import androidx.compose.material.icons.outlined.Subtitles
@@ -189,7 +189,7 @@ internal fun PlayarrPlayerChrome(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 PlayarrPlayerTopButton(
-                    icon = Icons.Outlined.ArrowBack,
+                    icon = Icons.AutoMirrored.Outlined.ArrowBack,
                     label = playarrString(PlayarrString.CommonBack),
                     accessibilityLabel = playarrString(PlayarrString.PlayerBackToDetails),
                     isTelevision = isTelevision,
@@ -423,7 +423,7 @@ private fun PlayarrPlayerControlBar(
             }
             Spacer(Modifier.weight(1f))
             PlayerMenuButton(
-                icon = Icons.Outlined.QueueMusic,
+                icon = Icons.AutoMirrored.Outlined.QueueMusic,
                 label = playarrString(
                     if (queue.items.size == 1) {
                         PlayarrString.PlayerPlaylistLabelSingular

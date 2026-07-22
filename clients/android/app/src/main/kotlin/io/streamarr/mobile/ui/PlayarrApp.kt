@@ -580,6 +580,7 @@ private fun TelevisionPairingScreen(
                         PlayarrQrCode(
                             state.code.verificationUriComplete,
                             playarrString(PlayarrString.DeviceLoginQrLabel),
+                            Modifier.size(220.dp),
                         )
                         Text(
                             state.code.userCode,
@@ -613,7 +614,7 @@ private fun TelevisionPairingScreen(
 internal fun PlayarrQrCode(
     value: String,
     contentDescription: String,
-    modifier: Modifier = Modifier.size(220.dp),
+    modifier: Modifier = Modifier,
 ) {
     val bitmap = remember(value) {
         val size = 260

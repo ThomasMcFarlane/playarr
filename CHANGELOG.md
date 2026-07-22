@@ -7,6 +7,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Use direction-aware Android back and playlist icons and conform shared QR and media-card
+  composables to the standard Modifier contract without changing left-to-right layouts.
+
 ### Fixed
 
 - Serve the Roku developer ZIP from Playarr's public same-origin download storage instead of

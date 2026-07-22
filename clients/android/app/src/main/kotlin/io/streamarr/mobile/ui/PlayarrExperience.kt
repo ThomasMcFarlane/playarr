@@ -50,7 +50,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -60,7 +61,6 @@ import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.PictureInPictureAlt
-import androidx.compose.material.icons.outlined.PlaylistPlay
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Tv
@@ -559,7 +559,7 @@ internal val experienceDestinations = listOf(
     ExperienceDestination("movies", PlayarrString.NavMovies, Icons.Outlined.Movie, WorkKind.Movie),
     ExperienceDestination("sites", PlayarrString.NavSites, Icons.Outlined.Language, WorkKind.Site),
     ExperienceDestination("music", PlayarrString.NavMusic, Icons.Outlined.MusicNote, WorkKind.Artist),
-    ExperienceDestination("playlists", PlayarrString.NavPlaylists, Icons.Outlined.PlaylistPlay),
+    ExperienceDestination("playlists", PlayarrString.NavPlaylists, Icons.AutoMirrored.Outlined.PlaylistPlay),
 )
 
 internal fun visibleExperienceDestinations(
@@ -1452,11 +1452,11 @@ private fun ExperienceLandscapeCard(
     accessToken: String?,
     width: Dp,
     selected: Boolean,
-    progress: WatchProgress? = null,
     onSelected: () -> Unit,
     onClick: () -> Unit,
-    onContext: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    progress: WatchProgress? = null,
+    onContext: (() -> Unit)? = null,
     homeView: PlayarrHomeViewPreference = PlayarrHomeViewPreference.Thumbnail,
     mediaFileId: String? = null,
     displayTitle: String = work.title,
@@ -1544,8 +1544,16 @@ private fun LibraryResults(
         ) {
             items(works, key = Work::id) { work ->
                 ExperienceLandscapeCard(
-                    work, serverUrl, accessToken, landscapeWidth, work.id == selectedId,
-                    progressByWork[work.id], { onSelected(work) }, { onOpen(work) }, { onContext(work) }, Modifier.fillMaxWidth(),
+                    work = work,
+                    serverUrl = serverUrl,
+                    accessToken = accessToken,
+                    width = landscapeWidth,
+                    selected = work.id == selectedId,
+                    onSelected = { onSelected(work) },
+                    onClick = { onOpen(work) },
+                    modifier = Modifier.fillMaxWidth(),
+                    progress = progressByWork[work.id],
+                    onContext = { onContext(work) },
                 )
             }
         }
@@ -2616,7 +2624,7 @@ private fun ExperienceDetailScreen(
                             .background(WebSurfaceStrong.copy(alpha = 0.8f), CircleShape),
                     ) {
                         Icon(
-                            Icons.Outlined.ArrowBack,
+                            Icons.AutoMirrored.Outlined.ArrowBack,
                             contentDescription = playarrString(PlayarrString.CommonBack),
                             tint = WebInk,
                         )
@@ -2877,7 +2885,7 @@ private fun ExperienceVideoDetailContent(
                 .background(WebSurfaceStrong.copy(alpha = 0.82f), CircleShape),
         ) {
             Icon(
-                Icons.Outlined.ArrowBack,
+                Icons.AutoMirrored.Outlined.ArrowBack,
                 contentDescription = playarrString(PlayarrString.CommonBack),
                 tint = WebInk,
             )
@@ -3672,7 +3680,7 @@ private fun ExperienceMusicDetailContent(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     IconButton(onClick = onBack, modifier = Modifier.background(WebSurfaceStrong.copy(alpha = 0.88f), CircleShape)) {
                         Icon(
-                            Icons.Outlined.ArrowBack,
+                            Icons.AutoMirrored.Outlined.ArrowBack,
                             contentDescription = playarrString(PlayarrString.MusicBackToMusic),
                             tint = WebInk,
                         )
@@ -4704,7 +4712,7 @@ private fun ExperiencePlayerScreen(
                     .background(Color.Black.copy(alpha = 0.62f), CircleShape),
             ) {
                 Icon(
-                    Icons.Outlined.ArrowBack,
+                    Icons.AutoMirrored.Outlined.ArrowBack,
                     contentDescription = playarrString(PlayarrString.PlayerBackToDetails),
                     tint = Color.White,
                 )
