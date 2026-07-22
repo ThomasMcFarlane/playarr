@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Localize Android parity-screen retry actions, match Web's decorative album-art semantics, and
+  remove an unobservable playlist-success message that was immediately dismissed.
 - Remove Android mobile sign-in's inert back control and localize known Android TV link-start,
   expiry, session-expiry, and declined states while retaining provider diagnostics.
 - Route Android joined-server artwork, playback, progress, and offline-download bytes through the

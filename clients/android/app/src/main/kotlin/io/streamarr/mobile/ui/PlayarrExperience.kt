@@ -4855,7 +4855,7 @@ private fun AuthenticatedAlbumArtwork(
             }
             AsyncImage(
                 model = request,
-                contentDescription = itemAlbumArtworkDescription(artistWork.title),
+                contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -4868,8 +4868,6 @@ internal fun resolveAlbumArtworkUrl(serverUrl: String, artistWorkId: String, alb
 
 private fun String.asUrlPathSegment(): String =
     URLEncoder.encode(this, StandardCharsets.UTF_8.name()).replace("+", "%20")
-
-internal fun itemAlbumArtworkDescription(artistTitle: String): String = "$artistTitle album artwork"
 
 @Composable
 private fun PlayarrMusicVisualiser(active: Boolean, modifier: Modifier = Modifier) {

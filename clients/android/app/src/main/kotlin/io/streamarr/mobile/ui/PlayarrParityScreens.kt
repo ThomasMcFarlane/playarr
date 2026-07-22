@@ -288,7 +288,7 @@ internal class PlaylistActionsViewModel @Inject constructor(private val api: Str
 
     fun add(playlistId: String, workId: String, trackId: String?, onAdded: () -> Unit) = viewModelScope.launch {
         runCatching { api.addPlaylistItem(playlistId, AddPlaylistItemRequest(workId, trackId)) }
-            .onSuccess { _message.value = "Added to playlist"; onAdded() }
+            .onSuccess { onAdded() }
             .onFailure { _message.value = it.playarrMessage("playlist") }
     }
 
@@ -2795,7 +2795,9 @@ private fun ParityLoading(label: String) {
 private fun ParityFailure(message: String, retry: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text(message, color = MaterialTheme.colorScheme.error)
-        Button(onClick = retry, modifier = Modifier.padding(top = 14.dp)) { Text("Try again") }
+        Button(onClick = retry, modifier = Modifier.padding(top = 14.dp)) {
+            Text(playarrString(PlayarrString.CommonTryAgain))
+        }
     }
 }
 
