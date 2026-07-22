@@ -224,8 +224,6 @@ internal sealed interface ExperienceLoad<out T> {
     data class Failed(val message: String) : ExperienceLoad<Nothing>
 }
 
-internal data class HomeRail(val title: String, val works: List<Work>)
-
 @HiltViewModel
 internal class PlayarrExperienceViewModel @Inject constructor(
     private val browseLibrary: BrowseLibraryUseCase,
@@ -289,7 +287,7 @@ internal class PlayarrExperienceViewModel @Inject constructor(
         viewModelScope.launch {
             _home.value = ExperienceLoad.Loading
             val progressRequest = async { runCatching { api.listWatchProgress() }.getOrDefault(emptyList()) }
-            val kinds = listOf(WorkKind.Movie, WorkKind.Series, WorkKind.Site, WorkKind.Artist)
+            val kinds = listOf(WorkKind.Movie, WorkKind.Series, WorkKind.Site)
             val results = kinds.map { kind ->
                 async { kind to browseLibrary(kind = kind, availableOnly = true, sort = "recent", limit = 36) }
             }.awaitAll()
@@ -305,7 +303,7 @@ internal class PlayarrExperienceViewModel @Inject constructor(
             }
             val progress = progressRequest.await()
             _progress.value = progress
-            _home.value = ExperienceLoad.Ready(buildHomeRails(byKind, progress))
+            _home.value = ExperienceLoad.Ready(buildPlayarrHomeRails(byKind, progress))
         }
     }
 
@@ -406,23 +404,6 @@ internal class PlayarrExperienceViewModel @Inject constructor(
         _playbackQueue.value = PlayarrPlaybackQueue()
     }
 
-    private fun buildHomeRails(byKind: Map<WorkKind, List<Work>>, progress: List<WatchProgress>): List<HomeRail> {
-        val movies = byKind[WorkKind.Movie].orEmpty()
-        val series = byKind[WorkKind.Series].orEmpty()
-        val sites = byKind[WorkKind.Site].orEmpty()
-        val music = byKind[WorkKind.Artist].orEmpty()
-        val recent = (movies + series + sites).sortedByDescending(Work::addedAt)
-        val partWatchedIds = progress.filter { it.state == WatchState.PartWatched }.map(WatchProgress::workId).toSet()
-        val continueWatching = (movies + series + sites).filter { it.id in partWatchedIds }
-        return listOf(
-            HomeRail("Continue watching", continueWatching.take(12)),
-            HomeRail("Start watching", recent.filterNot { it.id in partWatchedIds }.take(12)),
-            HomeRail("New movies", movies.take(12)),
-            HomeRail("New series", series.take(12)),
-            HomeRail("New sites", sites.take(12)),
-            HomeRail("Music", music.take(12)),
-        ).filter { it.works.isNotEmpty() }
-    }
 }
 
 internal data class ExperienceDestination(

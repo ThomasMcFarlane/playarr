@@ -215,6 +215,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Match Playarr Web's Android Home shelves: use one latest-progress On Deck or Start Watching
+  primary, de-duplicate every subsequent title, split each video kind into New and More rails,
+  and keep artists exclusively in Music.
 - Match the Web minimized-player surface on Android phone and TV with a single expand target,
   responsive Web dimensions, live elapsed and duration text, a bounded progress rail, artwork
   fade, and maximize affordance.
