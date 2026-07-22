@@ -59,7 +59,6 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.MusicNote
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PictureInPictureAlt
 import androidx.compose.material.icons.outlined.PlaylistPlay
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -4941,57 +4940,6 @@ internal fun resolveStreamarrPlaybackUrl(serverUrl: String, playbackUrl: String)
         val base = URI(if (serverUrl.endsWith('/')) serverUrl else "$serverUrl/")
         base.resolve(playbackUrl).toString()
     }.getOrDefault(playbackUrl)
-
-@HiltViewModel
-internal class ExperienceSettingsViewModel @Inject constructor(private val tokenStore: TokenStore) : ViewModel() {
-    fun signOut() = viewModelScope.launch { tokenStore.clear() }
-}
-
-@Composable
-private fun ExperienceSettingsScreen(
-    serverUrl: String,
-    isTelevision: Boolean,
-    viewModel: ExperienceSettingsViewModel = hiltViewModel(),
-) {
-    BoxWithConstraints(Modifier.fillMaxSize().background(WebSurface).windowInsetsPadding(WindowInsets.safeDrawing)) {
-        val wide = isTelevision || maxWidth >= 760.dp
-        if (wide) {
-            Row(Modifier.fillMaxSize().padding(horizontal = 72.dp, vertical = 86.dp), horizontalArrangement = Arrangement.spacedBy(34.dp)) {
-                Column(Modifier.width(260.dp)) {
-                    Text("Settings", color = WebInk, fontSize = 34.sp, fontWeight = FontWeight.Medium)
-                    listOf("Appearance", "Language", "Player", "Server").forEachIndexed { index, label ->
-                        Text(
-                            "0${index + 1}  $label",
-                            color = if (label == "Server") WebInk else WebInkMuted,
-                            fontWeight = if (label == "Server") FontWeight.Bold else FontWeight.Normal,
-                            modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
-                        )
-                    }
-                }
-                SettingsServerCard(serverUrl, viewModel::signOut, Modifier.weight(1f))
-            }
-        } else {
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, 72.dp, 16.dp, 106.dp)) {
-                item { Text("Settings", color = WebInk, fontSize = 30.sp, fontWeight = FontWeight.Medium) }
-                item { Spacer(Modifier.height(22.dp)) }
-                item { SettingsServerCard(serverUrl, viewModel::signOut, Modifier.fillMaxWidth()) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingsServerCard(serverUrl: String, onSignOut: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(modifier = modifier, color = WebSurfaceStrong, shape = RoundedCornerShape(18.dp), border = androidx.compose.foundation.BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.22f))) {
-        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
-            Text("SERVER", color = WebPink, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
-            Text("Connected server", color = WebInk, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-            Text(serverUrl, color = WebInkSoft, fontSize = 13.sp)
-            Text("The server address belongs to this account on this device.", color = WebInkMuted, fontSize = 12.sp)
-            OutlinedButton(onClick = onSignOut, modifier = Modifier.padding(top = 8.dp)) { Text("Sign out") }
-        }
-    }
-}
 
 @Composable
 internal fun AuthenticatedArtwork(

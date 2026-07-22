@@ -265,6 +265,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Remove Android's unreachable pre-parity login, catalogue, player, and settings Compose stacks so
+  audits and maintenance cover only the native phone and television experience that can run.
 - Join Android catalogue, search, kind, progress, media, playback-session, and download API calls
   across independently authenticated connected servers, with Playarr Web-equivalent identity
   merging, partial-success behaviour, source discovery, and ownership routing.
