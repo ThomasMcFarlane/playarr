@@ -30,6 +30,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Keep the Android phone profile stage logo and language control below the system status bar while
+  preserving their Playarr Web-aligned television placement.
 - Release ArrowUp and ArrowDown from every Android single-line text field into spatial focus
   navigation after the on-screen keyboard closes, while preserving Left and Right caret movement.
 - Keep Android phone library headings below the system status bar while leaving television layouts

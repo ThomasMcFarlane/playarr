@@ -1671,17 +1671,23 @@ internal fun ExperienceProfilesScreen(
             }
         }
         PlayarrLogo(
-            modifier = Modifier.align(Alignment.TopStart).padding(
-                start = if (isTelevision) 59.dp else 18.dp,
-                top = if (isTelevision) 34.dp else 14.dp,
-            ),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.statusBars)
+                .padding(
+                    start = if (isTelevision) 59.dp else 18.dp,
+                    top = if (isTelevision) 34.dp else 14.dp,
+                ),
             iconSize = if (isTelevision) 42.dp else 30.dp,
         )
         PlayarrLanguageDropdown(
-            modifier = Modifier.align(Alignment.TopEnd).padding(
-                end = if (isTelevision) 44.dp else 14.dp,
-                top = if (isTelevision) 26.dp else 6.dp,
-            ),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.statusBars)
+                .padding(
+                    end = if (isTelevision) 44.dp else 14.dp,
+                    top = if (isTelevision) 26.dp else 6.dp,
+                ),
         )
     }
     pinProfile?.let { profile ->
