@@ -53,6 +53,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Bring Android music details to Playarr Web parity with localized artist, album, track, empty,
+  duration, and action copy; restore an explicitly requested track; and keep the focused track's
+  title, duration, and selected styling synchronized across phone and TV layouts.
 - Localise Android video details, episode and chapter rails, title action and playlist dialogs,
   playback settings, and multi-server playback selection in English, Thai, and Japanese, with
   locale-aware Web-compatible runtime labels and a natively scrollable playlist picker.

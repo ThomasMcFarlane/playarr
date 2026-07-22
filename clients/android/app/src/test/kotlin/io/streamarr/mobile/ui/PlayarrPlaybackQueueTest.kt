@@ -133,6 +133,43 @@ class PlayarrPlaybackQueueTest {
     }
 
     @Test
+    fun `music detail restores the requested track or falls back to the first playable track`() {
+        fun album(id: String, mediaFileId: String?) = AlbumDetail(
+            album = Album(
+                id = id,
+                artistWorkId = "artist",
+                title = id,
+                albumType = AlbumType.Studio,
+                monitored = true,
+                availability = Availability.Available,
+            ),
+            tracks = listOf(
+                TrackDetail(
+                    track = Track(
+                        id = "$id-track",
+                        albumId = id,
+                        discNumber = 1,
+                        trackNumber = 1,
+                        title = "$id track",
+                        availability = Availability.Available,
+                    ),
+                    mediaFileId = mediaFileId,
+                ),
+            ),
+        )
+        val albums = listOf(album("unavailable", null), album("first", "media-1"), album("requested", "media-2"))
+
+        assertEquals(
+            PlayarrMusicSelection("requested", "requested-track"),
+            resolvePlayarrMusicSelection(albums, "media-2"),
+        )
+        assertEquals(
+            PlayarrMusicSelection("first", "first-track"),
+            resolvePlayarrMusicSelection(albums, "missing"),
+        )
+    }
+
+    @Test
     fun `joined series source maps the requested episode by season and episode number`() {
         fun detail(workId: String, mediaPrefix: String) = WorkDetail(
             work = work(workId, WorkKind.Series, "Series"),

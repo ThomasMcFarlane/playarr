@@ -2497,6 +2497,7 @@ private fun ExperienceDetailScreen(
                     ExperienceMusicDetailContent(
                         detail = detail,
                         children = artistChildren,
+                        initialMediaFileId = initialMediaFileId,
                         serverUrl = serverUrl,
                         accessToken = accessToken,
                         isTelevision = isTelevision,
@@ -3549,6 +3550,7 @@ private fun SimilarWorksRail(
 private fun ExperienceMusicDetailContent(
     detail: WorkDetail,
     children: WorkChildren.Artist,
+    initialMediaFileId: String?,
     serverUrl: String,
     accessToken: String?,
     isTelevision: Boolean,
@@ -3558,12 +3560,22 @@ private fun ExperienceMusicDetailContent(
     onAddToPlaylist: (trackId: String) -> Unit,
     onDownload: (List<DownloadCandidate>) -> Unit,
 ) {
+    val language = LocalPlayarrLanguage.current
     val albums = remember(children) {
         children.albums.filter { album -> album.tracks.any { it.mediaFileId != null } }
     }
-    var selectedAlbumId by remember(detail.work.id, albums) { mutableStateOf(albums.firstOrNull()?.album?.id) }
+    val initialSelection = remember(detail.work.id, albums, initialMediaFileId) {
+        resolvePlayarrMusicSelection(albums, initialMediaFileId)
+    }
+    var selectedAlbumId by remember(detail.work.id, albums, initialMediaFileId) {
+        mutableStateOf(initialSelection?.albumId)
+    }
+    var selectedTrackId by remember(detail.work.id, albums, initialMediaFileId) {
+        mutableStateOf(initialSelection?.trackId)
+    }
     val selectedAlbum = albums.firstOrNull { it.album.id == selectedAlbumId } ?: albums.firstOrNull()
     val selectedTracks = selectedAlbum?.tracks?.filter { it.mediaFileId != null }.orEmpty()
+    val selectedTrack = selectedTracks.firstOrNull { it.track.id == selectedTrackId } ?: selectedTracks.firstOrNull()
     val posterUrl = remember(detail.work.id) {
         detail.work.images.firstOrNull { it.kind == ImageKind.Poster }?.url
     }
@@ -3609,10 +3621,20 @@ private fun ExperienceMusicDetailContent(
             item {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     IconButton(onClick = onBack, modifier = Modifier.background(WebSurfaceStrong.copy(alpha = 0.88f), CircleShape)) {
-                        Icon(Icons.Outlined.ArrowBack, contentDescription = "Back to Music", tint = WebInk)
+                        Icon(
+                            Icons.Outlined.ArrowBack,
+                            contentDescription = playarrString(PlayarrString.MusicBackToMusic),
+                            tint = WebInk,
+                        )
                     }
                     Column {
-                        Text("MUSIC", color = WebPink, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
+                        Text(
+                            playarrString(PlayarrString.MusicTitle).uppercase(language.locale),
+                            color = WebPink,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 1.2.sp,
+                        )
                         Text(detail.work.title, color = WebInk, fontSize = if (isTelevision) 32.sp else 24.sp, fontWeight = FontWeight.Medium)
                     }
                 }
@@ -3623,7 +3645,11 @@ private fun ExperienceMusicDetailContent(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
-                        selectedAlbum?.album?.albumType?.name?.replace('_', ' ')?.uppercase() ?: "ARTIST",
+                        (
+                            selectedAlbum?.album?.albumType?.name?.replace('_', ' ')
+                                ?: detail.work.genres.firstOrNull()
+                                ?: playarrString(PlayarrString.MusicArtist)
+                            ).uppercase(language.locale),
                         color = WebInkMuted,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
@@ -3637,18 +3663,55 @@ private fun ExperienceMusicDetailContent(
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(detail.work.title, color = WebInkSoft, fontWeight = FontWeight.SemiBold)
                         selectedAlbum?.album?.releaseDate?.year?.let { Text(it.toString(), color = WebInkMuted) }
-                        if (selectedAlbum != null) Text("${selectedTracks.size} tracks", color = WebInkMuted)
+                        if (selectedAlbum != null) {
+                            Text(
+                                playarrString(
+                                    PlayarrString.MusicTrackCount,
+                                    "count" to selectedTracks.size,
+                                    "unit" to playarrString(
+                                        if (selectedTracks.size == 1) PlayarrString.MusicTrackSingular else PlayarrString.MusicTrackPlural,
+                                    ),
+                                ),
+                                color = WebInkMuted,
+                            )
+                        }
                     }
-                    detail.work.overview?.let {
-                        Text(it, color = WebInkSoft, maxLines = if (isTelevision) 3 else 4, overflow = TextOverflow.Ellipsis)
+                    selectedTrack?.let { track ->
+                        Text(
+                            "${track.track.title} · ${formatMusicDurationLabel(track.track.durationSeconds)}",
+                            color = WebInkSoft,
+                            fontSize = if (isTelevision) 18.sp else 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
+                    Text(
+                        detail.work.overview?.takeIf(String::isNotBlank)
+                            ?: playarrString(PlayarrString.MusicOverviewFallback),
+                        color = WebInkSoft,
+                        maxLines = if (isTelevision) 3 else 4,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
             if (albums.isEmpty()) {
-                item { Text("No playable albums are available.", color = WebInkMuted, modifier = Modifier.padding(vertical = 48.dp)) }
+                item {
+                    Column(
+                        modifier = Modifier.padding(vertical = 48.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            playarrString(PlayarrString.MusicNoAlbumsTitle),
+                            color = WebInk,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(playarrString(PlayarrString.MusicNoAlbumsDescription), color = WebInkMuted)
+                    }
+                }
             } else {
                 item {
-                    Text("Albums", color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    Text(playarrString(PlayarrString.MusicAlbums), color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                     LazyRow(
                         modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 22.dp else 12.dp),
@@ -3662,9 +3725,13 @@ private fun ExperienceMusicDetailContent(
                                 accessToken = accessToken,
                                 selected = album.album.id == selectedAlbum?.album?.id,
                                 isTelevision = isTelevision,
-                                onSelect = { selectedAlbumId = album.album.id },
+                                onSelect = {
+                                    selectedAlbumId = album.album.id
+                                    selectedTrackId = firstTrack?.track?.id
+                                },
                                 onPlay = {
                                     selectedAlbumId = album.album.id
+                                    selectedTrackId = firstTrack?.track?.id
                                     firstTrack?.mediaFileId?.let { onPlay(it, album.album.id) }
                                 },
                             )
@@ -3679,7 +3746,17 @@ private fun ExperienceMusicDetailContent(
                         ) {
                             Column(Modifier.weight(1f)) {
                                 Text(album.album.title, color = WebInk, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                                Text("Album tracks", color = WebInkMuted, fontSize = 10.sp)
+                                Text(
+                                    playarrString(
+                                        PlayarrString.MusicTrackCount,
+                                        "count" to selectedTracks.size,
+                                        "unit" to playarrString(
+                                            if (selectedTracks.size == 1) PlayarrString.MusicTrackSingular else PlayarrString.MusicTrackPlural,
+                                        ),
+                                    ),
+                                    color = WebInkMuted,
+                                    fontSize = 10.sp,
+                                )
                             }
                             val albumDownloads = album.tracks.mapNotNull { track ->
                                 track.mediaFileId?.let {
@@ -3688,7 +3765,14 @@ private fun ExperienceMusicDetailContent(
                             }
                             if (canDownload && albumDownloads.isNotEmpty()) {
                                 IconButton(onClick = { onDownload(albumDownloads) }) {
-                                    Icon(Icons.Outlined.Download, contentDescription = "Download album", tint = WebInk)
+                                    Icon(
+                                        Icons.Outlined.Download,
+                                        contentDescription = playarrString(
+                                            PlayarrString.DetailDownloadTitle,
+                                            "title" to album.album.title,
+                                        ),
+                                        tint = WebInk,
+                                    )
                                 }
                             }
                         }
@@ -3700,7 +3784,12 @@ private fun ExperienceMusicDetailContent(
                             artistTitle = detail.work.title,
                             posterUrl = posterUrl,
                             canDownload = canDownload,
-                            onPlay = { track.mediaFileId?.let { onPlay(it, album.album.id) } },
+                            selected = track.track.id == selectedTrack?.track?.id,
+                            onSelect = { selectedTrackId = track.track.id },
+                            onPlay = {
+                                selectedTrackId = track.track.id
+                                track.mediaFileId?.let { onPlay(it, album.album.id) }
+                            },
                             onAddToPlaylist = { onAddToPlaylist(track.track.id) },
                             onDownload = { candidate -> onDownload(listOf(candidate)) },
                         )
@@ -3763,6 +3852,8 @@ private fun MusicTrackRow(
     artistTitle: String,
     posterUrl: String?,
     canDownload: Boolean,
+    selected: Boolean,
+    onSelect: () -> Unit,
     onPlay: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onDownload: (DownloadCandidate) -> Unit,
@@ -3771,9 +3862,12 @@ private fun MusicTrackRow(
     var focused by remember(track.track.id) { mutableStateOf(false) }
     Surface(
         onClick = onPlay,
-        color = if (focused) WebSurfaceSoft else WebSurfaceStrong.copy(alpha = 0.92f),
+        color = if (focused || selected) WebSurfaceSoft else WebSurfaceStrong.copy(alpha = 0.92f),
         shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+        modifier = Modifier.fillMaxWidth().onFocusChanged {
+            focused = it.isFocused
+            if (it.isFocused) onSelect()
+        },
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
@@ -3782,9 +3876,16 @@ private fun MusicTrackRow(
         ) {
             Text(track.track.trackNumber.toString().padStart(2, '0'), color = WebInkMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Text(track.track.title, color = WebInk, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(formatMusicDuration(track.track.durationSeconds), color = WebInkMuted, fontSize = 11.sp)
+            Text(formatMusicDurationLabel(track.track.durationSeconds), color = WebInkMuted, fontSize = 11.sp)
             IconButton(onClick = onAddToPlaylist) {
-                Icon(Icons.Outlined.Add, contentDescription = "Add ${track.track.title} to playlist", tint = WebInkMuted)
+                Icon(
+                    Icons.Outlined.Add,
+                    contentDescription = playarrString(
+                        PlayarrString.MusicAddTrackToPlaylist,
+                        "title" to track.track.title,
+                    ),
+                    tint = WebInkMuted,
+                )
             }
             if (canDownload) {
                 IconButton(
@@ -3792,17 +3893,57 @@ private fun MusicTrackRow(
                         onDownload(DownloadCandidate(mediaFileId, artistWorkId, track.track.title, artistTitle, posterUrl, "track"))
                     },
                 ) {
-                    Icon(Icons.Outlined.Download, contentDescription = "Download ${track.track.title}", tint = WebInkMuted)
+                    Icon(
+                        Icons.Outlined.Download,
+                        contentDescription = playarrString(
+                            PlayarrString.DetailDownloadTitle,
+                            "title" to track.track.title,
+                        ),
+                        tint = WebInkMuted,
+                    )
                 }
             }
-            Icon(Icons.Outlined.PlayArrow, contentDescription = "Play ${track.track.title}", tint = WebPink)
+            Icon(
+                Icons.Outlined.PlayArrow,
+                contentDescription = playarrString(PlayarrString.DetailPlayTitle, "title" to track.track.title),
+                tint = WebPink,
+            )
         }
     }
 }
 
+@Composable
+private fun formatMusicDurationLabel(seconds: Int?): String =
+    if (seconds == null || seconds <= 0) {
+        playarrString(PlayarrString.MusicDurationUnavailable)
+    } else {
+        formatMusicDuration(seconds)
+    }
+
 internal fun formatMusicDuration(seconds: Int?): String {
     if (seconds == null || seconds <= 0) return "--:--"
     return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
+}
+
+internal data class PlayarrMusicSelection(val albumId: String, val trackId: String)
+
+internal fun resolvePlayarrMusicSelection(
+    albums: List<AlbumDetail>,
+    requestedMediaFileId: String?,
+): PlayarrMusicSelection? {
+    val requested = requestedMediaFileId?.let { mediaFileId ->
+        albums.firstNotNullOfOrNull { album ->
+            album.tracks.firstOrNull { it.mediaFileId == mediaFileId }?.let { track ->
+                PlayarrMusicSelection(album.album.id, track.track.id)
+            }
+        }
+    }
+    if (requested != null) return requested
+    return albums.firstNotNullOfOrNull { album ->
+        album.tracks.firstOrNull { it.mediaFileId != null }?.let { track ->
+            PlayarrMusicSelection(album.album.id, track.track.id)
+        }
+    }
 }
 
 @Composable
@@ -3826,7 +3967,7 @@ private fun DetailChildren(
         when (val children = detail.children) {
             WorkChildren.Movie -> detail.mediaFileId?.let { id ->
                 PlayRow(
-                    title = "Play ${detail.work.title}",
+                    title = playarrString(PlayarrString.DetailPlayTitle, "title" to detail.work.title),
                     available = true,
                     onAddToPlaylist = { onAddToPlaylist(null) },
                     onDownload = if (canDownload) {
@@ -3839,17 +3980,37 @@ private fun DetailChildren(
                         null
                     },
                 ) { onPlay(id) }
-            } ?: Text("This title is not available to play.", color = WebInkMuted)
+            } ?: Text(playarrString(PlayarrString.DetailNoPlayableMedia), color = WebInkMuted)
             is WorkChildren.Series -> children.seasons.forEach { season ->
                 val seasonCandidates = season.episodes.mapNotNull { episode ->
                     episode.mediaFileId?.let {
-                        DownloadCandidate(it, detail.work.id, episode.episode.title ?: "Episode ${episode.episode.episodeNumber}", detail.work.title, posterUrl, "episode")
+                        DownloadCandidate(
+                            it,
+                            detail.work.id,
+                            episode.episode.title ?: playarrString(
+                                PlayarrString.DetailEpisodeNumber,
+                                "number" to episode.episode.episodeNumber,
+                            ),
+                            detail.work.title,
+                            posterUrl,
+                            "episode",
+                        )
                     }
                 }
-                SectionHeaderRow("Season ${season.season.seasonNumber}", if (canDownload) seasonCandidates else emptyList()) { onDownload(it) }
+                SectionHeaderRow(
+                    season.season.title ?: playarrString(
+                        PlayarrString.DetailSeasonNumber,
+                        "number" to season.season.seasonNumber,
+                    ),
+                    if (canDownload) seasonCandidates else emptyList(),
+                ) { onDownload(it) }
                 season.episodes.forEach { episode ->
+                    val episodeTitle = episode.episode.title ?: playarrString(
+                        PlayarrString.DetailEpisodeNumber,
+                        "number" to episode.episode.episodeNumber,
+                    )
                     PlayRow(
-                        title = episode.episode.title ?: "Episode ${episode.episode.episodeNumber}",
+                        title = episodeTitle,
                         available = episode.mediaFileId != null,
                         onAddToPlaylist = { onAddToPlaylist(episode.episode.id) },
                         onDownload = episode.mediaFileId?.takeIf { canDownload }?.let { id ->
@@ -3858,7 +4019,7 @@ private fun DetailChildren(
                                     listOf(
                                         DownloadCandidate(
                                             id, detail.work.id,
-                                            episode.episode.title ?: "Episode ${episode.episode.episodeNumber}",
+                                            episodeTitle,
                                             detail.work.title, posterUrl, "episode",
                                         ),
                                     ),
@@ -3908,7 +4069,14 @@ private fun SectionHeaderRow(title: String, candidates: List<DownloadCandidate>,
         Text(title, color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
         if (candidates.isNotEmpty()) {
             IconButton(onClick = { onDownloadAll(candidates) }) {
-                Icon(Icons.Outlined.Download, contentDescription = "Download all", tint = WebInkMuted)
+                Icon(
+                    Icons.Outlined.Download,
+                    contentDescription = playarrString(
+                        PlayarrString.ContextDownloadCount,
+                        "count" to candidates.size,
+                    ),
+                    tint = WebInkMuted,
+                )
             }
         }
     }
@@ -3933,12 +4101,30 @@ private fun PlayRow(
         Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(title, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
             onAddToPlaylist?.let { add ->
-                IconButton(onClick = add) { Icon(Icons.Outlined.Add, contentDescription = "Add to playlist", tint = WebInkMuted) }
+                IconButton(onClick = add) {
+                    Icon(
+                        Icons.Outlined.Add,
+                        contentDescription = playarrString(PlayarrString.ContextAddToPlaylist),
+                        tint = WebInkMuted,
+                    )
+                }
             }
             onDownload?.let { download ->
-                IconButton(onClick = download) { Icon(Icons.Outlined.Download, contentDescription = "Download", tint = WebInkMuted) }
+                IconButton(onClick = download) {
+                    Icon(
+                        Icons.Outlined.Download,
+                        contentDescription = playarrString(PlayarrString.ContextDownload),
+                        tint = WebInkMuted,
+                    )
+                }
             }
-            Icon(Icons.Outlined.PlayArrow, contentDescription = if (available) "Play" else "Unavailable", tint = if (available) WebPink else WebInkMuted)
+            Icon(
+                Icons.Outlined.PlayArrow,
+                contentDescription = playarrString(
+                    if (available) PlayarrString.DetailPlay else PlayarrString.DetailUnavailable,
+                ),
+                tint = if (available) WebPink else WebInkMuted,
+            )
         }
     }
 }
