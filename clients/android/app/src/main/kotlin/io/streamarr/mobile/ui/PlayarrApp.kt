@@ -537,7 +537,10 @@ private fun TelevisionPairingScreen(
                 when (state) {
                     PairingState.Idle, PairingState.Requesting -> CircularProgressIndicator(color = WebPink)
                     is PairingState.Waiting -> {
-                        PairingQrCode(state.code.verificationUriComplete)
+                        PlayarrQrCode(
+                            state.code.verificationUriComplete,
+                            "QR code for playarr.app/link",
+                        )
                         Text(state.code.userCode, color = WebInk, fontSize = 42.sp, fontWeight = FontWeight.Bold, letterSpacing = 5.sp)
                         Text("Open playarr.app/link and enter this code", color = WebInkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         Text("Waiting for approval…", color = WebPink, fontWeight = FontWeight.SemiBold)
@@ -553,7 +556,11 @@ private fun TelevisionPairingScreen(
 }
 
 @Composable
-private fun PairingQrCode(value: String) {
+internal fun PlayarrQrCode(
+    value: String,
+    contentDescription: String,
+    modifier: Modifier = Modifier.size(220.dp),
+) {
     val bitmap = remember(value) {
         val size = 260
         val matrix = QRCodeWriter().encode(
@@ -574,8 +581,8 @@ private fun PairingQrCode(value: String) {
     Surface(color = Color.White, shape = RoundedCornerShape(12.dp)) {
         Image(
             bitmap = bitmap.asImageBitmap(),
-            contentDescription = "QR code for playarr.app/link",
-            modifier = Modifier.size(220.dp).padding(8.dp),
+            contentDescription = contentDescription,
+            modifier = modifier.padding(8.dp),
         )
     }
 }

@@ -98,6 +98,7 @@ import io.streamarr.shared.data.model.CreatePlaylistRequest
 import io.streamarr.shared.data.model.CreateUserInviteRequest
 import io.streamarr.shared.data.model.InviteRequestStatus
 import io.streamarr.shared.data.model.PlayerPreferences
+import io.streamarr.shared.data.model.PeerAddressEntry
 import io.streamarr.shared.data.model.Playlist
 import io.streamarr.shared.data.model.PlaylistItem
 import io.streamarr.shared.data.model.PlaylistMediaType
@@ -108,7 +109,6 @@ import io.streamarr.shared.data.model.ReorderPlaylistItemsRequest
 import io.streamarr.shared.data.model.UpdatePlayerPreferencesRequest
 import io.streamarr.shared.data.model.UpdateProfileAvatarRequest
 import io.streamarr.shared.data.model.UpdateProfilePinRequest
-import io.streamarr.shared.data.model.UserInvite
 import io.streamarr.shared.data.model.UserInviteRequest
 import io.streamarr.shared.data.model.WorkChildren
 import io.streamarr.shared.data.model.WorkDetail
@@ -118,10 +118,12 @@ import javax.inject.Inject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 internal sealed interface ParityLoad<out T> {
     data object Loading : ParityLoad<Nothing>
@@ -652,8 +654,10 @@ internal class ParitySettingsViewModel @Inject constructor(
     val state = _state.asStateFlow()
     private val _message = MutableStateFlow<String?>(null)
     val message = _message.asStateFlow()
-    private val _invite = MutableStateFlow<UserInvite?>(null)
+    private val _invite = MutableStateFlow<PlayarrGeneratedInvite?>(null)
     val invite = _invite.asStateFlow()
+    private val _inviteBusy = MutableStateFlow(false)
+    val inviteBusy = _inviteBusy.asStateFlow()
 
     init { load() }
 
@@ -676,15 +680,63 @@ internal class ParitySettingsViewModel @Inject constructor(
     fun saveAvatar(preference: ProfileAvatarPreference) = update("Profile avatar saved") {
         api.updateProfileAvatar(UpdateProfileAvatarRequest(preference))
     }
-    fun requestInvite(message: String) = update("Invitation request sent") { api.createUserInviteRequest(CreateUserInviteRequest(message.ifBlank { null })) }
-    fun generateInvite() = viewModelScope.launch {
-        runCatching { api.generateApprovedUserInvite() }.onSuccess { _invite.value = it; _message.value = "Invitation generated" }.onFailure { _message.value = it.playarrMessage("invitation") }
+    fun requestInvite(message: String) = viewModelScope.launch {
+        if (_inviteBusy.value) return@launch
+        _inviteBusy.value = true
+        runCatching { api.createUserInviteRequest(CreateUserInviteRequest(message.ifBlank { null })) }
+            .onSuccess {
+                updateInviteRequest(it)
+                _message.value = "Invitation request sent"
+            }
+            .onFailure { _message.value = it.playarrMessage("invitation") }
+        _inviteBusy.value = false
     }
+    fun generateInvite(serverUrl: String) = viewModelScope.launch {
+        if (_inviteBusy.value) return@launch
+        _inviteBusy.value = true
+        runCatching {
+            coroutineScope {
+                val invite = async { api.generateApprovedUserInvite() }
+                val addresses = async { resolveInviteAddresses(serverUrl) }
+                val generated = invite.await()
+                PlayarrGeneratedInvite(
+                    link = buildPlayarrInviteUrl(addresses.await(), generated.inviteToken),
+                    expiresAt = generated.expiresAt,
+                )
+            }
+        }.onSuccess {
+            _invite.value = it
+            runCatching { refreshInviteRequestNow() }
+            _message.value = "Invitation generated"
+        }.onFailure { _message.value = it.playarrMessage("invitation") }
+        _inviteBusy.value = false
+    }
+    fun dismissInvite() { _invite.value = null }
+    fun refreshInviteRequest() = viewModelScope.launch { runCatching { refreshInviteRequestNow() } }
     fun changeServer(value: String) = viewModelScope.launch {
         runCatching { normaliseServerUrl(value) }.onSuccess { serverConfigStore.setBaseUrl(it); tokenStore.clear() }.onFailure { _message.value = "Enter a valid HTTP or HTTPS server URL." }
     }
     fun signOut() = viewModelScope.launch { tokenStore.clear() }
     fun clearMessage() { _message.value = null }
+
+    private suspend fun resolveInviteAddresses(serverUrl: String): List<PeerAddressEntry> {
+        val bundle = try {
+            api.getPeerAddressBundle()
+        } catch (error: HttpException) {
+            if (error.code() == 403) return playarrInviteAddresses(emptyList(), serverUrl)
+            throw error
+        }
+        return playarrInviteAddresses(bundle.addresses, serverUrl)
+    }
+
+    private suspend fun refreshInviteRequestNow() {
+        updateInviteRequest(api.getMyUserInviteRequest().value)
+    }
+
+    private fun updateInviteRequest(request: UserInviteRequest?) {
+        val current = (_state.value as? ParityLoad.Ready)?.value ?: return
+        _state.value = ParityLoad.Ready(current.copy(inviteRequest = request))
+    }
 
     private fun update(success: String, block: suspend () -> Any) = viewModelScope.launch {
         runCatching { block() }.onSuccess { _message.value = success; load() }.onFailure { _message.value = it.playarrMessage("settings") }
@@ -704,7 +756,15 @@ internal fun ExperienceParitySettingsScreen(
     val state by viewModel.state.collectAsState()
     val message by viewModel.message.collectAsState()
     val invite by viewModel.invite.collectAsState()
+    val inviteBusy by viewModel.inviteBusy.collectAsState()
     var section by remember { mutableStateOf(SettingsSection.Appearance) }
+    LaunchedEffect(section) {
+        if (section != SettingsSection.Invite) return@LaunchedEffect
+        while (true) {
+            delay(30_000)
+            viewModel.refreshInviteRequest()
+        }
+    }
     BoxWithConstraints(Modifier.fillMaxSize().background(WebSurface)) {
         val wide = isTelevision || maxWidth >= 760.dp
         Row(Modifier.fillMaxSize()) {
@@ -740,7 +800,7 @@ internal fun ExperienceParitySettingsScreen(
                     when (val current = state) {
                         ParityLoad.Loading -> Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebPink) }
                         is ParityLoad.Failed -> ParityFailure(current.message, viewModel::load)
-                        is ParityLoad.Ready -> SettingsSectionContent(section, current.value, serverUrl, invite, isTelevision, viewModel)
+                        is ParityLoad.Ready -> SettingsSectionContent(section, current.value, serverUrl, isTelevision, inviteBusy, viewModel)
                     }
                 }
                 message?.let { item { Text(it, color = if (it.contains("saved") || it.contains("sent") || it.contains("generated")) WebPink else MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable { viewModel.clearMessage() }) } }
@@ -748,6 +808,7 @@ internal fun ExperienceParitySettingsScreen(
             }
         }
     }
+    invite?.let { PlayarrInviteDialog(it, viewModel::dismissInvite) }
 }
 
 @Composable
@@ -755,8 +816,8 @@ private fun SettingsSectionContent(
     section: SettingsSection,
     snapshot: SettingsSnapshot,
     serverUrl: String,
-    invite: UserInvite?,
     isTelevision: Boolean,
+    inviteBusy: Boolean,
     viewModel: ParitySettingsViewModel,
 ) {
     val display = LocalPlayarrDisplayPreferences.current
@@ -901,16 +962,32 @@ private fun SettingsSectionContent(
             SettingsSection.Invite -> {
                 var requestMessage by remember { mutableStateOf("") }
                 val request = snapshot.inviteRequest
+                LaunchedEffect(request?.status) {
+                    if (request?.status == InviteRequestStatus.Pending) requestMessage = ""
+                }
                 Text(request?.status?.name?.replace('_', ' ')?.uppercase(Locale.getDefault()) ?: "NO REQUEST", color = WebPink, fontWeight = FontWeight.Bold)
                 when (request?.status) {
-                    InviteRequestStatus.Approved -> Button(onClick = viewModel::generateInvite) { Text("Generate invitation") }
+                    InviteRequestStatus.Approved -> Button(
+                        onClick = { viewModel.generateInvite(serverUrl) },
+                        enabled = !inviteBusy,
+                    ) { Text(if (inviteBusy) "Working…" else "Generate QR") }
                     InviteRequestStatus.Pending -> Text("Your request is waiting for approval.", color = WebInkSoft)
                     else -> {
-                        OutlinedTextField(requestMessage, { requestMessage = it }, label = { Text("Optional message") }, modifier = Modifier.fillMaxWidth())
-                        Button(onClick = { viewModel.requestInvite(requestMessage) }) { Text("Request invitation") }
+                        OutlinedTextField(
+                            requestMessage,
+                            { if (it.length <= 500) requestMessage = it },
+                            label = { Text("Optional message") },
+                            minLines = 4,
+                            maxLines = 4,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Button(
+                            onClick = { viewModel.requestInvite(requestMessage) },
+                            enabled = !inviteBusy,
+                        ) { Text(if (inviteBusy) "Working…" else "Request invitation") }
                     }
                 }
-                invite?.let { Text("https://playarr.app/signup?invite=${it.inviteToken}&server=${serverUrl}", color = WebInk, fontSize = 11.sp) }
+                PlayarrApprovalNotifications()
             }
         }
     }

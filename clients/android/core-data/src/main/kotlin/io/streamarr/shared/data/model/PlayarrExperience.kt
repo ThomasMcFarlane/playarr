@@ -209,3 +209,16 @@ data class UserInvite(
     @SerialName("invite_token") val inviteToken: String,
     @SerialName("expires_at") val expiresAt: String,
 )
+
+@Serializable
+data class PeerAddressEntry(
+    @SerialName("peer_node_id") val peerNodeId: String,
+    val url: String,
+)
+
+@Serializable
+data class PeerAddressBundle(
+    @SerialName("group_id") val groupId: String? = null,
+    @SerialName("group_name") val groupName: String? = null,
+    val addresses: List<PeerAddressEntry> = emptyList(),
+)

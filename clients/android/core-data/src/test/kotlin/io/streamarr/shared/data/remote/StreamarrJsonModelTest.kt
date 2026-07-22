@@ -6,6 +6,7 @@ import io.streamarr.shared.data.model.CatalogPage
 import io.streamarr.shared.data.model.ExternalProvider
 import io.streamarr.shared.data.model.MediaChapter
 import io.streamarr.shared.data.model.MediaPlaybackOptionsResponse
+import io.streamarr.shared.data.model.PeerAddressBundle
 import io.streamarr.shared.data.model.PlaybackMode
 import io.streamarr.shared.data.model.PlaybackInfoResponse
 import io.streamarr.shared.data.model.OptionalUserInviteRequest
@@ -196,6 +197,26 @@ class StreamarrJsonModelTest {
         assertEquals(65_432L, chapters.single().endMs)
         assertEquals("source-audio-1", options.preferences.audioTrackId)
         assertEquals("source-subtitle-3", options.subtitleTracks.single().id)
+    }
+
+    @Test
+    fun `decodes peer address bundle used by invite links`() {
+        val bundle = json.decodeFromString(
+            PeerAddressBundle.serializer(),
+            """
+            {
+              "group_id": "11111111-1111-4111-8111-111111111111",
+              "group_name": "Home Group",
+              "addresses": [
+                {"peer_node_id":"node-a","url":"https://home.example.com"},
+                {"peer_node_id":"node-b","url":"http://192.168.1.5:8484"}
+              ]
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals("Home Group", bundle.groupName)
+        assertEquals(listOf("node-a", "node-b"), bundle.addresses.map { it.peerNodeId })
     }
 
     @Test

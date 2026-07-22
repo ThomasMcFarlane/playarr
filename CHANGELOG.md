@@ -47,6 +47,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Bring Android friend invitations to Playarr Web parity with live approval refresh, notification
+  enablement, grouped-server links, QR and expiry display, clipboard copying, and fallback routing.
 - Add Android phone photo avatars with Playarr Web-compatible pan, zoom, square crop, and
   server-backed 512 px JPEG output while retaining preset-only selection on TV.
 - Enrich Android movie and series details with fixed runtime, real or generated chapters, cast,

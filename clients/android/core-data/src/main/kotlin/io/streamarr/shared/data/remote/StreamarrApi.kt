@@ -13,6 +13,7 @@ import io.streamarr.shared.data.model.DownloadTicketResponse
 import io.streamarr.shared.data.model.MediaChapter
 import io.streamarr.shared.data.model.MediaMetadata
 import io.streamarr.shared.data.model.MediaPlaybackOptionsResponse
+import io.streamarr.shared.data.model.PeerAddressBundle
 import io.streamarr.shared.data.model.PlayerPreferences
 import io.streamarr.shared.data.model.OptionalUserInviteRequest
 import io.streamarr.shared.data.model.Playlist
@@ -84,6 +85,9 @@ interface StreamarrApi {
 
     @POST("api/v1/users/me/push-registrations")
     suspend fun registerPush(@Body request: PushRegistrationRequest): Response<ResponseBody>
+
+    @GET("api/v1/admin/peer-groups/self/address-bundle")
+    suspend fun getPeerAddressBundle(): PeerAddressBundle
 
     // ---- system ------------------------------------------------------------
 
