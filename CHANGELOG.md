@@ -53,6 +53,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Align Android's playlist directory with Playarr Web through localized hierarchy-aware roots,
+  inherited cover artwork, shared/personal and natural-name ordering filters, folder metadata, and
+  parent-aware video or audio playlist creation.
 - Bring Android Downloads to Playarr Web parity with localized grouped states, playable completed
   downloads, scrollable quality options, and arbitrary date or after-watched retention controls,
   including a migration-safe policy whose expiry starts at the actual watched event.
