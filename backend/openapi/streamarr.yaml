@@ -53,6 +53,25 @@ paths:
                   sunset: null
                 instance_name: Streamarr
                 server_version: 1.4.2
+  /api/v1/admin/library/source-matrix:
+    get:
+      tags:
+      - admin
+      summary: Physical media-file inventory across every normal Source instance.
+      operationId: source_matrix_handler
+      responses:
+        '200':
+          description: Sources and their imported physical files
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceMatrixResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+      security:
+      - bearer_auth: []
   /api/v1/admin/peer-groups:
     post:
       tags:
@@ -656,6 +675,46 @@ paths:
           description: Missing or invalid access token
         '403':
           description: Caller is authenticated but not an admin
+      security:
+      - bearer_auth: []
+  /api/v1/admin/source-instances/{id}/folder-mappings:
+    put:
+      tags:
+      - admin
+      summary: |-
+        Replaces one Source instance's peer-root mappings. Because mappings are
+        part of the normal Source row, the existing signed Source replication
+        carries this change to every peer.
+      operationId: update_source_folder_mappings_handler
+      parameters:
+      - name: id
+        in: path
+        description: Source instance id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourceFolderMappingsRequest'
+        required: true
+      responses:
+        '200':
+          description: Updated Source instance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceInstanceResponse'
+        '400':
+          description: A mapped path was empty
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '404':
+          description: No source instance registered with this id
       security:
       - bearer_auth: []
   /api/v1/admin/source-instances/{id}/sync:
@@ -5621,6 +5680,57 @@ components:
           description: |-
             Base URL of a node already in the target group, e.g.
             `"https://home.example.com"` -- the doc's "bootstrap address".
+    LeafRef:
+      oneOf:
+      - type: object
+        description: The file *is* the work (movies).
+        required:
+        - leaf_kind
+        properties:
+          leaf_kind:
+            type: string
+            enum:
+            - work
+      - type: object
+        required:
+        - leaf_id
+        - leaf_kind
+        properties:
+          leaf_id:
+            type: string
+            format: uuid
+          leaf_kind:
+            type: string
+            enum:
+            - episode
+      - type: object
+        required:
+        - leaf_id
+        - leaf_kind
+        properties:
+          leaf_id:
+            type: string
+            format: uuid
+          leaf_kind:
+            type: string
+            enum:
+            - track
+      - type: object
+        required:
+        - leaf_id
+        - leaf_kind
+        properties:
+          leaf_id:
+            type: string
+            format: uuid
+          leaf_kind:
+            type: string
+            enum:
+            - book
+      description: |-
+        Identifies exactly which leaf of a [`crate::Work`] a [`MediaFile`] is
+        the source for. A movie's file points straight at the work; a TV/music/
+        book file points at the specific episode/track/book child.
     LeafSelector:
       oneOf:
       - type: string
@@ -7803,6 +7913,19 @@ components:
           type: string
         username:
           type: string
+    SourceFolderMappingsRequest:
+      type: object
+      description: Complete per-node root mapping for one ordinary Source instance.
+      required:
+      - folder_mappings
+      properties:
+        folder_mappings:
+          type: object
+          additionalProperties:
+            type: string
+          propertyNames:
+            type: string
+            format: uuid
     SourceInstanceRequest:
       type: object
       description: |-
@@ -7859,6 +7982,7 @@ components:
       - name
       - base_url
       - priority
+      - folder_mappings
       - best_effort
       properties:
         base_url:
@@ -7874,6 +7998,13 @@ components:
           type:
           - string
           - 'null'
+        folder_mappings:
+          type: object
+          additionalProperties:
+            type: string
+          propertyNames:
+            type: string
+            format: uuid
         id:
           type: string
           format: uuid
@@ -7921,6 +8052,13 @@ components:
           - string
           - 'null'
           format: date-time
+        folder_mappings:
+          type: object
+          additionalProperties:
+            type: string
+          propertyNames:
+            type: string
+            format: uuid
         group_library_id:
           type:
           - string
@@ -8002,6 +8140,71 @@ components:
       - prowlarr
       - readarr
       - whisparr
+    SourceMatrixFileResponse:
+      type: object
+      required:
+      - id
+      - work_id
+      - leaf_ref
+      - source_instance_id
+      - path
+      - mapped_path
+      - mapped
+      - container
+      - codec
+      - size_bytes
+      properties:
+        bitrate:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        codec:
+          type: string
+        container:
+          type: string
+        duration_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        id:
+          type: string
+          format: uuid
+        leaf_ref:
+          $ref: '#/components/schemas/LeafRef'
+        mapped:
+          type: boolean
+        mapped_path:
+          type: string
+        path:
+          type: string
+        size_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+        source_instance_id:
+          type: string
+          format: uuid
+        work_id:
+          type: string
+          format: uuid
+    SourceMatrixResponse:
+      type: object
+      required:
+      - sources
+      - files
+      properties:
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourceMatrixFileResponse'
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourceInstanceResponse'
     StopReason:
       oneOf:
       - type: string

@@ -13,6 +13,8 @@
 //! key gets a clear 502 immediately, not a silent no-op that only surfaces
 //! later as `arr-sync` reconciliation failures nobody's watching yet.
 
+use std::collections::BTreeMap;
+
 use axum::extract::{Path, State};
 use axum::Json;
 use serde::{Deserialize, Serialize};
@@ -73,6 +75,7 @@ pub struct SourceInstanceResponse {
     pub base_url: String,
     pub priority: i32,
     pub default_root_folder_id: Option<String>,
+    pub folder_mappings: BTreeMap<Uuid, String>,
     pub default_quality_profile_id: Option<i64>,
     pub best_effort: bool,
 }
@@ -86,10 +89,183 @@ impl From<SourceInstance> for SourceInstanceResponse {
             base_url: instance.base_url,
             priority: instance.priority,
             default_root_folder_id: instance.default_root_folder_id,
+            folder_mappings: instance.folder_mappings,
             default_quality_profile_id: instance.default_quality_profile_id,
             best_effort: instance.best_effort,
         }
     }
+}
+
+/// Complete per-node root mapping for one ordinary Source instance.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SourceFolderMappingsRequest {
+    pub folder_mappings: BTreeMap<Uuid, String>,
+}
+
+/// Replaces one Source instance's peer-root mappings. Because mappings are
+/// part of the normal Source row, the existing signed Source replication
+/// carries this change to every peer.
+#[utoipa::path(
+    put,
+    path = "/api/v1/admin/source-instances/{id}/folder-mappings",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Source instance id")),
+    request_body = SourceFolderMappingsRequest,
+    responses(
+        (status = 200, description = "Updated Source instance", body = SourceInstanceResponse),
+        (status = 400, description = "A mapped path was empty"),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Caller is authenticated but not an admin"),
+        (status = 404, description = "No source instance registered with this id")
+    )
+)]
+pub async fn update_source_folder_mappings_handler(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<SourceFolderMappingsRequest>,
+) -> Result<Json<SourceInstanceResponse>, ApiError> {
+    let mut instance = state
+        .source_instances
+        .get(id)
+        .ok_or_else(|| ApiError::not_found("source instance not found"))?;
+    let mut mappings = BTreeMap::new();
+    for (peer_id, path) in body.folder_mappings {
+        let path = path.trim();
+        if path.is_empty() {
+            return Err(ApiError::bad_request("mapped folder paths cannot be empty"));
+        }
+        mappings.insert(peer_id, path.to_string());
+    }
+    instance.folder_mappings = mappings;
+    state
+        .source_instance_repo
+        .upsert(&instance)
+        .await
+        .map_err(|error| ApiError::internal(format!("failed to save folder mappings: {error}")))?;
+    state.source_instances.upsert(instance.clone());
+    Ok(Json(instance.into()))
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SourceMatrixFileResponse {
+    pub id: Uuid,
+    pub work_id: Uuid,
+    pub leaf_ref: streamarr_model::media::LeafRef,
+    pub source_instance_id: Uuid,
+    pub path: String,
+    pub mapped_path: String,
+    pub mapped: bool,
+    pub container: String,
+    pub codec: String,
+    pub bitrate: Option<u64>,
+    pub duration_ms: Option<u64>,
+    pub size_bytes: u64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SourceMatrixResponse {
+    pub sources: Vec<SourceInstanceResponse>,
+    pub files: Vec<SourceMatrixFileResponse>,
+}
+
+fn map_source_path(
+    path: &str,
+    source_root: Option<&str>,
+    mapped_root: Option<&str>,
+) -> (String, bool) {
+    let (Some(source_root), Some(mapped_root)) = (source_root, mapped_root) else {
+        return (path.to_string(), false);
+    };
+    let normalise = |value: &str| value.replace('\\', "/").trim_end_matches('/').to_string();
+    let path_normalised = normalise(path);
+    let source_normalised = normalise(source_root);
+    let suffix = if path_normalised == source_normalised {
+        ""
+    } else if let Some(suffix) = path_normalised.strip_prefix(&(source_normalised.clone() + "/")) {
+        suffix
+    } else {
+        return (path.to_string(), false);
+    };
+    let separator = if mapped_root.contains('\\') && !mapped_root.contains('/') {
+        "\\"
+    } else {
+        "/"
+    };
+    let root = mapped_root.trim_end_matches(['/', '\\']);
+    let mapped = if suffix.is_empty() {
+        root.to_string()
+    } else {
+        format!("{root}{separator}{}", suffix.replace('/', separator))
+    };
+    (mapped, true)
+}
+
+/// Physical media-file inventory across every normal Source instance.
+#[utoipa::path(
+    get,
+    path = "/api/v1/admin/library/source-matrix",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Sources and their imported physical files", body = SourceMatrixResponse),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Caller is authenticated but not an admin")
+    )
+)]
+pub async fn source_matrix_handler(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+) -> Result<Json<SourceMatrixResponse>, ApiError> {
+    let self_peer_id = state
+        .node_identity_repo
+        .get()
+        .await
+        .map_err(|error| ApiError::internal(format!("failed to load node identity: {error}")))?
+        .map(|identity| identity.peer_id);
+    let instances = state.source_instances.all();
+    let by_id: std::collections::HashMap<Uuid, SourceInstance> = instances
+        .iter()
+        .cloned()
+        .map(|instance| (instance.id, instance))
+        .collect();
+    let files = state
+        .media_file_repo
+        .list_all()
+        .await
+        .map_err(|error| ApiError::internal(format!("failed to list media files: {error}")))?
+        .into_iter()
+        .filter_map(|file| {
+            let source = by_id.get(&file.source_instance_id)?;
+            let path = file.path.to_string_lossy().into_owned();
+            let mapped_root = self_peer_id.and_then(|id| source.folder_mappings.get(&id));
+            let (mapped_path, mapped) = map_source_path(
+                &path,
+                source.default_root_folder_id.as_deref(),
+                mapped_root.map(String::as_str),
+            );
+            Some(SourceMatrixFileResponse {
+                id: file.id,
+                work_id: file.work_id,
+                leaf_ref: file.leaf_ref,
+                source_instance_id: file.source_instance_id,
+                path,
+                mapped_path,
+                mapped,
+                container: file.container,
+                codec: file.codec,
+                bitrate: file.bitrate,
+                duration_ms: file.duration_ms,
+                size_bytes: file.size_bytes,
+            })
+        })
+        .collect();
+    Ok(Json(SourceMatrixResponse {
+        sources: instances
+            .into_iter()
+            .map(SourceInstanceResponse::from)
+            .collect(),
+        files,
+    }))
 }
 
 /// Registers a new `*arr` connection, or updates an existing one in place
@@ -130,21 +306,26 @@ pub async fn create_source_instance_handler(
     _admin: AdminUser,
     Json(body): Json<SourceInstanceRequest>,
 ) -> Result<Json<SourceInstanceResponse>, ApiError> {
+    let id = body.id.unwrap_or_else(Uuid::new_v4);
+    let existing = state.source_instances.get(id);
     let instance = SourceInstance {
-        id: body.id.unwrap_or_else(Uuid::new_v4),
+        id,
         kind: body.kind,
         name: body.name,
         base_url: body.base_url,
         api_key_encrypted: streamarr_model::Sensitive::new(body.api_key),
         priority: body.priority,
         default_root_folder_id: body.default_root_folder_id,
+        folder_mappings: existing
+            .as_ref()
+            .map(|instance| instance.folder_mappings.clone())
+            .unwrap_or_default(),
         default_quality_profile_id: body.default_quality_profile_id,
         best_effort: body.best_effort,
-        // Not yet settable through this endpoint's request body -- mapping
-        // a `SourceInstance` onto a `GroupLibrary` (§2.3/§5.1) has no admin
-        // UI/API surface yet, so every create/update through here leaves it
-        // unset.
-        group_library_id: None,
+        // Not settable through this endpoint's request body. Preserve the
+        // existing group mapping on an edit; a genuinely new Source starts
+        // ungrouped.
+        group_library_id: existing.and_then(|instance| instance.group_library_id),
     };
 
     let client = ArrClient::from_source_instance(&instance);
@@ -484,6 +665,32 @@ mod tests {
         bearer_header, mint_access_token, seed_admin_user, seed_streaming_user, test_state,
     };
 
+    #[test]
+    fn source_paths_map_across_unix_and_windows_roots() {
+        assert_eq!(
+            super::map_source_path(
+                "/source/movies/Voyage (2016)/Voyage.mkv",
+                Some("/source/movies"),
+                Some("/mnt/media/movies"),
+            ),
+            (
+                "/mnt/media/movies/Voyage (2016)/Voyage.mkv".to_string(),
+                true,
+            )
+        );
+        assert_eq!(
+            super::map_source_path(
+                r"D:\Movies\Voyage (2016)\Voyage.mkv",
+                Some(r"D:\Movies"),
+                Some(r"E:\Media\Movies"),
+            ),
+            (
+                r"E:\Media\Movies\Voyage (2016)\Voyage.mkv".to_string(),
+                true
+            )
+        );
+    }
+
     #[tokio::test]
     async fn register_confirms_reachability_before_accepting() {
         let mock = MockServer::start().await;
@@ -577,6 +784,7 @@ mod tests {
             api_key_encrypted: streamarr_model::Sensitive::new("key".to_string()),
             priority: 0,
             default_root_folder_id: None,
+            folder_mappings: Default::default(),
             default_quality_profile_id: None,
             best_effort: false,
             group_library_id: None,
@@ -614,6 +822,71 @@ mod tests {
             .unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
         assert_eq!(state.app.source_instances.all().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn folder_mapping_update_changes_the_normal_source_instance() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+        let token = mint_access_token(&state, admin_id);
+        let instance = streamarr_model::SourceInstance {
+            id: Uuid::new_v4(),
+            kind: streamarr_model::SourceKind::Radarr,
+            name: "Mapped Radarr".to_string(),
+            base_url: "http://localhost:7878".to_string(),
+            api_key_encrypted: streamarr_model::Sensitive::new("key".to_string()),
+            priority: 0,
+            default_root_folder_id: Some("/source/movies".to_string()),
+            folder_mappings: Default::default(),
+            default_quality_profile_id: None,
+            best_effort: false,
+            group_library_id: None,
+        };
+        state
+            .app
+            .source_instance_repo
+            .upsert(&instance)
+            .await
+            .unwrap();
+        state.app.source_instances.upsert(instance.clone());
+        let peer_id = Uuid::new_v4();
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(format!(
+                        "/api/v1/admin/source-instances/{}/folder-mappings",
+                        instance.id
+                    ))
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::from(
+                        serde_json::json!({
+                            "folder_mappings": { peer_id.to_string(): "/mnt/media/movies" }
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            state
+                .app
+                .source_instances
+                .get(instance.id)
+                .unwrap()
+                .folder_mappings[&peer_id],
+            "/mnt/media/movies"
+        );
+        assert_eq!(
+            state.app.source_instance_repo.list_all().await.unwrap()[0].folder_mappings[&peer_id],
+            "/mnt/media/movies"
+        );
     }
 
     #[tokio::test]
@@ -655,6 +928,7 @@ mod tests {
             api_key_encrypted: streamarr_model::Sensitive::new("key".to_string()),
             priority: 0,
             default_root_folder_id: None,
+            folder_mappings: Default::default(),
             default_quality_profile_id: None,
             best_effort: false,
             group_library_id: None,

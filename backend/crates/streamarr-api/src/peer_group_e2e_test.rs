@@ -301,6 +301,7 @@ async fn two_peer_nodes_join_and_sync_over_the_real_wire_protocol() {
         api_key_encrypted: Sensitive::new("not-a-real-api-key".to_string()),
         priority: 4,
         default_root_folder_id: None,
+        folder_mappings: Default::default(),
         default_quality_profile_id: None,
         best_effort: false,
         group_library_id: None,

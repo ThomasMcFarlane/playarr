@@ -1665,6 +1665,7 @@ mod tests {
                     api_key_encrypted: None,
                     priority: 0,
                     default_root_folder_id: None,
+                    folder_mappings: Default::default(),
                     default_quality_profile_id: None,
                     best_effort: false,
                     group_library_id: None,
@@ -1726,6 +1727,7 @@ mod tests {
         let new_library_id = Uuid::new_v4();
         let stale_library_id = Uuid::new_v4();
         let source_instance_id = Uuid::new_v4();
+        let mapping_peer_id = Uuid::new_v4();
         let now = Utc::now();
 
         // Seed a local row that a peer's stale report will lose against.
@@ -1751,6 +1753,8 @@ mod tests {
                     "base_url": "https://radarr.example.test",
                     "api_key_encrypted": "test-api-key",
                     "priority": 2,
+                    "default_root_folder_id": "/source/movies",
+                    "folder_mappings": { (mapping_peer_id.to_string()): "/mnt/media/movies" },
                     "best_effort": false,
                     "group_library_id": new_library_id,
                     "updated_at": now,
@@ -1802,6 +1806,10 @@ mod tests {
             "test-api-key"
         );
         assert_eq!(remote_sources[0].group_library_id, Some(new_library_id));
+        assert_eq!(
+            remote_sources[0].folder_mappings[&mapping_peer_id],
+            "/mnt/media/movies"
+        );
         let stale = harness
             .group_library_repo
             .get(stale_library_id)

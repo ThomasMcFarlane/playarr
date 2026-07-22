@@ -41,6 +41,9 @@ pub trait MediaFileRepo: Send + Sync {
     /// series/artist/author).
     async fn list_by_work_id(&self, work_id: Uuid) -> Result<Vec<MediaFile>, DbError>;
 
+    /// Every physical file imported by every normal source instance.
+    async fn list_all(&self) -> Result<Vec<MediaFile>, DbError>;
+
     /// Distinct work ids that currently own at least one synced media file.
     /// This is the efficient catalogue-level answer to "is anything under
     /// this work actually playable?" without issuing one query per work.
@@ -214,6 +217,17 @@ impl MediaFileRepo for SqlxMediaFileRepo {
             .bind(work_id.to_string())
             .fetch_all(&self.pool)
             .await?;
+        rows.iter().map(Self::from_row).collect()
+    }
+
+    async fn list_all(&self) -> Result<Vec<MediaFile>, DbError> {
+        let rows = sqlx::query(
+            "SELECT id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, \
+             source_instance_id, source_file_id FROM media_files \
+             ORDER BY source_instance_id, path",
+        )
+        .fetch_all(&self.pool)
+        .await?;
         rows.iter().map(Self::from_row).collect()
     }
 

@@ -110,6 +110,9 @@ export type SourceKind = components["schemas"]["SourceKind"];
 export type SourceInstanceRequest = components["schemas"]["SourceInstanceRequest"];
 export type SourceInstanceResponse = components["schemas"]["SourceInstanceResponse"];
 export type SourceInstanceSyncStatus = components["schemas"]["SourceInstanceSyncStatusResponse"];
+export type SourceFolderMappingsRequest = components["schemas"]["SourceFolderMappingsRequest"];
+export type SourceMatrixResponse = components["schemas"]["SourceMatrixResponse"];
+export type SourceMatrixFile = components["schemas"]["SourceMatrixFileResponse"];
 
 export type TdarrConnectionRequest = components["schemas"]["TdarrConnectionRequest"];
 export type TdarrConnectionResponse = components["schemas"]["TdarrConnectionResponse"];
@@ -343,8 +346,10 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/admin/source-instances", method: "POST" },
   { schemaPath: "/api/v1/admin/source-instances", method: "GET" },
   { schemaPath: "/api/v1/admin/source-instances/{id}", method: "DELETE" },
+  { schemaPath: "/api/v1/admin/source-instances/{id}/folder-mappings", method: "PUT" },
   { schemaPath: "/api/v1/admin/source-instances/{id}/sync", method: "POST" },
   { schemaPath: "/api/v1/admin/source-instances/sync-status", method: "GET" },
+  { schemaPath: "/api/v1/admin/library/source-matrix", method: "GET" },
   { schemaPath: "/api/v1/admin/system-settings", method: "GET" },
   { schemaPath: "/api/v1/admin/system-settings", method: "PUT" },
   { schemaPath: "/api/v1/admin/peer-groups", method: "POST" },
@@ -761,6 +766,22 @@ export class ApiClient {
 
   async listSourceInstances(): Promise<SourceInstanceResponse[]> {
     return this.unwrap(await this.raw.GET("/api/v1/admin/source-instances", {}));
+  }
+
+  async updateSourceFolderMappings(
+    id: string,
+    body: SourceFolderMappingsRequest
+  ): Promise<SourceInstanceResponse> {
+    return this.unwrap(
+      await this.raw.PUT("/api/v1/admin/source-instances/{id}/folder-mappings", {
+        params: { path: { id } },
+        body,
+      })
+    );
+  }
+
+  async getSourceMatrix(): Promise<SourceMatrixResponse> {
+    return this.unwrap(await this.raw.GET("/api/v1/admin/library/source-matrix", {}));
   }
 
   /**

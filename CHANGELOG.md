@@ -23,6 +23,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Let peer groups map each normal Source instance's reported root folder to its equivalent path
+  on every node, synchronise those mappings with the Source configuration, and expose the mapped
+  physical-file inventory to admin clients.
 - Show the running Playarr bundle version outside the user button beneath its avatar across
   responsive layouts.
 - Let peer nodes publish signed, incremental sync pages as well as pull them, so two-way

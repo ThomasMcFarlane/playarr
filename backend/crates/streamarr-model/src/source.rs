@@ -1,6 +1,8 @@
 //! [`SourceInstance`]: a configured connection to one of the *arr apps
 //! Streamarr treats as a source of catalog/download truth.
 
+use std::collections::BTreeMap;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -46,6 +48,11 @@ pub struct SourceInstance {
     /// doesn't pin one explicitly.
     pub priority: i32,
     pub default_root_folder_id: Option<String>,
+    /// Per-peer equivalent of `default_root_folder_id`. A source still
+    /// reports its native path; each peer can map that root to the physical
+    /// location visible from that node without creating a shadow source.
+    #[serde(default)]
+    pub folder_mappings: BTreeMap<Uuid, String>,
     pub default_quality_profile_id: Option<i64>,
     /// When true, a sync failure against this instance is logged and
     /// skipped rather than failing the overall reconciliation pass — for
@@ -93,6 +100,8 @@ pub struct SourceInstanceSyncRow {
     #[serde(default)]
     pub default_root_folder_id: Option<String>,
     #[serde(default)]
+    pub folder_mappings: BTreeMap<Uuid, String>,
+    #[serde(default)]
     pub default_quality_profile_id: Option<i64>,
     #[serde(default)]
     pub best_effort: bool,
@@ -120,6 +129,7 @@ impl SourceInstanceSyncRow {
             api_key_encrypted: Some(instance.api_key_encrypted.into_inner()),
             priority: instance.priority,
             default_root_folder_id: instance.default_root_folder_id,
+            folder_mappings: instance.folder_mappings,
             default_quality_profile_id: instance.default_quality_profile_id,
             best_effort: instance.best_effort,
             group_library_id: instance.group_library_id,
@@ -138,6 +148,7 @@ impl SourceInstanceSyncRow {
             api_key_encrypted: Sensitive::new(self.api_key_encrypted?),
             priority: self.priority,
             default_root_folder_id: self.default_root_folder_id,
+            folder_mappings: self.folder_mappings,
             default_quality_profile_id: self.default_quality_profile_id,
             best_effort: self.best_effort,
             group_library_id: self.group_library_id,

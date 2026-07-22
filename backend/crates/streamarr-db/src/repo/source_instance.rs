@@ -95,6 +95,7 @@ impl SqlxSourceInstanceRepo {
         let api_key_encrypted: String = row.try_get("api_key_encrypted")?;
         let priority: i32 = row.try_get("priority")?;
         let default_root_folder_id: Option<String> = row.try_get("default_root_folder_id")?;
+        let folder_mappings: String = row.try_get("folder_mappings")?;
         let default_quality_profile_id: Option<i64> = row.try_get("default_quality_profile_id")?;
         let best_effort: i64 = row.try_get("best_effort")?;
         let group_library_id: Option<String> = row.try_get("group_library_id")?;
@@ -107,6 +108,7 @@ impl SqlxSourceInstanceRepo {
             api_key_encrypted: Sensitive::new(api_key_encrypted),
             priority,
             default_root_folder_id,
+            folder_mappings: serde_json::from_str(&folder_mappings)?,
             default_quality_profile_id,
             best_effort: bool_from_i64(best_effort),
             group_library_id: group_library_id.as_deref().map(parse_uuid).transpose()?,
@@ -142,7 +144,7 @@ impl SqlxSourceInstanceRepo {
 impl SourceInstanceRepo for SqlxSourceInstanceRepo {
     async fn list_all(&self) -> Result<Vec<SourceInstance>, DbError> {
         let sql = "SELECT id, kind, name, base_url, api_key_encrypted, priority, \
-                    default_root_folder_id, default_quality_profile_id, \
+                    default_root_folder_id, folder_mappings, default_quality_profile_id, \
                     best_effort, group_library_id FROM source_instances \
                     WHERE deleted_at IS NULL ORDER BY priority, name";
         let rows = sqlx::query(sql).fetch_all(&self.pool).await?;
@@ -166,12 +168,13 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
             Backend::Sqlite => {
                 "INSERT INTO source_instances \
                  (id, kind, name, base_url, api_key_encrypted, priority, default_root_folder_id, \
-                 default_quality_profile_id, best_effort, group_library_id, updated_at) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+                 folder_mappings, default_quality_profile_id, best_effort, group_library_id, updated_at) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (id) DO UPDATE SET \
                  kind = excluded.kind, name = excluded.name, base_url = excluded.base_url, \
                  api_key_encrypted = excluded.api_key_encrypted, priority = excluded.priority, \
                  default_root_folder_id = excluded.default_root_folder_id, \
+                 folder_mappings = excluded.folder_mappings, \
                  default_quality_profile_id = excluded.default_quality_profile_id, \
                  best_effort = excluded.best_effort, group_library_id = excluded.group_library_id, \
                  updated_at = excluded.updated_at"
@@ -179,12 +182,13 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
             Backend::Postgres => {
                 "INSERT INTO source_instances \
                  (id, kind, name, base_url, api_key_encrypted, priority, default_root_folder_id, \
-                 default_quality_profile_id, best_effort, group_library_id, updated_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
+                 folder_mappings, default_quality_profile_id, best_effort, group_library_id, updated_at) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
                  ON CONFLICT (id) DO UPDATE SET \
                  kind = excluded.kind, name = excluded.name, base_url = excluded.base_url, \
                  api_key_encrypted = excluded.api_key_encrypted, priority = excluded.priority, \
                  default_root_folder_id = excluded.default_root_folder_id, \
+                 folder_mappings = excluded.folder_mappings, \
                  default_quality_profile_id = excluded.default_quality_profile_id, \
                  best_effort = excluded.best_effort, group_library_id = excluded.group_library_id, \
                  updated_at = excluded.updated_at"
@@ -198,6 +202,7 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
             .bind(instance.api_key_encrypted.expose_secret().as_str())
             .bind(instance.priority)
             .bind(instance.default_root_folder_id.as_deref())
+            .bind(serde_json::to_string(&instance.folder_mappings)?)
             .bind(instance.default_quality_profile_id)
             .bind(bool_to_i64(instance.best_effort))
             .bind(instance.group_library_id.map(|id| id.to_string()))
@@ -287,8 +292,8 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
         metadata: crate::repo::SyncMetadata,
     ) -> Result<(), DbError> {
         let sql = match self.backend {
-            Backend::Sqlite => "INSERT INTO source_instances (id, kind, name, base_url, api_key_encrypted, priority, default_root_folder_id, default_quality_profile_id, best_effort, group_library_id, updated_at, origin_peer_id, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, name = excluded.name, base_url = excluded.base_url, api_key_encrypted = excluded.api_key_encrypted, priority = excluded.priority, default_root_folder_id = excluded.default_root_folder_id, default_quality_profile_id = excluded.default_quality_profile_id, best_effort = excluded.best_effort, group_library_id = excluded.group_library_id, updated_at = excluded.updated_at, origin_peer_id = excluded.origin_peer_id, deleted_at = excluded.deleted_at",
-            Backend::Postgres => "INSERT INTO source_instances (id, kind, name, base_url, api_key_encrypted, priority, default_root_folder_id, default_quality_profile_id, best_effort, group_library_id, updated_at, origin_peer_id, deleted_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, name = excluded.name, base_url = excluded.base_url, api_key_encrypted = excluded.api_key_encrypted, priority = excluded.priority, default_root_folder_id = excluded.default_root_folder_id, default_quality_profile_id = excluded.default_quality_profile_id, best_effort = excluded.best_effort, group_library_id = excluded.group_library_id, updated_at = excluded.updated_at, origin_peer_id = excluded.origin_peer_id, deleted_at = excluded.deleted_at",
+            Backend::Sqlite => "INSERT INTO source_instances (id, kind, name, base_url, api_key_encrypted, priority, default_root_folder_id, folder_mappings, default_quality_profile_id, best_effort, group_library_id, updated_at, origin_peer_id, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, name = excluded.name, base_url = excluded.base_url, api_key_encrypted = excluded.api_key_encrypted, priority = excluded.priority, default_root_folder_id = excluded.default_root_folder_id, folder_mappings = excluded.folder_mappings, default_quality_profile_id = excluded.default_quality_profile_id, best_effort = excluded.best_effort, group_library_id = excluded.group_library_id, updated_at = excluded.updated_at, origin_peer_id = excluded.origin_peer_id, deleted_at = excluded.deleted_at",
+            Backend::Postgres => "INSERT INTO source_instances (id, kind, name, base_url, api_key_encrypted, priority, default_root_folder_id, folder_mappings, default_quality_profile_id, best_effort, group_library_id, updated_at, origin_peer_id, deleted_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, name = excluded.name, base_url = excluded.base_url, api_key_encrypted = excluded.api_key_encrypted, priority = excluded.priority, default_root_folder_id = excluded.default_root_folder_id, folder_mappings = excluded.folder_mappings, default_quality_profile_id = excluded.default_quality_profile_id, best_effort = excluded.best_effort, group_library_id = excluded.group_library_id, updated_at = excluded.updated_at, origin_peer_id = excluded.origin_peer_id, deleted_at = excluded.deleted_at",
         };
         sqlx::query(sql)
             .bind(instance.id.to_string())
@@ -298,6 +303,7 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
             .bind(instance.api_key_encrypted.expose_secret().as_str())
             .bind(instance.priority)
             .bind(instance.default_root_folder_id.as_deref())
+            .bind(serde_json::to_string(&instance.folder_mappings)?)
             .bind(instance.default_quality_profile_id)
             .bind(bool_to_i64(instance.best_effort))
             .bind(instance.group_library_id.map(|id| id.to_string()))
@@ -314,7 +320,7 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
         since: Option<DateTime<Utc>>,
     ) -> Result<Vec<(SourceInstance, crate::repo::SyncMetadata)>, DbError> {
         const SELECT: &str = "id, kind, name, base_url, api_key_encrypted, priority, \
-                               default_root_folder_id, default_quality_profile_id, best_effort, \
+                               default_root_folder_id, folder_mappings, default_quality_profile_id, best_effort, \
                                group_library_id, updated_at, origin_peer_id, deleted_at";
         // Deliberately no `WHERE deleted_at IS NULL` -- see this trait
         // method's own doc comment.
@@ -361,6 +367,7 @@ mod tests {
             api_key_encrypted: Sensitive::new("super-secret-api-key".to_string()),
             priority: 10,
             default_root_folder_id: Some("/data/media".to_string()),
+            folder_mappings: Default::default(),
             default_quality_profile_id: Some(4),
             best_effort: false,
             group_library_id: None,
@@ -378,6 +385,32 @@ mod tests {
 
         assert_eq!(all.len(), 1);
         assert_eq!(all[0], instance);
+    }
+
+    #[tokio::test]
+    async fn folder_mappings_round_trip_and_update() {
+        let pool = test_sqlite_pool().await;
+        let repo = SqlxSourceInstanceRepo::new(pool);
+        let mut instance = sample_instance(SourceKind::Radarr, "Mapped Radarr");
+        let peer_id = Uuid::new_v4();
+        instance
+            .folder_mappings
+            .insert(peer_id, "/srv/movies".to_string());
+
+        repo.upsert(&instance).await.unwrap();
+        assert_eq!(
+            repo.list_all().await.unwrap()[0].folder_mappings,
+            instance.folder_mappings
+        );
+
+        instance
+            .folder_mappings
+            .insert(peer_id, "/mnt/media/movies".to_string());
+        repo.upsert(&instance).await.unwrap();
+        assert_eq!(
+            repo.list_all().await.unwrap()[0].folder_mappings,
+            instance.folder_mappings
+        );
     }
 
     #[tokio::test]

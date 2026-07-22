@@ -253,8 +253,10 @@ fn api_router() -> OpenApiRouter<AppState> {
             admin::list_source_instances_handler
         ))
         .routes(routes!(admin::delete_source_instance_handler))
+        .routes(routes!(admin::update_source_folder_mappings_handler))
         .routes(routes!(admin::sync_source_instance_handler))
         .routes(routes!(admin::sync_status_handler))
+        .routes(routes!(admin::source_matrix_handler))
         .routes(routes!(
             tdarr::create_tdarr_connection_handler,
             tdarr::get_tdarr_connection_handler,

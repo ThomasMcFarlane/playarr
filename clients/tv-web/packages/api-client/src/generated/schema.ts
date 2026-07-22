@@ -52,6 +52,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/library/source-matrix": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Physical media-file inventory across every normal Source instance. */
+        get: operations["source_matrix_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/peer-groups": {
         parameters: {
             query?: never;
@@ -389,6 +406,27 @@ export interface paths {
          *     next reconciliation tick; already-imported catalog data is untouched.
          */
         delete: operations["delete_source_instance_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/source-instances/{id}/folder-mappings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replaces one Source instance's peer-root mappings. Because mappings are
+         *     part of the normal Source row, the existing signed Source replication
+         *     carries this change to every peer.
+         */
+        put: operations["update_source_folder_mappings_handler"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1283,7 +1321,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * This node's own `source_instances` (identity only) + this group's
+         * This node's own complete `source_instances` + this group's
          *     `group_libraries`, both updated since `since` -- the read behind
          *     `streamarr_peer_sync::account_sync::sync_libraries`.
          */
@@ -2486,6 +2524,30 @@ export interface components {
             seed_address: string;
         };
         /**
+         * @description Identifies exactly which leaf of a [`crate::Work`] a [`MediaFile`] is
+         *     the source for. A movie's file points straight at the work; a TV/music/
+         *     book file points at the specific episode/track/book child.
+         */
+        LeafRef: {
+            /** @enum {string} */
+            leaf_kind: "work";
+        } | {
+            /** Format: uuid */
+            leaf_id: string;
+            /** @enum {string} */
+            leaf_kind: "episode";
+        } | {
+            /** Format: uuid */
+            leaf_id: string;
+            /** @enum {string} */
+            leaf_kind: "track";
+        } | {
+            /** Format: uuid */
+            leaf_id: string;
+            /** @enum {string} */
+            leaf_kind: "book";
+        };
+        /**
          * @description Portable leaf identity -- never a peer-local `LeafRef`/`Uuid`, which is
          *     meaningless off the node that minted it. A receiving peer resolves
          *     `(provider, external_id, LeafSelector)` against its own child rows to
@@ -2524,13 +2586,13 @@ export interface components {
         };
         /**
          * @description Response body for [`libraries_handler`] -- `docs/architecture/
-         *     peer-groups.md` §3.6: credential-free `source_instances` identity rows
-         *     plus `group_libraries`.
+         *     peer-groups.md` §3.6: complete `source_instances` rows plus
+         *     `group_libraries`.
          */
         LibrariesResponse: {
             group_libraries: components["schemas"]["GroupLibrary"][];
             server_time: string;
-            source_instances: components["schemas"]["SourceInstanceIdentity"][];
+            source_instances: components["schemas"]["SourceInstanceSyncRow"][];
         };
         /**
          * @description Request body for both create (`POST /api/v1/admin/views`) and update
@@ -3639,24 +3701,11 @@ export interface components {
             password: string;
             username: string;
         };
-        /**
-         * @description Credential-free identity of one source instance as shared with peer
-         *     nodes. Connection details stay local; timestamps carry updates and
-         *     tombstones safely through cursor-based peer synchronisation.
-         */
-        SourceInstanceIdentity: {
-            /** Format: date-time */
-            deleted_at?: string | null;
-            /** Format: uuid */
-            group_library_id?: string | null;
-            /** Format: uuid */
-            id: string;
-            kind: components["schemas"]["SourceKind"];
-            name: string;
-            /** Format: int32 */
-            priority: number;
-            /** Format: date-time */
-            updated_at?: string;
+        /** @description Complete per-node root mapping for one ordinary Source instance. */
+        SourceFolderMappingsRequest: {
+            folder_mappings: {
+                [key: string]: string;
+            };
         };
         /**
          * @description Request body for registering (or re-registering, by re-POSTing with the
@@ -3694,12 +3743,46 @@ export interface components {
             /** Format: int64 */
             default_quality_profile_id?: number | null;
             default_root_folder_id?: string | null;
+            folder_mappings: {
+                [key: string]: string;
+            };
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["SourceKind"];
             name: string;
             /** Format: int32 */
             priority: number;
+        };
+        /**
+         * @description Complete source-instance configuration exchanged only over authenticated,
+         *     signed peer endpoints. The two connection fields are optional solely for
+         *     rolling compatibility with older nodes that sent identity-only rows; such
+         *     rows are ignored by newer receivers until a complete row arrives.
+         */
+        SourceInstanceSyncRow: {
+            api_key_encrypted?: string | null;
+            base_url?: string | null;
+            best_effort?: boolean;
+            /** Format: int64 */
+            default_quality_profile_id?: number | null;
+            default_root_folder_id?: string | null;
+            /** Format: date-time */
+            deleted_at?: string | null;
+            folder_mappings?: {
+                [key: string]: string;
+            };
+            /** Format: uuid */
+            group_library_id?: string | null;
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["SourceKind"];
+            name: string;
+            /** Format: uuid */
+            origin_peer_id?: string | null;
+            /** Format: int32 */
+            priority: number;
+            /** Format: date-time */
+            updated_at?: string;
         };
         /**
          * @description One source instance's most recently reported reconciliation outcome --
@@ -3730,6 +3813,30 @@ export interface components {
         };
         /** @enum {string} */
         SourceKind: "sonarr" | "radarr" | "lidarr" | "bazarr" | "prowlarr" | "readarr" | "whisparr";
+        SourceMatrixFileResponse: {
+            /** Format: int64 */
+            bitrate?: number | null;
+            codec: string;
+            container: string;
+            /** Format: int64 */
+            duration_ms?: number | null;
+            /** Format: uuid */
+            id: string;
+            leaf_ref: components["schemas"]["LeafRef"];
+            mapped: boolean;
+            mapped_path: string;
+            path: string;
+            /** Format: int64 */
+            size_bytes: number;
+            /** Format: uuid */
+            source_instance_id: string;
+            /** Format: uuid */
+            work_id: string;
+        };
+        SourceMatrixResponse: {
+            files: components["schemas"]["SourceMatrixFileResponse"][];
+            sources: components["schemas"]["SourceInstanceResponse"][];
+        };
         StopReason: "completed" | "user_stopped" | "error" | "device_disconnected" | "session_revoked" | "concurrent_limit_exceeded" | "idle_timeout" | {
             other: string;
         };
@@ -4225,6 +4332,40 @@ export interface operations {
                      */
                     "application/json": components["schemas"]["VersionEnvelope"];
                 };
+            };
+        };
+    };
+    source_matrix_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sources and their imported physical files */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceMatrixResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -5036,6 +5177,61 @@ export interface operations {
             };
             /** @description Caller is authenticated but not an admin */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_source_folder_mappings_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Source instance id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceFolderMappingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated Source instance */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceInstanceResponse"];
+                };
+            };
+            /** @description A mapped path was empty */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No source instance registered with this id */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8260,7 +8456,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description source_instances identity rows + group_libraries updated since the given cursor */
+            /** @description source_instances + group_libraries updated since the given cursor */
             200: {
                 headers: {
                     [name: string]: unknown;

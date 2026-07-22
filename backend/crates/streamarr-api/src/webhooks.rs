@@ -74,6 +74,7 @@ mod tests {
             api_key_encrypted: Sensitive::new("key".to_string()),
             priority: 0,
             default_root_folder_id: None,
+            folder_mappings: Default::default(),
             default_quality_profile_id: None,
             best_effort: false,
             group_library_id: None,
