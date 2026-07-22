@@ -66,5 +66,10 @@ checksum and update manifest at:
 
 - `https://playarr.app/downloads/android/playarr-android.apk`
 
-The first published signing certificate is permanent: later APKs signed with a
-different certificate cannot update existing installations.
+The `release-android` GitHub environment must also define the non-secret
+`ANDROID_SIGNING_CERT_SHA256` variable with the release certificate's SHA-256 fingerprint. The
+publisher rejects missing, mismatched, multi-signer, or Android debug certificates and validates
+the APK package and version against the release tag before uploading anything.
+
+The first production signing certificate is permanent: later APKs signed with a different
+certificate cannot update existing installations.

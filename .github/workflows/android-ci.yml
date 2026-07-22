@@ -83,6 +83,8 @@ jobs:
       - name: Verify and package APK
         id: package
         shell: bash
+        env:
+          EXPECTED_ANDROID_SIGNING_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
         run: |
           mobile_apk="$(find app/build/outputs/apk/release -name '*.apk' -type f -print -quit)"
           if [[ -z "$mobile_apk" ]]; then
@@ -90,7 +92,15 @@ jobs:
             exit 1
           fi
           apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
-          "$apksigner" verify --verbose --print-certs "$mobile_apk"
+          aapt="$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)"
+          ../../scripts/verify-android-release-apk.sh \
+            "$mobile_apk" \
+            "$apksigner" \
+            "$aapt" \
+            "$EXPECTED_ANDROID_SIGNING_CERT_SHA256" \
+            "io.streamarr.mobile" \
+            "${{ steps.version.outputs.name }}" \
+            "${{ steps.version.outputs.code }}"
           mkdir -p release
           cp "$mobile_apk" release/playarr-android.apk
           sha256sum release/*.apk > release/SHA256SUMS

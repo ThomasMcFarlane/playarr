@@ -18,6 +18,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Reject Android releases signed by the debug or an unexpected certificate, and verify the APK
+  package and version against its release tag before publishing it to Playarr or GitHub.
 - Serve the Roku developer ZIP from Playarr's public same-origin download storage instead of
   linking the public Clients page to an inaccessible private GitHub release.
 - Re-register rotated Android Firebase messaging tokens with Streamarr and identify universal APK
