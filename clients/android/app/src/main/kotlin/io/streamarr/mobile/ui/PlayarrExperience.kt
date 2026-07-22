@@ -10,6 +10,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
@@ -34,6 +35,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -86,6 +88,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
@@ -93,6 +98,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -5107,14 +5116,133 @@ internal fun ExperienceEmpty(message: String, description: String? = null) {
 
 @Composable
 private fun ExperienceNotFoundScreen() {
-    Column(
-        modifier = Modifier.fillMaxSize().background(WebSurface).padding(48.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+    BoxWithConstraints(
+        Modifier
+            .fillMaxSize()
+            .background(WebSurface)
+            .background(Brush.radialGradient(listOf(WebPink.copy(alpha = 0.12f), Color.Transparent))),
     ) {
-        Text("404", color = WebPink, fontSize = 68.sp, fontWeight = FontWeight.Bold)
-        Text("That page drifted out of range.", color = WebInk, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
-        Text("The address does not match an available Playarr view.", color = WebInkMuted, modifier = Modifier.padding(top = 10.dp))
+        val wide = maxWidth >= 760.dp
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    start = if (wide) 142.dp else 32.dp,
+                    end = if (wide) 96.dp else 32.dp,
+                    top = if (wide) 96.dp else 72.dp,
+                    bottom = if (wide) 130.dp else 112.dp,
+                ),
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            PlayarrNotFoundArtwork(
+                Modifier
+                    .then(if (wide) Modifier.width(640.dp) else Modifier.fillMaxWidth())
+                    .widthIn(max = 640.dp)
+                    .aspectRatio(8f / 5f),
+            )
+            Text(
+                playarrString(PlayarrString.NotFoundKicker).uppercase(LocalPlayarrLanguage.current.locale),
+                color = WebPink,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.2.sp,
+            )
+            Text(
+                playarrString(PlayarrString.NotFoundHeading),
+                color = WebInk,
+                fontSize = if (wide) 72.sp else 44.sp,
+                fontWeight = FontWeight.Medium,
+                lineHeight = if (wide) 68.sp else 44.sp,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                playarrString(PlayarrString.NotFoundDescription),
+                color = WebInkMuted,
+                fontSize = if (wide) 18.sp else 14.sp,
+                modifier = Modifier.widthIn(max = 530.dp).padding(top = 14.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlayarrNotFoundArtwork(modifier: Modifier = Modifier) {
+    Box(modifier.clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
+        Text(
+            "404",
+            color = WebInk.copy(alpha = 0.06f),
+            fontSize = 150.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = (-12).sp,
+        )
+        val accent = WebPink.copy(alpha = 0.82f)
+        val fill = WebSurfaceStrong.copy(alpha = 0.88f)
+        val orbit = WebInkMuted.copy(alpha = 0.45f)
+        Canvas(Modifier.fillMaxSize()) {
+            val scaleX = size.width / 640f
+            val scaleY = size.height / 420f
+            scale(scaleX = scaleX, scaleY = scaleY, pivot = Offset.Zero) {
+                val orbitPath = Path().apply {
+                    moveTo(88f, 236f)
+                    cubicTo(117f, 91f, 281f, 24f, 430f, 81f)
+                    cubicTo(546f, 126f, 598f, 258f, 524f, 348f)
+                }
+                drawPath(
+                    orbitPath,
+                    color = orbit,
+                    style = Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 13f))),
+                )
+                listOf(Offset(104f, 190f) to 5f, Offset(487f, 95f) to 4f, Offset(533f, 308f) to 6f)
+                    .forEach { (center, radius) -> drawCircle(accent.copy(alpha = 0.72f), radius, center) }
+
+                drawRoundRect(
+                    color = fill,
+                    topLeft = Offset(171f, 104f),
+                    size = Size(292f, 190f),
+                    cornerRadius = CornerRadius(28f),
+                )
+                drawRoundRect(
+                    color = accent,
+                    topLeft = Offset(171f, 104f),
+                    size = Size(292f, 190f),
+                    cornerRadius = CornerRadius(28f),
+                    style = Stroke(5f),
+                )
+                drawLine(accent, Offset(198f, 140f), Offset(436f, 140f), strokeWidth = 5f)
+                drawCircle(accent, 4f, Offset(207f, 122f))
+                drawCircle(accent, 4f, Offset(223f, 122f))
+                val play = Path().apply {
+                    moveTo(298f, 182f)
+                    lineTo(349f, 213f)
+                    lineTo(298f, 244f)
+                    close()
+                }
+                drawPath(play, accent, style = Stroke(5f))
+                val crack = Path().apply {
+                    moveTo(370f, 104f)
+                    lineTo(350f, 139f)
+                    lineTo(375f, 164f)
+                    lineTo(346f, 198f)
+                    lineTo(370f, 227f)
+                    lineTo(352f, 258f)
+                    lineTo(374f, 294f)
+                }
+                drawPath(crack, accent, style = Stroke(5f))
+
+                drawCircle(fill.copy(alpha = 0.96f), 61f, Offset(449f, 286f))
+                drawCircle(accent, 61f, Offset(449f, 286f), style = Stroke(5f))
+                drawLine(accent, Offset(493f, 331f), Offset(543f, 381f), strokeWidth = 5f)
+                val question = Path().apply {
+                    moveTo(432f, 270f)
+                    cubicTo(434f, 255f, 465f, 252f, 466f, 270f)
+                    cubicTo(468f, 283f, 449f, 285f, 449f, 299f)
+                }
+                drawPath(question, accent, style = Stroke(5f))
+                drawCircle(accent, 3f, Offset(449f, 313f))
+            }
+        }
     }
 }
 

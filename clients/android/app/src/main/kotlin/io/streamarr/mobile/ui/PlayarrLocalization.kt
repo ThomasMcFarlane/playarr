@@ -102,6 +102,13 @@ internal enum class PlayarrString(
     CommonClose("Close", "ปิด", "閉じる"),
     CommonDone("Done", "เสร็จสิ้น", "完了"),
     CommonTryAgain("Try again", "ลองอีกครั้ง", "もう一度試す"),
+    NotFoundKicker("Lost in the library", "หลงทางในไลบรารี", "ライブラリで迷子になりました"),
+    NotFoundHeading("Page not found", "ไม่พบหน้า", "ページが見つかりません"),
+    NotFoundDescription(
+        "The address may be incorrect, or the page may have moved somewhere else.",
+        "ที่อยู่อาจไม่ถูกต้อง หรือหน้านี้อาจถูกย้ายไปที่อื่น",
+        "アドレスが正しくないか、ページが別の場所へ移動した可能性があります。",
+    ),
     WorkKindMovie("Movie", "ภาพยนตร์", "映画"),
     WorkKindSeries("Series", "ซีรีส์", "シリーズ"),
     WorkKindSite("Site", "ไซต์", "サイト"),

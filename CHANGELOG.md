@@ -53,6 +53,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Match Android's unavailable-route screen to Playarr Web with localized 404 copy and a responsive,
+  natively drawn orbit, broken-screen, and search illustration that remains scrollable on phones.
 - Align Android server settings with Playarr Web through localized connected-server management,
   guarded connect, disconnect, and forget operations, connection feedback, and app-host editing.
 - Align Android profile-lock and friend-invite settings with Playarr Web through localized status,
