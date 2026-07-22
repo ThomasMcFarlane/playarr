@@ -215,6 +215,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Match Playarr Web Search on Android with 320 ms request coalescing, stale-request cancellation,
+  available-only results, dynamic content-type filters, saved-view library filters, and the same
+  playlist-versus-library exclusion rules.
 - Match Playarr Web's Android Home shelves: use one latest-progress On Deck or Start Watching
   primary, de-duplicate every subsequent title, split each video kind into New and More rails,
   and keep artists exclusively in Music.

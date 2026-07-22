@@ -96,6 +96,37 @@ class StreamarrHttpClientAuthTest {
     }
 
     @Test
+    fun `native search calls the public view list and resolve routes`() = runBlocking {
+        val server = MockWebServer()
+        server.enqueue(
+            jsonResponse(
+                """[{"id":"view-1","name":"Recently Added","is_default":true,"default_order":0}]""",
+            ),
+        )
+        server.enqueue(jsonResponse("""{"items":[],"total":0}"""))
+        server.start()
+        try {
+            val api = StreamarrHttpClient.create(
+                baseUrlProvider = { server.url("/").toString() },
+                clientPlatform = ClientPlatform.AndroidMobile,
+                clientVersion = "0.2.7",
+                accessTokenProvider = { "token" },
+            )
+
+            val view = api.listViews().single()
+            assertEquals("Recently Added", view.name)
+            assertEquals(true, view.isDefault)
+            assertEquals(0, view.defaultOrder)
+            assertEquals(0, api.resolveView("view-1", limit = 500).items.size)
+
+            assertEquals("/api/v1/views", server.takeRequest().path)
+            assertEquals("/api/v1/views/view-1/resolve?limit=500", server.takeRequest().path)
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
     fun `playback quality defaults use the documented force transcode query`() = runBlocking {
         val server = MockWebServer()
         server.enqueue(jsonResponse("""{"mode":"hls","url":"/api/v1/media/sessions/s1/playlist.m3u8"}"""))

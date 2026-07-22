@@ -20,6 +20,15 @@ data class CatalogPage(
     val total: Long? = null,
 )
 
+/** Minimal Playarr-facing projection returned by `GET /api/v1/views`. */
+@Serializable
+data class ViewSummary(
+    val id: String,
+    val name: String,
+    val isDefault: Boolean,
+    val defaultOrder: Int? = null,
+)
+
 /**
  * `GET /api/v1/catalog/{id}` response body -- mirrors `WorkDetailSchema`.
  *

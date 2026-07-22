@@ -17,6 +17,7 @@ import io.streamarr.shared.data.model.PlaylistMediaType
 import io.streamarr.shared.data.model.SelfCapabilitiesResponse
 import io.streamarr.shared.data.model.WatchProgress
 import io.streamarr.shared.data.model.WatchState
+import io.streamarr.shared.data.model.ViewSummary
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
 import io.streamarr.shared.data.model.WorkCreditsResponse
@@ -111,6 +112,18 @@ class StreamarrJsonModelTest {
         )
         assertTrue(page.items.isEmpty())
         assertEquals(0L, page.total)
+    }
+
+    @Test
+    fun `decodes public view summaries`() {
+        val view = json.decodeFromString(
+            ViewSummary.serializer(),
+            """{"id":"view-1","name":"Recently Added","is_default":true,"default_order":0}""",
+        )
+
+        assertEquals("Recently Added", view.name)
+        assertTrue(view.isDefault)
+        assertEquals(0, view.defaultOrder)
     }
 
     @Test

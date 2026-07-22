@@ -142,6 +142,7 @@ import io.streamarr.shared.data.model.WatchProgress
 import io.streamarr.shared.data.model.WatchState
 import io.streamarr.shared.data.model.UpdateMediaPlaybackPreferencesRequest
 import io.streamarr.shared.data.model.UpdateWatchProgressRequest
+import io.streamarr.shared.data.model.ViewSummary
 import io.streamarr.shared.data.model.wireName
 import io.streamarr.shared.data.remote.StreamarrApi
 import io.streamarr.shared.domain.model.StreamarrResult
@@ -163,6 +164,7 @@ import java.nio.charset.StandardCharsets
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.Dispatchers
@@ -240,11 +242,17 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     private val _libraries = MutableStateFlow<Map<WorkKind, ExperienceLoad<List<Work>>>>(emptyMap())
     val libraries: StateFlow<Map<WorkKind, ExperienceLoad<List<Work>>>> = _libraries.asStateFlow()
 
-    private val _search = MutableStateFlow<ExperienceLoad<List<Work>>>(ExperienceLoad.Ready(emptyList()))
-    val search: StateFlow<ExperienceLoad<List<Work>>> = _search.asStateFlow()
+    private val _search = MutableStateFlow<ExperienceLoad<PlayarrSearchResults>>(
+        ExperienceLoad.Ready(PlayarrSearchResults()),
+    )
+    val search: StateFlow<ExperienceLoad<PlayarrSearchResults>> = _search.asStateFlow()
 
-    private val _searchPlaylists = MutableStateFlow<List<Playlist>>(emptyList())
-    val searchPlaylists: StateFlow<List<Playlist>> = _searchPlaylists.asStateFlow()
+    private val _searchViews = MutableStateFlow<List<ViewSummary>>(emptyList())
+    val searchViews: StateFlow<List<ViewSummary>> = _searchViews.asStateFlow()
+
+    private var searchJob: Job? = null
+    private var availableSearchWorkIds: Set<String>? = null
+    private val searchAvailabilityMutex = Mutex()
 
     private val _availableKinds = MutableStateFlow<Set<WorkKind>?>(null)
     val availableKinds: StateFlow<Set<WorkKind>?> = _availableKinds.asStateFlow()
@@ -329,7 +337,10 @@ internal class PlayarrExperienceViewModel @Inject constructor(
         _availableKinds.value = null
         _canDownload.value = null
         _libraries.value = emptyMap()
-        _search.value = ExperienceLoad.Ready(emptyList())
+        searchJob?.cancel()
+        availableSearchWorkIds = null
+        _search.value = ExperienceLoad.Ready(PlayarrSearchResults())
+        _searchViews.value = emptyList()
         loadAvailableKinds()
         loadHome()
         viewModelScope.launch {
@@ -359,24 +370,104 @@ internal class PlayarrExperienceViewModel @Inject constructor(
         }
     }
 
-    fun search(query: String) {
+    fun prepareSearch() {
+        viewModelScope.launch {
+            _searchViews.value = runCatching { api.listViews() }.getOrDefault(emptyList())
+        }
+    }
+
+    fun search(
+        query: String,
+        mediaType: PlayarrSearchMediaType = PlayarrSearchMediaType.All,
+        libraryId: String? = null,
+        debounce: Boolean = true,
+    ) {
+        searchJob?.cancel()
         val normalised = query.trim()
         if (normalised.isEmpty()) {
-            _search.value = ExperienceLoad.Ready(emptyList())
-            _searchPlaylists.value = emptyList()
+            _search.value = ExperienceLoad.Ready(PlayarrSearchResults())
             return
         }
-        viewModelScope.launch {
+        searchJob = viewModelScope.launch {
+            if (debounce) delay(SEARCH_DEBOUNCE_MS)
             _search.value = ExperienceLoad.Loading
-            val playlists = async {
-                runCatching { api.listPlaylists().filter { it.name.contains(normalised, ignoreCase = true) } }.getOrDefault(emptyList())
+            try {
+                val includesWorks = mediaType != PlayarrSearchMediaType.Playlist
+                val worksRequest = async {
+                    if (!includesWorks) return@async emptyList()
+                    when (val result = searchCatalog(normalised, limit = SEARCH_LIMIT)) {
+                        is StreamarrResult.Success -> result.value
+                        is StreamarrResult.Failure -> throw IllegalStateException(
+                            result.error.userMessageForExperience("search"),
+                        )
+                    }
+                }
+                val availableIdsRequest = async {
+                    if (includesWorks) loadAvailableSearchWorkIds() else emptySet()
+                }
+                val libraryIdsRequest = async {
+                    if (includesWorks && libraryId != null) {
+                        api.resolveView(libraryId, limit = SEARCH_LIBRARY_LIMIT).items.mapTo(mutableSetOf(), Work::id)
+                    } else {
+                        null
+                    }
+                }
+                val playlistsRequest = async {
+                    if (libraryId == null && mediaType in setOf(
+                            PlayarrSearchMediaType.All,
+                            PlayarrSearchMediaType.Playlist,
+                        )
+                    ) {
+                        try {
+                            api.listPlaylists()
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (error: Throwable) {
+                            if (mediaType == PlayarrSearchMediaType.Playlist) throw error
+                            emptyList()
+                        }
+                    } else {
+                        emptyList()
+                    }
+                }
+                val works = filterPlayarrSearchWorks(
+                    works = worksRequest.await(),
+                    availableWorkIds = availableIdsRequest.await(),
+                    mediaType = mediaType,
+                    libraryWorkIds = libraryIdsRequest.await(),
+                )
+                val playlists = filterPlayarrSearchPlaylists(
+                    playlists = playlistsRequest.await(),
+                    query = normalised,
+                    mediaType = mediaType,
+                    libraryId = libraryId,
+                )
+                _search.value = ExperienceLoad.Ready(PlayarrSearchResults(works, playlists))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                _search.value = ExperienceLoad.Failed(
+                    error.message?.takeIf(String::isNotBlank) ?: "Unable to search your library.",
+                )
             }
-            _search.value = when (val result = searchCatalog(normalised, limit = 80)) {
-                is StreamarrResult.Success -> ExperienceLoad.Ready(result.value)
-                is StreamarrResult.Failure -> ExperienceLoad.Failed(result.error.userMessageForExperience("search"))
-            }
-            _searchPlaylists.value = playlists.await()
         }
+    }
+
+    private suspend fun loadAvailableSearchWorkIds(): Set<String> = searchAvailabilityMutex.withLock {
+        availableSearchWorkIds?.let { return@withLock it }
+        val ids = mutableSetOf<String>()
+        var offset = 0L
+        while (true) {
+            val page = api.browseCatalog(
+                availableOnly = true,
+                limit = SEARCH_AVAILABILITY_PAGE_SIZE,
+                offset = offset,
+            )
+            page.items.mapTo(ids, Work::id)
+            offset += page.items.size
+            if (page.items.isEmpty() || page.total?.let { offset >= it } == true) break
+        }
+        ids.toSet().also { availableSearchWorkIds = it }
     }
 
     fun markWork(work: Work, watched: Boolean) {
@@ -462,6 +553,10 @@ internal fun televisionDestinationGroups(
 ).filter(List<ExperienceDestination>::isNotEmpty)
 
 private const val CAPABILITIES_POLL_MS = 60_000L
+private const val SEARCH_DEBOUNCE_MS = 320L
+private const val SEARCH_LIMIT = 60L
+private const val SEARCH_LIBRARY_LIMIT = 500L
+private const val SEARCH_AVAILABILITY_PAGE_SIZE = 500L
 
 @Composable
 internal fun PlayarrExperience(
@@ -1580,13 +1675,31 @@ private fun ExperienceSearchScreen(
     viewModel: PlayarrExperienceViewModel,
 ) {
     val state by viewModel.search.collectAsState()
-    val playlists by viewModel.searchPlaylists.collectAsState()
+    val views by viewModel.searchViews.collectAsState()
+    val availableKinds by viewModel.availableKinds.collectAsState()
     val progress by viewModel.progress.collectAsState()
     val progressByWork = remember(progress) { progress.associateBy(WatchProgress::workId) }
     var query by remember { mutableStateOf("") }
-    var mediaFilter by remember { mutableStateOf("all") }
+    var mediaFilter by remember { mutableStateOf(PlayarrSearchMediaType.All) }
+    var libraryId by remember { mutableStateOf<String?>(null) }
     var filtersOpen by remember { mutableStateOf(false) }
     var contextWork by remember { mutableStateOf<Work?>(null) }
+    val visibleMediaTypes = remember(availableKinds) {
+        PlayarrSearchMediaType.entries.filter { type ->
+            type.workKind == null || availableKinds?.contains(type.workKind) == true
+        }
+    }
+    val activeLibrary = views.firstOrNull { it.id == libraryId }
+    fun submitSearch(debounce: Boolean) {
+        viewModel.search(query, mediaFilter, libraryId, debounce)
+    }
+    LaunchedEffect(Unit) { viewModel.prepareSearch() }
+    LaunchedEffect(availableKinds, mediaFilter) {
+        if (mediaFilter.workKind != null && availableKinds?.contains(mediaFilter.workKind) == false) {
+            mediaFilter = PlayarrSearchMediaType.All
+            viewModel.search(query, mediaFilter, libraryId, debounce = false)
+        }
+    }
     Column(
         modifier = Modifier.fillMaxSize().background(WebSurface).padding(
             start = if (isTelevision) 72.dp else 16.dp,
@@ -1597,13 +1710,16 @@ private fun ExperienceSearchScreen(
         Text("Search", color = WebInk, fontSize = if (isTelevision) 44.sp else 30.sp, fontWeight = FontWeight.Medium, letterSpacing = (-1).sp)
         OutlinedTextField(
             value = query,
-            onValueChange = { query = it; viewModel.search(it) },
+            onValueChange = {
+                query = it
+                viewModel.search(it, mediaFilter, libraryId, debounce = true)
+            },
             modifier = Modifier.fillMaxWidth(if (isTelevision) 0.58f else 1f).padding(top = 18.dp),
             placeholder = { Text("Search your library") },
             leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { viewModel.search(query) }),
+            keyboardActions = KeyboardActions(onSearch = { submitSearch(debounce = false) }),
             shape = RoundedCornerShape(18.dp),
         )
         OutlinedButton(
@@ -1612,45 +1728,70 @@ private fun ExperienceSearchScreen(
             shape = RoundedCornerShape(14.dp),
         ) {
             Icon(Icons.Outlined.FilterList, contentDescription = null, modifier = Modifier.size(18.dp))
-            Text("Filters · ${mediaFilter.replaceFirstChar(Char::uppercase)}", modifier = Modifier.padding(start = 7.dp))
+            Text(
+                "Filters · ${mediaFilter.label} · ${activeLibrary?.name ?: "All libraries"}",
+                modifier = Modifier.padding(start = 7.dp),
+            )
         }
         if (filtersOpen) {
+            Text("Type", color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 10.dp))
             LazyRow(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                items(
-                    listOf(
-                        "all" to "All",
-                        "movie" to "Movies",
-                        "series" to "Series",
-                        "site" to "Sites",
-                        "artist" to "Music",
-                        "playlist" to "Playlists",
-                    ),
-                ) { (value, label) ->
+                items(visibleMediaTypes, key = PlayarrSearchMediaType::value) { type ->
                     OutlinedButton(
-                        onClick = { mediaFilter = value },
-                        enabled = mediaFilter != value,
+                        onClick = {
+                            mediaFilter = type
+                            if (type == PlayarrSearchMediaType.Playlist) libraryId = null
+                            submitSearch(debounce = false)
+                        },
+                        enabled = mediaFilter != type,
                         modifier = Modifier.height(36.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp),
-                    ) { Text(label, fontSize = 10.sp) }
+                    ) { Text(type.label, fontSize = 10.sp) }
+                }
+            }
+            Text("Library", color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
+            LazyRow(
+                modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                item {
+                    OutlinedButton(
+                        onClick = {
+                            libraryId = null
+                            submitSearch(debounce = false)
+                        },
+                        enabled = libraryId != null,
+                        modifier = Modifier.height(36.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp),
+                    ) { Text("All", fontSize = 10.sp) }
+                }
+                items(views, key = ViewSummary::id) { view ->
+                    OutlinedButton(
+                        onClick = {
+                            libraryId = view.id
+                            if (mediaFilter == PlayarrSearchMediaType.Playlist) {
+                                mediaFilter = PlayarrSearchMediaType.All
+                            }
+                            submitSearch(debounce = false)
+                        },
+                        enabled = libraryId != view.id,
+                        modifier = Modifier.height(36.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp),
+                    ) { Text(view.name, fontSize = 10.sp) }
                 }
             }
         }
         when (val current = state) {
             ExperienceLoad.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebPink) }
-            is ExperienceLoad.Failed -> ExperienceFailure(current.message) { viewModel.search(query) }
+            is ExperienceLoad.Failed -> ExperienceFailure(current.message) { submitSearch(debounce = false) }
             is ExperienceLoad.Ready -> if (query.isBlank()) {
                 Text("Find films, series, sites, and music.", color = WebInkMuted, modifier = Modifier.padding(top = 26.dp))
-            } else if (
-                current.value.none { mediaFilter == "all" || it.kind.wireName() == mediaFilter } &&
-                playlists.none { mediaFilter == "all" || mediaFilter == "playlist" }
-            ) {
+            } else if (current.value.works.isEmpty() && current.value.playlists.isEmpty()) {
                 Text("No results for ‘$query’.", color = WebInkMuted, modifier = Modifier.padding(top = 26.dp))
             } else {
-                val visibleWorks = current.value.filter { mediaFilter == "all" || it.kind.wireName() == mediaFilter }
-                val visiblePlaylists = if (mediaFilter == "all" || mediaFilter == "playlist") playlists else emptyList()
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(if (isTelevision) 210.dp else 164.dp),
                     modifier = Modifier.fillMaxSize().padding(top = 22.dp),
@@ -1658,7 +1799,7 @@ private fun ExperienceSearchScreen(
                     verticalArrangement = Arrangement.spacedBy(22.dp),
                     contentPadding = PaddingValues(bottom = 104.dp),
                 ) {
-                    items(visibleWorks, key = { "work:${it.id}" }) { work ->
+                    items(current.value.works, key = { "work:${it.id}" }) { work ->
                         ExperienceLandscapeCard(
                             work, serverUrl, accessToken,
                             width = if (isTelevision) 210.dp else 164.dp,
@@ -1669,7 +1810,7 @@ private fun ExperienceSearchScreen(
                             onContext = { contextWork = work },
                         )
                     }
-                    items(visiblePlaylists, key = { "playlist:${it.id}" }) { playlist ->
+                    items(current.value.playlists, key = { "playlist:${it.id}" }) { playlist ->
                         PlaylistCard(playlist) { navController.navigate("playlists/${playlist.id}") }
                     }
                 }

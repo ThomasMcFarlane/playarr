@@ -36,6 +36,7 @@ import io.streamarr.shared.data.model.VerifyProfilePinRequest
 import io.streamarr.shared.data.model.VerifyProfilePinResponse
 import io.streamarr.shared.data.model.WatchProgress
 import io.streamarr.shared.data.model.VersionEnvelope
+import io.streamarr.shared.data.model.ViewSummary
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkCreditsResponse
 import io.streamarr.shared.data.model.WorkDetail
@@ -147,6 +148,18 @@ interface StreamarrApi {
         @Path("id") id: String,
         @Query("limit") limit: Long? = null,
     ): List<Work>
+
+    // ---- views ---------------------------------------------------------------
+
+    @GET("api/v1/views")
+    suspend fun listViews(): List<ViewSummary>
+
+    @GET("api/v1/views/{id}/resolve")
+    suspend fun resolveView(
+        @Path("id") id: String,
+        @Query("limit") limit: Long? = null,
+        @Query("offset") offset: Long? = null,
+    ): CatalogPage
 
     // ---- playback --------------------------------------------------------------
 
