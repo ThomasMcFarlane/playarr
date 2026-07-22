@@ -781,6 +781,8 @@ export const ja: Translations = {
   "pages.clients.android.platform": "スマートフォン、タブレット、テレビ",
   "pages.clients.roku.name": "Roku TV",
   "pages.clients.roku.platform": "Rokuテレビ",
+  "pages.clients.roku.description":
+    "プレビュー版ZIPはRokuチャンネル一式です。Rokuの開発用インストーラーはアーカイブ自体を読み込むため、展開せずに使用してください。",
   "pages.clients.androidMobile.name": "Android Mobile",
   "pages.clients.androidMobile.platform": "Androidスマートフォンとタブレット",
   "pages.clients.androidMobile.description": "クライアントビルドはありますが、署名済みダウンロードはまだ公開されていません。",
@@ -812,6 +814,28 @@ export const ja: Translations = {
   "pages.clients.androidPage.description":
     "同じレスポンシブAPKがスマートフォン、タブレット、Android TV、Google TVを検出し、タッチ操作またはリモコン操作を自動で選択します。",
   "pages.clients.androidPage.download": "Android APKをダウンロード",
+  "pages.clients.rokuPage.download": "Roku ZIPをダウンロード",
+  "pages.clients.rokuPage.installKicker": "開発者モードでサイドロード",
+  "pages.clients.rokuPage.installTitle": "RokuにPlayarrをインストール",
+  "pages.clients.rokuPage.installDescription":
+    "Rokuと、インストールに使うスマートフォンまたはパソコンを同じローカルネットワークに接続してください。Rokuリモコン、上のZIP、テレビで作成する開発者パスワードが必要です。",
+  "pages.clients.rokuPage.step1Title": "開発者モードを有効にする",
+  "pages.clients.rokuPage.step1Description":
+    "RokuリモコンでHomeを3回、Upを2回、続けてRight、Left、Right、Left、Rightを押します。表示されたURLを控え、Development Application Installerを有効にして規約に同意し、パスワードを作成します。Rokuが再起動します。",
+  "pages.clients.rokuPage.step2Title": "Webインストーラーを開く",
+  "pages.clients.rokuPage.step2Description":
+    "同じネットワーク上のスマートフォンまたはパソコンで、テレビに表示されたURLを開きます。ユーザー名rokudevと、作成した開発者パスワードでログインします。",
+  "pages.clients.rokuPage.step3Title": "ZIPをそのままアップロード",
+  "pages.clients.rokuPage.step3Description":
+    "Uploadを選び、playarr-roku.zipを展開せずに選択してからInstallを選びます。サイドロードが完了するとRokuがPlayarrを起動します。",
+  "pages.clients.rokuPage.step4Title": "Playarrを接続",
+  "pages.clients.rokuPage.step4Description":
+    "StreamarrサーバーのベースURLを入力し、テレビに表示されるコードに従ってRokuを承認してから、世帯プロフィールを選択します。",
+  "pages.clients.rokuPage.officialGuide": "Roku公式開発者ガイドを開く",
+  "pages.clients.rokuPage.noteKicker": "重要",
+  "pages.clients.rokuPage.noteTitle": "サイドロードできるアプリは一度に1つだけです。",
+  "pages.clients.rokuPage.noteDescription":
+    "別の開発用アプリをインストールするとPlayarrは置き換えられます。同じバージョンが拒否された場合は、既存のサイドロードアプリを削除してZIPを再インストールしてください。",
   "pages.clients.vidaaPage.documentTitle": "Hisense VIDAAにインストール",
   "pages.clients.vidaaPage.back": "すべてのクライアント",
   "pages.clients.vidaaPage.kicker": "Hisense VIDAA",

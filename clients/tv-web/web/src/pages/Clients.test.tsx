@@ -155,6 +155,18 @@ describe("ClientsPage", () => {
     expect(rokuMarkup).toContain(
       "releases/download/clients-v0.1.0-preview.1/playarr-roku.zip"
     );
+    expect(rokuMarkup).toContain("Download Roku ZIP");
+    expect(rokuMarkup).toContain(
+      "Roku&#x27;s development installer expects the archive itself"
+    );
+    expect(rokuMarkup).toContain("Home three times, Up twice");
+    expect(rokuMarkup).toContain("Right, Left, Right, Left, Right");
+    expect(rokuMarkup).toContain("username rokudev");
+    expect(rokuMarkup).toContain("select playarr-roku.zip without extracting it");
+    expect(rokuMarkup).toContain("Only one sideloaded app can be installed.");
+    expect(rokuMarkup).toContain(
+      'href="https://developer.roku.com/dev/docs/developer-setup"'
+    );
     expect(rokuMarkup).toContain("Available · Experimental install");
     expect(appleMarkup).toContain('data-navigation-scroll-key="clients:apple"');
     expect(appleMarkup).toContain('data-navigation-scroll-key="clients:platforms"');

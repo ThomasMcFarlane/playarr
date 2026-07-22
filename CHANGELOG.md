@@ -31,6 +31,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add complete developer-mode sideload instructions to the Roku client page, including the
+  remote sequence, web installer login, unchanged ZIP upload, first-launch linking, and Roku's
+  one-sideloaded-app limitation.
 - Let Android TV generate its QR and manual sign-in code through `playarr.app`, so selecting a
   signed-in Playarr profile transfers a short-lived Streamarr device credential and remembered
   server addresses without entering a Server URL on the television.

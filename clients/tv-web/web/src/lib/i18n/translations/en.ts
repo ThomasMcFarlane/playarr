@@ -863,6 +863,8 @@ export const en = {
   "pages.clients.android.platform": "Phones, tablets and TVs",
   "pages.clients.roku.name": "Roku TV",
   "pages.clients.roku.platform": "Roku televisions",
+  "pages.clients.roku.description":
+    "The preview ZIP is the complete Roku channel bundle. Roku's development installer expects the archive itself, so keep it zipped.",
   "pages.clients.androidMobile.name": "Android Mobile",
   "pages.clients.androidMobile.platform": "Android phones and tablets",
   "pages.clients.androidMobile.description":
@@ -899,6 +901,28 @@ export const en = {
   "pages.clients.androidPage.description":
     "The same responsive APK detects phones, tablets, Android TV and Google TV, then selects touch or remote navigation automatically.",
   "pages.clients.androidPage.download": "Download Android APK",
+  "pages.clients.rokuPage.download": "Download Roku ZIP",
+  "pages.clients.rokuPage.installKicker": "Developer-mode sideload",
+  "pages.clients.rokuPage.installTitle": "Install Playarr on your Roku",
+  "pages.clients.rokuPage.installDescription":
+    "Keep the Roku and the phone or computer used for installation on the same local network. You will need the Roku remote, the ZIP above and a developer password you create on the TV.",
+  "pages.clients.rokuPage.step1Title": "Enable Developer Mode",
+  "pages.clients.rokuPage.step1Description":
+    "On the Roku remote, press Home three times, Up twice, then Right, Left, Right, Left, Right. Note the URL shown, enable the Development Application Installer, accept the agreement and create a password. The Roku will restart.",
+  "pages.clients.rokuPage.step2Title": "Open the web installer",
+  "pages.clients.rokuPage.step2Description":
+    "From a phone or computer on the same network, open the URL shown on the TV. Sign in with the username rokudev and the developer password you created.",
+  "pages.clients.rokuPage.step3Title": "Upload the ZIP unchanged",
+  "pages.clients.rokuPage.step3Description":
+    "Choose Upload, select playarr-roku.zip without extracting it, then choose Install. Roku launches Playarr when the sideload finishes.",
+  "pages.clients.rokuPage.step4Title": "Connect Playarr",
+  "pages.clients.rokuPage.step4Description":
+    "Enter your Streamarr server base URL, follow the code shown on the TV to authorise the Roku, then choose a household profile.",
+  "pages.clients.rokuPage.officialGuide": "Open Roku's official developer guide",
+  "pages.clients.rokuPage.noteKicker": "Important",
+  "pages.clients.rokuPage.noteTitle": "Only one sideloaded app can be installed.",
+  "pages.clients.rokuPage.noteDescription":
+    "Installing another development app replaces Playarr. If Roku rejects an identical version, remove the existing sideloaded app and install the ZIP again.",
   "pages.clients.vidaaPage.documentTitle": "Install on Hisense VIDAA",
   "pages.clients.vidaaPage.back": "All clients",
   "pages.clients.vidaaPage.kicker": "Hisense VIDAA",

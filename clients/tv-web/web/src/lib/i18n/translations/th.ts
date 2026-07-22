@@ -785,6 +785,8 @@ export const th: Translations = {
   "pages.clients.android.platform": "โทรศัพท์ แท็บเล็ต และทีวี",
   "pages.clients.roku.name": "Roku TV",
   "pages.clients.roku.platform": "ทีวี Roku",
+  "pages.clients.roku.description":
+    "ไฟล์ ZIP รุ่นพรีวิวคือชุดช่อง Roku ที่สมบูรณ์ ตัวติดตั้งสำหรับนักพัฒนาของ Roku ต้องใช้ไฟล์บีบอัดนี้โดยตรง จึงไม่ต้องแตกไฟล์",
   "pages.clients.androidMobile.name": "Android Mobile",
   "pages.clients.androidMobile.platform": "โทรศัพท์และแท็บเล็ต Android",
   "pages.clients.androidMobile.description": "มีตัวแอปแล้ว แต่ยังไม่มีไฟล์ดาวน์โหลดที่ลงลายเซ็นเผยแพร่",
@@ -816,6 +818,28 @@ export const th: Translations = {
   "pages.clients.androidPage.description":
     "APK แบบตอบสนองเดียวกันจะตรวจหาโทรศัพท์ แท็บเล็ต Android TV และ Google TV แล้วเลือกการนำทางแบบสัมผัสหรือรีโมตโดยอัตโนมัติ",
   "pages.clients.androidPage.download": "ดาวน์โหลด Android APK",
+  "pages.clients.rokuPage.download": "ดาวน์โหลด Roku ZIP",
+  "pages.clients.rokuPage.installKicker": "ไซด์โหลดผ่านโหมดนักพัฒนา",
+  "pages.clients.rokuPage.installTitle": "ติดตั้ง Playarr บน Roku",
+  "pages.clients.rokuPage.installDescription":
+    "ให้ Roku และโทรศัพท์หรือคอมพิวเตอร์ที่ใช้ติดตั้งอยู่ในเครือข่ายภายในเดียวกัน เตรียมรีโมต Roku, ไฟล์ ZIP ด้านบน และรหัสผ่านนักพัฒนาที่คุณจะสร้างบนทีวี",
+  "pages.clients.rokuPage.step1Title": "เปิดโหมดนักพัฒนา",
+  "pages.clients.rokuPage.step1Description":
+    "กด Home สามครั้ง, Up สองครั้ง แล้วกด Right, Left, Right, Left, Right บนรีโมต Roku จด URL ที่แสดง เปิด Development Application Installer ยอมรับข้อตกลง และสร้างรหัสผ่าน จากนั้น Roku จะรีสตาร์ต",
+  "pages.clients.rokuPage.step2Title": "เปิดตัวติดตั้งผ่านเว็บ",
+  "pages.clients.rokuPage.step2Description":
+    "ใช้โทรศัพท์หรือคอมพิวเตอร์ในเครือข่ายเดียวกันเปิด URL ที่แสดงบนทีวี เข้าสู่ระบบด้วยชื่อผู้ใช้ rokudev และรหัสผ่านนักพัฒนาที่สร้างไว้",
+  "pages.clients.rokuPage.step3Title": "อัปโหลด ZIP โดยไม่แก้ไข",
+  "pages.clients.rokuPage.step3Description":
+    "เลือก Upload แล้วเลือก playarr-roku.zip โดยไม่ต้องแตกไฟล์ จากนั้นเลือก Install เมื่อไซด์โหลดเสร็จ Roku จะเปิด Playarr",
+  "pages.clients.rokuPage.step4Title": "เชื่อมต่อ Playarr",
+  "pages.clients.rokuPage.step4Description":
+    "ป้อน URL หลักของเซิร์ฟเวอร์ Streamarr ทำตามรหัสที่แสดงบนทีวีเพื่ออนุญาต Roku แล้วเลือกโปรไฟล์ครัวเรือน",
+  "pages.clients.rokuPage.officialGuide": "เปิดคู่มือนักพัฒนาอย่างเป็นทางการของ Roku",
+  "pages.clients.rokuPage.noteKicker": "สำคัญ",
+  "pages.clients.rokuPage.noteTitle": "ติดตั้งแอปที่ไซด์โหลดได้ครั้งละหนึ่งแอปเท่านั้น",
+  "pages.clients.rokuPage.noteDescription":
+    "การติดตั้งแอปพัฒนาอื่นจะแทนที่ Playarr หาก Roku ปฏิเสธรุ่นที่เหมือนเดิม ให้ลบแอปที่ไซด์โหลดอยู่แล้วติดตั้ง ZIP อีกครั้ง",
   "pages.clients.vidaaPage.documentTitle": "ติดตั้งบน Hisense VIDAA",
   "pages.clients.vidaaPage.back": "ไคลเอนต์ทั้งหมด",
   "pages.clients.vidaaPage.kicker": "Hisense VIDAA",

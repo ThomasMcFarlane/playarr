@@ -72,7 +72,7 @@ const PLAYARR_CLIENTS: readonly PlayarrClient[] = [
     id: "roku",
     nameKey: "pages.clients.roku.name",
     platformKey: "pages.clients.roku.platform",
-    descriptionKey: "pages.clients.downloadNote",
+    descriptionKey: "pages.clients.roku.description",
     status: "experimental",
     downloadFile: "playarr-roku.zip",
     icon: "roku",
@@ -333,6 +333,64 @@ function VidaaInstallDetails() {
   );
 }
 
+function RokuInstallGuide() {
+  const { t } = useLanguage();
+
+  return (
+    <>
+      <section
+        className="vidaa-steps roku-install-guide"
+        aria-labelledby="roku-install-title"
+      >
+        <div className="vidaa-section-heading">
+          <span aria-hidden="true">01</span>
+          <div>
+            <p>{t("pages.clients.rokuPage.installKicker")}</p>
+            <h2 id="roku-install-title">
+              {t("pages.clients.rokuPage.installTitle")}
+            </h2>
+          </div>
+        </div>
+        <p className="vidaa-section-copy">
+          {t("pages.clients.rokuPage.installDescription")}
+        </p>
+        <ol>
+          {([1, 2, 3, 4] as const).map((step) => (
+            <li key={step}>
+              <span>0{step}</span>
+              <div>
+                <h3>{t(`pages.clients.rokuPage.step${step}Title`)}</h3>
+                <p>{t(`pages.clients.rokuPage.step${step}Description`)}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+        <p className="roku-official-guide">
+          <a
+            href="https://developer.roku.com/dev/docs/developer-setup"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-navigation-focus-key="clients:roku:official-guide"
+          >
+            {t("pages.clients.rokuPage.officialGuide")}
+          </a>
+        </p>
+      </section>
+
+      <section
+        className="vidaa-safety roku-install-note"
+        aria-labelledby="roku-install-note-title"
+      >
+        <p className="page-kicker">{t("pages.clients.rokuPage.noteKicker")}</p>
+        <h2 id="roku-install-note-title">
+          {t("pages.clients.rokuPage.noteTitle")}
+        </h2>
+        <p>{t("pages.clients.rokuPage.noteDescription")}</p>
+      </section>
+    </>
+  );
+}
+
 function ClientOverviewDetails({ client }: { client: PlayarrClient }) {
   const { t } = useLanguage();
 
@@ -367,7 +425,11 @@ function ClientOverviewDetails({ client }: { client: PlayarrClient }) {
             data-navigation-focus-key={`clients:${client.id}:download`}
             data-tv-focus-default
           >
-            <strong>{t("pages.clients.downloadApp")}</strong>
+            <strong>
+              {client.id === "roku"
+                ? t("pages.clients.rokuPage.download")
+                : t("pages.clients.downloadApp")}
+            </strong>
           </a>
         </div>
       ) : null}
@@ -397,6 +459,11 @@ export function ClientDetailsPage() {
           <VidaaInstallDetails />
         ) : client.id === "android" ? (
           <AndroidDownloadDetails />
+        ) : client.id === "roku" ? (
+          <>
+            <ClientOverviewDetails client={client} />
+            <RokuInstallGuide />
+          </>
         ) : (
           <ClientOverviewDetails client={client} />
         )}
