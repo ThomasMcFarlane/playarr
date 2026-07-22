@@ -1,6 +1,7 @@
 package io.streamarr.mobile.ui
 
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -27,11 +28,14 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -89,6 +93,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -98,29 +103,72 @@ private val PlayarrViolet get() = WebPink
 
 sealed interface RootState {
     data object Loading : RootState
-    data class SignedOut(val savedServerUrl: String) : RootState
-    data class SignedIn(val serverUrl: String) : RootState
+    data class SignedOut(
+        val savedServerUrl: String,
+        val showProfiles: Boolean,
+        val canReturnToProfiles: Boolean,
+    ) : RootState
+    data class SignedIn(val serverUrl: String, val initialRoute: String) : RootState
 }
 
 @HiltViewModel
 class PlayarrRootViewModel @Inject constructor(
-    tokenStore: TokenStore,
+    private val tokenStore: TokenStore,
     private val serverConfigStore: ServerConfigStore,
 ) : ViewModel() {
-    val state: StateFlow<RootState> = combine(
+    private val loginRequested = MutableStateFlow(false)
+    private val postAuthRoute = MutableStateFlow("home")
+    private val sessionState = combine(
         tokenStore.accessToken,
         serverConfigStore.baseUrl,
-    ) { token, savedServerUrl ->
+        tokenStore.savedProfiles,
+    ) { token, savedServerUrl, savedProfiles ->
+        Triple(token, savedServerUrl, savedProfiles)
+    }
+    private val navigationState = combine(loginRequested, postAuthRoute, ::Pair)
+
+    val state: StateFlow<RootState> = combine(sessionState, navigationState) { session, navigation ->
+        val (token, savedServerUrl, savedProfiles) = session
+        val (showLogin, initialRoute) = navigation
         val serverUrl = savedServerUrl.takeIf { it.isNotBlank() }
             ?.let { runCatching { normaliseServerUrl(it) }.getOrDefault(it) }
             .orEmpty()
         if (serverUrl != savedServerUrl) serverConfigStore.setBaseUrl(serverUrl)
         if (token.isNullOrBlank() || serverUrl.isBlank()) {
-            RootState.SignedOut(serverUrl)
+            val hasProfiles = savedProfiles.any { it.serverUrl == serverUrl }
+            RootState.SignedOut(
+                savedServerUrl = serverUrl,
+                showProfiles = hasProfiles && !showLogin,
+                canReturnToProfiles = hasProfiles,
+            )
         } else {
-            RootState.SignedIn(serverUrl)
+            tokenStore.bindCurrentServer(serverUrl)
+            RootState.SignedIn(serverUrl, initialRoute)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RootState.Loading)
+
+    init {
+        viewModelScope.launch {
+            tokenStore.accessToken.filterNotNull().collect { loginRequested.value = false }
+        }
+    }
+
+    fun addProfile() {
+        viewModelScope.launch {
+            postAuthRoute.value = "home"
+            loginRequested.value = true
+            tokenStore.clearCurrent()
+        }
+    }
+
+    fun returnToProfiles() {
+        loginRequested.value = false
+    }
+
+    fun openAfterProfile(route: String) {
+        postAuthRoute.value = route
+        loginRequested.value = false
+    }
 }
 
 sealed interface LoginState {
@@ -174,7 +222,7 @@ internal class LoginViewModel @Inject constructor(
             _state.value = LoginState.Submitting
             try {
                 serverConfigStore.setBaseUrl(normalisedUrl)
-                tokenStore.clear()
+                tokenStore.clearCurrent()
                 val response = loginApi.login(
                     LoginRequest(
                         deviceId = tokenStore.getOrCreateDeviceId(),
@@ -186,7 +234,7 @@ internal class LoginViewModel @Inject constructor(
                     ),
                 )
                 tokenStore.save(response.toTokenResponse())
-                tokenStore.saveIdentity(response.userId, username.trim().ifBlank { null })
+                tokenStore.saveIdentity(response.userId, username.trim().ifBlank { null }, normalisedUrl)
                 _state.value = LoginState.Idle
             } catch (error: Exception) {
                 _state.value = LoginState.Failed(loginFailure(error))
@@ -227,7 +275,7 @@ internal class LoginViewModel @Inject constructor(
     private suspend fun completeHostedPairing(result: HostedLinkPollResult.Approved) {
         val claim = result.claim
         serverConfigStore.setBaseUrl(claim.serverUrl)
-        tokenStore.clear()
+        tokenStore.clearCurrent()
         val urls = (listOf(claim.serverUrl) + claim.serverUrls).distinct()
         deviceAuthClient.pollUntilResolved(claim.serverDeviceCode, 1).collect { tokenResult ->
             when (tokenResult) {
@@ -240,7 +288,7 @@ internal class LoginViewModel @Inject constructor(
                         ),
                     )
                     val current = runCatching { api.listAvailableProfiles().firstOrNull { it.isCurrent } }.getOrNull()
-                    current?.let { tokenStore.saveIdentity(it.id, it.displayName) }
+                    current?.let { tokenStore.saveIdentity(it.id, it.displayName, claim.serverUrl) }
                     _pairing.value = PairingState.Idle
                 }
                 DevicePollResult.AuthorizationPending, DevicePollResult.SlowDown -> Unit
@@ -344,13 +392,27 @@ fun PlayarrApp(
         Surface(modifier = Modifier.fillMaxSize(), color = PlayarrBackground, contentColor = Color.White) {
             when (val current = state) {
                 RootState.Loading -> LoadingScreen()
-                is RootState.SignedOut -> LoginScreen(
-                    savedServerUrl = current.savedServerUrl,
-                    isTelevision = isTelevision,
-                )
+                is RootState.SignedOut -> if (current.showProfiles) {
+                    ExperienceProfilesScreen(
+                        isTelevision = isTelevision,
+                        currentUserId = "",
+                        currentAvatar = null,
+                        onHome = { rootViewModel.openAfterProfile("home") },
+                        onSettings = { rootViewModel.openAfterProfile("settings") },
+                        onAddProfile = rootViewModel::addProfile,
+                    )
+                } else {
+                    LoginScreen(
+                        savedServerUrl = current.savedServerUrl,
+                        isTelevision = isTelevision,
+                        onBack = (rootViewModel::returnToProfiles).takeIf { current.canReturnToProfiles },
+                    )
+                }
                 is RootState.SignedIn -> PlayarrExperience(
                     serverUrl = current.serverUrl,
                     isTelevision = isTelevision,
+                    initialRoute = current.initialRoute,
+                    onAddProfile = rootViewModel::addProfile,
                 )
             }
         }
@@ -372,8 +434,10 @@ private fun LoadingScreen() {
 private fun LoginScreen(
     savedServerUrl: String,
     isTelevision: Boolean,
+    onBack: (() -> Unit)?,
     viewModel: LoginViewModel = hiltViewModel(),
 ) {
+    BackHandler(enabled = onBack != null) { onBack?.invoke() }
     val loginState by viewModel.state.collectAsState()
     val pairingState by viewModel.pairing.collectAsState()
     var serverUrl by remember(savedServerUrl) { mutableStateOf(savedServerUrl) }
@@ -410,6 +474,7 @@ private fun LoginScreen(
             state = loginState,
             onSubmit = { viewModel.login(serverUrl, username, password, false) },
             compact = compact,
+            onBack = onBack,
         )
     }
 }
@@ -425,6 +490,7 @@ private fun MobileLoginScreen(
     state: LoginState,
     onSubmit: () -> Unit,
     compact: Boolean,
+    onBack: (() -> Unit)?,
 ) {
     val language = LocalPlayarrLanguage.current
     Box(Modifier.fillMaxSize()) {
@@ -438,6 +504,11 @@ private fun MobileLoginScreen(
                 tint = Color.Unspecified,
                 modifier = Modifier.size(30.dp),
             )
+            onBack?.let {
+                IconButton(onClick = it, modifier = Modifier.padding(start = 14.dp)) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = playarrString(PlayarrString.CommonBack))
+                }
+            }
             Spacer(Modifier.weight(1f))
             PlayarrLanguageDropdown()
         }

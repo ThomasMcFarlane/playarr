@@ -644,6 +644,8 @@ private fun rememberPlayarrServerAccess(
 internal fun PlayarrExperience(
     serverUrl: String,
     isTelevision: Boolean,
+    initialRoute: String = "home",
+    onAddProfile: () -> Unit = {},
     viewModel: PlayarrExperienceViewModel = hiltViewModel(),
     playerViewModel: ExperiencePlayerViewModel = hiltViewModel(),
 ) {
@@ -725,6 +727,8 @@ internal fun PlayarrExperience(
                 isTelevision,
                 canDownload,
                 online,
+                initialRoute,
+                onAddProfile,
                 viewModel,
                 playerViewModel,
             )
@@ -1119,11 +1123,13 @@ private fun ExperienceNavHost(
     isTelevision: Boolean,
     canDownload: Boolean?,
     isOnline: Boolean,
+    initialRoute: String,
+    onAddProfile: () -> Unit,
     viewModel: PlayarrExperienceViewModel,
     playerViewModel: ExperiencePlayerViewModel,
 ) {
     val playbackQueue by viewModel.playbackQueue.collectAsState()
-    NavHost(navController, startDestination = "home", modifier = Modifier.fillMaxSize()) {
+    NavHost(navController, startDestination = initialRoute, modifier = Modifier.fillMaxSize()) {
         composable("home") {
             ExperienceOnlineGate(isOnline, isTelevision, "home") {
                 ExperienceHomeScreen(serverUrl, accessToken, isTelevision, canDownload == true, navController, viewModel)
@@ -1225,6 +1231,7 @@ private fun ExperienceNavHost(
                 currentAvatar = profileAvatar,
                 onHome = { navController.openExperienceTopLevel("home") },
                 onSettings = { navController.openExperienceTopLevel("settings") },
+                onAddProfile = onAddProfile,
             )
         }
         composable("settings") {

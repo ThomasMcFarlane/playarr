@@ -1,5 +1,6 @@
 package io.streamarr.mobile.ui
 
+import io.streamarr.shared.auth.SavedProfile
 import io.streamarr.shared.data.model.AvailableProfile
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -47,8 +48,45 @@ class PlayarrProfilesTest {
         )
     }
 
-    private fun profile(isCurrent: Boolean, pinLocked: Boolean) = AvailableProfile(
-        id = "profile-id",
+    @Test
+    fun `profile chooser exposes only the current and saved Android sessions`() {
+        val current = profile("current", isCurrent = true)
+        val saved = profile("saved")
+        val serverOnly = profile("server-only")
+
+        assertEquals(
+            listOf(current, saved),
+            selectAndroidDeviceProfiles(
+                available = listOf(current, saved, serverOnly),
+                savedProfileIds = setOf("saved"),
+                currentUserId = "current",
+            ),
+        )
+    }
+
+    @Test
+    fun `saved sessions provide an offline profile chooser fallback`() {
+        assertEquals(
+            listOf(
+                AvailableProfile("profile-a", "Alex", "Alex", isCurrent = true, pinLocked = false),
+                AvailableProfile("profile-b", "Bailey", "Bailey", isCurrent = false, pinLocked = false),
+            ),
+            savedAndroidProfiles(
+                profiles = listOf(
+                    SavedProfile("https://playarr.example", "profile-a", "Alex"),
+                    SavedProfile("https://playarr.example", "profile-b", "Bailey"),
+                ),
+                currentUserId = "profile-a",
+            ),
+        )
+    }
+
+    private fun profile(
+        id: String = "profile-id",
+        isCurrent: Boolean = false,
+        pinLocked: Boolean = false,
+    ) = AvailableProfile(
+        id = id,
         username = "viewer",
         displayName = "Viewer",
         isCurrent = isCurrent,

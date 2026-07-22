@@ -78,6 +78,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Remember multiple Android profile sessions per server so Add Profile preserves existing sign-ins,
+  saved profiles remain available offline, switching restores each rotating token pair, and signing
+  out removes only the chosen profile.
 - Match Android's unavailable-route screen to Playarr Web with localized 404 copy and a responsive,
   natively drawn orbit, broken-screen, and search illustration that remains scrollable on phones.
 - Align Android server settings with Playarr Web through localized connected-server management,

@@ -2,6 +2,7 @@ package io.streamarr.shared.auth
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import io.streamarr.shared.auth.model.TokenResponse
@@ -10,6 +11,25 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+
+data class SavedProfile(
+    val serverUrl: String,
+    val userId: String,
+    val name: String?,
+)
+
+@Serializable
+private data class StoredProfileSession(
+    val serverUrl: String,
+    val userId: String,
+    val name: String? = null,
+    val accessToken: String,
+    val refreshToken: String,
+    val tokenType: String,
+)
 
 /**
  * Persists the current access/refresh token pair across process death.
@@ -31,21 +51,101 @@ class TokenStore @Inject constructor(
     val refreshToken: Flow<String?> = dataStore.data.map { it[REFRESH_TOKEN_KEY] }
     val currentUserId: Flow<String?> = dataStore.data.map { it[USER_ID_KEY] }
     val currentUserName: Flow<String?> = dataStore.data.map { it[USER_NAME_KEY] }
+    val currentServerUrl: Flow<String?> = dataStore.data.map { it[CURRENT_SERVER_URL_KEY] }
+    val savedProfiles: Flow<List<SavedProfile>> = dataStore.data.map { preferences ->
+        preferences.storedProfileSessions().map { session ->
+            SavedProfile(session.serverUrl, session.userId, session.name)
+        }
+    }
+
+    fun savedProfilesForServer(serverUrl: String): Flow<List<SavedProfile>> = savedProfiles.map { profiles ->
+        profiles.filter { it.serverUrl == serverUrl }
+    }
 
     suspend fun save(token: TokenResponse) {
         dataStore.edit { prefs ->
             prefs[ACCESS_TOKEN_KEY] = token.accessToken
             prefs[REFRESH_TOKEN_KEY] = token.refreshToken
             prefs[TOKEN_TYPE_KEY] = token.tokenType
+            prefs.currentStoredProfile(token)?.let { session ->
+                prefs[SAVED_PROFILE_SESSIONS_KEY] = profileJson.encodeToString(
+                    prefs.storedProfileSessions().upsert(session),
+                )
+            }
         }
     }
 
-    suspend fun saveIdentity(userId: String, displayName: String?) {
+    suspend fun saveIdentity(userId: String, displayName: String?, serverUrl: String? = null) {
         dataStore.edit { prefs ->
             prefs[USER_ID_KEY] = userId
             if (displayName.isNullOrBlank()) prefs.remove(USER_NAME_KEY)
             else prefs[USER_NAME_KEY] = displayName
+            serverUrl?.takeIf(String::isNotBlank)?.let { prefs[CURRENT_SERVER_URL_KEY] = it }
+            prefs.currentStoredProfile()?.let { session ->
+                prefs[SAVED_PROFILE_SESSIONS_KEY] = profileJson.encodeToString(
+                    prefs.storedProfileSessions().upsert(session),
+                )
+            }
         }
+    }
+
+    suspend fun bindCurrentServer(serverUrl: String) {
+        if (serverUrl.isBlank()) return
+        dataStore.edit { prefs ->
+            val currentSession = prefs.currentStoredProfile()
+            if (
+                prefs[CURRENT_SERVER_URL_KEY] == serverUrl &&
+                currentSession != null &&
+                currentSession in prefs.storedProfileSessions()
+            ) {
+                return@edit
+            }
+            prefs[CURRENT_SERVER_URL_KEY] = serverUrl
+            prefs.currentStoredProfile()?.let { session ->
+                prefs[SAVED_PROFILE_SESSIONS_KEY] = profileJson.encodeToString(
+                    prefs.storedProfileSessions().upsert(session),
+                )
+            }
+        }
+    }
+
+    suspend fun activateProfile(serverUrl: String, userId: String): Boolean {
+        var activated = false
+        dataStore.edit { prefs ->
+            val session = prefs.storedProfileSessions().firstOrNull {
+                it.serverUrl == serverUrl && it.userId == userId
+            } ?: return@edit
+            prefs[ACCESS_TOKEN_KEY] = session.accessToken
+            prefs[REFRESH_TOKEN_KEY] = session.refreshToken
+            prefs[TOKEN_TYPE_KEY] = session.tokenType
+            prefs[USER_ID_KEY] = session.userId
+            if (session.name.isNullOrBlank()) prefs.remove(USER_NAME_KEY)
+            else prefs[USER_NAME_KEY] = session.name
+            prefs[CURRENT_SERVER_URL_KEY] = session.serverUrl
+            activated = true
+        }
+        return activated
+    }
+
+    suspend fun isProfileSaved(serverUrl: String, userId: String): Boolean =
+        dataStore.data.first().storedProfileSessions().any {
+            it.serverUrl == serverUrl && it.userId == userId
+        }
+
+    suspend fun logoutProfile(serverUrl: String, userId: String) {
+        dataStore.edit { prefs ->
+            val remaining = prefs.storedProfileSessions().filterNot {
+                it.serverUrl == serverUrl && it.userId == userId
+            }
+            prefs[SAVED_PROFILE_SESSIONS_KEY] = profileJson.encodeToString(remaining)
+            if (prefs[CURRENT_SERVER_URL_KEY] == serverUrl && prefs[USER_ID_KEY] == userId) {
+                prefs.clearCurrentSession()
+            }
+        }
+    }
+
+    suspend fun clearCurrent() {
+        dataStore.edit(MutablePreferences::clearCurrentSession)
     }
 
     /**
@@ -57,11 +157,16 @@ class TokenStore @Inject constructor(
      */
     suspend fun clear() {
         dataStore.edit { prefs ->
-            prefs.remove(ACCESS_TOKEN_KEY)
-            prefs.remove(REFRESH_TOKEN_KEY)
-            prefs.remove(TOKEN_TYPE_KEY)
-            prefs.remove(USER_ID_KEY)
-            prefs.remove(USER_NAME_KEY)
+            val serverUrl = prefs[CURRENT_SERVER_URL_KEY]
+            val userId = prefs[USER_ID_KEY]
+            if (serverUrl != null && userId != null) {
+                prefs[SAVED_PROFILE_SESSIONS_KEY] = profileJson.encodeToString(
+                    prefs.storedProfileSessions().filterNot {
+                        it.serverUrl == serverUrl && it.userId == userId
+                    },
+                )
+            }
+            prefs.clearCurrentSession()
         }
     }
 
@@ -83,12 +188,41 @@ class TokenStore @Inject constructor(
         return generated
     }
 
-    private companion object {
+    internal companion object {
         val ACCESS_TOKEN_KEY = stringPreferencesKey("streamarr_access_token")
         val REFRESH_TOKEN_KEY = stringPreferencesKey("streamarr_refresh_token")
         val TOKEN_TYPE_KEY = stringPreferencesKey("streamarr_token_type")
         val DEVICE_ID_KEY = stringPreferencesKey("streamarr_device_id")
         val USER_ID_KEY = stringPreferencesKey("streamarr_user_id")
         val USER_NAME_KEY = stringPreferencesKey("streamarr_user_name")
+        val CURRENT_SERVER_URL_KEY = stringPreferencesKey("streamarr_current_server_url")
+        val SAVED_PROFILE_SESSIONS_KEY = stringPreferencesKey("streamarr_saved_profile_sessions")
+        val profileJson = Json { ignoreUnknownKeys = true }
     }
+}
+
+private fun Preferences.storedProfileSessions(): List<StoredProfileSession> =
+    this[TokenStore.SAVED_PROFILE_SESSIONS_KEY]
+        ?.let { encoded -> runCatching { TokenStore.profileJson.decodeFromString<List<StoredProfileSession>>(encoded) }.getOrNull() }
+        .orEmpty()
+
+private fun Preferences.currentStoredProfile(token: TokenResponse? = null): StoredProfileSession? {
+    val serverUrl = this[TokenStore.CURRENT_SERVER_URL_KEY]?.takeIf(String::isNotBlank) ?: return null
+    val userId = this[TokenStore.USER_ID_KEY]?.takeIf(String::isNotBlank) ?: return null
+    val accessToken = token?.accessToken ?: this[TokenStore.ACCESS_TOKEN_KEY] ?: return null
+    val refreshToken = token?.refreshToken ?: this[TokenStore.REFRESH_TOKEN_KEY] ?: return null
+    val tokenType = token?.tokenType ?: this[TokenStore.TOKEN_TYPE_KEY] ?: return null
+    return StoredProfileSession(serverUrl, userId, this[TokenStore.USER_NAME_KEY], accessToken, refreshToken, tokenType)
+}
+
+private fun List<StoredProfileSession>.upsert(session: StoredProfileSession): List<StoredProfileSession> =
+    filterNot { it.serverUrl == session.serverUrl && it.userId == session.userId } + session
+
+private fun MutablePreferences.clearCurrentSession() {
+    remove(TokenStore.ACCESS_TOKEN_KEY)
+    remove(TokenStore.REFRESH_TOKEN_KEY)
+    remove(TokenStore.TOKEN_TYPE_KEY)
+    remove(TokenStore.USER_ID_KEY)
+    remove(TokenStore.USER_NAME_KEY)
+    remove(TokenStore.CURRENT_SERVER_URL_KEY)
 }

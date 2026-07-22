@@ -104,6 +104,7 @@ import io.streamarr.mobile.update.AndroidUpdateEvent
 import io.streamarr.shared.auth.ConnectedServerSessionManager
 import io.streamarr.shared.auth.ConnectedServerSessionStore
 import io.streamarr.shared.auth.KnownServerGroupStore
+import io.streamarr.shared.auth.SavedProfile
 import io.streamarr.shared.auth.TokenStore
 import io.streamarr.shared.auth.model.ClientPlatform
 import io.streamarr.shared.auth.model.LoginRequest
@@ -1317,14 +1318,37 @@ private fun WorkDetail.mediaFileFor(item: PlaylistItem): String? = when (val tre
 
 internal data class ProfilesSnapshot(
     val profiles: List<AvailableProfile>,
+    val savedProfileIds: Set<String>,
     val loadWarning: PlayarrMessage? = null,
 )
+
+internal fun selectAndroidDeviceProfiles(
+    available: List<AvailableProfile>,
+    savedProfileIds: Set<String>,
+    currentUserId: String?,
+): List<AvailableProfile> = available.filter { profile ->
+    profile.id == currentUserId || profile.isCurrent || profile.id in savedProfileIds
+}
+
+internal fun savedAndroidProfiles(
+    profiles: List<SavedProfile>,
+    currentUserId: String?,
+): List<AvailableProfile> = profiles.map { profile ->
+    AvailableProfile(
+        id = profile.userId,
+        username = profile.name.orEmpty(),
+        displayName = profile.name.orEmpty(),
+        isCurrent = profile.userId == currentUserId,
+        pinLocked = false,
+    )
+}
 
 @HiltViewModel
 internal class ProfilesViewModel @Inject constructor(
     private val api: StreamarrApi,
     private val loginApi: LoginApi,
     private val tokenStore: TokenStore,
+    private val serverConfigStore: ServerConfigStore,
 ) : ViewModel() {
     private val _state = MutableStateFlow<ParityLoad<ProfilesSnapshot>>(ParityLoad.Loading)
     val state = _state.asStateFlow()
@@ -1335,29 +1359,32 @@ internal class ProfilesViewModel @Inject constructor(
 
     fun load() = viewModelScope.launch {
         _state.value = ParityLoad.Loading
+        val serverUrl = serverConfigStore.baseUrl.first()
+        val saved = tokenStore.savedProfilesForServer(serverUrl).first()
+        val savedIds = saved.mapTo(mutableSetOf(), SavedProfile::userId)
+        val currentUserId = tokenStore.currentUserId.first()
+        val fallback = savedAndroidProfiles(saved, currentUserId)
+        if (currentUserId == null) {
+            _state.value = ParityLoad.Ready(ProfilesSnapshot(fallback, savedIds))
+            return@launch
+        }
         _state.value = runCatching { api.listAvailableProfiles() }.fold(
-            onSuccess = { ParityLoad.Ready(ProfilesSnapshot(it)) },
+            onSuccess = {
+                ParityLoad.Ready(
+                    ProfilesSnapshot(
+                        selectAndroidDeviceProfiles(it, savedIds, currentUserId),
+                        savedIds,
+                    ),
+                )
+            },
             onFailure = { failure ->
-                val userId = tokenStore.currentUserId.first()
-                if (userId == null) {
-                    ParityLoad.Failed(failure.playarrMessage(PlayarrFailureSubject.Profiles))
-                } else {
-                    val displayName = tokenStore.currentUserName.first().orEmpty()
-                    ParityLoad.Ready(
-                        ProfilesSnapshot(
-                            profiles = listOf(
-                                AvailableProfile(
-                                    id = userId,
-                                    username = displayName,
-                                    displayName = displayName,
-                                    isCurrent = true,
-                                    pinLocked = false,
-                                ),
-                            ),
-                            loadWarning = failure.playarrMessage(PlayarrFailureSubject.Profiles),
-                        ),
-                    )
-                }
+                ParityLoad.Ready(
+                    ProfilesSnapshot(
+                        profiles = fallback,
+                        savedProfileIds = savedIds,
+                        loadWarning = failure.playarrMessage(PlayarrFailureSubject.Profiles),
+                    ),
+                )
             },
         )
     }
@@ -1371,24 +1398,33 @@ internal class ProfilesViewModel @Inject constructor(
     ) = viewModelScope.launch {
         _switchingProfileId.value = profile.id
         runCatching {
-            val response = loginApi.login(
-                LoginRequest(
-                    deviceId = tokenStore.getOrCreateDeviceId(),
-                    deviceName = "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
-                    clientPlatform = if (isTelevision) ClientPlatform.AndroidTv else ClientPlatform.AndroidMobile,
-                    clientVersion = BuildConfig.VERSION_NAME,
-                    pin = pin,
-                    profileUserId = profile.id,
-                ),
-            )
-            tokenStore.save(response.toTokenResponse())
-            tokenStore.saveIdentity(response.userId, profile.displayName)
+            val serverUrl = serverConfigStore.baseUrl.first()
+            if (pin == null && tokenStore.isProfileSaved(serverUrl, profile.id)) {
+                check(tokenStore.activateProfile(serverUrl, profile.id))
+            } else {
+                val response = loginApi.login(
+                    LoginRequest(
+                        deviceId = tokenStore.getOrCreateDeviceId(),
+                        deviceName = "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
+                        clientPlatform = if (isTelevision) ClientPlatform.AndroidTv else ClientPlatform.AndroidMobile,
+                        clientVersion = BuildConfig.VERSION_NAME,
+                        pin = pin,
+                        profileUserId = profile.id,
+                    ),
+                )
+                tokenStore.clearCurrent()
+                tokenStore.save(response.toTokenResponse())
+                tokenStore.saveIdentity(response.userId, profile.displayName, serverUrl)
+            }
         }.onSuccess { onSuccess() }
             .onFailure(onFailure)
         _switchingProfileId.value = null
     }
 
-    fun signOut() = viewModelScope.launch { tokenStore.clear() }
+    fun signOut(profileId: String) = viewModelScope.launch {
+        tokenStore.logoutProfile(serverConfigStore.baseUrl.first(), profileId)
+        load()
+    }
 }
 
 internal enum class ProfileAction { Select, Settings }
@@ -1444,6 +1480,7 @@ internal fun ExperienceProfilesScreen(
     currentAvatar: ProfileAvatarPreference?,
     onHome: () -> Unit,
     onSettings: () -> Unit,
+    onAddProfile: () -> Unit,
     viewModel: ProfilesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -1549,7 +1586,11 @@ internal fun ExperienceProfilesScreen(
                                     onFocus = { selectedId = profile.id },
                                     onClick = { requestAction(profile, ProfileAction.Select) },
                                     onSettings = { requestAction(profile, ProfileAction.Settings) },
-                                    onSignOut = if (profile.isCurrent) ({ viewModel.signOut() }) else null,
+                                    onSignOut = if (profile.id in current.value.savedProfileIds || profile.isCurrent) {
+                                        ({ viewModel.signOut(profile.id) })
+                                    } else {
+                                        null
+                                    },
                                 )
                             }
                             item(AddProfileId) {
@@ -1558,7 +1599,7 @@ internal fun ExperienceProfilesScreen(
                                     isTelevision = isTelevision,
                                     enabled = switchingProfileId == null,
                                     onFocus = { selectedId = AddProfileId },
-                                    onClick = viewModel::signOut,
+                                    onClick = onAddProfile,
                                 )
                             }
                         }
@@ -1641,7 +1682,7 @@ internal fun ExperienceProfilesScreen(
                     pinError?.let {
                         Text(playarrText(it), color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
                     }
-                    TextButton(onClick = viewModel::signOut, enabled = !busy, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                    TextButton(onClick = onAddProfile, enabled = !busy, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                         Text(playarrString(PlayarrString.ProfilesUseAccountSignIn))
                     }
                 }
