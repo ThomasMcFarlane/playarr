@@ -36,4 +36,30 @@ class PlayarrAvatarEditorTest {
 
         assertEquals(expected, clamped)
     }
+
+    @Test
+    fun `dragging uses the available web pan range and clamps at its edges`() {
+        val crop = dragPlayarrAvatarCrop(
+            imageWidth = 1_000,
+            imageHeight = 500,
+            crop = PlayarrAvatarCrop(zoom = 2f),
+            size = 500,
+            deltaX = 400f,
+            deltaY = -400f,
+        )
+
+        assertEquals(0.533f, crop.offsetX, 0.001f)
+        assertEquals(-1f, crop.offsetY, 0.001f)
+    }
+
+    @Test
+    fun `preset labels map to their localized accessibility copy`() {
+        assertEquals(PlayarrString.SettingsAvatarAstronaut, playarrAvatarPresetLabelKey("astronaut"))
+        assertEquals(PlayarrString.SettingsAvatarCat, playarrAvatarPresetLabelKey("cat"))
+        assertEquals(PlayarrString.SettingsAvatarDinosaur, playarrAvatarPresetLabelKey("dinosaur"))
+        assertEquals(PlayarrString.SettingsAvatarRobot, playarrAvatarPresetLabelKey("robot"))
+        assertEquals(PlayarrString.SettingsAvatarPirate, playarrAvatarPresetLabelKey("pirate"))
+        assertEquals(PlayarrString.SettingsAvatarAlien, playarrAvatarPresetLabelKey("alien"))
+        assertEquals(PlayarrString.SettingsAvatarPresetLabel, playarrAvatarPresetLabelKey("unknown"))
+    }
 }

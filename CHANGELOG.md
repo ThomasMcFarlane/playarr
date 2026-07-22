@@ -53,6 +53,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Localize Android profile-avatar presets, upload validation, photo preparation, and the complete
+  crop editor while retaining the Web workflow's supported formats, limits, and labels.
 - Localize Android appearance, language, and player preference controls and replace English-only
   settings success detection with typed notices across profile, invite, and server updates.
 - Align Android's profile chooser with Playarr Web through localized status and PIN flows,
