@@ -10,6 +10,7 @@ import io.streamarr.shared.data.model.MediaChapter
 import io.streamarr.shared.data.model.PlaybackEventRequest
 import io.streamarr.shared.data.model.PlaybackInfoResponse
 import io.streamarr.shared.data.model.PlaybackMode
+import io.streamarr.shared.data.model.VersionEnvelope
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
 import io.streamarr.shared.data.model.WorkDetail
@@ -173,6 +174,39 @@ class JoinedStreamarrApiTest {
         joined.cancelDownloadTicket(ticket.id)
 
         assertEquals(listOf(ticket.id), cancelled)
+    }
+
+    @Test
+    fun `source selector exposes safe labels and makes the selected server own its media`() = runBlocking {
+        val primaryWork = work("primary-work", "Voyage", "329865")
+        val secondaryWork = work("secondary-work", "Voyage", "329865")
+        val primary = server("https://primary.example", fakeApi(
+            "getVersion" to { VersionEnvelope("Primary Room", "1.0.0", "v1") },
+        ))
+        val secondary = server("https://secondary.example", fakeApi(
+            "getVersion" to { VersionEnvelope("Cinema Room", "1.0.0", "v1") },
+            "getWork" to { WorkDetail(secondaryWork, WorkChildren.Movie, "secondary-media") },
+        ))
+        val registry = PlayarrServerSourceRegistry().also {
+            it.ensureScope(listOf(primary, secondary))
+            it.registerWorkSources(
+                listOf(
+                    PlayarrWorkSource(primary, primaryWork),
+                    PlayarrWorkSource(secondary, secondaryWork),
+                ),
+            )
+        }
+        val selector = PlayarrWorkSourceSelector({ listOf(primary, secondary) }, registry)
+
+        val choices = selector.choices(primaryWork.id)
+        val detail = selector.select(primaryWork.id, secondary.url)
+
+        assertEquals(listOf("Primary Room", "Cinema Room"), choices.map { it.label })
+        assertEquals(listOf(true, false), choices.map { it.defaultSource })
+        assertEquals("secondary-media", detail.mediaFileId)
+        assertSame(secondary, registry.mediaServer("secondary-media"))
+        assertSame(secondary, registry.preferredWorkSource(primaryWork.id)?.server)
+        assertSame(primary, registry.workSources(primaryWork.id).first().server)
     }
 
     private fun server(url: String, api: StreamarrApi) = PlayarrServerClient(

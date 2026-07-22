@@ -35,6 +35,7 @@ internal data class PlayarrWorkSource(
 /** In-memory ownership registry used to route child media and sessions back to their server. */
 internal class PlayarrServerSourceRegistry {
     private val sourcesByWorkId = ConcurrentHashMap<String, List<PlayarrWorkSource>>()
+    private val preferredServerByWorkId = ConcurrentHashMap<String, PlayarrServerClient>()
     private val serverByMediaFileId = ConcurrentHashMap<String, PlayarrServerClient>()
     private val serverByPlaybackSessionId = ConcurrentHashMap<String, PlayarrServerClient>()
     private val serverByDownloadTicketId = ConcurrentHashMap<String, PlayarrServerClient>()
@@ -49,6 +50,7 @@ internal class PlayarrServerSourceRegistry {
         if (activeScope == scope) return
         activeServerKeys = emptySet()
         sourcesByWorkId.clear()
+        preferredServerByWorkId.clear()
         serverByMediaFileId.clear()
         serverByPlaybackSessionId.clear()
         serverByDownloadTicketId.clear()
@@ -57,6 +59,27 @@ internal class PlayarrServerSourceRegistry {
     }
 
     fun workSources(workId: String): List<PlayarrWorkSource> = sourcesByWorkId[workId].orEmpty()
+
+    fun preferredWorkSource(workId: String): PlayarrWorkSource? {
+        val preferred = preferredServerByWorkId[workId] ?: return null
+        return workSources(workId).firstOrNull { it.server.scopeKey() == preferred.scopeKey() }
+    }
+
+    @Synchronized
+    fun preferWorkSource(source: PlayarrWorkSource, detail: WorkDetail) {
+        if (!source.server.isActive()) return
+        val selected = source.copy(work = detail.work)
+        val sources = workSources(source.work.id).map { current ->
+            if (current.server.scopeKey() == source.server.scopeKey()) selected else current
+        }
+        sources.forEach { current ->
+            sourcesByWorkId[current.work.id] = sources
+            preferredServerByWorkId[current.work.id] = source.server
+        }
+        sourcesByWorkId[detail.work.id] = sources
+        preferredServerByWorkId[detail.work.id] = source.server
+        registerDetail(source.server, detail)
+    }
 
     @Synchronized
     fun registerWorkSources(sources: List<PlayarrWorkSource>): Work {

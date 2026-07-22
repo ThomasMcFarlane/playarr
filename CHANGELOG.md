@@ -53,6 +53,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Prompt Android mobile and TV viewers to choose an owning server before playing a title available
+  on multiple connected Playarr instances, then map the selected movie, episode, track, or book to
+  that server's local media ids and queue.
 - Add Android mobile and TV Settings controls for listing independently connected Playarr servers,
   connecting and disconnecting profile-scoped sessions, showing instance names, testing the
   primary connection, and forgetting only the primary deployment's remembered failover group.

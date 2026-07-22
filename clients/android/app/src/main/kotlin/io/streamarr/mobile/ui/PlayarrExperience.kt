@@ -87,6 +87,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -121,6 +123,8 @@ import coil3.request.ImageRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.streamarr.mobile.BuildConfig
 import io.streamarr.mobile.R
+import io.streamarr.mobile.connected.PlayarrWorkSourceChoice
+import io.streamarr.mobile.connected.PlayarrWorkSourceSelector
 import io.streamarr.shared.auth.TokenStore
 import io.streamarr.shared.data.model.AlbumDetail
 import io.streamarr.shared.data.model.CreditResponse
@@ -2103,22 +2107,36 @@ private fun WorkDetail.mediaFileIds(): List<String> = when (val tree = children)
 internal class ExperienceDetailViewModel @Inject constructor(
     private val getWorkDetails: GetWorkDetailsUseCase,
     private val api: StreamarrApi,
+    private val workSourceSelector: PlayarrWorkSourceSelector,
 ) : ViewModel() {
     private val _state = MutableStateFlow<ExperienceLoad<ExperienceDetailSnapshot>>(ExperienceLoad.Loading)
     val state = _state.asStateFlow()
     private val _message = MutableStateFlow<String?>(null)
     val message = _message.asStateFlow()
+    private val _sourceChoices = MutableStateFlow<ExperienceLoad<List<PlayarrWorkSourceChoice>>>(ExperienceLoad.Loading)
+    val sourceChoices = _sourceChoices.asStateFlow()
+    private val _sourceSelection = MutableStateFlow<PlayarrSourceSelection>(PlayarrSourceSelection.Idle)
+    val sourceSelection = _sourceSelection.asStateFlow()
     private var loadJob: Job? = null
 
     fun load(id: String) {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             _state.value = ExperienceLoad.Loading
+            _sourceChoices.value = ExperienceLoad.Loading
+            _sourceSelection.value = PlayarrSourceSelection.Idle
             when (val result = getWorkDetails(id)) {
                 is StreamarrResult.Success -> {
                     val detail = result.value
                     val videoDetail = detail.children == WorkChildren.Movie || detail.children is WorkChildren.Series
                     _state.value = ExperienceLoad.Ready(ExperienceDetailSnapshot(detail, emptyMap()))
+                    launch {
+                        _sourceChoices.value = runCatching { workSourceSelector.choices(detail.work.id) }
+                            .fold(
+                                { ExperienceLoad.Ready(it) },
+                                { ExperienceLoad.Failed(it.message ?: "Couldn’t load available servers.") },
+                            )
+                    }
                     launch {
                         val progress = runCatching { api.listWatchProgress() }.getOrDefault(emptyList())
                         updateSnapshot(detail.work.id) {
@@ -2202,6 +2220,34 @@ internal class ExperienceDetailViewModel @Inject constructor(
     fun clearMessage() {
         _message.value = null
     }
+
+    fun selectSource(
+        originalDetail: WorkDetail,
+        requestedMediaFileId: String,
+        choice: PlayarrWorkSourceChoice,
+        onSelected: (PlayarrResolvedSourcePlayback) -> Unit,
+    ) {
+        if (_sourceSelection.value is PlayarrSourceSelection.Selecting) return
+        viewModelScope.launch {
+            _sourceSelection.value = PlayarrSourceSelection.Selecting(choice.serverUrl)
+            runCatching {
+                val sourceDetail = workSourceSelector.select(originalDetail.work.id, choice.serverUrl)
+                resolvePlayarrSourcePlayback(originalDetail, sourceDetail, requestedMediaFileId)
+                    ?: error("That server does not have the selected item.")
+            }.onSuccess {
+                _sourceSelection.value = PlayarrSourceSelection.Idle
+                onSelected(it)
+            }.onFailure {
+                _sourceSelection.value = PlayarrSourceSelection.Failed(
+                    it.message ?: "Couldn’t use that server.",
+                )
+            }
+        }
+    }
+
+    fun clearSourceSelection() {
+        _sourceSelection.value = PlayarrSourceSelection.Idle
+    }
 }
 
 internal fun playarrRelatedWorkScore(target: Work, candidate: Work): Double {
@@ -2228,6 +2274,20 @@ internal data class ExperienceDetailSnapshot(
     val moviePlaybackOptions: MediaPlaybackOptionsResponse? = null,
 )
 
+internal sealed interface PlayarrSourceSelection {
+    data object Idle : PlayarrSourceSelection
+    data class Selecting(val serverUrl: String) : PlayarrSourceSelection
+    data class Failed(val message: String) : PlayarrSourceSelection
+}
+
+private data class PendingSourcePlayback(
+    val mediaFileId: String,
+    val title: String,
+    val queueItems: List<PlayarrPlaybackQueueItem>,
+    val startPositionMs: Long?,
+    val launchSettings: PlayarrPlaybackLaunchSettings?,
+)
+
 @Composable
 private fun ExperienceDetailScreen(
     workId: String,
@@ -2243,6 +2303,9 @@ private fun ExperienceDetailScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val message by viewModel.message.collectAsState()
+    val sourceChoices by viewModel.sourceChoices.collectAsState()
+    val sourceSelection by viewModel.sourceSelection.collectAsState()
+    var pendingSourcePlayback by remember(workId) { mutableStateOf<PendingSourcePlayback?>(null) }
     LaunchedEffect(workId) { viewModel.load(workId) }
     when (val current = state) {
         ExperienceLoad.Loading -> ExperienceLoading("Loading title")
@@ -2253,7 +2316,19 @@ private fun ExperienceDetailScreen(
             val orderedItems = remember(detail) { detail.playarrPlaybackQueueItems() }
             val playInContext: (String, Long?, PlayarrPlaybackLaunchSettings?) -> Unit =
                 { mediaFileId, startPositionMs, launchSettings ->
-                    onPlay(mediaFileId, orderedItems, startPositionMs, launchSettings)
+                    val pending = PendingSourcePlayback(
+                        mediaFileId,
+                        orderedItems.firstOrNull { it.mediaFileId == mediaFileId }?.title ?: detail.work.title,
+                        orderedItems,
+                        startPositionMs,
+                        launchSettings,
+                    )
+                    val choices = (sourceChoices as? ExperienceLoad.Ready)?.value
+                    if (choices != null && choices.size <= 1) {
+                        onPlay(mediaFileId, orderedItems, startPositionMs, launchSettings)
+                    } else {
+                        pendingSourcePlayback = pending
+                    }
             }
             var pendingPlaylistTrackId by remember(detail.work.id) { mutableStateOf<String?>(null) }
             var addWorkToPlaylist by remember(detail.work.id) { mutableStateOf(false) }
@@ -2270,7 +2345,19 @@ private fun ExperienceDetailScreen(
                         canDownload = canDownload,
                         onBack = onBack,
                         onPlay = { mediaFileId, albumId ->
-                            onPlay(mediaFileId, playarrAlbumPlaybackQueueItems(orderedItems, albumId), null, null)
+                            val albumItems = playarrAlbumPlaybackQueueItems(orderedItems, albumId)
+                            val choices = (sourceChoices as? ExperienceLoad.Ready)?.value
+                            if (choices != null && choices.size <= 1) {
+                                onPlay(mediaFileId, albumItems, null, null)
+                            } else {
+                                pendingSourcePlayback = PendingSourcePlayback(
+                                    mediaFileId,
+                                    albumItems.firstOrNull { it.mediaFileId == mediaFileId }?.title ?: detail.work.title,
+                                    albumItems,
+                                    null,
+                                    null,
+                                )
+                            }
                         },
                         onAddToPlaylist = { trackId ->
                             pendingPlaylistTrackId = trackId
@@ -2376,8 +2463,111 @@ private fun ExperienceDetailScreen(
             pendingDownloadCandidates?.let { candidates ->
                 DownloadOptionsSheet(candidates = candidates, onDismiss = { pendingDownloadCandidates = null })
             }
+            pendingSourcePlayback?.let { pending ->
+                LaunchedEffect(sourceChoices, pending) {
+                    val choices = (sourceChoices as? ExperienceLoad.Ready)?.value ?: return@LaunchedEffect
+                    if (choices.size <= 1) {
+                        pendingSourcePlayback = null
+                        onPlay(
+                            pending.mediaFileId,
+                            pending.queueItems,
+                            pending.startPositionMs,
+                            pending.launchSettings,
+                        )
+                    }
+                }
+                PlayarrServerChoiceDialog(
+                    title = pending.title,
+                    choices = sourceChoices,
+                    selection = sourceSelection,
+                    onCancel = {
+                        pendingSourcePlayback = null
+                        viewModel.clearSourceSelection()
+                    },
+                    onRetry = { viewModel.load(detail.work.id) },
+                    onSelect = { choice ->
+                        viewModel.selectSource(detail, pending.mediaFileId, choice) { resolved ->
+                            pendingSourcePlayback = null
+                            onPlay(
+                                resolved.mediaFileId,
+                                resolved.queueItems,
+                                pending.startPositionMs,
+                                pending.launchSettings.takeIf { choice.defaultSource },
+                            )
+                        }
+                    },
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun PlayarrServerChoiceDialog(
+    title: String,
+    choices: ExperienceLoad<List<PlayarrWorkSourceChoice>>,
+    selection: PlayarrSourceSelection,
+    onCancel: () -> Unit,
+    onRetry: () -> Unit,
+    onSelect: (PlayarrWorkSourceChoice) -> Unit,
+) {
+    val firstChoiceFocus = remember { FocusRequester() }
+    val rows = (choices as? ExperienceLoad.Ready)?.value.orEmpty()
+    LaunchedEffect(rows) {
+        if (rows.isNotEmpty()) runCatching { firstChoiceFocus.requestFocus() }
+    }
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Where do you want to play $title?") },
+        text = {
+            Column(
+                Modifier.fillMaxWidth().height(360.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                when (choices) {
+                    ExperienceLoad.Loading -> {
+                        CircularProgressIndicator(color = WebPink)
+                        Text("Loading available servers…", color = WebInkMuted)
+                    }
+                    is ExperienceLoad.Failed -> {
+                        Text(choices.message, color = MaterialTheme.colorScheme.error)
+                        OutlinedButton(onClick = onRetry) { Text("Try again") }
+                    }
+                    is ExperienceLoad.Ready -> {
+                        Text("Available on ${choices.value.size} servers", color = WebPink, fontSize = 11.sp)
+                        Text("Choose which server should provide this item.", color = WebInkMuted)
+                        choices.value.forEachIndexed { index, choice ->
+                            OutlinedButton(
+                                onClick = { onSelect(choice) },
+                                enabled = selection !is PlayarrSourceSelection.Selecting,
+                                modifier = Modifier.fillMaxWidth().then(
+                                    if (index == 0) Modifier.focusRequester(firstChoiceFocus) else Modifier,
+                                ),
+                            ) {
+                                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
+                                    Text(choice.label, fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        if ((selection as? PlayarrSourceSelection.Selecting)?.serverUrl == choice.serverUrl) {
+                                            "Connecting…"
+                                        } else {
+                                            choice.serverUrl
+                                        },
+                                        color = WebInkMuted,
+                                        fontSize = 10.sp,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                if (selection is PlayarrSourceSelection.Failed) {
+                    Text(selection.message, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } },
+    )
 }
 
 @Composable

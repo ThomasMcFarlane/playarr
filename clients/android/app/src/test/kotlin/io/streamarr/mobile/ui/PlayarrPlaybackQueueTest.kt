@@ -133,6 +133,88 @@ class PlayarrPlaybackQueueTest {
     }
 
     @Test
+    fun `joined series source maps the requested episode by season and episode number`() {
+        fun detail(workId: String, mediaPrefix: String) = WorkDetail(
+            work = work(workId, WorkKind.Series, "Series"),
+            children = WorkChildren.Series(
+                listOf(
+                    SeasonDetail(
+                        season = Season(
+                            id = "$workId-season",
+                            seriesWorkId = workId,
+                            seasonNumber = 2,
+                            monitored = true,
+                            availability = Availability.Available,
+                        ),
+                        episodes = listOf(1, 2).map { number ->
+                            EpisodeDetail(
+                                episode = Episode(
+                                    id = "$workId-episode-$number",
+                                    seasonId = "$workId-season",
+                                    episodeNumber = number,
+                                    title = "Episode $number",
+                                    monitored = true,
+                                    availability = Availability.Available,
+                                ),
+                                mediaFileId = "$mediaPrefix-$number",
+                            )
+                        },
+                    ),
+                ),
+            ),
+        )
+        val original = detail("original", "original-media")
+        val source = detail("source", "source-media")
+
+        val resolved = resolvePlayarrSourcePlayback(original, source, "original-media-2")
+
+        assertEquals("source-media-2", resolved?.mediaFileId)
+        assertEquals(listOf("source-media-1", "source-media-2"), resolved?.queueItems?.map { it.mediaFileId })
+    }
+
+    @Test
+    fun `joined music source maps album and track while keeping the chosen album queue`() {
+        fun detail(workId: String, mediaPrefix: String) = WorkDetail(
+            work = work(workId, WorkKind.Artist, "Artist"),
+            children = WorkChildren.Artist(
+                listOf(
+                    AlbumDetail(
+                        album = Album(
+                            id = "$workId-album",
+                            artistWorkId = workId,
+                            title = "Shared Album",
+                            albumType = AlbumType.Studio,
+                            monitored = true,
+                            availability = Availability.Available,
+                        ),
+                        tracks = listOf(1, 2).map { number ->
+                            TrackDetail(
+                                track = Track(
+                                    id = "$workId-track-$number",
+                                    albumId = "$workId-album",
+                                    discNumber = 1,
+                                    trackNumber = number,
+                                    title = "Track $number",
+                                    availability = Availability.Available,
+                                ),
+                                mediaFileId = "$mediaPrefix-$number",
+                            )
+                        },
+                    ),
+                ),
+            ),
+        )
+        val original = detail("original", "original-media")
+        val source = detail("source", "source-media")
+
+        val resolved = resolvePlayarrSourcePlayback(original, source, "original-media-2")
+
+        assertEquals("source-media-2", resolved?.mediaFileId)
+        assertEquals(listOf("source-media-1", "source-media-2"), resolved?.queueItems?.map { it.mediaFileId })
+        assertTrue(resolved?.queueItems?.all { it.albumId == "source-album" } == true)
+    }
+
+    @Test
     fun `music durations match Playarr Web formatting`() {
         assertEquals("3:07", formatMusicDuration(187))
         assertEquals("--:--", formatMusicDuration(null))
@@ -229,4 +311,14 @@ class PlayarrPlaybackQueueTest {
         assertEquals("1 hr 31 min", formatPlayarrVideoRuntime(5_430_000L))
         assertEquals("2 hr", formatPlayarrVideoRuntime(7_200_000L))
     }
+
+    private fun work(id: String, kind: WorkKind, title: String) = Work(
+        id = id,
+        kind = kind,
+        title = title,
+        sortTitle = title,
+        addedAt = Instant.EPOCH,
+        monitored = true,
+        availability = Availability.Available,
+    )
 }

@@ -26,7 +26,10 @@ internal class AndroidStreamarrServerAccessResolver internal constructor(
 
     override suspend fun forWork(workId: String): StreamarrServerAccess {
         val clients = activeClients()
-        return registry.workSources(workId).firstOrNull()?.server?.access() ?: clients.first().access()
+        return (registry.preferredWorkSource(workId) ?: registry.workSources(workId).firstOrNull())
+            ?.server
+            ?.access()
+            ?: clients.first().access()
     }
 
     override suspend fun forMedia(mediaFileId: String): StreamarrServerAccess {

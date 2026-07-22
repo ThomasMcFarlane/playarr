@@ -6,6 +6,7 @@ import io.streamarr.shared.data.model.SeasonDetail
 import io.streamarr.shared.data.model.Work
 import io.streamarr.shared.data.model.WorkChildren
 import io.streamarr.shared.data.model.WorkDetail
+import java.util.Locale
 
 internal data class PlayarrPlaybackQueueItem(
     val mediaFileId: String,
@@ -26,6 +27,11 @@ internal data class PlayarrPlaybackLaunchSettings(
     val forceTranscode: Boolean,
     val audioStreamIndex: Int?,
     val subtitleTrackId: String?,
+)
+
+internal data class PlayarrResolvedSourcePlayback(
+    val mediaFileId: String,
+    val queueItems: List<PlayarrPlaybackQueueItem>,
 )
 
 internal data class PlayarrPlaybackQueue(
@@ -87,6 +93,60 @@ internal fun playarrAlbumPlaybackQueueItems(
     items: List<PlayarrPlaybackQueueItem>,
     albumId: String,
 ): List<PlayarrPlaybackQueueItem> = items.filter { it.albumId == albumId }
+
+/** Maps the selected logical movie/episode/track/book onto another joined server's local ids. */
+internal fun resolvePlayarrSourcePlayback(
+    originalDetail: WorkDetail,
+    sourceDetail: WorkDetail,
+    requestedMediaFileId: String,
+): PlayarrResolvedSourcePlayback? {
+    val sourceItems = sourceDetail.playarrPlaybackQueueItems()
+    val resolved = when (val originalChildren = originalDetail.children) {
+        WorkChildren.Movie -> sourceItems.firstOrNull()
+        is WorkChildren.Series -> {
+            val requested = originalDetail.playarrPlaybackQueueItems()
+                .firstOrNull { it.mediaFileId == requestedMediaFileId }
+                ?: return null
+            sourceItems.firstOrNull {
+                it.seasonNumber == requested.seasonNumber && it.episodeNumber == requested.episodeNumber
+            }
+        }
+        is WorkChildren.Artist -> {
+            val requestedAlbum = originalChildren.albums.firstNotNullOfOrNull { album ->
+                album.tracks.firstOrNull { it.mediaFileId == requestedMediaFileId }?.let { album to it }
+            } ?: return null
+            val sourceAlbums = sourceDetail.children as? WorkChildren.Artist ?: return null
+            val album = sourceAlbums.albums.firstOrNull { candidate ->
+                candidate.album.title.normalizedMediaTitle() == requestedAlbum.first.album.title.normalizedMediaTitle() &&
+                    candidate.album.releaseDate == requestedAlbum.first.album.releaseDate
+            } ?: return null
+            val track = album.tracks.firstOrNull { candidate ->
+                candidate.track.trackNumber == requestedAlbum.second.track.trackNumber ||
+                    candidate.track.title.normalizedMediaTitle() == requestedAlbum.second.track.title.normalizedMediaTitle()
+            } ?: return null
+            sourceItems.firstOrNull { it.mediaFileId == track.mediaFileId }
+        }
+        is WorkChildren.Author -> {
+            val requested = originalChildren.books.firstOrNull { it.mediaFileId == requestedMediaFileId }
+                ?: return null
+            val sourceBooks = sourceDetail.children as? WorkChildren.Author ?: return null
+            val requestedIsbn = requested.book.isbn?.takeIf(String::isNotBlank)
+            val book = sourceBooks.books.firstOrNull { candidate ->
+                (requestedIsbn != null && candidate.book.isbn == requestedIsbn) ||
+                    candidate.book.title.normalizedMediaTitle() == requested.book.title.normalizedMediaTitle()
+            } ?: return null
+            sourceItems.firstOrNull { it.mediaFileId == book.mediaFileId }
+        }
+    } ?: return null
+    val queue = if (resolved.music && resolved.albumId != null) {
+        playarrAlbumPlaybackQueueItems(sourceItems, resolved.albumId)
+    } else {
+        sourceItems
+    }
+    return PlayarrResolvedSourcePlayback(resolved.mediaFileId, queue)
+}
+
+private fun String.normalizedMediaTitle(): String = trim().lowercase(Locale.ROOT)
 
 internal fun shouldAutoAdvancePlayarrMusic(
     hasEnded: Boolean,
