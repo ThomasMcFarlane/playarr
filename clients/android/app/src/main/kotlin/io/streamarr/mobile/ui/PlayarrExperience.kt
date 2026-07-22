@@ -1136,12 +1136,12 @@ private fun ProfileControl(
 internal fun profileVersionLabel(versionName: String): String = "v$versionName"
 
 @Composable
-private fun PlayarrLogo(modifier: Modifier = Modifier) {
+internal fun PlayarrLogo(modifier: Modifier = Modifier, iconSize: Dp = 42.dp) {
     Icon(
         painter = painterResource(R.drawable.playarr_mark),
-        contentDescription = "Playarr",
+        contentDescription = null,
         tint = Color.Unspecified,
-        modifier = modifier.size(42.dp),
+        modifier = modifier.size(iconSize),
     )
 }
 

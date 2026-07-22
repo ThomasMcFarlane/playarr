@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Show Playarr's shared logo and language selector on the Android profile stage across phone and
+  television layouts, matching the Web profile selector chrome.
 - Enrich Android TV's focused download online with the same episode context, release year, genres,
   and synopsis as Playarr Web while preserving persisted metadata as the offline fallback.
 - Match Playarr Web's Android Downloads presentation with an online-aware offline badge, device

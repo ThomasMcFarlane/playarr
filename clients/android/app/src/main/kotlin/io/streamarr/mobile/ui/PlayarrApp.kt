@@ -572,7 +572,7 @@ private fun MobileLoginScreen(
 }
 
 @Composable
-private fun PlayarrLanguageDropdown(modifier: Modifier = Modifier) {
+internal fun PlayarrLanguageDropdown(modifier: Modifier = Modifier) {
     val display = LocalPlayarrDisplayPreferences.current
     var expanded by remember { mutableStateOf(false) }
     val selected = playarrUiLanguageOptions.firstOrNull { it.preference == display.language }
