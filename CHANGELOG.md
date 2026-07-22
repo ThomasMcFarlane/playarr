@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Enrich Android TV's focused download online with the same episode context, release year, genres,
+  and synopsis as Playarr Web while preserving persisted metadata as the offline fallback.
 - Match Playarr Web's Android Downloads presentation with an online-aware offline badge, device
   storage usage, persisted quality labels, type and byte metadata, determinate progress, explicit
   retention editing, an empty Downloaded-section state, detail-opening rows, and a focused TV

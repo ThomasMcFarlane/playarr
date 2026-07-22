@@ -83,6 +83,10 @@ import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.streamarr.shared.data.model.DownloadQualityOption
+import io.streamarr.shared.data.model.EpisodeDetail
+import io.streamarr.shared.data.model.WorkChildren
+import io.streamarr.shared.data.model.WorkDetail
+import io.streamarr.shared.data.remote.StreamarrApi
 import io.streamarr.shared.download.DownloadCandidate
 import io.streamarr.shared.download.DownloadEntity
 import io.streamarr.shared.download.DownloadRepository
@@ -94,6 +98,8 @@ import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -106,9 +112,32 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 internal class DownloadsViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository,
+    private val api: StreamarrApi,
 ) : ViewModel() {
     val downloads: StateFlow<List<DownloadEntity>> = downloadRepository.observeDownloads()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _focusedDetail = MutableStateFlow<WorkDetail?>(null)
+    val focusedDetail: StateFlow<WorkDetail?> = _focusedDetail.asStateFlow()
+    private var focusedDetailJob: Job? = null
+    private var focusedDetailRequest = 0L
+
+    fun loadFocusedDetail(workId: String?, online: Boolean) {
+        val request = ++focusedDetailRequest
+        focusedDetailJob?.cancel()
+        _focusedDetail.value = null
+        if (!online || workId.isNullOrBlank()) return
+        focusedDetailJob = viewModelScope.launch {
+            val detail = try {
+                api.getWork(workId)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                null
+            }
+            if (focusedDetailRequest == request) _focusedDetail.value = detail
+        }
+    }
 
     fun togglePauseOrRetry(entry: DownloadEntity) {
         if (entry.state == DownloadState.Downloading || entry.state == DownloadState.Queued) {
@@ -136,6 +165,28 @@ internal data class DownloadStorageUsage(
     val quotaBytes: Long,
     val percent: Int,
 )
+
+internal data class DownloadFocusedPreview(
+    val detail: WorkDetail,
+    val seasonNumber: Int?,
+    val episode: EpisodeDetail?,
+)
+
+internal fun resolveDownloadFocusedPreview(
+    detail: WorkDetail,
+    mediaFileId: String,
+): DownloadFocusedPreview {
+    val episodeMatch = (detail.children as? WorkChildren.Series)?.seasons
+        ?.firstNotNullOfOrNull { season ->
+            season.episodes.firstOrNull { it.mediaFileId == mediaFileId }
+                ?.let { season.season.seasonNumber to it }
+        }
+    return DownloadFocusedPreview(
+        detail = detail,
+        seasonNumber = episodeMatch?.first,
+        episode = episodeMatch?.second,
+    )
+}
 
 internal fun calculateDownloadStorageUsage(
     downloads: List<DownloadEntity>,
@@ -174,6 +225,7 @@ internal fun ExperienceDownloadsScreen(
     viewModel: DownloadsViewModel = hiltViewModel(),
 ) {
     val downloads by viewModel.downloads.collectAsState()
+    val focusedDetail by viewModel.focusedDetail.collectAsState()
     val context = LocalContext.current
     val storageUsage = remember(downloads, context.filesDir) {
         calculateDownloadStorageUsage(
@@ -188,6 +240,17 @@ internal fun ExperienceDownloadsScreen(
         if (focusedId !in downloads.map(DownloadEntity::mediaFileId)) {
             focusedId = downloads.firstOrNull()?.mediaFileId
         }
+    }
+    LaunchedEffect(isTelevision, isOnline, focused?.workId) {
+        viewModel.loadFocusedDetail(
+            workId = focused?.workId.takeIf { isTelevision },
+            online = isOnline,
+        )
+    }
+    val focusedPreview = focused?.let { entry ->
+        focusedDetail
+            ?.takeIf { it.work.id == entry.workId }
+            ?.let { resolveDownloadFocusedPreview(it, entry.mediaFileId) }
     }
     Column(
         modifier = Modifier
@@ -251,6 +314,7 @@ internal fun ExperienceDownloadsScreen(
                     focused?.let {
                         DownloadPreview(
                             entry = it,
+                            focusedPreview = focusedPreview,
                             serverUrl = serverUrl,
                             accessToken = accessToken,
                             modifier = Modifier.weight(0.75f).fillMaxSize(),
@@ -355,6 +419,7 @@ private fun DownloadsList(
 @Composable
 private fun DownloadPreview(
     entry: DownloadEntity,
+    focusedPreview: DownloadFocusedPreview?,
     serverUrl: String,
     accessToken: String?,
     modifier: Modifier = Modifier,
@@ -366,35 +431,100 @@ private fun DownloadPreview(
             accessToken = accessToken,
             modifier = Modifier.width(150.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(14.dp)),
         )
-        Text(
-            (downloadTypeLabel(entry.kind) ?: entry.qualityLabel).uppercase(LocalPlayarrLanguage.current.locale),
-            color = WebPink,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.2.sp,
-            modifier = Modifier.padding(top = 18.dp),
-        )
-        Text(
-            entry.title,
-            color = WebInk,
-            fontSize = 36.sp,
-            fontWeight = FontWeight.Medium,
-            letterSpacing = (-1).sp,
-            lineHeight = 36.sp,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (entry.workTitle != entry.title) {
-            Text(entry.workTitle, color = WebInkSoft, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
+        if (focusedPreview == null) {
+            DownloadFlatPreview(entry)
+        } else {
+            DownloadEnrichedPreview(entry, focusedPreview)
         }
-        Text(
-            listOf(entry.qualityLabel, downloadSizeLabel(entry)).filter(String::isNotBlank).joinToString(" · "),
-            color = WebInkMuted,
-            fontSize = 12.sp,
-            modifier = Modifier.padding(top = 12.dp),
-        )
-        DownloadStatusLine(entry)
     }
+}
+
+@Composable
+private fun DownloadFlatPreview(entry: DownloadEntity) {
+    Text(
+        (downloadTypeLabel(entry.kind) ?: entry.qualityLabel).uppercase(LocalPlayarrLanguage.current.locale),
+        color = WebPink,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 1.2.sp,
+        modifier = Modifier.padding(top = 18.dp),
+    )
+    Text(
+        entry.title,
+        color = WebInk,
+        fontSize = 36.sp,
+        fontWeight = FontWeight.Medium,
+        letterSpacing = (-1).sp,
+        lineHeight = 36.sp,
+        maxLines = 3,
+        overflow = TextOverflow.Ellipsis,
+    )
+    if (entry.workTitle != entry.title) {
+        Text(entry.workTitle, color = WebInkSoft, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
+    }
+    Text(
+        listOf(entry.qualityLabel, downloadSizeLabel(entry)).filter(String::isNotBlank).joinToString(" · "),
+        color = WebInkMuted,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 12.dp),
+    )
+    DownloadStatusLine(entry)
+}
+
+@Composable
+private fun DownloadEnrichedPreview(entry: DownloadEntity, preview: DownloadFocusedPreview) {
+    val work = preview.detail.work
+    val episode = preview.episode?.episode
+    val kindLabel = downloadTypeLabel(entry.kind) ?: entry.kind
+    Text(
+        (if (episode != null) work.title else work.genres.firstOrNull() ?: kindLabel)
+            .uppercase(LocalPlayarrLanguage.current.locale),
+        color = WebPink,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 1.2.sp,
+        modifier = Modifier.padding(top = 18.dp),
+    )
+    Text(
+        episode?.title ?: episode?.episodeNumber?.let {
+            playarrString(PlayarrString.DetailEpisodeNumber, "number" to it)
+        } ?: work.title,
+        color = WebInk,
+        fontSize = 36.sp,
+        fontWeight = FontWeight.Medium,
+        letterSpacing = (-1).sp,
+        lineHeight = 36.sp,
+        maxLines = 3,
+        overflow = TextOverflow.Ellipsis,
+    )
+    Text(
+        buildList {
+            if (episode != null && preview.seasonNumber != null) {
+                add(
+                    "S${preview.seasonNumber.toString().padStart(2, '0')} · " +
+                        "E${episode.episodeNumber.toString().padStart(2, '0')}",
+                )
+            }
+            add((work.releaseDate ?: work.addedAt).atZone(java.time.ZoneOffset.UTC).year.toString())
+            add(work.genres.take(2).joinToString(" · ").ifBlank { kindLabel })
+        }.joinToString(" · "),
+        color = WebInkMuted,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 12.dp),
+    )
+    Text(
+        episode?.overview?.takeIf(String::isNotBlank)
+            ?: work.overview?.takeIf(String::isNotBlank)
+            ?: playarrString(
+                if (episode == null) PlayarrString.DetailNoSynopsis else PlayarrString.DetailNoEpisodeSynopsis,
+            ),
+        color = WebInkMuted,
+        fontSize = 13.sp,
+        lineHeight = 20.sp,
+        maxLines = 5,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(top = 12.dp),
+    )
 }
 
 @Composable
