@@ -23,9 +23,23 @@ class InviteApprovalMessagingService : FirebaseMessagingService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onRegistered(installationId: String) {
+        registerWithStreamarr(installationId)
+    }
+
+    override fun onNewToken(token: String) {
+        registerWithStreamarr(token)
+    }
+
+    private fun registerWithStreamarr(token: String) {
+        if (token.isBlank()) return
         scope.launch {
             runCatching {
-                api.registerPush(PushRegistrationRequest(installationId, ClientPlatform.AndroidMobile))
+                val registration = playarrPushRegistration(
+                    token,
+                    isTelevision(this@InviteApprovalMessagingService),
+                )
+                val response = api.registerPush(registration)
+                check(response.isSuccessful) { "Streamarr rejected the push registration" }
             }
         }
     }
@@ -57,3 +71,9 @@ class InviteApprovalMessagingService : FirebaseMessagingService() {
         )
     }
 }
+
+internal fun playarrPushRegistration(token: String, isTelevision: Boolean): PushRegistrationRequest =
+    PushRegistrationRequest(
+        token = token,
+        platform = if (isTelevision) ClientPlatform.AndroidTv else ClientPlatform.AndroidMobile,
+    )
