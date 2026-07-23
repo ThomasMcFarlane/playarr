@@ -19,6 +19,7 @@ pub mod diagnostics;
 pub mod logging;
 pub mod metrics;
 pub mod otel;
+pub mod request_timing;
 
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;

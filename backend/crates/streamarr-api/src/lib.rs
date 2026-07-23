@@ -44,6 +44,7 @@ pub mod playback;
 pub mod playlists;
 pub mod readiness;
 pub mod refresh;
+pub mod request_timing_middleware;
 pub mod routing;
 pub mod source_registry;
 pub mod system_settings;
@@ -258,6 +259,7 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(admin::sync_source_instance_handler))
         .routes(routes!(admin::sync_status_handler))
         .routes(routes!(admin::source_matrix_handler))
+        .routes(routes!(admin::http_latency_handler))
         .routes(routes!(
             tdarr::create_tdarr_connection_handler,
             tdarr::get_tdarr_connection_handler,
@@ -598,6 +600,15 @@ pub struct AppState {
     /// instance from that one (a different role/process in a split Tier-2/3
     /// deployment), not a duplicate of the same resource.
     pub peer_http: reqwest::Client,
+    /// In-process, per-(method, route template) HTTP request-duration
+    /// recorder -- written by `request_timing_middleware::record_request_timing`
+    /// (layered over the whole router in `build_router`) on every request
+    /// that resolved to a real route, and read by
+    /// `admin::http_latency_handler`'s aggregated p50/p95/p99 endpoint.
+    /// Purely in-memory, like `session_registry`: nothing here survives a
+    /// restart, and each node in a multi-node deployment reports only its
+    /// own traffic.
+    pub request_timing: Arc<streamarr_telemetry::request_timing::RequestTimingRegistry>,
 }
 
 impl FromRef<AppState> for ReadinessState {
@@ -657,6 +668,7 @@ pub fn build_router(
     web_assets_dir: Option<PathBuf>,
 ) -> (Router, utoipa::openapi::OpenApi) {
     let readiness_for_alias = state.readiness.clone();
+    let state_for_request_timing = state.clone();
     let (router, mut api) = api_router().with_state(state).split_for_parts();
     // See `openapi_spec`'s doc comment: paths only exist after
     // `split_for_parts`, so `SecurityAddon` has to run again here to
@@ -673,7 +685,13 @@ pub fn build_router(
             }),
         );
 
-    let router = router.layer(version_gate).layer(CorsLayer::permissive());
+    let router = router
+        .layer(version_gate)
+        .layer(CorsLayer::permissive())
+        .layer(axum::middleware::from_fn_with_state(
+            state_for_request_timing,
+            request_timing_middleware::record_request_timing,
+        ));
 
     let router = match web_assets_dir {
         Some(dir) => {

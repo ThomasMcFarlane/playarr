@@ -1254,6 +1254,7 @@ async fn boot_api(
         sync_conflict_log_repo,
         coordinator,
         peer_http,
+        request_timing: Arc::new(streamarr_telemetry::request_timing::RequestTimingRegistry::new()),
     };
     let version_gate = VersionGateLayer::new(compatibility_table);
 

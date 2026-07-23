@@ -700,6 +700,44 @@ pub async fn impersonate_user_handler(
     }))
 }
 
+/// Aggregated p50/p95/p99/avg/max/count HTTP latency per (method, route
+/// template), computed on demand from whatever
+/// `request_timing_middleware::record_request_timing` has recorded in
+/// `AppState::request_timing` since this process started -- see that
+/// registry's own doc comment for the bounded-ring-buffer shape backing
+/// it. Sorted by `p95_ms` descending, so the routes worth investigating
+/// first are always at the top. Purely in-memory and per-node, like
+/// `sync_status_handler`'s view of sync state: nothing here survives a
+/// restart, and a multi-node deployment reports each node's own traffic
+/// only.
+#[utoipa::path(
+    get,
+    path = "/api/v1/admin/metrics/http-latency",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Aggregated request-duration stats per (method, route template), sorted by p95_ms descending", body = Vec<streamarr_telemetry::request_timing::RouteLatencyStats>, example = json!([
+            {
+                "method": "GET",
+                "route": "/api/v1/catalog/{id}",
+                "sample_count": 812,
+                "avg_ms": 4.2,
+                "p50_ms": 3.1,
+                "p95_ms": 11.4,
+                "p99_ms": 22.0,
+                "max_ms": 58.7
+            }
+        ])),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Caller is authenticated but not an admin")
+    )
+)]
+pub async fn http_latency_handler(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+) -> Json<Vec<streamarr_telemetry::request_timing::RouteLatencyStats>> {
+    Json(state.request_timing.snapshot())
+}
+
 #[cfg(test)]
 mod tests {
     use axum::body::Body;
@@ -1112,5 +1150,84 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    fn http_latency_request(token: Option<&str>) -> Request<Body> {
+        let mut builder = Request::builder()
+            .method("GET")
+            .uri("/api/v1/admin/metrics/http-latency");
+        if let Some(token) = token {
+            builder = builder.header("Authorization", bearer_header(token));
+        }
+        builder.body(Body::empty()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn http_latency_without_token_is_unauthorized() {
+        let (router, _state) = test_state().await;
+
+        let response = router.oneshot(http_latency_request(None)).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn http_latency_requires_admin() {
+        let (router, state) = test_state().await;
+        let non_admin_id = Uuid::new_v4();
+        seed_streaming_user(&state, non_admin_id).await;
+        let token = mint_access_token(&state, non_admin_id);
+
+        let response = router
+            .oneshot(http_latency_request(Some(&token)))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    /// Doubles as the end-to-end proof that
+    /// `request_timing_middleware::record_request_timing` is actually
+    /// layered where `MatchedPath` is populated (see that middleware's own
+    /// doc comment, and `crate::build_router`'s, for why ordering matters):
+    /// a real request through the *same* router this test hits the
+    /// endpoint on is what has to have populated
+    /// `AppState::request_timing` for this to pass -- there is no separate
+    /// seeding path into the registry.
+    #[tokio::test]
+    async fn http_latency_reports_a_sample_recorded_by_a_real_request() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+        let token = mint_access_token(&state, admin_id);
+
+        let warm_up = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/admin/source-instances/sync-status")
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(warm_up.status(), StatusCode::OK);
+
+        let response = router
+            .oneshot(http_latency_request(Some(&token)))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let rows: Vec<serde_json::Value> = serde_json::from_slice(&bytes).unwrap();
+        let row = rows
+            .iter()
+            .find(|row| row["route"] == "/api/v1/admin/source-instances/sync-status")
+            .expect("the warm-up request's route template was recorded");
+        assert_eq!(row["method"], "GET");
+        assert_eq!(row["sample_count"], 1);
     }
 }

@@ -684,6 +684,7 @@ pub async fn test_state() -> (Router, TestState) {
         sync_conflict_log_repo,
         coordinator: Arc::new(streamarr_coordination::SingleNodeCoordinator::new()),
         peer_http: reqwest::Client::new(),
+        request_timing: Arc::new(streamarr_telemetry::request_timing::RequestTimingRegistry::new()),
     };
 
     let (router, _api) = build_router(app.clone(), test_version_gate(), None);

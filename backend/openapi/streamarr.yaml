@@ -72,6 +72,46 @@ paths:
           description: Caller is authenticated but not an admin
       security:
       - bearer_auth: []
+  /api/v1/admin/metrics/http-latency:
+    get:
+      tags:
+      - admin
+      summary: |-
+        Aggregated p50/p95/p99/avg/max/count HTTP latency per (method, route
+        template), computed on demand from whatever
+        `request_timing_middleware::record_request_timing` has recorded in
+        `AppState::request_timing` since this process started -- see that
+        registry's own doc comment for the bounded-ring-buffer shape backing
+        it. Sorted by `p95_ms` descending, so the routes worth investigating
+        first are always at the top. Purely in-memory and per-node, like
+        `sync_status_handler`'s view of sync state: nothing here survives a
+        restart, and a multi-node deployment reports each node's own traffic
+        only.
+      operationId: http_latency_handler
+      responses:
+        '200':
+          description: Aggregated request-duration stats per (method, route template), sorted by p95_ms descending
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RouteLatencyStats'
+              example:
+              - avg_ms: 4.2
+                max_ms: 58.7
+                method: GET
+                p50_ms: 3.1
+                p95_ms: 11.4
+                p99_ms: 22.0
+                route: /api/v1/catalog/{id}
+                sample_count: 812
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+      security:
+      - bearer_auth: []
   /api/v1/admin/peer-groups:
     post:
       tags:
@@ -7575,6 +7615,46 @@ components:
           items:
             type: string
             format: uuid
+    RouteLatencyStats:
+      type: object
+      description: |-
+        Aggregated latency stats for one (method, route template) pair --
+        exactly the shape `streamarr-api`'s `admin::http_latency_handler`
+        returns, one element per key [`RequestTimingRegistry`] has ever
+        recorded a sample for.
+      required:
+      - method
+      - route
+      - sample_count
+      - avg_ms
+      - p50_ms
+      - p95_ms
+      - p99_ms
+      - max_ms
+      properties:
+        avg_ms:
+          type: number
+          format: double
+        max_ms:
+          type: number
+          format: double
+        method:
+          type: string
+        p50_ms:
+          type: number
+          format: double
+        p95_ms:
+          type: number
+          format: double
+        p99_ms:
+          type: number
+          format: double
+        route:
+          type: string
+        sample_count:
+          type: integer
+          format: int64
+          minimum: 0
     RoutingRule:
       type: object
       description: |-
