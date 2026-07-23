@@ -69,9 +69,8 @@ type SortOrder = "asc" | "desc";
 
 function storedView(kind: LibraryKind): LibraryView {
   const value = window.localStorage.getItem(`playarr.libraryView.${kind}`);
-  return value === "list" || value === "cover" || value === "cover-flow"
-    ? value
-    : "screen";
+  if (value === "cover-flow") return kind === "artist" ? "cover-flow" : "screen";
+  return value === "list" || value === "cover" ? value : "screen";
 }
 
 function storedArtworkSize(kind: LibraryKind): ArtworkSize {
@@ -713,7 +712,11 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
           <section>
             <h3>{t("pages.library.view")}</h3>
             <div className="tv-filter-choice-grid tv-filter-view-options">
-              {(["list", "screen", "cover", "cover-flow"] as LibraryView[]).map((option) => (
+              {(
+                kind === "artist"
+                  ? (["list", "screen", "cover", "cover-flow"] as LibraryView[])
+                  : (["list", "screen", "cover"] as LibraryView[])
+              ).map((option) => (
                 <button
                   key={option}
                   type="button"
