@@ -347,7 +347,9 @@ struct LibraryView: View {
                         Label("List", systemImage: "list.bullet").tag(LibraryViewModel.ViewMode.list)
                         Label("Screen", systemImage: "rectangle.grid.2x2").tag(LibraryViewModel.ViewMode.screen)
                         Label("Covers", systemImage: "square.grid.3x3").tag(LibraryViewModel.ViewMode.cover)
-                        Label("Flow", systemImage: "rectangle.on.rectangle.angled").tag(LibraryViewModel.ViewMode.coverFlow)
+                        if viewModel.selectedKind == .artist {
+                            Label("Flow", systemImage: "rectangle.on.rectangle.angled").tag(LibraryViewModel.ViewMode.coverFlow)
+                        }
                     }
                     .pickerStyle(.segmented)
                 }
