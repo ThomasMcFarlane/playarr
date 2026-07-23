@@ -31,13 +31,19 @@ configurations.
 
 | Variant | Login required? | Typical deployment |
 |---|---|---|
-| `AuthMode::TrustedNetwork { allowlist }` — **the default** | No credentials; auto-login by source IP | Tier 1 systemd install, LAN-only, single household |
+| `AuthMode::TrustedNetwork { allowlist }` | No credentials; auto-login by source IP | Tier 1 systemd install, LAN-only, single household, opt-in |
 | `AuthMode::ManagedProfiles` | PIN only | Multiple people in one household, "who's watching" style |
-| `AuthMode::FullAccount` | Username + password | Remote access, shared with people outside the household |
+| `AuthMode::FullAccount` — **the default** | Username + password | Remote access, shared with people outside the household |
 
-Set server-wide via `STREAMARR_AUTH_MODE` — `trusted-network` (the default;
+Set server-wide via `STREAMARR_AUTH_MODE` — `full-account` (the default;
 also the fallback when the variable is unset or holds an unrecognized
-value) or `full-account`. There is currently no `STREAMARR_AUTH_MODE` value
+value) or `trusted-network` (opt-in only — see
+[`auth_mode_from_env`'s doc comment](../../backend/src/main.rs) for why the
+default flipped from `trusted-network` to `full-account`: a real,
+persistent `UserRepo`/`PolicyRepo` now backs real per-user accounts, so
+IP-based zero-credential auto-admin is no longer the only login path that
+could possibly work, and is no longer handed out by default). There is
+currently no `STREAMARR_AUTH_MODE` value
 that selects `ManagedProfiles` from `backend/src/main.rs`'s composition
 root, even though the mode itself is fully implemented and tested in
 `streamarr-auth` — wiring a config value (or a way to select it per
@@ -46,7 +52,7 @@ funnel a successful login through the same `RefreshTokenService`, so every
 tier ultimately hands the client the same access + refresh token pair via
 `POST /api/v1/auth/login`.
 
-### `AuthMode::TrustedNetwork` — the default
+### `AuthMode::TrustedNetwork` — opt-in
 
 Every request whose source IP falls inside a configured CIDR range
 auto-logs-in as that range's single bound user id, with zero credentials
@@ -109,7 +115,7 @@ checked `AuthMode` at all, so every `FullAccount` login disclosed every
 other account's username/display name/PIN-lock status server-wide — fixed
 in the same pass that added this note.
 
-### `AuthMode::FullAccount`
+### `AuthMode::FullAccount` — the default
 
 Ordinary username + password, Argon2id-hashed
 (`streamarr_auth::login::hash_password` / `Argon2PasswordVerifier`) —
