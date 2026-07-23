@@ -1838,6 +1838,7 @@ private fun LibraryCoverCard(
 
 @Composable
 private fun LibraryFiltersDialog(
+    kind: WorkKind,
     viewMode: LibraryViewMode,
     artworkSize: LibraryArtworkSize,
     sortMode: String,
@@ -1848,6 +1849,11 @@ private fun LibraryFiltersDialog(
     onDescending: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val availableViewModes = if (kind == WorkKind.Artist) {
+        LibraryViewMode.entries
+    } else {
+        LibraryViewMode.entries.filter { it != LibraryViewMode.CoverFlow }
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(playarrString(PlayarrString.LibraryFilters)) },
@@ -1855,7 +1861,7 @@ private fun LibraryFiltersDialog(
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 LibraryFilterChoices(
                     playarrString(PlayarrString.LibraryView),
-                    LibraryViewMode.entries,
+                    availableViewModes,
                     viewMode,
                     onViewMode,
                 ) {
@@ -2047,6 +2053,7 @@ private fun ExperienceLibraryScreen(
             }
             if (filtersOpen) {
                 LibraryFiltersDialog(
+                    kind = kind,
                     viewMode = viewMode,
                     artworkSize = artworkSize,
                     sortMode = sortMode,
