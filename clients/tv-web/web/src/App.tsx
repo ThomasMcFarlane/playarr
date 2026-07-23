@@ -292,7 +292,15 @@ function AppShell() {
     };
   }, [isPlayerRoute, playerSession]);
 
+  // Gated on `!authFailed`, and `authFailed` is a dependency: re-authenticating
+  // as the same profile after a session expiry flips `authFailed` true -> false
+  // without `catalogKindsCacheScope`/`client` ever changing, and this is the
+  // only dependency that transition touches -- omitting it risked a fetch that
+  // failed while auth was broken leaving `availableWorkKinds` stuck on the
+  // fail-closed empty set (when there's no cache to fall back on) until a full
+  // page reload.
   useEffect(() => {
+    if (authFailed) return;
     let cancelled = false;
     const cachedKinds = readCachedCatalogKinds(catalogKindsCacheScope);
     setAvailableWorkKindsState({
@@ -326,7 +334,7 @@ function AppShell() {
     return () => {
       cancelled = true;
     };
-  }, [catalogKindsCacheScope, client]);
+  }, [authFailed, catalogKindsCacheScope, client]);
 
   useEffect(() => {
     if (!routeMediaFileId) return;
