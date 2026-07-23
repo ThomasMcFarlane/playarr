@@ -7,6 +7,7 @@ import io.streamarr.shared.auth.model.toTokenResponse
 import io.streamarr.shared.auth.remote.RefreshApi
 import io.streamarr.shared.auth.remote.RefreshApiForUrl
 import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -35,7 +36,20 @@ import retrofit2.HttpException
  * [decodeAccessTokenIssuerPeerNodeId]), or no remembered address is
  * attributed to that node, this collapses to exactly the original
  * single-address behavior -- no sibling is ever guessed at.
+ *
+ * `@Singleton`: [mutex] only serializes calls made *through this instance*.
+ * `NetworkModule` injects this into both the primary REST API's
+ * authenticator and, via `PlayarrServerClientProvider`, the Media3
+ * download/playback client's authenticator -- without a shared scope, Hilt
+ * hands each an unscoped instance of its own, so a REST call and a
+ * playback/download call 401ing around the same moment (e.g. right after
+ * the app resumes from background) would race the single-use refresh
+ * endpoint through two independent locks. The loser's presented token is
+ * already retired by the winner's rotation, which the server treats as
+ * theft and revokes the whole family -- forcing a full re-login even
+ * though the session was perfectly valid a moment before.
  */
+@Singleton
 class SessionRefresher @Inject constructor(
     private val refreshApi: RefreshApi,
     private val tokenStore: TokenStore,
