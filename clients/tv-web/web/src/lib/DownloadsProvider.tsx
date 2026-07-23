@@ -494,8 +494,13 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
   // this is the same "shared, kept-fresh" treatment the requirement asked
   // for; a push mechanism (SSE) would close the gap further but this repo
   // has no SSE infrastructure yet, so polling is the immediate fix.
+  // Gated on `!authFailed`, and `authFailed` is a dependency: re-authenticating
+  // as the same profile after a session expiry flips `authFailed` true -> false
+  // without `userId` ever changing, and this is the only dependency that
+  // transition touches -- omitting it left `canDownload` stuck on the
+  // fail-closed `false` from the earlier failure until a full page reload.
   useEffect(() => {
-    if (!userId) {
+    if (!userId || authFailed) {
       setCanDownload(null);
       return;
     }
@@ -522,7 +527,7 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [apiBaseUrl, client, userId]);
+  }, [apiBaseUrl, authFailed, client, userId]);
 
   useEffect(
     () => () => {
