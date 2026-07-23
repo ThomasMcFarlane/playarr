@@ -77,6 +77,12 @@ function buildSettingsSections(t: TFunction): readonly SettingsSection[] {
       title: t("settings.index.invite.title"),
       description: t("settings.index.invite.description"),
     },
+    {
+      to: "/settings/request-latency",
+      number: "08",
+      title: t("settings.index.requestLatency.title"),
+      description: t("settings.index.requestLatency.description"),
+    },
   ] as const;
 }
 

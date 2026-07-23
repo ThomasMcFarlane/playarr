@@ -279,6 +279,61 @@ export interface CreateDownloadRequest {
   quality_id: string;
 }
 
+// ---------------------------------------------------------------------------
+// admin (http latency metrics) -- per-route request latency percentiles for
+// the admin-only "Request latency" diagnostics page. Hand-authored (not
+// sourced from `components["schemas"]`), same reason as the `downloads`
+// types above: `backend/openapi/streamarr.yaml` doesn't carry this operation
+// yet at the time this client-side work was written, so this type/method is
+// typed directly off the agreed contract instead of waiting on a
+// `pnpm run generate` refresh. Once the spec and generated schema catch up,
+// this can be re-pointed at `components["schemas"]` with no call-site
+// changes -- the shape below is written to match exactly.
+// ---------------------------------------------------------------------------
+
+/** Wire shape of one row from `GET /api/v1/admin/metrics/http-latency`. */
+interface HttpRouteLatencyResponse {
+  method: string;
+  route: string;
+  sample_count: number;
+  avg_ms: number;
+  p50_ms: number;
+  p95_ms: number;
+  p99_ms: number;
+  max_ms: number;
+}
+
+/**
+ * Per-route request latency percentiles, normalized to camelCase for
+ * callers. `route` is the Axum route template (e.g. `"/api/v1/catalog/{id}"`),
+ * not the raw path with real ids interpolated -- that's what keeps this
+ * bounded-cardinality. Rows arrive sorted by `p95Ms` descending; nothing on
+ * this client re-sorts them.
+ */
+export interface HttpRouteLatency {
+  method: string;
+  route: string;
+  sampleCount: number;
+  avgMs: number;
+  p50Ms: number;
+  p95Ms: number;
+  p99Ms: number;
+  maxMs: number;
+}
+
+function toHttpRouteLatency(raw: HttpRouteLatencyResponse): HttpRouteLatency {
+  return {
+    method: raw.method,
+    route: raw.route,
+    sampleCount: raw.sample_count,
+    avgMs: raw.avg_ms,
+    p50Ms: raw.p50_ms,
+    p95Ms: raw.p95_ms,
+    p99Ms: raw.p99_ms,
+    maxMs: raw.max_ms,
+  };
+}
+
 export interface SessionHistoryParams {
   userId?: string;
   /** ISO 8601 datetime, inclusive lower bound on `started_at`. */
@@ -1412,5 +1467,27 @@ export class ApiClient {
    */
   downloadFileUrl(id: string): string {
     return this.resolveUrl(`/api/v1/downloads/${encodeURIComponent(id)}/file`);
+  }
+
+  // ---------------------------------------------------------------------
+  // admin (http latency metrics) -- `AdminUser`-gated (401 unauthenticated,
+  // 403 non-admin), identical gating to `sync_status_handler` in `admin.rs`.
+  // See this file's "admin (http latency metrics)" types section above for
+  // why this goes through `requestJson` instead of the generated
+  // `paths`-typed `raw` client.
+  // ---------------------------------------------------------------------
+
+  /**
+   * Per-route request latency percentiles (avg/p50/p95/p99/max, sample
+   * count), sorted by `p95Ms` descending. Backs the admin "Request latency"
+   * diagnostics page -- a non-admin caller gets a 403 `ApiError`, which
+   * callers treat as "not an admin", not a real failure.
+   */
+  async getHttpLatencyMetrics(): Promise<HttpRouteLatency[]> {
+    const rows = await this.requestJson<HttpRouteLatencyResponse[]>(
+      "GET",
+      "/api/v1/admin/metrics/http-latency"
+    );
+    return rows.map(toHttpRouteLatency);
   }
 }

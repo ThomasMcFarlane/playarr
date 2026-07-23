@@ -2179,6 +2179,39 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   flex-shrink: 0;
 }
 
+.http-latency-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.http-latency-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+}
+
+.http-latency-table th,
+.http-latency-table td {
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.http-latency-table th {
+  color: var(--ink-muted);
+  font-size: 0.66rem;
+  font-weight: 720;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.http-latency-table td:not(:first-child):not(:nth-child(2)) {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
 .connection-server-fields {
   display: grid;
   grid-template-columns:

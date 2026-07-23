@@ -30,6 +30,7 @@ import { SettingsPlayerPage } from "./pages/settings/Player";
 import { SettingsServerPage } from "./pages/settings/Server";
 import { SettingsProfileLockPage } from "./pages/settings/ProfileLock";
 import { SettingsInvitePage } from "./pages/settings/Invite";
+import { SettingsRequestLatencyPage } from "./pages/settings/RequestLatency";
 import { SettingsProfileAvatarPage } from "./pages/settings/ProfileAvatar";
 import { LoginPage } from "./pages/Login";
 import { SignupPage } from "./pages/Signup";
@@ -637,6 +638,7 @@ export function App() {
           <Route path="server" element={<SettingsServerPage />} />
           <Route path="profile-lock" element={<SettingsProfileLockPage />} />
           <Route path="invite" element={<SettingsInvitePage />} />
+          <Route path="request-latency" element={<SettingsRequestLatencyPage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>

@@ -58,7 +58,7 @@ describe("SettingsIndexPage", () => {
       'class="tv-library tv-directory settings-page settings-workspace-page settings-index-route"'
     );
     expect(markup).toContain('class="tv-page-back"');
-    expect(markup.match(/class="settings-option(?: is-active)?"/g)).toHaveLength(7);
+    expect(markup.match(/class="settings-option(?: is-active)?"/g)).toHaveLength(8);
     expect(markup).toContain('data-tv-scroll-container="true"');
     expect(markup).toContain('data-tv-scroll-axis="vertical"');
     expect(markup).toContain('data-navigation-scroll-key="settings:options"');
@@ -116,6 +116,7 @@ describe("SettingsIndexPage", () => {
     expect(indexMarkup).toContain("Server");
     expect(indexMarkup).toContain("Profile lock");
     expect(indexMarkup).toContain("Invite a friend");
+    expect(indexMarkup).toContain("Request latency");
     expect(css).toMatch(
       /\.settings-index-route \.settings-workspace-track,\s*\.settings-detail-route \.settings-workspace-track\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s
     );
