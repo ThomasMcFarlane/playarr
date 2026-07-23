@@ -33,8 +33,10 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::{Duration, Utc};
+use dashmap::DashMap;
 use streamarr_db::{DbError, DeviceRepo};
 use streamarr_model::{Device, Session};
+use tokio::sync::OnceCell;
 use uuid::Uuid;
 
 pub use streamarr_db::{
@@ -62,6 +64,47 @@ pub enum RefreshError {
     Jwt(#[from] JwtError),
 }
 
+/// A [`Result<(Session, TokenResponse), RefreshError>`] from
+/// [`RefreshTokenService::rotate_uncoalesced`], reshaped into a `Clone`
+/// value so it can be cached in [`RefreshTokenService::in_flight`] and
+/// handed identically to every caller coalesced onto one redemption --
+/// including the caller whose own attempt actually executed. `RefreshError`
+/// itself can't be `Clone` (it wraps `DbError`/`JwtError`, neither of which
+/// is), and re-running [`RefreshTokenService::rotate_uncoalesced`] a second
+/// time to reconstruct an equivalent error would observe state the first
+/// run already mutated (e.g. `revoked` already flipped from `false` to
+/// `true`), turning a specific `ReuseDetected` into a generic
+/// `FamilyRevoked` for whichever caller re-ran it -- exactly the kind of
+/// self-inflicted mismatch this type exists to avoid.
+#[derive(Clone)]
+enum RotationOutcome {
+    Success(Session, TokenResponse),
+    UnknownToken,
+    Expired,
+    ReuseDetected,
+    FamilyRevoked,
+    /// The redeeming call failed for an infrastructure reason (a database
+    /// or JWT-issuance error) rather than a security-relevant outcome --
+    /// too rare, and too dependent on non-`Clone` inner error types, to
+    /// preserve exactly. Every caller coalesced onto this falls back to
+    /// attempting its own redemption solo, same as it would for any other
+    /// transient failure.
+    Infra,
+}
+
+impl From<Result<(Session, TokenResponse), RefreshError>> for RotationOutcome {
+    fn from(result: Result<(Session, TokenResponse), RefreshError>) -> Self {
+        match result {
+            Ok((session, token_response)) => RotationOutcome::Success(session, token_response),
+            Err(RefreshError::UnknownToken) => RotationOutcome::UnknownToken,
+            Err(RefreshError::Expired) => RotationOutcome::Expired,
+            Err(RefreshError::ReuseDetected) => RotationOutcome::ReuseDetected,
+            Err(RefreshError::FamilyRevoked) => RotationOutcome::FamilyRevoked,
+            Err(RefreshError::Db(_)) | Err(RefreshError::Jwt(_)) => RotationOutcome::Infra,
+        }
+    }
+}
+
 /// Mints and rotates refresh-token families, backed by a [`RefreshTokenStore`]
 /// for the secret material and a real [`DeviceRepo`] for device lifecycle
 /// (existence, `trusted`, `last_seen_at`). Shared by [`crate::login`]
@@ -72,6 +115,14 @@ pub struct RefreshTokenService {
     store: Arc<dyn RefreshTokenStore>,
     devices: Arc<dyn DeviceRepo>,
     jwt: Arc<JwtIssuer>,
+    /// Coalesces genuinely-concurrent [`Self::rotate`] calls that present
+    /// the exact same still-current token for the same device -- see that
+    /// method's doc comment for why this exists and why it's narrow enough
+    /// to stay safe. Keyed by `(device_id, hash_token(presented token))`;
+    /// each entry is removed the moment its redeeming call finishes, so
+    /// this never outlives the handful of requests that were truly in
+    /// flight together.
+    in_flight: DashMap<(Uuid, String), Arc<OnceCell<RotationOutcome>>>,
 }
 
 impl RefreshTokenService {
@@ -84,6 +135,7 @@ impl RefreshTokenService {
             store,
             devices,
             jwt,
+            in_flight: DashMap::new(),
         }
     }
 
@@ -147,7 +199,72 @@ impl RefreshTokenService {
     /// reuse: the whole family is revoked and every future presentation --
     /// even of the token that *was* still valid -- is rejected until the
     /// device completes a fresh login via [`Self::issue`].
+    ///
+    /// Callers presenting the exact same still-current token for the same
+    /// device at (nearly) the same moment -- e.g. a client whose REST and
+    /// playback authenticators both 401 after the app resumes from
+    /// background, or two browser tabs sharing one session -- are
+    /// coalesced onto a single redemption via [`Self::in_flight`], rather
+    /// than each independently racing this method's rotation below. That
+    /// race would otherwise be indistinguishable from theft to the loser:
+    /// by the time it runs, the winner has already retired the very hash
+    /// it's presenting, so it would hit reuse detection and revoke a
+    /// perfectly legitimate session. This is deliberately narrow, not a
+    /// grace period: the coalescing entry exists only from the first
+    /// caller's arrival to that same redemption's completion, so a call
+    /// that shows up even slightly later -- including a real replay of a
+    /// stolen, already-retired token -- still goes through
+    /// [`Self::rotate_uncoalesced`] on its own and is rejected exactly as
+    /// before. (A *forgiving* grace period -- accepting the immediately-
+    /// prior hash again after the fact -- was considered and rejected: it
+    /// cannot tell "my own concurrent request" apart from "an attacker who
+    /// redeemed the stolen token a moment before me," and would silently
+    /// hand the second presenter the attacker's own rotated token instead
+    /// of raising the alarm.)
     pub async fn rotate(
+        &self,
+        device_id: Uuid,
+        raw_token: &str,
+    ) -> Result<(Session, TokenResponse), RefreshError> {
+        let key = (device_id, hash_token(raw_token));
+        let cell = self
+            .in_flight
+            .entry(key.clone())
+            .or_insert_with(|| Arc::new(OnceCell::new()))
+            .clone();
+
+        let outcome = cell
+            .get_or_init(|| async {
+                RotationOutcome::from(self.rotate_uncoalesced(device_id, raw_token).await)
+            })
+            .await
+            .clone();
+
+        // Only genuinely-concurrent callers should ever observe a resolved
+        // cell -- drop it the moment the redeeming call finishes so anyone
+        // presenting this same hash afterward takes the normal path below.
+        self.in_flight.remove(&key);
+
+        // Every caller coalesced onto this redemption -- including
+        // whichever one actually executed it -- maps the exact same cached
+        // `RotationOutcome` to its own return value. Nobody re-runs
+        // `rotate_uncoalesced` to "double check," which would just observe
+        // state the first run already mutated (see that type's doc
+        // comment) and report something subtly wrong.
+        match outcome {
+            RotationOutcome::Success(session, token_response) => Ok((session, token_response)),
+            RotationOutcome::UnknownToken => Err(RefreshError::UnknownToken),
+            RotationOutcome::Expired => Err(RefreshError::Expired),
+            RotationOutcome::ReuseDetected => Err(RefreshError::ReuseDetected),
+            RotationOutcome::FamilyRevoked => Err(RefreshError::FamilyRevoked),
+            RotationOutcome::Infra => self.rotate_uncoalesced(device_id, raw_token).await,
+        }
+    }
+
+    /// The actual single-use rotation/reuse-detection logic behind
+    /// [`Self::rotate`] -- see that method's doc comment for the
+    /// concurrency coalescing wrapped around this.
+    async fn rotate_uncoalesced(
         &self,
         device_id: Uuid,
         raw_token: &str,
@@ -294,6 +411,119 @@ mod tests {
             .rotate(session.device_id, &second.refresh_token)
             .await;
         assert!(matches!(after_revocation, Err(RefreshError::FamilyRevoked)));
+    }
+
+    /// The bug this coalescing fix targets: a client whose REST and
+    /// playback/download authenticators (or two browser tabs sharing one
+    /// session) both redeem the *same* still-current refresh token at
+    /// (nearly) the same moment. Before the fix, the loser would present a
+    /// hash the winner had already retired and get `ReuseDetected`,
+    /// revoking a perfectly legitimate session out from under the user.
+    ///
+    /// Wraps `FakeDeviceRepo` to pause the leader mid-`rotate_uncoalesced`
+    /// (at `touch_last_seen`, right before the new token is minted) so the
+    /// follower's call is deterministically guaranteed to observe the
+    /// leader's rotation still in flight, rather than hoping real thread
+    /// scheduling happens to overlap two instant calls.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn concurrent_callers_presenting_the_same_still_current_token_are_coalesced() {
+        use tokio::sync::Notify;
+
+        struct PausingDeviceRepo {
+            inner: FakeDeviceRepo,
+            paused: Notify,
+            release: Notify,
+        }
+
+        #[async_trait::async_trait]
+        impl DeviceRepo for PausingDeviceRepo {
+            async fn get(&self, id: Uuid) -> Result<Device, DbError> {
+                self.inner.get(id).await
+            }
+            async fn list_for_user(&self, user_id: Uuid) -> Result<Vec<Device>, DbError> {
+                self.inner.list_for_user(user_id).await
+            }
+            async fn upsert(&self, device: &Device) -> Result<(), DbError> {
+                self.inner.upsert(device).await
+            }
+            async fn delete(&self, id: Uuid) -> Result<(), DbError> {
+                self.inner.delete(id).await
+            }
+            async fn touch_last_seen(
+                &self,
+                id: Uuid,
+                at: chrono::DateTime<Utc>,
+            ) -> Result<(), DbError> {
+                self.paused.notify_one();
+                self.release.notified().await;
+                self.inner.touch_last_seen(id, at).await
+            }
+        }
+
+        let jwt = Arc::new(JwtIssuer::new(
+            b"test-secret-key-at-least-32-bytes!!",
+            "streamarr",
+            Duration::minutes(15),
+        ));
+        let inner = FakeDeviceRepo::default();
+        let user_id = Uuid::new_v4();
+        let d = device(user_id);
+        let device_id = d.id;
+        inner.upsert(&d).await.unwrap();
+        let devices = Arc::new(PausingDeviceRepo {
+            inner,
+            paused: Notify::new(),
+            release: Notify::new(),
+        });
+        let store: Arc<dyn RefreshTokenStore> = Arc::new(InMemoryRefreshTokenStore::new());
+        let service = Arc::new(RefreshTokenService::new(
+            store,
+            devices.clone(),
+            jwt,
+        ));
+
+        let (_, issued) = service.issue(d, Duration::days(30)).await.unwrap();
+        let token = issued.refresh_token;
+
+        let leader = tokio::spawn({
+            let service = service.clone();
+            let token = token.clone();
+            async move { service.rotate(device_id, &token).await }
+        });
+
+        // Deterministic handoff: don't proceed until the leader is
+        // actually parked mid-rotation, still holding the token retired.
+        devices.paused.notified().await;
+
+        let follower = tokio::spawn({
+            let service = service.clone();
+            let token = token.clone();
+            async move { service.rotate(device_id, &token).await }
+        });
+        // Give the follower a real chance to reach the in-flight join
+        // point before the leader is released and the entry is cleared.
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        devices.release.notify_one();
+
+        let (leader_result, follower_result) = tokio::join!(leader, follower);
+        let (leader_session, leader_response) =
+            leader_result.unwrap().expect("leader rotation succeeds");
+        let (follower_session, follower_response) = follower_result
+            .unwrap()
+            .expect("a truly concurrent caller must be coalesced onto the leader's result, not rejected as reuse");
+
+        assert_eq!(
+            leader_response.refresh_token, follower_response.refresh_token,
+            "coalesced callers must share the exact same rotated token, not each mint their own"
+        );
+        assert_eq!(leader_session.id, follower_session.id);
+
+        // The original token is still genuinely single-use: a later,
+        // non-concurrent replay of it is rejected exactly as before.
+        let reuse = service.rotate(device_id, &token).await;
+        assert!(matches!(reuse, Err(RefreshError::ReuseDetected)));
     }
 
     #[tokio::test]

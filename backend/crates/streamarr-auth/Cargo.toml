@@ -17,6 +17,12 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 dashmap = { workspace = true }
+# `refresh`'s in-flight rotation coalescing (`RefreshTokenService::rotate`)
+# -- `tokio::sync::OnceCell` is the single-flight primitive that lets
+# genuinely-concurrent callers share one rotation's result. This crate
+# otherwise has no need to depend on tokio directly (its traits are
+# already async via `async-trait`, run by whichever binary hosts them).
+tokio = { workspace = true, features = ["sync"] }
 # CIDR parsing/matching for the trusted-network trust tier (`login`).
 ipnet = "2"
 # Refresh-token secret hashing (`refresh`) -- fast general-purpose hashing
