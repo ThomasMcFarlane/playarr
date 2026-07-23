@@ -4398,10 +4398,26 @@ paths:
     get:
       tags:
       - users
+      summary: |-
+        Every account this endpoint returns is implicitly disclosed -- id,
+        username, display name, PIN-lock status -- to every other account it's
+        also returned to. That's the intended "who's watching" tradeoff *within
+        one household* (`AuthMode::TrustedNetwork`/`ManagedProfiles`: nobody
+        reaches this endpoint who isn't already on the trusted LAN, so household
+        members already know who else lives there). It stops being a reasonable
+        tradeoff the moment two accounts might belong to unrelated people
+        (`AuthMode::FullAccount`, "remote access, shared with people outside the
+        household" per `docs/architecture/auth-modes.md`) -- there is no
+        `household_id` or account-grouping concept anywhere in `streamarr-model`/
+        `streamarr-db` to scope by (see that doc's "no `household_id`... claim"
+        note), so under `FullAccount` this must fall back to "every account is a
+        stranger" and list only the caller's own profile. This is a strict
+        server-side gate, not merely relied on by the client: it must hold even
+        for a direct API call, not just Playarr's own UI.
       operationId: list_available_profiles_handler
       responses:
         '200':
-          description: Enabled Playarr profiles available on this server
+          description: Enabled Playarr profiles available to the caller -- every enabled account under AuthMode::TrustedNetwork/ManagedProfiles (single trusted household), or only the caller's own account under AuthMode::FullAccount (accounts may belong to unrelated people)
           content:
             application/json:
               schema:
@@ -4845,6 +4861,12 @@ components:
         Minimal household-profile projection for Playarr's 'who is watching'
         screen. Password hashes, email addresses and policy details are never
         exposed.
+
+        Only ever lists *sibling* profiles -- accounts that share the operator's
+        single-household trust boundary. See
+        [`list_available_profiles_handler`]'s doc comment for what "sibling"
+        means per `AuthMode` and why this must never include a stranger's
+        account.
       required:
       - id
       - username

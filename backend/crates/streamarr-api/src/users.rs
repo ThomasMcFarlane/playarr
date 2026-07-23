@@ -318,6 +318,12 @@ pub async fn get_self_capabilities_handler(
 /// Minimal household-profile projection for Playarr's 'who is watching'
 /// screen. Password hashes, email addresses and policy details are never
 /// exposed.
+///
+/// Only ever lists *sibling* profiles -- accounts that share the operator's
+/// single-household trust boundary. See
+/// [`list_available_profiles_handler`]'s doc comment for what "sibling"
+/// means per `AuthMode` and why this must never include a stranger's
+/// account.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AvailableProfileResponse {
     pub id: Uuid,
@@ -1217,12 +1223,27 @@ pub async fn list_users_handler(
     Ok(Json(responses))
 }
 
+/// Every account this endpoint returns is implicitly disclosed -- id,
+/// username, display name, PIN-lock status -- to every other account it's
+/// also returned to. That's the intended "who's watching" tradeoff *within
+/// one household* (`AuthMode::TrustedNetwork`/`ManagedProfiles`: nobody
+/// reaches this endpoint who isn't already on the trusted LAN, so household
+/// members already know who else lives there). It stops being a reasonable
+/// tradeoff the moment two accounts might belong to unrelated people
+/// (`AuthMode::FullAccount`, "remote access, shared with people outside the
+/// household" per `docs/architecture/auth-modes.md`) -- there is no
+/// `household_id` or account-grouping concept anywhere in `streamarr-model`/
+/// `streamarr-db` to scope by (see that doc's "no `household_id`... claim"
+/// note), so under `FullAccount` this must fall back to "every account is a
+/// stranger" and list only the caller's own profile. This is a strict
+/// server-side gate, not merely relied on by the client: it must hold even
+/// for a direct API call, not just Playarr's own UI.
 #[utoipa::path(
     get,
     path = "/api/v1/users/profiles",
     tag = "users",
     responses(
-        (status = 200, description = "Enabled Playarr profiles available on this server", body = Vec<AvailableProfileResponse>, example = json!([
+        (status = 200, description = "Enabled Playarr profiles available to the caller -- every enabled account under AuthMode::TrustedNetwork/ManagedProfiles (single trusted household), or only the caller's own account under AuthMode::FullAccount (accounts may belong to unrelated people)", body = Vec<AvailableProfileResponse>, example = json!([
             {
                 "id": "22222222-2222-4222-8222-222222222222",
                 "username": "alice",
@@ -1243,10 +1264,14 @@ pub async fn list_available_profiles_handler(
         state.user_repo.list_all().await.map_err(|error| {
             ApiError::internal(format!("failed to list viewer profiles: {error}"))
         })?;
+    let single_household = !matches!(*state.auth_mode, streamarr_auth::AuthMode::FullAccount);
     let mut profiles = Vec::new();
 
     for user in users {
         if user.disabled {
+            continue;
+        }
+        if !single_household && user.id != streaming.user_id {
             continue;
         }
         let can_stream = state
@@ -1509,10 +1534,22 @@ pub async fn update_profile_avatar_handler(
 )]
 pub async fn verify_profile_pin_handler(
     State(state): State<AppState>,
-    _streaming: StreamingUser,
+    streaming: StreamingUser,
     Path(id): Path<Uuid>,
     Json(body): Json<VerifyProfilePinRequest>,
 ) -> Result<Json<VerifyProfilePinResponse>, ApiError> {
+    // Same single-household boundary as `list_available_profiles_handler`:
+    // under `AuthMode::FullAccount` a target id may belong to a stranger,
+    // not a sibling profile, so this must not become a cross-account PIN
+    // oracle -- reject before even loading the target user, and reuse
+    // `invalid_pin()` so a disallowed target is indistinguishable from a
+    // wrong PIN (same non-enumeration posture this handler already applies
+    // to a missing/disabled/non-streaming target below).
+    let cross_account_probe = matches!(*state.auth_mode, streamarr_auth::AuthMode::FullAccount)
+        && id != streaming.user_id;
+    if cross_account_probe {
+        return Err(invalid_pin());
+    }
     let user = state
         .user_repo
         .find_by_id(id)
@@ -1853,6 +1890,26 @@ mod tests {
     use crate::test_support::{
         bearer_header, mint_access_token, seed_admin_user, seed_streaming_user, test_state,
     };
+    use crate::version_gate::{ClientCompatibilityTable, VersionGateLayer};
+
+    /// Same minimal table `test_support::test_state`'s router is built
+    /// with -- duplicated here (rather than made `pub(crate)` there) since
+    /// this is the only test in this module that needs a *second*,
+    /// differently-configured router built from a mutated clone of
+    /// `TestState::app` (see `login.rs`'s own copy of this helper for the
+    /// same rationale).
+    fn test_version_gate() -> VersionGateLayer {
+        VersionGateLayer::new(
+            ClientCompatibilityTable::from_toml_str(
+                r#"
+[server]
+version = "0.1.0"
+apiVersion = "1"
+"#,
+            )
+            .unwrap(),
+        )
+    }
 
     async fn issue_invite(router: &axum::Router, token: &str) -> String {
         let body = serde_json::json!({
@@ -2930,6 +2987,83 @@ mod tests {
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json["pin_locked"], false);
+    }
+
+    /// The regression this pass exists for: under `AuthMode::FullAccount`
+    /// ("remote access, shared with people outside the household" --
+    /// `docs/architecture/auth-modes.md`), two accounts may belong to
+    /// unrelated people, so `GET /api/v1/users/profiles` must never
+    /// disclose anyone but the caller, and
+    /// `POST /api/v1/users/profiles/{id}/verify-pin` must reject any target
+    /// id but the caller's own -- both regardless of the target's own PIN
+    /// being correct. `AuthMode::TrustedNetwork` (a single trusted
+    /// household, exercised above) is unaffected.
+    #[tokio::test]
+    async fn full_account_mode_never_discloses_or_pin_probes_another_user() {
+        let (_router, state) = test_state().await;
+        let caller_id = Uuid::new_v4();
+        let stranger_id = Uuid::new_v4();
+        seed_streaming_user(&state, caller_id).await;
+        seed_streaming_user(&state, stranger_id).await;
+        let pin_hash = streamarr_auth::login::hash_password("4821");
+        state
+            .app
+            .profile_pin_repo
+            .upsert_hash(stranger_id, &pin_hash)
+            .await
+            .unwrap();
+
+        let mut app = state.app.clone();
+        app.auth_mode = std::sync::Arc::new(streamarr_auth::AuthMode::FullAccount);
+        let (router, _api) = crate::build_router(app, test_version_gate(), None);
+        let token = mint_access_token(&state, caller_id);
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/users/profiles")
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let profiles: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let profiles = profiles.as_array().unwrap();
+        assert_eq!(
+            profiles.len(),
+            1,
+            "FullAccount must list only the caller's own profile, never a stranger's"
+        );
+        assert_eq!(profiles[0]["id"], caller_id.to_string());
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/api/v1/users/profiles/{stranger_id}/verify-pin"))
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::from(serde_json::json!({ "pin": "4821" }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::UNAUTHORIZED,
+            "the correct PIN must still be rejected for a stranger's id under FullAccount"
+        );
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["error"], "invalid_pin");
     }
 
     #[tokio::test]

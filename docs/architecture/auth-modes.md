@@ -92,6 +92,23 @@ a deliberately short secret by convention. Provisioning a profile with a
 known PIN is a user-provisioning concern outside `streamarr-auth`'s current
 scope — see the persistence gap below.
 
+**Security note:** `GET /api/v1/users/profiles`
+(`streamarr-api::users::list_available_profiles_handler`) and
+`POST /api/v1/users/profiles/{id}/verify-pin`
+(`verify_profile_pin_handler`) implement this "who's watching" picker, and
+are only safe to show every enabled account for because
+`TrustedNetwork`/`ManagedProfiles` both mean "one trusted household" — no
+one reaches either endpoint who isn't already inside that trust boundary.
+Since there is no `household_id`/account-grouping concept anywhere in
+`streamarr-model`/`streamarr-db` (see below), both handlers gate on
+`AuthMode` directly: under `AuthMode::FullAccount` ("shared with people
+outside the household" — two accounts may be complete strangers), the list
+endpoint returns only the caller's own profile and the PIN-verify endpoint
+rejects any target id but the caller's own. Previously neither handler
+checked `AuthMode` at all, so every `FullAccount` login disclosed every
+other account's username/display name/PIN-lock status server-wide — fixed
+in the same pass that added this note.
+
 ### `AuthMode::FullAccount`
 
 Ordinary username + password, Argon2id-hashed
