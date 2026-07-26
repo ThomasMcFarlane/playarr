@@ -181,6 +181,8 @@ export const en = {
   "lib.apiClientProvider.signInBeforeAddingServer": "Sign in before adding another server.",
   "lib.downloads.expiredToast": "{{title}} was removed (its keep-until date passed).",
   "lib.downloads.signInRequired": "Sign in before downloading.",
+  "lib.downloads.savedToDeviceToast":
+    "{{title}} was saved to your device (this browser can't manage offline downloads).",
   "lib.downloads.storageUnsupported": "Downloads aren't supported in this browser.",
   "lib.toast.dismiss": "Dismiss {{message}}",
   "pages.deviceLink.codeLabel": "TV code",

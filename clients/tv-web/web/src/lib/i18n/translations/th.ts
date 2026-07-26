@@ -1027,6 +1027,8 @@ export const th: Translations = {
   "pages.downloads.storageUsed": "ใช้ไป {{used}} จาก {{quota}} บนอุปกรณ์นี้",
 
   "lib.downloads.signInRequired": "กรุณาเข้าสู่ระบบก่อนดาวน์โหลด",
+  "lib.downloads.savedToDeviceToast":
+    "บันทึก {{title}} ลงในอุปกรณ์ของคุณแล้ว (เบราว์เซอร์นี้ไม่สามารถจัดการการดาวน์โหลดออฟไลน์ได้)",
   "lib.downloads.storageUnsupported": "เบราว์เซอร์นี้ไม่รองรับการดาวน์โหลด",
   "lib.downloads.expiredToast": "ลบ {{title}} แล้ว (ครบกำหนดเก็บไว้)",
 };

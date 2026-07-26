@@ -115,6 +115,39 @@ export async function detectDownloadStorage(): Promise<DownloadStorageKind | nul
   return null;
 }
 
+/**
+ * Last-resort fallback for when detectDownloadStorage finds neither OPFS
+ * nor IndexedDB available: fetches the whole file into memory and hands it
+ * straight to the browser's own native downloads flow via a throwaway
+ * anchor click, instead of this app's managed chunked/resumable pipeline.
+ * Not resumable, not chunked, and leaves nothing for this app to read back
+ * -- once the browser has it, there is no local record here at all.
+ */
+export async function downloadDirectToDevice(params: {
+  fileUrl: string;
+  fileName: string;
+  getAccessToken: () => Promise<string | undefined>;
+}): Promise<void> {
+  const token = await params.getAccessToken();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = "Bearer " + token;
+  const response = await fetch(params.fileUrl, { headers });
+  if (!response.ok) {
+    throw new Error("Download request failed (" + response.status + ").");
+  }
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = params.fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  // Revoking synchronously can race the browser's own download kickoff in
+  // some engines -- give it a beat before freeing the blob.
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 4_000);
+}
+
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     const timer = window.setTimeout(resolve, ms);

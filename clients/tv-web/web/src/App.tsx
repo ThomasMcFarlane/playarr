@@ -100,7 +100,7 @@ interface NavItem {
   end: boolean;
   Icon: ComponentType;
   workKind?: WorkKind;
-  /** Hidden until `DownloadsProvider`'s `canDownload` resolves `true` -- see the render filter below. */
+  /** Hidden until `DownloadsProvider`'s `canDownload` and `downloadStorageAvailable` both resolve `true` -- see the render filter below. */
   requiresDownload?: boolean;
 }
 
@@ -239,7 +239,7 @@ function AppShell() {
   const navigate = useNavigate();
   const now = useMinuteClock();
   const online = useOnlineStatus();
-  const { canDownload } = useDownloads();
+  const { canDownload, downloadStorageAvailable } = useDownloads();
   const playerRouteMatch = matchPath("/player/:mediaFileId", location.pathname);
   const routeMediaFileId = playerRouteMatch?.params.mediaFileId;
   const isPlayerRoute = routeMediaFileId !== undefined;
@@ -488,7 +488,7 @@ function AppShell() {
                 .filter(
                   (item) =>
                     (!item.workKind || availableWorkKinds?.has(item.workKind)) &&
-                    (!item.requiresDownload || canDownload === true)
+                    (!item.requiresDownload || (canDownload === true && downloadStorageAvailable === true))
                 )
                 .map(({ to, labelKey, end, Icon }) => (
                   <NavLink

@@ -1023,6 +1023,8 @@ export const ja: Translations = {
   "pages.downloads.storageUsed": "この端末で {{quota}} 中 {{used}} を使用",
 
   "lib.downloads.signInRequired": "ダウンロードする前にサインインしてください。",
+  "lib.downloads.savedToDeviceToast":
+    "{{title}} をこの端末に保存しました(このブラウザではオフラインダウンロードを管理できません)。",
   "lib.downloads.storageUnsupported": "このブラウザではダウンロードに対応していません。",
   "lib.downloads.expiredToast": "{{title}} を削除しました(保存期限が過ぎました)。",
 } as Translations;

@@ -234,8 +234,16 @@ export function DownloadsPage() {
   const { t } = useLanguage();
   const online = useOnlineStatus();
   const client = useApiClient();
-  const { downloads, storageUsage, storageSupported, retry, remove, updateKeepUntil, canDownload } =
-    useDownloads();
+  const {
+    downloads,
+    storageUsage,
+    storageSupported,
+    downloadStorageAvailable,
+    retry,
+    remove,
+    updateKeepUntil,
+    canDownload,
+  } = useDownloads();
   useDocumentTitle(t("pages.downloads.title"));
 
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -309,8 +317,11 @@ export function DownloadsPage() {
   // (confirmed no access): show a loading state, not the 404, while it's
   // still in flight -- mirrors the exact tv-compact-loading pattern
   // Home.tsx/Library.tsx/Playlists.tsx already use for their own initial
-  // loads. Never the real content during this window either.
-  if (canDownload === null) {
+  // loads. Never the real content during this window either. Applies to
+  // both `canDownload` (server grant) and `downloadStorageAvailable`
+  // (device/browser managed-storage capability) -- either one still being
+  // in flight means it's too early to decide.
+  if (canDownload === null || downloadStorageAvailable === null) {
     return (
       <div
         className="tv-library tv-compact-loading"
@@ -330,8 +341,11 @@ export function DownloadsPage() {
   // Defense in depth: the nav item is already hidden without this grant,
   // but a direct navigation (bookmark, typed URL) should still land on the
   // same 404 an address that never existed would -- not a redirect (which
-  // would confirm "this route exists, you're just not allowed").
-  if (canDownload === false) {
+  // would confirm "this route exists, you're just not allowed"). A device
+  // that can't do managed storage (`downloadStorageAvailable === false`) is
+  // 404'd the same way as no `canDownload` grant: there's nothing for this
+  // in-app Downloads list to manage on that device.
+  if (canDownload === false || downloadStorageAvailable === false) {
     return <NotFoundPage />;
   }
 

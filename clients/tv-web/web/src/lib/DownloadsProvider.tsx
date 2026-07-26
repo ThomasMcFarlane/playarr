@@ -14,6 +14,7 @@ import {
   abortDownload,
   deleteStoredBytes,
   detectDownloadStorage,
+  downloadDirectToDevice,
   getPlaybackBlob,
   runDownload,
 } from "./downloadEngine";
@@ -63,6 +64,12 @@ function mimeTypeForContainer(container: string): string {
     default:
       return "video/mp4";
   }
+}
+
+function directDeviceFileName(title: string, container: string): string {
+  const cleanedTitle = title.replace(/[\\/:*?"<>|]/g, "").trim() || "download";
+  const extension = container.trim().toLowerCase().replace(/^\./, "") || "mp4";
+  return cleanedTitle + "." + extension;
 }
 
 function ticketToLocalStatus(ticket: DownloadTicket): DownloadRecordStatus {
@@ -121,6 +128,14 @@ interface DownloadsContextValue {
   activeSummary: DownloadsActiveSummary;
   storageUsage: DownloadsStorageUsage | null;
   storageSupported: boolean | null;
+  /**
+   * The real device/browser download-storage capability (OPFS or
+   * IndexedDB, via `detectDownloadStorage`) -- the Downloads nav tab/page
+   * should gate on THIS field, not `storageSupported`: a device that can
+   * only do the `downloadDirectToDevice` fallback has nothing for an
+   * in-app Downloads list to manage.
+   */
+  downloadStorageAvailable: boolean | null;
   enqueue: (params: EnqueueDownloadParams) => Promise<DownloadRecord>;
   retry: (id: string) => Promise<void>;
   /** Cancels an in-progress download or deletes a finished one -- full cleanup either way. */
@@ -219,6 +234,7 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
   const [downloads, setDownloads] = useState<DownloadRecord[]>([]);
   const [storageUsage, setStorageUsage] = useState<DownloadsStorageUsage | null>(null);
   const [storageSupported, setStorageSupported] = useState<boolean | null>(null);
+  const [downloadStorageAvailable, setDownloadStorageAvailable] = useState<boolean | null>(null);
   const [canDownload, setCanDownload] = useState<boolean | null>(null);
 
   const downloadsRef = useRef<DownloadRecord[]>([]);
@@ -301,10 +317,25 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
           if (!storage) {
             storage = await detectDownloadStorage();
             if (!storage) {
-              patchRecord(id, {
-                status: "failed",
-                errorMessage: t("lib.downloads.storageUnsupported"),
-              });
+              try {
+                await downloadDirectToDevice({
+                  fileUrl: client.downloadFileUrl(id),
+                  fileName: directDeviceFileName(record.title, record.container),
+                  getAccessToken: () => client.getAccessToken(),
+                });
+                showToast(t("lib.downloads.savedToDeviceToast", { title: record.title }));
+                await deleteDownloadRow(id);
+                downloadsRef.current = downloadsRef.current.filter(
+                  (candidate) => candidate.id !== id
+                );
+                setDownloads(downloadsRef.current);
+              } catch (error) {
+                patchRecord(id, {
+                  status: "failed",
+                  errorMessage:
+                    error instanceof Error ? error.message : t("lib.downloads.storageUnsupported"),
+                });
+              }
               return;
             }
             patchRecord(id, { storage });
@@ -348,7 +379,7 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
         }
       })();
     }
-  }, [client, patchRecord, refreshStorageUsage, t]);
+  }, [client, patchRecord, refreshStorageUsage, showToast, t]);
 
   const beginFetch = useCallback(
     (id: string) => {
@@ -482,6 +513,22 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
     if (online && !wasOnlineRef.current) void refreshDownloadContext();
     wasOnlineRef.current = online;
   }, [online, refreshDownloadContext]);
+
+  // The real "can this browser store a managed download at all" signal
+  // (OPFS or IndexedDB, via `detectDownloadStorage`) -- distinct from
+  // `storageSupported` above, which only reflects the storage-quota-estimate
+  // API used for the usage bar. Computed once since browser storage
+  // capability doesn't change mid-session, unlike `canDownload`'s
+  // server-side grant, which is polled elsewhere in this file.
+  useEffect(() => {
+    let cancelled = false;
+    void detectDownloadStorage().then((storage) => {
+      if (!cancelled) setDownloadStorageAvailable(storage !== null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Resolves the signed-in user's own `can_download` grant so the UI can
   // actually hide download affordances for an account that doesn't have
@@ -780,6 +827,7 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
       activeSummary,
       storageUsage,
       storageSupported,
+      downloadStorageAvailable,
       enqueue,
       retry,
       remove,
@@ -791,6 +839,7 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
     [
       activeSummary,
       canDownload,
+      downloadStorageAvailable,
       downloads,
       enqueue,
       getLocalPlaybackSource,
