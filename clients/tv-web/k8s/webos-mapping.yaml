@@ -1,0 +1,9 @@
+apiVersion: getambassador.io/v3alpha1
+kind: Mapping
+metadata:
+  name: ${PROJECT}-webos
+  namespace: dev
+spec:
+  hostname: webos.${PROJECT}.localhost
+  prefix: /
+  service: ${PROJECT}-webos.dev:80
