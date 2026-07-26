@@ -5,85 +5,737 @@
   </interface>
   <children>
     <Rectangle width="1920" height="1080" color="0x070B14FF" />
-    <Label translation="[90,60]" text="PLAYARR" color="0xFFFFFFFF">
-      <Font role="font" uri="font:MediumBoldSystemFont" size="38" />
-    </Label>
-    <Label id="profileLabel" translation="[1480,68]" width="350" height="42" horizAlign="right" color="0xA9B7C9FF">
-      <Font role="font" uri="font:MediumSystemFont" size="24" />
-    </Label>
 
     <Group id="statusGroup" visible="true">
+      <!--
+        Small centered logo mark added for visual consistency with the
+        rebuilt pairingGroup below (tv-web's TvStageChrome logo appears on
+        every pre-auth screen, this is the loading/error equivalent). Purely
+        additive/decorative: existing spinner/title/message positions below
+        are untouched, so this carries no risk to this screen's established
+        behavior. Single-color "Playarr" wordmark rather than pairingGroup's
+        two-tone Play/arr split: centered text can't be built from two
+        independently-centered Labels without a visible gap, so the fancier
+        treatment is left to the left-anchored pairing screen only.
+      -->
+      <Poster id="statusLogoIcon" translation="[934,260]" width="52" height="52" uri="pkg:/images/pairing-logo.png" loadDisplayMode="scaleToFit" />
+      <Label translation="[760,322]" width="400" height="40" text="Playarr" horizAlign="center" scale="[0.72,0.72]" scaleRotateCenter="[200,20]" color="0xFFFFFFFF" />
       <BusySpinner id="spinner" translation="[920,440]" control="start" />
-      <Label id="statusTitle" translation="[310,560]" width="1300" height="55" horizAlign="center" color="0xFFFFFFFF">
-        <Font role="font" uri="font:MediumBoldSystemFont" size="34" />
-      </Label>
-      <Label id="statusMessage" translation="[360,625]" width="1200" height="130" horizAlign="center" vertAlign="top" wrap="true" color="0xA9B7C9FF">
-        <Font role="font" uri="font:MediumSystemFont" size="24" />
-      </Label>
+      <Label id="statusTitle" translation="[310,560]" width="1300" height="55" horizAlign="center" scale="[1.06,1.06]" scaleRotateCenter="[650,28]" color="0xFFFFFFFF" />
+      <Label id="statusMessage" translation="[360,625]" width="1600" height="173" horizAlign="center" vertAlign="top" wrap="true" scale="[0.75,0.75]" scaleRotateCenter="[800,86]" color="0xA9B7C9FF" />
     </Group>
 
+    <!--
+      Visual-correction phase: rebuilt to match tv-web's real DeviceLogin
+      page (clients/tv-web/web/src/components/DeviceLogin.tsx +
+      src/styles/global.css's .auth-page/.auth-card/.device-login-*
+      rules, dark theme values under :root[data-theme="dark"]), confirmed
+      against a live Playwright capture of https://playarr.app/login at
+      1920x1080. All logic (beginHostedLink/pollHostedLink/
+      acceptHostedLinkClaim/openServerDialog, see MainScene.brs) is
+      unchanged; only node geometry/color/text below moved.
+
+      Layout math: .auth-page is `display:grid;
+      grid-template-columns:minmax(0,1fr) minmax(340px,0.72fr)`, and
+      .device-login-page overrides that to
+      `minmax(260px,0.55fr) minmax(680px,1.45fr)`. At 1920px that resolves
+      to a 528px decorative left column and a 1392px right column; the
+      .auth-card inside it is `width:min(100% - 3rem,880px)` centered via
+      margin:0 auto, so its left edge lands at
+      528 + (1392-880)/2 = 784px, plus the card's own
+      `padding:clamp(24px,4vw,70px)` (70px at this width) puts actual
+      content at x=854, rounded to 855 below, matching the captured
+      screenshot's observed x=855-925 lockup position.
+
+      Kicker/title font sizes (.page-kicker 0.64vw=12px,
+      .auth-title clamp(...,4.5vw,...)=86px) are numerically identical to
+      TvStage.xml's own stageKicker/stageTitle sizing, so this reuses
+      those exact scale factors (0.38, 2.69) rather than re-deriving them.
+    -->
     <Group id="pairingGroup" visible="false">
-      <Label translation="[250,250]" width="1420" height="55" text="Link this Roku" horizAlign="center" color="0xFFFFFFFF">
-        <Font role="font" uri="font:MediumBoldSystemFont" size="38" />
-      </Label>
-      <Label id="pairingInstruction" translation="[250,340]" width="1420" height="120" horizAlign="center" wrap="true" color="0xA9B7C9FF">
-        <Font role="font" uri="font:MediumSystemFont" size="27" />
-      </Label>
-      <Label id="pairingCode" translation="[250,500]" width="1420" height="100" horizAlign="center" color="0x36D1DCFF">
-        <Font role="font" uri="font:MediumBoldSystemFont" size="64" />
-      </Label>
-      <Label id="pairingStatus" translation="[250,650]" width="1420" height="70" horizAlign="center" color="0xFFFFFFFF">
-        <Font role="font" uri="font:MediumSystemFont" size="24" />
-      </Label>
+      <!--
+        Decorative glow (from: .auth-backdrop's
+        radial-gradient(circle at 52% 48%, accent-soft, transparent 34%)).
+        SceneGraph has no gradient-fill primitive (see TvStage.xml's file
+        header comment for the same limitation), so this is approximated
+        with three stacked, increasingly-opaque, increasingly-small accent
+        colored Rectangles anchored lower-left, faking a soft falloff.
+        Declared first so later siblings draw in front of it (see
+        MainScene.xml's homeGroup comment on document-order layering).
+      -->
+      <Rectangle id="pairingGlow1" translation="[-120,600]" width="760" height="760" color="0xCF315710" />
+      <Rectangle id="pairingGlow2" translation="[-40,660]" width="560" height="560" color="0xCF31571C" />
+      <Rectangle id="pairingGlow3" translation="[40,720]" width="360" height="360" color="0xCF315728" />
+
+      <!--
+        Logo lockup (from: .app-logo-icon + .app-logo-accent). The source
+        icon is an SVG (clients/tv-web/web/public/playarr-icon.svg); Poster
+        needs a raster asset, so it was rasterised once with rsvg-convert
+        into images/pairing-logo.png (176x176, downscaled at draw time),
+        the real mark, not a placeholder rectangle.
+        The wordmark's two-tone treatment ("Play" muted, "arr" full-bright,
+        from the JSX's `<span className="app-logo-accent">Play</span>arr`
+        split) has no rich-text equivalent on a SceneGraph Label, so it is
+        approximated with two adjacent plain Labels; the 70px gap between
+        them is an estimate of "Play"'s rendered width at this font size,
+        not a measured value.
+      -->
+      <Poster id="pairingLogoIcon" translation="[855,350]" width="52" height="52" uri="pkg:/images/pairing-logo.png" loadDisplayMode="scaleToFit" />
+      <Label translation="[855,410]" width="100" height="32" text="Play" scale="[0.72,0.72]" color="0xA9B7C9FF" />
+      <Label translation="[925,410]" width="90" height="32" text="arr" scale="[0.72,0.72]" color="0xFFFFFFFF" />
+
+      <!-- Kicker (from: .page-kicker, 12px/uppercase/0.18em letter-spacing; copy mirrors tv-web's components.deviceLogin.kicker string). -->
+      <Label translation="[855,478]" width="600" height="20" text="SIGN IN ON ANOTHER DEVICE" scale="[0.38,0.38]" color="0x5C6B80FF" />
+      <!-- Title (from: .auth-title, 86px). Text unchanged ("Link this Roku" is this channel's own copy, matching tv-web's device-specific "Link this TV"). -->
+      <Label translation="[855,515]" width="700" height="50" text="Link this Roku" scale="[2.69,2.69]" color="0xFFFFFFFF" />
+
+      <!--
+        QR (from: .device-login-qr, 240x240 with a solid white 12px
+        border/background). pairingQrBg approximates that white card
+        behind the code; Roku Rectangle has no corner-radius field so the
+        border reads square rather than the source's 18px rounded corners.
+      -->
+      <Rectangle id="pairingQrBg" translation="[843,668]" width="264" height="264" color="0xFFFFFFFF" />
+      <Poster id="pairingQr" translation="[855,680]" width="240" height="240" loadDisplayMode="scaleToFit" visible="false" />
+
+      <!-- Instructions column (from: .device-login-instructions), right of the QR, left-anchored like the rest of the column. -->
+      <Label id="pairingInstruction" translation="[1165,680]" width="933" height="96" wrap="true" scale="[0.75,0.75]" color="0xA9B7C9FF" />
+      <Label id="pairingCode" translation="[1165,760]" width="300" height="50" scale="[2.4,2.4]" color="0xCF3157FF" />
+      <Label id="pairingStatus" translation="[1165,840]" width="600" height="40" scale="[0.75,0.75]" color="0xFFFFFFFF" />
+      <!--
+        Manual-entry hint (from: the source's error-state "Try again"
+        .btn-primary pill, the closest analog available here). This screen
+        has no real focusable button for the "*" shortcut, so a true pill
+        control isn't wired up; the light-pill look is approximated purely
+        as a static backdrop behind the hint text (dark text on a light
+        fill, mirroring on-accent on accent) rather than risking a
+        tight text-fitted pill overflowing on unmeasured real-device font
+        metrics.
+      -->
+      <Rectangle id="pairingManualHintBg" translation="[1155,882]" width="620" height="46" color="0xDFDCDDFF" />
+      <Label id="pairingManualHint" translation="[1165,894]" width="600" height="30" scale="[0.62,0.62]" color="0x211D21FF" />
     </Group>
 
+    <!--
+      Redesigned against a real Playwright screenshot of tv-web's actual
+      Profiles page (1920x1080, dark scheme, playarr.app): a small pink
+      uppercase "PROFILES" kicker above a large white "Who's watching?"
+      title, both horizontally centered across the full canvas (not
+      left-aligned like this app's other screens), with a horizontal row of
+      large circular glossy-gradient avatar buttons centered underneath,
+      not the old vertical LabelList("profilesList") text list. See
+      MainScene.brs's showProfiles/buildProfileAvatarContent doc comments and
+      ProfileAvatar.xml's header comment for the full rationale, including
+      the two platform-limitation compromises (pre-rendered gradient PNGs
+      standing in for a runtime circle mask, and an initial letter standing
+      in for tv-web's SVG mascot icon set).
+
+      Kicker/title use width="1920" translation.x="0" rather than a
+      Theme.screenX-margined box: horizAlign="center" already centers the
+      text within the label's own box, and scaleRotateCenter's x lands
+      exactly on the canvas's horizontal centre (1920/2=960) at any scale
+      factor, so this stays centered without the width/scale centering-math
+      needed for profilesRow below (see MainScene.brs's showProfiles, which
+      centers that RowList's translation by hand since its width varies with
+      profile count).
+    -->
     <Group id="profilesGroup" visible="false">
-      <Label translation="[110,175]" width="800" height="60" text="Who’s watching?" color="0xFFFFFFFF">
-        <Font role="font" uri="font:MediumBoldSystemFont" size="42" />
-      </Label>
-      <LabelList id="profilesList" translation="[110,275]" itemSize="[750,68]" numRows="8" focusBitmapBlendColor="0x36D1DCFF" />
-      <Label translation="[950,300]" width="700" height="180" text="Select the linked profile to continue. Choose another profile to link a new session for that viewer." wrap="true" color="0xA9B7C9FF">
-        <Font role="font" uri="font:MediumSystemFont" size="26" />
-      </Label>
-      <Label translation="[950,555]" width="700" height="55" text="Options" color="0xFFFFFFFF">
-        <Font role="font" uri="font:MediumBoldSystemFont" size="28" />
-      </Label>
-      <LabelList id="profileActions" translation="[950,625]" itemSize="[650,62]" numRows="3" focusBitmapBlendColor="0x36D1DCFF" />
+      <!-- Title previously overlapped the kicker: scaleRotateCenter at the
+           box's true vertical centre made the 2.66x scale expand both UP
+           and DOWN from that midpoint, pushing the glyph's visual top edge
+           above the kicker sitting just 35px away (confirmed live).
+           Pivoting at the box's TOP edge instead (y=0 in the
+           scaleRotateCenter, not the box's half-height) makes the scale
+           expand downward only, so the declared translation.y is a real
+           top-edge position regardless of scale. -->
+      <Label id="profilesKicker" translation="[0,115]" width="1920" height="30" text="PROFILES" horizAlign="center" scale="[0.38,0.38]" scaleRotateCenter="[960,15]" color="0xCF3157FF" />
+      <Label translation="[0,165]" width="1920" height="110" text="Who’s watching?" horizAlign="center" scale="[2.66,2.66]" scaleRotateCenter="[960,0]" color="0xFFFFFFFF" />
+      <!-- focusBitmapBlendColor fully transparent: RowList draws its own
+           default focus rectangle around each item's full square bounds
+           unless overridden, which every OTHER RowList/LabelList in this
+           file already customises via a real accent colour (see e.g.
+           libraryList's item PosterCard filling its box edge-to-edge, which
+           happens to visually hide that default rectangle behind the
+           poster art's own edge). ProfileAvatar's circular image doesn't
+           fill its square item box the same way, so that default rectangle
+           was clearly visible peeking out past the circle's rounded edge
+           (confirmed live): suppressed here since ProfileAvatar draws its
+           own circular focusRing instead. -->
+      <!-- itemSize is the ROW's own viewport box, not one item's size, see
+           libraryList's comment further down for the confirmed-live root
+           cause. 1800 spans this screen's near-full width; buildProfileAvatar
+           Content (MainScene.brs) re-centers the row by hand regardless of
+           this box, so a generous width here only needs to avoid clipping. -->
+      <RowList id="profilesRow" translation="[86,290]" itemComponentName="ProfileAvatar"
+        numRows="1" itemSize="[1800,350]" rowItemSize="[[271,350]]"
+        rowItemSpacing="[[48,0]]" rowHeights="[350]" showRowLabel="false"
+        focusXOffset="[0]" rowFocusAnimationStyle="fixedFocusWrap"
+        focusBitmapBlendColor="0x00000000" />
+      <!-- width=1358/scale 0.81 -> visual width 1100, translation.x=960-550=410,
+           centering it the same way statusMessage/pairingInstruction above do. -->
+      <Label translation="[410,660]" width="1358" height="100" text="Select the linked profile to continue. Choose another profile to link a new session for that viewer." horizAlign="center" wrap="true" scale="[0.81,0.81]" scaleRotateCenter="[679,50]" color="0xA9B7C9FF" />
+      <!--
+        Matches the real Profiles page exactly now (confirmed live): just
+        two small actions, Settings and Sign out, directly under the row,
+        no "Options" heading at all (that label never existed there, it was
+        this codebase's own invention). "Link another profile" is now the
+        row's own "+" avatar (see MainScene.brs's buildProfileAvatarContent/
+        onProfileSelected) and "Change server" was never its own top-level
+        action there either, it lives inside Settings' existing "Server
+        connection" section, so both are gone from here rather than kept as
+        extra menu items with no real-UI basis.
+      -->
+      <LabelList id="profileActions" translation="[860,795]" itemSize="[200,55]" numRows="2" focusBitmapBlendColor="0xCF3157FF" />
     </Group>
 
+    <!--
+      Phase 7: settings screen (v1 stub), reached from profilesGroup's
+      profileActions LabelList ("Settings" entry, see MainScene.brs's
+      openSettings). Mirrors profilesGroup's original two-column
+      master/detail-list layout (a left LabelList of section names, a
+      descriptive Label, and a right-hand LabelList of actions for whichever
+      section is focused) rather than inventing a new layout pattern;
+      profilesGroup itself has since moved to a horizontal avatar row (see
+      that Group's own comment above), but this settings screen's own
+      section/action split still fits the two-column shape fine on its own
+      terms.
+
+      Deliberately built as a v1 stub, not full tv-web Settings parity:
+        - Appearance/theme toggle: N/A, Roku is always the app's dark theme,
+          there is no light/dark mode to switch.
+        - Profile avatar upload: N/A, Roku channels have no camera/file
+          picker to source an image from.
+        - Language (i18n): skipped, there is no localisation/i18n
+          mechanism anywhere else in this codebase (every string in
+          MainScene.brs/.xml is a hardcoded English literal), so wiring a
+          language *setting* with nothing in the client actually reading it
+          would be a non-functional stub. Out of scope until real i18n
+          plumbing exists.
+        - Profile lock / PIN management: skipped, no PIN-entry UI exists
+          anywhere in this client yet (profiles.pin_locked is only ever
+          displayed as a suffix in showProfiles, never acted on).
+        - Invite/friend-approval: skipped, a niche feature not worth a v1
+          Roku stub.
+      Only two sections are built: Server (view remembered addresses, add
+      another via the existing openServerDialog dialog) and Player
+      (preferred audio language, the one cheap field on
+      GET/PATCH /api/v1/users/me/player-preferences, see
+      loadPlayerPreferences/saveAudioLanguage in MainScene.brs; the rest of
+      tv-web's Player settings page, quality/subtitle defaults, are
+      client-local localStorage prefs with no server endpoint at all, so
+      they are left out of this server-preferences-only v1 pass).
+    -->
+    <!-- Shifted right (110->180) to clear the global nav dock, same fix as
+         browseGroup/searchGroup/playlistsDirectoryGroup above. -->
+    <Group id="settingsGroup" visible="false">
+      <Label translation="[180,175]" width="800" height="60" text="Settings" scale="[1.31,1.31]" color="0xFFFFFFFF" />
+      <LabelList id="settingsSectionList" translation="[180,275]" itemSize="[750,68]" numRows="2" focusBitmapBlendColor="0xCF3157FF" />
+      <Label id="settingsDetail" translation="[1020,300]" width="864" height="222" wrap="true" scale="[0.81,0.81]" color="0xA9B7C9FF" />
+      <Label translation="[1020,555]" width="700" height="55" text="Actions" scale="[0.88,0.88]" color="0xFFFFFFFF" />
+      <LabelList id="settingsActionList" translation="[1020,625]" itemSize="[650,62]" numRows="8" focusBitmapBlendColor="0xCF3157FF" />
+      <Label translation="[180,915]" width="1600" height="50" text="OK select  •  Left/Right switch column  •  Back profiles" scale="[0.69,0.69]" color="0xA9B7C9FF" />
+    </Group>
+
+    <!--
+      Legacy flat single-row catalogue browser. No longer the post-profile
+      landing screen (see homeGroup below); kept in source as a fallback
+      path (rebuildLibraryContent/loadCatalog/onLibraryItem* still work
+      end-to-end) for the rare case where the home screen ends up with zero
+      populated rails, and as a future dedicated "browse all" screen.
+    -->
     <Group id="libraryGroup" visible="false">
-      <Label id="libraryTitle" translation="[90,155]" width="1500" height="60" text="Library" color="0xFFFFFFFF">
-        <Font role="font" uri="font:MediumBoldSystemFont" size="42" />
-      </Label>
+      <Label id="libraryTitle" translation="[90,155]" width="1500" height="60" text="Library" scale="[1.31,1.31]" color="0xFFFFFFFF" />
+      <!-- itemSize is the ROW's own viewport box, not one item's size, see
+           createHomeRail's comment in MainScene.brs for the confirmed-live
+           root cause (both a too-small value and omitting it entirely clip
+           every item but the first, or all of them, out of view). 1800
+           spans this screen's near-full width (translation.x=84). -->
       <RowList id="libraryList" translation="[84,245]" itemComponentName="PosterCard"
-        numRows="1" itemSize="[220,340]" rowItemSize="[[220,340]]"
-        rowItemSpacing="[[20,0]]" rowHeights="[360]" showRowLabel="false"
-        focusXOffset="[0]" rowFocusAnimationStyle="fixedFocusWrap" />
-      <Label id="libraryHint" translation="[90,920]" width="1700" height="50" text="OK details  •  Back profiles" color="0xA9B7C9FF">
-        <Font role="font" uri="font:MediumSystemFont" size="22" />
-      </Label>
+        numRows="1" itemSize="[1800,185]" rowItemSize="[[220,165]]"
+        rowItemSpacing="[[24,0]]" rowHeights="[185]" showRowLabel="false"
+        focusXOffset="[0]" rowFocusAnimationStyle="fixedFocusWrap"
+        focusBitmapBlendColor="0x00000000" />
+      <Label id="libraryHint" translation="[90,920]" width="1700" height="50" text="OK details  •  Back profiles" scale="[0.69,0.69]" color="0xA9B7C9FF" />
     </Group>
 
+    <!--
+      Home screen: the real post-profile-select landing screen. Composed on
+      top of the shared TvStage (hero key-art/title/meta) with rail content
+      (Continue/Start Watching, New Movies, New Series, New Sites) built and
+      appended into homeStage.contentTarget at runtime from MainScene.brs
+      (see createHomeRail/finishHomeLoad) rather than declared here, since
+      TvStage's own <children> already own the contentTarget Group and any
+      XML-declared children nested inside a <TvStage> instantiation would
+      attach as siblings of it, not inside it.
+    -->
+    <Group id="homeGroup" visible="false">
+      <TvStage id="homeStage" />
+    </Group>
+
+    <!--
+      Library grid (phase 3): kind-filtered (movie/series/site/artist) grid
+      browser, entered from the homeShortcuts row above. Deliberately a
+      *separate* screen/group from the legacy flat libraryGroup above rather
+      than a repurposing of it: tests/test_contract.py's
+      validate_source_contract pins `m.library = m.top.findNode("libraryList")`
+      to an actual <RowList id="libraryList">, and a RowList's numRows>1 rows
+      are independent horizontal lists (awkward for one flat paginated
+      catalog), whereas MarkupGrid is SGDEX's purpose-built node for exactly
+      this "flat item list auto-wrapped into a scrolling 2D grid" shape:
+      see MainScene.brs's buildGridContent/onBrowseItemFocused for how a flat
+      ContentNode list feeds it. numColumns=6/itemSize=[220,340] (PosterCard's
+      native size) with itemSpacing=[24,24] (Theme.spacing.lg) fits
+      1920 - 2*86 (Theme.screenX margins) = 1748px comfortably (6*220+5*24=1440).
+    -->
+    <!--
+      Left preview panel + grid right-shift (real-CSS-audit correction pass):
+      tv-web's real Library page (Library.tsx's aside.tv-library-preview)
+      shows the currently-focused title's genre/kind, name, year, and
+      synopsis in a fixed left column next to the grid, not just a plain
+      "N of Total" header with no per-item detail until you commit to
+      opening it. Also shifted right (90->160 title/hint, 86->560 grid) to
+      clear the global nav dock (occupies x=32-128) now that it renders on
+      every screen, not just Home. Grid columns dropped 6->5 to fit the
+      narrower remaining width (1920 - 560 - ~160 right margin) without
+      overlapping the preview column.
+    -->
+    <Group id="browseGroup" visible="false">
+      <Label id="browseTitle" translation="[160,90]" width="1400" height="60" scale="[1.31,1.31]" color="0xFFFFFFFF" />
+      <Label id="browsePreviewKind" translation="[160,175]" width="380" height="30" scale="[0.5,0.5]" color="0xCF3157FF" />
+      <Label id="browsePreviewTitle" translation="[160,205]" width="380" height="80" wrap="true" numLines="2" scale="[0.94,0.94]" color="0xFFFFFFFF" />
+      <Label id="browsePreviewMeta" translation="[160,310]" width="380" height="30" scale="[0.56,0.56]" color="0xA9B7C9FF" />
+      <Label id="browsePreviewOverview" translation="[160,355]" width="380" height="360" wrap="true" vertAlign="top" scale="[0.56,0.56]" color="0xA9B7C9FF" />
+      <MarkupGrid id="browseGrid" translation="[560,245]" itemComponentName="PosterCard"
+        numColumns="3" numRows="3" itemSize="[330,216]" itemSpacing="[27,27]"
+        focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" />
+      <Label id="browseHint" translation="[160,995]" width="1700" height="50" text="OK details  •  *  A-Z / Filters  •  Back home" scale="[0.69,0.69]" color="0xA9B7C9FF" />
+      <!-- Alphabet jump strip (from: .tv-alphabet, confirmed live: "#" then
+           A-Z, right edge, entered from the grid via Right at its last
+           column, matching this app's established "bubble at the boundary"
+           navigation pattern everywhere else RowList/MarkupGrid meets a
+           hand-focused sibling list). See MainScene.brs's
+           enterBrowseAlphabet/jumpToBrowseLetter for the real jump
+           behaviour (paginates further if the target letter isn't loaded
+           yet, not just a decorative strip). -->
+      <Group id="browseAlphabet" translation="[1880,245]">
+        <!-- Populated at runtime (27 Labels: # then A-Z), see
+             MainScene.brs's buildAlphabetStrip, kept out of XML since
+             it's the exact same 27-entry content on every grid screen that
+             uses one, not screen-specific markup. -->
+      </Group>
+      <!-- Filters button (from: .tv-filter-launcher, top-right, above the
+           alphabet strip): reached from the alphabet strip's own "#" entry
+           via Up (spatially matches the real layout, button above strip),
+           opens browseFiltersPanel. Confirmed live the real panel covers
+           View (List/Screen/Cover) and Artwork Size (Small/Medium/Large);
+           Artwork Size is wired (see applyBrowseArtworkSize, reflows
+           browseGrid's numColumns/itemSize/itemSpacing in place). View
+           (List/Screen/Cover) is not wired, each is a genuinely distinct
+           SceneGraph layout (row-list vs grid vs large single-column
+           carousel), not a parameter of this one MarkupGrid, so it is a
+           real, documented gap rather than a decorative stand-in. -->
+      <Label id="browseFiltersButton" translation="[1845,180]" width="120" height="40" text="Filters" horizAlign="center" scale="[0.56,0.56]" scaleRotateCenter="[60,10]" color="0xA9B7C9FF" />
+      <Group id="browseFiltersPanel" visible="false">
+        <Rectangle translation="[1550,0]" width="370" height="1080" color="0x151315F5" />
+        <Label translation="[1610,90]" width="280" height="30" text="LIBRARY CONTROLS" scale="[0.38,0.38]" color="0x887A82FF" />
+        <Label translation="[1610,120]" width="280" height="60" text="Filters" scale="[1.3,1.3]" color="0xFFFFFFFF" />
+        <Label translation="[1610,220]" width="280" height="26" text="SORT BY" scale="[0.38,0.38]" color="0x887A82FF" />
+        <Label id="browseFilterSortTitle" translation="[1610,255]" width="280" height="40" text="Title" scale="[0.62,0.62]" color="0xCF3157FF" />
+        <Label id="browseFilterSortDate" translation="[1610,305]" width="280" height="40" text="Date added" scale="[0.62,0.62]" color="0xA9B7C9FF" />
+        <Label translation="[1610,375]" width="280" height="26" text="ORDER" scale="[0.38,0.38]" color="0x887A82FF" />
+        <Label id="browseFilterOrderAsc" translation="[1610,410]" width="280" height="40" text="A-Z" scale="[0.62,0.62]" color="0xCF3157FF" />
+        <Label id="browseFilterOrderDesc" translation="[1610,460]" width="280" height="40" text="Z-A" scale="[0.62,0.62]" color="0xA9B7C9FF" />
+        <Label translation="[1610,530]" width="280" height="26" text="ARTWORK SIZE" scale="[0.38,0.38]" color="0x887A82FF" />
+        <Label id="browseFilterSizeSmall" translation="[1610,565]" width="280" height="40" text="Small" scale="[0.62,0.62]" color="0xA9B7C9FF" />
+        <Label id="browseFilterSizeMedium" translation="[1610,615]" width="280" height="40" text="Medium" scale="[0.62,0.62]" color="0xCF3157FF" />
+        <Label id="browseFilterSizeLarge" translation="[1610,665]" width="280" height="40" text="Large" scale="[0.62,0.62]" color="0xA9B7C9FF" />
+      </Group>
+    </Group>
+
+    <!--
+      Phase 6: search results screen, reached from homeShortcuts' new
+      shortcutSearch entry (see selectHomeShortcut/openSearchDialog in
+      MainScene.brs). Text entry happens in a StandardKeyboardDialog (same
+      construction pattern as openServerDialog), and the submitted query is
+      sent once to GET /api/v1/catalog/search?q=..., unlike browseGroup's
+      catalog listing endpoint, the search endpoint takes no `offset`
+      (confirmed against tv-web's generated schema.ts), so this grid has no
+      near-the-end pagination fetch, just one MarkupGrid fill per search.
+      Mirrors browseGroup's MarkupGrid config/layout for consistency.
+    -->
+    <!--
+      Left preview panel + grid right-shift, same rationale/geometry as
+      browseGroup's identical fix above: tv-web's real Search page
+      (Search.tsx's aside.tv-search-preview) shows the focused result's
+      kind, title, year/genre, and synopsis in a fixed left column, and
+      every screen needs to clear the global nav dock now that it renders
+      everywhere. The inline search-input bar (tv-web keeps the query box
+      on-screen; Roku uses a system StandardKeyboardDialog instead, see
+      openSearchDialog) is a deliberately not-replicated gap.
+
+      Type filter row (from: tv-web's .tv-search-filter-control /
+      SEARCH_TYPES) added as a hand-focused Label row, same pattern the old
+      Home homeShortcuts row used (see MainScene.brs's navDock section for
+      why a real SGDEX list isn't used here either): entered via Up from the
+      grid's top row, Left/Right moves between filters, OK applies and
+      returns focus to the grid. Matches the real chip set exactly
+      (confirmed live: All/Movies/Series/Music/Playlists, no "Sites" filter
+      type at all): "Playlists" matches m.playlists by name client-side, the
+      same way tv-web itself must (confirmed live via the network panel:
+      typing a query only ever fires /api/v1/catalog/search, never a
+      playlist-search endpoint), see applySearchFilter's own comment in
+      MainScene.brs for the one real remaining gap (m.playlists only has
+      data once the viewer has visited Playlists at least once this
+      session).
+    -->
+    <Group id="searchGroup" visible="false">
+      <Label id="searchTitle" translation="[160,90]" width="1400" height="60" scale="[1.31,1.31]" color="0xFFFFFFFF" />
+      <Group id="searchFilters">
+        <Label id="searchFilterAll" translation="[560,195]" width="140" height="36" text="All" horizAlign="center" scale="[0.56,0.56]" scaleRotateCenter="[70,18]" color="0xCF3157FF" />
+        <Label id="searchFilterMovie" translation="[700,195]" width="140" height="36" text="Movies" horizAlign="center" scale="[0.56,0.56]" scaleRotateCenter="[70,18]" color="0xA9B7C9FF" />
+        <Label id="searchFilterSeries" translation="[840,195]" width="140" height="36" text="Series" horizAlign="center" scale="[0.56,0.56]" scaleRotateCenter="[70,18]" color="0xA9B7C9FF" />
+        <Label id="searchFilterArtist" translation="[980,195]" width="140" height="36" text="Music" horizAlign="center" scale="[0.56,0.56]" scaleRotateCenter="[70,18]" color="0xA9B7C9FF" />
+        <Label id="searchFilterPlaylists" translation="[1120,195]" width="140" height="36" text="Playlists" horizAlign="center" scale="[0.56,0.56]" scaleRotateCenter="[70,18]" color="0xA9B7C9FF" />
+      </Group>
+      <Label id="searchPreviewKind" translation="[160,175]" width="380" height="30" scale="[0.5,0.5]" color="0xCF3157FF" />
+      <Label id="searchPreviewTitle" translation="[160,205]" width="380" height="80" wrap="true" numLines="2" scale="[0.94,0.94]" color="0xFFFFFFFF" />
+      <Label id="searchPreviewMeta" translation="[160,310]" width="380" height="30" scale="[0.56,0.56]" color="0xA9B7C9FF" />
+      <Label id="searchPreviewOverview" translation="[160,355]" width="380" height="360" wrap="true" vertAlign="top" scale="[0.56,0.56]" color="0xA9B7C9FF" />
+      <MarkupGrid id="searchGrid" translation="[560,245]" itemComponentName="PosterCard"
+        numColumns="3" numRows="3" itemSize="[330,216]" itemSpacing="[27,27]"
+        focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" />
+      <Label id="searchHint" translation="[160,995]" width="1700" height="50" text="OK details  •  Back home" scale="[0.69,0.69]" color="0xA9B7C9FF" />
+    </Group>
+
+    <!--
+      Phase 10: playlists screen, reached from homeShortcuts' new 6th entry
+      (shortcutPlaylists, see selectHomeShortcut/openPlaylists in
+      MainScene.brs). One screenState ("playlists") covers two sub-views,
+      toggled by hand (m.playlistDetailOpen) exactly like homeGroup's
+      m.homeShortcutMode overlay above rather than being split into two
+      separate screenStates:
+        - playlistsDirectoryGroup: a flat MarkupGrid of every playlist
+          visible to the caller (GET /api/v1/playlists), mirroring
+          browseGrid's/searchGrid's exact config. PlaylistResponse (see
+          tv-web's generated schema.ts) carries no cover-art field at all
+          (confirmed against the schema, unlike Work's `images` array), so
+          each PosterCard here renders with an empty poster (its existing
+          "no image" look) and just the playlist name label: a deliberate,
+          documented fallback, not a bug. Nested child playlists
+          (parent_playlist_id) are out of scope this phase, so this grid
+          lists every playlist flat, personal and System alike.
+        - playlistDetailGroup: reuses the TvStage composition (see
+          homeGroup/detailGroup above for the reference pattern) rather than
+          the detailGroup/showDetail machinery itself, since a playlist is
+          not a Work and doesn't have a `kind`/`children` shape to branch
+          on: a second, dedicated TvStage instance keeps playlist detail
+          from having to shoehorn into WorkDetail's movie/series/artist
+          branching. playlistItemsGrid is declared here (not nested inside
+          the <TvStage> tag; see homeGroup's comment on why XML-nested
+          children of a <TvStage> instantiation attach as siblings, not
+          children, of its contentTarget) and reparented into
+          playlistDetailStage.contentTarget at runtime in MainScene.brs's
+          init(). Sized for TvStage's content panel (864px wide, see
+          TvStage.xml's contentPanel comment) with 3 columns instead of
+          browseGrid's 6 (3*220 + 2*24 = 708 < 864).
+    -->
+    <Group id="playlistsGroup" visible="false">
+      <!-- Shifted right (90/86->160/560, columns 6->5) to clear the global
+           nav dock, same fix/geometry as browseGroup/searchGroup above. -->
+      <Group id="playlistsDirectoryGroup" visible="true">
+        <Label id="playlistsTitle" translation="[160,90]" width="1400" height="60" text="Playlists" scale="[1.31,1.31]" color="0xFFFFFFFF" />
+        <MarkupGrid id="playlistsGrid" translation="[560,245]" itemComponentName="PosterCard"
+          numColumns="3" numRows="3" itemSize="[330,216]" itemSpacing="[27,27]"
+          focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" />
+        <Label translation="[160,995]" width="1700" height="50" text="OK open  •  Back home" scale="[0.69,0.69]" color="0xA9B7C9FF" />
+      </Group>
+      <Group id="playlistDetailGroup" visible="false">
+        <TvStage id="playlistDetailStage" />
+        <MarkupGrid id="playlistItemsGrid" translation="[0,0]" itemComponentName="PosterCard"
+          numColumns="2" numRows="3" itemSize="[330,216]" itemSpacing="[27,27]"
+          focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" />
+        <Label translation="[100,915]" width="1600" height="50" text="OK details  •  Back playlists" scale="[0.69,0.69]" color="0xA9B7C9FF" />
+      </Group>
+    </Group>
+
+    <!--
+      Phase 4 (branch logic) / phase 9 (visual migration to TvStage): detail
+      screen branches on work.kind. Movies keep the original single-Play-
+      button LabelList (detailActions). Series/site works instead show
+      detailEpisodes, a RowList with one row per season (numRows set
+      dynamically from the parsed WorkChildrenSchema.Series in
+      MainScene.brs's buildEpisodeContent/showSeriesDetailActions) so a
+      specific episode's own resolved media_file_id drives playback, not
+      findFirstMediaFileId's old "grab anything" behaviour. Episode cards
+      reuse PosterCard (same as every other rail/grid in this app) rather
+      than a new dedicated episode-card component, so episode still images
+      render in PosterCard's portrait poster slot, an accepted visual
+      compromise for this phase, not a functional one (see MainScene.brs's
+      episodeArtworkUrl). showRowLabel's row header text comes from each
+      row ContentNode's own `title` (season label), a native SGDEX-drawn
+      label, not a Label node we authored, so it is not subject to the
+      custom-<Font>-child invisible-text bug documented in Theme.brs.
+      Only one of detailActions/detailEpisodes is visible at a time; see
+      showMovieDetailActions/showSeriesDetailActions.
+
+      Phase 9 rebuilds this screen's visual composition on the shared
+      TvStage (see homeGroup above for the reference pattern): title/kicker/
+      meta move onto detailStage's own title-panel fields (stageTitle/
+      stageKicker/stageMeta, set from showDetail() exactly like Home's
+      updateHeroFromWork), and the former small poster thumbnail
+      (detailPoster) is removed entirely in favour of TvStage's full-bleed
+      backdrop key-art (heroArtworkUrl(work), same helper Home already
+      uses); tv-web's actual detail page has no separate poster thumbnail
+      once there is full-bleed hero art behind the title panel. detailOverview/
+      detailActions/detailEpisodes are declared here (not nested inside the
+      <TvStage> tag; see homeGroup's comment on why XML-nested children of
+      a <TvStage> instantiation would attach as siblings of it, not inside
+      its contentTarget) and reparented into detailStage.contentTarget at
+      runtime in MainScene.brs's init(), positioned with contentTarget-
+      relative (0,0-origin) translations to land inside TvStage's right-hand
+      content panel (translation [983,259], ~864px wide).
+    -->
     <Group id="detailGroup" visible="false">
-      <Poster id="detailPoster" translation="[100,215]" width="330" height="495" loadDisplayMode="scaleToFill" />
-      <Label id="detailTitle" translation="[500,205]" width="1220" height="70" color="0xFFFFFFFF">
-        <Font role="font" uri="font:MediumBoldSystemFont" size="44" />
-      </Label>
-      <Label id="detailMeta" translation="[500,290]" width="1220" height="45" color="0x36D1DCFF">
-        <Font role="font" uri="font:MediumSystemFont" size="24" />
-      </Label>
-      <Label id="detailOverview" translation="[500,355]" width="1150" height="260" wrap="true" maxLines="6" color="0xDCE5F0FF">
-        <Font role="font" uri="font:MediumSystemFont" size="26" />
-      </Label>
-      <LabelList id="detailActions" translation="[500,660]" itemSize="[600,68]" numRows="3" focusBitmapBlendColor="0x36D1DCFF" />
-      <Label translation="[100,915]" width="1600" height="50" text="Back library" color="0xA9B7C9FF">
-        <Font role="font" uri="font:MediumSystemFont" size="22" />
-      </Label>
+      <TvStage id="detailStage" />
+      <!-- height=182 pre-scale * 0.81 scale = 147px visual bottom edge. detailEpisodes'
+           own row label sits 30px ABOVE its row (rowLabelOffset), so at y=180 that label
+           would draw at 150px: only 3px clear of the overview's bottom edge, and on
+           real hardware the two visibly overlapped (confirmed live: "Season 1" label was
+           swallowed by the overview's last line). Bumped both siblings' y to 230 for a
+           real ~83px gap below the overview text. -->
+      <Label id="detailOverview" translation="[0,0]" width="1067" height="182" wrap="true" maxLines="4" scale="[0.81,0.81]" color="0xDCE5F0FF" />
+      <LabelList id="detailActions" translation="[0,230]" itemSize="[600,68]" numRows="3" focusBitmapBlendColor="0xCF3157FF" />
+      <!-- itemSize is the ROW's own viewport box, not one item's size, see
+           libraryList's identical comment above for the confirmed-live root
+           cause. 860 matches TvStage's contentPanel width this renders into. -->
+      <RowList id="detailEpisodes" translation="[0,230]" itemComponentName="PosterCard"
+        numRows="1" itemSize="[860,185]" rowItemSize="[[220,165]]"
+        rowItemSpacing="[[24,0]]" rowHeights="[185]" showRowLabel="true"
+        rowLabelOffset="[[0,-30]]" focusXOffset="[0]"
+        focusBitmapBlendColor="0x00000000" rowFocusAnimationStyle="fixedFocusWrap"
+        visible="false" />
+      <!-- Chapters + Similar Titles rails (confirmed live against the real
+           detail page): movies show a "Chapters" rail (from GET
+           /api/v1/media/{media_file_id}/chapters, each card's art from GET
+           /api/v1/media/{id}/thumbnail?position_ms={start_ms}, a genuine
+           per-timestamp generated thumbnail, not a static image) below the
+           Play button, and any kind shows a "Similar Titles" rail below
+           that, confirmed live via the network panel that
+           /api/v1/catalog/{id}/similar 404s for this catalog (no cached
+           embeddings) and tv-web's own WorkDetail.tsx falls back to a
+           client-side genre search: up to 3 of the work's own genres, each
+           fetched via GET /api/v1/catalog?genre={genre}&limit=100, merged
+           and deduplicated by id, scored by
+           sharedGenres*100 + sameKind*10 + yearProximity(max 5) and sorted
+           descending, capped at 20, see MainScene.brs's
+           loadSimilarTitles/scoreSimilarWork for the port of that exact
+           algorithm. Both use the larger .tv-title-card sizing (cardScale
+           1.5) like the Library/Search grids, not Home's smaller rail card. -->
+      <RowList id="detailChapters" translation="[0,320]" itemComponentName="PosterCard"
+        numRows="1" itemSize="[860,270]" rowItemSize="[[330,247]]"
+        rowItemSpacing="[[24,0]]" rowHeights="[270]" showRowLabel="true"
+        rowLabelOffset="[[0,-30]]" focusXOffset="[0]"
+        focusBitmapBlendColor="0x00000000" rowFocusAnimationStyle="fixedFocusWrap"
+        visible="false" />
+      <RowList id="detailSimilar" translation="[0,610]" itemComponentName="PosterCard"
+        numRows="1" itemSize="[860,270]" rowItemSize="[[330,247]]"
+        rowItemSpacing="[[24,0]]" rowHeights="[270]" showRowLabel="true"
+        rowLabelOffset="[[0,-30]]" focusXOffset="[0]"
+        focusBitmapBlendColor="0x00000000" rowFocusAnimationStyle="fixedFocusWrap"
+        visible="false" />
+      <Label translation="[100,915]" width="1600" height="50" text="Back library" scale="[0.69,0.69]" color="0xA9B7C9FF" />
     </Group>
 
-    <Video id="video" visible="false" width="1920" height="1080" enableUI="true" />
+    <!--
+      Persistent app-chrome header (title + linked-profile name + the
+      temporary kind-shortcut row). Declared here: after every
+      screen-content Group (home/browse/search/settings/detail/library/
+      profiles/pairing/status) but before <Video>, so it always renders on
+      top of a screen's own content (in particular TvStage's homeGroup key-art
+      scrim, which previously sat in front of these labels since XML
+      children earlier in document order render *behind* later ones,
+      washing the header out to near-illegible) while still being covered by
+      the opaque fullscreen Video node during playback, matching the
+      original pre-TvStage behavior of "header hidden only during video."
+    -->
+    <!--
+      Two-tone wordmark treatment (see pairingGroup's logo lockup comment
+      above for the same approximation/rationale) applied here too for
+      cross-screen consistency with tv-web's .app-logo-accent split, in
+      place of the old plain all-caps "PLAYARR" label. Left unscaled/
+      unsized like the label it replaces (this header has always rendered
+      at the platform default size with no explicit width/height/scale) so
+      this stays a pure text/color change with no new sizing risk to the
+      always-visible chrome shared by every post-auth screen.
+    -->
+    <!-- Hidden during pairing/status: those screens carry their own
+         centered logo lockup (see pairingGroup/statusGroup), and tv-web's
+         real DeviceLogin/pre-auth pages never show this persistent corner
+         header at the same time as that page-level lockup (confirmed live
+         against the real app): showing both was a real, visible
+         duplicate-logo bug. Toggled in showOnly(). -->
+    <!--
+      Global app shell rebuild (real-CSS-audit correction pass): the
+      previous persistentHeader (a "Play"/"arr" text wordmark top-left, a
+      profile name top-right) plus a Home-only homeShortcuts text row was
+      never actually what tv-web's real authenticated shell looks like.
+      Read straight from the source of truth (App.tsx's AppShell + the
+      cascading .app-nav rules in styles/global.css, the LAST unscoped
+      `.app-nav`/`.app-clock` block in that file wins the cascade over an
+      earlier bottom-pill-shaped draft still sitting above it) tv-web's real
+      10-foot shell is:
+        - a small icon-only logo (no wordmark text at all) floating near the
+          top, horizontally centred over the nav dock,
+        - a fixed nav dock pinned to the LEFT edge, vertically centred,
+          split into three visually-grouped rounded panels top-to-bottom:
+          [Search], [Home, Series, Movies, Sites, Music], [Playlists], 7
+          icon+label buttons total, always visible on every authenticated
+          screen (not a Home-only affordance). Downloads is deliberately
+          omitted on this platform -- Roku has no local file-storage /
+          download-queue infrastructure at all, so there is nothing for a
+          Downloads tab to lead to here, and
+        - the linked-profile identity pinned bottom-left, near the dock.
+      Roku has no rounded-rectangle primitive (Rectangle is always sharp-
+      cornered) and no SVG renderer, so the group panels are plain
+      Rectangles and the icons are pre-rendered PNGs (images/nav-*.png,
+      generated from tv-web's actual NavIcons.tsx paths), both documented
+      simplifications, not missing features. The on-screen clock tv-web also
+      shows here is deliberately deferred (lower-impact than the structural
+      nav-shape fix this pass targets).
+    -->
+    <Group id="persistentHeader">
+      <Poster id="navLogo" translation="[16,34]" width="48" height="48" uri="pkg:/images/pairing-logo.png" />
+
+      <!-- Clock (from: App.tsx's .app-clock, real time + date shown on
+           every authenticated screen). Deferred in the earlier shell pass,
+           added now: translation chosen to sit clear of both the logo above
+           and the dock below (logo ends y=82; dock starts y=203). -->
+      <Label id="clockTime" translation="[90,40]" width="200" height="30" scale="[0.46,0.46]" color="0xF4F0F1FF" />
+      <Label id="clockDate" translation="[90,64]" width="260" height="26" scale="[0.34,0.34]" color="0x887A82FF" />
+
+      <!-- navDock: 7 flat-indexed items (see MainScene.brs's navDockKindList
+           for the matching order/behaviour), grouped visually into 3 panels
+           by background Rectangles declared first so they paint behind the
+           icons/labels that follow. Vertically centred as a whole on the
+           1080-tall canvas: group A (Search) 203-291, group B
+           (Home/Series/Movies/Sites/Music) 311-695, group C (Playlists)
+           715-803, symmetric 203px top/bottom margins. Downloads is
+           deliberately omitted, Roku has no local file-storage /
+           download-queue infrastructure to lead a Downloads tab to. -->
+      <!-- NOT opaque group-background panels: confirmed live against the
+           real app's own nav (.app-nav computed style) that its container
+           is fully transparent (background: rgba(0,0,0,0)), there is no
+           panel behind the icon groups at all, only each individual link
+           getting its own small rounded highlight on hover/active
+           (.app-nav-link's own background, already matched by this app's
+           navHighlight0-6 rectangles below). The 3 solid ~85%-opaque panels
+           this used to have were blocking the hero backdrop art behind them
+           with no basis in the real design. -->
+      <Group id="navDock">
+
+        <!-- Icon centre = panel centre (32 + 96/2 = 80), so icon translation.x
+             = 80 - width/2 = 64. Labels use a wide (200px) pre-scale box so
+             the longest word ("Playlists") doesn't wrap/truncate
+             at the default (unscaled) font size before scale shrinks them
+             down. scaleRotateCenter = [width/2,height/2] = [100,10] is the
+             point that stays fixed under scale, so the point that lands at
+             the visual centre is translation + scaleRotateCenter (the scale
+             term cancels out exactly at that point), not
+             translation + scaleRotateCenter*(1-scale), a formula that looks
+             plausible but is wrong and was live-tested wrong (text rendered
+             off to the right, overlapping Home's hero title, until this was
+             corrected). Solving translation.x + 100 = 80 gives
+             translation.x = -20. -->
+        <Rectangle id="navHighlight0" translation="[40,211]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Poster id="navIcon0" translation="[64,223]" width="32" height="32" uri="pkg:/images/nav-search.png" opacity="0.62" />
+        <Label id="navLabel0" translation="[-20,257]" width="200" height="20" text="Search" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
+
+        <Rectangle id="navHighlight1" translation="[40,319]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Poster id="navIcon1" translation="[64,331]" width="32" height="32" uri="pkg:/images/nav-home.png" opacity="0.62" />
+        <Label id="navLabel1" translation="[-20,365]" width="200" height="20" text="Home" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
+
+        <Rectangle id="navHighlight2" translation="[40,393]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Poster id="navIcon2" translation="[64,405]" width="32" height="32" uri="pkg:/images/nav-series.png" opacity="0.62" />
+        <Label id="navLabel2" translation="[-20,439]" width="200" height="20" text="Series" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
+
+        <Rectangle id="navHighlight3" translation="[40,467]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Poster id="navIcon3" translation="[64,479]" width="32" height="32" uri="pkg:/images/nav-movies.png" opacity="0.62" />
+        <Label id="navLabel3" translation="[-20,513]" width="200" height="20" text="Movies" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
+
+        <Rectangle id="navHighlight4" translation="[40,541]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Poster id="navIcon4" translation="[64,553]" width="32" height="32" uri="pkg:/images/nav-sites.png" opacity="0.62" />
+        <Label id="navLabel4" translation="[-20,587]" width="200" height="20" text="Sites" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
+
+        <Rectangle id="navHighlight5" translation="[40,615]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Poster id="navIcon5" translation="[64,627]" width="32" height="32" uri="pkg:/images/nav-music.png" opacity="0.62" />
+        <Label id="navLabel5" translation="[-20,661]" width="200" height="20" text="Music" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
+
+        <Rectangle id="navHighlight6" translation="[40,723]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Poster id="navIcon6" translation="[64,735]" width="32" height="32" uri="pkg:/images/nav-playlists.png" opacity="0.62" />
+        <Label id="navLabel6" translation="[-20,769]" width="200" height="20" text="Playlists" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
+      </Group>
+
+      <!-- Linked-profile identity, bottom-left near the dock (tv-web's
+           .app-user-identity-cluster sits fixed just past the dock's own
+           footprint). Kept as plain text (no avatar swatch) for now, a
+           documented simplification, not a missing field. -->
+      <Label id="profileLabel" translation="[16,900]" width="400" height="36" numLines="1" scale="[0.42,0.42]" color="0xC5B8BDFF" />
+    </Group>
+
+    <Video id="video" visible="false" width="1920" height="1080" enableUI="false" />
+
+    <!--
+      Phase 5: custom playback control bar. Roku's native trick-play OSD
+      (the old enableUI="true" chrome on the Video node above) looks nothing
+      like tv-web's custom transport bar, so enableUI is deliberately
+      "false" here and this Group is drawn on top of the video instead,
+      see tests/test_contract.py's
+      test_playback_uses_a_custom_control_bar_not_native_osd, which pins
+      both of those facts so a future pass doesn't "fix" enableUI back to
+      true without realising it was intentional.
+
+      Bottom-third overlay: a background scrim, a two-Rectangle seek bar
+      (static track + a fill Rectangle whose width is rewritten every
+      controlBarProgressTimer tick from MainScene.brs's
+      updatePlayerProgress), and a Previous/Play-Pause/Next/time label row.
+      Previous/Next only do something when playback was started from an
+      episode selection (see MainScene.brs's playAdjacentEpisode /
+      m.playbackEpisodeList), for movie playback, or the last/first
+      episode in a season list, they render dimmed (see
+      renderPlayerEpisodeNav) and are a no-op, not disabled-but-silent.
+
+      All Labels below are plain (no <Font> child) per Theme.brs's
+      documented invisible-text bug; horizAlign="right"/"center" labels
+      carry a scaleRotateCenter of their own half-width/half-height so the
+      scale pivots in place.
+    -->
+    <Group id="playerControls" visible="false">
+      <Rectangle id="playerBarBg" translation="[0,900]" width="1920" height="180" color="0x070B14CC" />
+      <Rectangle id="playerProgressTrack" translation="[100,930]" width="1720" height="6" color="0x3A3A3AFF" />
+      <!-- Mirrors tv-web's .player-seek-buffered (rgba(255,255,255,0.34) bar
+           under the played-progress fill). tv-web reads the real <video>
+           element's buffered TimeRanges; Roku's Video node has no equivalent
+           public API, but it does fire a real, documented downloadedSegment
+           field (SegStart/SegDuration) each time a stream segment finishes
+           downloading, which onDownloadedSegment (MainScene.brs) uses to
+           track the furthest-downloaded position, a genuine buffered-ahead
+           reading built from real per-segment download data, not a guess. -->
+      <Rectangle id="playerBufferedFill" translation="[100,930]" width="0" height="6" color="0xFFFFFF57" />
+      <Rectangle id="playerProgressFill" translation="[100,930]" width="0" height="6" color="0xCF3157FF" />
+      <Label id="playerPreviousLabel" translation="[100,965]" width="150" height="50" text="Previous" scale="[0.56,0.56]" scaleRotateCenter="[75,25]" color="0xA9B7C9FF" />
+      <Label id="playerPlayPauseLabel" translation="[280,965]" width="150" height="50" text="Pause" scale="[0.56,0.56]" scaleRotateCenter="[75,25]" color="0xFFFFFFFF" />
+      <Label id="playerNextLabel" translation="[460,965]" width="150" height="50" text="Next" scale="[0.56,0.56]" scaleRotateCenter="[75,25]" color="0xA9B7C9FF" />
+      <Label id="playerTimeLabel" translation="[1520,965]" width="300" height="50" horizAlign="right" text="0:00 / 0:00" scale="[0.56,0.56]" scaleRotateCenter="[150,25]" color="0xDCE5F0FF" />
+    </Group>
+
     <Timer id="pairingTimer" repeat="true" />
+    <!-- Matches tv-web's useMinuteClock: a 30s refresh is frequent enough
+         for a clock that only displays hours/minutes. -->
+    <Timer id="clockTimer" duration="30" repeat="true" />
+    <Timer id="hostedLinkTimer" repeat="true" />
     <Timer id="heartbeatTimer" duration="20" repeat="true" />
+    <Timer id="controlBarProgressTimer" duration="0.5" repeat="true" />
+    <Timer id="playerAutoHideTimer" duration="3" repeat="false" />
   </children>
   <script type="text/brightscript" uri="pkg:/source/Config.brs" />
   <script type="text/brightscript" uri="pkg:/source/Storage.brs" />

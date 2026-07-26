@@ -33,6 +33,11 @@ sub runRequest()
         started = transfer.AsyncGetToString()
     else if method = "POST" or method = "PUT" or method = "PATCH"
         transfer.AddHeader("Content-Type", "application/json")
+        ' AsyncPostFromString always fires a literal HTTP POST unless the
+        ' wire verb is overridden first -- PUT/PATCH were accepted here but
+        ' silently sent as POST until this fix (phase 7 needed a real PATCH
+        ' for /api/v1/users/me/player-preferences).
+        if method = "PUT" or method = "PATCH" then transfer.SetRequest(method)
         started = transfer.AsyncPostFromString(FormatJson(request.body))
     else
         m.top.result = { ok: false, status: 0, error: "Unsupported HTTP method" }

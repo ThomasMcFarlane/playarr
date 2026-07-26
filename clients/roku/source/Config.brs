@@ -7,6 +7,10 @@ function AppConfig() as Object
         clientPlatform: "web"
         catalogPageSize: 50
         maxBitrateBps: 20000000
+        ' The same hosted TV-linking service tv-webos/tv-tizen already use to
+        ' bootstrap onto a Streamarr server before they know its address --
+        ' see clients/tv-web/web/worker.js and hostedDeviceLink.ts.
+        hostedLinkOrigin: "https://playarr.app"
     }
 end function
 

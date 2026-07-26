@@ -23,6 +23,8 @@ class ApiContractTests(unittest.TestCase):
             "GET /api/v1/catalog/{id}": '"detail", "GET", "/api/v1/catalog/"',
             "GET /api/v1/playback/{id}": 'path = "/api/v1/playback/"',
             "POST playback event": '"POST", "/api/v1/playback/sessions/"',
+            "GET /api/v1/users/me/profile-pin": ('"profilePin", "GET", "/api/v1/users/me/profile-pin"'),
+            "PATCH /api/v1/users/me/profile-pin": ('"profilePinSave", "PATCH", "/api/v1/users/me/profile-pin"'),
         }
         for name, fragment in expected.items():
             with self.subTest(name=name):
@@ -45,7 +47,7 @@ class ApiContractTests(unittest.TestCase):
 class NavigationContractTests(unittest.TestCase):
     def test_overflowing_collections_are_native_scenegraph_lists(self) -> None:
         self.assertRegex(SCENE, r'<RowList id="libraryList"')
-        self.assertRegex(SCENE, r'<LabelList id="profilesList"')
+        self.assertRegex(SCENE, r'<RowList id="profilesRow"')
         self.assertRegex(SCENE, r'<LabelList id="detailActions"')
         self.assertIn('rowFocusAnimationStyle="fixedFocusWrap"', SCENE)
 
@@ -58,6 +60,18 @@ class NavigationContractTests(unittest.TestCase):
     def test_library_paginates_near_the_focused_end(self) -> None:
         self.assertIn('itemIndex >= m.items.Count() - 10', MAIN)
         self.assertIn('loadCatalog(true)', MAIN)
+
+    def test_home_rails_fetch_recent_catalog_by_kind(self) -> None:
+        # Matches the real Home page's own rail set, confirmed live via
+        # Playwright against https://playarr.app/ (5 rails: Continue/Start
+        # watching, New movies, New series, More movies, More series -- no
+        # "New Sites" rail exists there at all).
+        self.assertIn("kind=movie&sort=recent", MAIN)
+        self.assertIn("kind=series&sort=recent", MAIN)
+        self.assertIn('sub loadHomeMovies()', MAIN)
+        self.assertIn('sub loadHomeSeries()', MAIN)
+        self.assertIn('sub loadHomeMoreMovies()', MAIN)
+        self.assertIn('sub loadHomeMoreSeries()', MAIN)
 
 
 class SecretSafetyTests(unittest.TestCase):
@@ -84,12 +98,14 @@ class SecretSafetyTests(unittest.TestCase):
         self.assertIn('if m.top.screenState <> "playback"', MAIN)
 
     def test_repository_contains_no_baked_server_or_token(self) -> None:
+        binary_suffixes = {".png", ".jpg", ".jpeg", ".zip", ".ico"}
         all_text = "\n".join(
             path.read_text(encoding="utf-8")
             for path in ROOT.rglob("*")
             if path.is_file()
             and "build" not in path.parts
             and "__pycache__" not in path.parts
+            and path.suffix not in binary_suffixes
             and path.suffix != ".pyc"
         )
         self.assertNotRegex(all_text, r"https?://(?:192\.168|10\.|172\.(?:1[6-9]|2\d|3[01]))")

@@ -2,16 +2,124 @@
 <component name="PosterCard" extends="Group">
   <interface>
     <field id="itemContent" type="node" onChange="onContentChanged" />
+    <!-- Both drive onFocusChanged: focusPercent alone caused a real bug
+         confirmed live. RowList always shows its own "currently selected"
+         item at focusPercent=1, regardless of whether that RowList itself
+         actually holds real scene focus, so on Home's 4 independent
+         sibling rail RowLists, every rail's first card showed a fully-lifted
+         card on first paint, not just the genuinely focused rail.
+         activeRailFactor is a value MainScene bakes onto each item's
+         content node at buildRailContent() time (see PosterCard.brs's
+         onContentChanged and MainScene.brs's moveHomeFocus) reflecting
+         whether THIS card's rail is the one actually focused; multiplying
+         the two together correctly suppresses the lift on every other
+         rail. (This field was originally named rowFocusPercent, but that name
+         turned out to be reserved: RowList silently overwrote it back to 1
+         after content bound, confirmed live via debug-console tracing.
+         Renamed to a name Roku has no special handling for.) -->
     <field id="focusPercent" type="float" onChange="onFocusChanged" />
-    <field id="rowFocusPercent" type="float" />
+    <!-- Defaults to 1 (a no-op multiplier), not SceneGraph's normal 0
+         default-for-an-unset-float: MarkupGrid (browseGrid/searchGrid/
+         playlistsGrid/playlistItemsGrid) has no "row" concept and never sets
+         this on its content items at all, so those screens must keep
+         behaving exactly like before (focusPercent alone). Only Home's rail
+         RowLists actively drive this field for real. -->
+    <field id="activeRailFactor" type="float" value="1" onChange="onFocusChanged" />
+    <!-- Real tv-web uses two differently-sized card components for this
+         same 16:9 shape: .tv-home-card (220x165, Home's rails) and the
+         larger .tv-title-card (330x216, Library/Search/Playlists grids),
+         confirmed live via getComputedStyle on both real pages. Rather than
+         a second near-duplicate component, this card is authored at the
+         .tv-home-card base size and grid screens set cardScale (measured
+         330/220 = 1.5) to reach the larger size, the same Group.scale
+         mechanism onFocusChanged already uses for the focus-zoom, applied
+         once at content-bind time instead of on an Animation. -->
+    <!-- cardScale/showKind travel on each item's content node (see
+         PosterCard.brs's onContentChanged), not as interface fields here:
+         MarkupGrid/RowList only ever bind itemContent on each item
+         instance, there is no path to set an arbitrary custom field on
+         every item component directly. -->
+
   </interface>
   <children>
-    <Rectangle id="focusFrame" width="212" height="322" color="0x36D1DCFF" opacity="0" />
-    <Poster id="poster" translation="[6,6]" width="200" height="300" loadDisplayMode="scaleToFill" />
-    <Rectangle translation="[6,254]" width="200" height="52" color="0x070B14DD" />
-    <Label id="title" translation="[16,264]" width="180" height="32" horizAlign="center" vertAlign="center" numLines="1">
-      <Font role="font" uri="font:MediumSystemFont" size="19" />
-    </Label>
+    <!--
+      Full rebuild against the REAL live DOM (Playwright getComputedStyle on
+      the real .tv-home-card, not the .tv-title-card class this used to
+      chase): a 220x124 16:9 LANDSCAPE thumbnail (not a 220x340 tall movie
+      poster), no dark title-bar strip baked over the art at all, title +
+      kind text sitting BELOW the art box on the page's own background, and
+      a small solid-pink "unwatched" dot badge inset in the art's top-right
+      corner. Confirmed measurements at a real 1920px-wide viewport (so no
+      unit conversion needed against this channel's own 1920-canvas):
+        card rect:  220 x 165 (218.9 x 165.5 measured)
+        art rect:   220 x 124 (224.3 x 126.2 measured, aspect-ratio: 16/9)
+        art-to-strong gap: 10px (marginTop 9.92px)
+        strong: ~11px, ~630 weight, ink token (F4F0F1 in dark theme)
+        small:  ~9px, 400 weight, ink-muted token (887A82 in dark theme)
+        badge:  13x13 circle, literal #cf3157 (same in both themes),
+                inset 11px from the art's own top/right edges
+      cardRoot: real tv-web focus transitions animate (transform/box-shadow
+      ease over 240-260ms, see global.css's .tv-home-card / .tv-home-card-art
+      transition rules), not snap instantly. Roku has no CSS-transition
+      equivalent, but does have real Animation/FieldInterpolator nodes for
+      exactly this, onFocusChanged (PosterCard.brs) drives focusAnim instead
+      of setting fields directly. Matches tv-web's actual split: the WHOLE
+      card lifts (translateY(-7px), no colour change, there is no
+      colour-border/outline focus ring anywhere in the real CSS, confirmed
+      against the live computed styles), while only the art zooms in a touch
+      further. cardRoot's own translation carries the lift; artGroup wraps
+      just the art and its corner masks for the separate, smaller art-only
+      zoom. Neither field can be addressed on the component's own top-level
+      node by an Animation (can't address "the component I'm declared
+      inside" by id), hence both wrappers.
+    -->
+    <Group id="cardRoot">
+      <Group id="artGroup" scaleRotateCenter="[110,62]">
+        <!-- tv-web's .tv-home-card-art always carries a surface-soft
+             background underneath the img, visible whenever there is no
+             artwork at all (not just in the rounded corner slivers). A bare
+             Poster with no uri renders fully transparent, which would
+             silently reveal whatever sits behind the card instead,
+             confirmed live once the old colour-border was removed and a
+             no-art card (an artist with no image) went fully invisible
+             except for its title text. -->
+        <Rectangle id="posterBg" width="220" height="124" color="0x312A30FF" />
+        <!-- scaleToZoom (crop-to-fill, preserving aspect ratio), NOT
+             scaleToFill (stretch-to-fill, distorting it): confirmed live
+             that scaleToFill visibly warped tall 2:3 poster art stretched
+             into this 16:9 box. object-fit:cover on the real
+             .tv-title-card-art/.tv-home-card-art img is Roku's scaleToZoom,
+             not scaleToFill despite the deceptively similar name. -->
+        <Poster id="poster" width="220" height="124" loadDisplayMode="scaleToZoom" />
+        <!-- Rounded corners (from: .tv-home-card-art's overflow:hidden plus
+             border-radius over a background of the surface-soft token,
+             container element clipped): since the img covers the box fully
+             via object-fit:cover, that clip really just reveals surface-soft
+             in the 4 corner slivers, a fixed known colour, not the page's own
+             varying background, so painting over the art's square corners
+             with matching surface-soft-coloured quarter-circle masks is an
+             exact match for what the real clip shows, not an approximation.
+             Roku's Poster/Rectangle have no corner-radius field at all. -->
+        <Poster id="cornerTL" translation="[0,0]" width="12" height="12" uri="pkg:/images/card-corner-tl.png" />
+        <Poster id="cornerTR" translation="[208,0]" width="12" height="12" uri="pkg:/images/card-corner-tr.png" />
+        <Poster id="cornerBL" translation="[0,112]" width="12" height="12" uri="pkg:/images/card-corner-bl.png" />
+        <Poster id="cornerBR" translation="[208,112]" width="12" height="12" uri="pkg:/images/card-corner-br.png" />
+        <!-- Unwatched badge (from: .tv-watch-unseen, a plain solid circle in
+             the literal brand pink, not a themed token, same colour in
+             both light and dark). 11px inset from the art's own top/right
+             edges (measured top:10.56/right:10.56 on the real element). -->
+        <Poster id="unwatchedBadge" translation="[196,11]" width="13" height="13" uri="pkg:/images/badge-unwatched.png" visible="false" />
+      </Group>
+      <!-- Title + kind sit BELOW the art box entirely, on the page's own
+           background, not overlaid on the art, confirmed live there is no
+           dark title-bar strip anywhere in the real design. -->
+      <Label id="title" translation="[0,134]" width="220" height="18" numLines="1" scale="[0.35,0.35]" color="0xF4F0F1FF" />
+      <Label id="kind" translation="[0,152]" width="220" height="14" numLines="1" scale="[0.27,0.27]" color="0x887A82FF" />
+    </Group>
+    <Animation id="focusAnim" duration="0.16" easeFunction="inOutCubic">
+      <Vector2DFieldInterpolator id="liftInterp" fieldToInterp="cardRoot.translation" />
+      <Vector2DFieldInterpolator id="scaleInterp" fieldToInterp="artGroup.scale" />
+    </Animation>
   </children>
   <script type="text/brightscript" uri="pkg:/components/PosterCard.brs" />
 </component>

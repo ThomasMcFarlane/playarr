@@ -36,9 +36,33 @@ function AbsoluteUrl(baseUrl as String, value as String) as String
     return baseUrl + value
 end function
 
+' Percent-encodes a string for use in a URL query component. Deliberately
+' avoids roUrlTransfer.Escape(): roUrlTransfer is a MAIN|TASK-only component
+' and MainScene.brs (and therefore this function, when called from the
+' pairing poll on the render thread) runs on the Scene render thread, where
+' CreateObject("roUrlTransfer") fails at runtime.
 function UrlEncode(value as String) as String
-    transfer = CreateObject("roUrlTransfer")
-    return transfer.Escape(value)
+    unreserved = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.~"
+    result = ""
+    for i = 0 to value.Len() - 1
+        ch = value.Mid(i, 1)
+        if unreserved.Instr(ch) >= 0
+            result = result + ch
+        else
+            code = Asc(ch)
+            hex = StrToHex(code)
+            result = result + "%" + hex
+        end if
+    end for
+    return result
+end function
+
+' Formats a byte value (0-255) as a two-digit uppercase hex string.
+function StrToHex(value as Integer) as String
+    digits = "0123456789ABCDEF"
+    high = digits.Mid(Int(value / 16), 1)
+    low = digits.Mid(value Mod 16, 1)
+    return high + low
 end function
 
 function JsonString(value as Dynamic) as String

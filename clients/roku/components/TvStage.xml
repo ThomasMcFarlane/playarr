@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  TvStage: reusable "stage" composition matching tv-web's detail/home hero
+  layout (.tv-detail / .tv-key-art / .tv-title-panel / .tv-rail-panel in
+  clients/tv-web/web/src/styles/global.css). Later pages compose on top of
+  this by setting stageTitle/stageKicker/stageMeta/keyArtUri, inserting their
+  own rail/grid content under `contentTarget`, then calling show().
+
+  All positions/sizes below are fixed 1920x1080 px values evaluated from the
+  source clamp()/vw/vh CSS formulas (Roku's canvas is fixed at fhd - see
+  manifest ui_resolutions=fhd). Each block has a `from:` comment pointing at
+  the CSS rule and the evaluated formula.
+
+  CSS -> SceneGraph substitutions made here (see also TvStage.brs):
+    - CSS `filter: grayscale()/contrast()/brightness()` on the key-art <img>
+      has no SceneGraph equivalent (Poster cannot apply pixel filters).
+      Substituted with a semi-transparent Rectangle (`keyArtWash`) laid over
+      the Poster, using the theme's `bg` color at ~72% alpha - matching the
+      *dimming* (opacity: 0.72) the dark theme applies, without the actual
+      desaturation/contrast shift. Documented as an approximation only.
+    - CSS `linear-gradient()` scrims (`.tv-key-art::after`, `.tv-stage-wash`)
+      have no native equivalent either: SceneGraph's `Rectangle` node only
+      exposes a flat `color` field, not a gradient field or `roku_gradient`
+      region image. A real bitmap gradient asset would be the correct fix,
+      but none exists yet in this channel's `images/`. Substituted with a
+      small stack of flat, differently-sized/differently-alpha `Rectangle`
+      nodes (`scrimLeft1/2`, `scrimTop`, `scrimBottom`) that fake a
+      left-edge and top/bottom-edge fade using the theme's `surface` color.
+    - The CSS entrance easing `cubic-bezier(0.16, 1, 0.3, 1)` (strong
+      deceleration) isn't expressible on SceneGraph's `Animation` node, which
+      only accepts a fixed keyword set (linear, in/out/inOut Quad, Cubic,
+      Quart, Quint, Sine, Expo, Circ, Back, Bounce). "outCubic" is used below
+      as the closest built-in match (fast start, gentle finish). If a given
+      Roku OS floor rejects "outCubic", fall back to "linear".
+-->
+<component name="TvStage" extends="Group">
+  <interface>
+    <!-- Background art image (poster/backdrop) for the key-art layer. -->
+    <field id="keyArtUri" type="string" onChange="onKeyArtUriChange" />
+    <!-- from: .tv-provider / .tv-detail-kicker text content -->
+    <field id="stageKicker" type="string" onChange="onStageKickerChange" />
+    <!-- from: .tv-title-panel h1 text content -->
+    <field id="stageTitle" type="string" onChange="onStageTitleChange" />
+    <!-- from: .tv-title-meta text content (kind / year / genres line) -->
+    <field id="stageMeta" type="string" onChange="onStageMetaChange" />
+    <!--
+      Output field: the empty content-panel Group other scenes should
+      findNode()/append their own rail or grid content into. Treat this as
+      read-only - it is populated once in init() and should not be
+      reassigned by callers.
+    -->
+    <field id="contentTarget" type="node" />
+    <!-- Runs the staggered fade+translate entrance. Call after populating
+         stageTitle/stageKicker/stageMeta and contentTarget's children.
+         Named playEntrance (not "show") to rule out any collision with a
+         built-in roSGNode member of that name: "Member function not
+         found" was observed on-device calling `.show()` despite the
+         interface/backing sub both looking correct; renaming is the
+         cheapest way to test that theory without deeper platform digging. -->
+    <function name="playEntrance" />
+  </interface>
+  <children>
+    <!--
+      Key-art layer.
+      from: .tv-key-art { position:absolute; inset:0 } and
+      .tv-key-art img { width:52%; height:106%; object-fit:cover;
+      object-position:center 20%; transform:scale(1.04) } evaluated at
+      1920x1080:
+        width  = 52%  of 1920 = 998px
+        height = 106% of 1080 = 1145px
+        top offset approximates object-position's vertical bias: -(1145-1080)/2 = -33px
+      loadDisplayMode scaleToZoom (crop-to-fill, preserving aspect ratio) is
+      Roku's match for object-fit:cover, NOT scaleToFill (stretch-to-fill,
+      distorting it despite the deceptively similar name), confirmed live
+      elsewhere this session (PosterCard.xml's own poster Poster) that
+      scaleToFill visibly warps photographic art.
+    -->
+    <Group id="keyArtLayer" opacity="0">
+      <Poster id="keyArt" translation="[0,-33]" width="998" height="1145" loadDisplayMode="scaleToZoom" />
+      <!-- CSS filter+opacity substitute - see file header comment. -->
+      <Rectangle id="keyArtWash" translation="[0,-33]" width="998" height="1145" color="0x151315B8" />
+      <!-- CSS linear-gradient scrim substitute - see file header comment.
+           from: .tv-key-art::after (left-edge fade) + .tv-stage-wash (left/right fade) -->
+      <Group id="scrimLayer">
+        <Rectangle id="scrimLeft1" translation="[0,0]" width="422" height="1080" color="0x1B181BE6" />
+        <Rectangle id="scrimLeft2" translation="[422,0]" width="170" height="1080" color="0x1B181B59" />
+        <Rectangle id="scrimTop" translation="[0,0]" width="1920" height="238" color="0x1B181B59" />
+        <Rectangle id="scrimBottom" translation="[0,886]" width="1920" height="194" color="0x1B181B59" />
+      </Group>
+    </Group>
+
+    <!--
+      Title panel.
+      from: .tv-title-panel { top:31%; left:clamp(44px,7.5vw,150px); width:min(27vw,520px) }
+      evaluated at 1920x1080:
+        top   = 31% of 1080 = 334.8 -> 335px
+        left  = 7.5vw of 1920 = 144px (within the 44-150px clamp bounds)
+        width = 27vw of 1920 = 518.4 -> 518px (under the 520px cap)
+    -->
+    <Group id="titlePanel" translation="[144,335]" opacity="0">
+      <!-- from: .tv-provider/.tv-detail-kicker font-size clamp(0.58rem,0.64vw,0.78rem)
+           evaluated at 1920px: 0.64vw = 12.288px -> 12px. Color: theme accent (#cf3157). -->
+      <Label id="stageKickerLabel" translation="[0,0]" width="518" height="20" scale="[0.38,0.38]" color="0xCF3157FF" />
+      <!-- from: .tv-title-panel h1 font-size clamp(2.7rem,4.5vw,6.4rem) evaluated at
+           1920px: 4.5vw = 86.4px -> 86px. Color: theme ink.
+           Font child removed (platform bug - see Theme.brs); width/height
+           divided by scale factor to preserve the pre-scale wrap box.
+           Height corrected: 82px pre-scale (=221px visual) only fit ~1
+           truncated line despite maxLines="3": Roku truncates-with-
+           ellipsis to whatever fits the declared box height regardless of
+           maxLines, it doesn't grow the box to fit more lines. Using the
+           same font-size-to-line-height ratio as Theme.brs's type scale
+           (~1.42x, e.g. display 50/71) for 3 real lines: 86px * 1.42 = 122px
+           visual line height * 3 lines = 366px visual / 2.69 scale = 136px. -->
+      <Label id="stageTitleLabel" translation="[0,34]" width="193" height="136" wrap="true" maxLines="3" scale="[2.69,2.69]" color="0xF4F0F1FF" />
+      <!-- from: .tv-title-meta font-size clamp(0.68rem,0.78vw,0.96rem) evaluated at
+           1920px: 0.78vw = 14.976px -> 15px. Color: theme inkSoft. -->
+      <Label id="stageMetaLabel" translation="[0,270]" width="518" height="40" scale="[0.47,0.47]" color="0xC5B8BDFF" />
+    </Group>
+
+    <!--
+      Content panel: empty region other scenes populate via `contentTarget`.
+      Positioned to match tv-web's right-hand rail/content region.
+      from: .tv-rail-panel { top:24%; right:3.8%; width:45%; min-height:39% }
+      evaluated at 1920x1080:
+        top    = 24% of 1080 = 259.2 -> 259px
+        right  = 3.8% of 1920 = 72.96 -> 73px
+        width  = 45% of 1920 = 864px
+        left   = 1920 - width - right = 1920 - 864 - 73 = 983px
+        height = 39% of 1080 = 421.2 -> 421px (min-height, content may exceed it)
+    -->
+    <Group id="contentPanel" translation="[983,259]" opacity="0" />
+
+    <!--
+      Entrance animation: fades+translates keyArtLayer, titlePanel, and
+      contentPanel in with tv-web's staggered delays baked into each
+      interpolator's `key` array as a "hold at start value" segment (a single
+      Animation node applies one overall duration/state to every child
+      interpolator, so per-target delay has to be encoded this way rather
+      than as a separate `delay` field per target).
+
+      from: .tv-key-art-in (760ms, starts immediately)
+            .tv-copy-in    (620ms, 90ms delay)  - title panel
+            .tv-rail-in    (700ms, 120-180ms delay; 150ms used here) - content panel
+      Total animation window: 900ms (0.9s), matching the latest-finishing
+      target (title panel: 90ms + 620ms = 710ms; content panel: 150ms + 700ms
+      = 850ms; both comfortably inside 900ms).
+    -->
+    <Animation id="entranceAnimation" duration="0.9" easeFunction="outCubic">
+      <!-- key-art: fade 0->1 across the first 760/900 = 0.844 of the timeline -->
+      <FloatFieldInterpolator id="keyArtOpacityInterp" fieldToInterp="keyArtLayer.opacity"
+        key="[0.0, 0.844]" keyValue="[0.0, 1.0]" />
+      <Vector2DFieldInterpolator id="keyArtTranslateInterp" fieldToInterp="keyArtLayer.translation"
+        key="[0.0, 0.844]" keyValue="[[15.0,0.0],[0.0,0.0]]" />
+
+      <!-- title panel: hold hidden until 90/900 = 0.10, then fade+slide in
+           over 620ms, finishing at (90+620)/900 = 0.789 -->
+      <FloatFieldInterpolator id="titleOpacityInterp" fieldToInterp="titlePanel.opacity"
+        key="[0.0, 0.10, 0.789]" keyValue="[0.0, 0.0, 1.0]" />
+      <Vector2DFieldInterpolator id="titleTranslateInterp" fieldToInterp="titlePanel.translation"
+        key="[0.0, 0.10, 0.789]" keyValue="[[110.0,335.0],[110.0,335.0],[144.0,335.0]]" />
+
+      <!-- content panel: hold hidden until 150/900 = 0.167, then fade+slide in
+           over 700ms, finishing at (150+700)/900 = 0.944 -->
+      <FloatFieldInterpolator id="contentOpacityInterp" fieldToInterp="contentPanel.opacity"
+        key="[0.0, 0.167, 0.944]" keyValue="[0.0, 0.0, 1.0]" />
+      <Vector2DFieldInterpolator id="contentTranslateInterp" fieldToInterp="contentPanel.translation"
+        key="[0.0, 0.167, 0.944]" keyValue="[[1043.0,259.0],[1043.0,259.0],[983.0,259.0]]" />
+    </Animation>
+  </children>
+  <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
+  <script type="text/brightscript" uri="pkg:/components/TvStage.brs" />
+</component>
