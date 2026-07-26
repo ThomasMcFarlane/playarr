@@ -148,3 +148,8 @@ secrets/
 *.pem
 *.key
 !**/test-fixtures/**/*.key
+
+# Local browser-automation scratch: MCP session state and ad-hoc TV-web
+# screenshots dropped at the repo root during manual UI checks.
+.playwright-mcp/
+/tvweb_*.png
