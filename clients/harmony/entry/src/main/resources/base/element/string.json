@@ -1,0 +1,120 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "Playarr client module for browsing and playing your Playarr Server media library."
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "Playarr — watch your Playarr Server library on phone, tablet and TV."
+    },
+    {
+      "name": "permission_internet_reason",
+      "value": "Connects to your Playarr Server to browse and play your media library."
+    },
+    {
+      "name": "nav_home",
+      "value": "Home"
+    },
+    {
+      "name": "nav_search",
+      "value": "Search"
+    },
+    {
+      "name": "nav_series",
+      "value": "Series"
+    },
+    {
+      "name": "nav_movies",
+      "value": "Movies"
+    },
+    {
+      "name": "nav_sites",
+      "value": "Sites"
+    },
+    {
+      "name": "nav_music",
+      "value": "Music"
+    },
+    {
+      "name": "nav_playlists",
+      "value": "Playlists"
+    },
+    {
+      "name": "retry",
+      "value": "Retry"
+    },
+    {
+      "name": "sign_out",
+      "value": "Sign Out"
+    },
+    {
+      "name": "cancel",
+      "value": "Cancel"
+    },
+    {
+      "name": "ok",
+      "value": "OK"
+    },
+    {
+      "name": "design_gallery_title",
+      "value": "Design Gallery"
+    },
+    {
+      "name": "profiles_heading",
+      "value": "Who's Watching?"
+    },
+    {
+      "name": "profiles_current_badge",
+      "value": "Current"
+    },
+    {
+      "name": "profiles_pin_locked_badge",
+      "value": "PIN required"
+    },
+    {
+      "name": "profiles_add_profile",
+      "value": "Add Profile"
+    },
+    {
+      "name": "profiles_add_profile_hint",
+      "value": "Manage profiles from Playarr Server"
+    },
+    {
+      "name": "profiles_pin_title",
+      "value": "Enter PIN"
+    },
+    {
+      "name": "profiles_pin_continue",
+      "value": "Continue"
+    },
+    {
+      "name": "server_setup_title",
+      "value": "Connect to your Playarr Server"
+    },
+    {
+      "name": "server_setup_hint",
+      "value": "Enter your server's web address to get started."
+    },
+    {
+      "name": "server_setup_placeholder",
+      "value": "https://your-server.example.com"
+    },
+    {
+      "name": "server_setup_connect",
+      "value": "Connect"
+    },
+    {
+      "name": "pairing_title",
+      "value": "Pair This Device"
+    },
+    {
+      "name": "pairing_open_instruction",
+      "value": "Open this address on another device to approve pairing:"
+    },
+    {
+      "name": "pairing_waiting",
+      "value": "Waiting for approval..."
+    }
+  ]
+}

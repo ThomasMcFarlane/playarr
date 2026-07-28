@@ -1,0 +1,78 @@
+<Page
+    x:Class="Playarr.Xbox.Views.WorkDetailPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Playarr.Xbox.Views"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <!--
+        Follows Views/LoginPage.xaml.cs's established pattern: every
+        dynamic value is a plain x:Name'd element pushed to from
+        code-behind's Render(). The season/episode lists are the one
+        addition beyond LoginPage's shape, built directly into
+        SeasonsPanel.Children / EpisodesPanel.Children in code-behind
+        rather than through an ItemsSource/DataTemplate, matching
+        SearchPage's identical judgment call for its result tiles.
+    -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Height="380">
+            <Image
+                x:Name="BackdropImage"
+                Stretch="UniformToFill"
+                Opacity="0.55" />
+
+            <StackPanel VerticalAlignment="Bottom" Padding="48,0,48,24" Spacing="8">
+                <TextBlock
+                    x:Name="TitleText"
+                    Style="{StaticResource TitleTextBlockStyle}" />
+                <TextBlock
+                    x:Name="GenresText"
+                    Style="{StaticResource BodyTextBlockStyle}"
+                    Opacity="0.8" />
+                <Button
+                    x:Name="PlayButton"
+                    Content="Play"
+                    Click="PlayButton_Click" />
+            </StackPanel>
+
+            <ProgressRing
+                x:Name="LoadingRing"
+                IsActive="False"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center" />
+            <TextBlock
+                x:Name="ErrorText"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Foreground="{ThemeResource SystemControlErrorTextForegroundBrush}"
+                Visibility="Collapsed" />
+        </Grid>
+
+        <ScrollViewer Grid.Row="1" Padding="48,24,48,48">
+            <StackPanel Spacing="24">
+                <TextBlock
+                    x:Name="OverviewText"
+                    TextWrapping="Wrap"
+                    Style="{StaticResource BodyTextBlockStyle}" />
+
+                <StackPanel x:Name="SeriesPanel" Spacing="16" Visibility="Collapsed">
+                    <StackPanel
+                        x:Name="SeasonsPanel"
+                        Orientation="Horizontal"
+                        Spacing="8" />
+                    <StackPanel
+                        x:Name="EpisodesPanel"
+                        Spacing="4" />
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

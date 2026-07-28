@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Playarr</title>
+  <desc id="description">A play symbol surrounded by three flowing media orbits.</desc>
+  <defs>
+    <linearGradient id="playarr-gradient" x1="92" y1="76" x2="426" y2="438" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F47A91"/>
+      <stop offset=".48" stop-color="#D83F6B"/>
+      <stop offset="1" stop-color="#A82051"/>
+    </linearGradient>
+    <filter id="playarr-depth" x="-35%" y="-35%" width="180%" height="180%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="12" stdDeviation="13" flood-color="#160A10" flood-opacity=".3"/>
+    </filter>
+  </defs>
+
+  <g fill="none" stroke="url(#playarr-gradient)" stroke-linecap="round" filter="url(#playarr-depth)">
+    <path d="M171 92A184 184 0 1 1 92 256" stroke-width="38"/>
+    <path d="M191 151A124 124 0 1 1 151 323" stroke-width="28" opacity=".78"/>
+    <path d="M199 210A66 66 0 1 1 199 302" stroke-width="20" opacity=".52"/>
+  </g>
+
+  <path
+    d="M220 180c0-18 20-29 35-19l130 82c12 8 12 26 0 34l-130 82c-15 10-35-1-35-19Z"
+    fill="url(#playarr-gradient)"
+    filter="url(#playarr-depth)"
+  />
+  <path
+    d="M252 226c0-8 9-13 16-9l61 38c6 4 6 12 0 16l-61 38c-7 4-16-1-16-9Z"
+    fill="#FFF"
+    fill-opacity=".88"
+  />
+</svg>

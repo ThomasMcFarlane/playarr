@@ -1,0 +1,77 @@
+<Page
+    x:Class="Playarr.Xbox.Views.LibraryPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Playarr.Xbox.Views"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <!--
+        Follows Views/LoginPage.xaml.cs's pattern, see LibraryPage.xaml.cs's
+        type-level remarks. Kind tabs are built in code (server-defined,
+        variable count, plus an "All" tab this page adds itself); the two
+        sort buttons are static since there are only ever two. Grid tiles are
+        built in code via CatalogTileFactory, same as HomePage's row, see
+        that shared factory's remarks on why WorksGridView uses
+        Items.Add(...) rather than ItemsSource + a bound ItemTemplate.
+    -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Top nav: shared shape, duplicated on HomePage; see that page's own copy. -->
+        <StackPanel
+            Grid.Row="0"
+            Orientation="Horizontal"
+            Spacing="24"
+            Margin="48,32,48,24"
+            VerticalAlignment="Center">
+            <TextBlock Text="Playarr" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center" />
+            <Button x:Name="HomeNavButton" Content="Home" Click="HomeNavButton_Click" />
+            <Button x:Name="LibraryNavButton" Content="Library" IsEnabled="False" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="24" Margin="48,0,48,16">
+            <StackPanel x:Name="KindTabsPanel" Orientation="Horizontal" Spacing="12" />
+
+            <StackPanel Orientation="Horizontal" Spacing="12" Margin="32,0,0,0">
+                <Button x:Name="SortRecentButton" Content="Recently added" Click="SortRecentButton_Click" />
+                <Button x:Name="SortTitleButton" Content="Title" Click="SortTitleButton_Click" />
+            </StackPanel>
+        </StackPanel>
+
+        <Grid Grid.Row="2" Margin="48,0,48,48">
+            <ProgressRing
+                x:Name="LoadingRing"
+                IsActive="False"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                Width="40"
+                Height="40" />
+
+            <StackPanel
+                x:Name="ErrorPanel"
+                Spacing="12"
+                Visibility="Collapsed"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top">
+                <TextBlock
+                    x:Name="ErrorText"
+                    Foreground="{ThemeResource SystemControlErrorTextForegroundBrush}"
+                    Style="{StaticResource BodyTextBlockStyle}" />
+                <Button x:Name="RetryButton" Content="Try again" Click="RetryButton_Click" />
+            </StackPanel>
+
+            <GridView
+                x:Name="WorksGridView"
+                SelectionMode="None"
+                IsItemClickEnabled="True"
+                ItemClick="WorksGridView_ItemClick" />
+        </Grid>
+    </Grid>
+</Page>

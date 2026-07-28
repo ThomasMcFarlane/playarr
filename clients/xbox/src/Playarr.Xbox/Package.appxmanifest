@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <Identity
+    Name="Playarr.PlayarrXbox"
+    Publisher="CN=Playarr"
+    Version="0.1.0.0" />
+  <!--
+    Publisher="CN=Playarr" is a self-signed Dev Mode / sideload placeholder,
+    not a real Microsoft Store publisher identity. Sideloading via Xbox Dev
+    Mode only needs the certificate this placeholder implies (self-signed,
+    trusted locally on the dev-mode console) — a real Store submission
+    requires replacing this with the Partner Center-issued publisher CN,
+    which also means every *_TemporaryKey.pfx generated against this
+    placeholder (see ../../.gitignore) has to be regenerated against it too.
+
+    Version must be kept in step with Directory.Build.props's <Version> (the
+    "0.1.0" MSBuild property shared by Playarr.Core and this project) in its
+    4-part UWP form — "0.1.0" -> "0.1.0.0". Nothing enforces this
+    automatically for a legacy project; see Properties/AssemblyInfo.cs's own
+    comment on the same gap.
+  -->
+
+  <!--
+    No mp:PhoneIdentity element: that's a phone-app-only manifest element
+    (UWP mobile/phone support is deprecated), and the xmlns:mp namespace it
+    needs is deliberately not declared above either — both would be dead
+    weight on an Xbox/desktop-only client.
+  -->
+
+  <Properties>
+    <DisplayName>Playarr</DisplayName>
+    <PublisherDisplayName>Playarr</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <!--
+      TargetPlatformMinVersion/TargetPlatformVersion mirror
+      Playarr.Xbox.csproj's TargetPlatformMinVersion/TargetPlatformVersion
+      exactly — see that file's comment on the same pair of values.
+      Windows.Universal (rather than the narrower Windows.Xbox device family)
+      is deliberate for now: it's the widest family that still installs on
+      an Xbox, so this manifest sideloads and packages cleanly today without
+      first confirming Windows.Xbox-only distribution is what this project
+      actually wants for its eventual Store listing. Narrow this to
+      Windows.Xbox once that's confirmed — a Windows.Xbox-only package
+      can't be sideloaded or run on a desktop debug session at all, which
+      would be a bad default while this app is still being built.
+    -->
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19041.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="x-generate" />
+  </Resources>
+
+  <Applications>
+    <Application
+      Id="App"
+      Executable="$targetnametoken$.exe"
+      EntryPoint="Playarr.Xbox.App">
+      <uap:VisualElements
+        DisplayName="Playarr"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png"
+        Description="Playarr for Xbox — a native client for a self-hosted Playarr server."
+        BackgroundColor="transparent">
+        <!--
+          Every Assets\*.png referenced here and by Properties/Logo above
+          is a plausible filename, not a file that exists yet — no real
+          icon/tile/splash art has been produced for this client. Adding
+          the actual PNGs (and the corresponding <Content Include> entries
+          in Playarr.Xbox.csproj — see that file's own comment) is
+          required before this project can package, and belongs to the
+          MSIX-packaging phase (task #7), not this foundational one.
+        -->
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <!--
+      rescap:hevcPlayback is a *restricted* capability: Microsoft Store
+      submission requires written justification for declaring it (Partner
+      Center prompts for this at submission time), and Windows itself will
+      refuse to install a sideloaded package that declares a restricted
+      capability unless the device is in Developer Mode — which every
+      Xbox Dev Mode console already is by definition, so this only matters
+      once this project targets a real Store listing.
+
+      It's declared anyway, here, because it's load-bearing for this
+      client's whole reason to be a native UWP app rather than a web app:
+      XboxPlaybackProfile (Playarr.Core/Playback/XboxPlaybackProfile.cs)
+      advertises HEVC direct-play on every console except the original
+      Xbox One, and HEVC decode through Media Foundation on Xbox needs this
+      capability declared — without it, HEVC sources would silently fall
+      back to a server-side transcode regardless of what the console can
+      actually decode in hardware.
+    -->
+    <rescap:Capability Name="hevcPlayback" />
+  </Capabilities>
+</Package>

@@ -1,0 +1,77 @@
+<Page
+    x:Class="Playarr.Xbox.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Playarr.Xbox.Views"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <!--
+        Follows Views/LoginPage.xaml.cs's established pattern. The
+        server-address entry/pairing panels below are a deliberate
+        near-duplicate of LoginPage.xaml's own; see SettingsViewModel's
+        remarks for why this screen composes LoginViewModel's logic rather
+        than factoring a shared UserControl.
+    -->
+    <ScrollViewer Padding="48">
+        <StackPanel MaxWidth="720" Spacing="32">
+            <TextBlock
+                Text="Settings"
+                Style="{StaticResource TitleTextBlockStyle}" />
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="Current server" Style="{StaticResource BodyTextBlockStyle}" Opacity="0.7" />
+                <TextBlock x:Name="CurrentServerText" Style="{StaticResource SubtitleTextBlockStyle}" />
+            </StackPanel>
+
+            <StackPanel Spacing="12">
+                <TextBlock Text="Change server address" Style="{StaticResource BodyTextBlockStyle}" Opacity="0.7" />
+
+                <StackPanel x:Name="ServerPanel" Spacing="12">
+                    <TextBox
+                        x:Name="ServerAddressBox"
+                        InputScope="Url"
+                        PlaceholderText="http://your-server:8484" />
+                    <TextBlock
+                        x:Name="ServerErrorText"
+                        Foreground="{ThemeResource SystemControlErrorTextForegroundBrush}"
+                        Visibility="Collapsed" />
+                    <Button
+                        x:Name="ConnectButton"
+                        Content="Connect"
+                        Click="ConnectButton_Click" />
+                </StackPanel>
+
+                <StackPanel x:Name="PairingPanel" Spacing="16" Visibility="Collapsed">
+                    <ProgressRing x:Name="PairingProgressRing" IsActive="False" HorizontalAlignment="Left" />
+                    <TextBlock x:Name="PairingStatusText" Style="{StaticResource BodyTextBlockStyle}" />
+
+                    <StackPanel x:Name="DeviceCodePanel" Spacing="8" Visibility="Collapsed">
+                        <TextBlock Text="On your phone or computer, go to:" Style="{StaticResource BodyTextBlockStyle}" />
+                        <TextBlock x:Name="VerificationUriText" Style="{StaticResource SubtitleTextBlockStyle}" />
+                        <TextBlock Text="and enter this code:" Style="{StaticResource BodyTextBlockStyle}" />
+                        <TextBlock x:Name="UserCodeText" FontSize="48" FontWeight="Bold" FontFamily="Consolas" />
+                    </StackPanel>
+
+                    <Button x:Name="CancelPairingButton" Content="Cancel" Click="CancelPairingButton_Click" />
+                </StackPanel>
+
+                <TextBlock
+                    x:Name="ReconnectFailureText"
+                    Foreground="{ThemeResource SystemControlErrorTextForegroundBrush}"
+                    Visibility="Collapsed" />
+            </StackPanel>
+
+            <StackPanel Spacing="12">
+                <Button x:Name="SignOutButton" Content="Sign Out" Click="SignOutButton_Click" />
+            </StackPanel>
+
+            <TextBlock
+                x:Name="AppVersionText"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Opacity="0.6" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>

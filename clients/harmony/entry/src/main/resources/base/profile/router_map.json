@@ -1,0 +1,58 @@
+{
+  "routerMap": [
+    {
+      "name": "Index",
+      "pageSourceFile": "pages/Index.ets",
+      "buildFunction": "IndexBuilder",
+      "data": {}
+    },
+    {
+      "name": "DesignGallery",
+      "pageSourceFile": "pages/DesignGallery.ets",
+      "buildFunction": "DesignGalleryBuilder",
+      "data": {}
+    },
+    {
+      "name": "ServerSetup",
+      "pageSourceFile": "pages/ServerSetup.ets",
+      "buildFunction": "ServerSetupBuilder",
+      "data": {}
+    },
+    {
+      "name": "Pairing",
+      "pageSourceFile": "pages/Pairing.ets",
+      "buildFunction": "PairingBuilder",
+      "data": {}
+    },
+    {
+      "name": "Profiles",
+      "pageSourceFile": "pages/Profiles.ets",
+      "buildFunction": "ProfilesBuilder",
+      "data": {}
+    },
+    {
+      "name": "Home",
+      "pageSourceFile": "pages/Home.ets",
+      "buildFunction": "HomeBuilder",
+      "data": {}
+    },
+    {
+      "name": "Library",
+      "pageSourceFile": "pages/Library.ets",
+      "buildFunction": "LibraryBuilder",
+      "data": {}
+    },
+    {
+      "name": "Detail",
+      "pageSourceFile": "pages/Detail.ets",
+      "buildFunction": "DetailBuilder",
+      "data": {}
+    },
+    {
+      "name": "Player",
+      "pageSourceFile": "pages/Player.ets",
+      "buildFunction": "PlayerBuilder",
+      "data": {}
+    }
+  ]
+}

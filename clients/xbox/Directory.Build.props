@@ -1,0 +1,45 @@
+<Project>
+
+  <!--
+    Shared MSBuild properties for every project under clients/xbox/.
+
+    Deliberately narrow: the UWP application head is an old-style project
+    that the .NET SDK does not own, so anything set here has to be valid for
+    both it and the SDK-style Playarr.Core/test projects. Properties that
+    only make sense for one of the two live in that project's own .csproj.
+  -->
+
+  <PropertyGroup>
+    <!--
+      C# 8 is the floor for nullable reference types, which Playarr.Core
+      relies on to express "this token may be absent" in its own signatures
+      rather than in comments. UWP's compiler accepts the language version;
+      it is the *runtime* surface that is limited to netstandard2.0.
+    -->
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+
+    <!--
+      This tree is built on a Linux workstation and in CI on Windows. Keep
+      the two honest about each other: no machine-specific implicit usings,
+      and deterministic output so a CI-produced assembly can be compared
+      against a locally produced one.
+    -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+
+    <Product>Playarr for Xbox</Product>
+    <Company>Playarr</Company>
+    <Copyright>Copyright (c) Playarr contributors</Copyright>
+
+    <!--
+      One release number for the whole client. The MSIX manifest version is
+      validated against this at package time so an installed package can
+      never report a different version from the assemblies inside it: the
+      same rule the webOS package-preparation step enforces between
+      package.json and appinfo.json.
+    -->
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+</Project>

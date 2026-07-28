@@ -1,0 +1,19 @@
+<Application
+    x:Class="Playarr.Xbox.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Application.Resources>
+        <!--
+            No custom ResourceDictionary merged in yet — this app currently
+            relies entirely on the default UWP/XAML theme resources
+            (ThemeResource ApplicationPageBackgroundThemeBrush, the built-in
+            TitleTextBlockStyle/SubtitleTextBlockStyle/BodyTextBlockStyle
+            text styles, etc), used directly by Views/LoginPage.xaml and
+            Views/HomePage.xaml. A shared Styles.xaml is a natural addition
+            once more than one screen needs bespoke TV-legible typography,
+            a 10-foot-safe-area margin, or a focus-visual style — leave that
+            to the Screens phase, which will touch every page anyway.
+        -->
+    </Application.Resources>
+</Application>

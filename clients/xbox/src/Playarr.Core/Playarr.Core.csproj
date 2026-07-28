@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      netstandard2.0, not net8.0, and not by accident: this assembly is
+      referenced by the UWP application head, and UWP (UAP 10.0.17763,
+      compiled ahead-of-time by .NET Native) consumes netstandard2.0 and
+      nothing newer. Targeting anything later would build fine here on
+      Linux and then fail to reference from Playarr.Xbox on Windows: the
+      slowest possible way to discover the constraint.
+
+      Everything in this project is therefore deliberately I/O-and-logic
+      only, with no XAML, no WinRT, and no Windows.* namespace anywhere. It
+      is the whole reason the Xbox client can be developed and tested on a
+      Linux workstation while only the thin XAML head needs Windows.
+    -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <RootNamespace>Playarr.Core</RootNamespace>
+    <AssemblyName>Playarr.Core</AssemblyName>
+    <Description>
+      Playarr for Xbox: portable client core. Typed Playarr API client,
+      RFC 8628 device authorization, session/token persistence boundaries,
+      known-server-group failover, and the Xbox playback capability
+      profile. Mirrors clients/ios/Sources/PlayarrKit.
+    </Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!--
+      CS1591 is "missing XML comment for a publicly visible member". The
+      documentation file is still generated and the types that carry real
+      decisions are documented heavily; what this suppresses is the demand
+      for a comment on every wire-model property, where the JsonProperty
+      name already says everything there is to say.
+    -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Newtonsoft rather than System.Text.Json. STJ works on netstandard2.0,
+      but UWP's .NET Native toolchain compiles ahead-of-time and prunes
+      reflection metadata, which STJ's reflection-based serializer depends
+      on unless every type goes through the source generator. Newtonsoft is
+      the serializer UWP media clients have shipped on for years, and the
+      wire contract here is small and fully attributed either way.
+    -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+</Project>

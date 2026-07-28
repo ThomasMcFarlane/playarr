@@ -1,0 +1,14 @@
+{
+  "name": "harmony-client-tools",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline Node-based validation tooling for the Playarr HarmonyOS NEXT client (brief section 7.2, Tier 0b -- `just harmony-test`).",
+  "scripts": {
+    "test": "node run-core-tests.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "typescript": "5.6.3"
+  }
+}

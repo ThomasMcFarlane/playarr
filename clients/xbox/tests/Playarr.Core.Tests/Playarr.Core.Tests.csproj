@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      net8.0, not netstandard2.0: this project only has to run the tests, and
+      it runs them on the Linux workstation and on the CI runner rather than
+      on a console. Playarr.Core stays netstandard2.0 for the UWP head's
+      benefit and is referenced from here unchanged.
+    -->
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Playarr.Core.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Playarr.Core/Playarr.Core.csproj" />
+  </ItemGroup>
+
+</Project>

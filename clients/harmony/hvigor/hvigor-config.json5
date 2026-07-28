@@ -1,0 +1,16 @@
+{
+  "modelVersion": "5.0.0",
+  "dependencies": {
+    // These two versions must match the Command Line Tools version fetched
+    // by scripts/fetch-sdk.sh: bumping one without the other breaks Tier 1.
+    "@ohos/hvigor": "5.0.5",
+    "@ohos/hvigor-ohos-plugin": "5.0.5"
+  },
+  "execution": {
+    // Load-bearing: with typeCheck true, `assembleHap` performs real ArkTS
+    // type checking and fails the build on type errors (see brief §7.3).
+    "typeCheck": true,
+    "analyze": "normal",
+    "daemon": true
+  }
+}

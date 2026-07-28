@@ -1,0 +1,103 @@
+<Page
+    x:Class="Playarr.Xbox.Views.LoginPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Playarr.Xbox.Views"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <!--
+        The reference screen every other page in this app should follow
+        structurally. See LoginPage.xaml.cs's type-level remarks for the
+        exact pattern — summarised here: every dynamic value on this page
+        is a plain x:Name'd element pushed to from code-behind's Render();
+        there is no {x:Bind} and no IValueConverter anywhere in this project.
+    -->
+    <Grid>
+        <StackPanel
+            x:Name="ContentPanel"
+            MaxWidth="720"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Spacing="24">
+
+            <TextBlock
+                Text="Playarr for Xbox"
+                Style="{StaticResource TitleTextBlockStyle}"
+                HorizontalAlignment="Center" />
+
+            <!-- Server-address entry. Visible when signed out, or after a pairing failure. -->
+            <StackPanel x:Name="ServerPanel" Spacing="12">
+                <TextBlock Text="Playarr server address" Style="{StaticResource BodyTextBlockStyle}" />
+                <TextBox
+                    x:Name="ServerAddressBox"
+                    InputScope="Url"
+                    PlaceholderText="http://your-server:8484" />
+                <TextBlock
+                    x:Name="ServerErrorText"
+                    Foreground="{ThemeResource SystemControlErrorTextForegroundBrush}"
+                    Visibility="Collapsed" />
+                <Button
+                    x:Name="ConnectButton"
+                    Content="Connect"
+                    HorizontalAlignment="Center"
+                    Click="ConnectButton_Click" />
+            </StackPanel>
+
+            <!-- Pairing progress / device-code display. Visible only while StartPairingAsync is in flight. -->
+            <StackPanel x:Name="PairingPanel" Spacing="16" Visibility="Collapsed">
+                <ProgressRing x:Name="PairingProgressRing" IsActive="False" HorizontalAlignment="Center" />
+                <TextBlock
+                    x:Name="PairingStatusText"
+                    Style="{StaticResource BodyTextBlockStyle}"
+                    HorizontalAlignment="Center" />
+
+                <StackPanel x:Name="DeviceCodePanel" Spacing="8" Visibility="Collapsed">
+                    <TextBlock
+                        Text="On your phone or computer, go to:"
+                        HorizontalAlignment="Center"
+                        Style="{StaticResource BodyTextBlockStyle}" />
+                    <TextBlock
+                        x:Name="VerificationUriText"
+                        HorizontalAlignment="Center"
+                        Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <TextBlock
+                        Text="and enter this code:"
+                        HorizontalAlignment="Center"
+                        Style="{StaticResource BodyTextBlockStyle}" />
+                    <TextBlock
+                        x:Name="UserCodeText"
+                        HorizontalAlignment="Center"
+                        FontSize="64"
+                        FontWeight="Bold"
+                        FontFamily="Consolas" />
+                    <!--
+                        Future enhancement: render VerificationUriComplete as a QR
+                        code image instead of / alongside this text — no QR-image
+                        library is referenced by this project yet, so this is
+                        deliberately text-only for now.
+                    -->
+                    <TextBlock
+                        x:Name="VerificationUriCompleteText"
+                        HorizontalAlignment="Center"
+                        Opacity="0.7"
+                        Style="{StaticResource CaptionTextBlockStyle}" />
+                </StackPanel>
+
+                <Button
+                    x:Name="CancelPairingButton"
+                    Content="Cancel"
+                    HorizontalAlignment="Center"
+                    Click="CancelPairingButton_Click" />
+            </StackPanel>
+
+            <TextBlock
+                x:Name="FailureText"
+                Foreground="{ThemeResource SystemControlErrorTextForegroundBrush}"
+                HorizontalAlignment="Center"
+                Visibility="Collapsed" />
+        </StackPanel>
+    </Grid>
+</Page>

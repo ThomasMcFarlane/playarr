@@ -1,0 +1,30 @@
+# .NET build output
+bin/
+obj/
+*.user
+*.suo
+
+# MSIX / UWP packaging output. `AppPackages/` holds the produced .msix and
+# its signing sidecars, and `BundleArtifacts/` the intermediate bundle
+# manifests -- both are build artefacts, and neither is reproducible input.
+AppPackages/
+BundleArtifacts/
+*.appx
+*.appxbundle
+*.appxupload
+*.msix
+*.msixbundle
+*.msixupload
+
+# Signing material. A code-signing certificate or private key must never be
+# committed -- CI restores one from a base64 secret (see AGENTS.md and the
+# android-ci.yml precedent). The temporary certificate Visual Studio
+# generates for a new UWP project is caught by the same rule.
+*.pfx
+*.cer
+*.snk
+*_TemporaryKey.pfx
+
+# The generated web payload staged into the package by the build. Its
+# canonical source is the shared client workspace, not this directory.
+src/Playarr.Xbox/WebPayload/

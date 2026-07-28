@@ -1,0 +1,308 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Legacy (non-SDK-style) UWP project format — deliberate, not an oversight.
+  UAP 10.0 application heads still need the classic project system as of
+  this writing: SDK-style UWP support in `dotnet build`/MSBuild is
+  incomplete for AppX/MSIX packaging, the .NET Native toolchain, and the
+  WinRT XAML compiler this project needs (Microsoft.Windows.UI.Xaml.CSharp.targets,
+  imported at the bottom of this file, only works from inside a full Visual
+  Studio + Windows 10 SDK install). This is why Playarr.Core is SDK-style
+  (Microsoft.NET.Sdk, netstandard2.0) and this project is not — see
+  ../Playarr.Core/Playarr.Core.csproj's own top-of-file comment for the
+  other half of that split. As a direct consequence: this project cannot be
+  built with the `dotnet` CLI on any platform, and specifically cannot be
+  built at all on this Linux workstation, which has neither MSBuild nor the
+  Windows 10 SDK nor the UWP Visual Studio workload. It can only be opened,
+  restored, and built from Visual Studio on Windows.
+-->
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <!--
+    Directory.Build.props (../../Directory.Build.props) is picked up
+    automatically by the Microsoft.Common.props import above — MSBuild
+    walks up the directory tree for it on its own; no explicit <Import> of
+    it belongs here (adding one would double-import it).
+  -->
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x86'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\x86\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
+    <NoWarn>;2008</NoWarn>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <ErrorReport>prompt</ErrorReport>
+    <Optimize>false</Optimize>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x86'">
+    <OutputPath>bin\x86\Release\</OutputPath>
+    <DefineConstants>TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
+    <NoWarn>;2008</NoWarn>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <ErrorReport>prompt</ErrorReport>
+    <Prefer32Bit>true</Prefer32Bit>
+    <UseDotNetNativeToolchain>true</UseDotNetNativeToolchain>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\x64\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
+    <NoWarn>;2008</NoWarn>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <ErrorReport>prompt</ErrorReport>
+    <Optimize>false</Optimize>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+    <OutputPath>bin\x64\Release\</OutputPath>
+    <DefineConstants>TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
+    <NoWarn>;2008</NoWarn>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <ErrorReport>prompt</ErrorReport>
+    <Prefer32Bit>true</Prefer32Bit>
+    <UseDotNetNativeToolchain>true</UseDotNetNativeToolchain>
+  </PropertyGroup>
+
+  <!--
+    x64 is what every current Xbox console actually runs (One/One S/One X/
+    Series S/Series X are all AMD64); x86 and ARM64 are kept alongside it
+    purely so this same head still builds and runs on a desktop or
+    Windows-on-ARM debug session, and so a future Store submission can
+    bundle all three in one .msixbundle without a project-shape change.
+  -->
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|ARM64'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\ARM64\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
+    <NoWarn>;2008</NoWarn>
+    <DebugType>full</DebugType>
+    <PlatformTarget>ARM64</PlatformTarget>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <ErrorReport>prompt</ErrorReport>
+    <Optimize>false</Optimize>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|ARM64'">
+    <OutputPath>bin\ARM64\Release\</OutputPath>
+    <DefineConstants>TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
+    <NoWarn>;2008</NoWarn>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>ARM64</PlatformTarget>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <ErrorReport>prompt</ErrorReport>
+    <Prefer32Bit>true</Prefer32Bit>
+    <UseDotNetNativeToolchain>true</UseDotNetNativeToolchain>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <MinimumVisualStudioVersion>14</MinimumVisualStudioVersion>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x64</Platform>
+    <ProjectGuid>{7C1B1C2E-8B2C-4B7A-9C2F-2E9E9F0B7A1D}</ProjectGuid>
+    <OutputType>AppContainerExe</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>Playarr.Xbox</RootNamespace>
+    <AssemblyName>Playarr.Xbox</AssemblyName>
+    <DefaultLanguage>en-US</DefaultLanguage>
+    <TargetPlatformIdentifier>UAP</TargetPlatformIdentifier>
+    <!--
+      TargetPlatformVersion/TargetPlatformMinVersion: real, commonly-used
+      UAP 10.0 values — 10.0.19041.0 ("20H1"/Windows 10 SDK 19041, a widely
+      installed recent SDK) as the version this project is compiled against,
+      and 10.0.17763.0 (the October 2018 Update / "RS5", a common
+      wide-compatibility floor that predates every current Xbox console
+      generation) as the minimum OS this package installs on. This
+      environment has no Windows 10 SDK installed to confirm either value
+      against, so both should be re-verified against a live Visual Studio +
+      Windows SDK install before release — and kept identical to the
+      matching values in Package.appxmanifest's Dependencies/TargetDeviceFamily.
+    -->
+    <TargetPlatformVersion>10.0.19041.0</TargetPlatformVersion>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <EnableDotNetNativeCompatibleProfile>true</EnableDotNetNativeCompatibleProfile>
+    <AppxDefaultResourceQualifiers>en-US</AppxDefaultResourceQualifiers>
+    <AppxBundle>Always</AppxBundle>
+    <AppxBundlePlatforms>x86|x64|ARM64</AppxBundlePlatforms>
+    <PackageCertificateKeyFile>Playarr.Xbox_TemporaryKey.pfx</PackageCertificateKeyFile>
+    <!--
+      No PackageCertificateKeyFile is committed (and *_TemporaryKey.pfx is
+      .gitignore'd, see ../../.gitignore) — Visual Studio generates one on
+      this project's first build/package if none exists. That self-signed
+      key is exactly the Dev Mode / sideload placeholder Package.appxmanifest's
+      Identity/Publisher comment describes; a real Store submission is
+      signed by the Store itself instead, not by this key at all.
+    -->
+    <GenerateAppInstallerFile>false</GenerateAppInstallerFile>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Brings in the UWP API surface (Windows.*, the WinRT XAML compiler, and
+      the .NET Native build tooling) as a single package reference rather
+      than a pile of individual framework/winmd References — the standard
+      shape for a UWP application head since PackageReference support landed
+      in the legacy (non-SDK-style) csproj format. 6.2.14 is a realistic
+      recent version as of this writing, but this environment has no way to
+      resolve or restore NuGet packages against the real UWP package feed to
+      confirm it — re-verify (and bump to whatever newer 6.x has shipped)
+      the first time this project is opened in Visual Studio.
+    -->
+    <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform" Version="6.2.14" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Playarr.Core\Playarr.Core.csproj">
+      <Project>{2770DFC1-D7C0-4D0D-B587-E609E764CA64}</Project>
+      <Name>Playarr.Core</Name>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ApplicationDefinition Include="App.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </ApplicationDefinition>
+    <Compile Include="App.xaml.cs">
+      <DependentUpon>App.xaml</DependentUpon>
+    </Compile>
+
+    <Compile Include="ObservableObject.cs" />
+    <Compile Include="PairingState.cs" />
+    <Compile Include="XboxAppEnvironment.cs" />
+
+    <Compile Include="Properties\AssemblyInfo.cs" />
+
+    <Compile Include="Services\NavigationService.cs" />
+    <Compile Include="Services\PasswordVaultTokenStore.cs" />
+    <Compile Include="Services\LocalSettingsKnownServerGroupStore.cs" />
+    <Compile Include="Services\XboxModelDetector.cs" />
+
+    <Compile Include="ViewModels\ViewModelBase.cs" />
+    <Compile Include="ViewModels\LoginViewModel.cs" />
+    <Compile Include="ViewModels\PlayerViewModel.cs" />
+    <Compile Include="ViewModels\ProfilesViewModel.cs" />
+    <Compile Include="ViewModels\HomeViewModel.cs" />
+    <Compile Include="ViewModels\LibraryViewModel.cs" />
+    <Compile Include="ViewModels\SearchViewModel.cs" />
+    <Compile Include="ViewModels\WorkDetailViewModel.cs" />
+    <Compile Include="ViewModels\SettingsViewModel.cs" />
+
+    <Page Include="Views\LoginPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Compile Include="Views\LoginPage.xaml.cs">
+      <DependentUpon>LoginPage.xaml</DependentUpon>
+    </Compile>
+
+    <Page Include="Views\HomePage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Compile Include="Views\HomePage.xaml.cs">
+      <DependentUpon>HomePage.xaml</DependentUpon>
+    </Compile>
+
+    <Compile Include="Views\PlayerNavigationParameter.cs" />
+    <Page Include="Views\PlayerPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Compile Include="Views\PlayerPage.xaml.cs">
+      <DependentUpon>PlayerPage.xaml</DependentUpon>
+    </Compile>
+
+    <Compile Include="Views\CatalogTileFactory.cs" />
+
+    <Page Include="Views\ProfilesPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Compile Include="Views\ProfilesPage.xaml.cs">
+      <DependentUpon>ProfilesPage.xaml</DependentUpon>
+    </Compile>
+
+    <Page Include="Views\LibraryPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Compile Include="Views\LibraryPage.xaml.cs">
+      <DependentUpon>LibraryPage.xaml</DependentUpon>
+    </Compile>
+
+    <Page Include="Views\SearchPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Compile Include="Views\SearchPage.xaml.cs">
+      <DependentUpon>SearchPage.xaml</DependentUpon>
+    </Compile>
+
+    <Page Include="Views\WorkDetailPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Compile Include="Views\WorkDetailPage.xaml.cs">
+      <DependentUpon>WorkDetailPage.xaml</DependentUpon>
+    </Compile>
+
+    <Page Include="Views\SettingsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Compile Include="Views\SettingsPage.xaml.cs">
+      <DependentUpon>SettingsPage.xaml</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <AppxManifest Include="Package.appxmanifest">
+      <SubType>Designer</SubType>
+    </AppxManifest>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Referenced by Package.appxmanifest (Properties/Logo, uap:VisualElements,
+      uap:DefaultTile, uap:SplashScreen) but not created here — see that
+      file's own comment. These Content entries are kept anyway so the
+      project's file list structurally matches what the manifest expects;
+      a designer (or a `devdeploy`-style asset pipeline) still needs to drop
+      real PNGs at these paths before this project can actually package.
+    -->
+    <Content Include="Assets\Square150x150Logo.png" />
+    <Content Include="Assets\Square44x44Logo.png" />
+    <Content Include="Assets\StoreLogo.png" />
+    <Content Include="Assets\Wide310x150Logo.png" />
+    <Content Include="Assets\SplashScreen.png" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <!--
+      {A5A43C5B-DE2A-4C0C-9213-0A381AF9435A} = Windows Store App (Universal)
+      project subtype, paired with the standard C# project type guid — the
+      pair Visual Studio itself emits for a UWP app project.
+    -->
+    <ProjectTypeGuids>{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+  </PropertyGroup>
+
+  <!--
+    Essential, not boilerplate to trim: this is what actually compiles the
+    XAML pages into code (App.xaml/LoginPage.xaml/HomePage.xaml above) and
+    wires up the .NET Native / AppX packaging targets. Only resolves inside
+    a full Visual Studio + Windows 10 SDK install — see this file's
+    top-of-file comment.
+  -->
+  <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
+</Project>

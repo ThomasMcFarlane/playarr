@@ -1,0 +1,58 @@
+{
+  "app": {
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          // Real signing material never lives in the repo (see brief §10, risk R9).
+          // Populate these paths locally from your own DevEco Studio / AppGallery
+          // Connect debug identity before building a signed artefact:
+          // "storeFile": "/absolute/path/to/your/debug.p12",
+          // "storePassword": "<from local secret store, never committed>",
+          // "certpath": "/absolute/path/to/your/debug.cer",
+          // "keyAlias": "debug",
+          // "keyPassword": "<from local secret store, never committed>",
+          // "profile": "/absolute/path/to/your/debug.p7b",
+          // "signAlg": "SHA256withECDSA"
+        }
+      }
+    ],
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "compatibleSdkVersion": "5.0.0(12)",
+        "compileSdkVersion": "6.1.1(24)",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true
+          }
+        }
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug"
+      },
+      {
+        "name": "release"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    }
+  ]
+}

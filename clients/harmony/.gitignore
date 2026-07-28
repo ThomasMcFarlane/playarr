@@ -1,0 +1,23 @@
+# Build output
+build/
+.hvigor/
+.cxx/
+.clangd/
+
+# Dependency caches
+node_modules/
+oh_modules/
+
+# Packaged artefacts
+*.hap
+*.app
+*.har
+*.hsp
+
+# Local machine config
+local.properties
+
+# Release signing material — never lives in the repo (see brief §10, R9)
+*.p12
+*.cer
+*.p7b
