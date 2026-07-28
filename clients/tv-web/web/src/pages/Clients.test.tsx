@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Navigate, Route, Routes } from "react-router-dom";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { LanguageProvider } from "../lib/i18n/LanguageProvider";
 import { ClientDetailsPage, ClientsPage } from "./Clients";
@@ -24,9 +24,16 @@ function renderPage(page: React.ReactNode, path: string): string {
   );
 }
 
+/**
+ * The bare index redirects to the first client's own URL -- a coverflow
+ * always has something centred, so there's no distinct no-selection state
+ * to render -- so every route (including "/clients" itself) is rendered
+ * through both routes to let that redirect resolve.
+ */
 function renderClientRoute(path: string): string {
   return renderPage(
     <Routes>
+      <Route path="/clients" element={<ClientsPage />} />
       <Route path="/clients/:clientId" element={<ClientDetailsPage />} />
     </Routes>,
     path
@@ -34,22 +41,49 @@ function renderClientRoute(path: string): string {
 }
 
 /**
- * How many platform links the index renders. Every client URL must show the
- * same complete selector, so the per-route assertions compare against this
+ * How many platform links the coverflow renders. Every client URL must show
+ * the same complete set, so the per-route assertions compare against this
  * rather than a literal -- adding a client should not require editing counts
  * scattered through this file.
  */
 function allClientLinkCount(): number {
-  return (renderPage(<ClientsPage />, "/clients").match(/href="\/clients\//g) ?? [])
+  return (renderClientRoute("/clients/vidaa").match(/href="\/clients\//g) ?? [])
     .length;
 }
 
 describe("ClientsPage", () => {
-  it("renders downloadable clients as a profile-style horizontal selector", () => {
-    const markup = renderPage(<ClientsPage />, "/clients");
+  it("redirects the bare index to the first client's own URL", () => {
+    // react-router's <Navigate> performs its redirect in an effect, which a
+    // single renderToStaticMarkup pass never commits -- so the redirect
+    // target is asserted directly off the element it renders, not by
+    // comparing rendered markup.
+    const redirect = ClientsPage() as React.ReactElement<
+      React.ComponentProps<typeof Navigate>
+    >;
 
-    expect(markup).toContain('data-navigation-scroll-key="clients:index"');
+    expect(redirect.props.to).toBe("/clients/vidaa");
+    expect(redirect.props.replace).toBe(true);
+  });
+
+  it("wraps arrow-key navigation from the first client to the last and back", () => {
+    const markup = renderClientRoute("/clients/vidaa");
+
+    expect(markup).toMatch(
+      /id="client-vidaa"[^>]*data-tv-edge-target-left="#client-firetv"/
+    );
+    expect(markup).toMatch(
+      /id="client-firetv"[^>]*data-tv-edge-target-right="#client-vidaa"/
+    );
+    expect(markup).not.toContain("data-tv-edge-stop-left");
+    expect(markup).not.toContain("data-tv-edge-stop-right");
+  });
+
+  it("renders downloadable clients as a profile-style coverflow", () => {
+    const markup = renderClientRoute("/clients/vidaa");
+
+    expect(markup).toContain('data-navigation-scroll-key="clients:vidaa"');
     expect(markup).toContain('data-navigation-scroll-key="clients:platforms"');
+    expect(markup).toMatch(/class="client-choice is-experimental is-vidaa is-active"/);
     expect(markup).toContain('data-tv-scroll-axis="horizontal"');
     expect(markup).toContain('class="profiles-page profile-auth-page clients-shell"');
     expect(markup).toContain('class="tv-stage-chrome"');
@@ -76,8 +110,6 @@ describe("ClientsPage", () => {
     expect(markup).toContain("Chromecast built-in devices");
     expect(markup).toContain("PlayStation 5 and PlayStation 4");
     expect(markup).toContain("Amazon Fire TV devices");
-    expect(markup.match(/data-tv-edge-stop-left="true"/g)).toHaveLength(1);
-    expect(markup.match(/data-tv-edge-stop-right="true"/g)).toHaveLength(1);
     expect(markup).toContain("Apple TV");
     expect(markup).toContain("iPhone, iPad and Apple TV");
     expect(markup).toContain('id="client-apple"');
@@ -207,20 +239,20 @@ describe("ClientsPage", () => {
     );
     expect(webosMarkup).toContain("webOS 23 or newer");
     expect(webosMarkup).toContain(
-      "pnpm --filter @streamarr-tv/app-webos run package:ipk"
+      "pnpm --filter @playarr-tv/app-webos run package:ipk"
     );
     expect(webosMarkup).toContain("ares-setup-device --add playarr-tv");
     expect(webosMarkup).toContain(
       "ares-novacom --device playarr-tv --getkey"
     );
     expect(webosMarkup).toContain(
-      "ares-launch --device playarr-tv com.streamarr.tv"
+      "ares-launch --device playarr-tv com.playarr.tv"
     );
     expect(webosMarkup).toContain(
       'href="https://webostv.developer.lge.com/develop/getting-started/developer-mode-app"'
     );
     expect(webosMarkup).toContain(
-      'href="https://github.com/ThomasMcFarlane/streamarr/tree/main/clients/tv-web/apps/tv-webos"'
+      'href="https://github.com/ThomasMcFarlane/playarr/tree/main/clients/tv-web/apps/tv-webos"'
     );
 
     expect(tizenMarkup).toContain('data-navigation-scroll-key="clients:tizen"');
@@ -239,13 +271,13 @@ describe("ClientsPage", () => {
     );
     expect(tizenMarkup).toContain("sdb connect &lt;TV-IP&gt;");
     expect(tizenMarkup).toContain(
-      "tizen run -p StrmarrTV1.Streamarr -t &lt;target-name&gt;"
+      "tizen run -p StrmarrTV1.Playarr Server -t &lt;target-name&gt;"
     );
     expect(tizenMarkup).toContain(
       'href="https://developer.samsung.com/smarttv/develop/getting-started/using-sdk/tv-device.html"'
     );
     expect(tizenMarkup).toContain(
-      'href="https://github.com/ThomasMcFarlane/streamarr/tree/main/clients/tv-web/apps/tv-tizen"'
+      'href="https://github.com/ThomasMcFarlane/playarr/tree/main/clients/tv-web/apps/tv-tizen"'
     );
 
     for (const markup of [webosMarkup, tizenMarkup]) {

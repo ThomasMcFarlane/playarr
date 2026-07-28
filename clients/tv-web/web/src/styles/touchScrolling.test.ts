@@ -21,15 +21,11 @@ describe("native scroll containers", () => {
     expect(declarationsMissingTouchScrolling(clientsCss)).toEqual([]);
   });
 
-  it("keeps the sign-in, sign-up, and Clients scroll root touch-scrollable", () => {
+  it("keeps the sign-in and sign-up scroll root touch-scrollable", () => {
     const authScrollRule = globalCss.match(/\.profile-auth-scroll\s*\{(?<declarations>[^}]*)\}/)
-      ?.groups?.declarations;
-    const clientsRowRule = clientsCss.match(/\.clients-row-window\s*\{(?<declarations>[^}]*)\}/)
       ?.groups?.declarations;
 
     expect(authScrollRule).toContain("overflow-y: auto");
     expect(authScrollRule).toContain("-webkit-overflow-scrolling: touch");
-    expect(clientsRowRule).toContain("overflow-x: auto");
-    expect(clientsRowRule).toContain("-webkit-overflow-scrolling: touch");
   });
 });

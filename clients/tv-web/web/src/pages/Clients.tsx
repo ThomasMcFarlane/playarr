@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import {
   Link,
   Navigate,
@@ -7,6 +7,7 @@ import {
   useParams,
 } from "react-router-dom";
 import { TvStageChrome } from "../components/tv/TvStage";
+import { circularOffset, coverflowDepth, coverflowPosition } from "../lib/coverflow";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
@@ -220,25 +221,43 @@ function PublicClientsLayout({
   );
 }
 
-function ClientsSelector({ activeClientId }: { activeClientId?: string }) {
+function coverflowTileStyle(offset: number): CSSProperties {
+  const depth = coverflowDepth(offset);
+  return {
+    "--cf-position": coverflowPosition(offset),
+    transform: `translateX(calc(var(--cf-position) * var(--cf-spacing))) rotateY(calc(var(--cf-position) * var(--cf-tilt) * -1)) scale(${depth.scale})`,
+    zIndex: depth.zIndex,
+  } as CSSProperties;
+}
+
+function ClientsSelector({ activeClientId }: { activeClientId: string }) {
   const { t } = useLanguage();
+  const navigate = useNavigate();
+  const total = PLAYARR_CLIENTS.length;
+  const selectedIndex = Math.max(
+    0,
+    PLAYARR_CLIENTS.findIndex((client) => client.id === activeClientId)
+  );
 
   return (
     <section
-      className="clients-row-window"
+      className="clients-coverflow"
       aria-label={t("pages.clients.gridAriaLabel")}
       data-tv-scroll-container
       data-tv-scroll-axis="horizontal"
       data-navigation-scroll-key="clients:platforms"
     >
-      <div className="clients-row">
+      <div className="clients-coverflow-track">
         {PLAYARR_CLIENTS.map((client, index) => {
           const isActive = client.id === activeClientId;
+          const previous = PLAYARR_CLIENTS[(index - 1 + total) % total];
+          const next = PLAYARR_CLIENTS[(index + 1) % total];
 
           return (
             <article
               className={`client-choice is-${client.status} is-${client.icon}${isActive ? " is-active" : ""}`}
               key={client.id}
+              style={coverflowTileStyle(circularOffset(index, selectedIndex, total))}
             >
               <Link
                 id={`client-${client.id}`}
@@ -246,22 +265,15 @@ function ClientsSelector({ activeClientId }: { activeClientId?: string }) {
                 to={`/clients/${client.id}`}
                 aria-label={`${t(client.nameKey)} — ${t(client.platformKey)}`}
                 aria-current={isActive ? "page" : undefined}
-                data-tv-focus-default={
-                  isActive || (!activeClientId && index === 0) ? true : undefined
-                }
+                data-tv-focus-default={isActive ? true : undefined}
                 data-navigation-focus-key={`clients:${client.id}`}
-                data-tv-edge-stop-left={index === 0 ? true : undefined}
-                data-tv-edge-stop-right={
-                  index === PLAYARR_CLIENTS.length - 1 ? true : undefined
-                }
-                data-tv-edge-target-left={
-                  index > 0 ? `#client-${PLAYARR_CLIENTS[index - 1]?.id}` : undefined
-                }
-                data-tv-edge-target-right={
-                  index < PLAYARR_CLIENTS.length - 1
-                    ? `#client-${PLAYARR_CLIENTS[index + 1]?.id}`
-                    : undefined
-                }
+                data-tv-edge-target-left={`#client-${previous?.id}`}
+                data-tv-edge-target-right={`#client-${next?.id}`}
+                onFocus={() => {
+                  if (client.id !== activeClientId) {
+                    navigate(`/clients/${client.id}`, { replace: true });
+                  }
+                }}
               >
                 <span
                   className="client-platform-icon"
@@ -271,8 +283,6 @@ function ClientsSelector({ activeClientId }: { activeClientId?: string }) {
                   <ClientPlatformIcon icon={client.icon} />
                 </span>
               </Link>
-              <strong>{t(client.nameKey)}</strong>
-              <small>{t(client.platformKey)}</small>
             </article>
           );
         })}
@@ -281,25 +291,13 @@ function ClientsSelector({ activeClientId }: { activeClientId?: string }) {
   );
 }
 
+/**
+ * A coverflow always has something centred, so the bare index collapses
+ * onto the first client's own URL rather than rendering a distinct
+ * no-selection state.
+ */
 export function ClientsPage() {
-  const { t } = useLanguage();
-  useDocumentTitle(t("pages.clients.documentTitle"));
-
-  return (
-    <PublicClientsLayout backTo="/profiles" scrollKey="clients:index">
-      <section className="clients-hero" aria-labelledby="clients-title">
-        <p className="page-kicker">{t("pages.clients.kicker")}</p>
-        <h1 className="auth-title" id="clients-title">
-          {t("pages.clients.title")}
-        </h1>
-      </section>
-
-      <ClientsSelector />
-
-      <p className="clients-preview-note">{t("pages.clients.downloadNote")}</p>
-      <p className="clients-footer">{t("pages.clients.footer")}</p>
-    </PublicClientsLayout>
-  );
+  return <Navigate to={`/clients/${PLAYARR_CLIENTS[0]?.id}`} replace />;
 }
 
 export function AndroidDownloadDetails() {
@@ -479,21 +477,21 @@ interface SmartTvInstallConfig {
 
 const SMART_TV_INSTALL_CONFIG: Record<SmartTvClientId, SmartTvInstallConfig> = {
   webos: {
-    appId: "com.streamarr.tv",
+    appId: "com.playarr.tv",
     downloadHref: `${PLAYARR_PUBLIC_ORIGIN}/downloads/webos/playarr-webos.ipk`,
     officialGuideHref:
       "https://webostv.developer.lge.com/develop/getting-started/developer-mode-app",
     sourceHref:
-      "https://github.com/ThomasMcFarlane/streamarr/tree/main/clients/tv-web/apps/tv-webos",
+      "https://github.com/ThomasMcFarlane/playarr/tree/main/clients/tv-web/apps/tv-webos",
     steps: [
       [],
       [
-        "git clone https://github.com/ThomasMcFarlane/streamarr.git",
-        "cd streamarr/clients/tv-web",
+        "git clone https://github.com/ThomasMcFarlane/playarr.git",
+        "cd playarr/clients/tv-web",
         "npm install -g pnpm@11.13.0",
         "pnpm install --frozen-lockfile",
         "npm install -g @webos-tools/cli",
-        "pnpm --filter @streamarr-tv/app-webos run package:ipk",
+        "pnpm --filter @playarr-tv/app-webos run package:ipk",
       ],
       [
         'ares-setup-device --add playarr-tv -i "host=<TV-IP>" -i "port=9922" -i "username=prisoner"',
@@ -501,27 +499,27 @@ const SMART_TV_INSTALL_CONFIG: Record<SmartTvClientId, SmartTvInstallConfig> = {
         "ares-device --system-info --device playarr-tv",
       ],
       [
-        "ares-install --device playarr-tv apps/tv-webos/out/com.streamarr.tv_*_all.ipk",
-        "ares-launch --device playarr-tv com.streamarr.tv",
+        "ares-install --device playarr-tv apps/tv-webos/out/com.playarr.tv_*_all.ipk",
+        "ares-launch --device playarr-tv com.playarr.tv",
       ],
     ],
   },
   tizen: {
-    appId: "StrmarrTV1.Streamarr",
+    appId: "StrmarrTV1.Playarr Server",
     downloadHref: `${PLAYARR_PUBLIC_ORIGIN}/downloads/tizen/playarr-tizen.wgt`,
     officialGuideHref:
       "https://developer.samsung.com/smarttv/develop/getting-started/using-sdk/tv-device.html",
     sourceHref:
-      "https://github.com/ThomasMcFarlane/streamarr/tree/main/clients/tv-web/apps/tv-tizen",
+      "https://github.com/ThomasMcFarlane/playarr/tree/main/clients/tv-web/apps/tv-tizen",
     steps: [
       [],
       [],
       [
-        "git clone https://github.com/ThomasMcFarlane/streamarr.git",
-        "cd streamarr/clients/tv-web",
+        "git clone https://github.com/ThomasMcFarlane/playarr.git",
+        "cd playarr/clients/tv-web",
         "npm install -g pnpm@11.13.0",
         "pnpm install --frozen-lockfile",
-        "pnpm --filter @streamarr-tv/app-tizen... run build",
+        "pnpm --filter @playarr-tv/app-tizen... run build",
         "tizen package -t wgt -s <certificate-profile> -- apps/tv-tizen/dist",
       ],
       [
@@ -529,7 +527,7 @@ const SMART_TV_INSTALL_CONFIG: Record<SmartTvClientId, SmartTvInstallConfig> = {
         "sdb devices",
         "tizen list tv",
         "tizen install -n <generated-package>.wgt -t <target-name> -- apps/tv-tizen/dist",
-        "tizen run -p StrmarrTV1.Streamarr -t <target-name>",
+        "tizen run -p StrmarrTV1.Playarr Server -t <target-name>",
       ],
     ],
   },
@@ -712,6 +710,13 @@ export function ClientDetailsPage() {
 
   return (
     <PublicClientsLayout backTo="/clients" scrollKey={`clients:${client.id}`}>
+      <section className="clients-hero" aria-labelledby="clients-title">
+        <p className="page-kicker">{t("pages.clients.kicker")}</p>
+        <h1 className="auth-title" id="clients-title">
+          {t("pages.clients.title")}
+        </h1>
+      </section>
+
       <ClientsSelector activeClientId={client.id} />
       <div className="client-details-content">
         {client.id === "vidaa" ? (
@@ -731,6 +736,8 @@ export function ClientDetailsPage() {
           <ClientOverviewDetails client={client} />
         )}
       </div>
+      <p className="clients-preview-note">{t("pages.clients.downloadNote")}</p>
+      <p className="clients-footer">{t("pages.clients.footer")}</p>
     </PublicClientsLayout>
   );
 }
