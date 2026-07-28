@@ -1,9 +1,9 @@
 apiVersion: getambassador.io/v3alpha1
 kind: Mapping
 metadata:
-  name: ${PROJECT}-admin
+  name: playarr-admin
   namespace: dev
 spec:
-  hostname: admin.${PROJECT}.localhost
+  hostname: playarr-admin.localhost
   prefix: /
-  service: ${PROJECT}-admin.dev:80
+  service: playarr-admin.dev:80

@@ -1,19 +1,24 @@
+# Deliberately not templated with ${PROJECT}: the admin panel is branded and
+# addressed as its own product surface (playarr-admin.*), not a sub-route of
+# the "tv-web" monorepo's primary devdeploy project name. Rebuild + push
+# localhost:5000/tv-web-admin:<tag> by hand (see admin/Dockerfile), then
+# `devdeploy` from clients/tv-web/ applies this alongside the primary target.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ${PROJECT}-admin
+  name: playarr-admin
   namespace: dev
   labels:
-    app: ${PROJECT}-admin
+    app: playarr-admin
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: ${PROJECT}-admin
+      app: playarr-admin
   template:
     metadata:
       labels:
-        app: ${PROJECT}-admin
+        app: playarr-admin
     spec:
       containers:
         - name: app
