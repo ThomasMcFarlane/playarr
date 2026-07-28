@@ -1,0 +1,31 @@
+{
+  "name": "streamarr-site",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Public marketing and documentation site for Streamarr and the Playarr clients.",
+  "type": "module",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check && node scripts/check-copy.mjs",
+    "typecheck": "astro check",
+    "lint": "node scripts/check-copy.mjs",
+    "lint:copy": "node scripts/check-copy.mjs",
+    "lint:copy:strict": "node scripts/check-copy.mjs --strict"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "^7.0.4",
+    "@astrojs/sitemap": "^3.7.3",
+    "astro": "^7.1.4"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${PROJECT}
+  namespace: dev
+  labels:
+    app: ${PROJECT}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${PROJECT}
+  template:
+    metadata:
+      labels:
+        app: ${PROJECT}
+    spec:
+      containers:
+        - name: app
+          image: localhost:5000/${PROJECT}:${TAG}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: ${PORT}
+          # Astro's dev server watches these, so edits on the workstation show
+          # up in the browser without rebuilding the image. Everything else
+          # (astro.config.mjs, package.json, node_modules) stays baked in and
+          # still needs a `devdeploy` run when it changes.
+          volumeMounts:
+            - name: site-src
+              mountPath: /app/src
+              readOnly: true
+            - name: site-public
+              mountPath: /app/public
+              readOnly: true
+      volumes:
+        # The k3s node is this workstation, so the source tree is reachable at
+        # its real path. This couples the deployment to one machine, which is
+        # the correct trade-off for a local-only dev convenience layer.
+        - name: site-src
+          hostPath:
+            path: /path/to/streamarr/site/src
+            type: Directory
+        - name: site-public
+          hostPath:
+            path: /path/to/streamarr/site/public
+            type: Directory

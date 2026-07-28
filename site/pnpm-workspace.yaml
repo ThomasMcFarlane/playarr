@@ -1,0 +1,8 @@
+# The marketing site is its own pnpm root, independent of the client workspace
+# under clients/tv-web. Only this file is needed: there are no child packages.
+#
+# pnpm 11 reads build-script approvals from here rather than package.json.
+# esbuild is Vite's bundler and must run its postinstall to place the platform
+# binary, otherwise the build fails to start.
+allowBuilds:
+  esbuild: true
