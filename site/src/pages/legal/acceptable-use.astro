@@ -1,0 +1,84 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import Section from '../../components/Section.astro'
+import { LINKS, SITE } from '../../consts'
+
+/*
+ * The canonical answer for support and issue triage. Written to be linked to
+ * rather than improvised in a reply — the TickBox judgment rested on a
+ * project's promotional and customer-support conduct, not on its code.
+ */
+---
+
+<BaseLayout
+  title="Acceptable use"
+  description="What Streamarr is for, what this project will not help with, and where responsibility sits for the media an operator stores and shares."
+>
+  <Section eyebrow="Legal" title="Acceptable use">
+    <div class="prose">
+      <p class="lede">
+        This page is short on purpose, and it is the project's settled position rather than one
+        maintainer's opinion on a given day.
+      </p>
+
+      <h2>What {SITE.name} is</h2>
+      <p>
+        {SITE.name} is a media server. It catalogues media that is already present on storage you
+        control, and streams it to client applications you run. That is the entirety of what it
+        does.
+      </p>
+
+      <h2>What it is not</h2>
+      <p>
+        {SITE.name} supplies no media, no sources of media, and no means of obtaining media. It
+        performs no indexing, ships nothing preconfigured that points at any external source, and
+        searches nothing outside your own library. It cannot get you a film you do not have.
+      </p>
+      <p>
+        Where it reads from library-management applications, it reads only what those applications
+        have already organised on your own storage — titles, file paths and metadata identifiers.
+      </p>
+
+      <h2>Your responsibility</h2>
+      <p>
+        You are responsible for the legality of what you store, play and share using this software,
+        under the law that applies to you. Running a server for other people, or joining servers
+        together, does not move that responsibility elsewhere. If you are unsure whether something
+        you hold may lawfully be shared with a particular person, the answer is to find out before
+        you share it.
+      </p>
+
+      <h2>What this project will not help with</h2>
+      <p>
+        Maintainers will not assist with obtaining media, will not discuss sources of media, and
+        will not accept contributions, documentation, issues or feature requests directed at those
+        ends. Requests of that kind will be closed with a link to this page. This is not
+        squeamishness — it is the line that keeps a neutral tool a neutral tool.
+      </p>
+
+      <h2>Reporting a concern</h2>
+      <p>
+        If you believe material connected to this project infringes your rights, or you have a
+        security concern, please <a href={LINKS.issues} rel="noopener">open an issue</a> or use the
+        contact route listed in the repository, and we will respond.
+      </p>
+
+      <h2>No warranty</h2>
+      <p>
+        This software is provided “as is”, without warranty of any kind, as set out in the
+        <a href="/legal/licences">MIT licence</a>.
+      </p>
+    </div>
+  </Section>
+</BaseLayout>
+
+<style>
+  .prose {
+    max-width: var(--width-prose);
+  }
+
+  .prose h2 {
+    margin-top: var(--space-7);
+    font-size: var(--text-xl);
+  }
+</style>

@@ -1,0 +1,153 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import Section from '../../components/Section.astro'
+import { LINKS, SITE } from '../../consts'
+
+/*
+ * Obligations page.
+ *
+ * The FFmpeg and TMDB notices below are required, not decorative. FFmpeg's
+ * compliance checklist names websites explicitly; TMDB's API terms specify the
+ * notice wording verbatim. Do not paraphrase either.
+ */
+---
+
+<BaseLayout
+  title="Licences & attribution"
+  description="Licensing for Streamarr and Playarr, the FFmpeg and TMDB notices the project is required to display, and its trademark and patent position."
+>
+  <Section eyebrow="Legal" title="Licences and attribution">
+    <div class="prose">
+      <h2 id="streamarr">Streamarr and Playarr</h2>
+      <p>
+        Streamarr's and Playarr's own source code is released under the MIT licence.
+      </p>
+      <blockquote>
+        <p>Copyright (c) 2026 Thomas McFarlane</p>
+        <p>
+          Permission is hereby granted, free of charge, to any person obtaining a copy of this
+          software and associated documentation files (the “Software”), to deal in the Software
+          without restriction, including without limitation the rights to use, copy, modify, merge,
+          publish, distribute, sublicense, and/or sell copies of the Software, and to permit
+          persons to whom the Software is furnished to do so, subject to the following conditions:
+        </p>
+        <p>
+          The above copyright notice and this permission notice shall be included in all copies or
+          substantial portions of the Software.
+        </p>
+        <p>
+          THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+          INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+          PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+          FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+          OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+          DEALINGS IN THE SOFTWARE.
+        </p>
+      </blockquote>
+      <p>
+        The full text is in the <a href={LINKS.licence} rel="noopener">repository</a>.
+      </p>
+
+      <h2 id="ffmpeg">FFmpeg</h2>
+      <p>
+        This is an important distinction and worth stating plainly: <strong>{SITE.name}'s own
+        source is MIT-licensed, but the published container images additionally bundle FFmpeg,
+        which is licensed under the GNU General Public Licence version 2 or later.</strong> The
+        image as a whole is therefore distributed subject to that licence.
+      </p>
+      <blockquote>
+        <p>
+          This software uses libraries from the FFmpeg project under the GNU General Public Licence
+          version 2 or later. FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg
+          project. {SITE.name} is not affiliated with, endorsed by, or the owner of FFmpeg.
+        </p>
+      </blockquote>
+      <p>
+        FFmpeg runs on the server as a separate process. It is <strong>not</strong> embedded in any
+        Playarr client application.
+      </p>
+      <p class="todo">
+        <strong>Corresponding source.</strong> Anyone distributing a Streamarr container image must
+        make the exact corresponding FFmpeg source, and the build configuration used, available
+        alongside the binaries. This page is where those links belong, per published image tag.
+        They are not yet published here — if you need them before they are, please
+        <a href={LINKS.issues} rel="noopener">open an issue</a>.
+      </p>
+
+      <h2 id="tmdb">TMDB</h2>
+      <blockquote>
+        <p>
+          This website uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise
+          approved by TMDB.
+        </p>
+      </blockquote>
+      <p>
+        Metadata identifiers and artwork reaching a Streamarr installation may originate with TMDB,
+        by way of the library-management tools it reads from. TMDB is not a partner, sponsor or
+        endorser of this project.
+      </p>
+
+      <h2 id="patents">Codecs and patents</h2>
+      <p>
+        Media codecs may be covered by patents in some jurisdictions. Nothing on this site, and no
+        licence granted by this project, conveys any patent rights. Deploying this software
+        commercially, or distributing builds of it, may require a separate patent licence depending
+        on where you are and what you are doing. No claim is made that operating Streamarr is
+        royalty-free.
+      </p>
+
+      <h2 id="third-party">Other third-party software</h2>
+      <p>
+        Streamarr and Playarr are built on a large amount of open-source software across their Rust
+        and TypeScript trees. A generated dependency and licence inventory belongs here and is not
+        yet published; the dependency manifests in the
+        <a href={LINKS.repo} rel="noopener">repository</a> are authoritative in the meantime.
+      </p>
+
+      <h2 id="trademarks">Trademarks and affiliation</h2>
+      <p>
+        {SITE.name} and {SITE.clientName} are independent projects. They are not affiliated with,
+        endorsed by, or sponsored by Sonarr, Radarr, Lidarr, Bazarr, Prowlarr, Readarr, Tdarr,
+        Plex, Jellyfin, Emby, Apple, Google, LG, Samsung, Hisense, Roku, or TMDB. All trademarks
+        are the property of their respective owners, and are used here only to describe
+        interoperability.
+      </p>
+    </div>
+  </Section>
+</BaseLayout>
+
+<style>
+  .prose {
+    max-width: var(--width-prose);
+  }
+
+  .prose h2 {
+    margin-top: var(--space-8);
+    scroll-margin-top: 90px;
+  }
+
+  .prose h2:first-child {
+    margin-top: 0;
+  }
+
+  blockquote {
+    margin: 0 0 var(--space-5);
+    padding: var(--space-4) var(--space-5);
+    border-inline-start: 3px solid var(--line-strong);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    background: var(--surface);
+    color: var(--ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  blockquote p:last-child {
+    margin-bottom: 0;
+  }
+
+  .todo {
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    font-size: var(--text-sm);
+  }
+</style>
