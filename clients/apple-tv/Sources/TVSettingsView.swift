@@ -73,13 +73,16 @@ struct TVSettingsView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .focusable(TVParityLaunch.requestedScreen == nil)
+                            .focusEffectDisabled(TVParityLaunch.requestedScreen != nil)
                         }
                     }
                     .frame(width: 420)
                     Spacer()
                 }
-                .padding(.leading, 140)
-                .padding(.top, 110)
+                .padding(.leading, 154)
+                .padding(.top, 56)
+                .ignoresSafeArea()
 
                 // Right: section detail
                 VStack(alignment: .leading, spacing: 28) {
@@ -109,6 +112,26 @@ struct TVSettingsView: View {
                 themeChip("System", selected: false)
                 themeChip("Light", selected: false)
                 themeChip("Dark", selected: true)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(DesignTokens.Color.backgroundElevated)
+            )
+
+            Divider()
+                .background(DesignTokens.Color.borderDefault.opacity(0.35))
+                .padding(.vertical, 8)
+
+            Text("Home screen artwork")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+            Text("Show portrait covers instead of wide media thumbnails on the home screen.")
+                .font(.system(size: 14))
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+                .frame(maxWidth: 420, alignment: .leading)
+            HStack(spacing: 0) {
+                themeChip("Thumbnails", selected: true)
+                themeChip("Covers", selected: false)
             }
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)

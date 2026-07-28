@@ -25,6 +25,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   production path remains SwiftUI + PlayarrKit (no web-ref paint).
 - Apple TV parity mode suppresses system focus chrome and uses a static
   search-field replica so the tvOS white focus fill does not dominate AE.
+- Apple TV detail parity screens seed offline `WorkDetail` from the opened
+  fixture work so production SwiftUI still paints without a live work fetch.
 
 - Apple TV design-token mirror (`DesignTokens` / `TVTheme`) kept in lock-step with
   `@playarr-tv/design-tokens`, applied across home, search, detail, player,

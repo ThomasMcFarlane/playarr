@@ -9,7 +9,15 @@ struct TVWorkDetailView: View {
     init(work: Work, apiClient: PlayarrAPIClient) {
         self.work = work
         self.apiClient = apiClient
-        _viewModel = State(initialValue: TVWorkDetailViewModel(workID: work.id, apiClient: apiClient))
+        _viewModel = State(
+            initialValue: TVWorkDetailViewModel(
+                workID: work.id,
+                apiClient: apiClient,
+                // Always seed the opened work so parity fixtures (and any
+                // offline open) can render without a live fetch.
+                seedWork: work
+            )
+        )
     }
 
     var body: some View {

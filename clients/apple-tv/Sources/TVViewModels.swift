@@ -103,15 +103,39 @@ final class TVWorkDetailViewModel {
     private(set) var state: State = .idle
     private(set) var detail: WorkDetail?
     private let workID: UUID
+    private let seedWork: Work?
     private let apiClient: PlayarrAPIClient
 
-    init(workID: UUID, apiClient: PlayarrAPIClient) {
+    init(workID: UUID, apiClient: PlayarrAPIClient, seedWork: Work? = nil) {
         self.workID = workID
+        self.seedWork = seedWork
         self.apiClient = apiClient
     }
 
     func load() async {
         state = .loading
+        // Parity detail screens use deterministic fixtures (UUIDs are not on
+        // the live server). Prefer seed work so production SwiftUI still
+        // paints a real detail layout without a network round-trip.
+        if TVParityLaunch.requestedScreen != nil, let seedWork {
+            let children: WorkChildren
+            switch seedWork.kind {
+            case .movie: children = .movie
+            case .series: children = .series([])
+            case .artist: children = .artist([])
+            case .author: children = .author([])
+            default: children = .movie
+            }
+            detail = WorkDetail(
+                work: seedWork,
+                children: children,
+                mediaFileID: seedWork.kind == .movie
+                    ? UUID(uuidString: "00000000-0000-4000-8000-000000000099")
+                    : nil
+            )
+            state = .loaded
+            return
+        }
         do {
             detail = try await apiClient.fetchWork(id: workID)
             state = .loaded
