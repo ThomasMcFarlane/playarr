@@ -1,15 +1,27 @@
 ---
+export type Tone = 'brand' | 'amber' | 'teal' | 'violet'
+
 interface Props {
   title?: string
   href?: string
+  /** Colours the icon chip when an `icon` slot is provided. */
+  tone?: Tone
   class?: string
 }
 
-const { title, href, class: className } = Astro.props
+const { title, href, tone = 'brand', class: className } = Astro.props
 const Tag = href ? 'a' : 'div'
+const hasIcon = Astro.slots.has('icon')
 ---
 
 <Tag class:list={['card', { linked: Boolean(href) }, className]} href={href}>
+  {
+    hasIcon && (
+      <div class:list={['icon-chip', tone]}>
+        <slot name="icon" />
+      </div>
+    )
+  }
   {title && <h3 class="card-title">{title}</h3>}
   <slot />
 </Tag>
@@ -29,6 +41,37 @@ const Tag = href ? 'a' : 'div'
     margin-bottom: 0;
   }
 
+  .icon-chip {
+    display: inline-grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    margin-bottom: var(--space-4);
+    border-radius: var(--radius);
+  }
+
+  .icon-chip :global(svg) {
+    width: 20px;
+    height: 20px;
+  }
+
+  .icon-chip.brand {
+    background: var(--brand-tint);
+    color: var(--brand);
+  }
+  .icon-chip.amber {
+    background: var(--hue-amber-tint);
+    color: var(--hue-amber);
+  }
+  .icon-chip.teal {
+    background: var(--hue-teal-tint);
+    color: var(--hue-teal);
+  }
+  .icon-chip.violet {
+    background: var(--hue-violet-tint);
+    color: var(--hue-violet);
+  }
+
   .card-title {
     margin-bottom: var(--space-3);
     font-size: var(--text-lg);
@@ -37,14 +80,14 @@ const Tag = href ? 'a' : 'div'
   .linked {
     transition:
       border-color var(--dur-fast) var(--ease),
-      box-shadow var(--dur) var(--ease),
-      transform var(--dur-fast) var(--ease);
+      box-shadow var(--dur) var(--ease-out),
+      transform var(--dur-fast) var(--ease-out);
   }
 
   .linked:hover {
     border-color: var(--line-strong);
     box-shadow: var(--shadow-soft);
     color: inherit;
-    transform: translateY(-2px);
+    transform: translateY(-3px);
   }
 </style>

@@ -19,6 +19,7 @@ const { href, variant = 'solid', external = false, class: className } = Astro.pr
 
 <style>
   .btn {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -31,35 +32,44 @@ const { href, variant = 'solid', external = false, class: className } = Astro.pr
     text-align: center;
     text-decoration: none;
     transition:
-      opacity var(--dur-fast) var(--ease),
+      box-shadow var(--dur) var(--ease-out),
       background var(--dur-fast) var(--ease),
       border-color var(--dur-fast) var(--ease),
-      transform var(--dur-fast) var(--ease);
+      transform var(--dur-fast) var(--ease-out);
   }
 
   .btn:hover {
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+  }
+
+  .btn:active {
+    transform: translateY(0);
   }
 
   .solid {
-    background: var(--ink);
-    color: var(--bg);
+    background: linear-gradient(155deg, var(--brand-bright), var(--brand) 55%, var(--brand-strong));
+    color: var(--on-brand);
+    box-shadow:
+      0 1px 1px rgba(0, 0, 0, 0.08),
+      0 10px 26px var(--brand-tint-strong);
   }
 
   .solid:hover {
-    color: var(--bg);
-    opacity: 0.86;
+    color: var(--on-brand);
+    box-shadow:
+      0 1px 1px rgba(0, 0, 0, 0.08),
+      0 16px 36px var(--brand-tint-strong);
   }
 
   .outline {
     border-color: var(--line-strong);
-    background: transparent;
+    background: var(--surface);
     color: var(--ink);
   }
 
   .outline:hover {
-    border-color: var(--ink);
-    color: var(--ink);
+    border-color: var(--brand);
+    color: var(--brand);
   }
 
   .quiet {
@@ -68,7 +78,7 @@ const { href, variant = 'solid', external = false, class: className } = Astro.pr
   }
 
   .quiet:hover {
-    color: var(--highlight);
+    color: var(--brand);
     transform: none;
   }
 </style>

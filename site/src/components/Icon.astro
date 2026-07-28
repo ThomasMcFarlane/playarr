@@ -1,0 +1,42 @@
+---
+/*
+ * A small hand-picked icon set — stroke-based, 24x24, currentColor — used for
+ * the coloured chips on feature and distinctive cards. Deliberately not a
+ * dependency: seventeen paths do not warrant an icon library.
+ */
+const PATHS: Record<string, string> = {
+  grid: 'M4 5.5A1.5 1.5 0 0 1 5.5 4h4A1.5 1.5 0 0 1 11 5.5v4A1.5 1.5 0 0 1 9.5 11h-4A1.5 1.5 0 0 1 4 9.5v-4Zm9 0A1.5 1.5 0 0 1 14.5 4h4A1.5 1.5 0 0 1 20 5.5v4A1.5 1.5 0 0 1 18.5 11h-4A1.5 1.5 0 0 1 13 9.5v-4ZM4 14.5A1.5 1.5 0 0 1 5.5 13h4a1.5 1.5 0 0 1 1.5 1.5v4A1.5 1.5 0 0 1 9.5 20h-4A1.5 1.5 0 0 1 4 18.5v-4Zm9 0a1.5 1.5 0 0 1 1.5-1.5h4a1.5 1.5 0 0 1 1.5 1.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a1.5 1.5 0 0 1-1.5-1.5v-4Z',
+  play: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm-1.6-12.3 5 3.3a.8.8 0 0 1 0 1.34l-5 3.3a.8.8 0 0 1-1.24-.67V9.36a.8.8 0 0 1 1.24-.67Z',
+  users: 'M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7-1a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM2.5 20c.6-3.6 3.4-6 6.5-6s5.9 2.4 6.5 6M15 14.3c2.6.5 4.6 2.6 5.1 5.7',
+  server: 'M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v4A1.5 1.5 0 0 1 18.5 11h-13A1.5 1.5 0 0 1 4 9.5v-4Zm0 9A1.5 1.5 0 0 1 5.5 13h13a1.5 1.5 0 0 1 1.5 1.5v4a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-4ZM7.5 7.5h.01M7.5 16.5h.01',
+  link: 'M9.5 14.5 14.5 9.5M8 16 5.6 18.4a3 3 0 1 1-4.2-4.2L4 12M16 8l2.4-2.4a3 3 0 1 1 4.2 4.2L20 12',
+  cpu: 'M8 4v2.5M12 4v2.5M16 4v2.5M8 17.5V20M12 17.5V20M16 17.5V20M4 8h2.5M4 12h2.5M4 16h2.5M17.5 8H20M17.5 12H20M17.5 16H20M7.5 7.5h9v9h-9v-9Z',
+  key: 'M14.5 8.5a4.5 4.5 0 1 0-4.32 4.5L4 19.18V22h2.82l1.36-1.36H10v-1.82h1.82v-1.82L13.5 15.3A4.5 4.5 0 0 0 14.5 8.5Zm-4.5-1a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z',
+  brain: 'M9.5 4a3 3 0 0 0-3 3v.4A3 3 0 0 0 5 10v1a3 3 0 0 0 1 2.24V15a3 3 0 0 0 3 3h.5M14.5 4a3 3 0 0 1 3 3v.4A3 3 0 0 1 19 10v1a3 3 0 0 1-1 2.24V15a3 3 0 0 1-3 3h-.5M9.5 4v16M14.5 4v16',
+  lock: 'M6.5 10.5V8a5.5 5.5 0 0 1 11 0v2.5M5.5 10.5h13A1.5 1.5 0 0 1 20 12v7a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19v-7a1.5 1.5 0 0 1 1.5-1.5Z',
+  code: 'm9 8-4 4 4 4M15 8l4 4-4 4',
+  chevronRight: 'm9 6 6 6-6 6',
+}
+
+interface Props {
+  name: keyof typeof PATHS
+  class?: string
+}
+
+const { name, class: className } = Astro.props
+const d = PATHS[name]
+---
+
+<svg
+  class={className}
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="1.8"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+  focusable="false"
+>
+  <path d={d}></path>
+</svg>

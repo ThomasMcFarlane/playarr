@@ -1,9 +1,10 @@
 /*
  * Streamarr / Playarr design tokens.
  *
- * The colour ramp is copied verbatim from the Playarr Web client
- * (clients/tv-web/web/src/styles/global.css) so the marketing site, the app and
- * the published research artifacts all read as one product. Do not drift these
+ * The neutral ramp and the crimson brand colour are copied from the Playarr
+ * Web client (clients/tv-web/web/src/styles/global.css and its Play
+ * button/section-eyebrow accent) so the marketing site, the app and the
+ * published research artifacts read as one product. Do not drift these
  * values independently — change them in the client first, then mirror here.
  *
  * Everything below the colour block is marketing-site-only: a type ramp, a
@@ -11,7 +12,7 @@
  */
 
 :root {
-  /* ---- Playarr palette (light) ---- */
+  /* ---- Playarr neutral palette (light) ---- */
   --bg: #f5f3f2;
   --surface: #fbfaf9;
   --surface-strong: #ffffff;
@@ -34,9 +35,29 @@
   --shadow-focus: 0 24px 70px rgba(56, 38, 33, 0.2);
   --focus-outline: #675961;
 
-  /* The player's signature crimson, used sparingly as a highlight. */
-  --highlight: #cf3157;
-  --highlight-soft: rgba(207, 49, 87, 0.12);
+  /*
+   * Brand ramp — the player's own crimson Play button and section-eyebrow
+   * colour, carried onto the site as the one accent used for CTAs, links,
+   * icons and section identity, so the two never read as two similar reds.
+   */
+  --brand: #cf3157;
+  --brand-strong: #a81f43;
+  --brand-bright: #e8497a;
+  --brand-tint: rgba(207, 49, 87, 0.1);
+  --brand-tint-strong: rgba(207, 49, 87, 0.2);
+  --on-brand: #ffffff;
+
+  /* Supporting hues, used to give sections their own identity without
+     competing with the brand red as a call-to-action colour. */
+  --hue-amber: #b8710b;
+  --hue-amber-tint: rgba(184, 113, 11, 0.12);
+  --hue-teal: #0f7d71;
+  --hue-teal-tint: rgba(15, 125, 113, 0.12);
+  --hue-violet: #6b4fbb;
+  --hue-violet-tint: rgba(107, 79, 187, 0.12);
+
+  --highlight: var(--brand);
+  --highlight-soft: var(--brand-tint);
 
   --font: "Avenir Next", Avenir, "Segoe UI", Helvetica, Arial, sans-serif;
   --mono: "SFMono-Regular", Consolas, monospace;
@@ -67,8 +88,22 @@
   --shadow-focus: 0 30px 85px rgba(0, 0, 0, 0.5);
   --focus-outline: #dfdcdd;
 
-  --highlight: #ff6b88;
-  --highlight-soft: rgba(255, 107, 136, 0.16);
+  --brand: #ff6b88;
+  --brand-strong: #ff8ca2;
+  --brand-bright: #ff4d73;
+  --brand-tint: rgba(255, 107, 136, 0.14);
+  --brand-tint-strong: rgba(255, 107, 136, 0.24);
+  --on-brand: #2a1116;
+
+  --hue-amber: #e0a94e;
+  --hue-amber-tint: rgba(224, 169, 78, 0.16);
+  --hue-teal: #5ecbbd;
+  --hue-teal-tint: rgba(94, 203, 189, 0.16);
+  --hue-violet: #a693e8;
+  --hue-violet-tint: rgba(166, 147, 232, 0.16);
+
+  --highlight: var(--brand);
+  --highlight-soft: var(--brand-tint);
 
   color-scheme: dark;
 }
@@ -100,8 +135,20 @@
     --shadow-soft: 0 24px 72px rgba(0, 0, 0, 0.3);
     --shadow-focus: 0 30px 85px rgba(0, 0, 0, 0.5);
     --focus-outline: #dfdcdd;
-    --highlight: #ff6b88;
-    --highlight-soft: rgba(255, 107, 136, 0.16);
+    --brand: #ff6b88;
+    --brand-strong: #ff8ca2;
+    --brand-bright: #ff4d73;
+    --brand-tint: rgba(255, 107, 136, 0.14);
+    --brand-tint-strong: rgba(255, 107, 136, 0.24);
+    --on-brand: #2a1116;
+    --hue-amber: #e0a94e;
+    --hue-amber-tint: rgba(224, 169, 78, 0.16);
+    --hue-teal: #5ecbbd;
+    --hue-teal-tint: rgba(94, 203, 189, 0.16);
+    --hue-violet: #a693e8;
+    --hue-violet-tint: rgba(166, 147, 232, 0.16);
+    --highlight: var(--brand);
+    --highlight-soft: var(--brand-tint);
     color-scheme: dark;
   }
 }
@@ -145,13 +192,16 @@
   --radius-lg: 22px;
   --radius-pill: 999px;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --dur-fast: 160ms;
   --dur: 260ms;
+  --dur-slow: 480ms;
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-fast: 0ms;
     --dur: 0ms;
+    --dur-slow: 0ms;
   }
 }
