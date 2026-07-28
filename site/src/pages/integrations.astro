@@ -1,0 +1,151 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import Section from '../components/Section.astro'
+import ButtonLink from '../components/ButtonLink.astro'
+import { INTEGRATIONS, TDARR } from '../data/integrations'
+
+/*
+ * The most carefully worded page on the site.
+ *
+ * Streamarr reads a library the operator has already organised, using tools the
+ * operator already runs. It performs no indexing and obtains no media. Every
+ * sentence here must stay on that side of the line — see
+ * docs/artifacts/streamarr-legal-release.html.
+ */
+---
+
+<BaseLayout
+  title="Integrations"
+  description="Streamarr reads the library your existing management tools have already organised — Sonarr, Radarr, Lidarr, Readarr, Bazarr and Prowlarr — and dispatches background encoding to Tdarr."
+>
+  <Section
+    eyebrow="Integrations"
+    title="Works with the tools you already run"
+    lede="If you keep your library tidy with the *arr applications, Streamarr reads the result. It does not replace them, it does not duplicate them, and their own interfaces carry on working exactly as before."
+  >
+    <div class="statement">
+      <p>
+        <strong>What Streamarr takes from them:</strong> the titles, the file paths those titles
+        resolve to, and the metadata identifiers already established. That is what turns a folder
+        of files into a catalogue with correct posters, correct episode ordering and correct cast
+        lists.
+      </p>
+      <p>
+        <strong>What Streamarr does not do:</strong> it performs no indexing, runs no searches
+        against anything outside your own library, and obtains no media. It is a playback,
+        catalogue and metadata layer over storage you already control.
+      </p>
+    </div>
+  </Section>
+
+  <Section tint title="Library managers">
+    <div class="scroll-x">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Application</th>
+            <th scope="col">Covers</th>
+            <th scope="col">What Streamarr reads</th>
+            <th scope="col">If it is not connected</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            INTEGRATIONS.map((integration) => (
+              <tr>
+                <th scope="row">{integration.name}</th>
+                <td>{integration.role}</td>
+                <td>{integration.reads}</td>
+                <td class="muted">{integration.without}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+    <p class="after">
+      Worth being plain about: these connections are not optional garnish. Streamarr has no
+      filesystem scanner of its own — it builds its catalogue entirely from what these
+      applications have already reconciled. A server with nothing registered has an empty
+      catalogue, so you will want at least one of the four library applications connected before
+      anything appears on screen.
+    </p>
+  </Section>
+
+  <Section title="Transcoding at library scale">
+    <div class="prose">
+      <h3>{TDARR.name}</h3>
+      <p>{TDARR.reads}</p>
+      <p>
+        Keeping the two apart matters. Someone pressing play should never wait behind a queue of
+        library maintenance, and library maintenance should never be starved by playback. They are
+        separate systems with separate priorities, and background work steps back while people are
+        watching.
+      </p>
+    </div>
+  </Section>
+
+  <Section tint title="Metadata and artwork">
+    <div class="prose">
+      <p>
+        Artwork and metadata identifiers arrive with the records Streamarr reads from your library
+        managers. Artwork is fetched once and cached on your own disk, so browsing does not hammer
+        an upstream service every time a poster scrolls past.
+      </p>
+      <p>
+        This site and any Streamarr installation showing that imagery carry the required notice —
+        see <a href="/legal/licences">licences and attribution</a>.
+      </p>
+    </div>
+  </Section>
+
+  <Section title="Setting them up">
+    <p class="lede">
+      Each connection is a URL and an API key, added from the admin console. The setup guide walks
+      through each one and explains what to expect on the first synchronisation.
+    </p>
+    <p><ButtonLink href="/docs/library-managers">Connect your library managers</ButtonLink></p>
+  </Section>
+</BaseLayout>
+
+<style>
+  .statement {
+    max-width: var(--width-prose);
+    padding: var(--space-6);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+  }
+
+  .statement p:last-child {
+    margin-bottom: 0;
+  }
+
+  tbody th {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--ink);
+  }
+
+  .muted {
+    color: var(--ink-muted);
+  }
+
+  .prose {
+    max-width: var(--width-prose);
+  }
+
+  .prose h3 {
+    margin-bottom: var(--space-3);
+  }
+
+  .after {
+    margin-top: var(--space-6);
+    margin-bottom: 0;
+    max-width: var(--measure);
+    color: var(--ink-soft);
+    font-size: var(--text-sm);
+  }
+</style>

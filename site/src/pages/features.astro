@@ -1,0 +1,205 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import Section from '../components/Section.astro'
+import Pill from '../components/Pill.astro'
+import ButtonLink from '../components/ButtonLink.astro'
+import { LINKS } from '../consts'
+
+/*
+ * Every entry here is something present in the repository today. Anything not
+ * yet built belongs in the "Not built yet" table at the foot of the page, with
+ * an explicit label — never quietly folded in beside shipped capability.
+ */
+const areas = [
+  {
+    name: 'Library and catalogue',
+    lede: 'One catalogue across every kind of media you keep.',
+    items: [
+      ['Films, series, music and books', 'A single catalogue spanning video, audio and publishing, each with the structure that suits it — seasons and episodes, artists and albums, authors and books.'],
+      ['Matched against real identifiers', 'Titles are reconciled using the identifiers your library tools already resolved, rather than guessed from file names alone.'],
+      ['Views and filters', 'Browse by kind, filter down, and sort within a library without waiting on a full re-scan.'],
+      ['Search across your library', 'One search over everything catalogued, returning works, people and collections.'],
+      ['Semantic “more like this”', 'A small sentence-embedding model runs on your own CPU to suggest related titles. No cloud service is involved and it works offline once the model is fetched.'],
+    ],
+  },
+  {
+    name: 'Playback',
+    lede: 'Direct play where it fits, transcode where it does not.',
+    items: [
+      ['Direct play with real seeking', 'When the file already suits the client, it is served as-is with proper range requests, so scrubbing behaves.'],
+      ['On-demand transcoding', 'A quality ladder for the cases where the client cannot take the original. Encoding happens on the server; clients receive HLS.'],
+      ['Background re-encoding via Tdarr', 'Library-wide encode work is dispatched to a Tdarr worker pool as a completely separate, lower-priority system that yields while people are watching.'],
+      ['Subtitles, audio tracks and chapters', 'Subtitle selection with a timing offset, multiple audio tracks with a preferred language, and chapter markers.'],
+      ['Continue watching', 'Playback position follows you between devices, with explicit watched and unwatched state.'],
+      ['Playlists', 'Including nested playlists and ones that mix video and audio.'],
+      ['Offline playback on device', 'Originals can be kept on a device for playing without a connection. Transcoded copies for offline use are not built yet.'],
+    ],
+  },
+  {
+    name: 'People and permissions',
+    lede: 'A model that suits a household, not just an owner.',
+    items: [
+      ['Profile picker with PINs and avatars', 'The “who is watching” screen, with a PIN where you want one.'],
+      ['Deny-by-default library grants', 'Nobody reaches a library until they are granted it — an empty grant list gives access to nothing.'],
+      ['Streaming is a separate grant', 'Being an administrator does not silently grant the ability to watch. An admin account still needs the streaming grant, deliberately.'],
+      ['Keeping files off-device is the default', 'Permission to retain a copy on a device is off unless it is granted.'],
+      ['Invitations', 'Bring someone in with a one-use, time-limited invitation rather than by handing over credentials.'],
+      ['Accounts that persist', 'Real accounts with password hashing, and tokens that rotate rather than one long-lived credential.'],
+    ],
+  },
+  {
+    name: 'Access and identity',
+    lede: 'Choose the posture that matches where the server lives.',
+    items: [
+      ['Two authentication postures', 'Full accounts with hashed passwords by default, or zero-credential auto-login for a trusted LAN if the operator explicitly opts in.'],
+      ['Private ranges by default', 'The trusted-network opt-in is limited to private and loopback address ranges, so a mistaken port forward does not hand out an admin session.'],
+      ['Sign in on a television by code', 'Standards-based device-code pairing, so nobody types a password with a remote control.'],
+      ['Hosted first-contact linking', 'The hosted Playarr service can broker the first handshake between an app and your server. The short-lived record carries device and server details only — never a password or a browser token.'],
+      ['Tokens that rotate', 'Access tokens with refresh rotation rather than one long-lived credential.'],
+    ],
+  },
+  {
+    name: 'Running it',
+    lede: 'One binary, three tiers, no migration story between them.',
+    items: [
+      ['Single binary, role-gated', 'The same executable runs as the API, as a worker, or as a coordinator. Splitting roles is a configuration change.'],
+      ['SQLite or Postgres', 'Start on SQLite on one machine; move to Postgres when it earns its keep.'],
+      ['Three deployment tiers', 'A systemd unit, a Docker Compose stack, or Kubernetes with a Helm chart and overlays — all shipped in the repository.'],
+      ['HTTPS without a reverse proxy', 'Built-in ACME with an HTTP-01 listener, for home servers that would rather not run another moving part in front.'],
+      ['Admin console', 'Live sessions and playback history, with the ability to stop a session.'],
+      ['A published API contract', 'The OpenAPI description is generated from the handlers, drift-tested in CI and served by the running server. The TypeScript client is generated from it.'],
+    ],
+  },
+  {
+    name: 'Beyond one server',
+    lede: 'Unusual, and entirely optional.',
+    items: [
+      ['Peer groups', 'Independently owned, independently databased servers can share accounts, permissions, invitations and catalogue metadata over a signed protocol, and route playback between each other by redirect or proxy.'],
+      ['Inert when unused', 'Run a single server and none of this does anything. It is not a background service you have to reason about.'],
+    ],
+  },
+]
+
+const notBuilt = [
+  ['Hardware-accelerated transcoding', 'Software encoding only. This is the biggest practical gap on low-power hardware.'],
+  ['Chromecast and AirPlay', 'No casting of any kind.'],
+  ['Live TV, DVR and programme guides', 'No tuner support at all.'],
+  ['Protected-content playback', 'No support for playing back protected content.'],
+  ['Photos', 'There is no photo library concept.'],
+  ['Intro and credits detection', 'Nothing skips a title sequence for you.'],
+  ['Trailers, extras and theme music', 'Not present.'],
+  ['Watch-together', 'No synchronised playback between viewers.'],
+  ['Plugins', 'There is no plugin system.'],
+  ['App-store distribution', 'Nothing is published to any app store on any platform.'],
+  ['Readable books', 'Books are catalogued, but no client reads them yet.'],
+  ['Transcoded offline copies', 'Offline playback keeps originals only.'],
+  [
+    'Rating ceilings, tag rules, session caps and time windows',
+    'These are described in the data model and have a tested evaluator, but nothing on the live request path calls it yet. Do not treat Streamarr as having parental controls.',
+  ],
+  ['Device and platform restrictions', 'Modelled alongside the above, and likewise not yet enforced on a live request.'],
+]
+---
+
+<BaseLayout
+  title="Features"
+  description="What Streamarr does today: a unified catalogue, direct play and server-side transcoding, granular household permissions, three deployment tiers, and an honest list of what is not built yet."
+>
+  <Section
+    eyebrow="Features"
+    title="What Streamarr does today"
+    lede="Everything on this page exists in the repository now. What does not exist is listed at the bottom, in the same detail."
+  >
+    <p><ButtonLink href="/docs/install">Install the server</ButtonLink></p>
+  </Section>
+
+  {
+    areas.map((area, index) => (
+      <Section tint={index % 2 === 0} eyebrow={area.name} title={area.lede}>
+        <dl class="items">
+          {area.items.map(([term, detail]) => (
+            <div class="item">
+              <dt>{term}</dt>
+              <dd>{detail}</dd>
+            </div>
+          ))}
+        </dl>
+      </Section>
+    ))
+  }
+
+  <Section
+    eyebrow="Straight answers"
+    title="Not built yet"
+    lede="Listing this is cheaper for everyone than having you discover it after an evening of setup."
+  >
+    <div class="scroll-x">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Capability</th>
+            <th scope="col">Status</th>
+            <th scope="col">Detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            notBuilt.map(([name, detail]) => (
+              <tr>
+                <th scope="row">{name}</th>
+                <td><Pill tone="warn">Not built yet</Pill></td>
+                <td>{detail}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+    <p class="after">
+      There is no 1.0 release, and the deployment manifests have not yet been proven end to end
+      on every tier. Progress is tracked in the open in the
+      <a href={LINKS.repo} rel="noopener">repository</a>.
+    </p>
+  </Section>
+</BaseLayout>
+
+<style>
+  .items {
+    display: grid;
+    gap: var(--space-5) var(--space-6);
+    margin: 0;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  }
+
+  .item {
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--line);
+  }
+
+  dt {
+    margin-bottom: var(--space-2);
+    font-weight: 700;
+  }
+
+  dd {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  tbody th {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--ink);
+  }
+
+  .after {
+    margin-top: var(--space-6);
+    margin-bottom: 0;
+    max-width: var(--measure);
+    color: var(--ink-soft);
+    font-size: var(--text-sm);
+  }
+</style>

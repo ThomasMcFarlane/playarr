@@ -1,0 +1,366 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import Section from '../components/Section.astro'
+import Card from '../components/Card.astro'
+import Pill from '../components/Pill.astro'
+import ButtonLink from '../components/ButtonLink.astro'
+import { LINKS } from '../consts'
+import { PLATFORMS } from '../data/platforms'
+import { INTEGRATIONS } from '../data/integrations'
+
+const pillars = [
+  {
+    title: 'One library, properly catalogued',
+    body: 'Films, series, music and books in a single catalogue, with posters, backdrops, cast and crew, chapters, subtitles and multiple audio tracks — matched against the identifiers your library tools already resolved.',
+  },
+  {
+    title: 'Plays on the hardware you own',
+    body: 'Direct play with real seeking wherever the file already suits the screen, and server-side transcoding with a quality ladder when it does not. Library-wide re-encoding runs as a separate, lower-priority system that yields while people are watching.',
+  },
+  {
+    title: 'Accounts that fit a household',
+    body: 'A profile picker with PINs and avatars, and library access that is denied until granted. Being an administrator does not silently make you a viewer — the two are separate grants on purpose.',
+  },
+  {
+    title: 'Your server stays yours',
+    body: 'Self-hosted from the first byte. Nothing is brokered through a third party, there is no account to create with us, and the whole HTTP API is a published, generated OpenAPI contract you can build against.',
+  },
+]
+
+const distinctive = [
+  {
+    title: 'Federate with a friend, keep your own server',
+    body: 'Peer groups let independently owned installations share accounts, permissions and catalogue metadata over a signed protocol, routing playback between each other. Run one server and it stays completely inert.',
+  },
+  {
+    title: 'One binary, Raspberry Pi to Kubernetes',
+    body: 'The same executable runs single-node against SQLite or as independently scaled API and worker processes against Postgres. Growing is a configuration change, not different software.',
+  },
+  {
+    title: 'Pick your own authentication posture',
+    body: 'Real accounts by default, or zero-credential auto-login on a trusted LAN if you opt into it — and that opt-in is restricted to private address ranges, so a stray port forward cannot hand over the admin console.',
+  },
+  {
+    title: 'Recommendations that never leave the box',
+    body: 'A small CPU-only sentence-embedding model powers “more like this” locally. No cloud API, no generative model, and offline once the model is fetched.',
+  },
+  {
+    title: 'HTTPS without a reverse proxy',
+    body: 'Built-in ACME with an HTTP-01 listener, so a home server can hold a real certificate without another moving part in front of it.',
+  },
+  {
+    title: 'The API is part of the product',
+    body: 'The OpenAPI description is generated from the handlers, drift-tested in CI and served by the running server. The TypeScript client is generated from it, and so could yours be.',
+  },
+]
+
+const notYet = [
+  'Hardware-accelerated transcoding — software encoding only for now',
+  'Chromecast and AirPlay',
+  'Live TV, DVR, tuners and programme guides',
+  'Protected-content playback',
+  'A photos library',
+  'Intro and credits detection, trailers and extras, watch-together, plugins',
+]
+---
+
+<BaseLayout>
+  <section class="hero">
+    <div class="wrap hero-inner">
+      <p class="eyebrow">Self-hosted media server</p>
+      <h1>Your library.<br />Every screen.</h1>
+      <p class="hero-lede">
+        Streamarr turns the media you already own into a properly catalogued, genuinely
+        watchable library — and Playarr puts it on the phone in your pocket, the tablet on
+        the sofa and the television in the corner.
+      </p>
+      <div class="hero-actions">
+        <ButtonLink href={LINKS.playarrApp} external>Open Playarr</ButtonLink>
+        <ButtonLink href="/docs/install" variant="outline">Install the server</ButtonLink>
+      </div>
+      <p class="hero-note">
+        Free and open source under the MIT licence. No account with us, no telemetry to opt
+        out of, no tier that unlocks your own hardware.
+      </p>
+    </div>
+  </section>
+
+  <Section
+    tint
+    eyebrow="What it is"
+    title="The playback layer your setup is missing"
+    lede="You already have the storage and the tools that keep it tidy. Streamarr is the part that makes it a pleasure to actually watch."
+  >
+    <div class="grid-4">
+      {pillars.map((item) => <Card title={item.title}><p>{item.body}</p></Card>)}
+    </div>
+  </Section>
+
+  <Section
+    eyebrow="Every screen"
+    title="Playarr, on the devices you already watch on"
+    lede="Real native clients — Compose on Android, SwiftUI on Apple platforms, SceneGraph on Roku — all speaking one versioned API contract. Not a single web view in seven wrappers."
+  >
+    <div class="platforms">
+      {
+        PLATFORMS.map((platform) => (
+          <div class="platform">
+            <div class="platform-head">
+              <h3>{platform.name}</h3>
+              <Pill tone={platform.tone}>{platform.status}</Pill>
+            </div>
+            <p class="platform-devices">{platform.devices}</p>
+            <p class="platform-route">{platform.route}</p>
+          </div>
+        ))
+      }
+    </div>
+    <p class="after">
+      <ButtonLink href="/apps" variant="quiet">See how each one installs →</ButtonLink>
+    </p>
+  </Section>
+
+  <Section
+    tint
+    eyebrow="Integrations"
+    title="Works with the library managers you already run"
+    lede="Streamarr reads the library those tools have already organised — the titles, the file paths and the identifiers they resolved. It performs no indexing and obtains no media itself."
+  >
+    <div class="integrations">
+      {
+        INTEGRATIONS.map((integration) => (
+          <div class="integration">
+            <h3>{integration.name}</h3>
+            <p class="integration-role">{integration.role}</p>
+            <p>{integration.reads}</p>
+          </div>
+        ))
+      }
+    </div>
+    <p class="note">
+      This is genuinely how Streamarr learns what you have: it ships no filesystem scanner, so at
+      least one library application needs connecting before anything appears on screen. If you are
+      not already running that stack, this is not the server for you today.
+    </p>
+    <p class="after">
+      <ButtonLink href="/integrations" variant="quiet">What each one contributes →</ButtonLink>
+    </p>
+  </Section>
+
+  <Section
+    eyebrow="Why this one"
+    title="Things you will not find in the alternatives"
+    lede="Some of these are unusual. All of them are in the repository today."
+  >
+    <div class="grid-3">
+      {distinctive.map((item) => <Card title={item.title}><p>{item.body}</p></Card>)}
+    </div>
+  </Section>
+
+  <Section tint eyebrow="Straight answers" title="What it does not do yet">
+    <div class="honest">
+      <p class="lede">
+        Streamarr is early. There is no 1.0, nothing is on an app store, and several television
+        clients install through developer mode. Here is what is genuinely missing, so you can
+        decide before you spend an evening on it:
+      </p>
+      <ul class="gaps">
+        {notYet.map((gap) => <li>{gap}</li>)}
+      </ul>
+      <p>
+        The <a href={LINKS.repo} rel="noopener">repository</a> tracks all of this in the open, and the
+        installation guides label anything that is not built yet.
+      </p>
+    </div>
+  </Section>
+
+  <section class="closing">
+    <div class="wrap closing-inner">
+      <h2>Point it at your library and see.</h2>
+      <p class="lede">
+        A single binary and a media path is enough to get a catalogue on screen. The hosted
+        Playarr web app will talk to it as soon as it is running.
+      </p>
+      <div class="hero-actions">
+        <ButtonLink href="/docs/install">Choose your setup</ButtonLink>
+        <ButtonLink href={LINKS.playarrApp} variant="outline" external>Open Playarr</ButtonLink>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .hero {
+    padding-block: clamp(var(--space-8), 11vw, var(--space-10));
+    border-bottom: 1px solid var(--line);
+    background:
+      radial-gradient(120% 90% at 12% -10%, var(--highlight-soft), transparent 62%),
+      radial-gradient(90% 80% at 88% 0%, var(--surface-soft), transparent 58%);
+  }
+
+  .hero-inner {
+    max-width: 980px;
+  }
+
+  .hero h1 {
+    margin-bottom: var(--space-5);
+    font-size: var(--text-hero);
+    letter-spacing: -0.035em;
+  }
+
+  .hero-lede {
+    max-width: 60ch;
+    margin-bottom: var(--space-7);
+    color: var(--ink-soft);
+    font-size: clamp(1.05rem, 1.7vw, 1.35rem);
+  }
+
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-bottom: var(--space-6);
+  }
+
+  .hero-note {
+    max-width: 52ch;
+    margin-bottom: 0;
+    color: var(--ink-muted);
+    font-size: var(--text-sm);
+  }
+
+  .grid-4,
+  .grid-3 {
+    display: grid;
+    gap: var(--space-5);
+  }
+
+  .grid-4 {
+    grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+  }
+
+  .grid-3 {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+
+  .platforms {
+    display: grid;
+    gap: 1px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--line);
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    overflow: hidden;
+  }
+
+  .platform {
+    padding: var(--space-5) var(--space-6);
+    background: var(--bg);
+  }
+
+  .platform-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  .platform h3 {
+    margin: 0;
+    font-size: var(--text-lg);
+  }
+
+  .platform-devices {
+    margin-bottom: var(--space-2);
+    color: var(--ink-muted);
+    font-size: var(--text-sm);
+  }
+
+  .platform-route {
+    margin-bottom: 0;
+    color: var(--ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  .integrations {
+    display: grid;
+    gap: var(--space-6) var(--space-5);
+    grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  }
+
+  .integration h3 {
+    margin-bottom: var(--space-1);
+    font-size: var(--text-lg);
+  }
+
+  .integration-role {
+    margin-bottom: var(--space-3);
+    color: var(--ink-muted);
+    font-size: var(--text-xs);
+    font-weight: 750;
+    letter-spacing: var(--tracking-eyebrow);
+    text-transform: uppercase;
+  }
+
+  .integration p:last-child {
+    margin-bottom: 0;
+    color: var(--ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  .note {
+    max-width: var(--measure);
+    margin-top: var(--space-7);
+    margin-bottom: 0;
+    padding: var(--space-4) var(--space-5);
+    border-inline-start: 3px solid var(--line-strong);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    background: var(--surface-strong);
+    color: var(--ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  .after {
+    margin-top: var(--space-6);
+    margin-bottom: 0;
+  }
+
+  .honest {
+    max-width: var(--width-prose);
+  }
+
+  .gaps {
+    margin: var(--space-5) 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .gaps li {
+    padding-inline-start: 1.5em;
+    position: relative;
+    color: var(--ink-soft);
+  }
+
+  .gaps li::before {
+    content: '—';
+    position: absolute;
+    left: 0;
+    color: var(--ink-muted);
+  }
+
+  .closing {
+    padding-block: clamp(var(--space-8), 9vw, var(--space-10));
+    border-top: 1px solid var(--line);
+  }
+
+  .closing-inner {
+    max-width: 760px;
+  }
+
+  .closing h2 {
+    font-size: var(--text-3xl);
+  }
+</style>

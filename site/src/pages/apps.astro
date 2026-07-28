@@ -1,0 +1,234 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import Section from '../components/Section.astro'
+import Pill from '../components/Pill.astro'
+import ButtonLink from '../components/ButtonLink.astro'
+import { LINKS } from '../consts'
+import { PLATFORMS } from '../data/platforms'
+
+/*
+ * The status labels here mirror the live clients hub at playarr.app/clients.
+ * Nothing on this page may imply app-store availability, because there is none
+ * on any platform.
+ */
+const detail: Record<string, { built: string; notes: string[] }> = {
+  web: {
+    built: 'TypeScript and React, sharing its component library with the television shells.',
+    notes: [
+      'Works in any current desktop or mobile browser.',
+      'This is also the route used on Hisense televisions, through the built-in browser.',
+      'Nothing to install and nothing to update.',
+    ],
+  },
+  android: {
+    built: 'Native Kotlin and Jetpack Compose, responsive across phone, tablet and television layouts.',
+    notes: [
+      'One signed universal package covers phones, tablets, Android TV and Google TV.',
+      'The television build includes a self-update action that checks for a newer published version.',
+      'Installed directly rather than through a store, so you will need to permit installation from the browser or use adb.',
+    ],
+  },
+  vidaa: {
+    built: 'The hosted web app, opened in the television browser.',
+    notes: [
+      'The browser route is the reliable one and needs nothing unusual.',
+      'A launcher tile is possible on some firmware but is experimental, and you choose and control the method yourself.',
+      'There is no official VIDAA store distribution.',
+    ],
+  },
+  roku: {
+    built: 'Native SceneGraph using the platform video node.',
+    notes: [
+      'Requires enabling Developer Mode on the device, which involves a remote-control key sequence and a reboot.',
+      'The package is uploaded through the device’s own web installer.',
+      'Developer-mode side-loads are removed by a factory reset and are not a store installation.',
+    ],
+  },
+  webos: {
+    built: 'The shared television web application in an LG platform shell.',
+    notes: [
+      'No pre-built package is published; you build it from the repository.',
+      'Installation goes through LG Developer Mode and the ares-install tool.',
+      'Developer Mode sessions expire and need periodic renewal on the television.',
+    ],
+  },
+  tizen: {
+    built: 'The shared television web application with a native platform playback adapter.',
+    notes: [
+      'No pre-built package is published; you build it from the repository.',
+      'Samsung requires the package to be signed with a certificate you generate in Tizen Studio.',
+      'Installation goes over sdb with the television in developer mode.',
+    ],
+  },
+  apple: {
+    built: 'Native SwiftUI for iPhone, iPad and Apple TV.',
+    notes: [
+      'The source is in the repository and its tests run against a simulator.',
+      'There is no installable build and no distribution route yet.',
+      'Until then, the hosted web app works on iPhone and iPad in Safari.',
+    ],
+  },
+}
+---
+
+<BaseLayout
+  title="Apps"
+  description="Playarr runs on phones, tablets, televisions and the browser. Here is the honest status of each platform and exactly how it installs today."
+>
+  <Section
+    eyebrow="Playarr"
+    title="One library, every screen"
+    lede="Real native clients rather than one web view wrapped seven times — and one versioned API contract behind all of them. Several are still developer previews, and none is on an app store yet. Each is labelled below."
+  >
+    <div class="hero-actions">
+      <ButtonLink href={LINKS.playarrApp} external>Open the web app</ButtonLink>
+      <ButtonLink href={LINKS.playarrClients} variant="outline" external>All clients</ButtonLink>
+    </div>
+  </Section>
+
+  <Section tint title="At a glance">
+    <div class="scroll-x">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Platform</th>
+            <th scope="col">Devices</th>
+            <th scope="col">Status</th>
+            <th scope="col">How you install it</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            PLATFORMS.map((platform) => (
+              <tr>
+                <th scope="row">{platform.name}</th>
+                <td>{platform.devices}</td>
+                <td><Pill tone={platform.tone}>{platform.status}</Pill></td>
+                <td>{platform.route}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </Section>
+
+  <Section title="Platform by platform">
+    <div class="cards">
+      {
+        PLATFORMS.map((platform) => (
+          <article class="platform-card" id={platform.id}>
+            <header>
+              <h3>{platform.name}</h3>
+              <Pill tone={platform.tone}>{platform.status}</Pill>
+            </header>
+            <p class="devices">{platform.devices}</p>
+            <p class="built">{detail[platform.id]?.built}</p>
+            <ul>
+              {detail[platform.id]?.notes.map((note) => <li>{note}</li>)}
+            </ul>
+          </article>
+        ))
+      }
+    </div>
+    <p class="after">
+      Step-by-step instructions for each route live in
+      <a href="/docs/clients">the client setup guide</a>.
+    </p>
+  </Section>
+
+  <Section tint title="Signing in without typing a password on a remote">
+    <div class="prose">
+      <p>
+        Televisions are terrible at text entry, so Playarr does not ask them to be good at it. A
+        television shows a short code, you approve it from a phone or laptop, and the device is
+        signed in — the standard device-code flow, served by your own server.
+      </p>
+      <p>
+        The hosted Playarr service can also broker the very first handshake between an app and a
+        server it has never seen. That short-lived record holds only the device secret, the server
+        addresses you chose, and a single-use device code. It never receives a password, a browser
+        token, or a refresh token, and it expires within minutes.
+      </p>
+      <p>
+        Once linked, the app talks to your server directly. Nothing routes through the hosted
+        service afterwards.
+      </p>
+    </div>
+  </Section>
+</BaseLayout>
+
+<style>
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  tbody th {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--ink);
+  }
+
+  .cards {
+    display: grid;
+    gap: var(--space-5);
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  }
+
+  .platform-card {
+    padding: var(--space-6);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--surface-strong);
+    scroll-margin-top: 90px;
+  }
+
+  .platform-card header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  .platform-card h3 {
+    margin: 0;
+  }
+
+  .devices {
+    margin-bottom: var(--space-4);
+    color: var(--ink-muted);
+    font-size: var(--text-sm);
+  }
+
+  .built {
+    margin-bottom: var(--space-4);
+    font-size: var(--text-sm);
+  }
+
+  .platform-card ul {
+    margin: 0;
+    padding-inline-start: 1.2em;
+    color: var(--ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  .platform-card li {
+    margin-bottom: var(--space-2);
+  }
+
+  .prose {
+    max-width: var(--width-prose);
+  }
+
+  .after {
+    margin-top: var(--space-6);
+    margin-bottom: 0;
+    color: var(--ink-soft);
+    font-size: var(--text-sm);
+  }
+</style>

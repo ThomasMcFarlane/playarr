@@ -1,0 +1,190 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import Section from '../components/Section.astro'
+import { LINKS } from '../consts'
+
+const groups = [
+  {
+    name: 'The basics',
+    items: [
+      {
+        q: 'What is Streamarr, in one sentence?',
+        a: 'A self-hosted media server that catalogues the media you already keep and streams it to native apps on your phone, tablet, television and browser.',
+      },
+      {
+        q: 'What is Playarr, then?',
+        a: 'Playarr is the family of client apps. Streamarr is the server you run; Playarr is what you install on the things you watch on. There is also a hosted Playarr web app, so you can try the whole thing without installing a client at all.',
+      },
+      {
+        q: 'Does it supply any media?',
+        a: 'No. Streamarr ships no content, no sources and no means of obtaining anything. It reads media you already have on storage you already control, and plays it back. That is the whole scope.',
+      },
+      {
+        q: 'What does it cost?',
+        a: 'Nothing. It is free and open source under the MIT licence. There is no paid tier, no subscription, and no feature held back behind one — including hardware transcoding, which simply is not built yet for anybody.',
+      },
+      {
+        q: 'Is it ready to rely on?',
+        a: 'Not yet, honestly. There is no 1.0 release, nothing is published to any app store, and several television clients install through developer mode. It is worth your evening if you enjoy running your own infrastructure; it is not yet the thing to put in front of a household that will complain.',
+      },
+    ],
+  },
+  {
+    name: 'Running it',
+    items: [
+      {
+        q: 'What do I need to run the server?',
+        a: 'A machine that stays on, your media on storage it can reach, and FFmpeg available for transcoding. It runs on a single binary against SQLite at the small end, and scales up to Postgres and Kubernetes without changing software.',
+      },
+      {
+        q: 'Will it run on a Raspberry Pi or a NAS?',
+        a: 'The single-binary tier is designed for exactly that. Be aware there is no hardware-accelerated transcoding yet, so anything that cannot direct play will be encoded in software — which low-power hardware feels sharply. Direct play is unaffected.',
+      },
+      {
+        q: 'SQLite or Postgres?',
+        a: 'Start with SQLite. Move to Postgres when you actually need multiple processes or independent scaling. The same binary handles both and there is no separate product to migrate to.',
+      },
+      {
+        q: 'Can I reach it from outside my house?',
+        a: 'Yes, and the server can obtain its own certificate through built-in ACME rather than requiring a reverse proxy in front. Exposing a server to the internet remains your decision and your responsibility; the remote access guide covers the trade-offs.',
+      },
+      {
+        q: 'Does it phone home?',
+        a: 'The server is yours and is not designed to report to us. If you use the hosted Playarr web app to link a device for the first time, that handshake passes through the hosted service by definition — it holds a device secret, the server addresses you chose and a single-use code, for a few minutes.',
+      },
+    ],
+  },
+  {
+    name: 'Your existing setup',
+    items: [
+      {
+        q: 'Do I have to use Sonarr, Radarr and friends?',
+        a: 'In practice, yes — at least one of them. Streamarr has no filesystem scanner; it builds its catalogue from what those applications have already reconciled, reusing the file paths and identifiers they resolved. Point it at nothing and the catalogue is empty. If you are not already running that stack, Streamarr is not the right server for you today.',
+      },
+      {
+        q: 'Does it replace them?',
+        a: 'No, and it does not try to. They keep your library organised; Streamarr makes it watchable. Their own interfaces carry on working exactly as before.',
+      },
+      {
+        q: 'Can I migrate from Plex, Jellyfin or Emby?',
+        a: 'There is no automated import, and the honest answer is that it is not a drop-in swap. Those servers scan folders directly; Streamarr builds its catalogue from your library-management applications instead. If you already run that stack, connecting it is straightforward. Watch history and existing user accounts do not come across either way.',
+      },
+    ],
+  },
+  {
+    name: 'Playback and clients',
+    items: [
+      {
+        q: 'Why is my file being transcoded?',
+        a: 'Because the client cannot take the original as it is. Where the file already suits the device, it is served untouched with proper seeking. Encoding always happens on the server; the apps never embed an encoder themselves.',
+      },
+      {
+        q: 'Can I cast to a Chromecast, or use AirPlay?',
+        a: 'Not yet. Neither is implemented.',
+      },
+      {
+        q: 'Can I watch without a connection?',
+        a: 'Yes, originals can be kept on a device for offline playback. Keeping a smaller transcoded copy for offline use is not built yet.',
+      },
+      {
+        q: 'How do I sign in on a television?',
+        a: 'The television shows a short code and you approve it from a phone or laptop. Nobody types a password with a remote control.',
+      },
+      {
+        q: 'Why do some television apps need developer mode?',
+        a: 'Because publishing to a television manufacturer’s store is a separate process that has not happened yet. Until it does, the honest route on LG, Samsung and Roku is a developer-mode installation, and the guides say so plainly.',
+      },
+    ],
+  },
+  {
+    name: 'Sharing',
+    items: [
+      {
+        q: 'Can other people use my server?',
+        a: 'Yes, by one-use invitation. Library access is denied until you grant it, and the ability to stream is a separate grant from being an administrator.',
+      },
+      {
+        q: 'Does it have parental controls?',
+        a: 'No — not working ones, and it would be wrong to imply otherwise. Rating ceilings, tag rules, session caps and time windows exist in the data model with a tested evaluator behind them, but nothing on the live request path calls that evaluator yet. Do not rely on them to restrict what a child can reach.',
+      },
+      {
+        q: 'What are peer groups?',
+        a: 'An optional arrangement where independently owned servers share accounts, permissions and catalogue metadata over a signed protocol, and can route playback between one another. If you run a single server it does nothing at all.',
+      },
+    ],
+  },
+]
+---
+
+<BaseLayout
+  title="FAQ"
+  description="Straight answers about what Streamarr is, what it costs, what it does not do yet, and how it fits alongside the library tools you already run."
+>
+  <Section eyebrow="FAQ" title="Straight answers" lede="Including the ones that are not flattering.">
+    <div class="faq">
+      {
+        groups.map((group) => (
+          <section class="group">
+            <h2>{group.name}</h2>
+            <dl>
+              {group.items.map((item) => (
+                <div class="qa">
+                  <dt>{item.q}</dt>
+                  <dd>{item.a}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        ))
+      }
+    </div>
+
+    <p class="after">
+      Something not covered? Ask in the
+      <a href={LINKS.discussions} rel="noopener">project discussions</a>, or read
+      <a href="/legal/acceptable-use">what this project will and will not help with</a>.
+    </p>
+  </Section>
+</BaseLayout>
+
+<style>
+  .faq {
+    max-width: var(--width-prose);
+  }
+
+  .group + .group {
+    margin-top: var(--space-8);
+  }
+
+  .group h2 {
+    margin-bottom: var(--space-5);
+    font-size: var(--text-xl);
+  }
+
+  dl {
+    margin: 0;
+  }
+
+  .qa {
+    padding: var(--space-5) 0;
+    border-top: 1px solid var(--line);
+  }
+
+  dt {
+    margin-bottom: var(--space-2);
+    font-weight: 700;
+  }
+
+  dd {
+    margin: 0;
+    color: var(--ink-soft);
+  }
+
+  .after {
+    max-width: var(--measure);
+    margin-top: var(--space-8);
+    margin-bottom: 0;
+    color: var(--ink-soft);
+    font-size: var(--text-sm);
+  }
+</style>
