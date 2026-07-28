@@ -14,13 +14,13 @@ import { LINKS, SITE } from '../../consts'
 
 <BaseLayout
   title="Licences & attribution"
-  description="Licensing for Streamarr and Playarr, the FFmpeg and TMDB notices the project is required to display, and its trademark and patent position."
+  description="Licensing for Playarr Server and Playarr, the FFmpeg and TMDB notices the project is required to display, and its trademark and patent position."
 >
   <Section eyebrow="Legal" title="Licences and attribution">
     <div class="prose">
-      <h2 id="streamarr">Streamarr and Playarr</h2>
+      <h2 id="playarr">Playarr Server and Playarr</h2>
       <p>
-        Streamarr's and Playarr's own source code is released under the MIT licence.
+        Playarr Server's and Playarr's own source code is released under the MIT licence.
       </p>
       <blockquote>
         <p>Copyright (c) 2026 Thomas McFarlane</p>
@@ -67,7 +67,7 @@ import { LINKS, SITE } from '../../consts'
         Playarr client application.
       </p>
       <p class="todo">
-        <strong>Corresponding source.</strong> Anyone distributing a Streamarr container image must
+        <strong>Corresponding source.</strong> Anyone distributing a Playarr Server container image must
         make the exact corresponding FFmpeg source, and the build configuration used, available
         alongside the binaries. This page is where those links belong, per published image tag.
         They are not yet published here — if you need them before they are, please
@@ -82,7 +82,7 @@ import { LINKS, SITE } from '../../consts'
         </p>
       </blockquote>
       <p>
-        Metadata identifiers and artwork reaching a Streamarr installation may originate with TMDB,
+        Metadata identifiers and artwork reaching a Playarr Server installation may originate with TMDB,
         by way of the library-management tools it reads from. TMDB is not a partner, sponsor or
         endorser of this project.
       </p>
@@ -92,13 +92,13 @@ import { LINKS, SITE } from '../../consts'
         Media codecs may be covered by patents in some jurisdictions. Nothing on this site, and no
         licence granted by this project, conveys any patent rights. Deploying this software
         commercially, or distributing builds of it, may require a separate patent licence depending
-        on where you are and what you are doing. No claim is made that operating Streamarr is
+        on where you are and what you are doing. No claim is made that operating Playarr Server is
         royalty-free.
       </p>
 
       <h2 id="third-party">Other third-party software</h2>
       <p>
-        Streamarr and Playarr are built on a large amount of open-source software across their Rust
+        Playarr Server and Playarr are built on a large amount of open-source software across their Rust
         and TypeScript trees. A generated dependency and licence inventory belongs here and is not
         yet published; the dependency manifests in the
         <a href={LINKS.repo} rel="noopener">repository</a> are authoritative in the meantime.
@@ -106,10 +106,10 @@ import { LINKS, SITE } from '../../consts'
 
       <h2 id="trademarks">Trademarks and affiliation</h2>
       <p>
-        {SITE.name} and {SITE.clientName} are independent projects. They are not affiliated with,
-        endorsed by, or sponsored by Sonarr, Radarr, Lidarr, Bazarr, Prowlarr, Readarr, Tdarr,
-        Plex, Jellyfin, Emby, Apple, Google, LG, Samsung, Hisense, Roku, or TMDB. All trademarks
-        are the property of their respective owners, and are used here only to describe
+        {SITE.name} is an independent project. It is not affiliated with, endorsed by, or
+        sponsored by Sonarr, Radarr, Lidarr, Bazarr, Prowlarr, Readarr, Tdarr, Plex, Jellyfin,
+        Emby, Apple, Google, LG, Samsung, Hisense, Roku, or TMDB. All trademarks are the
+        property of their respective owners, and are used here only to describe
         interoperability.
       </p>
     </div>

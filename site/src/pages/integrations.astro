@@ -8,31 +8,31 @@ import { INTEGRATIONS, TDARR } from '../data/integrations'
 /*
  * The most carefully worded page on the site.
  *
- * Streamarr reads a library the operator has already organised, using tools the
+ * Playarr Server reads a library the operator has already organised, using tools the
  * operator already runs. It performs no indexing and obtains no media. Every
  * sentence here must stay on that side of the line — see
- * docs/artifacts/streamarr-legal-release.html.
+ * docs/artifacts/playarr-legal-release.html.
  */
 ---
 
 <BaseLayout
   title="Integrations"
-  description="Streamarr reads the library your existing management tools have already organised — Sonarr, Radarr, Lidarr, Readarr, Bazarr and Prowlarr — and dispatches background encoding to Tdarr."
+  description="Playarr Server reads the library your existing management tools have already organised — Sonarr, Radarr, Lidarr, Readarr, Bazarr and Prowlarr — and dispatches background encoding to Tdarr."
 >
   <Section
     eyebrow="Integrations"
     title="Works with the tools you already run"
-    lede="If you keep your library tidy with the *arr applications, Streamarr reads the result. It does not replace them, it does not duplicate them, and their own interfaces carry on working exactly as before."
+    lede="If you keep your library tidy with the *arr applications, Playarr Server reads the result. It does not replace them, it does not duplicate them, and their own interfaces carry on working exactly as before."
   >
     <div class="statement">
       <p>
-        <strong>What Streamarr takes from them:</strong> the titles, the file paths those titles
+        <strong>What Playarr Server takes from them:</strong> the titles, the file paths those titles
         resolve to, and the metadata identifiers already established. That is what turns a folder
         of files into a catalogue with correct posters, correct episode ordering and correct cast
         lists.
       </p>
       <p>
-        <strong>What Streamarr does not do:</strong> it performs no indexing, runs no searches
+        <strong>What Playarr Server does not do:</strong> it performs no indexing, runs no searches
         against anything outside your own library, and obtains no media. It is a playback,
         catalogue and metadata layer over storage you already control.
       </p>
@@ -46,7 +46,7 @@ import { INTEGRATIONS, TDARR } from '../data/integrations'
           <tr>
             <th scope="col">Application</th>
             <th scope="col">Covers</th>
-            <th scope="col">What Streamarr reads</th>
+            <th scope="col">What Playarr Server reads</th>
             <th scope="col">If it is not connected</th>
           </tr>
         </thead>
@@ -65,7 +65,7 @@ import { INTEGRATIONS, TDARR } from '../data/integrations'
       </table>
     </div>
     <p class="after">
-      Streamarr builds its catalogue from what these applications have already reconciled, rather
+      Playarr Server builds its catalogue from what these applications have already reconciled, rather
       than scanning folders itself — connect at least one of the four library applications and
       your titles appear.
     </p>
@@ -99,12 +99,12 @@ import { INTEGRATIONS, TDARR } from '../data/integrations'
     <div class="split">
       <div class="prose" data-reveal>
         <p>
-          Artwork and metadata identifiers arrive with the records Streamarr reads from your
+          Artwork and metadata identifiers arrive with the records Playarr Server reads from your
           library managers. Artwork is fetched once and cached on your own disk, so browsing does
           not hammer an upstream service every time a poster scrolls past.
         </p>
         <p>
-          This site and any Streamarr installation showing that imagery carry the required notice
+          This site and any Playarr Server installation showing that imagery carry the required notice
           — see <a href="/legal/licences">licences and attribution</a>.
         </p>
       </div>

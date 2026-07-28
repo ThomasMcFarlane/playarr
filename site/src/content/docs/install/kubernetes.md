@@ -1,12 +1,12 @@
 ---
 title: Kubernetes
-summary: Deploy Streamarr to a Kubernetes cluster with the bundled Helm chart or the Kustomize overlays, splitting the API and worker roles into independently scaled Deployments.
+summary: Deploy Playarr to a Kubernetes cluster with the bundled Helm chart or the Kustomize overlays, splitting the API and worker roles into independently scaled Deployments.
 group: Install
 order: 4
 badge: Preview
 ---
 
-Kubernetes is the third and largest deployment tier. It suits operators who already run a cluster and want the API and the background worker pool scaled independently, against a PostgreSQL instance that exists as infrastructure in its own right. Everything lives in `infra/kubernetes/` in the repository: a Helm chart at `infra/kubernetes/helm/streamarr/`, and a plain Kustomize skeleton at `infra/kubernetes/base/` with `dev`, `staging` and `prod` overlays. Pick one per cluster — they are not designed to be layered on top of each other.
+Kubernetes is the third and largest deployment tier. It suits operators who already run a cluster and want the API and the background worker pool scaled independently, against a PostgreSQL instance that exists as infrastructure in its own right. Everything lives in `infra/kubernetes/` in the repository: a Helm chart at `infra/kubernetes/helm/playarr/`, and a plain Kustomize skeleton at `infra/kubernetes/base/` with `dev`, `staging` and `prod` overlays. Pick one per cluster — they are not designed to be layered on top of each other.
 
 > **Status: Preview.** The chart and the overlays are real, checked-in manifests, but they have only been validated by local rendering — `helm lint`, `helm template` and `kustomize build`. Nobody has run `helm install` against a live cluster. There is also no published Helm chart repository and no published backend container image release yet, so you install from a repository checkout and supply your own image. Read the "Known rough edges" section before you commit to this tier.
 
@@ -23,20 +23,20 @@ Kubernetes is the third and largest deployment tier. It suits operators who alre
 | Optional: Prometheus Operator CRDs | Only if you set `serviceMonitor.enabled: true`. |
 | Optional: Redis | Only if you want Redis-backed caching and pub/sub instead of PostgreSQL `LISTEN`/`NOTIFY`. |
 
-Streamarr picks its coordination and caching strategy from the shape of `DATABASE_URL`, not from a flag. A `postgres://` or `postgresql://` URL selects the multi-node PostgreSQL coordinator; adding a non-empty `REDIS_URL` on top of that moves caching and pub/sub onto Redis. Pointing several pods at a `sqlite:` URL is a real misconfiguration hazard that neither path prevents — always use PostgreSQL here.
+Playarr picks its coordination and caching strategy from the shape of `DATABASE_URL`, not from a flag. A `postgres://` or `postgresql://` URL selects the multi-node PostgreSQL coordinator; adding a non-empty `REDIS_URL` on top of that moves caching and pub/sub onto Redis. Pointing several pods at a `sqlite:` URL is a real misconfiguration hazard that neither path prevents — always use PostgreSQL here.
 
 ## How the roles map onto Deployments
 
-Both paths deploy **two** Deployments from the **same image**, distinguished only by the `STREAMARR_ROLE` environment variable. Neither Deployment overrides the image's `command` or `args`; the image's default `CMD ["/app/streamarr", "serve"]` runs unchanged, and `serve` takes no role flag.
+Both paths deploy **two** Deployments from the **same image**, distinguished only by the `PLAYARR_ROLE` environment variable. Neither Deployment overrides the image's `command` or `args`; the image's default `CMD ["/app/playarr", "serve"]` runs unchanged, and `serve` takes no role flag.
 
-| Deployment | `STREAMARR_ROLE` | Serves | Scaled by |
+| Deployment | `PLAYARR_ROLE` | Serves | Scaled by |
 | --- | --- | --- | --- |
-| `streamarr-api` | `api` | The full HTTP/JSON API, authentication, playback negotiation, and a built web UI served as the router's fallback at `/`. Fronted by a `ClusterIP` Service. | `api.autoscaling` — an HPA, 2–6 replicas at 70% CPU by default. |
-| `streamarr-worker` | `worker` | No application traffic. Runs the reconciliation pollers, peer-sync pollers and background transcode dispatch. Behind a headless `ClusterIP` Service used only for probes and metrics scraping. | `worker.autoscaling` — an HPA, 1–8 replicas at 75% CPU by default, plus a PodDisruptionBudget. |
+| `playarr-api` | `api` | The full HTTP/JSON API, authentication, playback negotiation, and a built web UI served as the router's fallback at `/`. Fronted by a `ClusterIP` Service. | `api.autoscaling` — an HPA, 2–6 replicas at 70% CPU by default. |
+| `playarr-worker` | `worker` | No application traffic. Runs the reconciliation pollers, peer-sync pollers and background transcode dispatch. Behind a headless `ClusterIP` Service used only for probes and metrics scraping. | `worker.autoscaling` — an HPA, 1–8 replicas at 75% CPU by default, plus a PodDisruptionBudget. |
 
 > **There is no coordinator Deployment.** Coordination is in-process. Every pod constructs the same PostgreSQL-backed coordinator from `DATABASE_URL` and uses advisory locks and leader election so that only one node runs any given background loop. You do not deploy, scale or configure a coordinator separately — there is no third workload to run.
 
-> **Which web UI lands at `/` depends on the image you build.** The API router serves whatever directory `STREAMARR_WEB_ASSETS_DIR` names, falling back to a `web/` directory beside the binary, and serves API-only if neither contains an `index.html`. `infra/docker/backend.Dockerfile` currently builds the `@streamarr-tv/web` workspace (the Playarr web client) into `/app/web`, while `streamarr-api`'s own documentation describes that slot as Streamarr Admin (`clients/tv-web/admin/dist`). The two disagree in the repository today. If you want Streamarr Admin on this origin, build `clients/tv-web/admin`, mount its `dist/` output into the pods, and point `STREAMARR_WEB_ASSETS_DIR` at it — the chart exposes no value for that, so it needs the same volume patching described under "Storage".
+> **Which web UI lands at `/` depends on the image you build.** The API router serves whatever directory `PLAYARR_WEB_ASSETS_DIR` names, falling back to a `web/` directory beside the binary, and serves API-only if neither contains an `index.html`. `infra/docker/backend.Dockerfile` currently builds the `@playarr-tv/web` workspace (the Playarr web client) into `/app/web`, while `playarr-api`'s own documentation describes that slot as Playarr Admin (`clients/tv-web/admin/dist`). The two disagree in the repository today. If you want Playarr Admin on this origin, build `clients/tv-web/admin`, mount its `dist/` output into the pods, and point `PLAYARR_WEB_ASSETS_DIR` at it — the chart exposes no value for that, so it needs the same volume patching described under "Storage".
 
 Both roles listen on the same two ports. The chart configures the same probe paths for both, though the `worker` role does not actually serve `/readyz` — see "Known rough edges":
 
@@ -52,29 +52,29 @@ Both roles listen on the same two ports. The chart configures the same probe pat
 
 ## Step 1 — Build and push an image
 
-The chart's default `image.repository` is `ghcr.io/streamarr/streamarr`, which the repository's own README labels a placeholder. No backend image has been published, so build one from the repository root — the Dockerfile's build context must be the root, because it also builds the web assets:
+The chart's default `image.repository` is `ghcr.io/playarr/playarr`, which the repository's own README labels a placeholder. No backend image has been published, so build one from the repository root — the Dockerfile's build context must be the root, because it also builds the web assets:
 
 ```bash
-git clone https://github.com/ThomasMcFarlane/streamarr.git
-cd streamarr
+git clone https://github.com/ThomasMcFarlane/playarr.git
+cd playarr
 
 docker build \
   -f infra/docker/backend.Dockerfile \
-  -t <YOUR-REGISTRY>/streamarr:<YOUR-TAG> \
+  -t <YOUR-REGISTRY>/playarr:<YOUR-TAG> \
   .
 
-docker push <YOUR-REGISTRY>/streamarr:<YOUR-TAG>
+docker push <YOUR-REGISTRY>/playarr:<YOUR-TAG>
 ```
 
 The resulting image runs as uid/gid `10001`, exposes `8484` and `9090`, bundles `ffmpeg` and `ffprobe` for thumbnailing, subtitle extraction and on-demand transcoding, and works with a read-only root filesystem. Both the SQLite and PostgreSQL drivers are compiled in; the backend is chosen at runtime from `DATABASE_URL`.
 
 ## Step 2 — Prepare PostgreSQL
 
-Create a database and a role for Streamarr on your existing PostgreSQL instance. Nothing else is required: schema migrations are embedded in the binary and run automatically at pod startup, on every tier.
+Create a database and a role for Playarr on your existing PostgreSQL instance. Nothing else is required: schema migrations are embedded in the binary and run automatically at pod startup, on every tier.
 
 ```sql
-CREATE ROLE streamarr LOGIN PASSWORD '<YOUR-DB-PASSWORD>';
-CREATE DATABASE streamarr OWNER streamarr;
+CREATE ROLE playarr LOGIN PASSWORD '<YOUR-DB-PASSWORD>';
+CREATE DATABASE playarr OWNER playarr;
 ```
 
 Because migrations run at startup, a rolling update where old and new pods overlap will briefly have both schema versions in play. Keep `maxSurge: 1` / `maxUnavailable: 0` (the shipped strategy) and roll one version at a time.
@@ -86,11 +86,11 @@ Because migrations run at startup, a rolling update where old and new pods overl
 `DATABASE_URL` and `REDIS_URL` are only ever read through `secretKeyRef`. The chart will not accept them as plaintext `values.yaml` entries, and `secret.create` defaults to `false`, meaning the chart expects the Secret to already exist.
 
 ```bash
-kubectl create namespace streamarr
+kubectl create namespace playarr
 
-kubectl create secret generic streamarr-secrets \
-  --namespace streamarr \
-  --from-literal=DATABASE_URL='postgres://streamarr:<YOUR-DB-PASSWORD>@postgres.databases.svc:5432/streamarr' \
+kubectl create secret generic playarr-secrets \
+  --namespace playarr \
+  --from-literal=DATABASE_URL='postgres://playarr:<YOUR-DB-PASSWORD>@postgres.databases.svc:5432/playarr' \
   --from-literal=REDIS_URL=''
 ```
 
@@ -102,12 +102,12 @@ In production, prefer managing that Secret with External Secrets Operator, Seale
 
 ## Step 4 — Write a values file
 
-Every key below exists in `infra/kubernetes/helm/streamarr/values.yaml`. Anything you put under `config:` is rendered into a ConfigMap and consumed by both Deployments via `envFrom`, so any environment variable the binary reads can go there.
+Every key below exists in `infra/kubernetes/helm/playarr/values.yaml`. Anything you put under `config:` is rendered into a ConfigMap and consumed by both Deployments via `envFrom`, so any environment variable the binary reads can go there.
 
 ```yaml
 # my-values.yaml
 image:
-  repository: <YOUR-REGISTRY>/streamarr
+  repository: <YOUR-REGISTRY>/playarr
   tag: "<YOUR-TAG>"
   pullPolicy: IfNotPresent
 
@@ -116,17 +116,17 @@ imagePullSecrets:
 
 secret:
   create: false
-  name: streamarr-secrets
+  name: playarr-secrets
 
 config:
-  STREAMARR_LOG: "info"
-  STREAMARR_HTTP_BIND_ADDR: "0.0.0.0:8484"
-  STREAMARR_METRICS_BIND_ADDR: "0.0.0.0:9090"
+  PLAYARR_LOG: "info"
+  PLAYARR_HTTP_BIND_ADDR: "0.0.0.0:8484"
+  PLAYARR_METRICS_BIND_ADDR: "0.0.0.0:9090"
   # Caches must land on a writable mount. The only writable mount the chart
   # creates is the emptyDir at /tmp, so these point there — ephemeral, and
   # rebuilt per pod. See "Storage" for making them persistent.
-  STREAMARR_ARTWORK_CACHE_DIR: "/tmp/streamarr-cache/artwork"
-  STREAMARR_SUBTITLE_CACHE_DIR: "/tmp/streamarr-cache/subtitles"
+  PLAYARR_ARTWORK_CACHE_DIR: "/tmp/playarr-cache/artwork"
+  PLAYARR_SUBTITLE_CACHE_DIR: "/tmp/playarr-cache/subtitles"
 
 probes:
   port: 8484
@@ -178,7 +178,7 @@ worker:
     minAvailable: 1
     maxUnavailable: null
   # Any label you have already applied to the nodes you want workers on.
-  # This is your cluster's label, not one Streamarr defines.
+  # This is your cluster's label, not one Playarr defines.
   nodeSelector:
     <YOUR-NODE-LABEL-KEY>: <YOUR-NODE-LABEL-VALUE>
 
@@ -186,7 +186,7 @@ serviceMonitor:
   enabled: false
 ```
 
-> **`probes.port` and `metricsPort` are not derived from the bind addresses.** Kubernetes port fields need a plain integer, while the binary takes a full socket address string. If you change the port inside `STREAMARR_HTTP_BIND_ADDR` or `STREAMARR_METRICS_BIND_ADDR`, you must change `probes.port` or `metricsPort` by hand to match. Nothing checks this for you.
+> **`probes.port` and `metricsPort` are not derived from the bind addresses.** Kubernetes port fields need a plain integer, while the binary takes a full socket address string. If you change the port inside `PLAYARR_HTTP_BIND_ADDR` or `PLAYARR_METRICS_BIND_ADDR`, you must change `probes.port` or `metricsPort` by hand to match. Nothing checks this for you.
 
 A few more notes on the values above:
 
@@ -201,43 +201,43 @@ A few more notes on the values above:
 Render and inspect first, then install:
 
 ```bash
-helm lint infra/kubernetes/helm/streamarr
+helm lint infra/kubernetes/helm/playarr
 
-helm template streamarr infra/kubernetes/helm/streamarr \
-  --namespace streamarr \
+helm template playarr infra/kubernetes/helm/playarr \
+  --namespace playarr \
   -f my-values.yaml | less
 
-helm install streamarr infra/kubernetes/helm/streamarr \
-  --namespace streamarr --create-namespace \
+helm install playarr infra/kubernetes/helm/playarr \
+  --namespace playarr --create-namespace \
   -f my-values.yaml
 ```
 
 For a throwaway development cluster you can let the chart create the Secret itself:
 
 ```bash
-helm install streamarr infra/kubernetes/helm/streamarr \
-  --namespace streamarr --create-namespace \
+helm install playarr infra/kubernetes/helm/playarr \
+  --namespace playarr --create-namespace \
   --set secret.create=true \
-  --set secret.data.databaseUrl='postgres://streamarr:<YOUR-DB-PASSWORD>@postgres:5432/streamarr' \
+  --set secret.data.databaseUrl='postgres://playarr:<YOUR-DB-PASSWORD>@postgres:5432/playarr' \
   --set secret.data.redisUrl=''
 ```
 
-With a release named `streamarr` and the chart named `streamarr`, the fullname helper collapses to `streamarr`, so the objects created are `streamarr-api` and `streamarr-worker` (Deployments, Services, HPAs), `streamarr-worker` (PDB), `streamarr-config` (ConfigMap) and `streamarr` (ServiceAccount).
+With a release named `playarr` and the chart named `playarr`, the fullname helper collapses to `playarr`, so the objects created are `playarr-api` and `playarr-worker` (Deployments, Services, HPAs), `playarr-worker` (PDB), `playarr-config` (ConfigMap) and `playarr` (ServiceAccount).
 
 ## Step 6 — Verify the rollout
 
 ```bash
-kubectl -n streamarr rollout status deployment/streamarr-api
-kubectl -n streamarr rollout status deployment/streamarr-worker
+kubectl -n playarr rollout status deployment/playarr-api
+kubectl -n playarr rollout status deployment/playarr-worker
 
-kubectl -n streamarr get pods -l app.kubernetes.io/name=streamarr -o wide
-kubectl -n streamarr get svc,hpa,pdb
+kubectl -n playarr get pods -l app.kubernetes.io/name=playarr -o wide
+kubectl -n playarr get svc,hpa,pdb
 ```
 
 Then check the API answers from inside the cluster:
 
 ```bash
-kubectl -n streamarr port-forward svc/streamarr-api 8484:80
+kubectl -n playarr port-forward svc/playarr-api 8484:80
 
 # in another shell
 curl -fsS http://127.0.0.1:8484/healthz
@@ -248,19 +248,19 @@ curl -fsS http://127.0.0.1:8484/api/system/version
 `/readyz` returns 200 only once the API's HTTP listener is bound, which happens after the pool has connected and migrations have applied; it returns 503 before that. Confirm the pods really are running the roles you expect:
 
 ```bash
-kubectl -n streamarr get deploy streamarr-api \
-  -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="STREAMARR_ROLE")].value}{"\n"}'
-kubectl -n streamarr get deploy streamarr-worker \
-  -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="STREAMARR_ROLE")].value}{"\n"}'
+kubectl -n playarr get deploy playarr-api \
+  -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="PLAYARR_ROLE")].value}{"\n"}'
+kubectl -n playarr get deploy playarr-worker \
+  -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="PLAYARR_ROLE")].value}{"\n"}'
 ```
 
 On a completely empty database the API bootstraps a single admin account and logs its generated password exactly once, at WARN level. Capture it now — it is never shown again:
 
 ```bash
-kubectl -n streamarr logs deployment/streamarr-api | grep 'bootstrap admin'
+kubectl -n playarr logs deployment/playarr-api | grep 'bootstrap admin'
 ```
 
-Set `STREAMARR_BOOTSTRAP_ADMIN_USERNAME` and `STREAMARR_BOOTSTRAP_ADMIN_PASSWORD` in `config:` beforehand if you would rather choose them yourself — though a password in a ConfigMap is visible to anyone who can read the namespace.
+Set `PLAYARR_BOOTSTRAP_ADMIN_USERNAME` and `PLAYARR_BOOTSTRAP_ADMIN_PASSWORD` in `config:` beforehand if you would rather choose them yourself — though a password in a ConfigMap is visible to anyone who can read the namespace.
 
 Common failure signatures:
 
@@ -277,19 +277,19 @@ This is the whole reason to run Tier 3. The two Deployments have separate HPAs, 
 
 ```bash
 # Temporarily override the autoscaler bounds
-helm upgrade streamarr infra/kubernetes/helm/streamarr \
-  --namespace streamarr -f my-values.yaml \
+helm upgrade playarr infra/kubernetes/helm/playarr \
+  --namespace playarr -f my-values.yaml \
   --set api.autoscaling.maxReplicas=10 \
   --set worker.autoscaling.maxReplicas=16
 
-kubectl -n streamarr get hpa -w
+kubectl -n playarr get hpa -w
 ```
 
 To pin a fixed replica count instead, disable the relevant autoscaler and set the count:
 
 ```bash
-helm upgrade streamarr infra/kubernetes/helm/streamarr \
-  --namespace streamarr -f my-values.yaml \
+helm upgrade playarr infra/kubernetes/helm/playarr \
+  --namespace playarr -f my-values.yaml \
   --set worker.autoscaling.enabled=false \
   --set worker.replicaCount=4
 ```
@@ -300,15 +300,15 @@ Give the worker pool its own nodes with `worker.nodeSelector`, `worker.toleratio
 
 This is the part the chart does not do for you, and the part to plan before you install.
 
-**What the chart mounts today:** one `emptyDir` at `/tmp` per pod, and nothing else. It creates no PersistentVolumeClaim, references no `storageClassName`, and mounts no media volume. There is no object-storage backend of any kind in Streamarr; every cache is a local directory.
+**What the chart mounts today:** one `emptyDir` at `/tmp` per pod, and nothing else. It creates no PersistentVolumeClaim, references no `storageClassName`, and mounts no media volume. There is no object-storage backend of any kind in Playarr; every cache is a local directory.
 
 That leaves three storage concerns for you to satisfy:
 
 | What | Where it lives | Access mode | Notes |
 | --- | --- | --- | --- |
 | Your media files | Wherever your library already is — NFS, CephFS, SMB, or a CSI volume | `ReadWriteMany` if more than one pod must read it | Both roles need it: the API serves direct-play and HLS from it, the worker reads it for background work. |
-| Artwork, thumbnail and subtitle caches | `STREAMARR_ARTWORK_CACHE_DIR`, `STREAMARR_THUMBNAIL_CACHE_DIR`, `STREAMARR_SUBTITLE_CACHE_DIR` | `ReadWriteMany` to share; otherwise each pod caches separately | **Set these explicitly.** `STREAMARR_ARTWORK_CACHE_DIR` also roots the thumbnail cache (under an `episode-thumbnails/` subdirectory) unless `STREAMARR_THUMBNAIL_CACHE_DIR` overrides it. |
-| On-demand transcode segments | A `streamarr-transcode` directory inside the process temp directory — `/tmp/streamarr-transcode` unless `TMPDIR` says otherwise | Per pod | No Streamarr-specific variable exposes this path. It lands in the `emptyDir` at `/tmp`, which by default consumes node ephemeral storage. Size your nodes accordingly, or replace the volume. |
+| Artwork, thumbnail and subtitle caches | `PLAYARR_ARTWORK_CACHE_DIR`, `PLAYARR_THUMBNAIL_CACHE_DIR`, `PLAYARR_SUBTITLE_CACHE_DIR` | `ReadWriteMany` to share; otherwise each pod caches separately | **Set these explicitly.** `PLAYARR_ARTWORK_CACHE_DIR` also roots the thumbnail cache (under an `episode-thumbnails/` subdirectory) unless `PLAYARR_THUMBNAIL_CACHE_DIR` overrides it. |
+| On-demand transcode segments | A `playarr-transcode` directory inside the process temp directory — `/tmp/playarr-transcode` unless `TMPDIR` says otherwise | Per pod | No Playarr-specific variable exposes this path. It lands in the `emptyDir` at `/tmp`, which by default consumes node ephemeral storage. Size your nodes accordingly, or replace the volume. |
 
 > **Do not leave the cache paths unset on a PostgreSQL deployment.** With no `DATABASE_URL` that looks like SQLite, the artwork cache falls back to the process temp directory, but the **thumbnail and subtitle caches fall back to the process working directory** — `/app` in the published image. Under the chart's `securityContext.readOnlyRootFilesystem: true`, that path is not writable, so those two caches fail to write rather than quietly filling an `emptyDir`. Point all three at a writable mount.
 
@@ -324,23 +324,23 @@ If your library manager reports paths under a different root from the one the po
 
 ```yaml
 config:
-  STREAMARR_MEDIA_REMOTE_ROOT: "/media"
-  STREAMARR_MEDIA_LOCAL_ROOT: "/mnt/library"
+  PLAYARR_MEDIA_REMOTE_ROOT: "/media"
+  PLAYARR_MEDIA_LOCAL_ROOT: "/mnt/library"
 ```
 
 > **Not built yet: hardware-accelerated transcoding.** There is no VAAPI, NVENC, QSV, CUDA or VideoToolbox support in the backend, and no `/dev/dri` passthrough, NVIDIA runtime or GPU resource request anywhere in the Kubernetes manifests. Transcoding uses a software encoder. Budget CPU, not GPU, when sizing the worker pool.
 
 ## Ingress and TLS
 
-**Neither path ships an Ingress or Gateway API resource.** Ingress class, TLS issuer and hostname are all cluster-specific, so fronting the `streamarr-api` Service is left to you. A minimal ingress-nginx plus cert-manager example you write yourself:
+**Neither path ships an Ingress or Gateway API resource.** Ingress class, TLS issuer and hostname are all cluster-specific, so fronting the `playarr-api` Service is left to you. A minimal ingress-nginx plus cert-manager example you write yourself:
 
 ```yaml
-# streamarr-ingress.yaml
+# playarr-ingress.yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: streamarr
-  namespace: streamarr
+  name: playarr
+  namespace: playarr
   annotations:
     cert-manager.io/cluster-issuer: <YOUR-CLUSTER-ISSUER>
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
@@ -350,7 +350,7 @@ spec:
   tls:
     - hosts:
         - <YOUR-SERVER-HOSTNAME>
-      secretName: streamarr-tls
+      secretName: playarr-tls
   rules:
     - host: <YOUR-SERVER-HOSTNAME>
       http:
@@ -359,13 +359,13 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: streamarr-api
+                name: playarr-api
                 port:
                   number: 80
 ```
 
 ```bash
-kubectl apply -f streamarr-ingress.yaml
+kubectl apply -f playarr-ingress.yaml
 ```
 
 Route only the `http` port (`80` on the Service, targeting container port `8484`). **Do not expose port `9090`** — `/metrics` is unauthenticated and belongs on the internal network only, scraped by Prometheus.
@@ -383,29 +383,29 @@ These follow directly from the manifests and the backend source. None has been o
 ```bash
 # Simplest: point readiness at /healthz for both Deployments.
 # Trade-off: the API loses genuine readiness gating during startup.
-helm upgrade streamarr infra/kubernetes/helm/streamarr \
-  --namespace streamarr -f my-values.yaml \
+helm upgrade playarr infra/kubernetes/helm/playarr \
+  --namespace playarr -f my-values.yaml \
   --set probes.readinessPath=/healthz
 ```
 
 On the Kustomize route you can be more precise and change the readiness path in `base/deployment-worker.yaml` alone, leaving the API's `/readyz` probe intact. Verify whichever you choose:
 
 ```bash
-kubectl -n streamarr get pods -l app.kubernetes.io/component=worker
-kubectl -n streamarr describe pod -l app.kubernetes.io/component=worker | grep -A3 Readiness
+kubectl -n playarr get pods -l app.kubernetes.io/component=worker
+kubectl -n playarr describe pod -l app.kubernetes.io/component=worker | grep -A3 Readiness
 ```
 
-**Set `STREAMARR_JWT_SECRET` or sign-ins will break across replicas.** If it is unset, or shorter than 32 bytes, each process generates a fresh boot-lifetime secret. With two or more API replicas that means a token minted by one pod is rejected by the next, and every restart signs everyone out. The chart's Secret only carries `DATABASE_URL` and `REDIS_URL`, and there is no `envFrom` for a Secret, so the two honest options are to put it in `config:` (a ConfigMap, which is not a secure home for a signing key) or to patch an `envFrom.secretRef` onto both Deployments:
+**Set `PLAYARR_JWT_SECRET` or sign-ins will break across replicas.** If it is unset, or shorter than 32 bytes, each process generates a fresh boot-lifetime secret. With two or more API replicas that means a token minted by one pod is rejected by the next, and every restart signs everyone out. The chart's Secret only carries `DATABASE_URL` and `REDIS_URL`, and there is no `envFrom` for a Secret, so the two honest options are to put it in `config:` (a ConfigMap, which is not a secure home for a signing key) or to patch an `envFrom.secretRef` onto both Deployments:
 
 ```bash
 openssl rand -hex 32   # 64 characters, comfortably over the 32-byte minimum
 ```
 
-**Splitting roles disables one transcode promotion path.** The in-process channel that promotes a live on-demand transcode into a durable background-produced rendition only works when a single process runs both roles (`STREAMARR_ROLE=all`). In a split `api` / `worker` deployment the send fails closed. Ordinary background dispatch is unaffected.
+**Splitting roles disables one transcode promotion path.** The in-process channel that promotes a live on-demand transcode into a durable background-produced rendition only works when a single process runs both roles (`PLAYARR_ROLE=all`). In a split `api` / `worker` deployment the send fails closed. Ordinary background dispatch is unaffected.
 
 **On-demand transcode sessions are not node-affine.** A playback session that started on one API pod dies with that pod. Keep `terminationGracePeriodSeconds` and `preStopSleepSeconds` at their defaults so rolling updates drain gracefully.
 
-**The default image repository is a placeholder.** `ghcr.io/streamarr/streamarr` appears in `values.yaml` and in `base/kustomization.yaml`; the repository's own README calls it a placeholder. Always set your own.
+**The default image repository is a placeholder.** `ghcr.io/playarr/playarr` appears in `values.yaml` and in `base/kustomization.yaml`; the repository's own README calls it a placeholder. Always set your own.
 
 ## The Kustomize route
 
@@ -415,15 +415,15 @@ For teams that would rather not have a Helm release object in-cluster. It is del
 infra/kubernetes/
   base/
     kustomization.yaml     # commonLabels, resource list, images[] tag pin
-    deployment-api.yaml    # STREAMARR_ROLE=api, 2 replicas
-    deployment-worker.yaml # STREAMARR_ROLE=worker, 2 replicas
+    deployment-api.yaml    # PLAYARR_ROLE=api, 2 replicas
+    deployment-worker.yaml # PLAYARR_ROLE=worker, 2 replicas
     service.yaml           # ClusterIP for api, headless ClusterIP for worker
-    configmap.yaml         # STREAMARR_LOG / *_BIND_ADDR
+    configmap.yaml         # PLAYARR_LOG / *_BIND_ADDR
     secret.yaml            # placeholder with empty stringData
   overlays/
-    dev/                   # namespace streamarr-dev, 1 replica each, STREAMARR_LOG=debug
-    staging/               # namespace streamarr-staging, 2 replicas each, STREAMARR_LOG=info
-    prod/                  # namespace streamarr-prod, 3 replicas each, STREAMARR_LOG=warn
+    dev/                   # namespace playarr-dev, 1 replica each, PLAYARR_LOG=debug
+    staging/               # namespace playarr-staging, 2 replicas each, PLAYARR_LOG=info
+    prod/                  # namespace playarr-prod, 3 replicas each, PLAYARR_LOG=warn
 ```
 
 Render, inspect, apply. Applying the overlay as it stands ships `base/secret.yaml`'s **empty** `DATABASE_URL`, which makes every pod exit at startup, so overwrite the Secret straight after applying — or replace it with a `secretGenerator` first, as under point 1 below:
@@ -432,17 +432,17 @@ Render, inspect, apply. Applying the overlay as it stands ships `base/secret.yam
 kustomize build infra/kubernetes/base | less
 kustomize build infra/kubernetes/overlays/dev | less
 
-kubectl create namespace streamarr-dev
+kubectl create namespace playarr-dev
 kustomize build infra/kubernetes/overlays/dev | kubectl apply -f -
 
 # The applied Secret is the empty placeholder — give it real values.
-kubectl -n streamarr-dev create secret generic streamarr-secrets \
-  --from-literal=DATABASE_URL='postgres://streamarr:<YOUR-DB-PASSWORD>@postgres.databases.svc:5432/streamarr' \
+kubectl -n playarr-dev create secret generic playarr-secrets \
+  --from-literal=DATABASE_URL='postgres://playarr:<YOUR-DB-PASSWORD>@postgres.databases.svc:5432/playarr' \
   --from-literal=REDIS_URL='' \
   --dry-run=client -o yaml | kubectl apply -f -
 
-kubectl -n streamarr-dev rollout restart deployment/streamarr-api deployment/streamarr-worker
-kubectl -n streamarr-dev rollout status deployment/streamarr-api
+kubectl -n playarr-dev rollout restart deployment/playarr-api deployment/playarr-worker
+kubectl -n playarr-dev rollout status deployment/playarr-api
 ```
 
 The Kustomize base sets no image pull secret either, so if your registry is private, add an `imagePullSecrets` patch in your overlay before the pods can pull at all.
@@ -454,53 +454,53 @@ Two things to change before this touches anything real:
    ```yaml
    # overlays/prod/kustomization.yaml
    secretGenerator:
-     - name: streamarr-secrets
+     - name: playarr-secrets
        behavior: replace
        envs:
-         - streamarr-secrets.prod.env   # untracked, gitignored
+         - playarr-secrets.prod.env   # untracked, gitignored
    ```
 
 2. **Set the image.** Update `images[].name` and `images[].newTag` in `base/kustomization.yaml`, or override per overlay:
 
    ```yaml
    images:
-     - name: ghcr.io/streamarr/streamarr
-       newName: <YOUR-REGISTRY>/streamarr
+     - name: ghcr.io/playarr/playarr
+       newName: <YOUR-REGISTRY>/playarr
        newTag: "<YOUR-TAG>"
    ```
 
-Each overlay sets its namespace, patches both Deployments' replica counts, and merges a `STREAMARR_LOG` override into the ConfigMap — so adding your own config keys, volumes or probe changes is a `configMapGenerator` merge or a strategic-merge patch in the overlay.
+Each overlay sets its namespace, patches both Deployments' replica counts, and merges a `PLAYARR_LOG` override into the ConfigMap — so adding your own config keys, volumes or probe changes is a `configMapGenerator` merge or a strategic-merge patch in the overlay.
 
 ## Upgrading
 
-Kubernetes is the one tier where Streamarr never updates itself, by design. Nothing in the repository reaches out to a registry, patches its own workload through the Kubernetes API, or otherwise self-updates from inside the cluster — and nothing should.
+Kubernetes is the one tier where Playarr never updates itself, by design. Nothing in the repository reaches out to a registry, patches its own workload through the Kubernetes API, or otherwise self-updates from inside the cluster — and nothing should.
 
 The ordinary upgrade is a values change plus a `helm upgrade`:
 
 ```bash
 # Bump image.tag in my-values.yaml, then:
-helm upgrade streamarr infra/kubernetes/helm/streamarr \
-  --namespace streamarr -f my-values.yaml
+helm upgrade playarr infra/kubernetes/helm/playarr \
+  --namespace playarr -f my-values.yaml
 
-kubectl -n streamarr rollout status deployment/streamarr-api
-kubectl -n streamarr rollout status deployment/streamarr-worker
+kubectl -n playarr rollout status deployment/playarr-api
+kubectl -n playarr rollout status deployment/playarr-worker
 ```
 
-Migrations run automatically as pods start, exactly as on the other tiers. Roll back with `helm rollback streamarr <REVISION>` or `kubectl -n streamarr rollout undo deployment/streamarr-api` — but note that a rollback moves the application back, not the database schema, so treat migrations as forward-only.
+Migrations run automatically as pods start, exactly as on the other tiers. Roll back with `helm rollback playarr <REVISION>` or `kubectl -n playarr rollout undo deployment/playarr-api` — but note that a rollback moves the application back, not the database schema, so treat migrations as forward-only.
 
 For GitOps, `infra/kubernetes/flux-image-automation.example.yaml` documents the sanctioned automation path: an `ImageRepository` watching the registry, an `ImagePolicy` selecting the highest tag matching a semver range, and an `ImageUpdateAutomation` committing the resulting tag bump back into your Git repository — ideally to a side branch behind a pull request. It is a heavily commented **example only**, not wired into any live Flux `Kustomization` or `HelmRelease`, and neither `values.yaml` nor `base/kustomization.yaml` carries the `# {"$imagepolicy": …}` marker comment by default. Adding it is a deliberate, per-environment opt-in, because it changes what is allowed to author commits against that file.
 
 ## Uninstalling
 
 ```bash
-helm uninstall streamarr --namespace streamarr
-kubectl delete namespace streamarr
+helm uninstall playarr --namespace playarr
+kubectl delete namespace playarr
 ```
 
 The Secret you created out-of-band is deleted with the namespace; your PostgreSQL database is not, and neither are any volumes you provisioned yourself.
 
 ## Next steps
 
-With a healthy rollout and the bootstrap admin password in hand, sign in to Streamarr Admin — at your ingress hostname if you built an image that serves it at `/` (see the note under "How the roles map onto Deployments"), otherwise wherever you host it — to set the instance display name, register the library-management applications you already run, and invite the people in your household.
+With a healthy rollout and the bootstrap admin password in hand, sign in to Playarr Admin — at your ingress hostname if you built an image that serves it at `/` (see the note under "How the roles map onto Deployments"), otherwise wherever you host it — to set the instance display name, register the library-management applications you already run, and invite the people in your household.
 
 > The bootstrap admin account is created with `can_stream: false`: it exists to run the admin surface, not as a viewing account. Create a separate account for ordinary playback.

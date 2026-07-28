@@ -1,11 +1,11 @@
 ---
 title: First run
-summary: What Streamarr does the first time it starts, how to reach it, how the first administrator account is created, and how to connect your library managers so the catalogue fills up.
+summary: What Playarr does the first time it starts, how to reach it, how the first administrator account is created, and how to connect your library managers so the catalogue fills up.
 group: Setup
 order: 10
 ---
 
-Streamarr does all of its first-boot work by itself: it creates its database, applies its migrations,
+Playarr does all of its first-boot work by itself: it creates its database, applies its migrations,
 mints this installation's node identity, seeds two default library shelves and provisions exactly one
 administrator account. There is no setup wizard to click through. Your job on first run is to find
 the generated password, sign in, connect the library managers you already run, and check that the
@@ -13,14 +13,14 @@ first reconciliation pass completed.
 
 ## Reach the server
 
-Streamarr listens on `0.0.0.0:8484` by default, and serves a Prometheus scrape endpoint on
+Playarr listens on `0.0.0.0:8484` by default, and serves a Prometheus scrape endpoint on
 `0.0.0.0:9090`. Neither is a bare port setting — both take a full socket address.
 
 | Port | Purpose | Environment variable |
 | --- | --- | --- |
-| `8484/tcp` | HTTP API, and the co-hosted web UI when built assets are present | `STREAMARR_HTTP_BIND_ADDR` |
-| `9090/tcp` | `GET /metrics` | `STREAMARR_METRICS_BIND_ADDR` |
-| `80/tcp` | ACME HTTP-01 challenge, only when automatic HTTPS is enabled | `STREAMARR_ACME_HTTP01_BIND_ADDR` |
+| `8484/tcp` | HTTP API, and the co-hosted web UI when built assets are present | `PLAYARR_HTTP_BIND_ADDR` |
+| `9090/tcp` | `GET /metrics` | `PLAYARR_METRICS_BIND_ADDR` |
+| `80/tcp` | ACME HTTP-01 challenge, only when automatic HTTPS is enabled | `PLAYARR_ACME_HTTP01_BIND_ADDR` |
 
 Check that it is alive and ready:
 
@@ -37,22 +37,22 @@ client compatibility table.
 
 > **Port 9090 should never be reachable from outside your network.** The production Compose stack at
 > `infra/docker/docker-compose.prod.yml` only `expose`s 8484 and 9090 on the internal
-> `streamarr-net` network and fronts 8484 through Caddy, so nothing is published directly. The
+> `playarr-net` network and fronts 8484 through Caddy, so nothing is published directly. The
 > single-node stack at `infra/docker/docker-compose.standalone.yml` is the opposite: it publishes
 > **both** `8484:8484` and `9090:9090` straight to the host, so firewall or remove the 9090 mapping
 > before that host is reachable from anywhere you do not trust.
 
 If you deployed with the reference Compose production stack, Caddy fronts everything on ports 80 and
-443 instead, and the Streamarr containers publish nothing directly — reach the API through Caddy's
+443 instead, and the Playarr containers publish nothing directly — reach the API through Caddy's
 hostname rather than `:8484`.
 
 ## Find the first administrator password
 
-Before Streamarr serves a single request, it checks whether the database contains any users. If it
+Before Playarr serves a single request, it checks whether the database contains any users. If it
 does, nothing happens. If the database is empty, it provisions exactly one administrator:
 
-- The username comes from `STREAMARR_BOOTSTRAP_ADMIN_USERNAME`, defaulting to `admin`.
-- The password comes from `STREAMARR_BOOTSTRAP_ADMIN_PASSWORD`. **If you did not set it, Streamarr
+- The username comes from `PLAYARR_BOOTSTRAP_ADMIN_USERNAME`, defaulting to `admin`.
+- The password comes from `PLAYARR_BOOTSTRAP_ADMIN_PASSWORD`. **If you did not set it, Playarr
   generates a random 64-character password** — there is no fixed default password shipped in the
   code — and logs it exactly once, at `WARN`.
 - Either way, only the Argon2id hash is stored. The cleartext is never logged a second time.
@@ -61,20 +61,20 @@ Retrieve it from the logs:
 
 ```bash
 # systemd
-sudo journalctl -u streamarr.service | grep 'bootstrap admin'
+sudo journalctl -u playarr.service | grep 'bootstrap admin'
 
 # Docker Compose (standalone stack)
-docker compose -f infra/docker/docker-compose.standalone.yml logs streamarr | grep 'bootstrap admin'
+docker compose -f infra/docker/docker-compose.standalone.yml logs playarr | grep 'bootstrap admin'
 
 # Kubernetes
-kubectl -n streamarr logs deploy/streamarr-api | grep 'bootstrap admin'
+kubectl -n playarr logs deploy/playarr-api | grep 'bootstrap admin'
 ```
 
 The line reads `bootstrap admin created -- username: … password: … -- save this now, it will not be
 shown again`. Save it in a password manager, then change it.
 
 > **This account has no playback access, on purpose.** The bootstrap administrator is created with
-> `can_stream: false`. It exists to run Streamarr's operator surface, not as a household viewer
+> `can_stream: false`. It exists to run Playarr's operator surface, not as a household viewer
 > account — `is_admin` deliberately does not imply Playarr access. Create a separate account for
 > yourself as a viewer (see below).
 
@@ -82,15 +82,15 @@ To avoid the log-scraping step entirely, set the password in your environment fi
 first start:
 
 ```bash
-STREAMARR_BOOTSTRAP_ADMIN_USERNAME=admin
-STREAMARR_BOOTSTRAP_ADMIN_PASSWORD=<A-LONG-RANDOM-PASSWORD>
+PLAYARR_BOOTSTRAP_ADMIN_USERNAME=admin
+PLAYARR_BOOTSTRAP_ADMIN_PASSWORD=<A-LONG-RANDOM-PASSWORD>
 ```
 
 Also set a stable JWT signing secret at the same time. Without it a fresh random secret is generated
 on every boot, so every signed-in client is logged out whenever the process restarts:
 
 ```bash
-STREAMARR_JWT_SECRET=$(openssl rand -hex 32)   # must be at least 32 bytes
+PLAYARR_JWT_SECRET=$(openssl rand -hex 32)   # must be at least 32 bytes
 ```
 
 ## Sign in
@@ -105,7 +105,7 @@ curl -sS -X POST http://<YOUR-SERVER-URL>:8484/api/v1/auth/login \
     \"password\": \"<BOOTSTRAP-PASSWORD>\",
     \"device_id\": \"$(uuidgen)\",
     \"device_name\": \"operator-laptop\",
-    \"client_platform\": \"streamarr-admin\",
+    \"client_platform\": \"playarr-admin\",
     \"client_version\": \"0.1.0\"
   }"
 ```
@@ -113,7 +113,7 @@ curl -sS -X POST http://<YOUR-SERVER-URL>:8484/api/v1/auth/login \
 `device_id`, `device_name`, `client_platform` and `client_version` are all mandatory alongside the
 credentials — `device_id` must be a UUID, and a request that omits `client_version` is rejected
 before the handler ever sees it. `client_platform` is a closed set: `android-mobile`, `android-tv`,
-`ios`, `web`, `tv-webos`, `tv-tizen`, `tv-vidaa`, `xbox` or `streamarr-admin`. Resend the same
+`ios`, `web`, `tv-webos`, `tv-tizen`, `tv-vidaa`, `xbox` or `playarr-admin`. Resend the same
 `device_id` on every later login and refresh from this machine, so device limits count one device
 rather than a fresh one per sign-in.
 
@@ -121,53 +121,53 @@ The response carries `access_token`, `refresh_token`, `expires_in` and `user_id`
 token for the rest of this page:
 
 ```bash
-export STREAMARR_TOKEN=<ACCESS-TOKEN>
+export PLAYARR_TOKEN=<ACCESS-TOKEN>
 ```
 
-`client_platform` matters here. Declaring `streamarr-admin` selects the operator login check, which
+`client_platform` matters here. Declaring `playarr-admin` selects the operator login check, which
 does not require `Policy::can_stream`; any Playarr platform value (`web`, `android-tv`, `ios`, …)
 requires it. Declaring a platform grants nothing by itself — every other endpoint still enforces the
 persisted policy.
 
 ### The operator web UI
 
-Streamarr can co-host a built web UI at `/`, on the same origin and port as the API, so there is no
-CORS setup. It serves whatever is at `STREAMARR_WEB_ASSETS_DIR`, or a `web/` directory next to the
+Playarr can co-host a built web UI at `/`, on the same origin and port as the API, so there is no
+CORS setup. It serves whatever is at `PLAYARR_WEB_ASSETS_DIR`, or a `web/` directory next to the
 binary, provided that directory contains an `index.html`. If nothing is found, the server runs
 API-only and logs an info line saying so.
 
-To build Streamarr Admin and point the server at it:
+To build Playarr Admin and point the server at it:
 
 ```bash
 cd clients/tv-web
 pnpm install                 # workspace install + version-catalogue resolution
 pnpm -r run build            # typechecks and builds every package in dependency order
 # the admin bundle lands in clients/tv-web/admin/dist, so:
-# STREAMARR_WEB_ASSETS_DIR=/absolute/path/to/clients/tv-web/admin/dist
+# PLAYARR_WEB_ASSETS_DIR=/absolute/path/to/clients/tv-web/admin/dist
 ```
 
 `pnpm -r run build` is the command the workspace's own README documents; the admin app
-(`@streamarr-tv/admin`) depends on several workspace packages that must be built first, so building
+(`@playarr-tv/admin`) depends on several workspace packages that must be built first, so building
 it in isolation is not enough.
 
 > The repository is inconsistent about this slot. `backend/src/main.rs` describes the co-hosted
-> assets directory as Streamarr Admin, but `infra/docker/backend.Dockerfile` copies the built Playarr
+> assets directory as Playarr Admin, but `infra/docker/backend.Dockerfile` copies the built Playarr
 > **Web** client to `/app/web` instead. If you need the admin console specifically, build it and set
-> `STREAMARR_WEB_ASSETS_DIR` explicitly rather than relying on the image default.
+> `PLAYARR_WEB_ASSETS_DIR` explicitly rather than relying on the image default.
 
 ## The authentication model available today
 
-`STREAMARR_AUTH_MODE` selects one server-wide login posture. Two values are selectable.
+`PLAYARR_AUTH_MODE` selects one server-wide login posture. Two values are selectable.
 
 | Mode | Value | What a login requires | Status |
 | --- | --- | --- | --- |
 | Full account | `full-account` (**the default**) | Username and password | Built |
 | Trusted network | `trusted-network` | Nothing — requests from allowlisted source IPs auto-authenticate as the default administrator | Built, opt-in |
-| Managed profiles (PIN-only household logins) | — | — | Implemented in the auth crate but **not selectable**: no `STREAMARR_AUTH_MODE` value maps to it today |
+| Managed profiles (PIN-only household logins) | — | — | Implemented in the auth crate but **not selectable**: no `PLAYARR_AUTH_MODE` value maps to it today |
 
 Under `trusted-network`, the allowlist defaults to RFC 1918 plus loopback — `10.0.0.0/8`,
 `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.1/32`, `::1/128` — and deliberately not `0.0.0.0/0`, so
-a stray port forward cannot hand administrator access to the internet. `STREAMARR_TRUSTED_NETWORK_CIDR`
+a stray port forward cannot hand administrator access to the internet. `PLAYARR_TRUSTED_NETWORK_CIDR`
 **replaces** that list rather than extending it.
 
 > Trusted-network mode is not a substitute for real per-user authentication on a shared or untrusted
@@ -194,7 +194,7 @@ so explicitly:
 
 ```bash
 curl -sS -X POST http://<YOUR-SERVER-URL>:8484/api/v1/admin/users \
-  -H "Authorization: Bearer $STREAMARR_TOKEN" \
+  -H "Authorization: Bearer $PLAYARR_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
     "username": "alex",
@@ -216,7 +216,7 @@ explicitly.
 
 ## Add your libraries
 
-**Streamarr does not scan folders.** It has no filesystem scanner and no metadata pipeline of its
+**Playarr does not scan folders.** It has no filesystem scanner and no metadata pipeline of its
 own. Its catalogue is built by reconciling against the library-management apps you already run, over
 those apps' own read-only REST endpoints. A deployment with nothing connected has an empty catalogue.
 
@@ -225,7 +225,7 @@ library for permission purposes — the UUIDs in a policy's `library_allow` are 
 
 ```bash
 curl -sS -X POST http://<YOUR-SERVER-URL>:8484/api/v1/admin/source-instances \
-  -H "Authorization: Bearer $STREAMARR_TOKEN" \
+  -H "Authorization: Bearer $PLAYARR_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
     "kind": "radarr",
@@ -242,11 +242,11 @@ every later command on this page means by `<SOURCE-INSTANCE-ID>` or `<INSTANCE-I
 list them all back:
 
 ```bash
-curl -sS -H "Authorization: Bearer $STREAMARR_TOKEN" \
+curl -sS -H "Authorization: Bearer $PLAYARR_TOKEN" \
   http://<YOUR-SERVER-URL>:8484/api/v1/admin/source-instances
 ```
 
-In Streamarr Admin the same thing lives on the **Source instances** page, which is the console's
+In Playarr Admin the same thing lives on the **Source instances** page, which is the console's
 landing page: pick a kind, give it a name, paste the base URL and API key, and press
 **Add & test connection**.
 
@@ -275,16 +275,16 @@ Things worth knowing before you register anything:
 
 ### Media paths
 
-Streamarr stores the file paths exactly as the source app reports them. In the ordinary case —
-Streamarr running on the same host as the media — that is already correct and there is nothing to
+Playarr stores the file paths exactly as the source app reports them. In the ordinary case —
+Playarr running on the same host as the media — that is already correct and there is nothing to
 configure.
 
-If Streamarr runs somewhere else and reaches the same files through a network mount at a different
+If Playarr runs somewhere else and reaches the same files through a network mount at a different
 path, set both halves of the prefix substitution:
 
 ```bash
-STREAMARR_MEDIA_REMOTE_ROOT=/data/media    # the prefix as the source app reports it
-STREAMARR_MEDIA_LOCAL_ROOT=/mnt/nas/media  # where that same root is mounted on this host
+PLAYARR_MEDIA_REMOTE_ROOT=/data/media    # the prefix as the source app reports it
+PLAYARR_MEDIA_LOCAL_ROOT=/mnt/nas/media  # where that same root is mounted on this host
 ```
 
 Both must be set — with only one, the substitution is skipped entirely and the original path is used
@@ -298,15 +298,15 @@ returned untouched.
 ## What the first scan does
 
 Reconciliation is **poll-as-truth, webhook-as-signal**. A poller re-reads each connected app on a
-fixed **300-second (five minute)** cycle and diffs the result against Streamarr's own catalogue. The
+fixed **300-second (five minute)** cycle and diffs the result against Playarr's own catalogue. The
 first tick fires immediately when the poller starts, so you do not wait five minutes for anything to
-appear. Webhooks are optional and only make Streamarr notice sooner; a webhook body is never trusted
+appear. Webhooks are optional and only make Playarr notice sooner; a webhook body is never trusted
 as data.
 
 Watch progress:
 
 ```bash
-curl -sS -H "Authorization: Bearer $STREAMARR_TOKEN" \
+curl -sS -H "Authorization: Bearer $PLAYARR_TOKEN" \
   http://<YOUR-SERVER-URL>:8484/api/v1/admin/source-instances/sync-status
 ```
 
@@ -319,7 +319,7 @@ runtime state, not history.
 To force a pass without waiting for the next tick:
 
 ```bash
-curl -sS -X POST -H "Authorization: Bearer $STREAMARR_TOKEN" \
+curl -sS -X POST -H "Authorization: Bearer $PLAYARR_TOKEN" \
   http://<YOUR-SERVER-URL>:8484/api/v1/admin/source-instances/<INSTANCE-ID>/sync
 ```
 
@@ -328,8 +328,8 @@ yet.
 
 What a first pass actually does, in order:
 
-1. Lists everything from the source app and normalises it into Streamarr's own model.
-2. Diffs by external metadata id — not by Streamarr's internal UUID — into inserts, updates and
+1. Lists everything from the source app and normalises it into Playarr's own model.
+2. Diffs by external metadata id — not by Playarr's internal UUID — into inserts, updates and
    deletes.
 3. Syncs file-level rows for every touched work.
 4. Backfills media files for anything already marked available but holding zero file rows, at up to
@@ -352,9 +352,9 @@ renamed and retuned but not deleted, because the Playarr home screen references 
 
 ## Where artwork and metadata come from
 
-There is no TMDB, TVDB, MusicBrainz or Goodreads client anywhere in the Streamarr backend. Streamarr
+There is no TMDB, TVDB, MusicBrainz or Goodreads client anywhere in the Playarr backend. Playarr
 adds no second metadata pipeline: titles, sort titles, overviews, genres, release dates, availability
-and image URLs all arrive from the apps you already run, and Streamarr carries their external
+and image URLs all arrive from the apps you already run, and Playarr carries their external
 identifiers through.
 
 | Source app | Catalogue kind | Identifier carried |
@@ -366,16 +366,16 @@ identifiers through.
 
 Artwork specifically:
 
-- Streamarr accepts the remote image URL the source app supplies, and keeps its **own local artwork
+- Playarr accepts the remote image URL the source app supplies, and keeps its **own local artwork
   cache** on your server. A prewarm job runs straight after each reconciliation pass, so the first
   person to browse a title gets a cache hit instead of paying for the fetch. An on-demand route
   remains as a fallback. Cached images are capped at 12 MiB each.
-- Where an image only exists behind the source app's own API key, Streamarr mints an opaque internal
+- Where an image only exists behind the source app's own API key, Playarr mints an opaque internal
   locator and resolves it server-side. **Your source instance's host and API key never reach a Playarr
   client.**
 - Episode stills are extracted lazily from the media file itself with ffmpeg and cached on the node.
 - Cache locations default sensibly for SQLite deployments (beside the database file) but fall back to
-  the process temp directory on Postgres, so set `STREAMARR_ARTWORK_CACHE_DIR` explicitly for anything
+  the process temp directory on Postgres, so set `PLAYARR_ARTWORK_CACHE_DIR` explicitly for anything
   other than a single-node SQLite install.
 
 Cast and crew come from Radarr only — it is the one app in this family that exposes credits. An empty
@@ -386,7 +386,7 @@ TMDB.
 
 ## Next
 
-- **[Connect your library managers](/docs/library-managers)** — per-app detail on what Streamarr
+- **[Connect your library managers](/docs/library-managers)** — per-app detail on what Playarr
   reads from Sonarr, Radarr, Lidarr and Readarr, optional webhooks, and connecting Tdarr for
   background transcoding.
 - **[Install the clients](/docs/clients)** — how to get Playarr onto a browser, a phone and a TV, and

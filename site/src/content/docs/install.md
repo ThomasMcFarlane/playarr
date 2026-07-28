@@ -1,12 +1,12 @@
 ---
 title: Choose your setup
-summary: Streamarr ships as one binary that runs on a single box, a Compose stack or a Kubernetes cluster — pick the tier that matches the hardware you already have.
+summary: Playarr ships as one binary that runs on a single box, a Compose stack or a Kubernetes cluster — pick the tier that matches the hardware you already have.
 group: Install
 order: 1
 badge: Preview
 ---
 
-Streamarr is a single compiled Rust binary called `streamarr`. The same artefact serves every deployment tier: what changes between them is the `DATABASE_URL` you point it at and the `STREAMARR_ROLE` you start it with. There is no separate "server edition", no plugin bundle to install, and no configuration file format — all configuration is environment variables, read once at startup.
+Playarr is a single compiled Rust binary called `playarr`. The same artefact serves every deployment tier: what changes between them is the `DATABASE_URL` you point it at and the `PLAYARR_ROLE` you start it with. There is no separate "server edition", no plugin bundle to install, and no configuration file format — all configuration is environment variables, read once at startup.
 
 Read this page, pick a tier, then follow the linked walkthrough. Every tier ends in the same place: [First run](/docs/first-run).
 
@@ -14,13 +14,13 @@ Read this page, pick a tier, then follow the linked walkthrough. Every tier ends
 
 ## The three tiers
 
-Streamarr is designed against three deployment shapes, and every architectural decision in the project is checked against all three. A design that only works on a Raspberry Pi, or only works on Kubernetes, is rejected.
+Playarr is designed against three deployment shapes, and every architectural decision in the project is checked against all three. A design that only works on a Raspberry Pi, or only works on Kubernetes, is rejected.
 
 | | Tier 1 — single server | Tier 2 — Docker Compose | Tier 3 — Kubernetes |
 | --- | --- | --- | --- |
-| **Who it suits** | One always-on Linux box you administer by hand. The default, and what most people should run. | You already prefer containers, and want Streamarr plus its database managed as one stack on a home server or small VPS. | You are running Streamarr as shared infrastructure and already operate a cluster and a Postgres instance. |
+| **Who it suits** | One always-on Linux box you administer by hand. The default, and what most people should run. | You already prefer containers, and want Playarr plus its database managed as one stack on a home server or small VPS. | You are running Playarr as shared infrastructure and already operate a cluster and a Postgres instance. |
 | **Database** | SQLite, embedded, created on first boot | Postgres, run as a container in the same stack | Postgres, pre-existing — the chart never provisions one |
-| **What runs** | One `streamarr` process under systemd, role `all` | `postgres` + `caddy` + one or more `streamarr-api` / `streamarr-worker` containers, optionally `redis` | An API Deployment and a worker Deployment, each independently autoscaled, plus a Service per role |
+| **What runs** | One `playarr` process under systemd, role `all` | `postgres` + `caddy` + one or more `playarr-api` / `playarr-worker` containers, optionally `redis` | An API Deployment and a worker Deployment, each independently autoscaled, plus a Service per role |
 | **Nodes** | 1 | 1–3 | 3+ |
 | **Hardware** | Explicitly targets NAS boxes (Synology, QNAP), Raspberry Pi 4/5 and other consumer hardware, down to 1–2 GB RAM | Not documented — see the note below | Not documented — see the note below |
 | **Effort** | Run one installer, edit one file, `systemctl enable --now` | Write a `.env`, `docker compose build`, `docker compose up` | Provision Postgres, create a Secret, write a values file, `helm install`, then supply your own ingress |
@@ -30,7 +30,7 @@ Streamarr is designed against three deployment shapes, and every architectural d
 
 ### How the tier is actually chosen
 
-The tier is **not a flag**. Streamarr derives it at startup from two environment variables:
+The tier is **not a flag**. Playarr derives it at startup from two environment variables:
 
 | `DATABASE_URL` | `REDIS_URL` | Resolved tier | Cache and pub/sub | Cluster coordination |
 | --- | --- | --- | --- | --- |
@@ -47,39 +47,39 @@ That is the whole mechanism. Pointing the binary at Postgres is what "moves you 
 - **64-bit Linux.** CI builds release archives for `x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu`, but — per the note above — none has been published yet, so today you produce the binary yourself from a checkout with a Rust toolchain installed. Tier 1 additionally requires systemd; the installer refuses to run without `systemctl` on `PATH`.
 
   ```bash
-  # from the repository root; yields backend/target/release/streamarr
-  cd backend && cargo build --release --locked --bin streamarr
+  # from the repository root; yields backend/target/release/playarr
+  cd backend && cargo build --release --locked --bin playarr
   ```
 
-- **`ffmpeg` and `ffprobe` on `PATH`.** Streamarr shells out to both for thumbnails, subtitle extraction and on-demand transcoding. The container image installs `ffmpeg` for you; a bare-metal install must supply it. Override the executables with `STREAMARR_FFMPEG_BINARY` and `STREAMARR_FFPROBE_BINARY` if they live somewhere unusual.
+- **`ffmpeg` and `ffprobe` on `PATH`.** Playarr shells out to both for thumbnails, subtitle extraction and on-demand transcoding. The container image installs `ffmpeg` for you; a bare-metal install must supply it. Override the executables with `PLAYARR_FFMPEG_BINARY` and `PLAYARR_FFPROBE_BINARY` if they live somewhere unusual.
 - **CPU headroom for transcoding.** The on-demand transcode path uses the software `libx264` encoder. There is no VAAPI, NVENC, QSV or VideoToolbox integration anywhere in the backend, and none of the shipped Compose or Kubernetes manifests pass through `/dev/dri` or request a GPU. Size the box on the assumption that transcoding is done on the CPU.
 - **A `DATABASE_URL`.** The only genuinely required variable. The process fails at startup if it is unset or empty.
-- **At least one *arr instance.** Streamarr integrates with the *arr suite for library management and builds its catalogue by reconciling against the apps you already run. It does not scan folders itself, so a deployment with nothing registered has an empty catalogue. You register instances after first boot, through the admin API or Streamarr Admin — nothing needs to be in place before you install.
-- **Two ports.** `8484/tcp` for the application (`STREAMARR_HTTP_BIND_ADDR`) and `9090/tcp` for the Prometheus endpoint (`STREAMARR_METRICS_BIND_ADDR`). Both take a full socket address, not a bare port number. `/metrics` should never be reachable from the public edge.
-- **A long-lived signing secret.** Set `STREAMARR_JWT_SECRET` to at least 32 bytes. Leave it unset and a fresh random secret is generated on every boot, so every client is signed out on restart and no two nodes ever agree.
+- **At least one *arr instance.** Playarr integrates with the *arr suite for library management and builds its catalogue by reconciling against the apps you already run. It does not scan folders itself, so a deployment with nothing registered has an empty catalogue. You register instances after first boot, through the admin API or Playarr Admin — nothing needs to be in place before you install.
+- **Two ports.** `8484/tcp` for the application (`PLAYARR_HTTP_BIND_ADDR`) and `9090/tcp` for the Prometheus endpoint (`PLAYARR_METRICS_BIND_ADDR`). Both take a full socket address, not a bare port number. `/metrics` should never be reachable from the public edge.
+- **A long-lived signing secret.** Set `PLAYARR_JWT_SECRET` to at least 32 bytes. Leave it unset and a fresh random secret is generated on every boot, so every client is signed out on restart and no two nodes ever agree.
 
 ```bash
 openssl rand -hex 32
 ```
 
-> **Nothing hot-reloads.** Every value is resolved once, at process startup. After editing configuration you must restart the process (`systemctl restart streamarr.service`, `docker compose up -d`, or a rollout).
+> **Nothing hot-reloads.** Every value is resolved once, at process startup. After editing configuration you must restart the process (`systemctl restart playarr.service`, `docker compose up -d`, or a rollout).
 
 ## How media storage is expected to be laid out
 
-Streamarr never discovers files on its own. Each media file's path arrives from the *arr instance that owns it, exactly as that app reports it — and the Streamarr process then has to be able to `open()` that path on its own filesystem.
+Playarr never discovers files on its own. Each media file's path arrives from the *arr instance that owns it, exactly as that app reports it — and the Playarr process then has to be able to `open()` that path on its own filesystem.
 
 That gives you three ways to lay things out, in order of preference:
 
 ### 1. Co-locate, and mount at the identical path
 
-The intended arrangement: Streamarr runs on (or mounts) the same storage the *arr apps see, at the same absolute path. If Sonarr reports `/mnt/media/tv/…`, then `/mnt/media/tv/…` must resolve for Streamarr too. Nothing else to configure.
+The intended arrangement: Playarr runs on (or mounts) the same storage the *arr apps see, at the same absolute path. If Sonarr reports `/mnt/media/tv/…`, then `/mnt/media/tv/…` must resolve for Playarr too. Nothing else to configure.
 
-A **read-only** mount is sufficient for playback and for on-demand transcoding — transcode output is written to the process's temporary directory (`$TMPDIR/streamarr-transcode`), never alongside your files.
+A **read-only** mount is sufficient for playback and for on-demand transcoding — transcode output is written to the process's temporary directory (`$TMPDIR/playarr-transcode`), never alongside your files.
 
 ```yaml
 # docker-compose override — the shipped files define no media volume of their own
 services:
-  streamarr-api:
+  playarr-api:
     volumes:
       - /mnt/media:/mnt/media:ro
 ```
@@ -91,8 +91,8 @@ services:
 If the mount point differs — a network mount at a different local path, say — set both halves of the substitution. Both must be set; setting only one is ignored and the original path is used unchanged. Only a single prefix pair is supported.
 
 ```bash
-STREAMARR_MEDIA_REMOTE_ROOT=/data/media     # the prefix the *arr app reports
-STREAMARR_MEDIA_LOCAL_ROOT=/mnt/nas/media   # where that same root is mounted here
+PLAYARR_MEDIA_REMOTE_ROOT=/data/media     # the prefix the *arr app reports
+PLAYARR_MEDIA_LOCAL_ROOT=/mnt/nas/media   # where that same root is mounted here
 ```
 
 ### 3. Per-node folder mappings
@@ -109,23 +109,23 @@ Content-Type: application/json
 
 ### Caches
 
-Artwork, episode thumbnails and extracted subtitles are cached on local disk — there is no object-storage backend of any kind. On SQLite deployments the caches default to directories beside the database file. **On Postgres deployments with nothing set, the fallbacks are poor**: the artwork cache lands in the process temp directory (`$TMPDIR/streamarr-artwork`), while the episode-thumbnail and subtitle caches land under the process's *current working directory* — which on a container with a read-only root filesystem is not writable at all. Set them explicitly:
+Artwork, episode thumbnails and extracted subtitles are cached on local disk — there is no object-storage backend of any kind. On SQLite deployments the caches default to directories beside the database file. **On Postgres deployments with nothing set, the fallbacks are poor**: the artwork cache lands in the process temp directory (`$TMPDIR/playarr-artwork`), while the episode-thumbnail and subtitle caches land under the process's *current working directory* — which on a container with a read-only root filesystem is not writable at all. Set them explicitly:
 
 ```bash
-STREAMARR_ARTWORK_CACHE_DIR=/data/streamarr-cache/artwork
-STREAMARR_SUBTITLE_CACHE_DIR=/data/streamarr-cache/subtitles
+PLAYARR_ARTWORK_CACHE_DIR=/data/playarr-cache/artwork
+PLAYARR_SUBTITLE_CACHE_DIR=/data/playarr-cache/subtitles
 ```
 
-`STREAMARR_ARTWORK_CACHE_DIR` also relocates episode thumbnails, into an `episode-thumbnails/` subdirectory of that root, so those two variables between them cover all three caches. Whatever paths you pick must be backed by a writable volume: the shipped Compose files do that with the `streamarr_prod_artwork_cache` named volume, but the Helm chart sets none of these variables and mounts only an `emptyDir` at `/tmp`, so at Tier 3 both the variables and the volume are yours to add.
+`PLAYARR_ARTWORK_CACHE_DIR` also relocates episode thumbnails, into an `episode-thumbnails/` subdirectory of that root, so those two variables between them cover all three caches. Whatever paths you pick must be backed by a writable volume: the shipped Compose files do that with the `playarr_prod_artwork_cache` named volume, but the Helm chart sets none of these variables and mounts only an `emptyDir` at `/tmp`, so at Tier 3 both the variables and the volume are yours to add.
 
 ## Roles: one binary, three modes
 
-There is no separate API executable, worker executable or coordinator executable, and no `--role` command-line flag. `STREAMARR_ROLE` selects what a given process does:
+There is no separate API executable, worker executable or coordinator executable, and no `--role` command-line flag. `PLAYARR_ROLE` selects what a given process does:
 
-| `STREAMARR_ROLE` | Serves the HTTP API | Runs background loops | Notes |
+| `PLAYARR_ROLE` | Serves the HTTP API | Runs background loops | Notes |
 | --- | --- | --- | --- |
 | `all` *(default)* | Yes | Yes | What Tier 1 always runs; the systemd unit hard-codes it. |
-| `api` | Yes | No | Catalogue, playback negotiation, authentication, admin routes, and Streamarr Admin at `/` when built assets are present. |
+| `api` | Yes | No | Catalogue, playback negotiation, authentication, admin routes, and Playarr Admin at `/` when built assets are present. |
 | `worker` | No — only `GET /healthz` | Yes | *arr reconciliation pollers, peer-sync pollers and background transcode dispatch. |
 
 Anything other than `all`, `api` or `worker` is a hard startup failure. The `/metrics` listener is spawned by every role, unconditionally.
@@ -136,7 +136,7 @@ Anything other than `all`, `api` or `worker` is a hard startup failure. The `/me
 
 **When would you split roles?** Only at Tier 2 or Tier 3, and only against Postgres. The reason is capacity shape: browse and playback traffic scales differently from background transcode and library reconciliation work, and splitting lets you autoscale each independently and give the worker pool its own resource limits and disruption budget. On one box there is nothing to gain — run `all`.
 
-> **One capability is lost when you split.** Promoting a live on-demand transcode into a durable rendition happens over an in-process channel, so it only works when both roles share a process (`STREAMARR_ROLE=all`). In a split deployment that promotion fails closed; on-demand transcoding itself is unaffected.
+> **One capability is lost when you split.** Promoting a live on-demand transcode into a durable rendition happens over an in-process channel, so it only works when both roles share a process (`PLAYARR_ROLE=all`). In a split deployment that promotion fails closed; on-demand transcoding itself is unaffected.
 
 ## Then what?
 

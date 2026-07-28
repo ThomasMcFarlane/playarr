@@ -1,6 +1,6 @@
-# Streamarr marketing site
+# Playarr marketing site
 
-The public marketing and documentation site for **Streamarr** (the server) and
+The public marketing and documentation site for **Playarr** (the server) and
 **Playarr** (the clients). It is deliberately separate from
 [`playarr.app`](https://playarr.app), which is the hosted Playarr *web client*
 and its clients hub — this site is the product story and the installation
@@ -39,18 +39,18 @@ pnpm check        # astro check + copy linter
 To run it in a local Kubernetes cluster, apply the manifests in `k8s/`:
 
 ```sh
-devdeploy streamarr-marketing
+kubectl apply -f k8s/
 ```
 
-That serves the site at `streamarr-marketing.localhost`,
-`streamarr-marketing.dev.home.arpa` and `streamarr-marketing.example.com`. The
+That serves the site at `playarr-marketing.localhost`,
+`playarr-marketing.dev.home.arpa` and `playarr-marketing.example.com`. The
 production hostname is not settled yet; set `SITE_URL` at build time to control
 canonical URLs, Open Graph tags and the sitemap.
 
 ## The copy linter — read this before writing any page
 
 `scripts/check-copy.mjs` is not a style checker. It exists because
-[`docs/artifacts/streamarr-legal-release.html`](../docs/artifacts/streamarr-legal-release.html)
+[`docs/artifacts/playarr-legal-release.html`](../docs/artifacts/playarr-legal-release.html)
 concludes that for a project of this shape **the exposure surface is the
 marketing, not the code** — TickBox, Grokster and Filmspeler were each sunk
 primarily by their own promotional conduct rather than by what their software
@@ -69,7 +69,7 @@ too. It runs as part of `pnpm check`.
 
 ## Rules the content must follow
 
-1. **Streamarr plays media the operator already holds.** Nothing on this site
+1. **Playarr plays media the operator already holds.** Nothing on this site
    describes acquiring, indexing, searching for or obtaining content.
 2. **Never present planned work as shipped.** There is no 1.0 release and
    nothing is published to any app store on any platform. Anything unbuilt
@@ -77,7 +77,7 @@ too. It runs as part of `pnpm check`.
 3. **The clients hub is the authority on availability.** Status wording in
    `src/data/platforms.ts` mirrors
    `clients/tv-web/web/src/pages/Clients.tsx`; if that changes, change this.
-4. **Streamarr has no filesystem scanner.** Its catalogue is built entirely
+4. **Playarr has no filesystem scanner.** Its catalogue is built entirely
    from connected library-management applications. Do not describe those
    connections as optional extras.
 5. **The permission model is only partly enforced.** Library grants,

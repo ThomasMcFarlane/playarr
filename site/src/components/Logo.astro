@@ -1,14 +1,13 @@
 ---
 /*
- * Wordmark for the marketing site.
- *
- * The repository ships platform app icons but no vector wordmark, so this is
- * drawn inline: a rounded tile carrying a play glyph, set against the product
- * name. Everything inherits currentColor apart from the tile, which uses the
- * accent token, so the mark tracks the active theme without a second asset.
+ * Wordmark for the marketing site: the real Playarr app icon (the play
+ * symbol with three orbiting rings, clients/tv-web/web/public/playarr-icon.svg,
+ * copied to public/playarr-icon.svg) set beside the product name. The icon
+ * carries its own gradient and reads correctly in both themes unmodified, so
+ * unlike a currentColor glyph it needs no theme-specific handling here.
  */
 interface Props {
-  /** Hide the word and render the tile alone, for tight spaces. */
+  /** Hide the word and render the mark alone, for tight spaces. */
   markOnly?: boolean
   class?: string
 }
@@ -17,11 +16,8 @@ const { markOnly = false, class: className } = Astro.props
 ---
 
 <span class:list={['logo', className]}>
-  <svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-    <rect x="0" y="0" width="32" height="32" rx="9" fill="currentColor" />
-    <path d="M12.6 10.2 22 16l-9.4 5.8Z" fill="var(--bg)" />
-  </svg>
-  {markOnly ? null : <span class="logo-word">Streamarr</span>}
+  <img class="logo-mark" src="/playarr-icon.svg" alt="" width="32" height="32" />
+  {markOnly ? null : <span class="logo-word">Playarr</span>}
 </span>
 
 <style>
@@ -33,17 +29,23 @@ const { markOnly = false, class: className } = Astro.props
     font-weight: 750;
     font-size: var(--text-lg);
     letter-spacing: -0.02em;
+    line-height: 1;
     white-space: nowrap;
   }
 
   .logo-mark {
-    width: 1.55em;
-    height: 1.55em;
+    display: block;
+    width: 1.85em;
+    height: 1.85em;
     flex: none;
-    color: var(--ink);
+    /* The icon's own artwork (rings + play glyph) sits slightly low and
+       left of its 512x512 canvas centre, so a naive flex-center against the
+       wordmark reads as misaligned. Nudge up to compensate. */
+    transform: translateY(-0.09em);
   }
 
   .logo-word {
+    display: block;
     line-height: 1;
   }
 </style>

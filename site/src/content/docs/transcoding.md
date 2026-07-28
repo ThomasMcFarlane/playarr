@@ -1,32 +1,32 @@
 ---
 title: Transcoding
-summary: How Streamarr converts files at play time and how it hands library-wide re-encoding off to a Tdarr worker pool, with the real configuration keys for both.
+summary: How Playarr converts files at play time and how it hands library-wide re-encoding off to a Tdarr worker pool, with the real configuration keys for both.
 group: Setup
 order: 12
 ---
 
-Streamarr treats "convert this video" as two unrelated problems and refuses to let one code path
+Playarr treats "convert this video" as two unrelated problems and refuses to let one code path
 serve both. One is latency-sensitive and happens the instant somebody presses play. The other is
 low-priority background work that may take hours and is handed to a separate Tdarr worker pool.
 They are dispatched, scheduled and monitored independently, and neither can starve the other.
 
 Both ultimately shell out to FFmpeg, and in both cases FFmpeg runs **on the server**, as a
-subprocess of the Streamarr process (or of a Tdarr node). No Playarr client app embeds FFmpeg.
+subprocess of the Playarr process (or of a Tdarr node). No Playarr client app embeds FFmpeg.
 
 ## The two paths at a glance
 
 | | On-demand transcode-on-play | Background re-encoding |
 | --- | --- | --- |
 | Trigger | A playback request the device cannot play as-is | A file arriving on the Tdarr dispatch channel |
-| Runs where | The Streamarr node handling the request | Your Tdarr worker nodes |
+| Runs where | The Playarr node handling the request | Your Tdarr worker nodes |
 | Priority | Immediate; blocks the viewer | Low; throttled while people are watching |
 | Output | Live HLS, written to a temp directory, TTL'd | A durable `Rendition`, reused by later playbacks |
 | Lifetime | Ephemeral — dies with the session | Persistent until you remove it |
 | Configured by | Environment variables + client capability parameters | `POST /api/v1/admin/tdarr`, persisted in the database |
 | Role required | `api` or `all` | `worker` or `all` |
-| Optional? | No — always available | Yes — Streamarr works fine with no Tdarr at all |
+| Optional? | No — always available | Yes — Playarr works fine with no Tdarr at all |
 
-> Streamarr is perfectly usable with no Tdarr instance. You simply pay for an on-demand transcode
+> Playarr is perfectly usable with no Tdarr instance. You simply pay for an on-demand transcode
 > every time a device cannot play a file directly, instead of reusing a rendition someone else's
 > playback already caused to be produced.
 
@@ -90,7 +90,7 @@ curl -sS -X POST "https://<YOUR-SERVER-URL>/api/v1/auth/login" \
 
 ### What the client receives
 
-When step 3 fires, the response points at an HLS manifest served by Streamarr itself:
+When step 3 fires, the response points at an HLS manifest served by Playarr itself:
 
 - `GET /api/v1/media/sessions/{session_id}/{file_name}` — the live session's `playlist.m3u8` and its
   `segment_00000.ts`, `segment_00001.ts`, … files.
@@ -155,17 +155,17 @@ as a durable database row.
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `STREAMARR_TRANSCODE_SESSION_IDLE_TTL_SECS` | `60` | Idle deadline for a live session. Every manifest and segment request slides it forward, so this is not a cap on playback length — it is how long a session survives after a viewer closes the tab or loses connection before the FFmpeg process and its capacity slot are freed. A non-positive or unparseable value logs a warning and falls back to 60. |
+| `PLAYARR_TRANSCODE_SESSION_IDLE_TTL_SECS` | `60` | Idle deadline for a live session. Every manifest and segment request slides it forward, so this is not a cap on playback length — it is how long a session survives after a viewer closes the tab or loses connection before the FFmpeg process and its capacity slot are freed. A non-positive or unparseable value logs a warning and falls back to 60. |
 
 Set it in the usual place for your deployment tier:
 
 ```bash
-# Tier 1, systemd — /etc/streamarr/streamarr.env
-STREAMARR_TRANSCODE_SESSION_IDLE_TTL_SECS=60
+# Tier 1, systemd — /etc/playarr/playarr.env
+PLAYARR_TRANSCODE_SESSION_IDLE_TTL_SECS=60
 ```
 
 ```bash
-sudo systemctl restart streamarr.service
+sudo systemctl restart playarr.service
 ```
 
 There is no hot reload; everything resolved at startup is read once.
@@ -177,7 +177,7 @@ There is no hot reload; everything resolved at startup is read once.
 
 > **Not built yet: a concurrency cap.** The orchestrator supports a maximum-concurrent-sessions
 > limit in code, but nothing wires it up at startup and no environment variable exposes it. In
-> practice a busy node is bounded by CPU, not by Streamarr.
+> practice a busy node is bounded by CPU, not by Playarr.
 
 ### The feedback loop between the two paths
 
@@ -189,7 +189,7 @@ resolves at step 2 instead of paying for step 3 again.
 The send is fire-and-forget (`try_send`, never awaited), so a full or absent channel — no Tdarr
 registered, or a process that does not run the worker role — never affects playback.
 
-> **This bridge only works when one process runs both roles** (`STREAMARR_ROLE=all`). In a split
+> **This bridge only works when one process runs both roles** (`PLAYARR_ROLE=all`). In a split
 > `api` / `worker` deployment the receiver lives in a different process, the channel receiver is
 > dropped, and every send fails closed. Background re-encoding still works from any other event
 > source; it simply is not fed by live playback.
@@ -202,21 +202,21 @@ hours.
 
 ### What Tdarr must be configured with
 
-Streamarr does not install, manage or configure Tdarr. You run Tdarr yourself, and before
+Playarr does not install, manage or configure Tdarr. You run Tdarr yourself, and before
 registering it you need:
 
-1. **A reachable Tdarr server** with its REST v2 API available. Streamarr talks to
+1. **A reachable Tdarr server** with its REST v2 API available. Playarr talks to
    `/api/v2/scan-individual-file`, `/api/v2/scan-files`, `/api/v2/search-db`, `/api/v2/get-nodes`
    and `/api/v2/alter-worker-limit`, authenticating with the `x-api-key` header on every request.
 2. **An API key** for that server.
 3. **A Tdarr library**, with its **database id**. This is Tdarr's own concept — you create the
-   library on the Tdarr side and copy its id into Streamarr. Streamarr assumes exactly one Tdarr
+   library on the Tdarr side and copy its id into Playarr. Playarr assumes exactly one Tdarr
    library per deployment; the connection is deliberately a singleton, and routing different
    libraries to different Tdarr instances is not a feature that exists.
-4. **The Tdarr library's paths must resolve to the same files Streamarr sees.** Streamarr dispatches
-   the media file's path as-is. If Streamarr and Tdarr mount storage at different points, fix that
-   at the mount level, or with `STREAMARR_MEDIA_REMOTE_ROOT` / `STREAMARR_MEDIA_LOCAL_ROOT`.
-5. **A Tdarr flow or plugin stack that actually produces your target output.** Streamarr tells Tdarr
+4. **The Tdarr library's paths must resolve to the same files Playarr sees.** Playarr dispatches
+   the media file's path as-is. If Playarr and Tdarr mount storage at different points, fix that
+   at the mount level, or with `PLAYARR_MEDIA_REMOTE_ROOT` / `PLAYARR_MEDIA_LOCAL_ROOT`.
+5. **A Tdarr flow or plugin stack that actually produces your target output.** Playarr tells Tdarr
    *which file* to process; what Tdarr does with it is entirely Tdarr's own configuration.
 6. **The name of the worker pool to throttle** — one of Tdarr's process identifiers, e.g.
    `transcodecpu`, `transcodegpu`, `healthcheckcpu`, `healthcheckgpu`.
@@ -233,7 +233,7 @@ curl -sS -X POST "https://<YOUR-SERVER-URL>/api/v1/admin/tdarr" \
   -d '{
         "base_url": "http://tdarr.local:8265",
         "api_key": "<TDARR-API-KEY>",
-        "tdarr_db_id": "streamarr",
+        "tdarr_db_id": "playarr",
         "default_profile": "h264-720p-4mbps",
         "worker_process": "transcodecpu",
         "default_worker_limit": 2,
@@ -259,7 +259,7 @@ curl -sS -X DELETE -H "Authorization: Bearer <ADMIN-ACCESS-TOKEN>" \
 | --- | --- | --- | --- |
 | `base_url` | **Yes** | — | Your Tdarr server's base URL. |
 | `api_key` | **Yes** | — | Write-only. Never echoed back in any response, not even redacted. |
-| `tdarr_db_id` | No | `streamarr` | The Tdarr library database id dispatched work targets. |
+| `tdarr_db_id` | No | `playarr` | The Tdarr library database id dispatched work targets. |
 | `default_profile` | No | `h264-720p-4mbps` | The rendition profile checked before dispatching. If a `Ready` rendition already exists at this profile, there is nothing for Tdarr to do and the file is skipped. |
 | `worker_process` | No | `transcodecpu` | Which Tdarr worker pool gets throttled. |
 | `default_worker_limit` | No | `2` | Worker limit applied when no live playback needs headroom. |
@@ -267,7 +267,7 @@ curl -sS -X DELETE -H "Authorization: Bearer <ADMIN-ACCESS-TOKEN>" \
 | `active_session_threshold` | No | `2` | How many concurrent live on-demand sessions trigger the throttle. |
 | `throttle_check_interval_secs` | No | `30` | How often the dispatcher re-evaluates and reapplies the limit. |
 
-Registration is not accepted blindly: Streamarr calls Tdarr's `GET /api/v2/get-nodes` first and
+Registration is not accepted blindly: Playarr calls Tdarr's `GET /api/v2/get-nodes` first and
 returns `502` if the URL or key is rejected or Tdarr cannot be reached. A wrong value fails
 immediately rather than surfacing later as silently missing renditions.
 
@@ -298,7 +298,7 @@ deployment the dispatcher only sees the sessions on its own node.
   coordinator with a 30-second lease.
 - **Removing the connection leaves already-cached renditions untouched.** They keep resolving at
   step 2 of playback negotiation.
-- **There is no Tdarr page in Streamarr Admin.** The web admin has pages for source instances,
+- **There is no Tdarr page in Playarr Admin.** The web admin has pages for source instances,
   users, library, views, playlists, tasks, activity, system settings, peer groups and an API
   explorer — Tdarr is configured through the API, or through Admin's built-in API explorer.
 
@@ -315,11 +315,11 @@ deployment the dispatcher only sees the sessions on its own node.
 On-demand HLS output is written to a per-session directory under a fixed root:
 
 ```
-<system temp dir>/streamarr-transcode/<session-id>/
+<system temp dir>/playarr-transcode/<session-id>/
 ```
 
-**No Streamarr environment variable exposes this path.** The root is
-`std::env::temp_dir().join("streamarr-transcode")`, so on Linux the only lever is the standard
+**No Playarr environment variable exposes this path.** The root is
+`std::env::temp_dir().join("playarr-transcode")`, so on Linux the only lever is the standard
 `TMPDIR` environment variable, which Rust's `temp_dir()` honours (falling back to `/tmp`).
 
 What that means per tier:
@@ -333,19 +333,19 @@ What that means per tier:
 
 To move it onto disk on a systemd install, point `TMPDIR` at a directory the unit may write to. The
 unit's `ProtectSystem=strict` allows writes only to `ReadWritePaths`, which is
-`/var/lib/streamarr /var/log/streamarr`, so use a subdirectory of one of those:
+`/var/lib/playarr /var/log/playarr`, so use a subdirectory of one of those:
 
 ```bash
-sudo -u streamarr mkdir -p /var/lib/streamarr/tmp
+sudo -u playarr mkdir -p /var/lib/playarr/tmp
 ```
 
 ```bash
-# /etc/streamarr/streamarr.env
-TMPDIR=/var/lib/streamarr/tmp
+# /etc/playarr/playarr.env
+TMPDIR=/var/lib/playarr/tmp
 ```
 
 ```bash
-sudo systemctl restart streamarr.service
+sudo systemctl restart playarr.service
 ```
 
 > Size this generously. A single 4-second-segment session at `h264-2160p-35mbps` writes roughly
@@ -353,15 +353,15 @@ sudo systemctl restart streamarr.service
 > nothing is pruned while playback continues.
 
 The other caches are configured separately and are not part of the transcode temp directory:
-`STREAMARR_ARTWORK_CACHE_DIR`, `STREAMARR_THUMBNAIL_CACHE_DIR` and `STREAMARR_SUBTITLE_CACHE_DIR`.
+`PLAYARR_ARTWORK_CACHE_DIR`, `PLAYARR_THUMBNAIL_CACHE_DIR` and `PLAYARR_SUBTITLE_CACHE_DIR`.
 
 ## Hardware acceleration
 
-**Not wired up. There is no VAAPI, NVENC, QSV, CUDA or VideoToolbox path in Streamarr.**
+**Not wired up. There is no VAAPI, NVENC, QSV, CUDA or VideoToolbox path in Playarr.**
 
 This is the honest position, and it is worth stating precisely rather than hedging:
 
-| Accelerator | Status in Streamarr |
+| Accelerator | Status in Playarr |
 | --- | --- |
 | VAAPI (Intel/AMD on Linux) | **Not built.** No `-hwaccel`, no `-vaapi_device`, no `/dev/dri` passthrough in any shipped manifest. |
 | NVENC (NVIDIA) | **Not built.** No NVIDIA container runtime, no GPU resource requests in the Helm chart or Compose files. |
@@ -370,7 +370,7 @@ This is the honest position, and it is worth stating precisely rather than hedgi
 
 Every on-demand transcode resolves `-c:v libx264` — software H.264 — and there is no configuration
 key, feature flag or manifest option that changes it. Nor can you substitute a wrapper binary for
-the on-demand path: `STREAMARR_FFMPEG_BINARY` and `STREAMARR_FFPROBE_BINARY` exist, but they are
+the on-demand path: `PLAYARR_FFMPEG_BINARY` and `PLAYARR_FFPROBE_BINARY` exist, but they are
 read only by the thumbnail and subtitle-extraction helpers. The transcode orchestrator does have an
 internal `with_ffmpeg_binary` override, but nothing at startup passes anything to it, so the
 playback path always invokes plain `ffmpeg` as resolved on `PATH`.
@@ -382,18 +382,18 @@ Practical consequences to plan for:
 - Prefer keeping files your devices can play directly. Direct play costs almost nothing.
 - If you want acceleration, put it in **Tdarr**. Tdarr worker nodes are separate machines running
   their own FFmpeg with their own flows, and whatever acceleration they use is Tdarr's, entirely
-  outside Streamarr. Setting `worker_process` to `transcodegpu` throttles the correct pool.
+  outside Playarr. Setting `worker_process` to `transcodegpu` throttles the correct pool.
 
-> Hardware-accelerated transcoding inside Streamarr is **not on the shipped feature list**. Treat any
+> Hardware-accelerated transcoding inside Playarr is **not on the shipped feature list**. Treat any
 > mention of it as planned work with no delivery date.
 
 ## Where FFmpeg runs
 
 FFmpeg is a **server-side subprocess** in every case:
 
-- The Streamarr binary spawns `ffmpeg` through `tokio::process::Command` for on-demand HLS, and for
+- The Playarr binary spawns `ffmpeg` through `tokio::process::Command` for on-demand HLS, and for
   thumbnail and subtitle extraction. The process is spawned with `kill_on_drop`, so it can never
-  outlive the Streamarr process with nothing left to expire its session.
+  outlive the Playarr process with nothing left to expire its session.
 - Tdarr nodes run their own FFmpeg, on their own machines, under their own configuration.
 - **No Playarr client app embeds FFmpeg.** Clients receive HLS or a direct byte stream over HTTP and
   play it with the platform's own player — ExoPlayer/Media3 on Android, AVKit on Apple platforms,
@@ -415,7 +415,7 @@ sudo apt-get install -y ffmpeg
 ```
 
 > The Debian FFmpeg build that lands in an image built from `backend.Dockerfile` is covered by the
-> GNU General Public Licence version 2 or later, separately from Streamarr's own MIT licence. If you
+> GNU General Public Licence version 2 or later, separately from Playarr's own MIT licence. If you
 > distribute that image to anyone else, the corresponding-source obligation is yours. See
 > [Licences and attribution](/legal/licences#ffmpeg).
 
@@ -424,17 +424,17 @@ sudo apt-get install -y ffmpeg
 Confirm which path a given file took by reading the negotiation response, then watch the logs:
 
 ```bash
-journalctl -u streamarr.service -f
+journalctl -u playarr.service -f
 ```
 
 ```bash
 docker compose \
   -f infra/docker/docker-compose.prod.yml \
   -f infra/docker/docker-compose.local.yml \
-  --profile standard logs -f streamarr-api
+  --profile standard logs -f playarr-api
 ```
 
-> `docker-compose.prod.yml` interpolates `${STREAMARR_DB_PASSWORD:?…}`, so it fails every
+> `docker-compose.prod.yml` interpolates `${PLAYARR_DB_PASSWORD:?…}`, so it fails every
 > invocation — `logs` included — unless your local override or `.env` supplies it. Always pass the
 > same file list and profile you brought the stack up with; see
 > [Docker Compose](/docs/install/docker-compose).
@@ -442,8 +442,8 @@ docker compose \
 Turn up the relevant log targets:
 
 ```bash
-# /etc/streamarr/streamarr.env
-STREAMARR_LOG=info,streamarr_transcode=debug,streamarr_api=debug
+# /etc/playarr/playarr.env
+PLAYARR_LOG=info,playarr_transcode=debug,playarr_api=debug
 ```
 
 Common causes, in the order worth checking:
@@ -453,8 +453,8 @@ Common causes, in the order worth checking:
 | Everything transcodes, nothing direct-plays | The client is sending an empty or wrong `containers` / `video_codecs` list, or a `max_bitrate_bps` cap lower than your files. |
 | Playback stalls a few seconds in | The transcode temp directory filled up, or its tmpfs is too small. |
 | Sessions vanish behind a load balancer | No session-to-node affinity — pin sticky sessions to one backend. |
-| Playback works but no renditions ever appear | No Tdarr connection registered, no node running the `worker` role, or a split `api`/`worker` deployment (the live-playback bridge needs `STREAMARR_ROLE=all`). |
-| Tdarr connection rejected with `502` | `base_url` or `api_key` wrong, or `GET /api/v2/get-nodes` unreachable from the Streamarr node. |
+| Playback works but no renditions ever appear | No Tdarr connection registered, no node running the `worker` role, or a split `api`/`worker` deployment (the live-playback bridge needs `PLAYARR_ROLE=all`). |
+| Tdarr connection rejected with `502` | `base_url` or `api_key` wrong, or `GET /api/v2/get-nodes` unreachable from the Playarr node. |
 | Tdarr accepts work but never produces anything | The dispatched path does not exist from Tdarr's side, or the Tdarr flow does not act on it. |
 | 10-bit source plays as audio only in a browser | Should not happen — `-pix_fmt yuv420p` is forced. Confirm you are on a current build. |
 
@@ -462,7 +462,7 @@ Live sessions are also visible to admins: `GET /api/v1/admin/playback/sessions/a
 watching right now, `GET /api/v1/admin/playback/sessions/history` for the filtered session history,
 and `POST /api/v1/admin/playback/sessions/{session_id}/stop` to force-stop one.
 
-In Streamarr Admin they are split across two pages:
+In Playarr Admin they are split across two pages:
 
 | Page | What it shows |
 | --- | --- |

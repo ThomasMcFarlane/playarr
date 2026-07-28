@@ -1,8 +1,8 @@
-# Local development image for the Streamarr marketing site.
+# Local development image for the Playarr marketing site.
 #
 # Per the workstation's devdeploy convention this runs the project's *dev*
 # command inside the cluster rather than a production server, so the site is
-# reachable at streamarr-marketing.localhost with Astro's watcher intact.
+# reachable at playarr-marketing.localhost with Astro's watcher intact.
 # The real production deploy path (a static host) is separate and does not use
 # this image.
 FROM node:24-alpine

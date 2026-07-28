@@ -1,21 +1,21 @@
 /**
- * Library-management tools Streamarr can read from.
+ * Library-management tools Playarr can read from.
  *
- * Only the six general-media *arr applications are listed. Streamarr's source
+ * Only the six general-media *arr applications are listed. Playarr's source
  * enum contains further variants that are deliberately not surfaced on this
  * site. Every description here must stay on the correct side of one line:
- * Streamarr reads what these tools have already organised. It performs no
+ * Playarr reads what these tools have already organised. It performs no
  * indexing and obtains no media itself.
  *
- * Accuracy note, verified against the backend: Streamarr has NO filesystem
- * scanner. The catalogue write path is fed entirely by streamarr-arr-sync, so
+ * Accuracy note, verified against the backend: Playarr has NO filesystem
+ * scanner. The catalogue write path is fed entirely by playarr-arr-sync, so
  * a server with no connection registered has an empty catalogue. Never
  * describe these integrations as optional extras that merely improve matching.
  */
 export interface Integration {
   name: string
   role: string
-  /** Exactly what Streamarr takes from it. */
+  /** Exactly what Playarr takes from it. */
   reads: string
   /** What the operator does not get if it is not connected. */
   without: string
@@ -55,7 +55,7 @@ export const INTEGRATIONS: readonly Integration[] = [
   {
     name: 'Prowlarr',
     role: 'Fleet management',
-    reads: 'The list of applications it manages, so Streamarr can be pointed at them consistently.',
+    reads: 'The list of applications it manages, so Playarr can be pointed at them consistently.',
     without: 'Each application is registered individually instead. Nothing is lost.',
   },
 ]
@@ -64,5 +64,5 @@ export const TDARR = {
   name: 'Tdarr',
   role: 'Background transcoding',
   reads:
-    'Streamarr dispatches library-wide re-encode work to a Tdarr worker pool and tracks its progress, keeping that work entirely separate from latency-sensitive playback.',
+    'Playarr dispatches library-wide re-encode work to a Tdarr worker pool and tracks its progress, keeping that work entirely separate from latency-sensitive playback.',
 } as const

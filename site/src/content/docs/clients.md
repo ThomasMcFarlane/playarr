@@ -1,11 +1,11 @@
 ---
 title: Install the apps
-summary: How to get Playarr onto a browser, phone, tablet or television, and how each device signs in to your own Streamarr server.
+summary: How to get Playarr onto a browser, phone, tablet or television, and how each device signs in to your own Playarr server.
 group: Clients
 order: 20
 ---
 
-Playarr is the playback and library front end for a Streamarr server you run yourself. It reads the library your server already knows about and plays it back. No Playarr client is distributed through any app store, and there is no 1.0 release — every route below is either the hosted browser app, a direct package download, or a documented build-from-source and sideload path.
+Playarr is the playback and library front end for a Playarr server you run yourself. It reads the library your server already knows about and plays it back. No Playarr client is distributed through any app store, and there is no 1.0 release — every route below is either the hosted browser app, a direct package download, or a documented build-from-source and sideload path.
 
 The canonical list of platforms and their current availability lives at <https://playarr.app/clients>. That hub labels each entry **Available**, **Available · Experimental install** or **Coming soon**, and the table below uses the same labels. The browser client does not appear on the hub at all, because there is nothing to install.
 
@@ -21,15 +21,15 @@ The canonical list of platforms and their current availability lives at <https:/
 | Xbox | Not built yet | None. `clients/xbox/` holds a handful of C# model and networking files — no application and no install route |
 | HarmonyOS — Huawei phones, tablets, Vision TVs | Coming soon | None. A native ArkTS client is in development — no application and no install route yet |
 
-> Transcoding happens on the Streamarr server, not in the client. Playarr apps receive direct-play or HLS streams; none of them embeds FFmpeg.
+> Transcoding happens on the Playarr server, not in the client. Playarr apps receive direct-play or HLS streams; none of them embeds FFmpeg.
 
 ## Start in a browser
 
 The hosted Playarr Web App is the complete client and it works right now.
 
 1. Open <https://playarr.app> on any evergreen desktop or mobile browser with Media Source Extensions.
-2. On the sign-in screen, enter the absolute URL of your Streamarr server, including the port — for example `http://192.168.1.50:8484` or `https://media.<YOUR-DOMAIN>`.
-3. Sign in with your username and password. If the operator has opted the server into `STREAMARR_AUTH_MODE=trusted-network`, a request from an allowlisted address signs you in with no credentials at all instead.
+2. On the sign-in screen, enter the absolute URL of your Playarr server, including the port — for example `http://192.168.1.50:8484` or `https://media.<YOUR-DOMAIN>`.
+3. Sign in with your username and password. If the operator has opted the server into `PLAYARR_AUTH_MODE=trusted-network`, a request from an allowlisted address signs you in with no credentials at all instead.
 
 There is no download, no packaging step and no review gate: a new build is live for every browser the moment it is deployed. A hand-written service worker checks `build-manifest.json` on focus and every 15 minutes, and offers an "Update available" toast when a newer bundle is published.
 
@@ -38,13 +38,13 @@ There is no download, no packaging step and no review gate: a new build is live 
 `playarr.app` is served over HTTPS, so reaching a plain-HTTP server on your LAN needs help from the browser:
 
 - **Local Network Access.** Playarr marks private and loopback addresses as local-network requests, so a browser that implements Local Network Access can prompt you for permission and relax mixed-content blocking. Approve the prompt the first time. A browser without that feature cannot connect to a private plain-HTTP server from the hosted app.
-- **Public IPv4 addresses.** Enter the public address and Playarr rewrites it to the deterministic hostname `https://v4-A-B-C-D.relay.playarr.app:8484`. Those DNS records are DNS-only — Streamarr's own authoritative DNS resolves the name straight back to the address you typed, and **Streamarr terminates TLS itself**. Set `STREAMARR_ACME_DOMAIN` on the server and accept the certificate authority's terms with `STREAMARR_ACME_ACCEPT_TERMS=true` so it can obtain and renew that certificate.
+- **Public IPv4 addresses.** Enter the public address and Playarr rewrites it to the deterministic hostname `https://v4-A-B-C-D.relay.playarr.app:8484`. Those DNS records are DNS-only — Playarr's own authoritative DNS resolves the name straight back to the address you typed, and **Playarr terminates TLS itself**. Set `PLAYARR_ACME_DOMAIN` on the server and accept the certificate authority's terms with `PLAYARR_ACME_ACCEPT_TERMS=true` so it can obtain and renew that certificate.
 
 > Playarr never relays API or playback traffic through Cloudflare. Whatever URL you enter, the browser talks to your server directly.
 
 ## Android — Available
 
-One project, one package, one artefact. The same APK installs on phones, tablets, Android TV and Google TV; the manifest exposes both the normal and `LEANBACK_LAUNCHER` categories, and the app picks touch or remote navigation at runtime. The package is `io.streamarr.mobile` on every device, and the minimum is **Android 8.0 (API 26)**.
+One project, one package, one artefact. The same APK installs on phones, tablets, Android TV and Google TV; the manifest exposes both the normal and `LEANBACK_LAUNCHER` categories, and the app picks touch or remote navigation at runtime. The package is `io.playarr.mobile` on every device, and the minimum is **Android 8.0 (API 26)**.
 
 ### Install the published APK
 
@@ -80,8 +80,8 @@ The app also updates itself outside any store: it polls `https://playarr.app/dow
 Requires JDK 21 and the Android SDK. Point `JAVA_HOME` at your own JDK 21 installation — the path below is an example, not a fixed location:
 
 ```bash
-git clone https://github.com/ThomasMcFarlane/streamarr.git
-cd streamarr/clients/android
+git clone https://github.com/ThomasMcFarlane/playarr.git
+cd playarr/clients/android
 export JAVA_HOME=<PATH-TO-YOUR-JDK-21>
 ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
 adb install -r app/build/outputs/apk/debug/playarr-android-debug.apk
@@ -96,7 +96,7 @@ There is no APK, IPK, WGT or USB package for VIDAA. Playarr runs on these televi
 ### Route 1 — the TV Browser (reliable, recommended)
 
 1. Update the TV: **Settings → Support → System Upgrade → Check Firmware Upgrade**.
-2. Put the TV and the Streamarr server on the same trusted home network.
+2. Put the TV and the Playarr server on the same trusted home network.
 3. Open the **Browser** app on the TV and enter:
 
    ```text
@@ -104,9 +104,9 @@ There is no APK, IPK, WGT or USB package for VIDAA. Playarr runs on these televi
    ```
 
 4. Save it as a Browser favourite if the television offers that.
-5. Sign in with the same Streamarr account you use elsewhere.
+5. Sign in with the same Playarr account you use elsewhere.
 
-The `platform=tv-vidaa` marker is persisted after the first visit, so you do not need to keep the query string visible. It identifies the TV to Streamarr and selects a conservative playback profile — H.264, H.265 and VP9 video with AAC, Opus and MP3 audio.
+The `platform=tv-vidaa` marker is persisted after the first visit, so you do not need to keep the query string visible. It identifies the TV to Playarr and selects a conservative playback profile — H.264, H.265 and VP9 video with AAC, Opus and MP3 audio.
 
 ### Route 2 — the experimental launcher tile
 
@@ -129,7 +129,7 @@ Playarr for Roku is a native SceneGraph channel using Roku's own focusable lists
 2. **Get the ZIP** from <https://playarr.app/downloads/roku/playarr-roku.zip>. Keep it zipped — Roku's installer expects the archive itself.
 3. **Open the web installer** at the URL shown on the TV, from a phone or computer on the same network. Sign in with the username `rokudev` and the password you created.
 4. **Upload and install.** Choose Upload, select `playarr-roku.zip` without extracting it, then Install.
-5. **Connect Playarr.** Enter your Streamarr server base URL, follow the code shown on the TV to authorise the Roku, then choose a household profile.
+5. **Connect Playarr.** Enter your Playarr server base URL, follow the code shown on the TV to authorise the Roku, then choose a household profile.
 
 > **Only one sideloaded app can be installed on a Roku.** Installing another development app replaces Playarr. If Roku rejects an identical version, remove the existing sideloaded app and install the ZIP again.
 
@@ -140,8 +140,8 @@ Roku's own guide: <https://developer.roku.com/dev/docs/developer-setup>
 Python 3 and `zip` are the only requirements:
 
 ```bash
-git clone https://github.com/ThomasMcFarlane/streamarr.git
-cd streamarr/clients/roku
+git clone https://github.com/ThomasMcFarlane/playarr.git
+cd playarr/clients/roku
 make validate
 make package
 ```
@@ -154,11 +154,11 @@ export ROKU_DEV_PASSWORD='<YOUR-DEV-PASSWORD>'
 make deploy
 ```
 
-The channel reports `clientVersion` `0.1.0` and, because Streamarr's client-platform enum has no `tv-roku` value yet, identifies itself using the supported `web` compatibility identity. Store signing, channel artwork and physical-device certification are outside this source-only client.
+The channel reports `clientVersion` `0.1.0` and, because Playarr's client-platform enum has no `tv-roku` value yet, identifies itself using the supported `web` compatibility identity. Store signing, channel artwork and physical-device certification are outside this source-only client.
 
 ## LG webOS — Available · Experimental install
 
-The webOS app is a packaged distribution of the same complete Playarr Web application, not a second interface. It installs as `com.streamarr.tv` and needs **webOS 23 or newer**.
+The webOS app is a packaged distribution of the same complete Playarr Web application, not a second interface. It installs as `com.playarr.tv` and needs **webOS 23 or newer**.
 
 > **No release IPK has been published yet.** The download button on the hub serves one only once an artefact exists; today, build it from source with the commands below.
 
@@ -184,14 +184,14 @@ curl -fL https://playarr.app/downloads/webos/playarr-webos.ipk -o playarr-webos.
 Until then, build the identical IPK yourself. This needs **Node.js 20 or newer** (the workspace declares `engines.node >= 20`):
 
 ```bash
-git clone https://github.com/ThomasMcFarlane/streamarr.git
-cd streamarr/clients/tv-web
+git clone https://github.com/ThomasMcFarlane/playarr.git
+cd playarr/clients/tv-web
 npm install -g pnpm@11.13.0
 pnpm install --frozen-lockfile
-pnpm --filter @streamarr-tv/app-webos run package:ipk
+pnpm --filter @playarr-tv/app-webos run package:ipk
 ```
 
-`package:ipk` builds the app and then runs `ares-package`, writing `apps/tv-webos/out/com.streamarr.tv_<version>_all.ipk`.
+`package:ipk` builds the app and then runs `ares-package`, writing `apps/tv-webos/out/com.playarr.tv_<version>_all.ipk`.
 
 ### 3. Connect the TV
 
@@ -208,8 +208,8 @@ Port `9922` and the user `prisoner` are LG's own Developer Mode values. `--getke
 Run this from `clients/tv-web` for a locally built package, or substitute `playarr-webos.ipk` if you downloaded one:
 
 ```bash
-ares-install --device playarr-tv apps/tv-webos/out/com.streamarr.tv_*_all.ipk
-ares-launch --device playarr-tv com.streamarr.tv
+ares-install --device playarr-tv apps/tv-webos/out/com.playarr.tv_*_all.ipk
+ares-launch --device playarr-tv com.playarr.tv
 ```
 
 On first launch the TV shows **Link this TV** with a QR code and a short code rather than a URL box. Finish the pairing from a signed-in browser — see [Hosted first-contact linking](#hosted-first-contact-linking-at-playarrapplink) below.
@@ -220,7 +220,7 @@ LG's guide: <https://webostv.developer.lge.com/develop/getting-started/developer
 
 ## Samsung Tizen — Available · Experimental install
 
-Also a packaged distribution of the full Playarr Web application, installing as `StrmarrTV1.Streamarr`. It requires **Tizen 7.0 or newer — a 2023-or-newer Samsung television**. Playback uses Samsung's native AVPlay surface rather than the browser video element.
+Also a packaged distribution of the full Playarr Web application, installing as `StrmarrTV1.Playarr`. It requires **Tizen 7.0 or newer — a 2023-or-newer Samsung television**. Playback uses Samsung's native AVPlay surface rather than the browser video element.
 
 > **Every WGT must be signed, and a signed developer WGT is device-bound.** The distributor certificate authorises specific TV DUIDs, so an arbitrary downloaded developer package generally cannot install on someone else's television. No hosted WGT is published; build and sign your own.
 
@@ -235,11 +235,11 @@ Open **Apps → App Settings**, enter `12345`, turn Developer Mode on, enter you
 The repository ships a `package:wgt` script that builds the app, copies `config.xml` into `dist/`, invokes `tizen package` with your certificate profile and copies the result to a stable filename. It needs **Node.js 20 or newer** and the `tizen` CLI on your `PATH`:
 
 ```bash
-git clone https://github.com/ThomasMcFarlane/streamarr.git
-cd streamarr/clients/tv-web
+git clone https://github.com/ThomasMcFarlane/playarr.git
+cd playarr/clients/tv-web
 npm install -g pnpm@11.13.0
 pnpm install --frozen-lockfile
-pnpm --filter @streamarr-tv/app-tizen run package:wgt -- --profile <YOUR-CERTIFICATE-PROFILE>
+pnpm --filter @playarr-tv/app-tizen run package:wgt -- --profile <YOUR-CERTIFICATE-PROFILE>
 ```
 
 Use the exact active profile name from Tizen Studio. Instead of `--profile` you may export `PLAYARR_TIZEN_CERT_PROFILE=<YOUR-CERTIFICATE-PROFILE>`; the script fails with a clear message if neither is supplied. The signed widget is written to `apps/tv-tizen/playarr-tizen.wgt`.
@@ -251,7 +251,7 @@ sdb connect <TV-IP>
 sdb devices
 tizen list tv
 tizen install -n playarr-tizen.wgt -t <TARGET-NAME> -- apps/tv-tizen
-tizen run -p StrmarrTV1.Streamarr -t <TARGET-NAME>
+tizen run -p StrmarrTV1.Playarr -t <TARGET-NAME>
 ```
 
 In Tizen Studio's **Device Manager**, right-click the connected TV and choose **Permit to install applications** before installing. Use `tizen list tv` to find the exact `<TARGET-NAME>`.
@@ -270,20 +270,20 @@ What is in the tree today:
 
 | Target | Path | Minimum OS | Bundle identifier |
 | --- | --- | --- | --- |
-| iPhone and iPad | `clients/ios/` | iOS 17.0 | `com.streamarr.ios` |
-| Apple TV | `clients/apple-tv/` | tvOS 17.0 | `com.streamarr.playarr.tvos` |
+| iPhone and iPad | `clients/ios/` | iOS 17.0 | `com.playarr.ios` |
+| Apple TV | `clients/apple-tv/` | tvOS 17.0 | `com.playarr.playarr.tvos` |
 
-Both consume the same `StreamarrKit` Swift package for API models, networking, device-code authentication and AVFoundation playback. If you have Xcode and want to run the tvOS app on a simulator:
+Both consume the same `PlayarrKit` Swift package for API models, networking, device-code authentication and AVFoundation playback. If you have Xcode and want to run the tvOS app on a simulator:
 
 ```bash
-git clone https://github.com/ThomasMcFarlane/streamarr.git
-cd streamarr/clients/apple-tv
+git clone https://github.com/ThomasMcFarlane/playarr.git
+cd playarr/clients/apple-tv
 xcodegen generate
 xcodebuild -project PlayarrTV.xcodeproj -scheme PlayarrTV \
   -destination 'platform=tvOS Simulator,name=Apple TV' test
 ```
 
-The bundle identifier, signing team, version and artwork are development defaults. Because Streamarr's client-platform enum has no tvOS value, the Apple TV app currently identifies as `ios`.
+The bundle identifier, signing team, version and artwork are development defaults. Because Playarr's client-platform enum has no tvOS value, the Apple TV app currently identifies as `ios`.
 
 ## Signing in
 
@@ -291,9 +291,9 @@ No Playarr package contains your server address, your credentials or a token. Ev
 
 ### Direct sign-in
 
-Browsers, phones and tablets take the Streamarr URL on the sign-in screen alongside a username and password (`POST /api/v1/auth/login`). A URL with no scheme is treated as HTTP, which is what LAN self-hosting usually needs. Household profiles come from `GET /api/v1/users/profiles`, with a four-digit PIN when a profile is locked.
+Browsers, phones and tablets take the Playarr URL on the sign-in screen alongside a username and password (`POST /api/v1/auth/login`). A URL with no scheme is treated as HTTP, which is what LAN self-hosting usually needs. Household profiles come from `GET /api/v1/users/profiles`, with a four-digit PIN when a profile is locked.
 
-The server's default is `STREAMARR_AUTH_MODE=full-account`, so a username and password are required. Under the opt-in `trusted-network` mode a bearer token is instead acquired on demand, with no interaction and no credentials, the first time a call needs one — and a request from outside the allowlist is refused rather than falling back to a password prompt.
+The server's default is `PLAYARR_AUTH_MODE=full-account`, so a username and password are required. Under the opt-in `trusted-network` mode a bearer token is instead acquired on demand, with no interaction and no credentials, the first time a call needs one — and a request from outside the allowlist is refused rather than falling back to a password prompt.
 
 ### Device-code flow, when the client already knows your server
 
@@ -312,13 +312,13 @@ Typing `http://192.168.1.50:8484` on a TV remote is miserable, so televisions th
 
 1. The television requests a code (`POST /api/link/code`) and shows a QR code, the address `playarr.app/link`, and a short manual code.
 2. You scan the QR with a phone, or open <https://playarr.app/link> and type the code. Codes are eight characters drawn from a 32-character unambiguous alphabet — `A`–`Z` without `I` or `O`, and `2`–`9` — formatted `XXXX-XXXX`.
-3. In your **already signed-in browser**, you pick the Streamarr server and household profile you want on that television.
-4. The browser asks *your own Streamarr server* for a short-lived device credential for that profile, and hands only that credential plus the server-address bundle back through the broker.
-5. The television redeems the credential directly with Streamarr and stores the selected URL along with any peer addresses supplied with it.
+3. In your **already signed-in browser**, you pick the Playarr server and household profile you want on that television.
+4. The browser asks *your own Playarr server* for a short-lived device credential for that profile, and hands only that credential plus the server-address bundle back through the broker.
+5. The television redeems the credential directly with Playarr and stores the selected URL along with any peer addresses supplied with it.
 
 Each code lives in its own isolated Durable Object, **expires after ten minutes**, and is polled every two seconds.
 
-> **What the link record contains:** only the device secret, the selected Streamarr server addresses, and a single-use Streamarr device code. **It never receives a password, a browser bearer token, or a refresh token.** The broker holds no runtime secrets, and no API or playback traffic passes through it.
+> **What the link record contains:** only the device secret, the selected Playarr server addresses, and a single-use Playarr device code. **It never receives a password, a browser bearer token, or a refresh token.** The broker holds no runtime secrets, and no API or playback traffic passes through it.
 
 ## Known limits
 
@@ -326,5 +326,5 @@ Each code lives in its own isolated Durable Object, **expires after ten minutes*
 - **No DRM on any platform.** There are no Widevine, FairPlay or PlayReady licence endpoints in the API at all, so DRM-protected playback is not offered. That is a deliberate design position, not a temporary gap.
 - **Chromecast, AirPlay and deep linking are not built yet** on any client.
 - **No real-device certification has been done.** The webOS and Tizen packages in particular are labelled developer previews until playback, remote handling, suspend and resume are validated on representative hardware.
-- **Roku and Apple TV report a substitute platform identity** (`web` and `ios` respectively) because Streamarr's client-platform enum does not yet define values for them.
+- **Roku and Apple TV report a substitute platform identity** (`web` and `ios` respectively) because Playarr's client-platform enum does not yet define values for them.
 - **The Xbox client is not built yet.** `clients/xbox/` contains a small amount of C# shared model and networking code and a `ClientPlatform::Xbox` value on the server. There is no application, no package and no install route, and it is not listed on the clients hub.

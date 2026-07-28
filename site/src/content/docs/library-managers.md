@@ -1,39 +1,39 @@
 ---
 title: Connect your library managers
-summary: Point Streamarr at the Sonarr, Radarr, Lidarr, Readarr, Bazarr and Prowlarr instances you already run, so it can read the library they have already organised.
+summary: Point Playarr at the Sonarr, Radarr, Lidarr, Readarr, Bazarr and Prowlarr instances you already run, so it can read the library they have already organised.
 group: Setup
 order: 11
 ---
 
-You already run the *arr suite to keep your library tidy on disk. Streamarr does not replace any of
+You already run the *arr suite to keep your library tidy on disk. Playarr does not replace any of
 it — it reads the organised result. Each app you register becomes a **source instance**: a name, a
-base URL and that app's own API key. Streamarr then re-reads it on a schedule and turns what it
+base URL and that app's own API key. Playarr then re-reads it on a schedule and turns what it
 finds into the catalogue your Playarr clients browse.
 
-> **What Streamarr does not do.** Streamarr supplies no media and obtains none. Every request it
+> **What Playarr does not do.** Playarr supplies no media and obtains none. Every request it
 > makes to a connected *arr app is an HTTP `GET` — there is no `POST`, `PUT` or `DELETE` helper
-> anywhere in `streamarr-arr-client`. It reads the library those apps have already organised; it
+> anywhere in `playarr-arr-client`. It reads the library those apps have already organised; it
 > never changes it, and it never reaches past it.
 
 ## Before you start
 
-- A running Streamarr server, reachable in your browser.
-- **Streamarr Admin actually being the thing served at `/`.** The Streamarr binary co-hosts one
-  built web UI on the same origin and port as the API — whatever is at `STREAMARR_WEB_ASSETS_DIR`,
+- A running Playarr server, reachable in your browser.
+- **Playarr Admin actually being the thing served at `/`.** The Playarr binary co-hosts one
+  built web UI on the same origin and port as the API — whatever is at `PLAYARR_WEB_ASSETS_DIR`,
   or a `web/` directory next to the binary. The published container image puts the Playarr **Web**
-  client there, not Streamarr Admin, so on a Docker deployment you must build Admin and point
-  `STREAMARR_WEB_ASSETS_DIR` at it yourself. [First run](/docs/first-run) covers that step; if you
+  client there, not Playarr Admin, so on a Docker deployment you must build Admin and point
+  `PLAYARR_WEB_ASSETS_DIR` at it yourself. [First run](/docs/first-run) covers that step; if you
   would rather not, every instruction below is also available over the API.
-- An admin account. On first boot Streamarr provisions one — username from
-  `STREAMARR_BOOTSTRAP_ADMIN_USERNAME`, default `admin` — and, when
-  `STREAMARR_BOOTSTRAP_ADMIN_PASSWORD` is unset, generates a random password and logs it exactly
+- An admin account. On first boot Playarr provisions one — username from
+  `PLAYARR_BOOTSTRAP_ADMIN_USERNAME`, default `admin` — and, when
+  `PLAYARR_BOOTSTRAP_ADMIN_PASSWORD` is unset, generates a random password and logs it exactly
   once at `WARN` level.
-- Each *arr app you want to connect, reachable from the Streamarr server over HTTP, plus its API
+- Each *arr app you want to connect, reachable from the Playarr server over HTTP, plus its API
   key.
 
 Every *arr app exposes its key at **Settings → General → API Key** in its own UI.
 
-| App | Streamarr `kind` | API version Streamarr talks | Typical port |
+| App | Playarr `kind` | API version Playarr talks | Typical port |
 | --- | --- | --- | --- |
 | Sonarr | `sonarr` | `v3` | 8989 |
 | Radarr | `radarr` | `v3` | 7878 |
@@ -42,7 +42,7 @@ Every *arr app exposes its key at **Settings → General → API Key** in its ow
 | Bazarr | `bazarr` | `/api` | 6767 |
 | Prowlarr | `prowlarr` | `v1` | 9696 |
 
-> **Note on ports.** Those are each application's own defaults, not Streamarr settings — Streamarr
+> **Note on ports.** Those are each application's own defaults, not Playarr settings — Playarr
 > has no built-in port list and takes whatever base URL you give it. The same six ports are what
 > `infra/docker/docker-compose.dev.yml` in the repository maps for its local test stack, so they are
 > a reasonable starting guess; confirm each against your own installation.
@@ -51,11 +51,11 @@ Every *arr app exposes its key at **Settings → General → API Key** in its ow
 
 Three things are worth understanding before you add the first one.
 
-**It is read-only.** Streamarr authenticates with the app's standard `X-Api-Key` header and issues
+**It is read-only.** Playarr authenticates with the app's standard `X-Api-Key` header and issues
 only `GET` requests. The shared HTTP helpers are `get_json` and `get_status`; nothing else exists.
 
 **Polling is the truth.** A `ReconciliationPoller` runs a full listing pass per instance and diffs
-it against Streamarr's own catalogue. The interval is **300 seconds (five minutes)**, and the first
+it against Playarr's own catalogue. The interval is **300 seconds (five minutes)**, and the first
 pass fires immediately at start-up so your catalogue populates without waiting. There is no way to
 change the interval — the 300-second value is compiled in, not a config key. A webhook body is by
 design never trusted as data, only as a nudge to re-read sooner, and that nudge is **not yet wired
@@ -65,9 +65,9 @@ up**; see [Webhooks](#webhooks-endpoint-built-faster-updates-not-built-yet) belo
 against that app's `system/status` endpoint first. A mistyped URL or a stale key fails immediately
 with a `502`, rather than silently succeeding and going wrong later.
 
-## Add a source instance in Streamarr Admin
+## Add a source instance in Playarr Admin
 
-1. Open Streamarr Admin at `http://<YOUR-SERVER-URL>/` and sign in as an admin. (If you land in
+1. Open Playarr Admin at `http://<YOUR-SERVER-URL>/` and sign in as an admin. (If you land in
    Playarr Web instead, the server is co-hosting the wrong bundle — see **Before you start**.)
 2. **Source instances** is the root page. You will see a card grid with a **+** tile.
 3. Click **+** to open the **Add source instance** modal.
@@ -105,12 +105,12 @@ curl -sS -X POST "http://<YOUR-SERVER-URL>/api/v1/auth/login" \
     "password": "<YOUR-ADMIN-PASSWORD>",
     "device_id": "b3f2c9a4-6e1d-4f8a-9c2b-1a7e5d3f6b90",
     "device_name": "setup-shell",
-    "client_platform": "streamarr-admin",
+    "client_platform": "playarr-admin",
     "client_version": "0.1.0"
   }'
 ```
 
-> **Keep `client_platform` as `streamarr-admin`.** That value selects the operator login path, which
+> **Keep `client_platform` as `playarr-admin`.** That value selects the operator login path, which
 > does not require `Policy::can_stream`. The bootstrapped admin account is provisioned without
 > streaming access on purpose, so logging in with a Playarr platform value (`web`, `ios`,
 > `android-tv`, …) returns `403` for that account. Take `access_token` from the response and use it
@@ -160,14 +160,14 @@ All require an admin bearer token: `401` without one, `403` for a non-admin.
 
 > **Credentials are not encrypted at rest.** The database column is named `api_key_encrypted`, but
 > it is stored as plain text; the `Sensitive<String>` wrapper only stops the value leaking through
-> log formatting. Treat the Streamarr database as holding live *arr credentials, and protect it
+> log formatting. Treat the Playarr database as holding live *arr credentials, and protect it
 > accordingly.
 
 ## What each app contributes
 
 ### Sonarr
 
-Streamarr reads `GET /api/v3/series`, `GET /api/v3/episode?seriesId={id}` and
+Playarr reads `GET /api/v3/series`, `GET /api/v3/episode?seriesId={id}` and
 `GET /api/v3/episodefile?seriesId={id}`.
 
 From those it takes title, sort title, TVDB id, monitored flag, status, path, overview, genres,
@@ -181,7 +181,7 @@ It reads nothing else from Sonarr — the request shapes are a deliberately hand
 
 ### Radarr
 
-Streamarr reads `GET /api/v3/movie` and `GET /api/v3/credit?movieId={id}`. Radarr embeds the file
+Playarr reads `GET /api/v3/movie` and `GET /api/v3/credit?movieId={id}`. Radarr embeds the file
 on the movie itself, so there is no separate file listing.
 
 Fields taken: title, sort title, TMDB id, monitored, `hasFile`, path, runtime, overview, genres,
@@ -190,14 +190,14 @@ images, `digitalRelease` and `physicalRelease`, plus the embedded `movieFile` (p
 monitored without a file means **Pending**, anything else is **Unknown**. Release date prefers
 `digitalRelease` and falls back to `physicalRelease`.
 
-Radarr is also the **only** connected app that exposes cast and crew. Streamarr reads `personName`,
+Radarr is also the **only** connected app that exposes cast and crew. Playarr reads `personName`,
 `personTmdbId`, images, `type`, `character`, `department`, `job` and `order`, de-duplicates each
 person by TMDB person id into one shared record, and fully replaces a film's credit list on every
 pass. This is what fills the cast, crew and people screens in Playarr.
 
 ### Lidarr
 
-Lidarr is on API v1. Streamarr reads `GET /api/v1/artist`, `GET /api/v1/album`,
+Lidarr is on API v1. Playarr reads `GET /api/v1/artist`, `GET /api/v1/album`,
 `GET /api/v1/track?artistId={id}` and `GET /api/v1/trackfile?artistId={id}`.
 
 Artists become `Artist` works keyed on the MusicBrainz artist id, with availability derived from
@@ -207,20 +207,20 @@ playable track with disc and track number, title, duration and the audio `mediaI
 bitrate, channels, bit depth, sample rate).
 
 > **Artwork wrinkle.** Lidarr often reports only local, key-gated `/MediaCover/...` paths. Where an
-> artist has no usable poster, Streamarr falls back to the first album cover, and mints an opaque
-> internal locator (`streamarr-arr://<source-instance-id>/MediaCover/...`) that the backend resolves
+> artist has no usable poster, Playarr falls back to the first album cover, and mints an opaque
+> internal locator (`playarr-arr://<source-instance-id>/MediaCover/...`) that the backend resolves
 > using the instance's own key. Your *arr host and API key never reach a Playarr client.
 
 ### Readarr
 
-Streamarr reads `GET /api/v1/author`, `GET /api/v1/book` and `GET /api/v1/bookfile?authorId={id}`.
+Playarr reads `GET /api/v1/author`, `GET /api/v1/book` and `GET /api/v1/bookfile?authorId={id}`.
 Authors become `Author` works keyed on the Goodreads author id, with per-book file rows carrying
 path, size and quality (`EPUB`, `PDF`, `MP3-320` and so on).
 
 > **Best-effort, and labelled as such in the code.** Readarr's upstream is archived and has no
-> actively maintained public API reference; the book-file shape in Streamarr was written by analogy
+> actively maintained public API reference; the book-file shape in Playarr was written by analogy
 > with Lidarr's track file rather than verified against a specification. Readarr authors carry no
-> overview, genres, images or availability into Streamarr, and book files get no bitrate and a zero
+> overview, genres, images or availability into Playarr, and book files get no bitrate and a zero
 > duration, with the quality name standing in for a codec label. Do not expect parity with
 > Sonarr, Radarr or Lidarr here.
 
@@ -231,12 +231,12 @@ is persisted, and appears as a card in the Admin UI like any other. A client wit
 the codebase.
 
 > **Not yet wired into sync — not built yet.** Bazarr's listing calls are never invoked by
-> `streamarr-arr-sync`; only its constructor and health check are. Subtitle-completeness state has
+> `playarr-arr-sync`; only its constructor and health check are. Subtitle-completeness state has
 > no repository to be written into, and there is an explicit `TODO` in the code saying so. A
 > reconciliation pass for a Bazarr instance logs that the kind has no catalogue surface and returns.
 > Registering Bazarr therefore verifies the connection and nothing more.
 
-Subtitles in Playarr come from somewhere else entirely: Streamarr inspects the subtitle streams
+Subtitles in Playarr come from somewhere else entirely: Playarr inspects the subtitle streams
 **embedded in the media file itself** with `ffprobe`, converts them to WebVTT with `ffmpeg` on the
 server, and caches the result on disk. No sidecar files are read and no subtitles are fetched from
 Bazarr.
@@ -244,13 +244,13 @@ Bazarr.
 ### Prowlarr
 
 Prowlarr can be registered as a source instance and is health-checked against
-`GET /api/v1/system/status`. Streamarr reads no library data from it and it contributes nothing to
+`GET /api/v1/system/status`. Playarr reads no library data from it and it contributes nothing to
 your catalogue: a reconciliation pass for a Prowlarr instance logs that the kind has no catalogue
 surface and returns immediately. Nothing degrades if you never register it.
 
 ## Summary: what each integration contributes
 
-| App | Streamarr reads | Becomes | If absent |
+| App | Playarr reads | Becomes | If absent |
 | --- | --- | --- | --- |
 | **Sonarr** | Series, episodes, episode files | `Series` works keyed on TVDB, one media file per episode | No series in the catalogue. Nothing else degrades. |
 | **Radarr** | Films, embedded movie file, credits | `Movie` works keyed on TMDB, plus every person record | No films — **and no cast or crew anywhere**, since no other app provides them. |
@@ -264,7 +264,7 @@ surface and returns immediately. Nothing degrades if you never register it.
 Every 300 seconds, per instance:
 
 1. List everything from the app and normalise it into a source-agnostic shape.
-2. Diff by external metadata id — TVDB, TMDB, MusicBrainz, Goodreads — not by Streamarr's own UUID,
+2. Diff by external metadata id — TVDB, TMDB, MusicBrainz, Goodreads — not by Playarr's own UUID,
    into insert / update / delete operations.
 3. Apply them, then run file-level sync and artwork prewarm for every touched work, followed by
    embedding sync. Embedding sync is best-effort: the local embedding model is downloaded on first
@@ -273,7 +273,7 @@ Every 300 seconds, per instance:
 4. Backfill any work already marked **Available** that has zero file rows, at up to 8 concurrent
    requests against the app, reporting progress as `backfilling media files: {completed}/{total}`.
 
-Streamarr owns and overwrites: title, sort title, monitored flag, availability, overview, genres,
+Playarr owns and overwrites: title, sort title, monitored flag, availability, overview, genres,
 images and release date. It never touches your tags, the `added_at` timestamp, or external
 references contributed by anything else.
 
@@ -291,14 +291,14 @@ only one node reconciles a given instance at a time.
 > by which your catalogue updates. It is documented here so you know what the endpoint is and what
 > it currently is not.
 
-Streamarr exposes a receiver per instance:
+Playarr exposes a receiver per instance:
 
 ```http
 POST http://<YOUR-SERVER-URL>/webhooks/<SOURCE-INSTANCE-ID>
 ```
 
 You would add that as a generic webhook connection in the *arr app's own **Settings → Connect**.
-Streamarr extracts only `eventType` and, where it can, one entity id — `/series/id` for Sonarr,
+Playarr extracts only `eventType` and, where it can, one entity id — `/series/id` for Sonarr,
 `/movie/id` for Radarr, `/artist/id` for Lidarr, `/author/id` for Readarr. Bazarr and Prowlarr
 signals carry no usable entity id. The extracted signal is turned into a re-fetch request and
 offered to the poller; because nothing is listening for it yet, it is dropped and logged at `DEBUG`.
@@ -329,14 +329,14 @@ curl -sS -X POST "http://<YOUR-SERVER-URL>/api/v1/admin/source-instances/<ID>/sy
   -H "Authorization: Bearer <ADMIN-ACCESS-TOKEN>" -i
 ```
 
-> Sync status is held in memory only. Nothing in it survives a Streamarr restart, and an instance
+> Sync status is held in memory only. Nothing in it survives a Playarr restart, and an instance
 > with no completed pass reports `status: null` rather than a synthetic "idle".
 
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `502` when adding an instance | The health check failed: wrong base URL, wrong key, or the app is unreachable from the Streamarr host. | Check the URL from the Streamarr machine, not your laptop. Container deployments need a resolvable hostname or the host IP, not `localhost`. |
+| `502` when adding an instance | The health check failed: wrong base URL, wrong key, or the app is unreachable from the Playarr host. | Check the URL from the Playarr machine, not your laptop. Container deployments need a resolvable hostname or the host IP, not `localhost`. |
 | `401` / `403` on any admin call | No token, or a non-admin token. | Log in as an admin and resend the bearer token. |
 | `503` from "Sync now" | No reconciliation poller is running for that instance yet. | Wait about ten seconds and retry — a worker-side watch loop ticks every 10 s and spawns a poller for any instance registered since the last tick. No restart is needed. |
 | Titles appear but nothing plays | Works imported before their file rows. | The next pass backfills them automatically; watch for `backfilling media files:` in the logs. |
@@ -347,7 +347,7 @@ curl -sS -X POST "http://<YOUR-SERVER-URL>/api/v1/admin/source-instances/<ID>/sy
 - **Two instances of the same kind will fight.** The reconciliation diff compares against every
   local work of the matching kind, not only the ones a given instance produced — so two Radarr
   instances covering disjoint libraries would each delete the other's works. This is a documented
-  gap with a `TODO` in `streamarr-arr-sync`. Do not run same-kind instances over separate libraries
+  gap with a `TODO` in `playarr-arr-sync`. Do not run same-kind instances over separate libraries
   yet.
 - **API keys are stored in plain text.** See the callout above.
 - **Webhook-driven refresh is not built yet.** The receiver returns `202` but no poller consumes the
@@ -356,8 +356,8 @@ curl -sS -X POST "http://<YOUR-SERVER-URL>/api/v1/admin/source-instances/<ID>/sy
   `backend/src/main.rs`, not an environment variable.
 - **Bazarr's catalogue integration is not built yet**, and Prowlarr has none by design.
 - **Readarr is best-effort** with unverified request shapes.
-- Streamarr has no metadata-provider client of any kind. There is no TMDB, TVDB, MusicBrainz or
-  Goodreads HTTP client in the backend — Streamarr holds only the identifiers your *arr apps pass
+- Playarr has no metadata-provider client of any kind. There is no TMDB, TVDB, MusicBrainz or
+  Goodreads HTTP client in the backend — Playarr holds only the identifiers your *arr apps pass
   through, and downloads and caches the artwork at whatever image URLs they supply. Everything you
   see in Playarr traces back to the apps you already run.
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Copy compliance linter for the Streamarr marketing site.
+ * Copy compliance linter for the Playarr Server marketing site.
  *
- * Why this exists: `docs/artifacts/streamarr-legal-release.html` concludes that
+ * Why this exists: `docs/artifacts/playarr-legal-release.html` concludes that
  * for projects of this shape the exposure surface is the *marketing*, not the
  * code — TickBox, Grokster and Filmspeler were each sunk primarily by their own
  * promotional conduct. This script mechanically enforces the resulting
@@ -33,7 +33,7 @@ const SCAN_EXT = new Set(['.astro', '.md', '.mdx', '.ts', '.tsx', '.js', '.mjs',
 const SELF = basename(fileURLToPath(import.meta.url))
 
 /**
- * Acquisition-adjacent. Streamarr plays media the operator already holds; the
+ * Acquisition-adjacent. Playarr Server plays media the operator already holds; the
  * site must never imply it finds, fetches, indexes or obtains anything.
  */
 const ACQUISITION = [

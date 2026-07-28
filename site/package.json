@@ -1,8 +1,8 @@
 {
-  "name": "streamarr-site",
+  "name": "playarr-site",
   "version": "0.1.0",
   "private": true,
-  "description": "Public marketing and documentation site for Streamarr and the Playarr clients.",
+  "description": "Public marketing and documentation site for Playarr and the Playarr clients.",
   "type": "module",
   "engines": {
     "node": ">=20",

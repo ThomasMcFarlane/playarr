@@ -1,32 +1,32 @@
 /**
  * Single source of truth for site-wide strings, navigation and outbound links.
  *
- * Copy on this site is legally load-bearing: `docs/artifacts/streamarr-legal-release.html`
+ * Copy on this site is legally load-bearing: `docs/artifacts/playarr-legal-release.html`
  * concludes that promotional conduct, not source code, is what sank comparable
- * projects. Streamarr is described here strictly as a playback, library and
+ * projects. Playarr is described here strictly as a playback, library and
  * metadata layer over media the operator already holds. Nothing on this site
  * describes acquiring, indexing or searching for content.
  */
 
 export const SITE = {
-  name: 'Streamarr',
+  name: 'Playarr',
   clientName: 'Playarr',
   tagline: 'Your library. Every screen.',
   description:
-    'Streamarr is a self-hosted media server that turns the library you already own into a polished viewing experience, with native Playarr apps for phones, tablets, televisions and the browser.',
+    'Playarr is a self-hosted media server that turns the library you already own into a polished viewing experience, with native Playarr apps for phones, tablets, televisions and the browser.',
   locale: 'en-GB',
 } as const
 
 /** Outbound destinations. The hosted Playarr Web App is the primary call to action. */
 export const LINKS = {
-  /** The hosted Playarr Web App — sign in against your own Streamarr server. */
+  /** The hosted Playarr Web App — sign in against your own Playarr server. */
   playarrApp: 'https://playarr.app',
   /** Public hub listing every Playarr client and how to install it. */
   playarrClients: 'https://playarr.app/clients',
-  repo: 'https://github.com/ThomasMcFarlane/streamarr',
-  issues: 'https://github.com/ThomasMcFarlane/streamarr/issues',
-  discussions: 'https://github.com/ThomasMcFarlane/streamarr/discussions',
-  licence: 'https://github.com/ThomasMcFarlane/streamarr/blob/main/LICENSE',
+  repo: 'https://github.com/ThomasMcFarlane/playarr',
+  issues: 'https://github.com/ThomasMcFarlane/playarr/issues',
+  discussions: 'https://github.com/ThomasMcFarlane/playarr/discussions',
+  licence: 'https://github.com/ThomasMcFarlane/playarr/blob/main/LICENSE',
 } as const
 
 export const NAV: ReadonlyArray<{ href: string; label: string }> = [
