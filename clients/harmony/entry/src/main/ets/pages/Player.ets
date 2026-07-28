@@ -65,8 +65,8 @@
  * `Detail.ets`/`Library.ets`), never a standalone Entry-decorated page of
  * its own, so it has no literal `onPageShow`/`onPageHide` page-router
  * lifecycle of its own the way `pages/Index.ets` (the app's one Entry-
- * decorated root) would. This file
- * wires BOTH of the two real ArkUI mechanisms that could plausibly be what
+ * decorated root) would. This file wires BOTH of the two real ArkUI
+ * mechanisms that could plausibly be what
  * a `NavDestination`-hosted component's "shown"/"hidden" transitions mean
  * on a real device -- `NavDestination`'s own `.onShown()`/`.onHidden()`
  * events (a stable, well-documented API this project is confident about)
@@ -919,6 +919,12 @@ struct Player {
       void this.exitImmersiveMode();
     })
     .onBackPressed(() => {
+      // Also unconfirmed without a device (this file's own header comment,
+      // "Immersive mode", flags the same class of risk for onShown/
+      // onHidden): if a real system back gesture bypasses this callback
+      // entirely rather than routing through it, aboutToDisappear's own
+      // safety net still closes the session and releases the native
+      // player, just without a chance to stop the pop itself first.
       this.handleBack();
       return true;
     })

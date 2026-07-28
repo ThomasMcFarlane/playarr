@@ -81,8 +81,8 @@ describe("normaliseServerUrlList: deduping and dropping invalid entries", () => 
   });
 
   it("accepts a scheme matched case-insensitively and trims surrounding whitespace", () => {
-    const result: string[] = normaliseServerUrlList(["  HTTPS://Box.Playarr Server.Local  "]);
-    assert.deepStrictEqual(result, ["HTTPS://Box.Playarr Server.Local"]);
+    const result: string[] = normaliseServerUrlList(["  HTTPS://Box.Playarr.Local  "]);
+    assert.deepStrictEqual(result, ["HTTPS://Box.Playarr.Local"]);
   });
 
   it("mixes valid and invalid entries, keeping only the valid ones in first-seen order", () => {

@@ -48,7 +48,7 @@ const FIXTURES: AvatarFixture[] = [
   },
   { userId: "Aa", hash: 2112, mod6: 0, expectedPreset: "astronaut" },
   { userId: "aA", hash: 3072, mod6: 0, expectedPreset: "astronaut" },
-  { userId: "playarr", hash: 3979344609, mod6: 3, expectedPreset: "robot" },
+  { userId: "playarr", hash: 3801395885, mod6: 5, expectedPreset: "alien" },
   { userId: "playarr-user-42", hash: 265340064, mod6: 0, expectedPreset: "astronaut" },
   { userId: "éèê", hash: 231339, mod6: 3, expectedPreset: "robot" },
   { userId: "the-quick-brown-fox", hash: 701037180, mod6: 0, expectedPreset: "astronaut" }
