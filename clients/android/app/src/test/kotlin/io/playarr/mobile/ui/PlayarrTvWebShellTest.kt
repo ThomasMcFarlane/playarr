@@ -24,7 +24,7 @@ class PlayarrTvWebShellTest {
         assertTrue(script.contains("http://192.0.2.58:8484"))
         assertTrue(script.contains("Test User A"))
         assertTrue(script.contains("playarr.profileSessions.v4"))
-        assertTrue(script.contains("streamarr:session"))
+        assertTrue(script.contains("playarr:session"))
         assertTrue(script.contains("dark"))
     }
 

@@ -196,6 +196,8 @@ internal fun buildTvWebBootstrapScript(
     return """
         (function() {
           try {
+            // TokenStore key is `playarr:session` (device-auth package).
+            localStorage.setItem('playarr:session', ${jsonStringLiteral(sessionJson)});
             localStorage.setItem('streamarr:session', ${jsonStringLiteral(sessionJson)});
             localStorage.setItem('playarr.profileSessions.v4', ${jsonStringLiteral(profilesJson)});
             localStorage.setItem('playarr.currentUserName', ${jsonStringLiteral(displayName)});
