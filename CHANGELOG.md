@@ -47,7 +47,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   WebView path is a temporary deviation from the client principles, not the accepted product
   shape; the target remains full native Compose + Media3 on television.
 - Add Android TV parity capture tooling under `clients/android/tools/` (`compare_surfaces.py`,
-  `parity_ae0.py`) for deterministic 1920×1080 AE comparison and triple-verify runs.
+  `parity_ae0.py`, `parity_unpainted_ae0.py`) for deterministic 1920×1080 AE comparison and
+  triple-verify runs. The unpainted suite freezes the live SPA inside the TV WebView and
+  dual-captures via CDP so AE=0 is measured without full-bleed paint of web-ref frames.
 - Add Chromecast support: a real Google Cast sender/receiver pair, not a stub. A new
   `@playarr-tv/cast-protocol` package defines one shared wire protocol (mirrored by hand into
   Kotlin and Swift); a new CAF (Cast Application Framework) custom web receiver at
