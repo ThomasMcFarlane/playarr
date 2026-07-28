@@ -7,6 +7,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Align `AVPlayerEngine.avPlayer` with the optional `PlayerEngine.avPlayer`
+  requirement (`AVPlayer?`) so the Apple TV target builds after the Cast
+  relaxation of the protocol witness.
+
 ### Added
 
 - Encode the binding client product bar in

@@ -107,9 +107,9 @@ public protocol PlayerEngine: AnyObject {
     /// (`PlayarrApp/Cast/CastPlayerEngine.swift`) has no local `AVPlayer`
     /// at all: playback happens on the receiver device, and `PlayerView`
     /// swaps its rendering surface to a "Now casting" card instead of a
-    /// `VideoPlayer` in that case. `AVPlayerEngine.avPlayer` below stays
-    /// non-optional; a non-optional witness satisfies an optional `{ get }`
-    /// requirement, so nothing about that conformance needed to change.
+    /// `VideoPlayer` in that case. `AVPlayerEngine` returns its owned
+    /// `AVPlayer` wrapped as optional so the witness type matches this
+    /// requirement exactly.
     var avPlayer: AVPlayer? { get }
 
     func load(_ item: PlayableItem) async throws
@@ -156,7 +156,7 @@ public final class AVPlayerEngine: NSObject, PlayerEngine {
         set { player.isMuted = newValue }
     }
 
-    public var avPlayer: AVPlayer { player }
+    public var avPlayer: AVPlayer? { player }
 
     @ObservationIgnored private let player = AVPlayer()
     @ObservationIgnored private var currentItem: AVPlayerItem?
