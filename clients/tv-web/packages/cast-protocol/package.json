@@ -1,0 +1,26 @@
+{
+  "name": "@streamarr-tv/cast-protocol",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared Chromecast (Cast Application Framework) protocol types and message contracts used by the sender-side web app and the cast-receiver app.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitest": "^2.1.8"
+  }
+}
