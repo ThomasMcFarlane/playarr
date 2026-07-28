@@ -28,7 +28,7 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Playarr connects to the Streamarr server you configure on your local network.</string>
+	<string>Playarr connects to the Playarr Server you configure on your local network.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_googlecast._tcp</string>
