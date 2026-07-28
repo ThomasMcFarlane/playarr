@@ -2195,9 +2195,13 @@ export interface components {
          *     only selects which check `login_handler` applies, and every *other*
          *     endpoint still separately enforces the real, persisted `Policy`
          *     regardless of what a login request once claimed.
+         *
+         *     `Cast` identifies the CAF Custom Web Receiver page, not a device the
+         *     user signs into directly -- it is provisioned via delegated device
+         *     authorization from an already-signed-in sender.
          * @enum {string}
          */
-        ClientPlatform: "android-mobile" | "android-tv" | "ios" | "web" | "tv-webos" | "tv-tizen" | "tv-vidaa" | "tv-fire" | "xbox" | "streamarr-admin";
+        ClientPlatform: "android-mobile" | "android-tv" | "ios" | "web" | "tv-webos" | "tv-tizen" | "tv-vidaa" | "cast" | "tv-fire" | "xbox" | "harmony-mobile" | "harmony-tv" | "streamarr-admin";
         /**
          * @description One platform's row in the compatibility table: what the latest client
          *     build is, the floor below which the version-gate middleware rejects
@@ -7485,7 +7489,9 @@ export interface operations {
     };
     serve_rendition_file_handler: {
         parameters: {
-            query?: never;
+            query?: {
+                playback_session_id?: string | null;
+            };
             header?: never;
             path: {
                 /** @description Rendition id */
@@ -7518,7 +7524,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Missing or invalid bearer token/playback-session cookie */
+            /** @description Missing or invalid bearer token, playback-session cookie, or playback_session_id capability query */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -7543,7 +7549,9 @@ export interface operations {
     };
     serve_session_file_handler: {
         parameters: {
-            query?: never;
+            query?: {
+                playback_session_id?: string | null;
+            };
             header?: never;
             path: {
                 /** @description On-demand TranscodeSession id */
@@ -7576,7 +7584,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Missing or invalid bearer token/playback-session cookie */
+            /** @description Missing or invalid bearer token, playback-session cookie, or playback_session_id capability query */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -8070,6 +8078,7 @@ export interface operations {
                  *     timeline. On-demand HLS sessions use this to keep sidecar cues aligned.
                  */
                 source_offset_ms?: number;
+                playback_session_id?: string | null;
             };
             header?: never;
             path: {
@@ -8091,7 +8100,7 @@ export interface operations {
                     "text/vtt": unknown;
                 };
             };
-            /** @description Missing or invalid access token */
+            /** @description Missing or invalid bearer token, playback-session cookie, or playback_session_id capability query */
             401: {
                 headers: {
                     [name: string]: unknown;

@@ -96,8 +96,12 @@ public enum ClientPlatform: String, Codable, Sendable, CaseIterable, Hashable {
     case tvWebOS = "tv-webos"
     case tvTizen = "tv-tizen"
     case tvVidaa = "tv-vidaa"
+    case cast
     case tvFire = "tv-fire"
     case xbox
+    case harmonyMobile = "harmony-mobile"
+    case harmonyTV = "harmony-tv"
+    case streamarrAdmin = "streamarr-admin"
 }
 
 public enum AlbumType: String, Codable, Sendable, CaseIterable, Hashable {
