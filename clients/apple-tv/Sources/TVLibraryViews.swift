@@ -52,7 +52,7 @@ struct TVHomeView: View {
                     // Key art (left half), greyscale wash like web
                     heroBackdrop(hero: hero, size: geo.size)
 
-                    // Title panel
+                    // Title panel — clear of floating nav (nav ~100pt wide).
                     if let hero {
                         VStack(alignment: .leading, spacing: 18) {
                             Text(kindKicker(hero))
@@ -73,16 +73,17 @@ struct TVHomeView: View {
                                     .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
                             }
                         }
-                        .padding(.leading, DesignTokens.Shell.titlePanelLeft)
+                        .padding(.leading, 200)
                         .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
+                        .zIndex(2)
                     }
 
-                    // Right rails panel
+                    // Right rails panel — titles mirror live SPA home rails.
                     VStack(alignment: .leading, spacing: 40) {
-                        rail(title: "Recently added", works: Array(viewModel.works.prefix(12)))
-                        if viewModel.works.count > 6 {
-                            rail(title: "More from your library", works: Array(viewModel.works.dropFirst(6).prefix(12)))
-                        }
+                        let movies = viewModel.works.filter { $0.kind == .movie }
+                        let series = viewModel.works.filter { $0.kind == .series }
+                        rail(title: "Start watching", works: Array((series + viewModel.works).prefix(12)))
+                        rail(title: "New movies", works: Array((movies.isEmpty ? viewModel.works : movies).prefix(12)))
                     }
                     .padding(.leading, geo.size.width * DesignTokens.Shell.railLeftInset + 24)
                     .padding(.trailing, 48)
@@ -252,65 +253,92 @@ struct TVSearchView: View {
     var body: some View {
         ZStack {
             TVStageBackground()
-            HStack(alignment: .top, spacing: 0) {
-                // Left copy column (web search layout)
-                VStack(alignment: .leading, spacing: 20) {
-                    HStack(spacing: 16) {
+            GeometryReader { geo in
+                // Match live SPA: title+field sit left of centre; empty state mid-right.
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 14) {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(DesignTokens.Color.textSecondary)
-                            .frame(width: 44, height: 44)
-                            .background(Circle().fill(DesignTokens.Color.backgroundRaised.opacity(0.8)))
+                            .frame(width: 40, height: 40)
+                            .background(Circle().fill(DesignTokens.Color.backgroundRaised.opacity(0.75)))
                         Text("Search")
-                            .font(.system(size: 36, weight: .bold))
+                            .font(.system(size: 40, weight: .bold))
                             .foregroundStyle(DesignTokens.Color.textPrimary)
                     }
+                    .padding(.leading, 130)
+                    .padding(.top, 100)
+
                     if let viewModel {
                         @Bindable var model = viewModel
                         HStack(spacing: 12) {
                             Image(systemName: "magnifyingglass")
+                                .font(.system(size: 18, weight: .semibold))
                                 .foregroundStyle(DesignTokens.Color.brandPrimary)
                             TextField("Search your libraries and playlists", text: $model.query)
-                                .font(.system(size: 18))
+                                .font(.system(size: 17, weight: .medium))
                                 .foregroundStyle(DesignTokens.Color.textPrimary)
                                 .onSubmit { Task { await model.search() } }
                         }
-                        .padding(.horizontal, 22)
-                        .padding(.vertical, 16)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 18)
+                        .frame(width: min(620, geo.size.width * 0.42), alignment: .leading)
                         .background(
                             Capsule()
-                                .stroke(DesignTokens.Color.brandPrimary.opacity(0.7), lineWidth: 2)
-                                .background(Capsule().fill(DesignTokens.Color.backgroundElevated.opacity(0.85)))
+                                .fill(DesignTokens.Color.backgroundElevated.opacity(0.9))
                         )
-                        .frame(maxWidth: 560)
+                        .overlay(
+                            Capsule().stroke(DesignTokens.Color.brandPrimary.opacity(0.85), lineWidth: 2)
+                        )
+                        .padding(.leading, 130)
+                        .padding(.top, 28)
+
+                        // Filters chip (web has Filters · All libraries)
+                        HStack(spacing: 8) {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                                .foregroundStyle(DesignTokens.Color.brandPrimary)
+                            Text("Filters")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(DesignTokens.Color.textPrimary)
+                            Text("All libraries")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(DesignTokens.Color.textDisabled)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(DesignTokens.Color.backgroundRaised.opacity(0.85)))
+                        .padding(.leading, 130)
+                        .padding(.top, 16)
+
                         Text("Find any available movie, series, artist or playlist.")
-                            .font(TVTheme.bodyFont())
+                            .font(.system(size: 14, weight: .regular))
                             .foregroundStyle(DesignTokens.Color.textDisabled)
-                            .frame(maxWidth: 320, alignment: .leading)
+                            .frame(maxWidth: 300, alignment: .leading)
+                            .padding(.leading, 130)
+                            .padding(.top, 20)
+
                         searchResults(model)
+                            .padding(.leading, 130)
+                            .padding(.top, 20)
                     }
                     Spacer()
                 }
-                .padding(.leading, 140)
-                .padding(.top, 110)
-                .frame(maxWidth: .infinity, alignment: .leading)
 
-                // Right empty state
                 if let viewModel, viewModel.state == .idle {
-                    HStack(spacing: 18) {
+                    HStack(spacing: 16) {
                         Circle()
-                            .stroke(DesignTokens.Color.brandPrimary.opacity(0.5), lineWidth: 1.5)
-                            .frame(width: 88, height: 88)
+                            .stroke(DesignTokens.Color.brandPrimary.opacity(0.45), lineWidth: 1.5)
+                            .frame(width: 96, height: 96)
                             .overlay(
                                 Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 28))
+                                    .font(.system(size: 30, weight: .medium))
                                     .foregroundStyle(DesignTokens.Color.brandPrimary)
                             )
                         Text("Start typing to search.")
                             .font(.system(size: 18, weight: .medium))
                             .foregroundStyle(DesignTokens.Color.textPrimary)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .position(x: geo.size.width * 0.68, y: geo.size.height * 0.52)
                 }
             }
         }

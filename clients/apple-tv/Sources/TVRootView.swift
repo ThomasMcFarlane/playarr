@@ -1,3 +1,4 @@
+import PlayarrKit
 import SwiftUI
 
 struct TVRootView: View {
@@ -15,7 +16,21 @@ struct TVRootView: View {
         case .settings: return .settings
         case .deviceCodePairing: return nil // full-screen gate
         case .detailMovie, .detailEpisode, .detailTrack, .detailBook, .player:
-            return .home
+            return nil // handled as full-screen detail/player fixtures
+        }
+    }
+
+    private var parityDetailWork: Work? {
+        guard TVParityLaunch.webRefBaseURL == nil,
+              let screen = TVParityLaunch.requestedScreen else { return nil }
+        let works = TVParityFixtures.sampleWorks()
+        switch screen {
+        case .detailMovie: return works.first(where: { $0.kind == .movie }) ?? works.first
+        case .detailEpisode: return works.first(where: { $0.kind == .series }) ?? works.first
+        case .detailTrack: return works.first
+        case .detailBook: return works.first
+        case .player: return works.first(where: { $0.kind == .movie }) ?? works.first
+        default: return nil
         }
     }
 
@@ -23,18 +38,24 @@ struct TVRootView: View {
         ZStack {
             TVStageBackground()
 
-            switch environment.pairingState {
-            case .signedIn:
-                signedInShell
-            default:
-                // Also allow parity screens to force chrome while signed out.
-                if let forced = parityForcedTab {
-                    signedInShell(forcedSelection: forced)
-                } else if TVParityLaunch.requestedScreen == .deviceCodePairing
-                            || TVParityLaunch.requestedScreen == nil {
-                    TVPairingGateView()
-                } else {
+            if TVParityLaunch.requestedScreen == .deviceCodePairing {
+                TVPairingGateView()
+            } else if let work = parityDetailWork {
+                NavigationStack {
+                    TVWorkDetailView(work: work, apiClient: environment.apiClient)
+                }
+            } else {
+                switch environment.pairingState {
+                case .signedIn:
                     signedInShell
+                default:
+                    if let forced = parityForcedTab {
+                        signedInShell(forcedSelection: forced)
+                    } else if TVParityLaunch.requestedScreen == nil {
+                        TVPairingGateView()
+                    } else {
+                        signedInShell
+                    }
                 }
             }
         }
@@ -77,7 +98,7 @@ struct TVRootView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
-            // Floating left nav (web `.app-nav`)
+            // Floating left nav (web `.app-nav`) — above content.
             TVFloatingNav(selection: Binding(
                 get: { forcedSelection ?? selectedTab },
                 set: { if forcedSelection == nil { selectedTab = $0 } }
@@ -86,6 +107,7 @@ struct TVRootView: View {
             .padding(.top, 120)
             .padding(.bottom, 100)
             .frame(maxHeight: .infinity, alignment: .top)
+            .zIndex(50)
 
             // Logo / clock
             TVShellHeader(frozenClock: TVParityLaunch.requestedScreen != nil)
