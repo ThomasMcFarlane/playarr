@@ -18,6 +18,8 @@ export interface Platform {
   tone: Tone
   /** What a person actually does today to get it running. */
   route: string
+  /** Where this platform's real download/install page lives on the clients hub. */
+  href: string
 }
 
 export const PLATFORMS: readonly Platform[] = [
@@ -28,6 +30,7 @@ export const PLATFORMS: readonly Platform[] = [
     status: 'Available',
     tone: 'ok',
     route: 'Open playarr.app and point it at your server. Nothing to install.',
+    href: 'https://playarr.app',
   },
   {
     id: 'android',
@@ -36,6 +39,7 @@ export const PLATFORMS: readonly Platform[] = [
     status: 'Available',
     tone: 'ok',
     route: 'One signed universal package, installed directly from the clients hub.',
+    href: 'https://playarr.app/clients/android',
   },
   {
     id: 'vidaa',
@@ -44,6 +48,7 @@ export const PLATFORMS: readonly Platform[] = [
     status: 'Available · Experimental install',
     tone: 'neutral',
     route: 'Open the web app in the television browser. A launcher tile is experimental.',
+    href: 'https://playarr.app/clients/vidaa',
   },
   {
     id: 'roku',
@@ -52,6 +57,7 @@ export const PLATFORMS: readonly Platform[] = [
     status: 'Available · Experimental install',
     tone: 'neutral',
     route: 'Enable Developer Mode and side-load the package from the clients hub.',
+    href: 'https://playarr.app/clients/roku',
   },
   {
     id: 'webos',
@@ -60,6 +66,7 @@ export const PLATFORMS: readonly Platform[] = [
     status: 'Available · Experimental install',
     tone: 'neutral',
     route: 'Build from source, then install with LG Developer Mode and ares-install.',
+    href: 'https://playarr.app/clients/webos',
   },
   {
     id: 'tizen',
@@ -68,6 +75,7 @@ export const PLATFORMS: readonly Platform[] = [
     status: 'Available · Experimental install',
     tone: 'neutral',
     route: 'Build and sign from source with Tizen Studio, then install over sdb.',
+    href: 'https://playarr.app/clients/tizen',
   },
   {
     id: 'apple',
@@ -76,6 +84,7 @@ export const PLATFORMS: readonly Platform[] = [
     status: 'Coming soon',
     tone: 'warn',
     route: 'Native SwiftUI apps exist in the repository; there is no installable build yet.',
+    href: 'https://playarr.app/clients/apple',
   },
   {
     id: 'harmony',
@@ -84,5 +93,6 @@ export const PLATFORMS: readonly Platform[] = [
     status: 'Coming soon',
     tone: 'warn',
     route: 'A native ArkTS client is in development; there is no installable build yet.',
+    href: 'https://playarr.app/clients/harmony',
   },
 ]
