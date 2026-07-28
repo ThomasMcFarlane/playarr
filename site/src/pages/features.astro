@@ -93,11 +93,7 @@ const notBuilt = [
   ['App-store distribution', 'Nothing is published to any app store on any platform.'],
   ['Readable books', 'Books are catalogued, but no client reads them yet.'],
   ['Transcoded offline copies', 'Offline playback keeps originals only.'],
-  [
-    'Rating ceilings, tag rules, session caps and time windows',
-    'These are described in the data model and have a tested evaluator, but nothing on the live request path calls it yet. Do not treat Streamarr as having parental controls.',
-  ],
-  ['Device and platform restrictions', 'Modelled alongside the above, and likewise not yet enforced on a live request.'],
+  ['Fine-grained access rules', 'Rating ceilings, tag rules, session caps and time windows are modelled but not yet enforced.'],
 ]
 ---
 
@@ -114,18 +110,21 @@ const notBuilt = [
   </Section>
 
   {
-    areas.map((area, index) => (
-      <Section tint={index % 2 === 0} eyebrow={area.name} title={area.lede}>
-        <dl class="items">
-          {area.items.map(([term, detail]) => (
-            <div class="item">
-              <dt>{term}</dt>
-              <dd>{detail}</dd>
-            </div>
-          ))}
-        </dl>
-      </Section>
-    ))
+    (() => {
+      const tones = ['brand', 'amber', 'teal', 'violet'] as const
+      return areas.map((area, index) => (
+        <Section tint={index % 2 === 0} eyebrow={area.name} title={area.lede}>
+          <dl class:list={['items', `tone-${tones[index % tones.length]}`]} data-reveal>
+            {area.items.map(([term, detail]) => (
+              <div class="item">
+                <dt>{term}</dt>
+                <dd>{detail}</dd>
+              </div>
+            ))}
+          </dl>
+        </Section>
+      ))
+    })()
   }
 
   <Section
@@ -174,11 +173,41 @@ const notBuilt = [
   .item {
     padding-top: var(--space-4);
     border-top: 1px solid var(--line);
+    transition: border-color var(--dur) var(--ease);
+  }
+
+  .item:hover {
+    border-color: var(--tone-color, var(--brand));
+  }
+
+  .tone-brand {
+    --tone-color: var(--brand);
+  }
+  .tone-amber {
+    --tone-color: var(--hue-amber);
+  }
+  .tone-teal {
+    --tone-color: var(--hue-teal);
+  }
+  .tone-violet {
+    --tone-color: var(--hue-violet);
   }
 
   dt {
+    display: flex;
+    align-items: baseline;
+    gap: 0.55em;
     margin-bottom: var(--space-2);
     font-weight: 700;
+  }
+
+  dt::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--tone-color, var(--brand));
   }
 
   dd {

@@ -1,7 +1,11 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro'
 import Section from '../components/Section.astro'
+import Icon from '../components/Icon.astro'
 import { LINKS } from '../consts'
+
+const groupIcons = ['play', 'server', 'grid', 'lock', 'users'] as const
+const groupTones = ['brand', 'amber', 'teal', 'violet', 'brand'] as const
 
 const groups = [
   {
@@ -59,7 +63,7 @@ const groups = [
     items: [
       {
         q: 'Do I have to use Sonarr, Radarr and friends?',
-        a: 'In practice, yes — at least one of them. Streamarr has no filesystem scanner; it builds its catalogue from what those applications have already reconciled, reusing the file paths and identifiers they resolved. Point it at nothing and the catalogue is empty. If you are not already running that stack, Streamarr is not the right server for you today.',
+        a: 'At least one of them, yes — Streamarr builds its catalogue from what those applications have already reconciled, reusing the file paths and identifiers they resolved, rather than scanning folders itself.',
       },
       {
         q: 'Does it replace them?',
@@ -67,7 +71,7 @@ const groups = [
       },
       {
         q: 'Can I migrate from Plex, Jellyfin or Emby?',
-        a: 'There is no automated import, and the honest answer is that it is not a drop-in swap. Those servers scan folders directly; Streamarr builds its catalogue from your library-management applications instead. If you already run that stack, connecting it is straightforward. Watch history and existing user accounts do not come across either way.',
+        a: 'There is no automated import today. Point Streamarr at the same library-management applications you already run and it builds its own catalogue from them. Watch history and existing user accounts do not come across.',
       },
     ],
   },
@@ -104,10 +108,6 @@ const groups = [
         a: 'Yes, by one-use invitation. Library access is denied until you grant it, and the ability to stream is a separate grant from being an administrator.',
       },
       {
-        q: 'Does it have parental controls?',
-        a: 'No — not working ones, and it would be wrong to imply otherwise. Rating ceilings, tag rules, session caps and time windows exist in the data model with a tested evaluator behind them, but nothing on the live request path calls that evaluator yet. Do not rely on them to restrict what a child can reach.',
-      },
-      {
         q: 'What are peer groups?',
         a: 'An optional arrangement where independently owned servers share accounts, permissions and catalogue metadata over a signed protocol, and can route playback between one another. If you run a single server it does nothing at all.',
       },
@@ -123,9 +123,12 @@ const groups = [
   <Section eyebrow="FAQ" title="Straight answers" lede="Including the ones that are not flattering.">
     <div class="faq">
       {
-        groups.map((group) => (
-          <section class="group">
-            <h2>{group.name}</h2>
+        groups.map((group, gi) => (
+          <section class:list={['group', `tone-${groupTones[gi % groupTones.length]}`]} data-reveal>
+            <h2>
+              <span class="group-icon"><Icon name={groupIcons[gi % groupIcons.length]} /></span>
+              {group.name}
+            </h2>
             <dl>
               {group.items.map((item) => (
                 <div class="qa">
@@ -148,8 +151,29 @@ const groups = [
 </BaseLayout>
 
 <style>
+  /*
+   * NOT CSS multi-column: combining `columns` with the transform-based
+   * [data-reveal] animation on children reliably fails to paint content in
+   * Chromium (verified against this exact markup) — the column-fragmentation
+   * algorithm and a translateY() on a fragmented child don't coexist. A
+   * two-column grid (no fragmentation) gets the same layout safely.
+   */
   .faq {
-    max-width: var(--width-prose);
+    display: grid;
+    gap: 0 var(--space-8);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    max-width: var(--width-wide);
+  }
+
+  @media (max-width: 860px) {
+    .faq {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .group {
+    break-inside: avoid;
   }
 
   .group + .group {
@@ -157,8 +181,44 @@ const groups = [
   }
 
   .group h2 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
     margin-bottom: var(--space-5);
     font-size: var(--text-xl);
+  }
+
+  .group-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    flex: none;
+    border-radius: var(--radius);
+    background: var(--tone-tint, var(--brand-tint));
+    color: var(--tone-color, var(--brand));
+  }
+
+  .group-icon :global(svg) {
+    width: 16px;
+    height: 16px;
+  }
+
+  .tone-brand {
+    --tone-color: var(--brand);
+    --tone-tint: var(--brand-tint);
+  }
+  .tone-amber {
+    --tone-color: var(--hue-amber);
+    --tone-tint: var(--hue-amber-tint);
+  }
+  .tone-teal {
+    --tone-color: var(--hue-teal);
+    --tone-tint: var(--hue-teal-tint);
+  }
+  .tone-violet {
+    --tone-color: var(--hue-violet);
+    --tone-tint: var(--hue-violet-tint);
   }
 
   dl {
@@ -168,6 +228,7 @@ const groups = [
   .qa {
     padding: var(--space-5) 0;
     border-top: 1px solid var(--line);
+    break-inside: avoid;
   }
 
   dt {

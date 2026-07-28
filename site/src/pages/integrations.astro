@@ -2,6 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro'
 import Section from '../components/Section.astro'
 import ButtonLink from '../components/ButtonLink.astro'
+import Icon from '../components/Icon.astro'
 import { INTEGRATIONS, TDARR } from '../data/integrations'
 
 /*
@@ -64,38 +65,58 @@ import { INTEGRATIONS, TDARR } from '../data/integrations'
       </table>
     </div>
     <p class="after">
-      Worth being plain about: these connections are not optional garnish. Streamarr has no
-      filesystem scanner of its own — it builds its catalogue entirely from what these
-      applications have already reconciled. A server with nothing registered has an empty
-      catalogue, so you will want at least one of the four library applications connected before
-      anything appears on screen.
+      Streamarr builds its catalogue from what these applications have already reconciled, rather
+      than scanning folders itself — connect at least one of the four library applications and
+      your titles appear.
     </p>
   </Section>
 
   <Section title="Transcoding at library scale">
-    <div class="prose">
-      <h3>{TDARR.name}</h3>
-      <p>{TDARR.reads}</p>
-      <p>
-        Keeping the two apart matters. Someone pressing play should never wait behind a queue of
-        library maintenance, and library maintenance should never be starved by playback. They are
-        separate systems with separate priorities, and background work steps back while people are
-        watching.
-      </p>
+    <div class="split">
+      <div class="prose" data-reveal>
+        <h3>{TDARR.name}</h3>
+        <p>{TDARR.reads}</p>
+        <p>
+          Keeping the two apart matters. Someone pressing play should never wait behind a queue of
+          library maintenance, and library maintenance should never be starved by playback. They
+          are separate systems with separate priorities, and background work steps back while
+          people are watching.
+        </p>
+      </div>
+      <aside class="stat-card tone-amber" data-reveal data-reveal-delay="80">
+        <div class="stat-icon"><Icon name="cpu" /></div>
+        <p class="stat-title">Two independent systems</p>
+        <ul>
+          <li>On-demand — latency-sensitive, triggered by playback</li>
+          <li>Background — library-wide, dispatched to Tdarr</li>
+        </ul>
+        <p class="stat-note">Never sharing a code path. Background work yields while you watch.</p>
+      </aside>
     </div>
   </Section>
 
   <Section tint title="Metadata and artwork">
-    <div class="prose">
-      <p>
-        Artwork and metadata identifiers arrive with the records Streamarr reads from your library
-        managers. Artwork is fetched once and cached on your own disk, so browsing does not hammer
-        an upstream service every time a poster scrolls past.
-      </p>
-      <p>
-        This site and any Streamarr installation showing that imagery carry the required notice —
-        see <a href="/legal/licences">licences and attribution</a>.
-      </p>
+    <div class="split">
+      <div class="prose" data-reveal>
+        <p>
+          Artwork and metadata identifiers arrive with the records Streamarr reads from your
+          library managers. Artwork is fetched once and cached on your own disk, so browsing does
+          not hammer an upstream service every time a poster scrolls past.
+        </p>
+        <p>
+          This site and any Streamarr installation showing that imagery carry the required notice
+          — see <a href="/legal/licences">licences and attribution</a>.
+        </p>
+      </div>
+      <aside class="stat-card tone-teal" data-reveal data-reveal-delay="80">
+        <div class="stat-icon"><Icon name="grid" /></div>
+        <p class="stat-title">Fetched once, cached locally</p>
+        <ul>
+          <li>12 MB ceiling per image</li>
+          <li>Served from your own disk after the first fetch</li>
+          <li>Source API keys never reach a client</li>
+        </ul>
+      </aside>
     </div>
   </Section>
 
@@ -133,12 +154,79 @@ import { INTEGRATIONS, TDARR } from '../data/integrations'
     color: var(--ink-muted);
   }
 
+  .split {
+    display: grid;
+    gap: var(--space-8);
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+    align-items: start;
+  }
+
+  @media (max-width: 780px) {
+    .split {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
   .prose {
     max-width: var(--width-prose);
   }
 
   .prose h3 {
     margin-bottom: var(--space-3);
+  }
+
+  .stat-card {
+    padding: var(--space-6);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--surface-strong);
+  }
+
+  .stat-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    margin-bottom: var(--space-4);
+    border-radius: var(--radius);
+    background: var(--tone-tint, var(--brand-tint));
+    color: var(--tone-color, var(--brand));
+  }
+
+  .stat-icon :global(svg) {
+    width: 20px;
+    height: 20px;
+  }
+
+  .tone-amber {
+    --tone-color: var(--hue-amber);
+    --tone-tint: var(--hue-amber-tint);
+  }
+  .tone-teal {
+    --tone-color: var(--hue-teal);
+    --tone-tint: var(--hue-teal-tint);
+  }
+
+  .stat-title {
+    margin-bottom: var(--space-3);
+    font-weight: 700;
+  }
+
+  .stat-card ul {
+    margin: 0 0 var(--space-3);
+    padding-inline-start: 1.1em;
+    color: var(--ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  .stat-card li {
+    margin-bottom: var(--space-2);
+  }
+
+  .stat-note {
+    margin: 0;
+    color: var(--ink-muted);
+    font-size: var(--text-xs);
   }
 
   .after {
