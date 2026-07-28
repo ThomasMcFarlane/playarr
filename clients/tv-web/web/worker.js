@@ -1,3 +1,7 @@
+// Deep import bypasses qrcode's package.json "browser" field, which remaps
+// the default entry to a canvas/DOM renderer with no toBuffer() export.
+import * as QRCode from "qrcode/lib/server.js";
+
 const DOWNLOADS = new Map([
   ["/downloads/android/playarr-android.apk", "android/playarr-android.apk"],
   ["/downloads/android/playarr-android.json", "android/playarr-android.json"],
@@ -19,6 +23,7 @@ const LINK_CLIENT_PLATFORMS = new Set([
   "tv-tizen",
   "tv-roku",
   "tv-fire",
+  "xbox",
 ]);
 
 function json(body, init = {}) {
@@ -66,6 +71,30 @@ function normaliseUserCode(value) {
     .replace(/[^a-z0-9]/gi, "")
     .toUpperCase();
   return compact.length === 8 ? `${compact.slice(0, 4)}-${compact.slice(4)}` : compact;
+}
+
+/**
+ * Renders the device-link QR as a PNG for platforms whose native UI toolkit
+ * can't display SVG (Roku's Poster node only accepts JPEG/PNG/WebP). Scoped
+ * to `https://playarr.app/link?...` so this can't become a general-purpose
+ * QR generator for arbitrary caller-supplied text.
+ */
+async function linkQrPng(value) {
+  if (typeof value !== "string" || !value.startsWith("https://playarr.app/link?")) {
+    return json({ error: "invalid_value" }, { status: 400 });
+  }
+  const png = await QRCode.toBuffer(value, {
+    type: "png",
+    errorCorrectionLevel: "M",
+    margin: 2,
+    width: 400,
+  });
+  return new Response(png, {
+    headers: {
+      "Content-Type": "image/png",
+      "Cache-Control": "no-store",
+    },
+  });
 }
 
 function isHttpUrl(value) {
@@ -209,7 +238,8 @@ export default {
     if (url.pathname.startsWith("/api/link/")) {
       const packagedLinkEndpoint =
         url.pathname === "/api/link/code" ||
-        url.pathname.startsWith("/api/link/code/");
+        url.pathname.startsWith("/api/link/code/") ||
+        url.pathname === "/api/link/qr";
       if (request.method === "OPTIONS") {
         return packagedLinkEndpoint
           ? linkCorsPreflight()
@@ -228,11 +258,34 @@ export default {
         response = await inspectLinkSession(url.searchParams.get("user_code"), env);
       } else if (url.pathname === "/api/link/authorize" && request.method === "POST") {
         response = await authoriseLinkSession(request, env);
+      } else if (url.pathname === "/api/link/qr" && request.method === "GET") {
+        response = await linkQrPng(url.searchParams.get("value"));
       } else {
         response = json({ error: "not_found" }, { status: 404 });
       }
       return packagedLinkEndpoint ? withLinkCors(response) : response;
     }
+    if (url.pathname === "/cast") {
+      return new Response(null, {
+        status: 301,
+        headers: { Location: "/cast/" },
+      });
+    }
+    if (url.pathname === "/cast/") {
+      return env.ASSETS.fetch(new Request(new URL("/cast/index.html", url), request));
+    }
+    if (url.pathname.startsWith("/cast/") && /\.[^./]+$/.test(url.pathname)) {
+      const response = await env.ASSETS.fetch(request);
+      const contentType = response.headers.get("Content-Type") ?? "";
+      if (contentType.startsWith("text/html")) {
+        return new Response("Not found", {
+          status: 404,
+          headers: { "Cache-Control": "no-store" },
+        });
+      }
+      return response;
+    }
+
     const key = downloadKey(url.pathname);
     if (!key) return env.ASSETS.fetch(request);
 

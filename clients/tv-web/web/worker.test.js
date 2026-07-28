@@ -185,6 +185,63 @@ describe("client package downloads", () => {
   });
 });
 
+describe("hosted cast receiver", () => {
+  it("redirects the bare /cast path to the trailing-slash form", async () => {
+    const env = environment(null);
+    const response = await worker.fetch(new Request("https://playarr.app/cast"), env);
+
+    expect(response.status).toBe(301);
+    expect(response.headers.get("Location")).toBe("/cast/");
+    expect(env.ASSETS.fetch).not.toHaveBeenCalled();
+  });
+
+  it("serves the receiver's index.html for /cast/", async () => {
+    const env = environment(null);
+    const response = await worker.fetch(new Request("https://playarr.app/cast/"), env);
+
+    expect(await response.text()).toBe("asset");
+    expect(env.ASSETS.fetch).toHaveBeenCalledOnce();
+    const requested = env.ASSETS.fetch.mock.calls[0][0];
+    expect(new URL(requested.url).pathname).toBe("/cast/index.html");
+  });
+
+  it("passes through non-html cast assets unchanged", async () => {
+    const env = environment(null);
+    env.ASSETS.fetch.mockResolvedValueOnce(
+      new Response("console.log('cast')", {
+        headers: { "Content-Type": "application/javascript" },
+      })
+    );
+
+    const response = await worker.fetch(
+      new Request("https://playarr.app/cast/assets/receiver.js"),
+      env
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("application/javascript");
+    expect(await response.text()).toBe("console.log('cast')");
+  });
+
+  it("turns the SPA fallback's html response into a real 404 for a missing cast asset", async () => {
+    const env = environment(null);
+    env.ASSETS.fetch.mockResolvedValueOnce(
+      new Response("<html>web app shell</html>", {
+        status: 200,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      })
+    );
+
+    const response = await worker.fetch(
+      new Request("https://playarr.app/cast/assets/missing.js"),
+      env
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.text()).resolves.not.toContain("web app shell");
+  });
+});
+
 describe("hosted device linking", () => {
   it("allows packaged TV webviews to preflight and read link responses", async () => {
     const env = environment(null);
@@ -239,7 +296,7 @@ describe("hosted device linking", () => {
     expect(preflight.headers.has("Access-Control-Allow-Origin")).toBe(false);
   });
 
-  it.each(["android-mobile", "android-tv", "tv-webos", "tv-tizen", "tv-roku", "tv-fire"])(
+  it.each(["android-mobile", "android-tv", "tv-webos", "tv-tizen", "tv-roku", "tv-fire", "xbox"])(
     "preserves the %s client platform in the link session",
     async (clientPlatform) => {
       const env = environment(null);
@@ -348,6 +405,43 @@ describe("hosted device linking", () => {
       }),
       env
     );
+
+    expect(response.status).toBe(400);
+  });
+});
+
+describe("link QR code", () => {
+  it("renders a decodable PNG for a playarr.app link URL", async () => {
+    const env = environment(null);
+    const value = "https://playarr.app/link?user_code=ABCD-1234";
+    const response = await worker.fetch(
+      new Request(`https://playarr.app/api/link/qr?value=${encodeURIComponent(value)}`),
+      env
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("image/png");
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    // PNG signature: 0x89 'P' 'N' 'G' \r \n 0x1A \n
+    expect(Array.from(bytes.slice(0, 8))).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  });
+
+  it("refuses to encode arbitrary text", async () => {
+    const env = environment(null);
+    const response = await worker.fetch(
+      new Request(
+        `https://playarr.app/api/link/qr?value=${encodeURIComponent("https://evil.example/phish")}`
+      ),
+      env
+    );
+
+    expect(response.status).toBe(400);
+  });
+
+  it("refuses to encode without a value", async () => {
+    const env = environment(null);
+    const response = await worker.fetch(new Request("https://playarr.app/api/link/qr"), env);
 
     expect(response.status).toBe(400);
   });
