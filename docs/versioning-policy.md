@@ -52,7 +52,7 @@ any compatibility decision by any code in this repository today.
 `backend/config/client-compatibility.toml` is the real, checked-in source of
 per-platform floors — one section per shipped Playarr `playarr_model::ClientPlatform`
 (`android-mobile`, `android-tv`, `ios`, `web`, `tv-webos`, `tv-tizen`,
-`tv-vidaa`, `tv-fire`, `xbox`). `PlayarrAdmin` is the one variant with no
+`tv-vidaa`, `tv-fire`, `xbox`, `harmony-mobile`, `harmony-tv`). `PlayarrAdmin` is the one variant with no
 section here: it identifies Playarr Server's own admin UI, not a shipped Playarr
 client, so it has no version floor to gate. The schema itself is intentionally split in two,
 because Android and everything else key off different notions of "version":
@@ -278,11 +278,27 @@ update model. The two are evaluated independently — a viewer using the
 browser fallback is unaffected by whatever version floor the native `xbox`
 row states, and vice versa.
 
+### HarmonyOS — AppGallery package
+
+`harmony-mobile` and `harmony-tv` denote the native ArkTS/ArkUI HarmonyOS
+NEXT client at `clients/harmony/` (see
+[`docs/architecture/clients/harmony.md`](architecture/clients/harmony.md)).
+One HAP ships both identities: which one a session reports is chosen at
+runtime from `deviceInfo.deviceType`, not at build time, so the two rows
+always track the same package version. Like the Fire TV `.vpkg` and Xbox
+MSIX above, a HAP is immutable once installed — a new version only reaches
+a device through Huawei AppGallery's own auto-update (once a listing
+exists — it does not yet) or a fresh HarmonyOS Developer Mode sideload via
+`hdc`. Both rows' floors in `client-compatibility.toml` are deliberately
+pinned at the first shipped version for the same reason as `[tv-fire]` and
+`[xbox]`: no package has shipped yet, so there is nothing to ratchet a
+floor against.
+
 ## Automation: the client-compatibility bump bot
 
 [`.github/workflows/release-client-compat-bot.yml`](../.github/workflows/release-client-compat-bot.yml)
 triggers on any client release tag (`android-v*`, `ios-v*`, `tv-web-v*`,
-`web-v*` — anything except `backend-v*`) and opens a
+`web-v*`, `harmony-v*` — anything except `backend-v*`) and opens a
 PR proposing a version-floor bump in `client-compatibility.toml`; it never
 pushes to `main` directly. It is explicitly, self-documented, a placeholder
 today: its update step does a naive regex replace written against a

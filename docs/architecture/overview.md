@@ -232,6 +232,7 @@ beyond this document's current pass — see the note below the table.
 | VIDAA | Hisense/Toshiba smart TVs | [`clients/vidaa.md`](clients/vidaa.md) |
 | Web | Browsers, installable PWA | [`clients/web.md`](clients/web.md) |
 | Xbox | Xbox One/Series consoles: native UWP/XAML app (portable core built and tested, UWP head unverified), plus a zero-install Edge-browser fallback | [`clients/xbox.md`](../clients/xbox.md), [architecture detail](clients/xbox.md) |
+| HarmonyOS | Huawei phones, tablets/foldables, Vision TV: one native ArkTS/ArkUI HAP (`HarmonyMobile`/`HarmonyTv` identities chosen at runtime) | [architecture detail](clients/harmony.md) |
 
 Code sharing follows the grain of the platforms rather than forcing every
 client through one runtime:
@@ -254,13 +255,12 @@ client through one runtime:
   [`clients/xbox.md`](clients/xbox.md) for why native was chosen over a
   packaged web shell here specifically.
 
-This table is also already incomplete for reasons unrelated to Xbox:
-`clients/apple-tv/`, `clients/roku/`, and `clients/harmony/` (HarmonyOS,
-covering `playarr_model::ClientPlatform`'s `HarmonyMobile`/`HarmonyTv`
-variants) exist as real client trees in the repository, and `ClientPlatform`
-also has `Cast` and `TvFire` variants, none of which have a row here or a doc
-under `docs/architecture/clients/`. That drift predates this pass and is
-noted here rather than fixed, to keep this change scoped to Xbox.
+This table is also already incomplete for reasons unrelated to Xbox or
+HarmonyOS: `clients/apple-tv/` and `clients/roku/` exist as real client trees
+in the repository, and `ClientPlatform` also has `Cast` and `TvFire`
+variants, none of which have a row here or a doc under
+`docs/architecture/clients/`. That drift predates this pass and is noted
+here rather than fixed, to keep this change scoped.
 
 Every client, regardless of code sharing, is required to speak the same
 versioned API contract — see [`versioning-policy.md`](../versioning-policy.md)
