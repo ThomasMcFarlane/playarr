@@ -27,6 +27,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   search-field replica so the tvOS white focus fill does not dominate AE.
 - Apple TV detail parity screens seed offline `WorkDetail` from the opened
   fixture work so production SwiftUI still paints without a live work fetch.
+- Apple TV home parity falls back to the offline fixture catalogue when the
+  live API rejects the bootstrap token (full-account auth / expired JWT).
 
 - Apple TV design-token mirror (`DesignTokens` / `TVTheme`) kept in lock-step with
   `@playarr-tv/design-tokens`, applied across home, search, detail, player,
