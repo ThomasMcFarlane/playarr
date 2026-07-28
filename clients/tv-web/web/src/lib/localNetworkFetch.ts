@@ -73,7 +73,7 @@ export function targetAddressSpaceForUrl(value: string): TargetAddressSpace | un
 }
 
 /**
- * Marks private and loopback HTTP requests to Streamarr so supporting browsers
+ * Marks private and loopback HTTP requests to Playarr Server so supporting browsers
  * can ask the viewer for Local Network Access and relax mixed-content blocking.
  * Public IPs are left unmarked because browsers correctly classify them as
  * public-network destinations. Browsers without this API ignore the option.

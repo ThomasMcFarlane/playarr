@@ -2,7 +2,7 @@
 /**
  * Regenerates `public/build-manifest.json` -- the CDN-hosted "build
  * manifest" this app's own OTA update flow polls (see
- * `src/lib/appUpdate.ts` and `@streamarr-tv/domain`'s `fetchBuildManifest`),
+ * `src/lib/appUpdate.ts` and `@playarr-tv/domain`'s `fetchBuildManifest`),
  * per `docs/architecture/clients/web.md#self-update--ota-mechanism`.
  *
  * `bundleVersion` is sourced straight from `package.json`'s own `version`

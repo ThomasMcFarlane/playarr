@@ -66,11 +66,9 @@
      the nearest neighbour clears the enlarged active tile's footprint at
      every viewport size, instead of tucking in behind it. */
   --cf-spacing: calc(var(--cf-tile-width) * 1.15);
-  --cf-tilt: 8deg;
   width: 100vw;
   margin-right: calc(50% - 50vw);
   margin-left: calc(50% - 50vw);
-  perspective: 1400px;
 }
 
 .clients-coverflow-track {
@@ -118,6 +116,18 @@
   transition:
     box-shadow 260ms ease,
     transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/*
+ * The frosted, semi-transparent fill above is fine when tiles never
+ * overlap, but the coverflow deliberately stacks tiles behind each other --
+ * left see-through, a tile in front would visibly blend with whatever is
+ * layered behind it instead of cleanly occluding it. Solid within the
+ * coverflow specifically; the single, non-overlapping detail-page icon
+ * keeps the frosted look.
+ */
+.client-choice .client-platform-icon {
+  background: var(--surface-strong);
 }
 
 .client-platform-icon svg {

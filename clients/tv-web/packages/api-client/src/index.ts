@@ -1,8 +1,8 @@
 /**
- * @streamarr-tv/api-client
+ * @playarr-tv/api-client
  *
- * Real typed client for the Streamarr API. `src/generated/schema.ts` is
- * generated straight from `backend/openapi/streamarr.yaml` by
+ * Real typed client for the Playarr Server API. `src/generated/schema.ts` is
+ * generated straight from `backend/openapi/playarr.yaml` by
  * `openapi-typescript` (run `pnpm run generate` to refresh it against the
  * spec); this file wraps that generated `paths`/`components` pair with
  * `openapi-fetch` (a thin typed fetch client) behind a small, ergonomic
@@ -17,7 +17,7 @@
  * the caller isn't an admin); the catalog/playback operations require the
  * same header but check `can_stream` instead of `is_admin` (403 if the
  * caller lacks Playarr streaming access -- see
- * `backend/crates/streamarr-api/src/auth_extractor.rs`'s `StreamingUser`).
+ * `backend/crates/playarr-api/src/auth_extractor.rs`'s `StreamingUser`).
  * Login/oauth stay unauthenticated per the spec's own responses -- see the
  * constructor's `authMiddleware` below, which attaches the header to
  * exactly `PROTECTED_OPERATIONS` and no others.
@@ -171,7 +171,7 @@ export type PlaylistItemResponse = components["schemas"]["PlaylistItemResponse"]
 export type AddPlaylistItemRequest = components["schemas"]["AddPlaylistItemRequest"];
 export type ReorderPlaylistItemsRequest = components["schemas"]["ReorderPlaylistItemsRequest"];
 
-/** RFC 6749 §5.2 grant type Streamarr's `/api/v1/oauth/token` requires for the device flow. */
+/** RFC 6749 §5.2 grant type Playarr Server's `/api/v1/oauth/token` requires for the device flow. */
 export const DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
 
 export interface BrowseCatalogParams {
@@ -228,7 +228,7 @@ export interface WatchProgressUpdate {
 
 // ---------------------------------------------------------------------------
 // downloads -- offline media downloads. Hand-authored (not sourced from
-// `components["schemas"]`): `backend/openapi/streamarr.yaml` doesn't carry
+// `components["schemas"]`): `backend/openapi/playarr.yaml` doesn't carry
 // these operations yet at the time this client-side work was written, so
 // these types/methods are typed directly off the agreed contract instead of
 // waiting on a `pnpm run generate` refresh. Once the spec and generated
@@ -283,7 +283,7 @@ export interface CreateDownloadRequest {
 // admin (http latency metrics) -- per-route request latency percentiles for
 // the admin-only "Request latency" diagnostics page. Hand-authored (not
 // sourced from `components["schemas"]`), same reason as the `downloads`
-// types above: `backend/openapi/streamarr.yaml` doesn't carry this operation
+// types above: `backend/openapi/playarr.yaml` doesn't carry this operation
 // yet at the time this client-side work was written, so this type/method is
 // typed directly off the agreed contract instead of waiting on a
 // `pnpm run generate` refresh. Once the spec and generated schema catch up,
@@ -389,7 +389,7 @@ export class ApiError extends Error {
  * `schemaPath` (the OpenAPI path template, curly braces and all)
  * `openapi-fetch` passes its middleware, paired with the HTTP method. The
  * `/api/v1/admin/*` operations are admin-only (403 for a non-admin caller
- * -- see backend/crates/streamarr-api/src/admin.rs); the catalog/playback
+ * -- see backend/crates/playarr-api/src/admin.rs); the catalog/playback
  * operations are streaming-only (403 for a caller without `can_stream` --
  * see `auth_extractor.rs`'s `StreamingUser`). Both still 401 with no/an
  * invalid token.
@@ -501,7 +501,7 @@ function isProtectedOperation(schemaPath: string, method: string): boolean {
  * token, 403 authenticated-but-lacking-the-required-grant) from every other
  * failure, so callers can surface a real, specific message instead of a
  * generic "something went wrong". A 403's body always carries a real,
- * specific `message` (see `backend/crates/streamarr-api/src/error.rs`'s
+ * specific `message` (see `backend/crates/playarr-api/src/error.rs`'s
  * `ErrorBody` -- every `ApiError::new`/`forbidden()` call sets one), so
  * that's preferred over a generic fallback whenever it's present.
  */
@@ -521,11 +521,11 @@ export function describeApiError(err: unknown): string {
 }
 
 /**
- * Typed client for the Streamarr API, backed by `openapi-fetch` +
+ * Typed client for the Playarr Server API, backed by `openapi-fetch` +
  * generated `paths`/`components` types. Every method below is a thin,
  * faithful wrapper over one spec operation -- no field renaming beyond
  * grouping loose query params into an object, so the shapes here always
- * match `backend/openapi/streamarr.yaml` exactly.
+ * match `backend/openapi/playarr.yaml` exactly.
  */
 export class ApiClient {
   /** The underlying `openapi-fetch` client, for operations without a convenience method above. */
@@ -668,7 +668,7 @@ export class ApiClient {
    * token itself is rotated (a new one comes back in the response) --
    * callers must persist the new one and stop using the old one, or the
    * next redemption is treated as reuse and the whole token family is
-   * revoked server-side (see `backend/crates/streamarr-api/src/refresh.rs`).
+   * revoked server-side (see `backend/crates/playarr-api/src/refresh.rs`).
    * Unauthenticated itself -- not one of `PROTECTED_OPERATIONS`.
    */
   async refresh(body: RefreshRequest): Promise<RefreshResponse> {
@@ -693,7 +693,7 @@ export class ApiClient {
   }
 
   // ---------------------------------------------------------------------
-  // webhooks (*arr -> Streamarr; not called by any first-party client UI,
+  // webhooks (*arr -> Playarr Server; not called by any first-party client UI,
   // included for completeness/spec coverage)
   // ---------------------------------------------------------------------
 
@@ -774,7 +774,7 @@ export class ApiClient {
   }
 
   /**
-   * Source artwork fetched and durably cached by Streamarr. A Blob keeps
+   * Source artwork fetched and durably cached by Playarr Server. A Blob keeps
    * bearer credentials out of image URLs; web clients can create a local
    * object URL for normal `<img>` rendering.
    */
@@ -788,7 +788,7 @@ export class ApiClient {
   }
 
   /**
-   * Source album artwork fetched and durably cached by Streamarr. The
+   * Source album artwork fetched and durably cached by Playarr Server. The
    * artist work id keeps album lookup within the caller's visible library.
    */
   async getAlbumArtwork(
@@ -814,7 +814,7 @@ export class ApiClient {
   }
 
   // ---------------------------------------------------------------------
-  // admin (source instances) -- registering the *arr apps Streamarr talks
+  // admin (source instances) -- registering the *arr apps Playarr Server talks
   // to. Every operation here is admin-gated (401 with no/invalid token,
   // 403 for a valid-but-non-admin caller).
   // ---------------------------------------------------------------------
@@ -886,7 +886,7 @@ export class ApiClient {
   }
 
   // ---------------------------------------------------------------------
-  // admin (tdarr) -- Streamarr's single Tdarr connection (background
+  // admin (tdarr) -- Playarr Server's single Tdarr connection (background
   // transcode pipeline). Unlike source instances, this is a singleton --
   // no `{id}` path segment, `createTdarrConnection` always registers-or-
   // replaces the one connection. Admin-gated, same as source instances.
@@ -900,7 +900,7 @@ export class ApiClient {
   }
 
   /**
-   * Registers (or updates in place) Streamarr's Tdarr connection. The
+   * Registers (or updates in place) Playarr Server's Tdarr connection. The
    * server confirms Tdarr is actually reachable (a real `get-nodes` call)
    * before accepting -- expect this to take a second or two, and to
    * reject (502) a wrong URL/key immediately rather than silently
@@ -1165,7 +1165,7 @@ export class ApiClient {
   // as views' public pair): 401 no/invalid token, 403 lacking both grants.
   // Per-playlist read/write access is enforced server-side (404 for a
   // personal playlist the caller doesn't own, 403 writing a System
-  // playlist as a non-admin) -- see backend/crates/streamarr-api/src/
+  // playlist as a non-admin) -- see backend/crates/playarr-api/src/
   // playlists.rs's module doc comment.
   // ---------------------------------------------------------------------
 
@@ -1344,7 +1344,7 @@ export class ApiClient {
     );
   }
 
-  /** Embedded text subtitle converted and cached by Streamarr as WebVTT. */
+  /** Embedded text subtitle converted and cached by Playarr Server as WebVTT. */
   async getMediaSubtitle(
     mediaFileId: string,
     streamIndex: number,

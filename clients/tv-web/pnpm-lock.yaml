@@ -62,13 +62,13 @@ importers:
       '@scalar/api-reference-react':
         specifier: ^0.9.58
         version: 0.9.58(axios@1.18.1)(change-case@5.4.4)(qrcode@1.5.4)(react@18.3.1)(tailwindcss@4.3.3)(typescript@5.9.3)(zod@4.4.3)
-      '@streamarr-tv/api-client':
+      '@playarr-tv/api-client':
         specifier: workspace:*
         version: link:../packages/api-client
-      '@streamarr-tv/device-auth':
+      '@playarr-tv/device-auth':
         specifier: workspace:*
         version: link:../packages/device-auth
-      '@streamarr-tv/domain':
+      '@playarr-tv/domain':
         specifier: workspace:*
         version: link:../packages/domain
       react:
@@ -99,13 +99,13 @@ importers:
 
   apps/cast-receiver:
     dependencies:
-      '@streamarr-tv/api-client':
+      '@playarr-tv/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
-      '@streamarr-tv/cast-protocol':
+      '@playarr-tv/cast-protocol':
         specifier: workspace:*
         version: link:../../packages/cast-protocol
-      '@streamarr-tv/device-auth':
+      '@playarr-tv/device-auth':
         specifier: workspace:*
         version: link:../../packages/device-auth
     devDependencies:
@@ -124,10 +124,10 @@ importers:
 
   apps/tv-tizen:
     dependencies:
-      '@streamarr-tv/player-avplay':
+      '@playarr-tv/player-avplay':
         specifier: workspace:*
         version: link:../../packages/player-avplay
-      '@streamarr-tv/web':
+      '@playarr-tv/web':
         specifier: workspace:*
         version: link:../../web
       react:
@@ -161,19 +161,19 @@ importers:
 
   apps/tv-vidaa-fallback:
     dependencies:
-      '@streamarr-tv/api-client':
+      '@playarr-tv/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
-      '@streamarr-tv/domain':
+      '@playarr-tv/domain':
         specifier: workspace:*
         version: link:../../packages/domain
-      '@streamarr-tv/player-core':
+      '@playarr-tv/player-core':
         specifier: workspace:*
         version: link:../../packages/player-core
-      '@streamarr-tv/player-shaka':
+      '@playarr-tv/player-shaka':
         specifier: workspace:*
         version: link:../../packages/player-shaka
-      '@streamarr-tv/ui-tv':
+      '@playarr-tv/ui-tv':
         specifier: workspace:*
         version: link:../../packages/ui-tv
       react:
@@ -201,7 +201,7 @@ importers:
 
   apps/tv-webos:
     dependencies:
-      '@streamarr-tv/web':
+      '@playarr-tv/web':
         specifier: workspace:*
         version: link:../../web
       react:
@@ -272,7 +272,7 @@ importers:
 
   packages/device-auth:
     dependencies:
-      '@streamarr-tv/api-client':
+      '@playarr-tv/api-client':
         specifier: workspace:*
         version: link:../api-client
       qrcode:
@@ -300,7 +300,7 @@ importers:
 
   packages/player-avplay:
     dependencies:
-      '@streamarr-tv/player-core':
+      '@playarr-tv/player-core':
         specifier: workspace:*
         version: link:../player-core
     devDependencies:
@@ -316,7 +316,7 @@ importers:
 
   packages/player-shaka:
     dependencies:
-      '@streamarr-tv/player-core':
+      '@playarr-tv/player-core':
         specifier: workspace:*
         version: link:../player-core
       shaka-player:
@@ -335,22 +335,22 @@ importers:
 
   packages/ui-tv:
     dependencies:
-      '@streamarr-tv/api-client':
+      '@playarr-tv/api-client':
         specifier: workspace:*
         version: link:../api-client
-      '@streamarr-tv/design-tokens':
+      '@playarr-tv/design-tokens':
         specifier: workspace:*
         version: link:../design-tokens
-      '@streamarr-tv/device-auth':
+      '@playarr-tv/device-auth':
         specifier: workspace:*
         version: link:../device-auth
-      '@streamarr-tv/domain':
+      '@playarr-tv/domain':
         specifier: workspace:*
         version: link:../domain
-      '@streamarr-tv/player-core':
+      '@playarr-tv/player-core':
         specifier: workspace:*
         version: link:../player-core
-      '@streamarr-tv/spatial-nav':
+      '@playarr-tv/spatial-nav':
         specifier: workspace:*
         version: link:../spatial-nav
     devDependencies:
@@ -372,28 +372,28 @@ importers:
 
   web:
     dependencies:
-      '@streamarr-tv/api-client':
+      '@playarr-tv/api-client':
         specifier: workspace:*
         version: link:../packages/api-client
-      '@streamarr-tv/app-cast-receiver':
+      '@playarr-tv/app-cast-receiver':
         specifier: workspace:*
         version: link:../apps/cast-receiver
-      '@streamarr-tv/cast-protocol':
+      '@playarr-tv/cast-protocol':
         specifier: workspace:*
         version: link:../packages/cast-protocol
-      '@streamarr-tv/device-auth':
+      '@playarr-tv/device-auth':
         specifier: workspace:*
         version: link:../packages/device-auth
-      '@streamarr-tv/domain':
+      '@playarr-tv/domain':
         specifier: workspace:*
         version: link:../packages/domain
-      '@streamarr-tv/player-avplay':
+      '@playarr-tv/player-avplay':
         specifier: workspace:*
         version: link:../packages/player-avplay
-      '@streamarr-tv/player-core':
+      '@playarr-tv/player-core':
         specifier: workspace:*
         version: link:../packages/player-core
-      '@streamarr-tv/player-shaka':
+      '@playarr-tv/player-shaka':
         specifier: workspace:*
         version: link:../packages/player-shaka
       firebase:

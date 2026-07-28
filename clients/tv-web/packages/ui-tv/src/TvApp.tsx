@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ApiClient, type ClientPlatform, type Work } from "@streamarr-tv/api-client";
-import type { PlaybackCapabilities } from "@streamarr-tv/api-client/react";
-import type { DeviceTokenSuccess } from "@streamarr-tv/device-auth";
-import { evaluateClientVersion, type ClientVersionEvaluation } from "@streamarr-tv/domain";
-import type { PlaybackEngine } from "@streamarr-tv/player-core";
+import { ApiClient, type ClientPlatform, type Work } from "@playarr-tv/api-client";
+import type { PlaybackCapabilities } from "@playarr-tv/api-client/react";
+import type { DeviceTokenSuccess } from "@playarr-tv/device-auth";
+import { evaluateClientVersion, type ClientVersionEvaluation } from "@playarr-tv/domain";
+import type { PlaybackEngine } from "@playarr-tv/player-core";
 import { SpatialNavProvider } from "./SpatialNavContext";
 import { PairingScreenContainer } from "./screens/PairingScreenContainer";
 import { BrowseScreenContainer } from "./screens/BrowseScreenContainer";

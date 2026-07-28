@@ -7,7 +7,7 @@ document.documentElement.dataset.platform = "tv-webos";
 installWebOsLifecycle();
 
 async function startPlayarr(): Promise<void> {
-  await loadWebOsRuntimeConfig(`${import.meta.env.BASE_URL}streamarr-config.json`);
+  await loadWebOsRuntimeConfig(`${import.meta.env.BASE_URL}playarr-config.json`);
 
   // Import the real Playarr application after platform lifecycle and runtime
   // config are in place. This is the same routed profiles/home/search/library/

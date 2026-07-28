@@ -4,7 +4,7 @@
  * `docs/versioning-policy.md`'s per-platform update table).
  *
  * Two independent signals feed this, both defensive/never-throwing (see
- * `@streamarr-tv/domain`):
+ * `@playarr-tv/domain`):
  *
  * 1. The CDN-hosted build manifest (`fetchBuildManifest`) -- "is there a
  *    newer bundle than the one I'm running". This drives the *soft*,
@@ -19,8 +19,8 @@
  *    notice and wait for the viewer to install a newer IPK/WGT.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ApiClient } from "@streamarr-tv/api-client";
-import { evaluateClientVersion, fetchBuildManifest, isNewerBundleAvailable } from "@streamarr-tv/domain";
+import type { ApiClient } from "@playarr-tv/api-client";
+import { evaluateClientVersion, fetchBuildManifest, isNewerBundleAvailable } from "@playarr-tv/domain";
 
 /** How often to re-poll for an update while the app stays open, in addition to on-focus/on-visible checks. */
 const POLL_INTERVAL_MS = 15 * 60 * 1000;

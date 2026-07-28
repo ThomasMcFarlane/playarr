@@ -7,7 +7,7 @@
 Written for whichever agent/session picks up the Playarr redesign next. This
 covers: what's being asked for, what already exists, what was just fixed
 (playback was broken end-to-end until this session), and what to watch out
-for. Streamarr Admin (`clients/tv-web/admin`) is **out of scope** here — it's
+for. Playarr Server Admin (`clients/tv-web/admin`) is **out of scope** here — it's
 a separate app being redesigned in parallel to match Sonarr/Radarr's own
 look (see `DESIGN.md` at the repo root), not this Dribbble direction.
 
@@ -25,7 +25,7 @@ Do not fetch the Dribbble URL yourself if your tooling restricts fetching
 arbitrary third-party URLs from a chat context — treat it as the user's own
 reference; ask them to describe/screenshot it if you can't access it
 directly. The described direction: clean, white/light-first TV browsing UI
-(large poster art, generous whitespace, minimal chrome) — but Streamarr's
+(large poster art, generous whitespace, minimal chrome) — but Playarr Server's
 own requirement on top is that it must ALSO support a real dark mode, not
 just light.
 
@@ -63,19 +63,19 @@ Shared packages this app depends on (also used by the not-yet-built webOS/
 Tizen/VIDAA shells under `clients/tv-web/apps/`, which are empty scaffolds —
 not a concern for this redesign pass):
 
-- `@streamarr-tv/player-shaka` — Shaka Player adapter (`packages/player-shaka/src/index.ts`)
-- `@streamarr-tv/player-core` — `PlaybackEngine` interface both `player-shaka` and the Tizen `player-avplay` adapter implement
-- `@streamarr-tv/api-client` — generated OpenAPI client + `useCatalogBrowse`/`useWorkDetail`/etc. React hooks (`packages/api-client/src/hooks.ts`)
-- `@streamarr-tv/device-auth` — `TokenStore`/session/device-id
-- `@streamarr-tv/design-tokens` — **read the note below before reusing this as-is**
-- `@streamarr-tv/domain` — shared constants (default API base URL, etc.)
+- `@playarr-tv/player-shaka` — Shaka Player adapter (`packages/player-shaka/src/index.ts`)
+- `@playarr-tv/player-core` — `PlaybackEngine` interface both `player-shaka` and the Tizen `player-avplay` adapter implement
+- `@playarr-tv/api-client` — generated OpenAPI client + `useCatalogBrowse`/`useWorkDetail`/etc. React hooks (`packages/api-client/src/hooks.ts`)
+- `@playarr-tv/device-auth` — `TokenStore`/session/device-id
+- `@playarr-tv/design-tokens` — **read the note below before reusing this as-is**
+- `@playarr-tv/domain` — shared constants (default API base URL, etc.)
 
 ### `design-tokens` note — don't blindly reuse it
 
 `packages/design-tokens/src/index.ts` is a hand-authored, **dark-only**
 token set deliberately derived from the real Sonarr/Radarr/Lidarr visual
 language (verified by live-scanning those apps — see its own doc comment
-and `DESIGN.md`). It exists so Streamarr Admin reads as "part of the *arr
+and `DESIGN.md`). It exists so Playarr Server Admin reads as "part of the *arr
 family." That is the opposite of what this Playarr redesign wants (a clean,
 light-first, non-*arr-looking consumer app). Do not extend this token set
 for Playarr's new look — either fork a separate Playarr-specific token
@@ -152,8 +152,8 @@ reintroduce one while restructuring `usePlaybackEngine.ts`/`PlayerSurface.tsx`:
 
 1. **Remote media path** — `MediaFile.path` is stored as the *arr instance's
    own filesystem path (a different machine), not something this backend
-   process can open directly. Fixed via `streamarr_model::resolve_media_path`
-   (backend-side, `STREAMARR_MEDIA_REMOTE_ROOT`/`STREAMARR_MEDIA_LOCAL_ROOT`
+   process can open directly. Fixed via `playarr_model::resolve_media_path`
+   (backend-side, `PLAYARR_MEDIA_REMOTE_ROOT`/`PLAYARR_MEDIA_LOCAL_ROOT`
    env vars) + an SSHFS mount. Not a frontend concern, just context for why
    playback ever worked at all once this was fixed.
 
@@ -199,7 +199,7 @@ watch. Purely backend/architecture, no frontend implication.
 
 ## Dev environment
 
-- Backend: `streamarr-backend` devserver session, `http://localhost:8484`
+- Backend: `playarr-backend` devserver session, `http://localhost:8484`
   (native `cargo run`, not Docker). Real SQLite DB with two registered *arr
   instances (Sonarr + Radarr) and a real, large synced catalog (~2800
   items) — test against this, not a mock.
@@ -217,18 +217,18 @@ watch. Purely backend/architecture, no frontend implication.
 
 ## Explicitly out of scope for this pass
 
-- Streamarr Admin (`clients/tv-web/admin`) — separate app, separate
+- Playarr Server Admin (`clients/tv-web/admin`) — separate app, separate
   concurrent workflow, matches Sonarr/Radarr's own look per `DESIGN.md`, not
   this Dribbble direction.
 - Native clients (Android/iOS/webOS/Tizen/VIDAA) — unstarted or bare
-  scaffolds, not part of this pass. `@streamarr-tv/player-core`'s
+  scaffolds, not part of this pass. `@playarr-tv/player-core`'s
   `PlaybackEngine` interface is the seam that keeps them decoupled from
   whatever this redesign does inside `player-shaka`'s Shaka-specific
   internals, as long as the interface itself doesn't change shape.
 
 ## New backend feature: "Views" (saved catalog filter shelves)
 
-Streamarr Admin now has a "Views" feature -- named, saved filter+sort
+Playarr Server Admin now has a "Views" feature -- named, saved filter+sort
 presets over the catalog (e.g. "Newly Added", "Newly Released"), created
 and managed by the operator, global to the instance (not per-user). This
 is the intended data source for Home screen shelves beyond the current
@@ -251,8 +251,8 @@ needed):
   into whatever component already renders a `Work[]` shelf today
   (`Home.tsx`'s existing "recently added" shelf / `WorkCard`).
 
-Both are already exposed on `@streamarr-tv/api-client`'s `ApiClient` (built
-straight off `backend/openapi/streamarr.yaml`, no hand-written duplicate
+Both are already exposed on `@playarr-tv/api-client`'s `ApiClient` (built
+straight off `backend/openapi/playarr.yaml`, no hand-written duplicate
 types needed):
 
 ```ts
@@ -262,13 +262,13 @@ resolveView(id: string, params?: { limit?: number; offset?: number }): Promise<C
 
 `ViewSummary` and `CatalogPage` (the latter identical to what
 `browseCatalog` already returns) are both exported types from
-`@streamarr-tv/api-client`.
+`@playarr-tv/api-client`.
 
 **Suggested integration**: on `Home.tsx`, replace (or supplement) the
 current single hardcoded "recently added" shelf with one shelf per entry
 from `listViews()`, each populated via its own `resolveView(id, { limit:
 <shelf size> })` call, in the order the list comes back in. At minimum two
-views exist out of the box -- "Newly Added" (sorted by when Streamarr
+views exist out of the box -- "Newly Added" (sorted by when Playarr Server
 synced it) and "Newly Released" (sorted by the title's real release date,
 backed by a new `Work.release_date` field, itself populated from Radarr's
 `digitalRelease`/`physicalRelease` and Sonarr's `firstAired`) -- but treat
@@ -289,7 +289,7 @@ go through `listViews()`.
 **Admin-only surface** (not relevant to Playarr, listed for completeness):
 `createView`/`updateView`/`deleteView`/`listAdminViews` on `ApiClient`
 back `POST/PUT/DELETE/GET /api/v1/admin/views[/{id}]`, gated by `AdminUser`
-(same as source-instance/user management) -- these are what Streamarr
+(same as source-instance/user management) -- these are what Playarr Server
 Admin's own new "Views" screen (`clients/tv-web/admin/src/pages/
 {ViewsPage,ViewEditPage}.tsx`) uses to manage the set; Playarr never calls
 them.
@@ -301,8 +301,8 @@ them.
 New backend surface, built to require the minimum possible client change.
 This is the **final, actually-shipped** shape (superseding any earlier
 draft of this note elsewhere) -- verified against the checked-in
-`backend/openapi/streamarr.yaml` and a real end-to-end test
-(`crates/streamarr-api/src/playback.rs`'s
+`backend/openapi/playarr.yaml` and a real end-to-end test
+(`crates/playarr-api/src/playback.rs`'s
 `event_endpoint_updates_registry_and_stop_closes_the_session` test) that
 exercises negotiate -> heartbeat -> buffer start/end -> stop against a real
 router.
@@ -317,7 +317,7 @@ router.
    ```
 
    The backend derives everything else (device id from your JWT, platform/
-   version from the `X-Streamarr-Client-Platform`/`X-Streamarr-Client-Version`
+   version from the `X-Playarr-Client-Platform`/`X-Playarr-Client-Version`
    headers you already send on every request, source/target codec) from
    data it already has. You don't need to send anything new to get a
    session created -- just read `session_id` out of the response you

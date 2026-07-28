@@ -170,7 +170,7 @@ export const en = {
   "components.themeToggle.useTheme": "Use {{theme}} theme",
   "components.updateToast.dismiss": "Dismiss",
   "components.updateToast.packageUpdateRequired":
-    "This installed Playarr app is no longer supported by your Streamarr server. Install a newer package to continue.",
+    "This installed Playarr app is no longer supported by your Playarr Server. Install a newer package to continue.",
   "components.updateToast.reload": "Reload",
   "components.updateToast.updateAvailable": "A new version of Playarr is available.",
   "components.watchStateOverlay.percentWatched": "{{percent}}% watched",
@@ -317,7 +317,7 @@ export const en = {
   "pages.library.viewList": "list",
   "pages.library.viewScreen": "screen",
   "pages.login.description":
-    "Choose your Streamarr server, then save this profile on the current browser.",
+    "Choose your Playarr Server, then save this profile on the current browser.",
   "pages.login.directConnectionHint":
     "Your browser connects directly to this server. Playarr does not proxy your login.",
   "pages.login.errorGeneric": "Sign-in failed. Check your username and password and try again.",
@@ -405,7 +405,7 @@ export const en = {
   "pages.playlists.nameLabel": "Name",
   "pages.playlists.mediaTypeLabel": "Playlist type",
   "pages.playlists.mediaTypeServerMismatch":
-    "This Streamarr server does not support audio playlists yet. Update or restart the server, then try again.",
+    "This Playarr Server does not support audio playlists yet. Update or restart the server, then try again.",
   "pages.playlists.mediaTypeVideo": "Video",
   "pages.playlists.mediaTypeAudio": "Audio",
   "pages.playlists.namePlaceholder": "Playlist name",
@@ -524,7 +524,7 @@ export const en = {
   "pages.signup.alreadyHaveAccount": "Already have an account?",
   "pages.signup.confirmPasswordLabel": "Confirm password",
   "pages.signup.description":
-    "Choose your account details for the Streamarr server that invited you.",
+    "Choose your account details for the Playarr Server that invited you.",
   "pages.signup.displayNameLabel": "Display name",
   "pages.signup.documentTitle": "Create account",
   "pages.signup.emailLabel": "Email (optional)",
@@ -532,10 +532,10 @@ export const en = {
     "Could not create the account. Ask your administrator for a new invitation.",
   "pages.signup.error.inviteAlreadyUsedToast": "This invite has already been used. Log in instead.",
   "pages.signup.error.networkUnreachable":
-    "Could not reach this Streamarr server. Check that you are on the same network and allow Local Network Access when asked.",
+    "Could not reach this Playarr Server. Check that you are on the same network and allow Local Network Access when asked.",
   "pages.signup.error.usernameTaken": "That username is already taken.",
   "pages.signup.inviteMissing":
-    "This invitation link is incomplete or invalid. Ask your Streamarr administrator for a new QR code.",
+    "This invitation link is incomplete or invalid. Ask your Playarr Server administrator for a new QR code.",
   "pages.signup.kicker": "You're invited",
   "pages.signup.loginLink": "Log in",
   "pages.signup.passwordLabel": "Password",
@@ -690,7 +690,7 @@ export const en = {
   "settings.index.appearance.title": "Appearance",
   "settings.index.description": "Choose how Playarr looks and where it connects.",
   "settings.index.documentTitle": "Settings",
-  "settings.index.invite.description": "Ask your Streamarr admin for one friend-invite QR code.",
+  "settings.index.invite.description": "Ask your Playarr Server admin for one friend-invite QR code.",
   "settings.index.invite.title": "Invite a friend",
   "settings.index.kicker": "Make it yours",
   "settings.index.language.title": "Language",
@@ -712,7 +712,7 @@ export const en = {
   "settings.invite.copied": "Copied",
   "settings.invite.copyFailed": "Could not copy the link. Select and copy it manually.",
   "settings.invite.copyLink": "Copy link",
-  "settings.invite.description": "Ask your Streamarr admin for one friend-invite QR code.",
+  "settings.invite.description": "Ask your Playarr Server admin for one friend-invite QR code.",
   "settings.invite.documentTitle": "Invite a friend - Settings",
   "settings.invite.enablePush": "Enable approval notifications",
   "settings.invite.expires": "Expires {{expiresAt}}. The invite can be used once.",
@@ -722,7 +722,7 @@ export const en = {
   "settings.invite.messageLabel": "Who is this for, and what should they have access to? (optional)",
   "settings.invite.messagePlaceholder": "For example: For Sam — films and television series, please.",
   "settings.invite.modalDescription":
-    "This one-use code opens Playarr with your Streamarr server already locked in.",
+    "This one-use code opens Playarr with your Playarr Server already locked in.",
   "settings.invite.modalKicker": "Ready to share",
   "settings.invite.modalTitle": "Invite a friend to Playarr",
   "settings.invite.pushEnabled": "Approval notifications enabled",
@@ -741,7 +741,7 @@ export const en = {
   "settings.invite.toastCopied": "Invite link copied.",
   "settings.invite.toastGenerated": "Friend invite generated. It is valid for 24 hours.",
   "settings.invite.toastPushEnabled": "Invite approval notifications enabled.",
-  "settings.invite.toastRequestSent": "Invite request sent to your Streamarr admin.",
+  "settings.invite.toastRequestSent": "Invite request sent to your Playarr Server admin.",
   "settings.invite.working": "Working…",
   "settings.language.autoHint":
     "Playarr detected {{language}} from this device. Choose a language above to override it.",
@@ -976,7 +976,7 @@ export const en = {
     "Run the device setup, choose add and name the target playarr-tv. Enter the TV's IP address, port 9922 and user prisoner without a password. With Key Server still enabled, fetch the key and enter the six-character passphrase shown on the TV.",
   "pages.clients.webosPage.step4Title": "Install and launch",
   "pages.clients.webosPage.step4Description":
-    "Run the commands from the tv-web directory for a locally built IPK. If you downloaded playarr-webos.ipk instead, substitute that file's path. When Playarr opens, scan its link code and choose your Streamarr server and household profile in Playarr.",
+    "Run the commands from the tv-web directory for a locally built IPK. If you downloaded playarr-webos.ipk instead, substitute that file's path. When Playarr opens, scan its link code and choose your Playarr Server and household profile in Playarr.",
   "pages.clients.webosPage.officialGuide": "Open LG's official Developer Mode guide",
   "pages.clients.webosPage.noteTitle": "Developer Mode installs expire with the session.",
   "pages.clients.webosPage.noteDescription":
@@ -1002,7 +1002,7 @@ export const en = {
     "Try the signed package download above first. If it is unavailable or its signature is not valid for your TV, build Playarr and package the dist directory with the exact active certificate profile name from Tizen Studio.",
   "pages.clients.tizenPage.step4Title": "Connect, install and launch",
   "pages.clients.tizenPage.step4Description":
-    "Connect with SDB. In Tizen Studio Device Manager, right-click the connected TV and choose Permit to install applications. Use tizen list tv to find the CLI target name, then substitute the generated WGT filename, package directory and target name. Launch Playarr with its fixed application ID, scan its link code and choose your Streamarr server and household profile in Playarr.",
+    "Connect with SDB. In Tizen Studio Device Manager, right-click the connected TV and choose Permit to install applications. Use tizen list tv to find the CLI target name, then substitute the generated WGT filename, package directory and target name. Launch Playarr with its fixed application ID, scan its link code and choose your Playarr Server and household profile in Playarr.",
   "pages.clients.tizenPage.officialGuide": "Open Samsung's official TV device guide",
   "pages.clients.tizenPage.noteTitle": "The WGT must stay signed and unchanged.",
   "pages.clients.tizenPage.noteDescription":
@@ -1028,7 +1028,7 @@ export const en = {
     "Choose Upload, select playarr-roku.zip without extracting it, then choose Install. Roku launches Playarr when the sideload finishes.",
   "pages.clients.rokuPage.step4Title": "Connect Playarr",
   "pages.clients.rokuPage.step4Description":
-    "Enter your Streamarr server base URL, follow the code shown on the TV to authorise the Roku, then choose a household profile.",
+    "Enter your Playarr Server base URL, follow the code shown on the TV to authorise the Roku, then choose a household profile.",
   "pages.clients.rokuPage.officialGuide": "Open Roku's official developer guide",
   "pages.clients.rokuPage.noteKicker": "Important",
   "pages.clients.rokuPage.noteTitle": "Only one sideloaded app can be installed.",

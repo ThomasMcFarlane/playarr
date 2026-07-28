@@ -1,5 +1,5 @@
 {
-  "name": "@streamarr-tv/app-tizen",
+  "name": "@playarr-tv/app-tizen",
   "version": "0.1.0",
   "private": true,
   "description": "Samsung Tizen package of the complete Playarr web application with native AVPlay playback and TV remote integration.",
@@ -8,14 +8,14 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build && node scripts/prepare-package.mjs",
     "test": "node --test scripts/*.test.mjs",
-    "package:wgt": "pnpm --filter @streamarr-tv/app-tizen... run build && node scripts/package-wgt.mjs",
+    "package:wgt": "pnpm --filter @playarr-tv/app-tizen... run build && node scripts/package-wgt.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@streamarr-tv/player-avplay": "workspace:*",
-    "@streamarr-tv/web": "workspace:*",
+    "@playarr-tv/player-avplay": "workspace:*",
+    "@playarr-tv/web": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:"
   },

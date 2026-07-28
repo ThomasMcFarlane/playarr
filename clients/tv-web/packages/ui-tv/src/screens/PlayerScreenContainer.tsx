@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import type { ApiClient } from "@streamarr-tv/api-client";
-import { usePlaybackInfo, type PlaybackCapabilities } from "@streamarr-tv/api-client/react";
-import type { PlaybackEngine } from "@streamarr-tv/player-core";
+import type { ApiClient } from "@playarr-tv/api-client";
+import { usePlaybackInfo, type PlaybackCapabilities } from "@playarr-tv/api-client/react";
+import type { PlaybackEngine } from "@playarr-tv/player-core";
 import { AsyncStateMessage } from "../lib/AsyncStateMessage";
 import { mimeTypeForPlaybackMode } from "../lib/playback";
 import { PlayerScreen } from "./PlayerScreen";
@@ -19,7 +19,7 @@ export interface PlayerScreenContainerProps {
  * Calls the real `GET /api/v1/playback/{media_file_id}` negotiation
  * endpoint, then configures the platform `PlaybackEngine` (Shaka on
  * web/webOS/VIDAA, native AVPlay on Tizen -- both implement the same
- * `PlaybackEngine` interface from `@streamarr-tv/player-core`) with
+ * `PlaybackEngine` interface from `@playarr-tv/player-core`) with
  * whatever it returns, before handing off to the presentational
  * `PlayerScreen` for transport controls.
  */

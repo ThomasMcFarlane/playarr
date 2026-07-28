@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { LoginResponse, RefreshResponse } from "@streamarr-tv/api-client";
-import { readKnownServers, rememberGroup, setStoredApiBaseUrl } from "@streamarr-tv/domain";
+import type { LoginResponse, RefreshResponse } from "@playarr-tv/api-client";
+import { readKnownServers, rememberGroup, setStoredApiBaseUrl } from "@playarr-tv/domain";
 import { createManagedApiClient, resolveInitialApiBaseUrl } from "./ApiClientProvider";
 
 /** Matches `knownServers.test.ts`'s own `localStorage` stub convention. */

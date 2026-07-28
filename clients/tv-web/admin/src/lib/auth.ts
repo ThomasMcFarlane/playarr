@@ -1,4 +1,4 @@
-import { TokenStore } from "@streamarr-tv/device-auth";
+import { TokenStore } from "@playarr-tv/device-auth";
 
 /**
  * Clears the stored session and hard-navigates to `/login` -- extracted out

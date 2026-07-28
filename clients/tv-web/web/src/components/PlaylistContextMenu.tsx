@@ -11,7 +11,7 @@ import { createPortal } from "react-dom";
 import {
   describeApiError,
   type PlaylistResponse,
-} from "@streamarr-tv/api-client";
+} from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { useToast } from "../lib/toast";

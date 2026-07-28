@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, type CSSProperties, type ReactNode } from "react";
 import {
   Link,
   Navigate,
@@ -7,7 +7,12 @@ import {
   useParams,
 } from "react-router-dom";
 import { TvStageChrome } from "../components/tv/TvStage";
-import { circularOffset, coverflowDepth, coverflowPosition } from "../lib/coverflow";
+import {
+  circularOffset,
+  coverflowDepth,
+  coverflowPosition,
+  nextClientIndex,
+} from "../lib/coverflow";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
@@ -224,8 +229,17 @@ function PublicClientsLayout({
 function coverflowTileStyle(offset: number): CSSProperties {
   const depth = coverflowDepth(offset);
   return {
+    // translateX + scale only -- no rotateY. A 3D tilt under perspective
+    // projects off-centre tiles into a slightly asymmetric shape, which can
+    // shift a tile's *computed* vertical centre by a stray pixel or two.
+    // The app-wide arrow-key focus system scores directional candidates
+    // geometrically, so that drift could occasionally make a neighbouring
+    // tile look like a valid Up/Down target instead of the current one.
+    // Keeping this transform 2D guarantees every tile's vertical centre is
+    // identical, so Up/Down can never land on another tile, not just
+    // "usually" won't.
     "--cf-position": coverflowPosition(offset),
-    transform: `translateX(calc(var(--cf-position) * var(--cf-spacing))) rotateY(calc(var(--cf-position) * var(--cf-tilt) * -1)) scale(${depth.scale})`,
+    transform: `translateX(calc(var(--cf-position) * var(--cf-spacing))) scale(${depth.scale})`,
     zIndex: depth.zIndex,
   } as CSSProperties;
 }
@@ -239,6 +253,26 @@ function ClientsSelector({ activeClientId }: { activeClientId: string }) {
     PLAYARR_CLIENTS.findIndex((client) => client.id === activeClientId)
   );
 
+  // Only Left/Right ever change the selection. Up/Down must stay free for
+  // row/page scrolling: the app-wide arrow-key system moves focus by nearest
+  // on-screen geometry, and that geometry genuinely does put some other
+  // tile "above" or "below" once focus has moved elsewhere on the page (e.g.
+  // into the detail content below) -- there's no bounding-box tweak that
+  // makes every tile unreachable via Up/Down from every possible position.
+  // Driving navigation from onFocus therefore couldn't tell a deliberate
+  // Left/Right move from focus incidentally landing on some tile via Up,
+  // Down, or Tab. Handling Left/Right explicitly here, instead of through
+  // focus arrival, removes the ambiguity: nothing but this handler ever
+  // navigates.
+  useEffect(() => {
+    const activeLink = document.getElementById(`client-${activeClientId}`);
+    const focusIsWithinCoverflow = document.activeElement
+      ?.closest(".clients-coverflow") != null;
+    if (activeLink && focusIsWithinCoverflow) {
+      activeLink.focus({ preventScroll: true });
+    }
+  }, [activeClientId]);
+
   return (
     <section
       className="clients-coverflow"
@@ -246,12 +280,20 @@ function ClientsSelector({ activeClientId }: { activeClientId: string }) {
       data-tv-scroll-container
       data-tv-scroll-axis="horizontal"
       data-navigation-scroll-key="clients:platforms"
+      onKeyDown={(event) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault();
+        event.stopPropagation();
+        const direction = event.key === "ArrowRight" ? 1 : -1;
+        const nextClient = PLAYARR_CLIENTS[nextClientIndex(selectedIndex, direction, total)];
+        if (nextClient && nextClient.id !== activeClientId) {
+          navigate(`/clients/${nextClient.id}`, { replace: true });
+        }
+      }}
     >
       <div className="clients-coverflow-track">
         {PLAYARR_CLIENTS.map((client, index) => {
           const isActive = client.id === activeClientId;
-          const previous = PLAYARR_CLIENTS[(index - 1 + total) % total];
-          const next = PLAYARR_CLIENTS[(index + 1) % total];
 
           return (
             <article
@@ -267,13 +309,6 @@ function ClientsSelector({ activeClientId }: { activeClientId: string }) {
                 aria-current={isActive ? "page" : undefined}
                 data-tv-focus-default={isActive ? true : undefined}
                 data-navigation-focus-key={`clients:${client.id}`}
-                data-tv-edge-target-left={`#client-${previous?.id}`}
-                data-tv-edge-target-right={`#client-${next?.id}`}
-                onFocus={() => {
-                  if (client.id !== activeClientId) {
-                    navigate(`/clients/${client.id}`, { replace: true });
-                  }
-                }}
               >
                 <span
                   className="client-platform-icon"

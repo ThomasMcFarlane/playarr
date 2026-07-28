@@ -8,8 +8,8 @@ import {
   type UserInviteRequestResponse,
   type UserResponse,
   type WorkKind,
-} from "@streamarr-tv/api-client";
-import { buildInviteUrl, type PeerAddressBundleLike } from "@streamarr-tv/domain";
+} from "@playarr-tv/api-client";
+import { buildInviteUrl, type PeerAddressBundleLike } from "@playarr-tv/domain";
 import { useApiBaseUrl, useApiClient, useCurrentUserId } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { Modal } from "../components/Modal";
@@ -38,7 +38,7 @@ type InviteSetup = {
 /**
  * The source applications that can actually contribute playable works to
  * each top-level catalog Type. Bazarr/Prowlarr are intentionally absent:
- * they support subtitles/indexing but do not own a Streamarr media library,
+ * they support subtitles/indexing but do not own a Playarr Server media library,
  * so offering them as a user library permission would grant nothing.
  */
 const TYPE_PERMISSIONS: readonly TypePermission[] = [
@@ -257,10 +257,10 @@ function TrashIcon() {
  * second click. Anything else (switching to a different card/action, or a
  * non-self-targeting click) clears it. Purely a client-side speed bump: the
  * backend does not itself reject an admin locking themselves out (see
- * `backend/crates/streamarr-api/src/users.rs`'s `update_user_handler`/
+ * `backend/crates/playarr-api/src/users.rs`'s `update_user_handler`/
  * `delete_user_handler`), so this is the only guard that exists today.
  * Revoking your own `can_stream` isn't included here -- unlike admin/
- * disabled/delete, it can't lock you out of *this* app (Streamarr Admin
+ * disabled/delete, it can't lock you out of *this* app (Playarr Server Admin
  * doesn't require `can_stream` at all), so it doesn't need the same
  * confirm-twice friction.
  */
@@ -279,14 +279,14 @@ const SELF_LOCKOUT_WARNINGS: Record<SelfLockoutAction, string> = {
 /**
  * Provisions/lists/removes real username+password accounts -- the web UI
  * for `POST/GET/PATCH/DELETE /api/v1/admin/users`
- * (backend/crates/streamarr-api/src/users.rs). `is_admin`/`can_stream`/
+ * (backend/crates/playarr-api/src/users.rs). `is_admin`/`can_stream`/
  * `disabled` are toggled inline via icon buttons (calling `updateUser`)
  * rather than a full edit form -- there's nothing else on a `User` worth a
  * dedicated edit screen for yet (display name/email/password changes
  * aren't exposed here at all).
  *
  * `can_stream` is a separate grant from `is_admin` -- see
- * `streamarr_model::Policy::can_stream`'s doc comment -- so an account can
+ * `playarr_model::Policy::can_stream`'s doc comment -- so an account can
  * be an admin with no Playarr access (the bootstrap admin defaults this
  * way) or a Playarr viewer with no admin access (the common case for a
  * household member), independently.
@@ -1076,7 +1076,7 @@ export function UsersPage() {
           }
         >
           <p className="muted" style={{ margin: 0 }}>
-            Ask the new user to scan this code. It opens Playarr with this Streamarr server locked
+            Ask the new user to scan this code. It opens Playarr with this Playarr Server locked
             in, then lets them choose their account details.
           </p>
           <QrCode value={inviteLink} size={260} />

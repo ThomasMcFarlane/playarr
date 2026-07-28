@@ -1,13 +1,13 @@
 /**
- * @streamarr-tv/api-client/react
+ * @playarr-tv/api-client/react
  *
  * Shared React data-fetching hooks over `ApiClient`. Kept in a separate
  * subpath export (rather than the package root) so consumers that don't
- * need React (e.g. `@streamarr-tv/device-auth`) never pull it in.
+ * need React (e.g. `@playarr-tv/device-auth`) never pull it in.
  *
  * These hooks are the single implementation of "loading / empty / error"
  * state handling reused by every screen that renders catalog or playback
- * data: the three TV app shells (via `@streamarr-tv/ui-tv`'s screen
+ * data: the three TV app shells (via `@playarr-tv/ui-tv`'s screen
  * containers) and the standalone web app's pages both call these directly,
  * so the async-state semantics (and their meaning: `"idle"` before a fetch
  * is even eligible to start, `"loading"` in flight, `"empty"` a successful

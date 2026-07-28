@@ -43,8 +43,8 @@ describe("decodeAccessTokenUserId", () => {
 
 describe("decodeAccessTokenIssuer", () => {
   it("extracts a standalone/HS256 node's fixed issuer string", () => {
-    const token = fakeJwt({ sub: "user-1", iss: "streamarr", exp: 9999999999 });
-    expect(decodeAccessTokenIssuer(token)).toBe("streamarr");
+    const token = fakeJwt({ sub: "user-1", iss: "playarr", exp: 9999999999 });
+    expect(decodeAccessTokenIssuer(token)).toBe("playarr");
   });
 
   it("extracts a grouped node's peer_id issuer", () => {

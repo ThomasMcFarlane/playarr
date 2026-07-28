@@ -1,7 +1,7 @@
 # Playarr Cast Receiver
 
 A thin CAF (Cast Application Framework) SDK host: a custom Google Cast web
-receiver that plays Streamarr media casted from a Playarr sender (Web,
+receiver that plays Playarr Server media casted from a Playarr sender (Web,
 Android, or iOS). It is not a packaged distribution of `clients/tv-web/web`:
 it has no React, no routes, and no UI beyond what the CAF SDK itself draws.
 See [`docs/architecture/clients/cast.md`](../../../../docs/architecture/clients/cast.md)
@@ -17,9 +17,9 @@ dev server.
 ```sh
 cd clients/tv-web
 pnpm install --frozen-lockfile
-pnpm --filter @streamarr-tv/app-cast-receiver run typecheck
-pnpm --filter @streamarr-tv/app-cast-receiver run test
-pnpm --filter @streamarr-tv/app-cast-receiver run build
+pnpm --filter @playarr-tv/app-cast-receiver run typecheck
+pnpm --filter @playarr-tv/app-cast-receiver run test
+pnpm --filter @playarr-tv/app-cast-receiver run build
 ```
 
 `build` writes `dist/index.html` and `dist/assets/*` with `base: "/cast/"`
@@ -34,7 +34,7 @@ send raw `LOAD`/media-status requests from a form, with no sender code
 involved.
 
 1. Serve a local build somewhere the Cast device can reach over HTTP(S),
-   e.g. `pnpm --filter @streamarr-tv/app-cast-receiver run build && pnpm dlx serve dist -l 4173`,
+   e.g. `pnpm --filter @playarr-tv/app-cast-receiver run build && pnpm dlx serve dist -l 4173`,
    or point a tunnel (`ngrok`, `cloudflared`) at it if the Cast device isn't
    on the same LAN as your dev machine. CaC needs an app registered in the
    [Google Cast Developer Console](https://cast.google.com/publish/) pointing
@@ -48,7 +48,7 @@ involved.
    `dist/index.html` on the physical Cast device.
 4. Use CaC's "Load Media" form to send a raw `LOAD` request. Set the
    `customData` field to a `PlayarrCastLoadRequest` JSON payload matching
-   `@streamarr-tv/cast-protocol`'s shape (protocol version, item, playback
+   `@playarr-tv/cast-protocol`'s shape (protocol version, item, playback
    intent, server, and credentials); see
    [`packages/cast-protocol/src/index.ts`](../../packages/cast-protocol/src/index.ts)
    for the exact fields. This exercises `main.ts`'s LOAD interceptor,

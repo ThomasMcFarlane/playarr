@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
-  <title id="title">Streamarr</title>
+  <title id="title">Playarr</title>
   <desc id="description">Three routed media streams forming an S.</desc>
   <defs>
     <linearGradient id="surface" x1="80" y1="48" x2="432" y2="464" gradientUnits="userSpaceOnUse">

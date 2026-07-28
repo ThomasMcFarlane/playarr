@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import { color, radius, spacing, typeScale } from "@streamarr-tv/design-tokens";
+import { color, radius, spacing, typeScale } from "@playarr-tv/design-tokens";
 import { useFocusable } from "../SpatialNavContext";
 import { QrCode } from "../QrCode";
 
@@ -44,7 +44,7 @@ export function PairingScreen({
         textAlign: "center",
       }}
     >
-      <h1 style={{ fontSize: typeScale.display.fontSize, margin: 0 }}>Streamarr</h1>
+      <h1 style={{ fontSize: typeScale.display.fontSize, margin: 0 }}>Playarr Server</h1>
 
       {status === "requesting" && (
         <p style={{ fontSize: typeScale.body.fontSize, color: color.text.secondary }}>

@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { DownloadTicket } from "@streamarr-tv/api-client";
+import type { DownloadTicket } from "@playarr-tv/api-client";
 import { useApiBaseUrl, useApiClient, useAuth, useCurrentUserId } from "./ApiClientProvider";
 import {
   abortDownload,

@@ -4,7 +4,7 @@ import {
   type PlayarrCastReadyMessage,
   type PlayarrCastReceiverMessage,
   type PlayarrCastStateMessage,
-} from "@streamarr-tv/cast-protocol";
+} from "@playarr-tv/cast-protocol";
 import { CastMessageBus, type CastMessageChannel, type CastMessageHandlers } from "./messages";
 
 function makeFakeChannel(): {

@@ -13,8 +13,8 @@ import type {
   WatchProgress,
   Work,
   WorkChildren,
-} from "@streamarr-tv/api-client";
-import { useCatalogBrowse } from "@streamarr-tv/api-client/react";
+} from "@playarr-tv/api-client";
+import { useCatalogBrowse } from "@playarr-tv/api-client/react";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { PlaybackEventKind } from "@streamarr-tv/api-client";
+import type { PlaybackEventKind } from "@playarr-tv/api-client";
 import { ProgressReporter, type ProgressReporterClient } from "./progress";
 
 /** A hand-rolled fake interval timer: records scheduled callbacks and lets the test fire them manually. */

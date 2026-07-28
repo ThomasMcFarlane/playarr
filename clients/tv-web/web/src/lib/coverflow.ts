@@ -20,6 +20,19 @@ export function circularOffset(
   return normalised > total / 2 ? normalised - total : normalised;
 }
 
+/**
+ * Index of the next item one step in `direction` from `currentIndex`,
+ * wrapping from the last item to the first and vice versa.
+ */
+export function nextClientIndex(
+  currentIndex: number,
+  direction: 1 | -1,
+  total: number
+): number {
+  if (total <= 0) return 0;
+  return (currentIndex + direction + total) % total;
+}
+
 // Each step out from centre is this fraction of the previous one's size, so
 // position keeps growing but by ever-smaller amounts.
 const POSITION_STEP_DECAY = 0.55;

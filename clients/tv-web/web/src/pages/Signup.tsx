@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ApiClient, ApiError } from "@streamarr-tv/api-client";
-import { rememberGroup } from "@streamarr-tv/domain";
+import { ApiClient, ApiError } from "@playarr-tv/api-client";
+import { rememberGroup } from "@playarr-tv/domain";
 import { useAuth } from "../lib/ApiClientProvider";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { createLocalNetworkFetch } from "../lib/localNetworkFetch";

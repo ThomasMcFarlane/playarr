@@ -173,36 +173,36 @@ test("returns only an unhandled root Back press to webOS", async () => {
   cleanup();
 });
 
-test("loads a valid packaged Streamarr server before application startup", async () => {
+test("loads a valid packaged Playarr server before application startup", async () => {
   const appWindow = {};
   const fetchImpl = async (url, init) => {
-    assert.equal(url, "./streamarr-config.json");
+    assert.equal(url, "./playarr-config.json");
     assert.deepEqual(init, { cache: "no-store" });
     return {
       ok: true,
-      json: async () => ({ apiBaseUrl: " https://streamarr.example.test/base/ " }),
+      json: async () => ({ apiBaseUrl: " https://playarr.example.test/base/ " }),
     };
   };
 
   assert.deepEqual(
-    await loadWebOsRuntimeConfig("./streamarr-config.json", fetchImpl, appWindow),
-    { apiBaseUrl: "https://streamarr.example.test/base" }
+    await loadWebOsRuntimeConfig("./playarr-config.json", fetchImpl, appWindow),
+    { apiBaseUrl: "https://playarr.example.test/base" }
   );
   assert.deepEqual(appWindow.PlayarrPackagedConfig, {
-    apiBaseUrl: "https://streamarr.example.test/base",
+    apiBaseUrl: "https://playarr.example.test/base",
   });
 });
 
 test("ignores invalid or credential-bearing packaged server URLs", async () => {
   for (const apiBaseUrl of [
     "file:///tmp/server",
-    "https://user:secret@streamarr.example.test",
-    "https://streamarr.example.test/?token=secret",
+    "https://user:secret@playarr.example.test",
+    "https://playarr.example.test/?token=secret",
     "not a URL",
   ]) {
     const appWindow = {};
     const result = await loadWebOsRuntimeConfig(
-      "./streamarr-config.json",
+      "./playarr-config.json",
       async () => ({ ok: true, json: async () => ({ apiBaseUrl }) }),
       appWindow
     );

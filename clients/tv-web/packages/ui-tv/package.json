@@ -1,8 +1,8 @@
 {
-  "name": "@streamarr-tv/ui-tv",
+  "name": "@playarr-tv/ui-tv",
   "version": "0.1.0",
   "private": true,
-  "description": "Shared TV screen/component skeletons (Browse, Detail, Player placeholder) built on @streamarr-tv/spatial-nav, consumed by the webOS, Tizen, and VIDAA-fallback app shells.",
+  "description": "Shared TV screen/component skeletons (Browse, Detail, Player placeholder) built on @playarr-tv/spatial-nav, consumed by the webOS, Tizen, and VIDAA-fallback app shells.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -19,12 +19,12 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@streamarr-tv/api-client": "workspace:*",
-    "@streamarr-tv/design-tokens": "workspace:*",
-    "@streamarr-tv/device-auth": "workspace:*",
-    "@streamarr-tv/domain": "workspace:*",
-    "@streamarr-tv/player-core": "workspace:*",
-    "@streamarr-tv/spatial-nav": "workspace:*"
+    "@playarr-tv/api-client": "workspace:*",
+    "@playarr-tv/design-tokens": "workspace:*",
+    "@playarr-tv/device-auth": "workspace:*",
+    "@playarr-tv/domain": "workspace:*",
+    "@playarr-tv/player-core": "workspace:*",
+    "@playarr-tv/spatial-nav": "workspace:*"
   },
   "peerDependencies": {
     "react": "^18.3.0",

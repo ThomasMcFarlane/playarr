@@ -5,7 +5,7 @@ import {
 import type {
   ApiClient,
   ProfileAvatarPreference as RemoteProfileAvatarPreference,
-} from "@streamarr-tv/api-client";
+} from "@playarr-tv/api-client";
 
 const PROFILE_AVATAR_STORAGE_KEY = "playarr.profileAvatars.v1";
 const MAX_AVATAR_UPLOAD_BYTES = 10 * 1024 * 1024;

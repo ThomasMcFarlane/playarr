@@ -11,7 +11,7 @@
  * pseudo-identity, moved here since this is the one place a device id is
  * still genuinely needed post-Round-E.
  */
-const DEVICE_ID_STORAGE_KEY = "streamarr:deviceId";
+const DEVICE_ID_STORAGE_KEY = "playarr:deviceId";
 
 /** Generates a UUID v4 without requiring `crypto.randomUUID()` (not available on every legacy TV WebKit runtime). */
 function generateUuid(): string {

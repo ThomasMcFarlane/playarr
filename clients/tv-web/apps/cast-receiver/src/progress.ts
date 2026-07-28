@@ -14,8 +14,8 @@
  *   time -- since an on-demand HLS session's engine time starts back at
  *   zero every time it's re-negotiated (see `negotiation.ts`).
  */
-import type { PlaybackEventKind } from "@streamarr-tv/api-client";
-import type { PlayarrCastStopReason } from "@streamarr-tv/cast-protocol";
+import type { PlaybackEventKind } from "@playarr-tv/api-client";
+import type { PlayarrCastStopReason } from "@playarr-tv/cast-protocol";
 
 /** The one `ApiClient` method this module needs. */
 export interface ProgressReporterClient {

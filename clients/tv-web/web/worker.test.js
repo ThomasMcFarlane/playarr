@@ -353,9 +353,9 @@ describe("hosted device linking", () => {
         method: "POST",
         body: JSON.stringify({
           user_code: code.user_code,
-          server_url: "http://streamarr.lan:8484",
+          server_url: "http://playarr.lan:8484",
           server_device_code: "server-secret-device-code",
-          server_urls: ["http://streamarr.lan:8484"],
+          server_urls: ["http://playarr.lan:8484"],
         }),
       }),
       env
@@ -368,9 +368,9 @@ describe("hosted device linking", () => {
     );
     await expect(linked.json()).resolves.toEqual({
       user_code: code.user_code,
-      server_url: "http://streamarr.lan:8484",
+      server_url: "http://playarr.lan:8484",
       server_device_code: "server-secret-device-code",
-      server_urls: ["http://streamarr.lan:8484"],
+      server_urls: ["http://playarr.lan:8484"],
     });
   });
 
@@ -398,9 +398,9 @@ describe("hosted device linking", () => {
         method: "POST",
         body: JSON.stringify({
           user_code: code.user_code,
-          server_url: "https://viewer:secret@streamarr.example.com",
+          server_url: "https://viewer:secret@playarr.example.com",
           server_device_code: "server-secret-device-code",
-          server_urls: ["https://streamarr.example.com"],
+          server_urls: ["https://playarr.example.com"],
         }),
       }),
       env

@@ -13,6 +13,14 @@ describe("playbackCapabilitiesForPlatform", () => {
     }
   );
 
+  it("uses the narrower verified subset for Xbox's built-in Edge browser", () => {
+    expect(playbackCapabilitiesForPlatform("xbox")).toEqual({
+      containers: "mp4,m4v,webm,mp3,m4a",
+      videoCodecs: "h264,vp9",
+      audioCodecs: "aac,opus",
+    });
+  });
+
   it("keeps the broader desktop browser profile", () => {
     expect(playbackCapabilitiesForPlatform("web").videoCodecs).toContain("av1");
     expect(playbackCapabilitiesForPlatform("web").audioCodecs).toContain("flac");

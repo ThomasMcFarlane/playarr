@@ -1,6 +1,6 @@
 import { useEffect, useState, type RefObject } from "react";
-import type { PlaybackEngine, PlaybackEngineState } from "@streamarr-tv/player-core";
-import { color, spacing, typeScale } from "@streamarr-tv/design-tokens";
+import type { PlaybackEngine, PlaybackEngineState } from "@playarr-tv/player-core";
+import { color, spacing, typeScale } from "@playarr-tv/design-tokens";
 import { useFocusable } from "../SpatialNavContext";
 
 export interface PlayerScreenProps {

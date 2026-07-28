@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { ApiClient } from "@streamarr-tv/api-client";
+import type { ApiClient } from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 
 interface MediaThumbnailArtworkProps {

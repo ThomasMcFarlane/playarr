@@ -1,5 +1,5 @@
 /**
- * @streamarr-tv/spatial-nav
+ * @playarr-tv/spatial-nav
  *
  * Platform-agnostic d-pad/remote focus-navigation engine. Deliberately has
  * no DOM or React dependency: callers register a focusable node with an

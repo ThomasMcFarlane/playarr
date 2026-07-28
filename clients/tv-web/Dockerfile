@@ -1,5 +1,5 @@
 # Local dev-only image (devdeploy). Runs the real `vite` dev server (HMR
-# included) for @streamarr-tv/web, the standalone Web app that also serves
+# included) for @playarr-tv/web, the standalone Web app that also serves
 # as the hosted VIDAA client (?platform=tv-vidaa). Not a production image --
 # see infra/docker/backend.Dockerfile for the real multi-stage prod build.
 #

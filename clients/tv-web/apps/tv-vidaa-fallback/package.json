@@ -1,8 +1,8 @@
 {
-  "name": "@streamarr-tv/app-vidaa-fallback",
+  "name": "@playarr-tv/app-vidaa-fallback",
   "version": "0.1.0",
   "private": true,
-  "description": "Minimal PWA shell for VIDAA (Hisense) TVs, bootstrapping @streamarr-tv/ui-tv + @streamarr-tv/player-shaka. Per the plan, VIDAA has no dedicated native SDK target yet -- this fallback runs as an installable PWA against VIDAA's browser, gated behind the vidaaOtaEnabled feature flag.",
+  "description": "Minimal PWA shell for VIDAA (Hisense) TVs, bootstrapping @playarr-tv/ui-tv + @playarr-tv/player-shaka. Per the plan, VIDAA has no dedicated native SDK target yet -- this fallback runs as an installable PWA against VIDAA's browser, gated behind the vidaaOtaEnabled feature flag.",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,11 +12,11 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@streamarr-tv/api-client": "workspace:*",
-    "@streamarr-tv/domain": "workspace:*",
-    "@streamarr-tv/player-core": "workspace:*",
-    "@streamarr-tv/player-shaka": "workspace:*",
-    "@streamarr-tv/ui-tv": "workspace:*",
+    "@playarr-tv/api-client": "workspace:*",
+    "@playarr-tv/domain": "workspace:*",
+    "@playarr-tv/player-core": "workspace:*",
+    "@playarr-tv/player-shaka": "workspace:*",
+    "@playarr-tv/ui-tv": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:"
   },

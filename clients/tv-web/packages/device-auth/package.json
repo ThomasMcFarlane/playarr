@@ -1,5 +1,5 @@
 {
-  "name": "@streamarr-tv/device-auth",
+  "name": "@playarr-tv/device-auth",
   "version": "0.1.0",
   "private": true,
   "description": "RFC 8628 OAuth 2.0 Device Authorization Grant client, shared by the webOS/Tizen/VIDAA-fallback TV apps and reused as the Web approver-UI logic.",
@@ -22,7 +22,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@streamarr-tv/api-client": "workspace:*",
+    "@playarr-tv/api-client": "workspace:*",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {

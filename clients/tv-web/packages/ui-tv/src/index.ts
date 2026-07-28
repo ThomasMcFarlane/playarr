@@ -1,7 +1,7 @@
 /**
- * @streamarr-tv/ui-tv
+ * @playarr-tv/ui-tv
  *
- * Shared TV screen/component skeletons, built on @streamarr-tv/spatial-nav
+ * Shared TV screen/component skeletons, built on @playarr-tv/spatial-nav
  * for d-pad/remote focus navigation. Consumed by all three TV app shells
  * (webOS, Tizen, VIDAA fallback); the web app has its own routed pages
  * (`web/src/pages`) since mouse/keyboard navigation doesn't need spatial-nav.
@@ -25,8 +25,8 @@ export type { PlayerScreenProps } from "./screens/PlayerScreen";
 export { PairingScreen } from "./screens/PairingScreen";
 export type { PairingScreenProps } from "./screens/PairingScreen";
 
-// Data-wired screen containers: fetch from the real API via `@streamarr-tv/api-client`
-// (and drive the real RFC 8628 flow via `@streamarr-tv/device-auth`), then render the
+// Data-wired screen containers: fetch from the real API via `@playarr-tv/api-client`
+// (and drive the real RFC 8628 flow via `@playarr-tv/device-auth`), then render the
 // presentational screens above with real loading/empty/error state handling.
 export { PairingScreenContainer } from "./screens/PairingScreenContainer";
 export type { PairingScreenContainerProps } from "./screens/PairingScreenContainer";

@@ -1,8 +1,8 @@
 {
-  "name": "streamarr-tv-web",
+  "name": "playarr-tv-web",
   "version": "0.1.0",
   "private": true,
-  "description": "Streamarr TV & web client workspace: shared packages, per-platform TV app shells (webOS, Tizen, VIDAA fallback), and the standalone web app.",
+  "description": "Playarr Server TV & web client workspace: shared packages, per-platform TV app shells (webOS, Tizen, VIDAA fallback), and the standalone web app.",
   "type": "module",
   "engines": {
     "node": ">=20",
@@ -13,7 +13,7 @@
     "typecheck": "pnpm -r run typecheck",
     "lint": "pnpm -r --if-present run lint",
     "test:legacy-tv-css": "node --test tooling/*.test.mjs",
-    "dev:web": "pnpm --filter @streamarr-tv/web run dev",
+    "dev:web": "pnpm --filter @playarr-tv/web run dev",
     "clean": "pnpm -r --if-present run clean"
   },
   "devDependencies": {

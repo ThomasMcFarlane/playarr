@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ApiClient, Work } from "@streamarr-tv/api-client";
+import type { ApiClient, Work } from "@playarr-tv/api-client";
 import {
   getJoinedWorkSources,
   joinServerWorks,

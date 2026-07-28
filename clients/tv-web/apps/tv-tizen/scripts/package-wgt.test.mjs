@@ -21,8 +21,8 @@ test("reads the certificate profile from CLI args before the environment", () =>
 
 test("finds exactly one generated widget", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "playarr-tizen-wgt-"));
-  await writeFile(path.join(root, "Streamarr.wgt"), "widget");
-  assert.equal(await findGeneratedWidget(root), path.join(root, "Streamarr.wgt"));
+  await writeFile(path.join(root, "Playarr.wgt"), "widget");
+  assert.equal(await findGeneratedWidget(root), path.join(root, "Playarr.wgt"));
   await writeFile(path.join(root, "Other.wgt"), "widget");
   await assert.rejects(findGeneratedWidget(root), /found 2/);
 });

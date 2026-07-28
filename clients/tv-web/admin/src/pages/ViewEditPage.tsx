@@ -7,7 +7,7 @@ import {
   type SourceInstanceResponse,
   type Work,
   type WorkKind,
-} from "@streamarr-tv/api-client";
+} from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 

@@ -5,7 +5,7 @@ import type {
   CatalogPage,
   Work,
   WorkDetail,
-} from "@streamarr-tv/api-client";
+} from "@playarr-tv/api-client";
 
 export interface ConnectedServerClient {
   url: string;

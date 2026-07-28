@@ -8,7 +8,7 @@ export async function preparePackage({
   sourceRoot = appRoot,
   outputRoot = path.join(sourceRoot, "dist"),
   iconSource = path.resolve(sourceRoot, "../../web/public/playarr-icon-512.png"),
-  runtimeConfigSource = path.join(sourceRoot, "public/streamarr-config.json"),
+  runtimeConfigSource = path.join(sourceRoot, "public/playarr-config.json"),
   packageJsonSource = path.join(sourceRoot, "package.json"),
 } = {}) {
   const manifestSource = path.join(sourceRoot, "tizen-manifest.xml");
@@ -45,7 +45,7 @@ export async function preparePackage({
 
   const runtimeConfig = JSON.parse(runtimeConfigText);
   if (typeof runtimeConfig.apiBaseUrl !== "string") {
-    throw new Error("streamarr-config.json apiBaseUrl must be a string");
+    throw new Error("playarr-config.json apiBaseUrl must be a string");
   }
   if (runtimeConfig.apiBaseUrl.trim()) {
     const apiUrl = new URL(runtimeConfig.apiBaseUrl);
@@ -57,7 +57,7 @@ export async function preparePackage({
       apiUrl.hash
     ) {
       throw new Error(
-        "streamarr-config.json apiBaseUrl must use HTTP(S) without credentials, a query, or a fragment"
+        "playarr-config.json apiBaseUrl must use HTTP(S) without credentials, a query, or a fragment"
       );
     }
   }
@@ -65,7 +65,7 @@ export async function preparePackage({
   await mkdir(outputRoot, { recursive: true });
   await copyFile(manifestSource, path.join(outputRoot, "config.xml"));
   await copyFile(iconSource, path.join(outputRoot, "icon.png"));
-  await copyFile(runtimeConfigSource, path.join(outputRoot, "streamarr-config.json"));
+  await copyFile(runtimeConfigSource, path.join(outputRoot, "playarr-config.json"));
 
   const builtIndex = await readFile(path.join(outputRoot, "index.html"), "utf8");
   for (const expected of [

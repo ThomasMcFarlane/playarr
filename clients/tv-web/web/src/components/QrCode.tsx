@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createQrCodeSvg } from "@streamarr-tv/device-auth";
+import { createQrCodeSvg } from "@playarr-tv/device-auth";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 
 export function QrCode({

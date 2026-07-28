@@ -1,5 +1,5 @@
 {
-  "name": "@streamarr-tv/spatial-nav",
+  "name": "@playarr-tv/spatial-nav",
   "version": "0.1.0",
   "private": true,
   "description": "Platform-agnostic d-pad/remote focus-navigation engine. No DOM/React dependency -- callers supply element rects, so it works identically under webOS, Tizen, VIDAA (browser) and the web app.",

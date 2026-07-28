@@ -1,5 +1,5 @@
 {
-  "name": "@streamarr-tv/player-core",
+  "name": "@playarr-tv/player-core",
   "version": "0.1.0",
   "private": true,
   "description": "PlaybackEngine TypeScript interface (load/play/pause/seek/getState + DRM config shape) implemented by player-shaka and player-avplay.",

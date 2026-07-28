@@ -1,5 +1,5 @@
-import { color, spacing, typeScale } from "@streamarr-tv/design-tokens";
-import type { ClientVersionEvaluation } from "@streamarr-tv/domain";
+import { color, spacing, typeScale } from "@playarr-tv/design-tokens";
+import type { ClientVersionEvaluation } from "@playarr-tv/domain";
 
 export interface VersionBannerProps {
   evaluation: ClientVersionEvaluation;

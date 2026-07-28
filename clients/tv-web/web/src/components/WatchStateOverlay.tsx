@@ -1,4 +1,4 @@
-import type { WatchProgress } from "@streamarr-tv/api-client";
+import type { WatchProgress } from "@playarr-tv/api-client";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 
 export function indexWatchProgressByWork(

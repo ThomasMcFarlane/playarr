@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { ApiClient } from "@streamarr-tv/api-client";
+import { ApiClient } from "@playarr-tv/api-client";
 import { authorizeDeviceAcrossServers, decodeServersParam, parseServersParam } from "./serverAddressBundle";
 
-/** Exact inverse of `streamarr-api/src/oauth.rs`'s `encode_servers_param`:
+/** Exact inverse of `playarr-api/src/oauth.rs`'s `encode_servers_param`:
  * base64url (`URL_SAFE_NO_PAD`, unpadded) of `JSON.stringify(value)`. */
 function base64UrlEncode(value: unknown): string {
   const raw = Buffer.from(JSON.stringify(value), "utf-8").toString("base64");
@@ -30,7 +30,7 @@ function clientFor(url: string, handler: (request: Request) => Response | Promis
 }
 
 describe("decodeServersParam", () => {
-  it("decodes the exact wire format streamarr-api/src/oauth.rs's encode_servers_param produces", () => {
+  it("decodes the exact wire format playarr-api/src/oauth.rs's encode_servers_param produces", () => {
     const encoded = base64UrlEncode(entries(["https://home.example.com", "https://east.example.com"]));
     expect(decodeServersParam(encoded)).toEqual(["https://home.example.com", "https://east.example.com"]);
   });

@@ -1,8 +1,8 @@
 {
-  "name": "@streamarr-tv/domain",
+  "name": "@playarr-tv/domain",
   "version": "0.1.0",
   "private": true,
-  "description": "Shared TypeScript domain types for the Streamarr TV & web clients, mirroring streamarr-model's domain types.",
+  "description": "Shared TypeScript domain types for the Playarr Server TV & web clients, mirroring playarr-model's domain types.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

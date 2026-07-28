@@ -1,10 +1,10 @@
-import type { ApiClient } from "@streamarr-tv/api-client";
+import type { ApiClient } from "@playarr-tv/api-client";
 import {
   parseServersParam,
   requestDeviceCode,
   type DeviceCodeResponse,
   type ClientPlatform,
-} from "@streamarr-tv/device-auth";
+} from "@playarr-tv/device-auth";
 
 const HOSTED_LINK_ORIGIN = "https://playarr.app";
 
@@ -50,7 +50,7 @@ export function shouldUseHostedDeviceLink(
   clientPlatform?: ClientPlatform
 ): boolean {
   return (
-    (isPackagedTv || clientPlatform === "tv-vidaa") &&
+    (isPackagedTv || clientPlatform === "tv-vidaa" || clientPlatform === "xbox") &&
     !configuredApiBaseUrl?.trim()
   );
 }
@@ -77,9 +77,9 @@ function waitForHostedLink(milliseconds: number, signal?: AbortSignal): Promise<
   });
 }
 
-/** Starts first-contact TV linking against playarr.app, before a TV knows any Streamarr URL. */
+/** Starts first-contact TV linking against playarr.app, before a TV knows any Playarr Server URL. */
 export async function requestHostedDeviceLink(
-  clientPlatform: Extract<ClientPlatform, "tv-webos" | "tv-tizen" | "tv-vidaa" | "tv-fire">,
+  clientPlatform: Extract<ClientPlatform, "tv-webos" | "tv-tizen" | "tv-vidaa" | "tv-fire" | "xbox">,
   options: HostedLinkRequestOptions = {}
 ): Promise<HostedLinkCode> {
   const response = await hostedLinkFetch(options.fetchImpl)(`${HOSTED_LINK_ORIGIN}/api/link/code`, {

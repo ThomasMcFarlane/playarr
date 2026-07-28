@@ -1,5 +1,5 @@
 {
-  "name": "@streamarr-tv/player-shaka",
+  "name": "@playarr-tv/player-shaka",
   "version": "0.1.0",
   "private": true,
   "description": "Shaka Player adapter implementing PlaybackEngine, used by the web app, webOS, and the VIDAA fallback PWA (all modern-enough WebKit/Chromium for MSE + EME).",
@@ -19,7 +19,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@streamarr-tv/player-core": "workspace:*",
+    "@playarr-tv/player-core": "workspace:*",
     "shaka-player": "^4.11.0"
   },
   "devDependencies": {

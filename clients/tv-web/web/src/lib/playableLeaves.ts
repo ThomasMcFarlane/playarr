@@ -1,4 +1,4 @@
-import type { WorkDetail, WorkKind } from "@streamarr-tv/api-client";
+import type { WorkDetail, WorkKind } from "@playarr-tv/api-client";
 import type { TranslationKey } from "./i18n/translations";
 
 export interface PlayableLeaf {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ApiClient } from "@streamarr-tv/api-client";
+import { ApiClient } from "@playarr-tv/api-client";
 import { createQrCodeSvg, pollDeviceToken, pollForToken, requestDeviceCode } from "./index";
 
 function mockFetch(handler: (request: Request) => Response | Promise<Response>) {
@@ -17,7 +17,7 @@ const BASE_URL = "http://localhost:8484";
 
 describe("createQrCodeSvg", () => {
   it("renders the complete verification URL locally as an SVG", async () => {
-    const svg = await createQrCodeSvg("https://streamarr.example/link?user_code=WXYZ-1234", 180);
+    const svg = await createQrCodeSvg("https://playarr.example/link?user_code=WXYZ-1234", 180);
     expect(svg).toContain("<svg");
     expect(svg).toContain('width="180"');
   });
@@ -32,8 +32,8 @@ describe("requestDeviceCode", () => {
         return jsonResponse(200, {
           device_code: "dc-1",
           user_code: "WXYZ-1234",
-          verification_uri: "https://streamarr.example/link",
-          verification_uri_complete: "https://streamarr.example/link?code=WXYZ-1234",
+          verification_uri: "https://playarr.example/link",
+          verification_uri_complete: "https://playarr.example/link?code=WXYZ-1234",
           expires_in: 900,
           interval: 5,
         });
@@ -44,8 +44,8 @@ describe("requestDeviceCode", () => {
     expect(response).toEqual({
       deviceCode: "dc-1",
       userCode: "WXYZ-1234",
-      verificationUri: "https://streamarr.example/link",
-      verificationUriComplete: "https://streamarr.example/link?code=WXYZ-1234",
+      verificationUri: "https://playarr.example/link",
+      verificationUriComplete: "https://playarr.example/link?code=WXYZ-1234",
       expiresInSeconds: 900,
       intervalSeconds: 5,
     });

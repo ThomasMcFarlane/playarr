@@ -16,15 +16,15 @@ import {
   type PlaybackMode,
   type PlaybackQualityOption,
   type WatchProgress,
-} from "@streamarr-tv/api-client";
-import { ShakaPlaybackEngine } from "@streamarr-tv/player-shaka";
-import { TizenAvplayEngine } from "@streamarr-tv/player-avplay";
+} from "@playarr-tv/api-client";
+import { ShakaPlaybackEngine } from "@playarr-tv/player-shaka";
+import { TizenAvplayEngine } from "@playarr-tv/player-avplay";
 import type {
   PlaybackAudioTrack,
   PlaybackEngine,
   PlaybackEngineState,
   PlaybackSubtitleTrack,
-} from "@streamarr-tv/player-core";
+} from "@playarr-tv/player-core";
 import { useServerAccessToken, useServerClient } from "./ApiClientProvider";
 import { WEB_PLAYBACK_CAPABILITIES } from "./playbackCapabilities";
 import {
@@ -135,7 +135,7 @@ function sourceSubtitleTracksFromInfo(info: PlaybackInfo): PlaybackSubtitleTrack
  * sense), while an engine error happens after a real source was handed to
  * Shaka Player.
  *
- * `usePlaybackInfo` in `@streamarr-tv/api-client/react` covers this same
+ * `usePlaybackInfo` in `@playarr-tv/api-client/react` covers this same
  * request elsewhere in the app, but collapses everything to a plain string
  * message -- this hook calls `ApiClient.getPlaybackInfo` directly instead so
  * a 403 (no Playarr streaming access) can be distinguished from every other

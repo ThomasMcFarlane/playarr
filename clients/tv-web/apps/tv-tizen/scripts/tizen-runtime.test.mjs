@@ -255,7 +255,7 @@ test("synchronizes AVPlay coordinates and object CSS from the same player bounds
 test("publishes only an absolute HTTP(S) packaged API URL", async () => {
   const windowObject = {};
   const config = await loadPackagedConfig({
-    configUrl: "streamarr-config.json",
+    configUrl: "playarr-config.json",
     windowObject,
     fetchImpl: async () =>
       new Response(JSON.stringify({ apiBaseUrl: " https://playarr.example.test/base// " }), {
@@ -268,7 +268,7 @@ test("publishes only an absolute HTTP(S) packaged API URL", async () => {
   const unsafeWindow = {};
   assert.equal(
     await loadPackagedConfig({
-      configUrl: "streamarr-config.json",
+      configUrl: "playarr-config.json",
       windowObject: unsafeWindow,
       fetchImpl: async () =>
         new Response(JSON.stringify({ apiBaseUrl: "javascript:alert(1)" }), { status: 200 }),
@@ -280,7 +280,7 @@ test("publishes only an absolute HTTP(S) packaged API URL", async () => {
   const credentialWindow = {};
   assert.equal(
     await loadPackagedConfig({
-      configUrl: "streamarr-config.json",
+      configUrl: "playarr-config.json",
       windowObject: credentialWindow,
       fetchImpl: async () =>
         new Response(JSON.stringify({ apiBaseUrl: "https://user:secret@example.test" }), {
@@ -294,7 +294,7 @@ test("publishes only an absolute HTTP(S) packaged API URL", async () => {
   const emptyWindow = {};
   assert.equal(
     await loadPackagedConfig({
-      configUrl: "streamarr-config.json",
+      configUrl: "playarr-config.json",
       windowObject: emptyWindow,
       fetchImpl: async () =>
         new Response(JSON.stringify({ apiBaseUrl: "" }), { status: 200 }),
@@ -310,7 +310,7 @@ test("publishes only an absolute HTTP(S) packaged API URL", async () => {
     const parameterWindow = {};
     assert.equal(
       await loadPackagedConfig({
-        configUrl: "streamarr-config.json",
+        configUrl: "playarr-config.json",
         windowObject: parameterWindow,
         fetchImpl: async () =>
           new Response(JSON.stringify({ apiBaseUrl }), { status: 200 }),

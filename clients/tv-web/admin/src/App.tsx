@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
-import { TokenStore } from "@streamarr-tv/device-auth";
+import { TokenStore } from "@playarr-tv/device-auth";
 import { SourceInstancesPage } from "./pages/SourceInstances";
 import { UsersPage } from "./pages/Users";
 import { UserSettingsPage } from "./pages/UserSettings";
@@ -55,7 +55,7 @@ const SYSTEM_NAV_LINKS = [
 /**
  * "Library" nav group -- a single accordion section, same shape as
  * `SystemNavSection`/`SYSTEM_NAV_LINKS`. "Views" (named, saved filter+sort
- * presets over the catalog -- see `streamarr_model::LibraryView`'s doc
+ * presets over the catalog -- see `playarr_model::LibraryView`'s doc
  * comment, surfaced to Playarr as Home screen shelves) is explicitly a
  * sub-nav item of Library, not its own top-level section -- it was briefly
  * shipped as a standalone "Views" accordion; that was wrong per the
@@ -178,9 +178,9 @@ function LibraryNavSection() {
 }
 
 /**
- * Streamarr's own admin UI: source-instance registration and user
- * management. Co-hosted by streamarr-bin at its own origin (see
- * streamarr_api::build_router's `web_assets_dir`) -- this is the operator
+ * Playarr Server's own admin UI: source-instance registration and user
+ * management. Co-hosted by playarr-bin at its own origin (see
+ * playarr_api::build_router's `web_assets_dir`) -- this is the operator
  * control plane, not a Playarr client (see clients/tv-web/web for that).
  */
 export function App() {
@@ -201,8 +201,8 @@ export function App() {
                 <aside className="sidebar">
                   <div className="sidebar-header">
                     <span className="app-logo">
-                      <img className="app-logo-icon" src="/streamarr-icon.svg" alt="" />
-                      <span className="app-logo-accent">Stream</span>arr
+                      <img className="app-logo-icon" src="/playarr-icon.svg" alt="" />
+                      <span className="app-logo-accent">Play</span>arr Server
                     </span>
                   </div>
                   <nav className="sidebar-nav">

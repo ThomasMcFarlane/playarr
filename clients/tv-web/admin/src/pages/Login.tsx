@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ApiError, type LoginRequest } from "@streamarr-tv/api-client";
-import { getOrCreateDeviceId, TokenStore, toStoredSession } from "@streamarr-tv/device-auth";
+import { ApiError, type LoginRequest } from "@playarr-tv/api-client";
+import { getOrCreateDeviceId, TokenStore, toStoredSession } from "@playarr-tv/device-auth";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 
 /**
- * Real username/password login for Streamarr's admin UI. `AuthMode`
+ * Real username/password login for Playarr Server's admin UI. `AuthMode`
  * defaults to `full-account` now (see backend/src/main.rs's
  * auth_mode_from_env) -- there is no transparent zero-credential path
  * anymore, so this form is the only way in.
@@ -27,8 +27,8 @@ export function LoginPage() {
     try {
       const body: LoginRequest = {
         device_id: getOrCreateDeviceId(),
-        device_name: "Streamarr Admin",
-        client_platform: "streamarr-admin",
+        device_name: "Playarr Server Admin",
+        client_platform: "playarr-admin",
         client_version: "0.1.0",
         username,
         password,
@@ -47,8 +47,8 @@ export function LoginPage() {
     <div className="page" style={{ maxWidth: 360, margin: "4rem auto" }}>
       <h1 className="page-title" style={{ marginBottom: "1.5rem" }}>
         <span className="app-logo">
-          <img className="app-logo-icon" src="/streamarr-icon.svg" alt="" />
-          <span><span className="app-logo-accent">Stream</span>arr</span>
+          <img className="app-logo-icon" src="/playarr-icon.svg" alt="" />
+          <span><span className="app-logo-accent">Play</span>arr Server</span>
         </span>
       </h1>
       <form onSubmit={(e) => void handleSubmit(e)} className="card" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>

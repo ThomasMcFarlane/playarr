@@ -1,5 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { circularOffset, coverflowDepth, coverflowPosition } from "./coverflow";
+import {
+  circularOffset,
+  coverflowDepth,
+  coverflowPosition,
+  nextClientIndex,
+} from "./coverflow";
+
+describe("nextClientIndex", () => {
+  it("steps forward and backward within the track", () => {
+    expect(nextClientIndex(4, 1, 11)).toBe(5);
+    expect(nextClientIndex(4, -1, 11)).toBe(3);
+  });
+
+  it("wraps from the last item to the first going forward", () => {
+    expect(nextClientIndex(10, 1, 11)).toBe(0);
+  });
+
+  it("wraps from the first item to the last going backward", () => {
+    expect(nextClientIndex(0, -1, 11)).toBe(10);
+  });
+
+  it("returns zero for a non-positive total", () => {
+    expect(nextClientIndex(0, 1, 0)).toBe(0);
+  });
+});
 
 describe("circularOffset", () => {
   it("is zero for the selected item itself", () => {

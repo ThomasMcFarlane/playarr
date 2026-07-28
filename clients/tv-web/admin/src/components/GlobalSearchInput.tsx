@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { describeApiError, type Work } from "@streamarr-tv/api-client";
+import { describeApiError, type Work } from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { KIND_LABELS } from "./PosterCard";
 

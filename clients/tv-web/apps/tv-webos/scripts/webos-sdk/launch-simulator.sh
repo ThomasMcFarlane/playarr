@@ -35,7 +35,7 @@ echo "Launching $appimage"
 echo "Once it opens, use File > Open (or drag-and-drop) to load:"
 echo "  $app_dist"
 if [ ! -d "$app_dist" ]; then
-  echo "  (doesn't exist yet -- run: pnpm --filter @streamarr-tv/app-webos run build)"
+  echo "  (doesn't exist yet -- run: pnpm --filter @playarr-tv/app-webos run build)"
 fi
 echo
 

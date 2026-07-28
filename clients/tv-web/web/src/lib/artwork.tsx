@@ -11,7 +11,7 @@ import type {
   ApiClient,
   ImageKind,
   Work,
-} from "@streamarr-tv/api-client";
+} from "@playarr-tv/api-client";
 import { useApiClient } from "./ApiClientProvider";
 
 interface ArtworkRecord {
@@ -239,7 +239,7 @@ interface CachedArtworkImageProps
   fallback?: ReactNode;
 }
 
-/** Authenticated `<img>` backed by Streamarr's persistent artwork cache. */
+/** Authenticated `<img>` backed by Playarr Server's persistent artwork cache. */
 export function CachedArtworkImage({
   work,
   kinds,
@@ -294,7 +294,7 @@ interface CachedAlbumArtworkImageProps
   fallback?: ReactNode;
 }
 
-/** Authenticated album `<img>` backed by Streamarr's persistent artwork cache. */
+/** Authenticated album `<img>` backed by Playarr Server's persistent artwork cache. */
 export function CachedAlbumArtworkImage({
   artistWorkId,
   album,

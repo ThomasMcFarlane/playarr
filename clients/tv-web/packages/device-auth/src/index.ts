@@ -1,13 +1,13 @@
 /**
- * @streamarr-tv/device-auth
+ * @playarr-tv/device-auth
  *
  * OAuth 2.0 Device Authorization Grant client (RFC 8628 --
  * https://datatracker.ietf.org/doc/html/rfc8628). This is how the TV apps
  * (webOS, Tizen, VIDAA fallback) authenticate: the TV displays a short
  * user code, the viewer approves it on a second device (phone/laptop).
  *
- * Wired against the real Streamarr endpoints (`POST /api/v1/oauth/device/code`,
- * `POST /api/v1/oauth/token`) via `@streamarr-tv/api-client`'s `ApiClient` --
+ * Wired against the real Playarr Server endpoints (`POST /api/v1/oauth/device/code`,
+ * `POST /api/v1/oauth/token`) via `@playarr-tv/api-client`'s `ApiClient` --
  * both are plain JSON endpoints (not the form-urlencoded body RFC 8628's
  * examples use), and the device-code request carries a `client_platform`
  * enum rather than a generic OAuth `client_id`/`scope` pair, so callers pass
@@ -20,8 +20,8 @@
  * §6.3): decoding the `servers=` bundle a device-pairing link carries, and
  * fanning the approval call out to it in parallel.
  */
-import { ApiError, DEVICE_CODE_GRANT_TYPE } from "@streamarr-tv/api-client";
-import type { ApiClient, ClientPlatform, OAuthErrorBody } from "@streamarr-tv/api-client";
+import { ApiError, DEVICE_CODE_GRANT_TYPE } from "@playarr-tv/api-client";
+import type { ApiClient, ClientPlatform, OAuthErrorBody } from "@playarr-tv/api-client";
 import QRCode from "qrcode";
 
 export { DEVICE_CODE_GRANT_TYPE };

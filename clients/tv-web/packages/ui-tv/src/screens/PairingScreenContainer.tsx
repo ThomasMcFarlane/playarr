@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import type { ApiClient, ClientPlatform } from "@streamarr-tv/api-client";
+import type { ApiClient, ClientPlatform } from "@playarr-tv/api-client";
 import {
   pollForToken,
   requestDeviceCode,
   type DeviceCodeResponse,
   type DeviceTokenSuccess,
-} from "@streamarr-tv/device-auth";
+} from "@playarr-tv/device-auth";
 import { PairingScreen } from "./PairingScreen";
 
 export interface PairingScreenContainerProps {

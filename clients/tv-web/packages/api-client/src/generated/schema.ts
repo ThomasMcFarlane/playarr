@@ -510,7 +510,7 @@ export interface paths {
         get: operations["get_tdarr_connection_handler"];
         put?: never;
         /**
-         * Registers (or updates) Streamarr's Tdarr connection. Confirms Tdarr is
+         * Registers (or updates) Playarr Server's Tdarr connection. Confirms Tdarr is
          *     actually reachable with the given `base_url`/`api_key` before
          *     accepting it.
          */
@@ -534,7 +534,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Lists every invitation request for the Streamarr admin console, newest
+         * Lists every invitation request for the Playarr Server admin console, newest
          *     first.
          */
         get: operations["list_user_invite_requests_handler"];
@@ -690,7 +690,7 @@ export interface paths {
          * Creates a new, admin-authored view. `is_default` is always `false` and
          *     `default_order` is always `None` for a view created through this
          *     endpoint -- both are set only by the boot-time seed step (see
-         *     `streamarr_db::repo::library_view::seed_default_views`).
+         *     `playarr_db::repo::library_view::seed_default_views`).
          */
         post: operations["create_view_handler"];
         delete?: never;
@@ -856,7 +856,7 @@ export interface paths {
          * Also unions in the partial-cache-node [`RemoteOnlyWork`] case (§4.3):
          *     titles a full peer reports but this node has zero local record of,
          *     scoped to the caller's own `Policy::group_library_allow` -- see
-         *     `streamarr_catalog::CatalogService::search_remote_only`'s doc comment.
+         *     `playarr_catalog::CatalogService::search_remote_only`'s doc comment.
          */
         get: operations["search_catalog_handler"];
         put?: never;
@@ -914,10 +914,10 @@ export interface paths {
         };
         /**
          * "What else is like this" -- semantic similarity over a locally-cached
-         *     embedding (see `streamarr_model::embedding`'s module doc comment), not
+         *     embedding (see `playarr_model::embedding`'s module doc comment), not
          *     genre/tag overlap. `404`s both for an unknown work id and for one that
          *     hasn't been embedded yet (not yet synced, or this deployment hasn't
-         *     configured embedding generation) -- `streamarr_catalog::CatalogService::
+         *     configured embedding generation) -- `playarr_catalog::CatalogService::
          *     similar`'s doc comment covers why those collapse to one status here
          *     rather than a distinct "not available" shape. Like `search`, a
          *     restricted caller's results silently omit works outside their
@@ -1251,7 +1251,7 @@ export interface paths {
         /**
          * `users`/`policies` upserted or soft-deleted since `since` (every row,
          *     oldest first, when omitted) -- the read behind
-         *     `streamarr_peer_sync::account_sync::sync_accounts`. Tombstoned rows are
+         *     `playarr_peer_sync::account_sync::sync_accounts`. Tombstoned rows are
          *     included (`deleted_at` set), never filtered out: see
          *     `UserRepo::list_updated_since`'s own doc comment for why a lagging peer
          *     must never see a delete as mere absence.
@@ -1323,7 +1323,7 @@ export interface paths {
         };
         /**
          * `user_invites`/`user_invite_requests` rows created/requested/consumed
-         *     since `since` -- the read behind `streamarr_peer_sync::account_sync::
+         *     since `since` -- the read behind `playarr_peer_sync::account_sync::
          *     sync_invites`. `user_invites` cursors on `updated_at` (creation *or*
          *     consumption -- see `UserInviteRepo::list_updated_since`'s doc comment);
          *     `user_invite_requests` still has no `updated_at` and cursors on
@@ -1351,7 +1351,7 @@ export interface paths {
         /**
          * This node's own complete `source_instances` + this group's
          *     `group_libraries`, both updated since `since` -- the read behind
-         *     `streamarr_peer_sync::account_sync::sync_libraries`.
+         *     `playarr_peer_sync::account_sync::sync_libraries`.
          */
         get: operations["libraries_handler"];
         put?: never;
@@ -1442,7 +1442,7 @@ export interface paths {
         };
         /**
          * This group's `routing_rules` updated since `since` (every row, oldest
-         *     first, when omitted) -- the read behind `streamarr_peer_sync::
+         *     first, when omitted) -- the read behind `playarr_peer_sync::
          *     routing_sync::sync_routing_rules`. Plain last-writer-wins by
          *     `updated_at` on the consumer side, no origin-gating: see that module's
          *     own doc comment for why a routing preference isn't a privilege-bearing
@@ -1469,7 +1469,7 @@ export interface paths {
          *     `Proxy` delivery (§5.3). [`PeerSignedRequest`]-gated (only a known,
          *     active peer may call this at all), but the *real* authorization check is
          *     independent of that signature: `playback_session_id` must resolve to a
-         *     still-open [`streamarr_model::PlaybackSession`] in THIS node's own
+         *     still-open [`playarr_model::PlaybackSession`] in THIS node's own
          *     `session_registry` -- populated only by THIS node's own
          *     [`crate::playback::negotiate_playback`] run (either for a local caller,
          *     or for a request this same node received via `peer_playback_info_handler`)
@@ -1909,8 +1909,8 @@ export interface paths {
          *     tradeoff the moment two accounts might belong to unrelated people
          *     (`AuthMode::FullAccount`, "remote access, shared with people outside the
          *     household" per `docs/architecture/auth-modes.md`) -- there is no
-         *     `household_id` or account-grouping concept anywhere in `streamarr-model`/
-         *     `streamarr-db` to scope by (see that doc's "no `household_id`... claim"
+         *     `household_id` or account-grouping concept anywhere in `playarr-model`/
+         *     `playarr-db` to scope by (see that doc's "no `household_id`... claim"
          *     note), so under `FullAccount` this must fall back to "every account is a
          *     stranger" and list only the caller's own profile. This is a strict
          *     server-side gate, not merely relied on by the client: it must hold even
@@ -2062,7 +2062,7 @@ export interface components {
             /**
              * Format: uuid
              * @description Best-effort media-file lookup; provides the route target for the
-             *     linked item title in Streamarr Admin.
+             *     linked item title in Playarr Server Admin.
              */
             work_id?: string | null;
         };
@@ -2102,8 +2102,8 @@ export interface components {
         /**
          * @description One peer's reported availability for a `Work`, per
          *     `docs/architecture/peer-groups.md` §4.3's Rust sketch. Mirrors
-         *     [`streamarr_catalog::AvailabilityBadge`] field-for-field: that type
-         *     can't implement `ToSchema` itself (`streamarr-catalog` deliberately
+         *     [`playarr_catalog::AvailabilityBadge`] field-for-field: that type
+         *     can't implement `ToSchema` itself (`playarr-catalog` deliberately
          *     doesn't depend on `utoipa`, same as every other type this file mirrors
          *     for OpenAPI purposes), and [`SearchResponse`] below needs a real,
          *     `ToSchema`-implementing type to actually return -- so, unlike
@@ -2160,7 +2160,7 @@ export interface components {
             title: string;
         };
         /**
-         * @description Doc-only mirror of `streamarr_catalog::BookDetail`; see
+         * @description Doc-only mirror of `playarr_catalog::BookDetail`; see
          *     [`EpisodeDetailSchema`].
          */
         BookDetailSchema: {
@@ -2169,7 +2169,7 @@ export interface components {
             media_file_id?: string | null;
         };
         /**
-         * @description Doc-only mirror of `streamarr_catalog::CatalogPage` -- see
+         * @description Doc-only mirror of `playarr_catalog::CatalogPage` -- see
          *     `catalog::CatalogPageSchema`'s own doc comment for why this can't just
          *     derive `ToSchema` on the real type.
          */
@@ -2179,18 +2179,18 @@ export interface components {
             total?: number | null;
         };
         /**
-         * @description Every first-party client surface Streamarr ships. Kept as a closed enum
+         * @description Every first-party client surface Playarr Server ships. Kept as a closed enum
          *     (rather than a free-form string) so the compatibility table, the
-         *     `X-Streamarr-Client-Platform` header parser, and policy's
+         *     `X-Playarr-Client-Platform` header parser, and policy's
          *     `device_allow` list all agree on the same finite set.
          *
-         *     `StreamarrAdmin` is the odd one out: every other variant is a Playarr
-         *     client (consumer streaming), but Streamarr's own admin UI is also a
+         *     `PlayarrAdmin` is the odd one out: every other variant is a Playarr
+         *     client (consumer streaming), but Playarr Server's own admin UI is also a
          *     real first-party client surface that authenticates through the same
          *     `POST /api/v1/auth/login` endpoint, and `login_handler` needs a real,
          *     honest way to tell the two apart so it knows whether to require
          *     `Policy::can_stream` for this login attempt -- see that handler's doc
-         *     comment. Declaring `client_platform: "streamarr-admin"` doesn't grant
+         *     comment. Declaring `client_platform: "playarr-admin"` doesn't grant
          *     anything by itself (a caller can claim whatever platform it wants); it
          *     only selects which check `login_handler` applies, and every *other*
          *     endpoint still separately enforces the real, persisted `Policy`
@@ -2201,7 +2201,7 @@ export interface components {
          *     authorization from an already-signed-in sender.
          * @enum {string}
          */
-        ClientPlatform: "android-mobile" | "android-tv" | "ios" | "web" | "tv-webos" | "tv-tizen" | "tv-vidaa" | "cast" | "tv-fire" | "xbox" | "harmony-mobile" | "harmony-tv" | "streamarr-admin";
+        ClientPlatform: "android-mobile" | "android-tv" | "ios" | "web" | "tv-webos" | "tv-tizen" | "tv-vidaa" | "cast" | "tv-fire" | "xbox" | "harmony-mobile" | "harmony-tv" | "playarr-admin";
         /**
          * @description One platform's row in the compatibility table: what the latest client
          *     build is, the floor below which the version-gate middleware rejects
@@ -2261,20 +2261,20 @@ export interface components {
         };
         /**
          * @description Request body for provisioning a new account. `password` is write-only
-         *     -- it is hashed via `streamarr_auth::login::hash_password` immediately
+         *     -- it is hashed via `playarr_auth::login::hash_password` immediately
          *     and never echoed back in [`UserResponse`].
          */
         CreateUserRequest: {
             /**
              * @description Grants permission to create/fetch downloads of media this account
-             *     can already stream -- see `streamarr_model::Policy::can_download`'s
+             *     can already stream -- see `playarr_model::Policy::can_download`'s
              *     doc comment. Defaults to `false` (least privilege), same philosophy
              *     as `can_stream`/`library_allow` above: an admin has to explicitly
              *     grant download access, it is never on by default.
              */
             can_download?: boolean;
             /**
-             * @description Grants Playarr streaming access -- see `streamarr_model::Policy::
+             * @description Grants Playarr streaming access -- see `playarr_model::Policy::
              *     can_stream`'s doc comment. Independent of `is_admin`; defaults to
              *     `false` (least privilege), same as every other grant this handler
              *     starts a new account with.
@@ -2285,7 +2285,7 @@ export interface components {
             is_admin?: boolean;
             /**
              * @description Source-instance ids ("libraries") this account may browse/stream --
-             *     see `streamarr_model::Policy::library_allow`'s doc comment. Defaults
+             *     see `playarr_model::Policy::library_allow`'s doc comment. Defaults
              *     to empty (no grants yet, deny-all -- not all-allow), same
              *     least-privilege-by-default philosophy as `is_admin`/`can_stream`
              *     above: an admin still has to explicitly grant library access after
@@ -2461,7 +2461,7 @@ export interface components {
             title?: string | null;
         };
         /**
-         * @description Doc-only mirror of `streamarr_catalog::EpisodeDetail` -- the resolved
+         * @description Doc-only mirror of `playarr_catalog::EpisodeDetail` -- the resolved
          *     `MediaFile` id (via `MediaFileRepo::find_by_leaf`) that plays this
          *     episode, `None` when no file has synced for it yet.
          */
@@ -2642,7 +2642,7 @@ export interface components {
              *     `catalog::BrowseQueryParams::sort`, not a typed enum on the wire.
              *     Empty/omitted defaults to `["title"]`. `"last_played"` orders by
              *     *each resolving viewer's own* last-played time (see
-             *     `streamarr_model::ViewSort::LastPlayedByUser`'s doc comment) --
+             *     `playarr_model::ViewSort::LastPlayedByUser`'s doc comment) --
              *     picking it here means every caller who resolves this view sees it
              *     personalized to them, not a single shared order.
              */
@@ -2727,7 +2727,7 @@ export interface components {
         /**
          * @description Response body for [`nodes_handler`] -- `docs/architecture/peer-groups.md`
          *     §3.6: "full `peer_nodes` (small; always full-refresh gossip)". No
-         *     `since`/`server_time` -- `streamarr_peer_sync::membership_sync`'s own
+         *     `since`/`server_time` -- `playarr_peer_sync::membership_sync`'s own
          *     `NodesResponse` doc comment explains why membership has no
          *     corresponding `peer_sync_state.entity` cursor to persist.
          */
@@ -2749,7 +2749,7 @@ export interface components {
             /**
              * @description Operator-asserted, never auto-detected (NAT/firewall topology
              *     cannot be reliably guessed -- same philosophy already used for
-             *     `STREAMARR_ACME_DOMAIN`). Drives `DeliveryMode::Auto`, see §5.3.
+             *     `PLAYARR_ACME_DOMAIN`). Drives `DeliveryMode::Auto`, see §5.3.
              */
             client_reachable: boolean;
             label: string;
@@ -2803,8 +2803,8 @@ export interface components {
         };
         /**
          * @description Wire shape of one derived leaf-availability row -- field-for-field
-         *     identical to `streamarr_peer_sync::availability_sync::AvailabilityRow`.
-         *     Reuses `streamarr_model::{ExternalProvider, Availability, LeafSelector,
+         *     identical to `playarr_peer_sync::availability_sync::AvailabilityRow`.
+         *     Reuses `playarr_model::{ExternalProvider, Availability, LeafSelector,
          *     WorkKind}` directly (all `ToSchema`, none secret): one shared type on
          *     both ends for each of those fields, so there is nothing for this DTO's
          *     definition to drift out of sync with.
@@ -2846,7 +2846,7 @@ export interface components {
         };
         /**
          * @description Wire shape of one `user_invite_requests` row -- mirrors
-         *     `streamarr_model::UserInviteRequest`, same rationale as
+         *     `playarr_model::UserInviteRequest`, same rationale as
          *     [`PeerInviteRow`].
          */
         PeerInviteRequestRow: {
@@ -2870,8 +2870,8 @@ export interface components {
         };
         /**
          * @description Wire shape of one `user_invites` row on `GET /api/v1/peer/invites` --
-         *     field-for-field identical to `streamarr_model::UserInvite`'s own
-         *     `Serialize` output (which is exactly what `streamarr_peer_sync::
+         *     field-for-field identical to `playarr_model::UserInvite`'s own
+         *     `Serialize` output (which is exactly what `playarr_peer_sync::
          *     account_sync::InvitesResponse` consumes -- that type uses `UserInvite`
          *     directly, not a wrapper). Mirrored here rather than adding `ToSchema`
          *     to `UserInvite` itself, matching `users.rs`'s own established
@@ -2994,9 +2994,9 @@ export interface components {
         };
         /**
          * @description Wire shape of one `policies` row on `GET /api/v1/peer/accounts` --
-         *     field-for-field identical to `streamarr_peer_sync::account_sync::
+         *     field-for-field identical to `playarr_peer_sync::account_sync::
          *     PolicySyncRow`. `Policy` carries no secret, so (unlike [`PeerUserRow`])
-         *     this flattens the real `streamarr_model::Policy` directly: one type,
+         *     this flattens the real `playarr_model::Policy` directly: one type,
          *     zero risk of the two shapes drifting apart.
          */
         PeerPolicyRow: components["schemas"]["Policy"] & {
@@ -3037,8 +3037,8 @@ export interface components {
         };
         /**
          * @description Wire shape of one `users` row on `GET /api/v1/peer/accounts` --
-         *     field-for-field identical to `streamarr_peer_sync::account_sync::
-         *     UserSyncRow`'s flattened wire shape (`streamarr_model::User`'s own
+         *     field-for-field identical to `playarr_peer_sync::account_sync::
+         *     UserSyncRow`'s flattened wire shape (`playarr_model::User`'s own
          *     fields plus the three sync-only columns). Not `User` itself flattened
          *     via `#[serde(flatten)]`: `User` is deliberately not `ToSchema`-derived
          *     (it carries `password_hash` -- see that type's own doc comment); this
@@ -3105,7 +3105,7 @@ export interface components {
         /**
          * @description A single timestamped occurrence within a [`PlaybackSession`]. Kept as a
          *     tagged enum rather than a generic `{kind: String, payload: Value}` bag
-         *     so the analytics rollup code (`streamarr-telemetry::analytics::rollup`)
+         *     so the analytics rollup code (`playarr-telemetry::analytics::rollup`)
          *     can exhaustively match every event type the compiler knows about.
          */
         PlaybackEventKind: {
@@ -3154,7 +3154,7 @@ export interface components {
              *     means the client isn't reporting this yet -- `bytes_streamed`
              *     on the session simply stays at whatever it last was (usually
              *     `0`) rather than being fabricated. See
-             *     `streamarr_telemetry::analytics::collector`'s module doc
+             *     `playarr_telemetry::analytics::collector`'s module doc
              *     comment for how this is applied.
              */
             bytes_streamed_total?: number | null;
@@ -3423,7 +3423,7 @@ export interface components {
          * @description The full set of gates an authorization check can consult for a user.
          *     Deliberately flat (no nested "permissions" sub-struct) so a policy
          *     evaluation function can be a straightforward series of field reads —
-         *     see `streamarr_auth::policy` for the evaluator.
+         *     see `playarr_auth::policy` for the evaluator.
          */
         Policy: {
             /**
@@ -3454,7 +3454,7 @@ export interface components {
             /**
              * @description Whether this account may sign in to Playarr (the consumer streaming
              *     client family) at all. Deliberately **not** bypassed by `is_admin`
-             *     below — an operator/admin account exists to run Streamarr's own
+             *     below — an operator/admin account exists to run Playarr Server's own
              *     admin surface, not to imply a household viewer account, so the two
              *     are independent grants. Defaults to `false` (least privilege): an
              *     admin has to explicitly opt an account into Playarr access, same
@@ -3469,7 +3469,7 @@ export interface components {
              *     whichever node evaluates this policy") -- `crate::GroupLibrary` ids
              *     (`docs/architecture/peer-groups.md` §2.3/§5.1), meaningful regardless
              *     of which group node evaluates the policy. Resolved to local
-             *     `SourceInstance` ids at the API layer (`streamarr-api::
+             *     `SourceInstance` ids at the API layer (`playarr-api::
              *     auth_extractor`'s `StreamingUser`/`CatalogViewer::allowed_libraries`)
              *     and unioned with `library_allow` there -- an empty list here grants
              *     nothing extra, it does not widen access, matching `library_allow`'s
@@ -3495,7 +3495,7 @@ export interface components {
             max_concurrent_sessions?: number | null;
             /**
              * @description Content-rating ceiling, e.g. `"PG-13"`; rating comparison logic
-             *     lives in `streamarr-auth`, not here.
+             *     lives in `playarr-auth`, not here.
              */
             max_rating?: string | null;
             name: string;
@@ -3554,7 +3554,7 @@ export interface components {
         /**
          * @description A title a full peer reports but this node has zero local record of at
          *     all -- the partial-cache-node case (§4.3). Mirrors
-         *     [`streamarr_catalog::RemoteOnlyWork`]; see [`AvailabilityBadge`]'s doc
+         *     [`playarr_catalog::RemoteOnlyWork`]; see [`AvailabilityBadge`]'s doc
          *     comment for why this exists as a real, separately-constructed type
          *     rather than a purely decorative mirror.
          */
@@ -3582,7 +3582,7 @@ export interface components {
         };
         /**
          * @description Aggregated latency stats for one (method, route template) pair --
-         *     exactly the shape `streamarr-api`'s `admin::http_latency_handler`
+         *     exactly the shape `playarr-api`'s `admin::http_latency_handler`
          *     returns, one element per key [`RequestTimingRegistry`] has ever
          *     recorded a sample for.
          */
@@ -3648,7 +3648,7 @@ export interface components {
          *     deliberately keeps returning a bare `Vec<Work>` (every existing caller/
          *     test is unaffected), so combining it with `remote_only` for the HTTP
          *     response has to happen here, in the API layer, rather than in
-         *     `streamarr-catalog`.
+         *     `playarr-catalog`.
          */
         SearchResponse: {
             items: components["schemas"]["Work"][];
@@ -3851,7 +3851,7 @@ export interface components {
         };
         /**
          * @description One source instance's most recently reported reconciliation outcome --
-         *     see `streamarr_arr_sync::SyncRunStatus`. `status`/`error`/`finished_at`
+         *     see `playarr_arr_sync::SyncRunStatus`. `status`/`error`/`finished_at`
          *     are `None` together when no poller has reported anything for this
          *     instance yet (e.g. it was registered less than ~10s ago).
          */
@@ -3859,7 +3859,7 @@ export interface components {
             /**
              * @description Only set when `status` is `"running"` and the poller has something
              *     more specific to report than "running" alone -- see
-             *     `streamarr_arr_sync::SyncRunStatus::Running`'s doc comment (e.g. a
+             *     `playarr_arr_sync::SyncRunStatus::Running`'s doc comment (e.g. a
              *     large missing-media-file backfill's live "N/total" progress).
              */
             detail?: string | null;
@@ -3988,7 +3988,7 @@ export interface components {
             track_number: number;
         };
         /**
-         * @description Doc-only mirror of `streamarr_catalog::TrackDetail`; see
+         * @description Doc-only mirror of `playarr_catalog::TrackDetail`; see
          *     [`EpisodeDetailSchema`].
          */
         TrackDetailSchema: {
@@ -4110,7 +4110,7 @@ export interface components {
             invite_token: string;
         };
         /**
-         * @description The redacted, admin-facing projection of [`streamarr_model::User`] --
+         * @description The redacted, admin-facing projection of [`playarr_model::User`] --
          *     same rationale as `admin.rs`'s `SourceInstanceResponse`: `User` itself
          *     is deliberately not `ToSchema` (it carries `password_hash`), so
          *     handlers map to this secret-free DTO instead. `is_admin` is pulled in
@@ -4120,14 +4120,14 @@ export interface components {
         UserResponse: {
             /**
              * @description Whether this account may create/fetch downloads -- see
-             *     `streamarr_model::Policy::can_download`'s doc comment. Independent
+             *     `playarr_model::Policy::can_download`'s doc comment. Independent
              *     of `can_stream`/`library_allow`; defaults to `false` for a newly
              *     created account.
              */
             can_download: boolean;
             /**
              * @description Whether this account is permitted to sign in to Playarr -- see
-             *     `streamarr_model::Policy::can_stream`'s doc comment. Independent of
+             *     `playarr_model::Policy::can_stream`'s doc comment. Independent of
              *     `is_admin`.
              */
             can_stream: boolean;
@@ -4141,7 +4141,7 @@ export interface components {
             is_admin: boolean;
             /**
              * @description Source-instance ids ("libraries") this account may browse/stream --
-             *     see `streamarr_model::Policy::library_allow`'s doc comment. Empty
+             *     see `playarr_model::Policy::library_allow`'s doc comment. Empty
              *     means no grants (deny-all), not all-allow; irrelevant (but still
              *     truthfully reported) for an `is_admin` account, since `is_admin`
              *     bypasses this check entirely at enforcement time.
@@ -4233,7 +4233,7 @@ export interface components {
             images: components["schemas"]["ImageAsset"][];
             kind: components["schemas"]["WorkKind"];
             /**
-             * @description Whether Streamarr should actively track/request missing children of
+             * @description Whether Playarr Server should actively track/request missing children of
              *     this work (mirrors the *arr "monitored" concept).
              */
             monitored: boolean;
@@ -4242,8 +4242,8 @@ export interface components {
              * Format: date-time
              * @description When this title was actually released, per its source *arr app
              *     (Radarr `digitalRelease`/`physicalRelease`, Sonarr `firstAired`) --
-             *     distinct from `added_at` (when Streamarr itself learned about the
-             *     work). Populated by `streamarr-arr-sync` for `Movie`/`Series`/`Site`
+             *     distinct from `added_at` (when Playarr Server itself learned about the
+             *     work). Populated by `playarr-arr-sync` for `Movie`/`Series`/`Site`
              *     kinds only; `Artist`/`Author` works have no single release date of
              *     their own (their children -- albums/books -- each carry one already),
              *     so this stays `None` for those kinds. See
@@ -4263,7 +4263,7 @@ export interface components {
             title: string;
         };
         /**
-         * @description Doc-only mirror of `streamarr_catalog::WorkChildren`; see
+         * @description Doc-only mirror of `playarr_catalog::WorkChildren`; see
          *     [`CatalogPageSchema`].
          */
         WorkChildrenSchema: "Movie" | {
@@ -4288,7 +4288,7 @@ export interface components {
              * Format: uuid
              * @description The resolved `MediaFile` id for a movie's own leaf (`LeafRef::Work`);
              *     always `None` for series/artist/author works, whose playable leaves
-             *     are their children instead -- see `streamarr_catalog::WorkDetail`.
+             *     are their children instead -- see `playarr_catalog::WorkDetail`.
              */
             media_file_id?: string | null;
             /**
@@ -4300,7 +4300,7 @@ export interface components {
             work: components["schemas"]["Work"];
         };
         /**
-         * @description The top-level taxonomy Streamarr understands. Deliberately small and
+         * @description The top-level taxonomy Playarr Server understands. Deliberately small and
          *     closed: everything else (season, album, book...) is a child of a `Work`
          *     rather than a `Work` in its own right, because those children don't have
          *     independent lifecycle/monitoring semantics at the top level.
@@ -4394,7 +4394,7 @@ export interface operations {
                      *           "sunset": null
                      *         }
                      *       ],
-                     *       "instance_name": "Streamarr",
+                     *       "instance_name": "Playarr Server",
                      *       "server_version": "1.4.2"
                      *     }
                      */
@@ -5421,7 +5421,7 @@ export interface operations {
                 content: {
                     /**
                      * @example {
-                     *       "instance_name": "Streamarr"
+                     *       "instance_name": "Playarr Server"
                      *     }
                      */
                     "application/json": components["schemas"]["SystemSettings"];
@@ -5519,7 +5519,7 @@ export interface operations {
                      *       "base_url": "http://tdarr.local:8265",
                      *       "default_profile": "h264-720p-4mbps",
                      *       "default_worker_limit": 2,
-                     *       "tdarr_db_id": "streamarr",
+                     *       "tdarr_db_id": "playarr",
                      *       "throttle_check_interval_secs": 30,
                      *       "throttled_worker_limit": 0,
                      *       "updated_at": "2025-01-15T12:00:00Z",
@@ -5568,7 +5568,7 @@ export interface operations {
                  *       "base_url": "http://tdarr.local:8265",
                  *       "default_profile": "h264-720p-4mbps",
                  *       "default_worker_limit": 2,
-                 *       "tdarr_db_id": "streamarr",
+                 *       "tdarr_db_id": "playarr",
                  *       "throttle_check_interval_secs": 30,
                  *       "throttled_worker_limit": 0,
                  *       "worker_process": "transcodecpu"
@@ -5590,7 +5590,7 @@ export interface operations {
                      *       "base_url": "http://tdarr.local:8265",
                      *       "default_profile": "h264-720p-4mbps",
                      *       "default_worker_limit": 2,
-                     *       "tdarr_db_id": "streamarr",
+                     *       "tdarr_db_id": "playarr",
                      *       "throttle_check_interval_secs": 30,
                      *       "throttled_worker_limit": 0,
                      *       "updated_at": "2025-01-15T12:00:00Z",
@@ -6435,7 +6435,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Streamarr-cached album artwork */
+            /** @description Playarr Server-cached album artwork */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -6502,7 +6502,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Streamarr-cached source artwork */
+            /** @description Playarr Server-cached source artwork */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -6738,7 +6738,7 @@ export interface operations {
                 kind?: null | components["schemas"]["WorkKind"];
                 /**
                  * @description Return only works that own at least one synced media file. Playarr
-                 *     enables this; Streamarr Admin leaves it unset so records without
+                 *     enables this; Playarr Server Admin leaves it unset so records without
                  *     playable leaves remain visible for library reconciliation.
                  */
                 available_only?: boolean | null;
@@ -6746,7 +6746,7 @@ export interface operations {
                  * @description Restricts results to works with at least one synced file from this
                  *     source instance -- the "library" filter (two source instances of the
                  *     same kind, e.g. two Radarr instances, browse as separate libraries).
-                 *     See `streamarr_catalog::BrowseQuery::source_instance_id`'s doc
+                 *     See `playarr_catalog::BrowseQuery::source_instance_id`'s doc
                  *     comment for how this is resolved.
                  */
                 source_instance_id?: string | null;
@@ -8185,7 +8185,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The source media path is not reachable on this Streamarr node */
+            /** @description The source media path is not reachable on this Playarr Server node */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -8213,10 +8213,10 @@ export interface operations {
                      * @example {
                      *       "api_key": "AIzaSyD-example1234567890abcdefghijklmno",
                      *       "app_id": "1:000000000000:web:9f2a3b7c1d4e5f6a7b8c9d",
-                     *       "auth_domain": "streamarr-prod.firebaseapp.com",
+                     *       "auth_domain": "example-project.firebaseapp.com",
                      *       "messaging_sender_id": "000000000000",
-                     *       "project_id": "streamarr-prod",
-                     *       "storage_bucket": "streamarr-prod.appspot.com",
+                     *       "project_id": "example-project",
+                     *       "storage_bucket": "example-project.appspot.com",
                      *       "vapid_public_key": "BEl62iUYgUivxIkv69yViEuiBIa40HI8YlOm5EF7Wv3-VBs9aLLpFBc5eDo8mV5yYBQNe4x7l9mLKQ3sXk9ZgYo"
                      *     }
                      */

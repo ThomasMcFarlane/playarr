@@ -3,8 +3,8 @@ import { normaliseApiBaseUrl } from "./index";
 
 describe("normaliseApiBaseUrl", () => {
   it("returns a canonical absolute URL without trailing slashes", () => {
-    expect(normaliseApiBaseUrl(" https://media.example.test/streamarr/// ")).toBe(
-      "https://media.example.test/streamarr"
+    expect(normaliseApiBaseUrl(" https://media.example.test/playarr/// ")).toBe(
+      "https://media.example.test/playarr"
     );
   });
 
@@ -15,8 +15,8 @@ describe("normaliseApiBaseUrl", () => {
   });
 
   it.each([
-    ["a relative URL", "/streamarr"],
-    ["an unsupported protocol", "file:///tmp/streamarr"],
+    ["a relative URL", "/playarr"],
+    ["an unsupported protocol", "file:///tmp/playarr"],
     ["embedded credentials", "https://user:secret@example.test"],
     ["a query", "https://example.test?server=one"],
     ["a fragment", "https://example.test/#login"],

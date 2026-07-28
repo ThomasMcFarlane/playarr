@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import type { PlayarrCastLoadRequest } from "@streamarr-tv/cast-protocol";
+import type { PlayarrCastLoadRequest } from "@playarr-tv/cast-protocol";
 import type { PlayerPlaylistItem } from "../../components/player/PlayerSurface";
 import { DOWNLOADED_QUALITY_ID } from "../usePlaybackEngine";
 import { buildPlayarrCastLoadRequest, requestPlayarrCastLoad } from "./castLoad";

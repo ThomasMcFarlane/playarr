@@ -3,14 +3,14 @@
  *
  * Corrected to match the real, verified Sonarr/Radarr/Lidarr ("*arr")
  * design language (Styles/Themes/dark.js + Styles/Variables/fonts.js --
- * byte-identical between Sonarr and Radarr). Streamarr wraps that suite, so
+ * byte-identical between Sonarr and Radarr). Playarr wraps that suite, so
  * this app should read as a member of the same family: a real dark base
  * (#202020/#2a2a2a/#333, not near-black), a persistent left sidebar instead
  * of a top nav bar, Roboto at 14px body / 1.4286 line-height, and light
  * (300-weight) large display type as the signature "big text stays thin"
  * treatment.
  *
- * Values here mirror @streamarr-tv/design-tokens (see that package's own
+ * Values here mirror @playarr-tv/design-tokens (see that package's own
  * doc comment: there is no build-time import yet -- CSS custom properties
  * are hand-kept in sync with the TS token values until a real
  * tokens.json -> Style Dictionary pipeline lands). Kept as plain CSS custom
@@ -40,11 +40,11 @@
   --color-text-help: #909293; /* help/hint text under fields */
   --color-text-inverse: #ffffff; /* headings/labels on a colored surface */
 
-  /* Streamarr's own red identity -- now the app's PRIMARY brand/action
+  /* Playarr's own red identity -- now the app's PRIMARY brand/action
      color: buttons, active states, checkboxes, focus rings, ::selection.
      This is a deliberate departure from the real Sonarr/Radarr/Lidarr
      theme, where each app's identity color stays nav-only and a shared
-     blue does all primary-action work -- see DESIGN.md Sec 3.2. Streamarr
+     blue does all primary-action work -- see DESIGN.md Sec 3.2. Playarr
      and Playarr are products in their own right, not a skin of someone
      else's shared *arr theme, so this one red now carries the brand
      everywhere, not just the sidebar. */
@@ -350,7 +350,7 @@ button {
 }
 
 /* Small colored numeric count badge slot for nav items with live status to
-   report (e.g. an "Activity"/"System" item). Streamarr has no live-status
+   report (e.g. an "Activity"/"System" item). Playarr has no live-status
    feed yet -- this class exists so the sidebar visually supports the slot,
    it's fine for it to go unused for now. */
 .sidebar-badge {
@@ -876,7 +876,7 @@ button {
   text-align: center;
 }
 
-/* Deliberately Streamarr's own hover convention (brighten to accent) --
+/* Deliberately Playarr's own hover convention (brighten to accent) --
    not Sonarr's own dim-on-hover, which the research itself flags as
    inconsistent with every other interactive element in that app. */
 .alpha-rail-item:hover {

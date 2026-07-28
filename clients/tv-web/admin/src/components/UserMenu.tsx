@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { UserResponse } from "@streamarr-tv/api-client";
+import type { UserResponse } from "@playarr-tv/api-client";
 import { useApiClient, useCurrentUserId } from "../lib/ApiClientProvider";
 import { handleLogout } from "../lib/auth";
 

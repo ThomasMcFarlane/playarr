@@ -1,5 +1,5 @@
 /**
- * React binding over @streamarr-tv/spatial-nav. One `SpatialNavigator` per
+ * React binding over @playarr-tv/spatial-nav. One `SpatialNavigator` per
  * mounted `SpatialNavProvider` (typically one per app, mounted at the root),
  * listening for arrow-key / remote d-pad `keydown` events and translating
  * them into `navigator.move(direction)` calls.
@@ -19,7 +19,7 @@ import {
   SpatialNavigator,
   type Direction,
   type FocusableNode,
-} from "@streamarr-tv/spatial-nav";
+} from "@playarr-tv/spatial-nav";
 
 const SpatialNavContext = createContext<SpatialNavigator | null>(null);
 

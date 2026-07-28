@@ -1,5 +1,5 @@
-import { type ApiClient } from "@streamarr-tv/api-client";
-import { useWorkDetail } from "@streamarr-tv/api-client/react";
+import { type ApiClient } from "@playarr-tv/api-client";
+import { useWorkDetail } from "@playarr-tv/api-client/react";
 import { AsyncStateMessage } from "../lib/AsyncStateMessage";
 import { DetailScreen } from "./DetailScreen";
 

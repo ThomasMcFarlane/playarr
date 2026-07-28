@@ -16,10 +16,10 @@
  * is logged and swallowed -- playback must never fail over a subtitle
  * fetch failure.
  */
-import type { PlaybackInfo } from "@streamarr-tv/api-client";
+import type { PlaybackInfo } from "@playarr-tv/api-client";
 
 /**
- * `@streamarr-tv/api-client` re-exports `PlaybackInfo` itself but not the
+ * `@playarr-tv/api-client` re-exports `PlaybackInfo` itself but not the
  * shape of its `subtitle_tracks` elements as a standalone named type, so
  * it's derived here via an indexed access instead of inventing a
  * hand-written duplicate that could drift from the real generated schema.

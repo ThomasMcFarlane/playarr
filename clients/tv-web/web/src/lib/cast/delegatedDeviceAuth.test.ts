@@ -52,8 +52,8 @@ describe("ensureDelegatedCastCredentials", () => {
         return jsonResponse(200, {
           device_code: "dc-1",
           user_code: "USER-CODE",
-          verification_uri: "https://streamarr.example/link",
-          verification_uri_complete: "https://streamarr.example/link?code=USER-CODE",
+          verification_uri: "https://playarr.example/link",
+          verification_uri_complete: "https://playarr.example/link?code=USER-CODE",
           expires_in: 600,
           interval: 5,
         });

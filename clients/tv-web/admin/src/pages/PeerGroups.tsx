@@ -13,7 +13,7 @@ import {
   type PeerNode,
   type PeerNodeStatus,
   type SourceInstanceResponse,
-} from "@streamarr-tv/api-client";
+} from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { Modal } from "../components/Modal";
@@ -134,7 +134,7 @@ function AddressEditor({ addresses, disabled, idPrefix, onChange }: AddressEdito
                   id={`${rowId}-url`}
                   className="input"
                   type="url"
-                  placeholder="https://streamarr.example.com"
+                  placeholder="https://playarr.example.com"
                   value={address.url}
                   onChange={(event) => update(address.key, { url: event.target.value })}
                 />
@@ -255,7 +255,7 @@ export function PeerGroupsPage() {
 
     const name = nodeName.trim();
     if (!name) {
-      setError("Give this Streamarr node a name.");
+      setError("Give this Playarr Server node a name.");
       return;
     }
 
@@ -300,7 +300,7 @@ export function PeerGroupsPage() {
     setNotice(null);
     const name = nodeName.trim();
     if (!name) {
-      setError("Give this Streamarr node a name.");
+      setError("Give this Playarr Server node a name.");
       return;
     }
     try {
@@ -389,7 +389,7 @@ export function PeerGroupsPage() {
         <div>
           <h1 className="page-title">Peer groups</h1>
           <p className="muted">
-            Connect Streamarr nodes so accounts, libraries, availability, and playback routing stay in sync.
+            Connect Playarr Server nodes so accounts, libraries, availability, and playback routing stay in sync.
           </p>
         </div>
         <button
@@ -453,7 +453,7 @@ export function PeerGroupsPage() {
                 />
                 <span>
                   <strong>Create a new group</strong>
-                  <small>Use this on the first Streamarr node.</small>
+                  <small>Use this on the first Playarr Server node.</small>
                 </span>
               </label>
               <label className={`peer-mode-option${setupMode === "join" ? " is-selected" : ""}`}>
@@ -480,7 +480,7 @@ export function PeerGroupsPage() {
                   className="input"
                   value={groupName}
                   maxLength={100}
-                  placeholder="My Streamarr group"
+                  placeholder="My Playarr Server group"
                   disabled={busy}
                   onChange={(event) => setGroupName(event.target.value)}
                 />
@@ -652,7 +652,7 @@ export function PeerGroupsPage() {
             <div className="peer-section-heading">
               <div>
                 <h2 className="section-title">Members</h2>
-                <p className="muted">Every Streamarr deployment currently known to this node.</p>
+                <p className="muted">Every Playarr Server deployment currently known to this node.</p>
               </div>
               <span className="badge badge-neutral badge-pill">{nodes.length} total</span>
             </div>

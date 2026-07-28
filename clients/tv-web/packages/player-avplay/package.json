@@ -1,5 +1,5 @@
 {
-  "name": "@streamarr-tv/player-avplay",
+  "name": "@playarr-tv/player-avplay",
   "version": "0.1.0",
   "private": true,
   "description": "Production Samsung Tizen webapis.avplay adapter implementing Playarr's shared PlaybackEngine contract.",
@@ -20,7 +20,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@streamarr-tv/player-core": "workspace:*"
+    "@playarr-tv/player-core": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:"

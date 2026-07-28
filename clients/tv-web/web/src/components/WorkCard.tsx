@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import type { Work } from "@streamarr-tv/api-client";
+import type { Work } from "@playarr-tv/api-client";
 import { CachedArtworkImage } from "../lib/artwork";
 import { useMediaContextMenu } from "./MediaContextMenu";
 

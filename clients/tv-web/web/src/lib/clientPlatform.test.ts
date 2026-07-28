@@ -56,6 +56,26 @@ describe("resolveClientPlatform", () => {
     ).toBe("tv-vidaa");
   });
 
+  it.each([
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; Xbox; Xbox One) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; Xbox; Xbox Series X) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+  ])("detects Xbox's built-in Edge browser from its user agent", (userAgent) => {
+    expect(resolveClientPlatform({ search: "", userAgent })).toBe("xbox");
+  });
+
+  it("does not persist the Xbox detection, unlike VIDAA's UA-sniff branch", () => {
+    const storage = createMemoryStorage();
+
+    expect(
+      resolveClientPlatform({
+        search: "",
+        userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; Xbox; Xbox Series X)",
+        storage,
+      })
+    ).toBe("xbox");
+    expect(storage.getItem("playarr.clientPlatform")).toBeNull();
+  });
+
   it("detects the Android TV WebView host", () => {
     expect(
       resolveClientPlatform({

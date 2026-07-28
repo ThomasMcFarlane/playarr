@@ -1,5 +1,5 @@
 {
-  "name": "@streamarr-tv/design-tokens",
+  "name": "@playarr-tv/design-tokens",
   "version": "0.1.0",
   "private": true,
   "description": "Minimal hand-authored design token set (color, spacing, type scale) as TypeScript constants. Style Dictionary will later generate per-platform output from a canonical token source -- see the note in src/index.ts.",

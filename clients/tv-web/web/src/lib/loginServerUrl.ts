@@ -1,8 +1,8 @@
-import { getStoredApiBaseUrl, readKnownServers } from "@streamarr-tv/domain";
+import { getStoredApiBaseUrl, readKnownServers } from "@playarr-tv/domain";
 
 const HOSTED_PLAYARR_HOSTNAME = "playarr.app";
 const PUBLIC_IPV4_RELAY_HOSTNAME = "relay.playarr.app";
-const STREAMARR_PORT = "8484";
+const PLAYARR_PORT = "8484";
 
 function publicIpv4Octets(hostname: string): [number, number, number, number] | undefined {
   const rawOctets = hostname.split(".");
@@ -50,7 +50,7 @@ function encodedPublicIpv4Octets(
 }
 
 /**
- * Give public IPv4 Streamarr servers a secure, deterministic DNS name.
+ * Give public IPv4 Playarr Server instances a secure, deterministic DNS name.
  * DNS resolves the name straight back to the encoded address; neither
  * Playarr nor Cloudflare relays the request or its response.
  */
@@ -72,14 +72,14 @@ export function publicIpv4RelayUrl(value: string): string {
 
     const hostname = `v4-${octets.join("-")}.${PUBLIC_IPV4_RELAY_HOSTNAME}`;
     const path = url.pathname === "/" ? "" : url.pathname;
-    return `https://${hostname}:${STREAMARR_PORT}${path}${url.search}${url.hash}`;
+    return `https://${hostname}:${PLAYARR_PORT}${path}${url.search}${url.hash}`;
   } catch {
     return value;
   }
 }
 
 /**
- * Do not present the hosted client itself as if it were a Streamarr server.
+ * Do not present the hosted client itself as if it were a Playarr Server.
  * The hosted sign-in form starts blank so a previously selected server is
  * never presented as a default -- *unless* there is something real to
  * prefill it with: a legacy operator-entered `apiBaseUrl`

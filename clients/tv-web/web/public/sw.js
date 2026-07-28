@@ -1,5 +1,5 @@
 /**
- * Streamarr Web service worker -- the versioned OTA update mechanism
+ * Playarr Web service worker -- the versioned OTA update mechanism
  * described in `docs/architecture/clients/web.md#self-update--ota-mechanism`.
  *
  * A newly installed worker activates immediately. Activation only replaces
@@ -8,7 +8,7 @@
  * behind an older worker that returns the app shell for failed API requests.
  */
 
-const CACHE_PREFIX = "streamarr-web-";
+const CACHE_PREFIX = "playarr-web-";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(precacheNewBundle().then(() => self.skipWaiting()));

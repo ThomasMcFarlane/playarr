@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ApiClient } from "@streamarr-tv/api-client";
+import type { ApiClient } from "@playarr-tv/api-client";
 import {
   authoriseHostedLink,
   inspectHostedLink,
@@ -14,18 +14,25 @@ describe("hosted device linking", () => {
   it("keeps an operator-configured packaged TV on direct server linking", () => {
     expect(shouldUseHostedDeviceLink(true)).toBe(true);
     expect(shouldUseHostedDeviceLink(true, "  ")).toBe(true);
-    expect(shouldUseHostedDeviceLink(true, "https://streamarr.example.test")).toBe(false);
+    expect(shouldUseHostedDeviceLink(true, "https://playarr.example.test")).toBe(false);
     expect(shouldUseHostedDeviceLink(false)).toBe(false);
   });
 
   it("uses the same hosted first-contact flow for VIDAA as packaged TVs", () => {
     expect(shouldUseHostedDeviceLink(false, undefined, "tv-vidaa")).toBe(true);
     expect(
-      shouldUseHostedDeviceLink(false, "https://streamarr.example.test", "tv-vidaa")
+      shouldUseHostedDeviceLink(false, "https://playarr.example.test", "tv-vidaa")
     ).toBe(false);
   });
 
-  it.each(["tv-webos", "tv-tizen", "tv-vidaa", "tv-fire"] as const)(
+  it("uses the same hosted first-contact flow for Xbox's Edge browser as packaged TVs", () => {
+    expect(shouldUseHostedDeviceLink(false, undefined, "xbox")).toBe(true);
+    expect(
+      shouldUseHostedDeviceLink(false, "https://playarr.example.test", "xbox")
+    ).toBe(false);
+  });
+
+  it.each(["tv-webos", "tv-tizen", "tv-vidaa", "tv-fire", "xbox"] as const)(
     "requests a first-contact code for packaged %s clients",
     async (clientPlatform) => {
       const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
@@ -59,7 +66,7 @@ describe("hosted device linking", () => {
     }
   );
 
-  it("polls the hosted broker until it returns the selected Streamarr server", async () => {
+  it("polls the hosted broker until it returns the selected Playarr Server", async () => {
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: "authorization_pending" }), { status: 202 }))
@@ -67,9 +74,9 @@ describe("hosted device linking", () => {
         new Response(
           JSON.stringify({
             user_code: "ABCD-2345",
-            server_url: "http://streamarr.lan:8484",
+            server_url: "http://playarr.lan:8484",
             server_device_code: "server-device-secret",
-            server_urls: ["http://streamarr.lan:8484"],
+            server_urls: ["http://playarr.lan:8484"],
           }),
           { status: 200 }
         )
@@ -94,7 +101,7 @@ describe("hosted device linking", () => {
         }
       )
     ).resolves.toMatchObject({
-      server_url: "http://streamarr.lan:8484",
+      server_url: "http://playarr.lan:8484",
       server_device_code: "server-device-secret",
     });
     expect(wait).toHaveBeenCalledTimes(2);
@@ -113,7 +120,7 @@ describe("hosted device linking", () => {
     );
   });
 
-  it("creates and approves the real Streamarr device code before claiming the hosted code", async () => {
+  it("creates and approves the real Playarr Server device code before claiming the hosted code", async () => {
     const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
       new Response(JSON.stringify({ linked: true }), { status: 200 })
     );
@@ -132,7 +139,7 @@ describe("hosted device linking", () => {
     await authoriseHostedLink({
       userCode: "ABCD-2345",
       session: { client_platform: "android-tv", expires_at: Date.now() + 60_000, linked: false },
-      serverUrl: "http://streamarr.lan:8484",
+      serverUrl: "http://playarr.lan:8484",
       client,
     });
 
@@ -141,9 +148,9 @@ describe("hosted device linking", () => {
     const requestInit = fetch.mock.calls[0]?.[1] as RequestInit | undefined;
     expect(JSON.parse(String(requestInit?.body))).toEqual({
       user_code: "ABCD-2345",
-      server_url: "http://streamarr.lan:8484",
+      server_url: "http://playarr.lan:8484",
       server_device_code: "server-device-secret",
-      server_urls: ["http://streamarr.lan:8484"],
+      server_urls: ["http://playarr.lan:8484"],
     });
   });
 
@@ -165,7 +172,7 @@ describe("hosted device linking", () => {
       authoriseHostedLink({
         userCode: "ABCD-2345",
         session: { client_platform: "tv-tizen", expires_at: Date.now() + 60_000, linked: false },
-        serverUrl: "http://streamarr.lan:8484",
+        serverUrl: "http://playarr.lan:8484",
         client,
       })
     ).rejects.toThrow("That Playarr link code has expired. Generate a new code on the TV.");

@@ -1,5 +1,5 @@
 import type { FirebaseOptions } from "firebase/app";
-import type { ApiClient, FirebaseWebConfig } from "@streamarr-tv/api-client";
+import type { ApiClient, FirebaseWebConfig } from "@playarr-tv/api-client";
 
 function firebaseOptions(config: FirebaseWebConfig): FirebaseOptions {
   return {
@@ -23,7 +23,7 @@ export async function enableApprovalPushNotifications(client: ApiClient): Promis
   if (permission !== "granted") {
     throw new Error("Notification permission was not granted.");
   }
-  const appName = `streamarr-push-${config.project_id}`;
+  const appName = `playarr-push-${config.project_id}`;
   const app = getApps().some((candidate) => candidate.name === appName)
     ? getApp(appName)
     : initializeApp(firebaseOptions(config), appName);

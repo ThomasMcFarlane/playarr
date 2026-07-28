@@ -14,7 +14,7 @@ import {
   type ApiClientConfig,
   type LoginRequest,
   type PeerAddressBundle,
-} from "@streamarr-tv/api-client";
+} from "@playarr-tv/api-client";
 import {
   decodeAccessTokenDeviceId,
   decodeAccessTokenUserId,
@@ -24,7 +24,7 @@ import {
   TokenStore,
   type DeviceTokenSuccess,
   type StoredSession,
-} from "@streamarr-tv/device-auth";
+} from "@playarr-tv/device-auth";
 import {
   API_BASE_URL_QUERY_PARAM,
   forgetGroup,
@@ -36,7 +36,7 @@ import {
   rememberServerSuccess,
   resolveReachableServer,
   setStoredApiBaseUrl,
-} from "@streamarr-tv/domain";
+} from "@playarr-tv/domain";
 import { IS_PACKAGED_TV, PLAYARR_CLIENT_PLATFORM } from "./clientPlatform";
 import { createLocalNetworkFetch } from "./localNetworkFetch";
 import { publicIpv4RelayUrl } from "./loginServerUrl";
@@ -78,8 +78,8 @@ const PLAYARR_PLATFORM_HEADERS =
   PLAYARR_CLIENT_PLATFORM === "web"
     ? undefined
     : {
-        "X-Streamarr-Client-Platform": PLAYARR_LOGIN_IDENTITY.clientPlatform,
-        "X-Streamarr-Client-Version": PLAYARR_LOGIN_IDENTITY.clientVersion,
+        "X-Playarr-Client-Platform": PLAYARR_LOGIN_IDENTITY.clientPlatform,
+        "X-Playarr-Client-Version": PLAYARR_LOGIN_IDENTITY.clientVersion,
       };
 
 const CURRENT_USER_NAME_STORAGE_KEY = "playarr.currentUserName";
@@ -411,15 +411,15 @@ const ApiClientContext = createContext<ApiClientContextValue | null>(null);
  * split reverse-proxy deployment or pointing a dev build at a non-default
  * backend), then this page's own origin.
  *
- * Same-origin is the real default, not a placeholder: `streamarr-bin` co-
+ * Same-origin is the real default, not a placeholder: `playarr-bin` co-
  * hosts this app's built assets with the API on one port (see
- * `streamarr_api::build_router`'s `web_assets_dir`), matching how every
+ * `playarr_api::build_router`'s `web_assets_dir`), matching how every
  * other `*arr` app ships its own UI, so "this page's origin" *is* the API
  * for the common case -- no configuration required. `vite.config.ts`
  * proxies `/api` etc. to a local backend so this also holds for
  * `pnpm run dev`. Unlike the TV app shells, the web app has a real
  * Settings text field (see `pages/Settings.tsx`) instead of the TV-only
- * `streamarr-config.json` runtime-config-file lookup, so that lookup is
+ * `playarr-config.json` runtime-config-file lookup, so that lookup is
  * skipped here.
  *
  * Kept verbatim as `resolveInitialApiBaseUrl`'s fallback once no
@@ -437,7 +437,7 @@ function resolveLegacyInitialApiBaseUrl(): string {
   if (IS_PACKAGED_TV && packagedDefault) return publicIpv4RelayUrl(packagedDefault);
 
   // Installed packages run from a file/widget origin, which is never a
-  // Streamarr API. Keep an inert but valid HTTP base until hosted pairing
+  // Playarr Server API. Keep an inert but valid HTTP base until hosted pairing
   // supplies the user's real server (or an operator sets the packaged
   // runtime config).
   if (IS_PACKAGED_TV) return "http://localhost:8484";

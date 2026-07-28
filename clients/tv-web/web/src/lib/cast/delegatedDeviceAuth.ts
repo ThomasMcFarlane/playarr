@@ -1,7 +1,7 @@
 /**
  * Delegated device auth for the Cast receiver -- the sender mints a
  * SEPARATE device identity for the Cast device using the existing RFC 8628
- * device-authorization-grant flow (`@streamarr-tv/device-auth`), rather
+ * device-authorization-grant flow (`@playarr-tv/device-auth`), rather
  * than ever shipping its own access/refresh token to the receiver. Handing
  * the receiver the sender's own refresh token would let the receiver's
  * later token rotation revoke the sender's own session via the backend's
@@ -34,13 +34,13 @@
 import {
   ApiClient,
   type AccessTokenRequest,
-} from "@streamarr-tv/api-client";
+} from "@playarr-tv/api-client";
 import {
   decodeAccessTokenDeviceId,
   pollDeviceToken,
   requestDeviceCode,
-} from "@streamarr-tv/device-auth";
-import type { PlayarrCastCredentials } from "@streamarr-tv/cast-protocol";
+} from "@playarr-tv/device-auth";
+import type { PlayarrCastCredentials } from "@playarr-tv/cast-protocol";
 
 const DELEGATED_CAST_AUTH_STORAGE_KEY = "playarr.cast.delegated.v1";
 
@@ -117,7 +117,7 @@ function clearCachedIdentity(storage: CastAuthStorage | undefined): void {
 }
 
 export interface EnsureDelegatedCastCredentialsOptions {
-  /** Base URL of the Streamarr server the receiver will negotiate playback against. */
+  /** Base URL of the Playarr Server the receiver will negotiate playback against. */
   apiBaseUrl: string;
   /** Injected (rather than defaulted to global `fetch`) so this whole flow is unit-testable against a stub. */
   fetchImpl: (input: Request) => Promise<Response>;
@@ -169,7 +169,7 @@ async function mintDelegatedCastDeviceIdentity(
  * dead (revoked, reuse-detected, or the device was forgotten server-side),
  * this falls through to minting a fresh identity instead of throwing --
  * the same "refresh fails -> fall through to a fresh credential-less
- * attempt" shape `@streamarr-tv/device-auth`'s own `ensureAccessToken` uses
+ * attempt" shape `@playarr-tv/device-auth`'s own `ensureAccessToken` uses
  * for the analogous transparent-login case.
  */
 export async function ensureDelegatedCastCredentials(

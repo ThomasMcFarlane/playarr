@@ -1,8 +1,8 @@
 {
-  "name": "@streamarr-tv/app-cast-receiver",
+  "name": "@playarr-tv/app-cast-receiver",
   "version": "0.1.0",
   "private": true,
-  "description": "Chromecast receiver app: a thin CAF (Cast Application Framework) SDK host that plays Streamarr media casted from the sender-side web app.",
+  "description": "Chromecast receiver app: a thin CAF (Cast Application Framework) SDK host that plays Playarr Server media casted from the sender-side web app.",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,9 +12,9 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@streamarr-tv/api-client": "workspace:*",
-    "@streamarr-tv/cast-protocol": "workspace:*",
-    "@streamarr-tv/device-auth": "workspace:*"
+    "@playarr-tv/api-client": "workspace:*",
+    "@playarr-tv/cast-protocol": "workspace:*",
+    "@playarr-tv/device-auth": "workspace:*"
   },
   "devDependencies": {
     "@types/chromecast-caf-receiver": "catalog:",

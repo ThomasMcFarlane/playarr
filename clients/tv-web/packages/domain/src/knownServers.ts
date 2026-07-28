@@ -1,6 +1,6 @@
 /**
  * Remembered group of server addresses -- `docs/architecture/
- * peer-groups.md` §7.1. Supersedes the single `streamarr:apiBaseUrl`
+ * peer-groups.md` §7.1. Supersedes the single `playarr:apiBaseUrl`
  * localStorage key (`STORED_API_BASE_URL_KEY` in `./index`, still exported
  * from there unchanged): once a client has talked to a peer group, "which
  * server do I talk to" is a priority-ordered *list* of addresses that can
@@ -10,7 +10,7 @@
  * later slice of this same phase) is what decides when to prefer a
  * `KnownServerGroup` over the legacy single key, not this file.
  *
- * This module intentionally doesn't import `@streamarr-tv/api-client`'s
+ * This module intentionally doesn't import `@playarr-tv/api-client`'s
  * generated `PeerAddressBundle` type (see this package's top-of-file
  * comment, and `version-check.ts`'s `CompatibilityEntryLike` /
  * `inviteUrl.ts`'s `PeerAddressBundleLike` for the same convention applied
@@ -30,7 +30,7 @@ export interface KnownServer {
    * `mergeKnownServerGroup` from a login/refresh response's
    * node-attributed `PeerAddressBundle`. Absent for a standalone
    * (ungrouped) node's address, and for anything remembered before this
-   * attribution existed. `@streamarr-tv/device-auth::session.ts`'s
+   * attribution existed. `@playarr-tv/device-auth::session.ts`'s
    * `ensureAccessToken` reads this back out to scope its cross-peer
    * refresh retry (§3.7 -- refresh tokens are never synced peer-to-peer,
    * so only an address attributed to the *same* peer that issued the
@@ -52,7 +52,7 @@ export interface KnownServerGroup {
   lastGoodUrl?: string;
 }
 
-const KNOWN_SERVER_GROUP_STORAGE_KEY = "streamarr:knownServerGroup";
+const KNOWN_SERVER_GROUP_STORAGE_KEY = "playarr:knownServerGroup";
 
 function isKnownServerShape(value: unknown): value is KnownServer {
   if (typeof value !== "object" || value === null) return false;
@@ -112,7 +112,7 @@ export function rememberGroup(group: KnownServerGroup): void {
  * Formerly `web/src/lib/ApiClientProvider.tsx`'s own, node-attribution-free
  * `mergeKnownServerGroup`, relocated here now that the attribution itself
  * -- not just each entry's `url` -- is something a caller needs preserved:
- * `@streamarr-tv/device-auth::session.ts`'s `ensureAccessToken` reads
+ * `@playarr-tv/device-auth::session.ts`'s `ensureAccessToken` reads
  * `peerNodeId` back out (via the `KnownServerGroup` it's handed) to scope
  * its cross-peer refresh retry to the issuing peer's own alternate
  * addresses (§3.7). This fold has to be where every self-healing write

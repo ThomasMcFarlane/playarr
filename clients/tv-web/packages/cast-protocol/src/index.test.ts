@@ -52,7 +52,7 @@ function makeStateMessage(overrides: Partial<PlayarrCastStateMessage> = {}): Pla
 function makeLoadRequest(overrides: Partial<PlayarrCastLoadRequest> = {}): PlayarrCastLoadRequest {
   return {
     protocolVersion: PLAYARR_CAST_PROTOCOL_VERSION,
-    server: { baseUrl: "https://example.streamarr.local" },
+    server: { baseUrl: "https://example.playarr.local" },
     credentials: {
       deviceId: "device-1",
       accessToken: "access-token",
@@ -93,8 +93,8 @@ describe("isPlayarrCastLoadRequest", () => {
   it("accepts a load request with peers and a queue", () => {
     const request = makeLoadRequest({
       server: {
-        baseUrl: "https://example.streamarr.local",
-        peers: [{ peerNodeId: "node-1", url: "https://node-1.streamarr.local" }],
+        baseUrl: "https://example.playarr.local",
+        peers: [{ peerNodeId: "node-1", url: "https://node-1.playarr.local" }],
       },
       queue: [{ mediaFileId: "file-2", kind: "episode", title: "Next Up" }],
     });

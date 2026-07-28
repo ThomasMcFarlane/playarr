@@ -1,7 +1,7 @@
 {
-  "name": "Streamarr",
-  "short_name": "Streamarr",
-  "description": "Browse and play your Streamarr media library.",
+  "name": "Playarr Server",
+  "short_name": "Playarr Server",
+  "description": "Browse and play your Playarr Server media library.",
   "start_url": "/",
   "scope": "/",
   "display": "fullscreen",

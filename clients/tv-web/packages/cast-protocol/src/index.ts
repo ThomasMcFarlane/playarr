@@ -1,11 +1,11 @@
 /**
  * Playarr Cast protocol: shared types and message contracts for the
- * Chromecast custom-channel used between the Streamarr sender apps
+ * Chromecast custom-channel used between the Playarr Server sender apps
  * (web / android-mobile / ios) and the Playarr Cast receiver.
  *
  * Namespace: "urn:x-cast:app.playarr.cast.v1"
  * Encoding: JSON, camelCase throughout (deliberately unlike the
- * snake_case Streamarr HTTP API).
+ * snake_case Playarr Server HTTP API).
  * Message cap: 64 KB. Never put manifests, playlists, artwork or
  * subtitle text on this channel.
  */

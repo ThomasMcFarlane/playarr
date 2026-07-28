@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { rememberGroup } from "@streamarr-tv/domain";
+import { rememberGroup } from "@playarr-tv/domain";
 import { initialLoginServerUrl, publicIpv4RelayUrl } from "./loginServerUrl";
 
 /** Matches `knownServers.test.ts`'s own `localStorage` stub convention. */
@@ -50,7 +50,7 @@ describe("initialLoginServerUrl", () => {
   });
 
   it("prefills on hosted Playarr when a legacy apiBaseUrl is stored", () => {
-    localStorage.setItem("streamarr:apiBaseUrl", "https://home.example.com");
+    localStorage.setItem("playarr:apiBaseUrl", "https://home.example.com");
     expect(initialLoginServerUrl("https://home.example.com", "playarr.app")).toBe(
       "https://home.example.com"
     );
@@ -90,7 +90,7 @@ describe("publicIpv4RelayUrl", () => {
     "v4-203-0-113-10.relay.playarr.app",
     "http://v4-203-0-113-10.relay.playarr.app",
     "https://v4-203-0-113-10.relay.playarr.app",
-  ])("normalises relay hostname form %s to HTTPS on the Streamarr port", (value) => {
+  ])("normalises relay hostname form %s to HTTPS on the Playarr Server port", (value) => {
     expect(publicIpv4RelayUrl(value)).toBe(
       "https://v4-203-0-113-10.relay.playarr.app:8484"
     );

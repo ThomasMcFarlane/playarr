@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { describeApiError } from "@streamarr-tv/api-client";
+import { describeApiError } from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 

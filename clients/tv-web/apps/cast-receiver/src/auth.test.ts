@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { RefreshRequest, RefreshResponse } from "@streamarr-tv/api-client";
-import type { PlayarrCastCredentials } from "@streamarr-tv/cast-protocol";
+import type { RefreshRequest, RefreshResponse } from "@playarr-tv/api-client";
+import type { PlayarrCastCredentials } from "@playarr-tv/cast-protocol";
 import { CastCredentialStore, type CastAuthRefreshClient } from "./auth";
 
 function makeCredentials(overrides: Partial<PlayarrCastCredentials> = {}): PlayarrCastCredentials {

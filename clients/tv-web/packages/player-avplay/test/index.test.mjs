@@ -127,7 +127,7 @@ test("loads AVPlay in Samsung's required order and exposes native tracks", async
 
   assert.deepEqual(avplay.calls.slice(0, 5), [
     ["open", "https://media.example/movie.m3u8"],
-    ["setStreamingProperty", "COOKIE", "streamarr_playback_session=session%20id%2F1"],
+    ["setStreamingProperty", "COOKIE", "playarr_playback_session=session%20id%2F1"],
     ["setDisplayRect", 0, 0, 1920, 1080],
     ["setDisplayMethod", "PLAYER_DISPLAY_MODE_LETTER_BOX"],
     ["prepareAsync"],

@@ -1,5 +1,5 @@
 {
-  "name": "@streamarr-tv/app-webos",
+  "name": "@playarr-tv/app-webos",
   "version": "0.1.0",
   "private": true,
   "description": "The full Playarr web client packaged as an installable LG webOS TV application.",
@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build && node scripts/prepare-package.mjs",
     "test": "node --test scripts/*.test.mjs src/*.test.mjs",
-    "package:ipk": "pnpm --filter @streamarr-tv/app-webos... run build && ares-package dist -o out",
+    "package:ipk": "pnpm --filter @playarr-tv/app-webos... run build && ares-package dist -o out",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",
     "clean": "rm -rf dist",
@@ -18,7 +18,7 @@
     "emulator": "bash scripts/webos-sdk/launch-ose-emulator.sh"
   },
   "dependencies": {
-    "@streamarr-tv/web": "workspace:*",
+    "@playarr-tv/web": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:"
   },

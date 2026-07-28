@@ -7,7 +7,7 @@ export default defineConfig({
     port: 5174,
     // Same rationale as clients/tv-web/web/vite.config.ts: the built app
     // is co-hosted by the backend in production (same origin, same port,
-    // see streamarr_api::build_router's `web_assets_dir`), so this app
+    // see playarr_api::build_router's `web_assets_dir`), so this app
     // also defaults to a same-origin API base URL. Proxying here
     // reproduces that for `pnpm run dev`.
     proxy: {

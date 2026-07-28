@@ -166,7 +166,7 @@ export const th: Translations = {
   "components.themeToggle.useTheme": "ใช้ธีม {{theme}}",
   "components.updateToast.updateAvailable": "มี Playarr เวอร์ชันใหม่พร้อมใช้งานแล้ว",
   "components.updateToast.packageUpdateRequired":
-    "เซิร์ฟเวอร์ Streamarr ของคุณไม่รองรับแอป Playarr ที่ติดตั้งอยู่นี้แล้ว โปรดติดตั้งแพ็กเกจเวอร์ชันใหม่เพื่อใช้งานต่อ",
+    "เซิร์ฟเวอร์ Playarr Server ของคุณไม่รองรับแอป Playarr ที่ติดตั้งอยู่นี้แล้ว โปรดติดตั้งแพ็กเกจเวอร์ชันใหม่เพื่อใช้งานต่อ",
   "components.updateToast.reload": "โหลดใหม่",
   "components.updateToast.dismiss": "ปิด",
   "components.watchStateOverlay.percentWatched": "ดูแล้ว {{percent}}%",
@@ -276,7 +276,7 @@ export const th: Translations = {
   "pages.login.title": "เข้าสู่ระบบ",
   "pages.login.kicker": "ยินดีต้อนรับกลับบ้าน",
   "pages.login.heading": "เข้าสู่ระบบ Playarr",
-  "pages.login.description": "เลือกเซิร์ฟเวอร์ Streamarr ของคุณ แล้วบันทึกโปรไฟล์นี้ไว้บนเบราว์เซอร์นี้",
+  "pages.login.description": "เลือกเซิร์ฟเวอร์ Playarr Server ของคุณ แล้วบันทึกโปรไฟล์นี้ไว้บนเบราว์เซอร์นี้",
   "pages.login.serverUrlLabel": "URL เซิร์ฟเวอร์",
   "pages.login.serverUrlPlaceholder": "ที่อยู่หรือ URL ของเซิร์ฟเวอร์",
   "pages.login.insecureHint":
@@ -373,7 +373,7 @@ export const th: Translations = {
   "pages.playlists.nameLabel": "ชื่อ",
   "pages.playlists.mediaTypeLabel": "ประเภทเพลย์ลิสต์",
   "pages.playlists.mediaTypeServerMismatch":
-    "เซิร์ฟเวอร์ Streamarr นี้ยังไม่รองรับเพลย์ลิสต์เสียง โปรดอัปเดตหรือรีสตาร์ตเซิร์ฟเวอร์แล้วลองอีกครั้ง",
+    "เซิร์ฟเวอร์ Playarr Server นี้ยังไม่รองรับเพลย์ลิสต์เสียง โปรดอัปเดตหรือรีสตาร์ตเซิร์ฟเวอร์แล้วลองอีกครั้ง",
   "pages.playlists.mediaTypeVideo": "วิดีโอ",
   "pages.playlists.mediaTypeAudio": "เสียง",
   "pages.playlists.namePlaceholder": "ชื่อเพลย์ลิสต์",
@@ -629,14 +629,14 @@ export const th: Translations = {
   "settings.index.profileLock.title": "การล็อกโปรไฟล์",
   "settings.index.profileLock.description": "กำหนดให้ต้องใช้ PIN 4 หลักก่อนสลับโปรไฟล์",
   "settings.index.invite.title": "เชิญเพื่อน",
-  "settings.index.invite.description": "ขอคิวอาร์โค้ดเชิญเพื่อนหนึ่งใบจากผู้ดูแลระบบ Streamarr ของคุณ",
+  "settings.index.invite.description": "ขอคิวอาร์โค้ดเชิญเพื่อนหนึ่งใบจากผู้ดูแลระบบ Playarr Server ของคุณ",
   "settings.index.requestLatency.title": "ความหน่วงของคำขอ",
   "settings.index.requestLatency.description": "ความหน่วงของคำขอ HTTP แยกตามเส้นทาง สำหรับผู้ดูแลระบบ",
 
   "settings.invite.documentTitle": "เชิญเพื่อน - การตั้งค่า",
   "settings.invite.kicker": "ปรับให้เป็นสไตล์ของคุณ",
   "settings.invite.title": "เชิญเพื่อน",
-  "settings.invite.description": "ขอคิวอาร์โค้ดเชิญเพื่อนหนึ่งใบจากผู้ดูแลระบบ Streamarr ของคุณ",
+  "settings.invite.description": "ขอคิวอาร์โค้ดเชิญเพื่อนหนึ่งใบจากผู้ดูแลระบบ Playarr Server ของคุณ",
   "settings.invite.checkingStatus": "กำลังตรวจสอบสถานะคำเชิญ…",
   "settings.invite.statusNone": "คุณยังไม่ได้ขอคำเชิญ",
   "settings.invite.statusPending": "กำลังรอผู้ดูแลระบบตรวจสอบคำขอของคุณ",
@@ -653,7 +653,7 @@ export const th: Translations = {
   "settings.invite.modalKicker": "พร้อมแชร์",
   "settings.invite.modalTitle": "เชิญเพื่อนมาใช้ Playarr",
   "settings.invite.modalDescription":
-    "รหัสใช้ครั้งเดียวนี้จะเปิด Playarr โดยล็อกเซิร์ฟเวอร์ Streamarr ของคุณไว้ให้แล้ว",
+    "รหัสใช้ครั้งเดียวนี้จะเปิด Playarr โดยล็อกเซิร์ฟเวอร์ Playarr Server ของคุณไว้ให้แล้ว",
   "settings.invite.qrLabel": "คิวอาร์โค้ดสำหรับคำเชิญเพื่อนของ Playarr",
   "settings.invite.linkLabel": "ลิงก์คำเชิญ",
   "settings.invite.messageLabel": "คำเชิญนี้สำหรับใคร และควรเข้าถึงอะไรได้บ้าง (ไม่บังคับ)",
@@ -662,7 +662,7 @@ export const th: Translations = {
   "settings.invite.close": "ปิด",
   "settings.invite.copied": "คัดลอกแล้ว",
   "settings.invite.copyLink": "คัดลอกลิงก์",
-  "settings.invite.toastRequestSent": "ส่งคำขอคำเชิญไปยังผู้ดูแลระบบ Streamarr ของคุณแล้ว",
+  "settings.invite.toastRequestSent": "ส่งคำขอคำเชิญไปยังผู้ดูแลระบบ Playarr Server ของคุณแล้ว",
   "settings.invite.toastGenerated": "สร้างคำเชิญเพื่อนแล้ว ใช้ได้ภายใน 24 ชั่วโมง",
   "settings.invite.toastCopied": "คัดลอกลิงก์คำเชิญแล้ว",
   "settings.invite.copyFailed": "ไม่สามารถคัดลอกลิงก์ได้ กรุณาเลือกและคัดลอกด้วยตนเอง",
@@ -776,9 +776,9 @@ export const th: Translations = {
   "pages.signup.alreadyHaveAccount": "มีบัญชีอยู่แล้วใช่ไหม",
   "pages.signup.loginLink": "เข้าสู่ระบบ",
   "pages.signup.title": "สร้างบัญชี Playarr ของคุณ",
-  "pages.signup.description": "กำหนดรายละเอียดบัญชีของคุณสำหรับเซิร์ฟเวอร์ Streamarr ที่เชิญคุณ",
+  "pages.signup.description": "กำหนดรายละเอียดบัญชีของคุณสำหรับเซิร์ฟเวอร์ Playarr Server ที่เชิญคุณ",
   "pages.signup.inviteMissing":
-    "ลิงก์คำเชิญนี้ไม่สมบูรณ์หรือไม่ถูกต้อง กรุณาขอคิวอาร์โค้ดใหม่จากผู้ดูแลระบบ Streamarr ของคุณ",
+    "ลิงก์คำเชิญนี้ไม่สมบูรณ์หรือไม่ถูกต้อง กรุณาขอคิวอาร์โค้ดใหม่จากผู้ดูแลระบบ Playarr Server ของคุณ",
   "pages.signup.serverNameLoading": "กำลังโหลดชื่อเซิร์ฟเวอร์…",
   "pages.signup.serverUrlLabel": "เซิร์ฟเวอร์",
   "pages.signup.serverUrlHint": "เซิร์ฟเวอร์นี้ถูกล็อกไว้กับเซิร์ฟเวอร์ที่ออกคำเชิญของคุณ",
@@ -793,7 +793,7 @@ export const th: Translations = {
   "pages.signup.error.usernameTaken": "ชื่อผู้ใช้นี้ถูกใช้ไปแล้ว",
   "pages.signup.error.generic": "ไม่สามารถสร้างบัญชีได้ กรุณาขอคำเชิญใหม่จากผู้ดูแลระบบของคุณ",
   "pages.signup.error.networkUnreachable":
-    "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ Streamarr นี้ได้ กรุณาตรวจสอบว่าคุณอยู่ในเครือข่ายเดียวกัน และอนุญาต Local Network Access เมื่อมีการถาม",
+    "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ Playarr Server นี้ได้ กรุณาตรวจสอบว่าคุณอยู่ในเครือข่ายเดียวกัน และอนุญาต Local Network Access เมื่อมีการถาม",
   "pages.clients.brandAriaLabel": "ไคลเอนต์ Playarr",
   "pages.clients.headerNavAriaLabel": "เมนูหน้าไคลเอนต์",
   "pages.clients.navClients": "ไคลเอนต์",
@@ -888,7 +888,7 @@ export const th: Translations = {
     "เรียกการตั้งค่าอุปกรณ์ เลือก add และตั้งชื่อปลายทางว่า playarr-tv ป้อน IP ของทีวี พอร์ต 9922 และผู้ใช้ prisoner โดยไม่ต้องใส่รหัสผ่าน ขณะที่ Key Server ยังเปิดอยู่ ให้ดึงคีย์และป้อนวลีรหัสหกตัวที่แสดงบนทีวี",
   "pages.clients.webosPage.step4Title": "ติดตั้งและเปิดแอป",
   "pages.clients.webosPage.step4Description":
-    "สำหรับ IPK ที่สร้างเอง ให้เรียกคำสั่งจากไดเรกทอรี tv-web หากดาวน์โหลด playarr-webos.ipk ให้เปลี่ยนเป็นพาธของไฟล์นั้น เมื่อ Playarr เปิดขึ้น ให้สแกนรหัสเชื่อมโยงแล้วเลือกเซิร์ฟเวอร์ Streamarr และโปรไฟล์ครัวเรือนใน Playarr",
+    "สำหรับ IPK ที่สร้างเอง ให้เรียกคำสั่งจากไดเรกทอรี tv-web หากดาวน์โหลด playarr-webos.ipk ให้เปลี่ยนเป็นพาธของไฟล์นั้น เมื่อ Playarr เปิดขึ้น ให้สแกนรหัสเชื่อมโยงแล้วเลือกเซิร์ฟเวอร์ Playarr Server และโปรไฟล์ครัวเรือนใน Playarr",
   "pages.clients.webosPage.officialGuide": "เปิดคู่มือ Developer Mode อย่างเป็นทางการของ LG",
   "pages.clients.webosPage.noteTitle": "แอปที่ติดตั้งผ่านโหมดนักพัฒนาจะหมดอายุตามเซสชัน",
   "pages.clients.webosPage.noteDescription":
@@ -914,7 +914,7 @@ export const th: Translations = {
     "ลองดาวน์โหลดแพ็กเกจที่ลงลายเซ็นด้านบนก่อน หากยังไม่มีหรือลายเซ็นใช้กับทีวีไม่ได้ ให้สร้าง Playarr แล้วแพ็กไดเรกทอรี dist ด้วยชื่อโปรไฟล์ใบรับรองที่เปิดใช้อยู่ใน Tizen Studio อย่างตรงกัน",
   "pages.clients.tizenPage.step4Title": "เชื่อมต่อ ติดตั้ง และเปิดแอป",
   "pages.clients.tizenPage.step4Description":
-    "เชื่อมต่อด้วย SDB จากนั้นใน Device Manager ของ Tizen Studio ให้คลิกขวาที่ทีวีที่เชื่อมต่อแล้วเลือก Permit to install applications ใช้ tizen list tv เพื่อดูชื่อเป้าหมายของ CLI แล้วแทนชื่อไฟล์ WGT ที่สร้าง ไดเรกทอรีแพ็กเกจ และชื่อเป้าหมาย เปิด Playarr ด้วยรหัสแอปคงที่ สแกนรหัสเชื่อมโยง แล้วเลือกเซิร์ฟเวอร์ Streamarr และโปรไฟล์ครัวเรือนใน Playarr",
+    "เชื่อมต่อด้วย SDB จากนั้นใน Device Manager ของ Tizen Studio ให้คลิกขวาที่ทีวีที่เชื่อมต่อแล้วเลือก Permit to install applications ใช้ tizen list tv เพื่อดูชื่อเป้าหมายของ CLI แล้วแทนชื่อไฟล์ WGT ที่สร้าง ไดเรกทอรีแพ็กเกจ และชื่อเป้าหมาย เปิด Playarr ด้วยรหัสแอปคงที่ สแกนรหัสเชื่อมโยง แล้วเลือกเซิร์ฟเวอร์ Playarr Server และโปรไฟล์ครัวเรือนใน Playarr",
   "pages.clients.tizenPage.officialGuide": "เปิดคู่มืออุปกรณ์ทีวีอย่างเป็นทางการของ Samsung",
   "pages.clients.tizenPage.noteTitle": "WGT ต้องคงลายเซ็นและห้ามแก้ไข",
   "pages.clients.tizenPage.noteDescription":
@@ -940,7 +940,7 @@ export const th: Translations = {
     "เลือก Upload แล้วเลือก playarr-roku.zip โดยไม่ต้องแตกไฟล์ จากนั้นเลือก Install เมื่อไซด์โหลดเสร็จ Roku จะเปิด Playarr",
   "pages.clients.rokuPage.step4Title": "เชื่อมต่อ Playarr",
   "pages.clients.rokuPage.step4Description":
-    "ป้อน URL หลักของเซิร์ฟเวอร์ Streamarr ทำตามรหัสที่แสดงบนทีวีเพื่ออนุญาต Roku แล้วเลือกโปรไฟล์ครัวเรือน",
+    "ป้อน URL หลักของเซิร์ฟเวอร์ Playarr Server ทำตามรหัสที่แสดงบนทีวีเพื่ออนุญาต Roku แล้วเลือกโปรไฟล์ครัวเรือน",
   "pages.clients.rokuPage.officialGuide": "เปิดคู่มือนักพัฒนาอย่างเป็นทางการของ Roku",
   "pages.clients.rokuPage.noteKicker": "สำคัญ",
   "pages.clients.rokuPage.noteTitle": "ติดตั้งแอปที่ไซด์โหลดได้ครั้งละหนึ่งแอปเท่านั้น",

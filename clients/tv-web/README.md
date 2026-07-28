@@ -1,4 +1,4 @@
-# Streamarr TV & Web clients
+# Playarr Server TV & Web clients
 
 A pnpm workspace covering every TV/web surface: shared TypeScript packages,
 two packaged TV app shells (webOS and Tizen), a legacy experimental VIDAA
@@ -13,7 +13,7 @@ clients/tv-web/
   pnpm-workspace.yaml   workspace package globs + shared version catalog
   tsconfig.base.json    shared compiler options, extended by every package
   packages/             platform-agnostic shared libraries
-    api-client/            real typed client generated from backend/openapi/streamarr.yaml
+    api-client/            real typed client generated from backend/openapi/playarr.yaml
                             (openapi-typescript + openapi-fetch), plus shared React
                             data-fetching hooks at the "./react" subpath export
     domain/                client-local config only now (API base URL resolution/storage)
@@ -40,7 +40,7 @@ clients/tv-web/
 
 ## Package naming & versioning
 
-Every package is scoped `@streamarr-tv/*` and `"private": true` (not
+Every package is scoped `@playarr-tv/*` and `"private": true` (not
 published). Shared external dependency versions (`typescript`, `react`,
 `react-dom`, their `@types`, `vite`, `@vitejs/plugin-react`) are pinned once
 in `pnpm-workspace.yaml`'s `catalog:` and referenced from each `package.json`
@@ -54,11 +54,11 @@ pnpm install              # install everything (workspace + catalog resolution)
 pnpm -r run build         # typecheck + build every package/app, in dependency order
 pnpm -r run typecheck     # tsc --noEmit everywhere
 pnpm -r --if-present run test   # vitest suites (api-client, device-auth) against mocked HTTP
-pnpm --filter @streamarr-tv/api-client run generate   # regenerate src/generated/schema.ts
-                                                        # from backend/openapi/streamarr.yaml
-pnpm --filter @streamarr-tv/web run dev     # Vite dev server for the standalone web app
-pnpm --filter @streamarr-tv/web run deploy:cloudflare   # build and deploy playarr.app
-pnpm --filter @streamarr-tv/app-webos run dev   # etc., per app
+pnpm --filter @playarr-tv/api-client run generate   # regenerate src/generated/schema.ts
+                                                        # from backend/openapi/playarr.yaml
+pnpm --filter @playarr-tv/web run dev     # Vite dev server for the standalone web app
+pnpm --filter @playarr-tv/web run deploy:cloudflare   # build and deploy playarr.app
+pnpm --filter @playarr-tv/app-webos run dev   # etc., per app
 ```
 
 Production deployment, GitHub Actions secrets, and the manual local workflow

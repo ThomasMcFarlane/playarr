@@ -16,7 +16,7 @@ function fakePng(width, height) {
 
 function validManifest(overrides = {}) {
   return {
-    id: "com.streamarr.tv",
+    id: "com.playarr.tv",
     title: "Playarr",
     version: "0.1.0",
     type: "web",

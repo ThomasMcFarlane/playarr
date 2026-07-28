@@ -8,8 +8,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import type { PlayarrCastCredentials, PlayarrCastStateMessage } from "@streamarr-tv/cast-protocol";
-import { PLAYARR_CAST_PROTOCOL_VERSION } from "@streamarr-tv/cast-protocol";
+import type { PlayarrCastCredentials, PlayarrCastStateMessage } from "@playarr-tv/cast-protocol";
+import { PLAYARR_CAST_PROTOCOL_VERSION } from "@playarr-tv/cast-protocol";
 import {
   usePlaybackEngine,
   type PlaybackLaunchSettings,
@@ -148,9 +148,9 @@ function isPlaybackLaunchSettings(value: unknown): value is PlaybackLaunchSettin
  * failed negotiation never reaches a `<video>` element at all) or the real
  * custom player (`PlayerSurface`) once a source is ready.
  *
- * `usePlaybackEngine` attaches `@streamarr-tv/player-shaka`'s
+ * `usePlaybackEngine` attaches `@playarr-tv/player-shaka`'s
  * `ShakaPlaybackEngine` -- the same adapter the webOS/VIDAA TV shells use,
- * via the shared `PlaybackEngine` interface from `@streamarr-tv/player-core`
+ * via the shared `PlaybackEngine` interface from `@playarr-tv/player-core`
  * -- rather than a second, web-only playback pipeline, so Playarr Web stays
  * on the same tested engine as the rest of the Playarr client family.
  *

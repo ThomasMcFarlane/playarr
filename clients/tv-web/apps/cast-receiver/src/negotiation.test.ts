@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { PlaybackEventKind, PlaybackInfo } from "@streamarr-tv/api-client";
-import type { PlayarrCastPlaybackIntent } from "@streamarr-tv/cast-protocol";
+import type { PlaybackEventKind, PlaybackInfo } from "@playarr-tv/api-client";
+import type { PlayarrCastPlaybackIntent } from "@playarr-tv/cast-protocol";
 import {
   PlaybackNegotiator,
   isOnDemandSessionUrl,

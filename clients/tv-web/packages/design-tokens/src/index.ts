@@ -1,11 +1,11 @@
 /**
- * @streamarr-tv/design-tokens
+ * @playarr-tv/design-tokens
  *
  * Hand-authored token set for early TV/web app development, corrected to
  * match the *real*, verified Sonarr/Radarr/Lidarr ("*arr") design language
  * (Styles/Themes/dark.js and Styles/Variables/fonts.js -- byte-identical
  * between Sonarr and Radarr, Lidarr matches on everything but its own brand
- * accent). Streamarr wraps that suite, so its web app should read as a
+ * accent). Playarr Server wraps that suite, so its web app should read as a
  * member of the same family rather than a generic dark dashboard.
  *
  * These are consumed directly as TypeScript constants for now. NOTE: once
@@ -18,13 +18,13 @@
  * hand-edited.
  *
  * IMPORTANT semantic change vs. the previous placeholder version:
- * `color.brand.primary` used to be Streamarr's red and was used everywhere
+ * `color.brand.primary` used to be Playarr Server's red and was used everywhere
  * (buttons, focus rings, etc). The real *arr apps do NOT do this -- they
  * share ONE generic UI primary color (#5d9cec, a periwinkle blue) across
  * every button/link/checkbox/focus-ring in all three apps, and reserve each
  * app's own distinct brand color for a narrow role: nav-item hover text and
  * the active-nav-item left border/text only. `color.brand.primary` now
- * holds that shared blue. Streamarr's own red identity lives at the NEW
+ * holds that shared blue. Playarr Server's own red identity lives at the NEW
  * `color.brand.accent` token and must only be used for that narrow nav
  * role -- never as a general button/CTA color.
  */
@@ -55,11 +55,11 @@ export const color = {
     inverse: "#ffffff",
   },
   brand: {
-    /** Shared *arr UI primary: buttons, links, checkboxes, focus rings. NOT Streamarr-specific -- identical across Sonarr/Radarr/Lidarr. */
+    /** Shared *arr UI primary: buttons, links, checkboxes, focus rings. NOT Playarr Server-specific -- identical across Sonarr/Radarr/Lidarr. */
     primary: "#5d9cec",
     primaryHover: "#7badf0",
     primaryPressed: "#4a84d1",
-    /** Streamarr's own distinct accent (its "red identity"), applied the way Sonarr/Radarr/Lidarr apply theirs: nav-item hover text + active-nav-item left border/text ONLY. Never a general button color. */
+    /** Playarr Server's own distinct accent (its "red identity"), applied the way Sonarr/Radarr/Lidarr apply theirs: nav-item hover text + active-nav-item left border/text ONLY. Never a general button color. */
     accent: "#e5484d",
     accentHover: "#ef6469",
     accentPressed: "#c93a3e",

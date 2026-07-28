@@ -1,9 +1,9 @@
 import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { TvApp } from "@streamarr-tv/ui-tv";
-import type { PlaybackCapabilities } from "@streamarr-tv/api-client/react";
-import { ShakaPlaybackEngine } from "@streamarr-tv/player-shaka";
-import { resolveApiBaseUrl } from "@streamarr-tv/domain";
+import { TvApp } from "@playarr-tv/ui-tv";
+import type { PlaybackCapabilities } from "@playarr-tv/api-client/react";
+import { ShakaPlaybackEngine } from "@playarr-tv/player-shaka";
+import { resolveApiBaseUrl } from "@playarr-tv/domain";
 import { vidaaOtaEnabled } from "./featureFlags";
 
 /**
@@ -18,8 +18,8 @@ const PLAYBACK_CAPABILITIES: PlaybackCapabilities = {
   audioCodecs: "aac,opus",
 };
 
-/** No keyboard on this platform: `?apiBaseUrl=...` (launch query param) or public/streamarr-config.json wins over the default. */
-const RUNTIME_CONFIG_URL = `${import.meta.env.BASE_URL}streamarr-config.json`;
+/** No keyboard on this platform: `?apiBaseUrl=...` (launch query param) or public/playarr-config.json wins over the default. */
+const RUNTIME_CONFIG_URL = `${import.meta.env.BASE_URL}playarr-config.json`;
 
 function App() {
   const videoRef = useRef<HTMLVideoElement>(null);

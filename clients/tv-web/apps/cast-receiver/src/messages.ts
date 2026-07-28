@@ -28,7 +28,7 @@ import {
   type PlayarrCastSelectTracksMessage,
   type PlayarrCastSetQueueMessage,
   type PlayarrCastStateMessage,
-} from "@streamarr-tv/cast-protocol";
+} from "@playarr-tv/cast-protocol";
 
 export interface CastMessageChannel {
   /** Registers the single handler CAF invokes for every message on this namespace. `CastMessageBus` calls this exactly once, from its constructor. */

@@ -3,8 +3,8 @@
  * `usePlaybackEngine.ts` already assembles for local playback, and issues
  * it to a connected `CastSession`.
  */
-import type { PlaybackAudioTrack, PlaybackSubtitleTrack } from "@streamarr-tv/player-core";
-import type { PlaybackQualityOption } from "@streamarr-tv/api-client";
+import type { PlaybackAudioTrack, PlaybackSubtitleTrack } from "@playarr-tv/player-core";
+import type { PlaybackQualityOption } from "@playarr-tv/api-client";
 import {
   PLAYARR_CAST_PROTOCOL_VERSION,
   type PlayarrCastCredentials,
@@ -13,7 +13,7 @@ import {
   type PlayarrCastLoadRequest,
   type PlayarrCastPeer,
   type PlayarrCastQueueEntry,
-} from "@streamarr-tv/cast-protocol";
+} from "@playarr-tv/cast-protocol";
 import type { PlayerPlaylistItem } from "../../components/player/PlayerSurface";
 import { DOWNLOADED_QUALITY_ID } from "../usePlaybackEngine";
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiClient, ApiError } from "@streamarr-tv/api-client";
+import { ApiClient, ApiError } from "@playarr-tv/api-client";
 import { ensureAccessToken } from "./session";
 import { TokenStore } from "./tokenStore";
 
@@ -15,7 +15,7 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 const BASE_URL = "http://localhost:8484";
-const IDENTITY = { deviceName: "Streamarr Web", clientPlatform: "web" as const, clientVersion: "1.0.0" };
+const IDENTITY = { deviceName: "Playarr Server Web", clientPlatform: "web" as const, clientVersion: "1.0.0" };
 
 // Two distinct, UUID-shaped `peer_id`s -- the only shape
 // `decodeAccessTokenIssuer`'s caller (`session.ts`'s
@@ -54,7 +54,7 @@ describe("ensureAccessToken", () => {
         loginCalls += 1;
         expect(new URL(request.url).pathname).toBe("/api/v1/auth/login");
         const body = (await request.json()) as Record<string, unknown>;
-        expect(body.device_name).toBe("Streamarr Web");
+        expect(body.device_name).toBe("Playarr Server Web");
         expect(body.client_platform).toBe("web");
         expect(body.client_version).toBe("1.0.0");
         expect(typeof body.device_id).toBe("string");
@@ -439,9 +439,9 @@ describe("ensureAccessToken with serverGroup/clientForUrl", () => {
     const store = new TokenStore();
     store.set({
       // The fixed HS256 issuer string a standalone (or not-yet-cross-node-
-      // trusted) node issues -- `streamarr_auth::jwt::JwtIssuer`'s default,
+      // trusted) node issues -- `playarr_auth::jwt::JwtIssuer`'s default,
       // not a `peer_id`.
-      accessToken: accessTokenWithIssuer("streamarr"),
+      accessToken: accessTokenWithIssuer("playarr"),
       refreshToken: "rt-stale",
       tokenType: "Bearer",
       expiresAt: Date.now() - 1,

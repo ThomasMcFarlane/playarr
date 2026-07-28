@@ -1,4 +1,4 @@
-# @streamarr-tv/app-vidaa-fallback
+# @playarr-tv/app-vidaa-fallback
 
 Legacy experimental PWA shell for VIDAA (Hisense) TVs. The supported household
 installation now points VIDAA's hosted Web App launcher at the current Playarr
@@ -8,7 +8,7 @@ an earlier shared-TV-shell prototype and is not the recommended client.
 VIDAA has no dedicated native app
 SDK target in the current plan, so this app runs as an installable Progressive
 Web App against VIDAA's Chromium-based browser instead of a packaged native
-bundle -- bootstraps `@streamarr-tv/ui-tv` with `@streamarr-tv/player-shaka`
+bundle -- bootstraps `@playarr-tv/ui-tv` with `@playarr-tv/player-shaka`
 (the same pairing as the webOS shell, since VIDAA's browser also supports
 MSE + EME).
 
@@ -19,12 +19,12 @@ and validated against a real VIDAA device or simulator.
 
 ## Configuring the API server
 
-This TV has no keyboard, so the app resolves which Streamarr instance to
-talk to (via `@streamarr-tv/domain`'s `resolveApiBaseUrl`) in this order:
+This TV has no keyboard, so the app resolves which Playarr Server instance to
+talk to (via `@playarr-tv/domain`'s `resolveApiBaseUrl`) in this order:
 
 1. A `?apiBaseUrl=http://192.168.1.50:8484` query param the PWA was opened
    with.
-2. `apiBaseUrl` in `streamarr-config.json`, shipped in this app's `public/`
+2. `apiBaseUrl` in `playarr-config.json`, shipped in this app's `public/`
    directory and copied verbatim into `dist/` at build time. An operator can
    overwrite this file on the serving origin to repoint the app without a
    rebuild.
@@ -32,7 +32,7 @@ talk to (via `@streamarr-tv/domain`'s `resolveApiBaseUrl`) in this order:
 
 ## Building
 
-`pnpm --filter @streamarr-tv/app-vidaa-fallback run build` produces a
+`pnpm --filter @playarr-tv/app-vidaa-fallback run build` produces a
 static `dist/` bundle via Vite, installable as a PWA from any HTTPS origin
 that serves it (root-relative `base: "/"`, unlike the file-packaged webOS/
 Tizen shells).

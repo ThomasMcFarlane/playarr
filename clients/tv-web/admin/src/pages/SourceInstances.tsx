@@ -7,7 +7,7 @@ import {
   type SourceKind,
   type TdarrConnectionRequest,
   type TdarrConnectionResponse,
-} from "@streamarr-tv/api-client";
+} from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { Modal } from "../components/Modal";
@@ -27,7 +27,7 @@ const SOURCE_KINDS: SourceKind[] = [
  * isn't backed by `POST/GET/DELETE /api/v1/admin/source-instances` like the
  * *arr apps above. It's a wholly separate singleton resource
  * (`POST/GET/DELETE /api/v1/admin/tdarr`, see
- * `backend/crates/streamarr-api/src/tdarr.rs`), but it's still "an instance
+ * `backend/crates/playarr-api/src/tdarr.rs`), but it's still "an instance
  * you connect", so it shows up as a selectable create-modal kind and a card
  * in this same grid rather than a dedicated page -- only its extra fields
  * and which API it submits to differ.
@@ -46,7 +46,7 @@ const EMPTY_FORM: SourceInstanceRequest = {
 const EMPTY_TDARR_FORM: TdarrConnectionRequest = {
   base_url: "",
   api_key: "",
-  tdarr_db_id: "streamarr",
+  tdarr_db_id: "playarr",
   default_profile: "h264-720p-4mbps",
   worker_process: "transcodecpu",
   default_worker_limit: 2,
@@ -123,11 +123,11 @@ type ModalState =
   | null;
 
 /**
- * Registers/lists/removes the *arr apps (and Tdarr) Streamarr talks to --
+ * Registers/lists/removes the *arr apps (and Tdarr) Playarr Server talks to --
  * the web UI for `POST/GET/DELETE /api/v1/admin/source-instances` plus
- * `POST/GET/DELETE /api/v1/admin/tdarr` (backend/crates/streamarr-api/src/
+ * `POST/GET/DELETE /api/v1/admin/tdarr` (backend/crates/playarr-api/src/
  * {admin,tdarr}.rs). Every other *arr app ships this as a first-class
- * settings screen; this is that screen for Streamarr, not a curl-only
+ * settings screen; this is that screen for Playarr Server, not a curl-only
  * feature. Tdarr is presented as just another card/kind here even though
  * it's backed by a separate singleton API under the hood -- see
  * `CreateKind`'s doc comment.
@@ -144,7 +144,7 @@ type ModalState =
  * interaction redesign -- list/create+test-connection/sync now/delete all
  * still go through the same four `useApiClient()` methods as before.
  *
- * Moved here from clients/tv-web/web (Playarr Web) -- this is Streamarr's
+ * Moved here from clients/tv-web/web (Playarr Web) -- this is Playarr Server's
  * own admin surface, not part of the consumer streaming client.
  */
 export function SourceInstancesPage() {
@@ -375,8 +375,8 @@ export function SourceInstancesPage() {
     <div className="page">
       <h1 className="page-title">Source instances</h1>
       <p className="muted" style={{ maxWidth: 640, marginBottom: "1rem" }}>
-        The Sonarr/Radarr/Lidarr/Bazarr/Prowlarr/Readarr/Whisparr instances Streamarr treats as a
-        source of catalog/download truth, plus Streamarr's Tdarr connection (the background
+        The Sonarr/Radarr/Lidarr/Bazarr/Prowlarr/Readarr/Whisparr instances Playarr Server treats as a
+        source of catalog/download truth, plus Playarr Server's Tdarr connection (the background
         transcode pipeline). Registering one confirms it's actually reachable before accepting it.
       </p>
 

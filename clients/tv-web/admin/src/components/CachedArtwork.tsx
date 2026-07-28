@@ -6,7 +6,7 @@ import {
   type ImgHTMLAttributes,
   type ReactNode,
 } from "react";
-import type { Album, ApiClient, ImageKind, Work } from "@streamarr-tv/api-client";
+import type { Album, ApiClient, ImageKind, Work } from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 
 interface ArtworkRecord {

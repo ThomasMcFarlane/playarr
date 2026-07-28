@@ -14,7 +14,7 @@ import {
   type WatchProgress,
   type Work,
   type WorkKind,
-} from "@streamarr-tv/api-client";
+} from "@playarr-tv/api-client";
 import type { AppShellOutletContext } from "../App";
 import { useMediaContextMenu } from "../components/MediaContextMenu";
 import {

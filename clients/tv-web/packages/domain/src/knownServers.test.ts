@@ -48,12 +48,12 @@ describe("readKnownServers", () => {
   });
 
   it("returns undefined for a malformed stored value rather than throwing", () => {
-    localStorage.setItem("streamarr:knownServerGroup", "{ not json");
+    localStorage.setItem("playarr:knownServerGroup", "{ not json");
     expect(readKnownServers()).toBeUndefined();
   });
 
   it("returns undefined when the stored value doesn't structurally match KnownServerGroup", () => {
-    localStorage.setItem("streamarr:knownServerGroup", JSON.stringify({ servers: "not-an-array" }));
+    localStorage.setItem("playarr:knownServerGroup", JSON.stringify({ servers: "not-an-array" }));
     expect(readKnownServers()).toBeUndefined();
   });
 
@@ -88,7 +88,7 @@ describe("readKnownServers", () => {
 
   it("returns undefined when a server's peerNodeId isn't a string", () => {
     localStorage.setItem(
-      "streamarr:knownServerGroup",
+      "playarr:knownServerGroup",
       JSON.stringify({ servers: [{ url: "https://home.example.com", peerNodeId: 12345 }] })
     );
     expect(readKnownServers()).toBeUndefined();

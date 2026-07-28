@@ -7,7 +7,7 @@ import {
   type SeasonDetail,
   type AlbumDetail,
   type WorkDetail as WorkDetailDto,
-} from "@streamarr-tv/api-client";
+} from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { KIND_LABELS } from "../components/PosterCard";
@@ -76,7 +76,7 @@ function WorkDetailBackdrop({ work }: { work: WorkDetailDto["work"] }) {
  * exactly" rule (see `LibraryToolbarMenus.tsx`/`DESIGN.md`). Backed by
  * `client.getWork(id)`, the same `GET /api/v1/catalog/{id}` endpoint
  * Playarr Web's own (playback-capable) `WorkDetail.tsx` uses -- this page
- * never surfaces a playback URL or exposes *arr-only fields Streamarr's own
+ * never surfaces a playback URL or exposes *arr-only fields Playarr Server's own
  * catalog model doesn't carry (quality profile, root path, cast/crew) --
  * those stay in Sonarr/Radarr's own UI, not duplicated here.
  */

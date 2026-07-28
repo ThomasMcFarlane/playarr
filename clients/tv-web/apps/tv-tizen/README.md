@@ -50,10 +50,10 @@ signed by a Samsung TV certificate profile that authorises that TV's DUID.
 
    ```sh
    pnpm install --frozen-lockfile
-   pnpm --filter @streamarr-tv/app-tizen... run build
-   pnpm --filter @streamarr-tv/player-avplay run test
-   pnpm --filter @streamarr-tv/app-tizen run test
-   pnpm --filter @streamarr-tv/app-tizen run package:wgt -- --profile PlayarrTV
+   pnpm --filter @playarr-tv/app-tizen... run build
+   pnpm --filter @playarr-tv/player-avplay run test
+   pnpm --filter @playarr-tv/app-tizen run test
+   pnpm --filter @playarr-tv/app-tizen run package:wgt -- --profile PlayarrTV
    ```
 
    The command writes the signed, stable artifact to
@@ -63,7 +63,7 @@ signed by a Samsung TV certificate profile that authorises that TV's DUID.
 
    ```sh
    tizen install -n playarr-tizen.wgt -t <target-name> -- apps/tv-tizen
-   tizen run -p StrmarrTV1.Streamarr -t <target-name>
+   tizen run -p StrmarrTV1.Playarr Server -t <target-name>
    ```
 
 On a fresh install, the TV asks `playarr.app` for a short-lived link code. Scan
@@ -72,7 +72,7 @@ address and type the manual code. Choose the existing Playarr profile/server
 on the phone; the TV then receives that server's own device authorisation and
 finishes login without entering a LAN URL on a TV keyboard. An
 operator-specific package may instead set an absolute HTTP or HTTPS
-`apiBaseUrl` in `public/streamarr-config.json` before building. The checked-in
+`apiBaseUrl` in `public/playarr-config.json` before building. The checked-in
 value is intentionally empty for the hosted first-install flow.
 
 The physical-device procedure follows Samsung's
@@ -86,13 +86,13 @@ guides.
 From `clients/tv-web/`:
 
 ```sh
-pnpm --filter @streamarr-tv/app-tizen... run build
-pnpm --filter @streamarr-tv/player-avplay run test
-pnpm --filter @streamarr-tv/app-tizen run test
+pnpm --filter @playarr-tv/app-tizen... run build
+pnpm --filter @playarr-tv/player-avplay run test
+pnpm --filter @playarr-tv/app-tizen run test
 ```
 
 The build creates `apps/tv-tizen/dist/` with the complete hashed Playarr
-bundle, `config.xml`, `streamarr-config.json`, and launcher icon. Package
+bundle, `config.xml`, `playarr-config.json`, and launcher icon. Package
 preparation fails if the Tizen TV profile, network/input privileges, Product
 API bootstrap, or AVPlay object is missing.
 

@@ -7,10 +7,10 @@
  * timeouts the way the TV side's own `requestDeviceCode` retry (trying its
  * remembered addresses one at a time) can.
  */
-import { ApiClient, ApiError } from "@streamarr-tv/api-client";
+import { ApiClient, ApiError } from "@playarr-tv/api-client";
 
 /**
- * Decodes the `servers=` query param value `streamarr-api/src/oauth.rs`'s
+ * Decodes the `servers=` query param value `playarr-api/src/oauth.rs`'s
  * `encode_servers_param` embeds in `verification_uri_complete` (§6.3),
  * identical to the encoding `signupInvite.ts`'s invite links use for the
  * same param (§6.1) -- exact wire format, matching the backend byte for

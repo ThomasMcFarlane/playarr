@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import type { ApiClient, Work } from "@streamarr-tv/api-client";
-import { useCatalogBrowse } from "@streamarr-tv/api-client/react";
+import type { ApiClient, Work } from "@playarr-tv/api-client";
+import { useCatalogBrowse } from "@playarr-tv/api-client/react";
 import { AsyncStateMessage } from "../lib/AsyncStateMessage";
 import { BrowseScreen, type BrowseRow } from "./BrowseScreen";
 

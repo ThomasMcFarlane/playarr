@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiClient } from "@streamarr-tv/api-client";
+import { ApiClient } from "@playarr-tv/api-client";
 import {
   pollForToken,
   requestDeviceCode,
   type DeviceCodeResponse,
   type DeviceTokenSuccess,
-} from "@streamarr-tv/device-auth";
+} from "@playarr-tv/device-auth";
 import { publicIpv4RelayUrl } from "../lib/loginServerUrl";
 import { useApiClient } from "../lib/ApiClientProvider";
 import {
@@ -59,7 +59,7 @@ export function DeviceLogin({
           PLAYARR_CLIENT_PLATFORM
         )
       ) {
-        const platform = PLAYARR_CLIENT_PLATFORM as "tv-webos" | "tv-tizen" | "tv-vidaa";
+        const platform = PLAYARR_CLIENT_PLATFORM as "tv-webos" | "tv-tizen" | "tv-vidaa" | "xbox";
         const code = await requestHostedDeviceLink(platform);
         if (cancelled) return;
         setDeviceCode(code);
@@ -72,8 +72,8 @@ export function DeviceLogin({
           baseUrl: serverUrl,
           fetchImpl: browserFetch,
           defaultHeaders: {
-            "X-Streamarr-Client-Platform": platform,
-            "X-Streamarr-Client-Version": __APP_VERSION__,
+            "X-Playarr-Client-Platform": platform,
+            "X-Playarr-Client-Version": __APP_VERSION__,
           },
         });
         const token = await pollForToken(

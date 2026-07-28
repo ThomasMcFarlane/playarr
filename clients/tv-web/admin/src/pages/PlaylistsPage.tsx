@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { describeApiError, type PlaylistResponse, type UserResponse } from "@streamarr-tv/api-client";
+import { describeApiError, type PlaylistResponse, type UserResponse } from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { Modal } from "../components/Modal";
@@ -10,7 +10,7 @@ import { Modal } from "../components/Modal";
  * (alphabetical), each immediately followed by its own children
  * (alphabetical) -- a flat, indented tree rather than a real nested
  * component, since `parent_playlist_id` nesting is expected to stay
- * shallow (see `streamarr_model::playlist`'s doc comment).
+ * shallow (see `playarr_model::playlist`'s doc comment).
  */
 function sortForDisplay(playlists: PlaylistResponse[]): Array<{ playlist: PlaylistResponse; depth: number }> {
   const byParent = new Map<string | null, PlaylistResponse[]>();
@@ -42,7 +42,7 @@ function sortForDisplay(playlists: PlaylistResponse[]): Array<{ playlist: Playli
  * /api/v1/playlists*`, which the backend restricts to admin for a System
  * playlist); personal playlists are shown read-only, owner labeled, purely
  * for admin visibility (backed by the admin-only `GET
- * /api/v1/admin/playlists`) -- see `streamarr_api::playlists`'s module doc
+ * /api/v1/admin/playlists`) -- see `playarr_api::playlists`'s module doc
  * comment for the full ownership/access-control split this mirrors. A
  * user's own personal playlists remain theirs to create/edit/delete in
  * Playarr, not here.

@@ -21,7 +21,7 @@
  * was sitting right there unused.
  *
  * `docs/architecture/peer-groups.md` §7.2/§3.7: once a client remembers a
- * peer group (`@streamarr-tv/domain`'s `KnownServerGroup`), a refresh
+ * peer group (`@playarr-tv/domain`'s `KnownServerGroup`), a refresh
  * failure against the current server no longer falls straight through to a
  * full login -- it retries the *same* refresh token against every other
  * remembered address first (`serverGroup`/`clientForUrl` below), since
@@ -32,7 +32,7 @@
  * recognized by the peer that issued it (§3.7 again -- refresh tokens are
  * never synced), so retrying it against a *different* node's address is a
  * guaranteed 401, not a real chance at recovery. `refreshAcrossServerGroup`
- * below only tries addresses `@streamarr-tv/domain`'s `KnownServerGroup`
+ * below only tries addresses `@playarr-tv/domain`'s `KnownServerGroup`
  * attributes to the same `peer_node_id` that issued the stored access token
  * (read off its `iss` claim via `decodeAccessTokenIssuer` -- unverified,
  * used purely as a routing hint, never a trust decision). A fresh
@@ -48,7 +48,7 @@ import type {
   LoginResponse,
   RefreshRequest,
   RefreshResponse,
-} from "@streamarr-tv/api-client";
+} from "@playarr-tv/api-client";
 import { getOrCreateDeviceId } from "./deviceId";
 import { decodeAccessTokenIssuer } from "./jwt";
 import type { StoredSession, TokenStore } from "./tokenStore";
@@ -62,8 +62,8 @@ export interface EnsureAccessTokenIdentity {
 }
 
 /**
- * Structural mirror of `@streamarr-tv/domain`'s `KnownServerGroup` -- this
- * package deliberately doesn't depend on `@streamarr-tv/domain` for one
+ * Structural mirror of `@playarr-tv/domain`'s `KnownServerGroup` -- this
+ * package deliberately doesn't depend on `@playarr-tv/domain` for one
  * shape (same "no new package dependency for a structural type" convention
  * `inviteUrl.ts`'s `PeerAddressBundleLike` and `knownServers.ts`'s own doc
  * comment both explain for the identical reason), so callers pass the real
@@ -76,7 +76,7 @@ export interface KnownServerGroupLike {
     url: string;
     /**
      * The `peer_nodes` row this address is attributed to
-     * (`@streamarr-tv/domain`'s `KnownServer::peerNodeId`), when known.
+     * (`@playarr-tv/domain`'s `KnownServer::peerNodeId`), when known.
      * `refreshAcrossServerGroup` below only retries addresses whose
      * `peerNodeId` matches the current session's issuing peer -- absent
      * for a standalone deployment, or anything remembered before this
@@ -99,7 +99,7 @@ export interface EnsureAccessTokenOptions {
    * - A refresh failure against `client` retries the *same* refresh token
    *   against each other remembered candidate *attributed to the same
    *   issuing peer* (§3.7 -- refresh tokens never sync peer-to-peer), in
-   *   the same priority order `@streamarr-tv/domain`'s
+   *   the same priority order `@playarr-tv/domain`'s
    *   `resolveReachableServer` uses (`lastGoodUrl` first, then
    *   `servers[]`). A no-op -- nothing to retry -- when the issuing peer
    *   can't be determined or no remembered address is attributed to it.
@@ -147,16 +147,16 @@ const inFlightLogins = new WeakMap<TokenStore, Promise<string>>();
 
 // Leave enough life on every returned JWT for a media request to wait through
 // the player's retry window without crossing the server-side expiry boundary.
-// Streamarr currently issues 15-minute access tokens, so renewing two minutes
+// Playarr Server currently issues 15-minute access tokens, so renewing two minutes
 // early keeps refresh traffic modest while avoiding edge-of-expiry 401s.
 const ACCESS_TOKEN_MINIMUM_VALIDITY_MS = 2 * 60 * 1000;
 
 /**
- * Same candidate ordering as `@streamarr-tv/domain`'s
+ * Same candidate ordering as `@playarr-tv/domain`'s
  * `resolveReachableServer`: `lastGoodUrl` first, then `servers[]`,
  * de-duplicated. Duplicated locally rather than imported -- see
  * `KnownServerGroupLike`'s doc comment for why this package doesn't depend
- * on `@streamarr-tv/domain`.
+ * on `@playarr-tv/domain`.
  */
 function serverGroupCandidates(group: KnownServerGroupLike): string[] {
   const candidates: string[] = [];
@@ -170,7 +170,7 @@ function serverGroupCandidates(group: KnownServerGroupLike): string[] {
 /**
  * RFC 4122's hyphenated form -- the only shape `Uuid::new_v4()`/serde ever
  * produce for a `peer_id`, and the same gate
- * `streamarr_auth::jwt::JwtIssuer::verify_access_token` itself applies to a
+ * `playarr_auth::jwt::JwtIssuer::verify_access_token` itself applies to a
  * token's `iss` claim (`Uuid::parse_str`) to decide EdDSA-peer verification
  * vs. the fixed HS256 issuer string. Good enough for a client-side routing
  * hint -- this is never a trust decision (see `decodeAccessTokenIssuer`'s

@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { ApiError, describeApiError, type UserResponse } from "@streamarr-tv/api-client";
+import { ApiError, describeApiError, type UserResponse } from "@playarr-tv/api-client";
 import { useApiClient } from "./ApiClientProvider";
 
 /**

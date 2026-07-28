@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { SourceInstanceResponse, WorkKind } from "@streamarr-tv/api-client";
+import type { SourceInstanceResponse, WorkKind } from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { KIND_LABELS } from "./PosterCard";
 import type { MatrixSort } from "./SourceMatrixView";

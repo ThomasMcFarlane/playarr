@@ -20,8 +20,8 @@ import {
   type TrackDetail,
   type WatchProgress,
   type WorkChildren,
-} from "@streamarr-tv/api-client";
-import { useWorkDetail } from "@streamarr-tv/api-client/react";
+} from "@playarr-tv/api-client";
+import { useWorkDetail } from "@playarr-tv/api-client/react";
 import { useMediaContextMenu } from "../components/MediaContextMenu";
 import { MediaThumbnailArtwork } from "../components/MediaThumbnailArtwork";
 import { ServerChoiceModal } from "../components/ServerChoiceModal";

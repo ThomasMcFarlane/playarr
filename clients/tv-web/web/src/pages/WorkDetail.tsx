@@ -12,9 +12,9 @@ import type {
   WorkChildren,
   WorkCreditsResponse,
   WorkDetail,
-} from "@streamarr-tv/api-client";
-import { describeApiError } from "@streamarr-tv/api-client";
-import { useWorkDetail } from "@streamarr-tv/api-client/react";
+} from "@playarr-tv/api-client";
+import { describeApiError } from "@playarr-tv/api-client";
+import { useWorkDetail } from "@playarr-tv/api-client/react";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { CachedArtworkImage, useCachedArtwork } from "../lib/artwork";
 import { useDownloads } from "../lib/DownloadsProvider";
@@ -846,7 +846,7 @@ function SeasonEpisodeTrack({
             const isSelected = episode.episode.id === selectedEpisodeId;
             // The media-file thumbnail endpoint is the primary artwork.
             // If extraction is temporarily unavailable, fall back to the
-            // series backdrop already cached by Streamarr rather than
+            // series backdrop already cached by Playarr Server rather than
             // loading the episode provider URL directly from the TV.
             const episodeArtwork = backdrop;
             const progress = progressByMedia.get(mediaFileId);

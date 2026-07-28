@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { describeApiError, type LibraryViewResponse } from "@streamarr-tv/api-client";
+import { describeApiError, type LibraryViewResponse } from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { KIND_LABELS } from "../components/PosterCard";
@@ -41,8 +41,8 @@ function summarizeSort(sort: string[]): string {
 /**
  * Lists every saved "View" (named filter+sort preset over the catalog) --
  * the admin surface for `GET/POST/PUT/DELETE /api/v1/admin/views`
- * (backend/crates/streamarr-api/src/views.rs). Views are global/admin-
- * managed (not per-user, see `streamarr_model::LibraryView`'s doc comment)
+ * (backend/crates/playarr-api/src/views.rs). Views are global/admin-
+ * managed (not per-user, see `playarr_model::LibraryView`'s doc comment)
  * and are the data source for Playarr's Home screen shelves beyond the
  * single hardcoded "recently added" one -- see
  * clients/tv-web/PLAYARR_HANDOVER.md's "New backend feature: Views" section.

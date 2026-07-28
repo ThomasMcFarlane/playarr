@@ -1,4 +1,4 @@
-import type { PlaybackMode } from "@streamarr-tv/api-client";
+import type { PlaybackMode } from "@playarr-tv/api-client";
 
 /**
  * Maps the real `PlaybackInfoResponse.mode` ("direct" | "hls") to a MIME

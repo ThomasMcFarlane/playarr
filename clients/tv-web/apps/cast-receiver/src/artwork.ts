@@ -6,7 +6,7 @@
  * failure -- missing artwork for this work, network error -- artwork is
  * omitted silently; it is never worth failing a load over.
  */
-import type { ImageKind } from "@streamarr-tv/api-client";
+import type { ImageKind } from "@playarr-tv/api-client";
 
 /** The one `ApiClient` method this module needs. */
 export type ArtworkFetcher = (workId: string, kind: ImageKind) => Promise<Blob>;

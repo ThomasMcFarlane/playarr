@@ -13,7 +13,7 @@ import { EditKeepUntilDrawer } from "../components/EditKeepUntilDrawer";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
 import { NotFoundPage } from "./NotFound";
-import type { Work, WorkDetail } from "@streamarr-tv/api-client";
+import type { Work, WorkDetail } from "@playarr-tv/api-client";
 
 type TFunc = (key: TranslationKey, params?: Record<string, string | number>) => string;
 

@@ -1,4 +1,4 @@
-import type { WorkKind } from "@streamarr-tv/api-client";
+import type { WorkKind } from "@playarr-tv/api-client";
 
 const CATALOG_KINDS_STORAGE_KEY = "playarr.catalogKinds.v1";
 const WORK_KINDS: ReadonlySet<string> = new Set([

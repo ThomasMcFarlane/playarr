@@ -10,7 +10,7 @@ import {
   parsePlayarrCastMessage,
   type PlayarrCastMessage,
   type PlayarrCastSenderMessage,
-} from "@streamarr-tv/cast-protocol";
+} from "@playarr-tv/cast-protocol";
 
 type PlayarrCastMessageListener = (namespace: string, message: string) => void;
 

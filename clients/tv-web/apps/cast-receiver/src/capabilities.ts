@@ -26,8 +26,8 @@
  * HEVC, or the server may hand back a source the narrow-profile bias was
  * specifically trying to avoid needing HLS/auth complexity for.
  */
-import type { PlaybackInfoParams } from "@streamarr-tv/api-client";
-import type { PlayarrCastDeviceCapabilities } from "@streamarr-tv/cast-protocol";
+import type { PlaybackInfoParams } from "@playarr-tv/api-client";
+import type { PlayarrCastDeviceCapabilities } from "@playarr-tv/cast-protocol";
 
 /** Always used for playback negotiation -- see this file's module doc comment. Never derived from real probing. */
 export const NEGOTIATION_PLAYBACK_CAPABILITIES: Pick<

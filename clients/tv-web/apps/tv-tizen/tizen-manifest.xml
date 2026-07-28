@@ -8,11 +8,11 @@
 -->
 <widget xmlns="http://www.w3.org/ns/widgets"
         xmlns:tizen="http://tizen.org/ns/widgets"
-        id="https://streamarr.tv/tizen/app"
+        id="https://playarr.tv/tizen/app"
         version="0.1.0"
         viewmodes="maximized">
 
-  <tizen:application id="StrmarrTV1.Streamarr"
+  <tizen:application id="StrmarrTV1.Playarr"
                       package="StrmarrTV1"
                       required_version="7.0"/>
 

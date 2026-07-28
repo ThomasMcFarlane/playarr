@@ -7,8 +7,8 @@ import {
   useState,
   type RefObject,
 } from "react";
-import type { Work } from "@streamarr-tv/api-client";
-import type { PlayarrCastStateMessage } from "@streamarr-tv/cast-protocol";
+import type { Work } from "@playarr-tv/api-client";
+import type { PlayarrCastStateMessage } from "@playarr-tv/cast-protocol";
 import type { PlaybackEngineController } from "../../lib/usePlaybackEngine";
 import { CachedArtworkImage } from "../../lib/artwork";
 import { useGlobalMediaControls } from "../../lib/useGlobalMediaControls";

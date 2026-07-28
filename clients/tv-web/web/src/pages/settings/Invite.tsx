@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import {
   ApiError,
   type UserInviteRequestResponse,
-} from "@streamarr-tv/api-client";
-import { buildInviteUrl, type PeerAddressBundleLike } from "@streamarr-tv/domain";
+} from "@playarr-tv/api-client";
+import { buildInviteUrl, type PeerAddressBundleLike } from "@playarr-tv/domain";
 import { useApiBaseUrl, usePrimaryApiClient } from "../../lib/ApiClientProvider";
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useToast } from "../../lib/toast";

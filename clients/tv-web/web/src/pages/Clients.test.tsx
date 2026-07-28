@@ -65,15 +65,15 @@ describe("ClientsPage", () => {
     expect(redirect.props.replace).toBe(true);
   });
 
-  it("wraps arrow-key navigation from the first client to the last and back", () => {
+  it("does not rely on the app-wide edge-target/edge-stop focus attributes", () => {
+    // Left/Right selection is handled by this page's own keydown handler
+    // (see nextClientIndex, unit-tested directly in coverflow.test.ts) so
+    // that Up/Down can never be misrouted into it -- there's nothing for
+    // the shared geometric focus system to do here at all.
     const markup = renderClientRoute("/clients/vidaa");
 
-    expect(markup).toMatch(
-      /id="client-vidaa"[^>]*data-tv-edge-target-left="#client-firetv"/
-    );
-    expect(markup).toMatch(
-      /id="client-firetv"[^>]*data-tv-edge-target-right="#client-vidaa"/
-    );
+    expect(markup).not.toContain("data-tv-edge-target-left");
+    expect(markup).not.toContain("data-tv-edge-target-right");
     expect(markup).not.toContain("data-tv-edge-stop-left");
     expect(markup).not.toContain("data-tv-edge-stop-right");
   });

@@ -1,5 +1,5 @@
 /**
- * @streamarr-tv/player-shaka
+ * @playarr-tv/player-shaka
  *
  * Shaka Player adapter implementing `PlaybackEngine`. Used by the web app,
  * the webOS app shell, and the VIDAA fallback PWA -- anywhere with a real
@@ -21,7 +21,7 @@ import {
   type PlaybackEngineState,
   type PlaybackSource,
   type PlaybackSubtitleTrack,
-} from "@streamarr-tv/player-core";
+} from "@playarr-tv/player-core";
 
 let polyfillsInstalled = false;
 
@@ -198,9 +198,9 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
    * Registers a callback awaited before every request Shaka's own
    * `NetworkingEngine` makes (manifest, segment, license, ...) -- whatever
    * it returns is attached as an `Authorization: Bearer <token>` header.
-   * Streamarr's playback-adjacent routes (HLS manifest/segment serving in
+   * Playarr Server's playback-adjacent routes (HLS manifest/segment serving in
    * particular) require this header -- see
-   * `backend/crates/streamarr-api/src/auth_extractor.rs`'s `StreamingUser`
+   * `backend/crates/playarr-api/src/auth_extractor.rs`'s `StreamingUser`
    * extractor.
    *
    * Safe to call before or after `attach()`/`load()`: the request filter
@@ -315,14 +315,14 @@ export class ShakaPlaybackEngine extends BasePlaybackEngine implements PlaybackE
     // `manifest.retryParameters` is widened well past Shaka's default (a
     // couple of quick attempts, gone in a few seconds total) because a
     // freshly-negotiated on-demand session's `playlist.m3u8` (see
-    // `streamarr-transcode::spawn_on_demand_transcode`) does not exist on
+    // `playarr-transcode::spawn_on_demand_transcode`) does not exist on
     // disk until ffmpeg actually starts writing it -- multiple seconds away
     // for a real 4K source, confirmed live (~7-10s cold start). Confirmed
     // live without this: Shaka 404s on the manifest fetch, exhausts its
     // default retry budget in under two seconds, and fires a fatal `error`
     // event -- the exact "can't load/play anything" symptom, with no
     // negotiation error and no obviously-broken network request to explain
-    // it. `streamarr-api`'s `serve_session_file_handler` doc comment already
+    // it. `playarr-api`'s `serve_session_file_handler` doc comment already
     // assumed "real HLS players retry"; this is what actually makes that
     // true. `streaming.retryParameters` gets the same treatment for
     // segment requests, which hit the same not-written-yet race for

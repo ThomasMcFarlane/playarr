@@ -2,7 +2,7 @@ export interface SignupInvite {
   /**
    * Every address this invite's issuing peer group answers to, priority-
    * ordered (each entry's `url`, `peer_node_id` dropped -- see
-   * `PeerAddressBundle.addresses`, `backend/crates/streamarr-api/
+   * `PeerAddressBundle.addresses`, `backend/crates/playarr-api/
    * src/admin_peer.rs`). For a standalone, ungrouped server this is always
    * a single-element list -- the "additive and inert for one node" rollout
    * invariant `docs/architecture/peer-groups.md` states at its top.
@@ -29,7 +29,7 @@ export interface SignupInvite {
  *   sign-up redemption works at any node in the group by design (see
  *   `SignupInvite.serverUrls`'s own doc comment). This is this file's own
  *   decoding convention -- `Invite.tsx`/`Users.tsx` (the invite-link
- *   builders, via `@streamarr-tv/domain::buildInviteUrl`) and the backend's
+ *   builders, via `@playarr-tv/domain::buildInviteUrl`) and the backend's
  *   `oauth.rs::encode_servers_param` (which embeds the same bundle shape
  *   into `verification_uri_complete` for device pairing, §6.3) both encode
  *   against it, so a change here must stay in lockstep with those. Chosen
@@ -100,14 +100,14 @@ function decodeServersParam(value: string): string[] {
   }
 }
 
-/** Extracts the `url` field off one `servers=` entry (`{peer_node_id, url}`); `undefined` if the entry isn't a well-formed object with a string `url`. Mirrors `@streamarr-tv/device-auth`'s `serverAddressBundle.ts::decodeServersParam`'s identical extraction. */
+/** Extracts the `url` field off one `servers=` entry (`{peer_node_id, url}`); `undefined` if the entry isn't a well-formed object with a string `url`. Mirrors `@playarr-tv/device-auth`'s `serverAddressBundle.ts::decodeServersParam`'s identical extraction. */
 function extractUrl(entry: unknown): string | undefined {
   if (entry === null || typeof entry !== "object") return undefined;
   const url = (entry as Record<string, unknown>).url;
   return typeof url === "string" ? url : undefined;
 }
 
-/** Mirrors `@streamarr-tv/device-auth`'s `jwt.ts::base64UrlDecode` (unexported there, so duplicated rather than reached into another package's internals for one helper). */
+/** Mirrors `@playarr-tv/device-auth`'s `jwt.ts::base64UrlDecode` (unexported there, so duplicated rather than reached into another package's internals for one helper). */
 function base64UrlDecode(segment: string): string {
   const base64 = segment.replace(/-/g, "+").replace(/_/g, "/");
   const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useNavigate, type Location } from "react-router-dom";
-import { ApiError } from "@streamarr-tv/api-client";
+import { ApiError } from "@playarr-tv/api-client";
 import { useApiBaseUrl, useAuth } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { DeviceLogin } from "../components/DeviceLogin";
@@ -185,10 +185,10 @@ function loginDestinationPath(from: Location | string | undefined): string | und
 
 /**
  * The login endpoint's failure responses carry a real `{error, message}`
- * body (`streamarr_api::error::ApiError`, e.g. `message: "invalid username
+ * body (`playarr_api::error::ApiError`, e.g. `message: "invalid username
  * or password"`) even though the generated OpenAPI type for its 400/401
  * responses is untyped -- see `ApiClient.login`'s doc comment and
- * `backend/crates/streamarr-api/src/error.rs`'s `From<LoginError>` impl.
+ * `backend/crates/playarr-api/src/error.rs`'s `From<LoginError>` impl.
  * Prefer that real message over `describeApiError`'s generic "Sign-in
  * required" 401 text, which reads wrong on the page whose entire purpose
  * is signing in.

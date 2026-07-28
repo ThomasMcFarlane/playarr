@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { describeApiError, type DownloadOptionsResponse } from "@streamarr-tv/api-client";
+import { describeApiError, type DownloadOptionsResponse } from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { formatBytes, formatEstimatedBytes } from "../lib/formatBytes";
 import { useLanguage } from "../lib/i18n/LanguageProvider";

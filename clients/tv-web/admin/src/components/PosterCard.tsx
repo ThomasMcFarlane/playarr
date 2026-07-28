@@ -1,9 +1,9 @@
 import { forwardRef } from "react";
 import { Link } from "react-router-dom";
-import type { Availability, Work, WorkKind } from "@streamarr-tv/api-client";
+import type { Availability, Work, WorkKind } from "@playarr-tv/api-client";
 import { CachedWorkArtworkImage } from "./CachedArtwork";
 
-/** Streamarr's actual `WorkKind` values -- "Books" reads better than the literal "Author" for an operator. */
+/** Playarr Server's actual `WorkKind` values -- "Books" reads better than the literal "Author" for an operator. */
 export const KIND_LABELS: Record<WorkKind, string> = {
   movie: "Movies",
   series: "Series",

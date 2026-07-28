@@ -166,7 +166,7 @@ export const ja: Translations = {
   "components.themeToggle.useTheme": "{{theme}}テーマを使用",
   "components.updateToast.updateAvailable": "Playarrの新しいバージョンが利用可能です。",
   "components.updateToast.packageUpdateRequired":
-    "インストール済みのPlayarrアプリは、このStreamarrサーバーではサポートされなくなりました。続行するには新しいパッケージをインストールしてください。",
+    "インストール済みのPlayarrアプリは、このPlayarr Serverサーバーではサポートされなくなりました。続行するには新しいパッケージをインストールしてください。",
   "components.updateToast.reload": "再読み込み",
   "components.updateToast.dismiss": "閉じる",
   "components.watchStateOverlay.percentWatched": "{{percent}}%視聴済み",
@@ -274,7 +274,7 @@ export const ja: Translations = {
   "pages.login.title": "サインイン",
   "pages.login.kicker": "おかえりなさい",
   "pages.login.heading": "Playarrにサインイン",
-  "pages.login.description": "Streamarrサーバーを選択し、このブラウザにプロフィールを保存してください。",
+  "pages.login.description": "Playarr Serverサーバーを選択し、このブラウザにプロフィールを保存してください。",
   "pages.login.serverUrlLabel": "サーバーURL",
   "pages.login.serverUrlPlaceholder": "サーバーアドレスまたはURL",
   "pages.login.insecureHint":
@@ -370,7 +370,7 @@ export const ja: Translations = {
   "pages.playlists.nameLabel": "名前",
   "pages.playlists.mediaTypeLabel": "プレイリストの種類",
   "pages.playlists.mediaTypeServerMismatch":
-    "このStreamarrサーバーはまだオーディオプレイリストに対応していません。サーバーを更新または再起動してから、もう一度お試しください。",
+    "このPlayarr Serverサーバーはまだオーディオプレイリストに対応していません。サーバーを更新または再起動してから、もう一度お試しください。",
   "pages.playlists.mediaTypeVideo": "ビデオ",
   "pages.playlists.mediaTypeAudio": "オーディオ",
   "pages.playlists.namePlaceholder": "プレイリスト名",
@@ -626,14 +626,14 @@ export const ja: Translations = {
   "settings.index.profileLock.title": "プロフィールロック",
   "settings.index.profileLock.description": "プロフィールを切り替える前に4桁のPINを要求します。",
   "settings.index.invite.title": "友達を招待",
-  "settings.index.invite.description": "Streamarrの管理者に友達招待用のQRコードを1枚依頼してください。",
+  "settings.index.invite.description": "Playarr Serverの管理者に友達招待用のQRコードを1枚依頼してください。",
   "settings.index.requestLatency.title": "リクエストのレイテンシ",
   "settings.index.requestLatency.description": "管理者向けのルート別HTTPリクエストのレイテンシ。",
 
   "settings.invite.documentTitle": "友達を招待 - 設定",
   "settings.invite.kicker": "自分好みにカスタマイズ",
   "settings.invite.title": "友達を招待",
-  "settings.invite.description": "Streamarrの管理者に友達招待用のQRコードを1枚依頼してください。",
+  "settings.invite.description": "Playarr Serverの管理者に友達招待用のQRコードを1枚依頼してください。",
   "settings.invite.checkingStatus": "招待の状況を確認しています…",
   "settings.invite.statusNone": "まだ招待をリクエストしていません。",
   "settings.invite.statusPending": "管理者による確認をお待ちください。",
@@ -650,7 +650,7 @@ export const ja: Translations = {
   "settings.invite.modalKicker": "共有の準備ができました",
   "settings.invite.modalTitle": "友達をPlayarrに招待",
   "settings.invite.modalDescription":
-    "この1回限りのコードは、お使いのStreamarrサーバーが設定された状態でPlayarrを開きます。",
+    "この1回限りのコードは、お使いのPlayarr Serverサーバーが設定された状態でPlayarrを開きます。",
   "settings.invite.qrLabel": "Playarr友達招待のQRコード",
   "settings.invite.linkLabel": "招待リンク",
   "settings.invite.messageLabel": "誰のための招待で、何へのアクセスが必要ですか？（任意）",
@@ -659,7 +659,7 @@ export const ja: Translations = {
   "settings.invite.close": "閉じる",
   "settings.invite.copied": "コピーしました",
   "settings.invite.copyLink": "リンクをコピー",
-  "settings.invite.toastRequestSent": "Streamarrの管理者に招待リクエストを送信しました。",
+  "settings.invite.toastRequestSent": "Playarr Serverの管理者に招待リクエストを送信しました。",
   "settings.invite.toastGenerated": "友達招待を生成しました。24時間有効です。",
   "settings.invite.toastCopied": "招待リンクをコピーしました。",
   "settings.invite.copyFailed": "リンクをコピーできませんでした。手動で選択してコピーしてください。",
@@ -772,9 +772,9 @@ export const ja: Translations = {
   "pages.signup.alreadyHaveAccount": "すでにアカウントをお持ちですか?",
   "pages.signup.loginLink": "ログイン",
   "pages.signup.title": "Playarrアカウントを作成",
-  "pages.signup.description": "あなたを招待したStreamarrサーバー用のアカウント情報を選択してください。",
+  "pages.signup.description": "あなたを招待したPlayarr Serverサーバー用のアカウント情報を選択してください。",
   "pages.signup.inviteMissing":
-    "この招待リンクは不完全か無効です。Streamarrの管理者に新しいQRコードを依頼してください。",
+    "この招待リンクは不完全か無効です。Playarr Serverの管理者に新しいQRコードを依頼してください。",
   "pages.signup.serverNameLoading": "サーバー名を読み込んでいます…",
   "pages.signup.serverUrlLabel": "サーバー",
   "pages.signup.serverUrlHint": "このサーバーは、招待を発行したサーバーに固定されています。",
@@ -789,7 +789,7 @@ export const ja: Translations = {
   "pages.signup.error.usernameTaken": "そのユーザー名はすでに使用されています。",
   "pages.signup.error.generic": "アカウントを作成できませんでした。管理者に新しい招待を依頼してください。",
   "pages.signup.error.networkUnreachable":
-    "このStreamarrサーバーに接続できませんでした。同じネットワークに接続しているか確認し、確認を求められたらローカルネットワークへのアクセスを許可してください。",
+    "このPlayarr Serverサーバーに接続できませんでした。同じネットワークに接続しているか確認し、確認を求められたらローカルネットワークへのアクセスを許可してください。",
   "pages.clients.brandAriaLabel": "Playarrクライアント",
   "pages.clients.headerNavAriaLabel": "クライアントページのナビゲーション",
   "pages.clients.navClients": "クライアント",
@@ -884,7 +884,7 @@ export const ja: Translations = {
     "デバイス設定を実行してaddを選び、接続先をplayarr-tvと名付けます。テレビのIPアドレス、ポート9922、ユーザーprisonerを入力し、パスワードは空欄にします。Key Serverを有効にしたまま鍵を取得し、テレビに表示された6文字のパスフレーズを入力します。",
   "pages.clients.webosPage.step4Title": "インストールして起動する",
   "pages.clients.webosPage.step4Description":
-    "ローカルでビルドしたIPKの場合はtv-webディレクトリからコマンドを実行します。playarr-webos.ipkをダウンロードした場合は、そのファイルのパスに置き換えてください。Playarrが開いたらリンクコードを読み取り、PlayarrでStreamarrサーバーと世帯プロフィールを選択します。",
+    "ローカルでビルドしたIPKの場合はtv-webディレクトリからコマンドを実行します。playarr-webos.ipkをダウンロードした場合は、そのファイルのパスに置き換えてください。Playarrが開いたらリンクコードを読み取り、PlayarrでPlayarr Serverサーバーと世帯プロフィールを選択します。",
   "pages.clients.webosPage.officialGuide": "LG公式Developer Modeガイドを開く",
   "pages.clients.webosPage.noteTitle": "Developer Modeでのインストールには有効期限があります。",
   "pages.clients.webosPage.noteDescription":
@@ -910,7 +910,7 @@ export const ja: Translations = {
     "まず上の署名済みパッケージを試します。利用できない場合や署名がテレビで無効な場合は、Playarrをビルドし、Tizen Studioで有効になっている証明書プロファイルの正確な名前を指定してdistディレクトリをパッケージ化します。",
   "pages.clients.tizenPage.step4Title": "接続、インストール、起動",
   "pages.clients.tizenPage.step4Description":
-    "SDBで接続します。Tizen StudioのDevice Managerで接続したテレビを右クリックし、Permit to install applicationsを選びます。tizen list tvでCLIのターゲット名を確認し、生成されたWGTのファイル名、パッケージディレクトリ、ターゲット名を代入して固定アプリIDでPlayarrを起動します。リンクコードを読み取り、PlayarrでStreamarrサーバーと世帯プロフィールを選択します。",
+    "SDBで接続します。Tizen StudioのDevice Managerで接続したテレビを右クリックし、Permit to install applicationsを選びます。tizen list tvでCLIのターゲット名を確認し、生成されたWGTのファイル名、パッケージディレクトリ、ターゲット名を代入して固定アプリIDでPlayarrを起動します。リンクコードを読み取り、PlayarrでPlayarr Serverサーバーと世帯プロフィールを選択します。",
   "pages.clients.tizenPage.officialGuide": "Samsung公式TVデバイスガイドを開く",
   "pages.clients.tizenPage.noteTitle": "WGTは署名後に変更しないでください。",
   "pages.clients.tizenPage.noteDescription":
@@ -936,7 +936,7 @@ export const ja: Translations = {
     "Uploadを選び、playarr-roku.zipを展開せずに選択してからInstallを選びます。サイドロードが完了するとRokuがPlayarrを起動します。",
   "pages.clients.rokuPage.step4Title": "Playarrを接続",
   "pages.clients.rokuPage.step4Description":
-    "StreamarrサーバーのベースURLを入力し、テレビに表示されるコードに従ってRokuを承認してから、世帯プロフィールを選択します。",
+    "Playarr ServerサーバーのベースURLを入力し、テレビに表示されるコードに従ってRokuを承認してから、世帯プロフィールを選択します。",
   "pages.clients.rokuPage.officialGuide": "Roku公式開発者ガイドを開く",
   "pages.clients.rokuPage.noteKicker": "重要",
   "pages.clients.rokuPage.noteTitle": "サイドロードできるアプリは一度に1つだけです。",

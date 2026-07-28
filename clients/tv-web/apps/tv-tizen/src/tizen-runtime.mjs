@@ -109,7 +109,7 @@ export function hasTizenBackBlockingSurface(documentObject) {
 
 export async function loadPackagedConfig({
   fetchImpl = fetch,
-  configUrl = `${import.meta.env.BASE_URL}streamarr-config.json`,
+  configUrl = `${import.meta.env.BASE_URL}playarr-config.json`,
   windowObject = window,
 } = {}) {
   try {

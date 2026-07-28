@@ -7,8 +7,8 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import type { PlaybackQualityOption } from "@streamarr-tv/api-client";
-import type { PlaybackEngineState } from "@streamarr-tv/player-core";
+import type { PlaybackQualityOption } from "@playarr-tv/api-client";
+import type { PlaybackEngineState } from "@playarr-tv/player-core";
 import { QualityMatrix } from "../QualityMatrix";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { qualityDefinitionForId } from "../../lib/qualityMatrix";

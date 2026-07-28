@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { describeApiError, type SourceMatrixResponse, type Work, type WorkKind } from "@streamarr-tv/api-client";
+import { describeApiError, type SourceMatrixResponse, type Work, type WorkKind } from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { LibraryToolbarMenus, type LibraryViewMode } from "../components/LibraryToolbarMenus";
@@ -34,12 +34,12 @@ function parseMatrixSort(value: string | null): MatrixSort {
 }
 
 /**
- * Read-only catalog browse for Streamarr's admin surface -- lets an
+ * Read-only catalog browse for Playarr Server's admin surface -- lets an
  * operator verify a registered `*arr` source actually synced (titles,
  * availability, genres) without needing Playarr streaming access. Backed
  * by the same `GET /api/v1/catalog` endpoint Playarr Web uses, gated on
  * the backend by `CatalogViewer` (streaming access OR admin -- see
- * `backend/crates/streamarr-api/src/auth_extractor.rs`), not
+ * `backend/crates/playarr-api/src/auth_extractor.rs`), not
  * `StreamingUser`: this page can never obtain a playback URL, it only
  * lists what's in the catalog.
  *

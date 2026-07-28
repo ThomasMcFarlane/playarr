@@ -1,4 +1,4 @@
-import { color, spacing, typeScale } from "@streamarr-tv/design-tokens";
+import { color, spacing, typeScale } from "@playarr-tv/design-tokens";
 
 export interface AsyncStateMessageProps {
   kind: "loading" | "empty" | "error";

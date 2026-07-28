@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { createQrCodeSvg } from "@streamarr-tv/device-auth";
-import { radius } from "@streamarr-tv/design-tokens";
+import { createQrCodeSvg } from "@playarr-tv/device-auth";
+import { radius } from "@playarr-tv/design-tokens";
 
 export function QrCode({ value, size = 240 }: { value: string; size?: number }) {
   const [svg, setSvg] = useState<string | null>(null);
@@ -19,7 +19,7 @@ export function QrCode({ value, size = 240 }: { value: string; size?: number }) 
   return (
     <div
       role="img"
-      aria-label="QR code for the Streamarr pairing link"
+      aria-label="QR code for the Playarr Server pairing link"
       style={{
         width: size,
         height: size,

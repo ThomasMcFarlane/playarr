@@ -8,9 +8,9 @@
  */
 
 /**
- * Structural mirror of `@streamarr-tv/api-client`'s generated
+ * Structural mirror of `@playarr-tv/api-client`'s generated
  * `PeerAddressEntry` -- one address attributed to the `peer_nodes` row it
- * belongs to (`backend/crates/streamarr-api/src/admin_peer.rs`). This
+ * belongs to (`backend/crates/playarr-api/src/admin_peer.rs`). This
  * package's invite-link builder never needs the attribution itself --
  * sign-up redemption works at any node in the group by design, per that
  * file's own doc comment -- it only exists here so `PeerAddressBundleLike`
@@ -22,7 +22,7 @@ export interface PeerAddressEntryLike {
 }
 
 /**
- * Structural mirror of `@streamarr-tv/api-client`'s generated
+ * Structural mirror of `@playarr-tv/api-client`'s generated
  * `PeerAddressBundle` -- this package deliberately doesn't depend on the
  * generated schema (see this package's top-of-file comment, and
  * `version-check.ts`'s `CompatibilityEntryLike` for the same convention
@@ -53,7 +53,7 @@ const SIGNUP_PATH = "/signup";
  * `bundle.addresses` as the plural `servers=` param, never the legacy singular
  * `server=`, even for a standalone node's one-element bundle: one code
  * path, not a grouped/ungrouped branch, mirroring `PeerAddressBundle`'s
- * own backend invariant (`streamarr-api/src/admin_peer.rs`) and
+ * own backend invariant (`playarr-api/src/admin_peer.rs`) and
  * `oauth.rs::request_verification_uri`'s identical choice for
  * `verification_uri_complete` (§6.3). The *result* still looks identical
  * to today's single-address link for an ungrouped deployment -- only the
@@ -72,11 +72,11 @@ export function buildInviteUrl(bundle: PeerAddressBundleLike, inviteToken: strin
 }
 
 /**
- * Mirrors `streamarr-api/src/oauth.rs::encode_servers_param` exactly: the
+ * Mirrors `playarr-api/src/oauth.rs::encode_servers_param` exactly: the
  * entry list is JSON-array-of-`{peer_node_id, url}`-objects-encoded, then
  * base64url-encoded with no padding -- unpadded, so the value never
  * contains a `=` that would need percent-encoding inside a query string,
- * the same convention `streamarr_auth::jwt::encode_eddsa` (backend) and
+ * the same convention `playarr_auth::jwt::encode_eddsa` (backend) and
  * this repo's own `device-auth` package
  * (`serverAddressBundle.ts::decodeServersParam`, `jwt.ts`) already use for
  * the identical reason. Exact inverse of `signupInvite.ts`'s decode:

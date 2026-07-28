@@ -1,20 +1,20 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
-import { ApiClient } from "@streamarr-tv/api-client";
-import { decodeAccessTokenUserId, ensureAccessToken, TokenStore } from "@streamarr-tv/device-auth";
-import { API_BASE_URL_QUERY_PARAM } from "@streamarr-tv/domain";
+import { ApiClient } from "@playarr-tv/api-client";
+import { decodeAccessTokenUserId, ensureAccessToken, TokenStore } from "@playarr-tv/device-auth";
+import { API_BASE_URL_QUERY_PARAM } from "@playarr-tv/domain";
 
 /**
  * This build's own identity for the transparent `POST /api/v1/auth/login`
- * call (see `ensureAccessToken`). `clientPlatform: "streamarr-admin"` is a
+ * call (see `ensureAccessToken`). `clientPlatform: "playarr-admin"` is a
  * real, dedicated `ClientPlatform` variant (not a borrowed Playarr one) --
  * `login_handler` on the backend uses it to skip the `can_stream` gate it
  * otherwise requires for every other platform, since this app is
- * Streamarr's own admin surface, not a Playarr client (see that handler's
+ * Playarr Server's own admin surface, not a Playarr client (see that handler's
  * doc comment).
  */
 const ADMIN_LOGIN_IDENTITY = {
-  deviceName: "Streamarr Admin",
-  clientPlatform: "streamarr-admin" as const,
+  deviceName: "Playarr Server Admin",
+  clientPlatform: "playarr-admin" as const,
   clientVersion: "0.1.0",
 };
 
@@ -51,12 +51,12 @@ interface ApiClientContextValue {
 const ApiClientContext = createContext<ApiClientContextValue | null>(null);
 
 /**
- * Streamarr's admin UI is co-hosted by the backend itself (same origin,
- * same port -- see `streamarr_api::build_router`'s `web_assets_dir`), so
+ * Playarr Server's admin UI is co-hosted by the backend itself (same origin,
+ * same port -- see `playarr_api::build_router`'s `web_assets_dir`), so
  * the API base URL is always this page's own origin. A `?apiBaseUrl=...`
  * override exists only for pointing a local dev build at a non-default
  * backend; there is no Settings-page override here (unlike Playarr Web) --
- * this app only ever talks to the one Streamarr instance serving it.
+ * this app only ever talks to the one Playarr Server instance serving it.
  */
 function resolveApiBaseUrl(): string {
   const fromQuery = new URLSearchParams(window.location.search).get(API_BASE_URL_QUERY_PARAM);

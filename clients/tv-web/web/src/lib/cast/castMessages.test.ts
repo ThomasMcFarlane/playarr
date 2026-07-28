@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PLAYARR_CAST_NAMESPACE, type PlayarrCastMessage } from "@streamarr-tv/cast-protocol";
+import { PLAYARR_CAST_NAMESPACE, type PlayarrCastMessage } from "@playarr-tv/cast-protocol";
 import {
   sendPlayarrCastMessage,
   subscribeToPlayarrCastMessages,

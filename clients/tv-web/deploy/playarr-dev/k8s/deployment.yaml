@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${PROJECT}
+  namespace: dev
+  labels:
+    app: ${PROJECT}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${PROJECT}
+  template:
+    metadata:
+      labels:
+        app: ${PROJECT}
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: app
+          image: localhost:5000/${PROJECT}:${TAG}
+          imagePullPolicy: Always
+          workingDir: /repo/clients/tv-web/web
+          command: ["node", "node_modules/vite/bin/vite.js", "--host", "0.0.0.0", "--port", "${PORT}"]
+          env:
+            - name: HOME
+              value: /tmp
+          ports:
+            - containerPort: ${PORT}
+          volumeMounts:
+            - name: repo
+              mountPath: /repo
+      volumes:
+        - name: repo
+          hostPath:
+            path: /path/to/streamarr
+            type: Directory

@@ -1,6 +1,6 @@
 /**
  * Best-effort, unverified decode of a JWT access token's `sub` claim (the
- * signed-in user's id -- see `streamarr_auth::jwt::AccessTokenClaims::sub`
+ * signed-in user's id -- see `playarr_auth::jwt::AccessTokenClaims::sub`
  * on the backend). Purely a client-side UX hint (e.g. "is this admin about
  * to edit their own account?") -- the signature is never checked here, only
  * the payload is read. That's fine: the server independently re-verifies
@@ -23,11 +23,11 @@ export function decodeAccessTokenDeviceId(accessToken: string): string | undefin
 
 /**
  * Best-effort, unverified read of a JWT access token's `iss` claim --
- * `streamarr_auth::jwt::AccessTokenClaims::iss`, either this node's fixed
+ * `playarr_auth::jwt::AccessTokenClaims::iss`, either this node's fixed
  * HS256 issuer string (a standalone deployment, or a grouped node's own
  * tokens before cross-node trust kicked in) or, once grouped, the issuing
  * peer's `peer_id` (§5.4 of `docs/architecture/peer-groups.md`). Used only
- * as a routing hint -- `@streamarr-tv/device-auth::session.ts`'s
+ * as a routing hint -- `@playarr-tv/device-auth::session.ts`'s
  * `ensureAccessToken` reads this to scope its cross-peer refresh retry to
  * addresses attributed to the *same* peer that actually issued the stored
  * refresh token (§3.7: refresh tokens are never synced peer-to-peer, so a

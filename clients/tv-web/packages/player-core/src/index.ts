@@ -1,5 +1,5 @@
 /**
- * @streamarr-tv/player-core
+ * @playarr-tv/player-core
  *
  * Platform-agnostic playback contract. `player-shaka` (web/webOS/VIDAA,
  * MSE + EME via Shaka Player) and `player-avplay` (Tizen's native

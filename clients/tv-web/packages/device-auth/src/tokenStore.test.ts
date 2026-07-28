@@ -88,7 +88,7 @@ describe("TokenStore", () => {
 
   it("ignores a corrupt/foreign value under its storage key instead of throwing", () => {
     const storage = createMemoryLocalStorage();
-    storage.setItem("streamarr:session", "not json");
+    storage.setItem("playarr:session", "not json");
     vi.stubGlobal("localStorage", storage);
 
     expect(() => new TokenStore()).not.toThrow();

@@ -21,7 +21,7 @@ import {
   type WatchProgress,
   type Work,
   type WorkDetail,
-} from "@streamarr-tv/api-client";
+} from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { CachedArtworkImage } from "../lib/artwork";
 import { useLanguage } from "../lib/i18n/LanguageProvider";

@@ -8,7 +8,7 @@
  * and `context.start(options)` itself is always the very last call in this
  * module.
  */
-import { ApiClient, describeApiError, type PlaybackInfo } from "@streamarr-tv/api-client";
+import { ApiClient, describeApiError, type PlaybackInfo } from "@playarr-tv/api-client";
 import {
   PLAYARR_CAST_NAMESPACE,
   PLAYARR_CAST_PROTOCOL_VERSION,
@@ -22,7 +22,7 @@ import {
   type PlayarrCastReadyMessage,
   type PlayarrCastStateMessage,
   type PlayarrCastTrackOption,
-} from "@streamarr-tv/cast-protocol";
+} from "@playarr-tv/cast-protocol";
 import { loadWorkArtworkBlobUrl } from "./artwork";
 import { CastCredentialStore } from "./auth";
 import { buildDeviceCapabilities } from "./capabilities";
@@ -120,8 +120,8 @@ function ensureServerBinding(baseUrl: string): void {
     baseUrl,
     getAccessToken: () => storeRef.current?.currentAccessToken(),
     defaultHeaders: {
-      "X-Streamarr-Client-Platform": "cast",
-      "X-Streamarr-Client-Version": __APP_VERSION__,
+      "X-Playarr-Client-Platform": "cast",
+      "X-Playarr-Client-Version": __APP_VERSION__,
     },
   });
   const store = new CastCredentialStore(

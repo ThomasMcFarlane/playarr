@@ -5,7 +5,7 @@ import {
   type WatchProgress,
   type Work,
   type WorkKind,
-} from "@streamarr-tv/api-client";
+} from "@playarr-tv/api-client";
 import {
   indexWatchProgressByWork,
   WatchStateOverlay,

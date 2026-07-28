@@ -198,7 +198,7 @@ describe("ApiClient", () => {
     expect(similar[0]?.id).toBe(similarId);
   });
 
-  it("fetches authenticated Streamarr-cached work artwork as a blob", async () => {
+  it("fetches authenticated Playarr Server-cached work artwork as a blob", async () => {
     const workId = "3f8b3e2a-1111-4a11-9a11-000000000001";
     const getAccessToken = vi.fn(async () => "access-token");
     const fetchImpl = mockFetch((request) => {
@@ -220,7 +220,7 @@ describe("ApiClient", () => {
     expect(getAccessToken).toHaveBeenCalledOnce();
   });
 
-  it("fetches authenticated Streamarr-cached album artwork as a blob", async () => {
+  it("fetches authenticated Playarr Server-cached album artwork as a blob", async () => {
     const artistWorkId = "3f8b3e2a-1111-4a11-9a11-000000000001";
     const albumId = "4f8b3e2a-1111-4a11-9a11-000000000002";
     const getAccessToken = vi.fn(async () => "access-token");
@@ -309,8 +309,8 @@ describe("ApiClient", () => {
       return jsonResponse(200, {
         device_code: "devcode-123",
         user_code: "ABCD-EFGH",
-        verification_uri: "https://streamarr.example/link",
-        verification_uri_complete: "https://streamarr.example/link?code=ABCD-EFGH",
+        verification_uri: "https://playarr.example/link",
+        verification_uri_complete: "https://playarr.example/link?code=ABCD-EFGH",
         expires_in: 1800,
         interval: 5,
       });
@@ -366,7 +366,7 @@ describe("ApiClient", () => {
     const fetchImpl = mockFetch((request) => {
       expect(request.headers.has("Authorization")).toBe(false);
       return jsonResponse(200, {
-        instance_name: "Test Streamarr",
+        instance_name: "Test Playarr Server",
         server_version: "0.1.0",
         api_version: "0.1.0",
         build_sha: null,
@@ -377,7 +377,7 @@ describe("ApiClient", () => {
     const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken });
 
     const version = await client.getVersion();
-    expect(version.instance_name).toBe("Test Streamarr");
+    expect(version.instance_name).toBe("Test Playarr Server");
     expect(version.server_version).toBe("0.1.0");
     expect(getAccessToken).not.toHaveBeenCalled();
   });
@@ -392,7 +392,7 @@ describe("ApiClient", () => {
     expect(getAccessToken).toHaveBeenCalledWith({ forceRefresh: true });
   });
 
-  it("reads and updates authenticated Streamarr system settings", async () => {
+  it("reads and updates authenticated Playarr Server system settings", async () => {
     const fetchImpl = mockFetch(async (request) => {
       expect(new URL(request.url).pathname).toBe("/api/v1/admin/system-settings");
       expect(request.headers.get("Authorization")).toBe("Bearer admin-token");
@@ -400,7 +400,7 @@ describe("ApiClient", () => {
         expect(await request.json()).toEqual({ instance_name: "REGION-A" });
         return jsonResponse(200, { instance_name: "REGION-A" });
       }
-      return jsonResponse(200, { instance_name: "Streamarr" });
+      return jsonResponse(200, { instance_name: "Playarr Server" });
     });
     const client = new ApiClient({
       baseUrl: BASE_URL,
@@ -408,7 +408,7 @@ describe("ApiClient", () => {
       getAccessToken: () => "admin-token",
     });
 
-    await expect(client.getSystemSettings()).resolves.toEqual({ instance_name: "Streamarr" });
+    await expect(client.getSystemSettings()).resolves.toEqual({ instance_name: "Playarr Server" });
     await expect(client.updateSystemSettings({ instance_name: "REGION-A" })).resolves.toEqual({
       instance_name: "REGION-A",
     });
@@ -448,7 +448,7 @@ describe("ApiClient", () => {
       expect(request.headers.has("Authorization")).toBe(false);
       expect(await request.json()).toEqual({
         device_id: "d1",
-        device_name: "Streamarr Web",
+        device_name: "Playarr Server Web",
         client_platform: "web",
         client_version: "1.0.0",
       });
@@ -464,7 +464,7 @@ describe("ApiClient", () => {
     const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl });
     const response = await client.login({
       device_id: "d1",
-      device_name: "Streamarr Web",
+      device_name: "Playarr Server Web",
       client_platform: "web",
       client_version: "1.0.0",
     });

@@ -8,7 +8,7 @@ import { useDocumentTitle } from "../lib/useDocumentTitle";
  * Admin-only interactive API explorer. Renders this server's own live
  * OpenAPI document (`GET /api/v1/openapi.json`) via Scalar's API Reference
  * component, so every "Test Request" call made from the UI hits this real
- * Streamarr instance. Scalar (not swagger-ui-react) specifically because it
+ * Playarr Server instance. Scalar (not swagger-ui-react) specifically because it
  * has real, built-in dark mode -- this app has no light theme at all, and
  * swagger-ui-react's light-only stylesheet needed extensive, fragile CSS
  * overrides to stay readable (see git history for that attempt).
@@ -73,7 +73,7 @@ export function ApiExplorerPage() {
     <div className="page">
       <h1 className="page-title">API Explorer</h1>
       <p className="muted" style={{ maxWidth: 760, marginBottom: "1.5rem" }}>
-        Browse and test every Streamarr API endpoint. Use "Impersonate" above to see exactly what
+        Browse and test every Playarr Server API endpoint. Use "Impersonate" above to see exactly what
         a specific user's account can access.
       </p>
 

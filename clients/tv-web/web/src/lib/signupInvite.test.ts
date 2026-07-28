@@ -15,10 +15,10 @@ describe("parseSignupInvite", () => {
   it("reads a legacy singular server= as a one-element list", () => {
     expect(
       parseSignupInvite(
-        "?server=https%3A%2F%2Fstreamarr.example.com%2F&invite=one-use-token"
+        "?server=https%3A%2F%2Fplayarr.example.com%2F&invite=one-use-token"
       )
     ).toEqual({
-      serverUrls: ["https://streamarr.example.com"],
+      serverUrls: ["https://playarr.example.com"],
       inviteToken: "one-use-token",
     });
   });
@@ -107,7 +107,7 @@ describe("parseSignupInvite", () => {
   });
 
   it("rejects missing values and non-HTTP schemes", () => {
-    expect(parseSignupInvite("?server=https%3A%2F%2Fstreamarr.example.com")).toBeNull();
+    expect(parseSignupInvite("?server=https%3A%2F%2Fplayarr.example.com")).toBeNull();
     expect(parseSignupInvite("?server=javascript%3Aalert(1)&invite=token")).toBeNull();
     expect(parseSignupInvite("?invite=token")).toBeNull();
   });

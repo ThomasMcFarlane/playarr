@@ -7,7 +7,7 @@ import { preparePackage } from "./prepare-package.mjs";
 
 const validManifest = `
 <widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" version="0.1.0">
-  <tizen:application id="StrmarrTV1.Streamarr" package="StrmarrTV1" required_version="7.0"/>
+  <tizen:application id="StrmarrTV1.Playarr" package="StrmarrTV1" required_version="7.0"/>
   <tizen:profile name="tv"/>
   <name>Playarr</name>
   <content src="index.html"/>
@@ -26,7 +26,7 @@ test("copies a package-valid widget manifest and icon into the build output", as
   const root = await mkdtemp(path.join(os.tmpdir(), "playarr-tizen-"));
   const output = path.join(root, "dist");
   const icon = path.join(root, "source-icon.png");
-  const runtimeConfig = path.join(root, "streamarr-config.json");
+  const runtimeConfig = path.join(root, "playarr-config.json");
   const packageJson = path.join(root, "package.json");
 
   await writeFile(path.join(root, "tizen-manifest.xml"), validManifest);
@@ -47,7 +47,7 @@ test("copies a package-valid widget manifest and icon into the build output", as
   assert.equal(await readFile(path.join(output, "config.xml"), "utf8"), validManifest);
   assert.equal(await readFile(path.join(output, "icon.png"), "utf8"), "test-icon");
   assert.equal(
-    await readFile(path.join(output, "streamarr-config.json"), "utf8"),
+    await readFile(path.join(output, "playarr-config.json"), "utf8"),
     '{"apiBaseUrl":""}'
   );
 });
@@ -61,14 +61,14 @@ test("rejects a manifest without the Tizen TV profile", async () => {
   await mkdir(path.join(root, "dist"), { recursive: true });
   await writeFile(path.join(root, "dist/index.html"), builtIndex);
   await writeFile(path.join(root, "package.json"), '{"version":"0.1.0"}');
-  await writeFile(path.join(root, "streamarr-config.json"), '{"apiBaseUrl":""}');
+  await writeFile(path.join(root, "playarr-config.json"), '{"apiBaseUrl":""}');
 
   await assert.rejects(
     preparePackage({
       sourceRoot: root,
       outputRoot: path.join(root, "dist"),
       iconSource: path.join(root, "missing.png"),
-      runtimeConfigSource: path.join(root, "streamarr-config.json"),
+      runtimeConfigSource: path.join(root, "playarr-config.json"),
       packageJsonSource: path.join(root, "package.json"),
     }),
     /tizen:profile/
@@ -83,7 +83,7 @@ test("rejects a manifest below the Chromium 94 Tizen 7 floor", async () => {
     validManifest.replace('required_version="7.0"', 'required_version="6.0"')
   );
   await writeFile(path.join(root, "package.json"), '{"version":"0.1.0"}');
-  await writeFile(path.join(root, "streamarr-config.json"), '{"apiBaseUrl":""}');
+  await writeFile(path.join(root, "playarr-config.json"), '{"apiBaseUrl":""}');
   await mkdir(output, { recursive: true });
   await writeFile(path.join(output, "index.html"), builtIndex);
 
@@ -92,7 +92,7 @@ test("rejects a manifest below the Chromium 94 Tizen 7 floor", async () => {
       sourceRoot: root,
       outputRoot: output,
       iconSource: path.join(root, "missing.png"),
-      runtimeConfigSource: path.join(root, "streamarr-config.json"),
+      runtimeConfigSource: path.join(root, "playarr-config.json"),
       packageJsonSource: path.join(root, "package.json"),
     }),
     /required_version="7\.0"/
@@ -104,7 +104,7 @@ test("rejects manifest/package version drift", async () => {
   const output = path.join(root, "dist");
   await writeFile(path.join(root, "tizen-manifest.xml"), validManifest);
   await writeFile(path.join(root, "package.json"), '{"version":"0.2.0"}');
-  await writeFile(path.join(root, "streamarr-config.json"), '{"apiBaseUrl":""}');
+  await writeFile(path.join(root, "playarr-config.json"), '{"apiBaseUrl":""}');
   await mkdir(output, { recursive: true });
   await writeFile(path.join(output, "index.html"), builtIndex);
 
@@ -113,7 +113,7 @@ test("rejects manifest/package version drift", async () => {
       sourceRoot: root,
       outputRoot: output,
       iconSource: path.join(root, "missing.png"),
-      runtimeConfigSource: path.join(root, "streamarr-config.json"),
+      runtimeConfigSource: path.join(root, "playarr-config.json"),
       packageJsonSource: path.join(root, "package.json"),
     }),
     /does not match package\.json/
@@ -130,7 +130,7 @@ test("rejects packaged server URLs containing a query or fragment", async () => 
     await writeFile(path.join(root, "tizen-manifest.xml"), validManifest);
     await writeFile(path.join(root, "package.json"), '{"version":"0.1.0"}');
     await writeFile(
-      path.join(root, "streamarr-config.json"),
+      path.join(root, "playarr-config.json"),
       JSON.stringify({ apiBaseUrl })
     );
     await mkdir(output, { recursive: true });
@@ -140,7 +140,7 @@ test("rejects packaged server URLs containing a query or fragment", async () => 
         sourceRoot: root,
         outputRoot: output,
         iconSource: path.join(root, "missing.png"),
-        runtimeConfigSource: path.join(root, "streamarr-config.json"),
+        runtimeConfigSource: path.join(root, "playarr-config.json"),
         packageJsonSource: path.join(root, "package.json"),
       }),
       /without credentials, a query, or a fragment/

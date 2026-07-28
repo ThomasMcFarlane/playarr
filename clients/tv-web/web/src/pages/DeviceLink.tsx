@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ApiClient, ApiError } from "@streamarr-tv/api-client";
-import { authorizeDeviceAcrossServers, parseServersParam } from "@streamarr-tv/device-auth";
+import { ApiClient, ApiError } from "@playarr-tv/api-client";
+import { authorizeDeviceAcrossServers, parseServersParam } from "@playarr-tv/device-auth";
 import {
   useApiBaseUrl,
   useApiClient,

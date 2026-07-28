@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import {
   describeApiError,
   type UserResponse,
-} from "@streamarr-tv/api-client";
+} from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 

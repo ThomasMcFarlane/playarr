@@ -54,15 +54,15 @@ and computer must be on the same network.
 
    ```sh
    ares-install --device playarr-tv playarr-webos.ipk
-   ares-launch --device playarr-tv com.streamarr.tv
+   ares-launch --device playarr-tv com.playarr.tv
    ```
 
 On first launch, Playarr shows **Link this TV** with a QR code, a web address,
 and a short code. Scan the QR code with a phone, or open the displayed
-`playarr.app` address and enter the short code manually. Choose the Streamarr
+`playarr.app` address and enter the short code manually. Choose the Playarr Server
 server/profile in that browser and approve the TV; the app receives the chosen
 server addresses and session automatically. A release operator can optionally
-preset `apiBaseUrl` in `public/streamarr-config.json` before building an
+preset `apiBaseUrl` in `public/playarr-config.json` before building an
 operator-specific package. The checked-in value is intentionally empty for the
 generic download, and the loader ignores it.
 
@@ -79,12 +79,12 @@ From `clients/tv-web/`:
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm --filter @streamarr-tv/app-webos run test
-pnpm --filter @streamarr-tv/app-webos... run build
+pnpm --filter @playarr-tv/app-webos run test
+pnpm --filter @playarr-tv/app-webos... run build
 ```
 
 The build creates `apps/tv-webos/dist/` with the full hashed Playarr bundle,
-`appinfo.json`, `streamarr-config.json`, the in-app Playarr mark, and LG's
+`appinfo.json`, `playarr-config.json`, the in-app Playarr mark, and LG's
 exact-size launcher icons.
 The final preparation step rejects manifest/version drift, incorrect icon
 sizes, and package-incompatible root-absolute HTML/CSS asset URLs.
@@ -92,20 +92,20 @@ sizes, and package-incompatible root-absolute HTML/CSS asset URLs.
 With the webOS CLI installed, create the IPK:
 
 ```sh
-pnpm --filter @streamarr-tv/app-webos run package:ipk
+pnpm --filter @playarr-tv/app-webos run package:ipk
 ```
 
 `ares-package` writes a versioned file such as
-`out/com.streamarr.tv_0.1.0_all.ipk`. Release automation publishes that file
+`out/com.playarr.tv_0.1.0_all.ipk`. Release automation publishes that file
 under the stable download name `playarr-webos.ipk`; the package's internal app
 ID and version remain unchanged.
 
 Useful device commands after installation:
 
 ```sh
-ares-inspect --device playarr-tv --app com.streamarr.tv
-ares-launch --device playarr-tv --close com.streamarr.tv
-ares-install --device playarr-tv --remove com.streamarr.tv
+ares-inspect --device playarr-tv --app com.playarr.tv
+ares-launch --device playarr-tv --close com.playarr.tv
+ares-install --device playarr-tv --remove com.playarr.tv
 ```
 
 ## Test without a TV
@@ -120,7 +120,7 @@ A desktop Electron app that runs the built `dist/` bundle with webOS TV APIs
 and remote-control key events emulated -- good for UI/navigation/focus work.
 It does not validate DRM, real media codecs, or actual remote hardware.
 
-1. Build the app: `pnpm --filter @streamarr-tv/app-webos run build`
+1. Build the app: `pnpm --filter @playarr-tv/app-webos run build`
 2. Download a Simulator zip for the target webOS TV version from LG's
    [Simulator Installation page](https://webostv.developer.lge.com/develop/tools/simulator-installation)
    in a browser. That page is a JS-rendered SPA gated behind a click-through
@@ -179,8 +179,8 @@ Once it's booted:
 ```sh
 ares-config -p ose                 # switch the CLI to the OSE device profile
 ares-setup-device --list           # should show: emulator (default) developer@127.0.0.1:6622
-ares-install --device emulator out/com.streamarr.tv_0.1.0_all.ipk
-ares-launch --device emulator com.streamarr.tv
+ares-install --device emulator out/com.playarr.tv_0.1.0_all.ipk
+ares-launch --device emulator com.playarr.tv
 ares-config -p tv                  # switch back -- this is global CLI state,
                                     # needed before the real-device steps above
 ```

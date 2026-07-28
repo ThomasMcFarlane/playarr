@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ApiError, type HttpRouteLatency } from "@streamarr-tv/api-client";
+import { ApiError, type HttpRouteLatency } from "@playarr-tv/api-client";
 import { usePrimaryApiClient } from "../../lib/ApiClientProvider";
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";

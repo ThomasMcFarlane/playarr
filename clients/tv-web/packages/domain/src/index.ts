@@ -1,9 +1,9 @@
 /**
- * @streamarr-tv/domain
+ * @playarr-tv/domain
  *
  * As foretold by this package's original placeholder comment: now that
- * `@streamarr-tv/api-client` generates real wire types straight off
- * `backend/openapi/streamarr.yaml` (`Work`, `PlaybackInfo`,
+ * `@playarr-tv/api-client` generates real wire types straight off
+ * `backend/openapi/playarr.yaml` (`Work`, `PlaybackInfo`,
  * `ClientPlatform`, ...), this package has narrowed down to what's left --
  * client-local concepts that don't round-trip the API. That's where to find
  * the API (below), plus -- per Round D -- the client self-update story built
@@ -15,7 +15,7 @@
  * (`./inviteUrl`) and the remembered peer-group address book (`./knownServers`,
  * `docs/architecture/peer-groups.md` §7.1) that supersedes the single
  * `apiBaseUrl` key below for a grouped deployment. Import wire-shape types
- * directly from `@streamarr-tv/api-client` instead of from here.
+ * directly from `@playarr-tv/api-client` instead of from here.
  */
 
 export {
@@ -47,7 +47,7 @@ export {
   type KnownServerGroup,
 } from "./knownServers";
 
-/** Default Streamarr API origin for local development. */
+/** Default Playarr Server API origin for local development. */
 export const DEFAULT_API_BASE_URL = "http://localhost:8484";
 
 /** Query param TV apps (no keyboard input) can be launched with to point at a non-default API origin. */
@@ -56,30 +56,30 @@ export const API_BASE_URL_QUERY_PARAM = "apiBaseUrl";
 /**
  * Validates and canonicalises an operator-entered API base URL. Browser
  * clients require an absolute HTTP(S) URL so every request goes directly to
- * the selected Streamarr server instead of resolving against (or being
+ * the selected Playarr Server instead of resolving against (or being
  * proxied through) the page that hosts Playarr.
  */
 export function normaliseApiBaseUrl(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
-    throw new Error("Enter the full HTTP or HTTPS URL for your Streamarr server.");
+    throw new Error("Enter the full HTTP or HTTPS URL for your Playarr Server.");
   }
 
   let parsed: URL;
   try {
     parsed = new URL(trimmed);
   } catch {
-    throw new Error("Enter a valid, absolute Streamarr server URL.");
+    throw new Error("Enter a valid, absolute Playarr Server URL.");
   }
 
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error("The Streamarr server URL must use HTTP or HTTPS.");
+    throw new Error("The Playarr Server URL must use HTTP or HTTPS.");
   }
   if (parsed.username || parsed.password) {
     throw new Error("Do not include a username or password in the server URL.");
   }
   if (parsed.search || parsed.hash) {
-    throw new Error("The Streamarr server URL cannot include a query or fragment.");
+    throw new Error("The Playarr Server URL cannot include a query or fragment.");
   }
 
   parsed.pathname = parsed.pathname.replace(/\/+$/, "");
@@ -92,14 +92,14 @@ export function normaliseApiBaseUrl(value: string): string {
  * bundle -- e.g. dropped onto the device/USB image post-install, no rebuild
  * required. Absent by default; see each TV app's README for how to provide one.
  */
-export const RUNTIME_CONFIG_FILE_NAME = "streamarr-config.json";
+export const RUNTIME_CONFIG_FILE_NAME = "playarr-config.json";
 
 /** Shape of the optional runtime config file above. */
 export interface RuntimeConfigFile {
   apiBaseUrl?: string;
 }
 
-/** The one setting every Streamarr client needs: which operator-run instance to talk to. */
+/** The one setting every Playarr Server client needs: which operator-run instance to talk to. */
 export interface AppSettings {
   apiBaseUrl: string;
 }
@@ -144,7 +144,7 @@ export async function resolveApiBaseUrl(options: ResolveApiBaseUrlOptions = {}):
   return DEFAULT_API_BASE_URL;
 }
 
-const STORED_API_BASE_URL_KEY = "streamarr:apiBaseUrl";
+const STORED_API_BASE_URL_KEY = "playarr:apiBaseUrl";
 
 /** Reads the operator-entered API base URL persisted by the web app's Settings page, if any. */
 export function getStoredApiBaseUrl(): string | undefined {

@@ -1,4 +1,4 @@
-import type { ClientPlatform } from "@streamarr-tv/api-client";
+import type { ClientPlatform } from "@playarr-tv/api-client";
 
 const PLATFORM_QUERY_PARAM = "platform";
 const PLATFORM_STORAGE_KEY = "playarr.clientPlatform";
@@ -11,6 +11,7 @@ export type PlayarrWebPlatform = Extract<
   | "tv-tizen"
   | "android-mobile"
   | "android-tv"
+  | "xbox"
 >;
 
 interface PlatformRuntime {
@@ -49,6 +50,11 @@ function browserRuntime(): PlatformRuntime {
  * first launch and is persisted for route reloads that no longer carry the
  * original query string. Modern VIDAA user agents are also detected directly.
  * `?platform=web` is an escape hatch that clears a stale TV selection.
+ *
+ * Xbox's built-in Edge browser is detected the same way from its stable
+ * "Xbox" user agent token, but isn't persisted: that UA is present on every
+ * request (unlike VIDAA's one-shot installer query flag), so a route reload
+ * re-detects it with no stored fallback needed.
  */
 export function resolveClientPlatform(
   runtime: PlatformRuntime = browserRuntime()
@@ -80,6 +86,10 @@ export function resolveClientPlatform(
     return "tv-vidaa";
   }
 
+  if (/\bXbox\b/i.test(runtime.userAgent)) {
+    return "xbox";
+  }
+
   return runtime.storage?.getItem(PLATFORM_STORAGE_KEY) === "tv-vidaa"
     ? "tv-vidaa"
     : "web";
@@ -89,6 +99,7 @@ export const PLAYARR_CLIENT_PLATFORM = resolveClientPlatform();
 export const IS_VIDAA = PLAYARR_CLIENT_PLATFORM === "tv-vidaa";
 export const IS_WEBOS = PLAYARR_CLIENT_PLATFORM === "tv-webos";
 export const IS_TIZEN = PLAYARR_CLIENT_PLATFORM === "tv-tizen";
+export const IS_XBOX = PLAYARR_CLIENT_PLATFORM === "xbox";
 export const IS_PACKAGED_TV = IS_WEBOS || IS_TIZEN;
 
 export function shouldStartPackagedTvLink(
@@ -102,4 +113,5 @@ export function shouldStartPackagedTvLink(
 export const IS_TV =
   IS_PACKAGED_TV ||
   PLAYARR_CLIENT_PLATFORM === "tv-vidaa" ||
-  PLAYARR_CLIENT_PLATFORM === "android-tv";
+  PLAYARR_CLIENT_PLATFORM === "android-tv" ||
+  IS_XBOX;

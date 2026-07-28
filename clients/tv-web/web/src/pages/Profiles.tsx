@@ -8,7 +8,7 @@ import {
   type FormEvent,
 } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { describeApiError } from "@streamarr-tv/api-client";
+import { describeApiError } from "@playarr-tv/api-client";
 import { useApiBaseUrl, useApiClient, useAuth } from "../lib/ApiClientProvider";
 import { selectDeviceProfiles } from "../lib/deviceProfiles";
 import { ProfileAvatar, useStoredProfileAvatar } from "../components/ProfileAvatar";

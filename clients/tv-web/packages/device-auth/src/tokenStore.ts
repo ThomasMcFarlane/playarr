@@ -10,7 +10,7 @@
  * Backed by `localStorage` when available (survives a page reload) with an
  * in-memory-only fallback otherwise (legacy TV WebKit runtimes without
  * persistent storage, tests, SSR) -- the same storage-availability guard
- * `@streamarr-tv/domain`'s `getStoredApiBaseUrl`/`setStoredApiBaseUrl`
+ * `@playarr-tv/domain`'s `getStoredApiBaseUrl`/`setStoredApiBaseUrl`
  * already use.
  */
 export interface StoredSession {
@@ -21,7 +21,7 @@ export interface StoredSession {
   expiresAt: number;
 }
 
-const SESSION_STORAGE_KEY = "streamarr:session";
+const SESSION_STORAGE_KEY = "playarr:session";
 
 function hasLocalStorage(): boolean {
   return typeof localStorage !== "undefined";

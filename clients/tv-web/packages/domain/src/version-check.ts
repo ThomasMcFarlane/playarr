@@ -1,14 +1,14 @@
 /**
- * Client-version floor/deprecation evaluation, shared by every Streamarr
+ * Client-version floor/deprecation evaluation, shared by every Playarr Server
  * client surface that talks to `GET /api/system/version`
- * (`VersionEnvelope`/`CompatibilityEntry` in `backend/openapi/streamarr.yaml`)
+ * (`VersionEnvelope`/`CompatibilityEntry` in `backend/openapi/playarr.yaml`)
  * -- see `docs/versioning-policy.md` for the server-side half of this
  * contract (the `426 Upgrade Required` version-gate middleware) and
  * `docs/architecture/clients/*.md`'s "Self-update / OTA mechanism" /
  * "Store submission process and constraints" sections for what each
  * platform does with the result.
  *
- * This module intentionally does not import `@streamarr-tv/api-client`'s
+ * This module intentionally does not import `@playarr-tv/api-client`'s
  * generated types (see this package's top-of-file comment) -- `CompatibilityEntryLike`
  * below is a structural duck-type of the real `CompatibilityEntry` wire
  * shape, so callers can pass `VersionEnvelope.compatibility` straight

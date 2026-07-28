@@ -55,7 +55,7 @@ import {
   SeriesIcon,
   SitesIcon,
 } from "./components/NavIcons";
-import type { WorkKind } from "@streamarr-tv/api-client";
+import type { WorkKind } from "@playarr-tv/api-client";
 import { useAppUpdate } from "./lib/appUpdate";
 import { useApiBaseUrl, useApiClient, useAuth } from "./lib/ApiClientProvider";
 import {
@@ -591,9 +591,9 @@ function formatDate(date: Date, locale?: string): string {
  * up there.
  *
  * This app has no admin surface -- source-instance registration and user
- * management are Streamarr's own concern (see clients/tv-web/admin), not
+ * management are Playarr Server's own concern (see clients/tv-web/admin), not
  * Playarr's. Playarr only ever authenticates as a user and talks to
- * Streamarr's API to browse/play content.
+ * Playarr Server's API to browse/play content.
  *
  * `AppShell` mounts Playarr Web's OTA self-update flow (`useAppUpdate`) so
  * the "Update available" toast (or a forced reload once the running bundle

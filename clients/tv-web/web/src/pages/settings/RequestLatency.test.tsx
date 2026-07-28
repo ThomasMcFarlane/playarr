@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import type { HttpRouteLatency } from "@streamarr-tv/api-client";
+import type { HttpRouteLatency } from "@playarr-tv/api-client";
 import { LanguageProvider } from "../../lib/i18n/LanguageProvider";
 import { RequestLatencyContent, type HttpLatencyState } from "./RequestLatency";
 

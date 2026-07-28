@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createQrCodeSvg } from "@streamarr-tv/device-auth";
+import { createQrCodeSvg } from "@playarr-tv/device-auth";
 
 export function QrCode({ value, size = 240 }: { value: string; size?: number }) {
   const [svg, setSvg] = useState<string | null>(null);

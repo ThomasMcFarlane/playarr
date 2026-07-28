@@ -13,7 +13,7 @@ import {
   type PlaybackAudioTrack,
   type PlaybackSource,
   type PlaybackSubtitleTrack,
-} from "@streamarr-tv/player-core";
+} from "@playarr-tv/player-core";
 
 export type TizenAvplayState = "NONE" | "IDLE" | "READY" | "PLAYING" | "PAUSED";
 
@@ -810,7 +810,7 @@ export class TizenAvplayEngine extends BasePlaybackEngine {
       if (playbackSessionId) {
         this.avplay.setStreamingProperty(
           "COOKIE",
-          `streamarr_playback_session=${encodeURIComponent(playbackSessionId)}`
+          `playarr_playback_session=${encodeURIComponent(playbackSessionId)}`
         );
       }
       this.avplay.setDisplayRect(

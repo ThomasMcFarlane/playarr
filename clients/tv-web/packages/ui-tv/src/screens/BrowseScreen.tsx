@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
-import type { Work } from "@streamarr-tv/api-client";
-import { color, radius, spacing, typeScale } from "@streamarr-tv/design-tokens";
+import type { Work } from "@playarr-tv/api-client";
+import { color, radius, spacing, typeScale } from "@playarr-tv/design-tokens";
 import { useFocusable } from "../SpatialNavContext";
 import { pickImage } from "../lib/images";
 

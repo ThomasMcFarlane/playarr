@@ -1,7 +1,7 @@
 /**
  * Holds the delegated-device credential (see the Playarr Cast design's
  * "Delegated device auth" section) the receiver uses to authenticate every
- * request against the cast target's own Streamarr server: never the
+ * request against the cast target's own Playarr Server: never the
  * sender's own access/refresh token, always a separate device identity the
  * sender minted via RFC 8628 specifically for this cast.
  *
@@ -10,20 +10,20 @@
  * `main.ts`) are synchronous callbacks and cannot await a token refresh
  * mid-segment. A proactive refresh timer -- mirroring the same
  * refresh-ahead-of-expiry approach as
- * `@streamarr-tv/device-auth`'s `ensureAccessToken`
+ * `@playarr-tv/device-auth`'s `ensureAccessToken`
  * (`ACCESS_TOKEN_MINIMUM_VALIDITY_MS`) -- keeps the held token valid well
  * before it would ever need a synchronous caller to block on anything.
  */
-import type { RefreshRequest, RefreshResponse } from "@streamarr-tv/api-client";
-import type { PlayarrCastCredentials } from "@streamarr-tv/cast-protocol";
+import type { RefreshRequest, RefreshResponse } from "@playarr-tv/api-client";
+import type { PlayarrCastCredentials } from "@playarr-tv/cast-protocol";
 
 /** The one `ApiClient` method this module needs -- narrowed so tests can supply a plain fake instead of a real `ApiClient`. `POST /api/v1/auth/refresh` needs no bearer token itself, so there is no circular dependency on this store's own `currentAccessToken()`. */
 export interface CastAuthRefreshClient {
   refresh(body: RefreshRequest): Promise<RefreshResponse>;
 }
 
-// Streamarr issues 15-minute access tokens (see
-// `@streamarr-tv/device-auth`'s `session.ts`); refreshing this far ahead of
+// Playarr Server issues 15-minute access tokens (see
+// `@playarr-tv/device-auth`'s `session.ts`); refreshing this far ahead of
 // expiry keeps refresh traffic modest while avoiding edge-of-expiry 401s --
 // same constant/rationale as that module's `ACCESS_TOKEN_MINIMUM_VALIDITY_MS`,
 // duplicated here rather than imported since this store's proactive-timer

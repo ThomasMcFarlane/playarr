@@ -20,8 +20,8 @@ import type {
   PlaybackInfo,
   PlaybackInfoParams,
   PlaybackMode,
-} from "@streamarr-tv/api-client";
-import type { PlayarrCastPlaybackIntent, PlayarrCastStopReason } from "@streamarr-tv/cast-protocol";
+} from "@playarr-tv/api-client";
+import type { PlayarrCastPlaybackIntent, PlayarrCastStopReason } from "@playarr-tv/cast-protocol";
 import { NEGOTIATION_PLAYBACK_CAPABILITIES } from "./capabilities";
 
 /** The two `ApiClient` methods this module actually needs -- narrowed so tests can supply a plain fake instead of a real `ApiClient`. */

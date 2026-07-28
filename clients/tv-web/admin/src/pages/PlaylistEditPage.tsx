@@ -6,7 +6,7 @@ import {
   type PlaylistResponse,
   type UserResponse,
   type Work,
-} from "@streamarr-tv/api-client";
+} from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 

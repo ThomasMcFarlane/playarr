@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { ApiError, type VersionEnvelope } from "@streamarr-tv/api-client";
-import { DEFAULT_API_BASE_URL, readKnownServers } from "@streamarr-tv/domain";
+import { ApiError, type VersionEnvelope } from "@playarr-tv/api-client";
+import { DEFAULT_API_BASE_URL, readKnownServers } from "@playarr-tv/domain";
 import { useApiBaseUrl, usePrimaryApiClient, useAuth } from "../../lib/ApiClientProvider";
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useToast } from "../../lib/toast";
@@ -219,7 +219,7 @@ export function SettingsServerPage() {
           <summary>{t("settings.server.tvDetailsSummary")}</summary>
           <p className="hint">
             {t("settings.server.tvDetailsIntro")} <code>?apiBaseUrl=...</code>{" "}
-            {t("settings.server.tvDetailsMiddle")} <code>streamarr-config.json</code>
+            {t("settings.server.tvDetailsMiddle")} <code>playarr-config.json</code>
             {t("settings.server.tvDetailsFallback")} <code>{DEFAULT_API_BASE_URL}</code>.
           </p>
         </details>

@@ -1,7 +1,7 @@
 {
-  "id": "com.streamarr.tv",
+  "id": "com.playarr.tv",
   "version": "0.1.0",
-  "vendor": "Streamarr",
+  "vendor": "Playarr Server",
   "type": "web",
   "main": "index.html",
   "title": "Playarr",
@@ -12,5 +12,5 @@
   "disableBackHistoryAPI": true,
   "handlesRelaunch": false,
   "transparent": false,
-  "appDescription": "Play your Streamarr libraries on LG webOS TV."
+  "appDescription": "Play your Playarr Server libraries on LG webOS TV."
 }
