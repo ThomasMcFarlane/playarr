@@ -1,12 +1,20 @@
 # Client architecture: universal Android app on TV
 
-Android TV and Google TV run the same native Playarr package and APK as phones
+Android TV and Google TV run the same Playarr package and APK as phones
 and tablets: `clients/android/`, package `io.playarr.mobile`.
 
-## Native presentation
+**Product bar:** full native Compose + Media3 for the entire television
+experience, with behavioural parity to Playarr Web. See
+[`../client-principles.md`](../client-principles.md). A temporary full-screen
+WebView of Playarr Web is **not** the accepted end state.
 
-The app is Jetpack Compose throughout. It does not host Playarr Web in a
-WebView. Runtime UI-mode and window-width checks adapt the shared screens:
+## Presentation (target vs current)
+
+### Target (policy)
+
+The app is Jetpack Compose throughout on television. It does not host Playarr
+Web in a WebView. Runtime UI-mode and window-width checks adapt the shared
+native screens:
 
 - television displays use the same grouped navigation rail and 1920 x 1080
   stage geometry as Playarr Web;
@@ -16,6 +24,15 @@ WebView. Runtime UI-mode and window-width checks adapt the shared screens:
 - the Activity enters immersive fullscreen mode on televisions; and
 - the same catalogue, title-detail, settings, and Media3 player routes remain
   available on touch devices.
+
+### Current deviation
+
+Signed-in television sessions currently mount `PlayarrTvWebShell`, a
+full-screen WebView of the Playarr Web TV surface with the device session
+injected so the SPA boots signed-in. Phone and tablet paths remain native
+Compose. This exists only as a transitional visual match; it violates the
+client principles and must be replaced by the native Compose television graph
++ Media3, not extended.
 
 The manifest declares `LEANBACK_LAUNCHER` and marks touch and Leanback hardware
 features optional, allowing the same artefact to install across all supported
@@ -39,10 +56,13 @@ elsewhere. Both identities come from the same installed package.
 
 ## Input and playback
 
-Standard Compose focus and click semantics accept touch, keyboard, and D-pad
-input. Text entry uses Android's system keyboard. Media playback is native
-Media3/ExoPlayer after Playarr Server's playback endpoint selects direct or HLS
-delivery.
+**Target:** standard Compose focus and click semantics accept touch, keyboard,
+and D-pad input. Text entry uses Android's system keyboard. Media playback is
+native Media3/ExoPlayer after Playarr Server's playback endpoint selects
+direct or HLS delivery.
+
+**While `PlayarrTvWebShell` is mounted:** input and playback run inside the
+Web TV surface (spatial nav + Shaka/MSE), which is the deviation to remove.
 
 ## Build and verification
 

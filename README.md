@@ -9,12 +9,12 @@ the whole thing on anything from a Raspberry Pi to a Kubernetes cluster.
 
 If you already run Sonarr, Radarr, Lidarr, Bazarr, Prowlarr, and/or Readarr,
 you have a great acquisition and organisation pipeline but no single, polished
-place to *watch* the result — and no first-class native apps for phones,
+place to *watch* the result, and no first-class native apps for phones,
 tablets, or TVs. Playarr Server sits on top of that stack: it owns your media
 library (scanning, metadata, artwork), playback (on-demand and background
 transcoding, via [Tdarr](https://github.com/HaveAGitGat/Tdarr) for the
 library-wide encode work), authentication, and a single unified HTTP/JSON API
-— while leaving indexing, acquisition, and subtitle-fetching to the *arr apps
+,  while leaving indexing, acquisition, and subtitle-fetching to the *arr apps
 that already do it well. Playarr is what you actually install to watch things:
 Android Mobile, Android TV, iOS, LG webOS, Samsung Tizen, Hisense VIDAA, a
 browser-based Web client, and a native Xbox client, all speaking the same
@@ -44,8 +44,12 @@ native, multi-platform *playback* experience should be. Commercial media
 servers fill that gap but keep you out of your own stack. Playarr Server/Playarr
 exists to close that gap without giving up ownership: wrap the tools you
 already trust, add the library/playback/auth layer they don't provide, and
-ship real native clients — not just a web view wrapped in each platform's
-app shell — for every screen people actually watch on.
+ship **fully native clients with full product parity and native-class
+performance** on every screen people actually watch on. Not a single web view
+wrapped seven times. Features degrade only where the platform truly cannot
+support them (for example offline downloads on some TV runtimes). The binding
+policy is
+[`docs/architecture/client-principles.md`](docs/architecture/client-principles.md).
 
 ## High-level architecture
 
@@ -81,7 +85,7 @@ transcode-on-play, and low-priority library-wide background re-encoding
 dispatched to a Tdarr worker pool. The full reasoning, the crate layout, the
 deployment-tier matrix, and the client code-sharing strategy are documented
 in depth in [`docs/architecture/overview.md`](docs/architecture/overview.md)
-— read that before making non-trivial changes anywhere in the tree.
+,  read that before making non-trivial changes anywhere in the tree.
 
 For what's built, what's next, and how work is sequenced across the monorepo,
 see [`docs/roadmap.md`](docs/roadmap.md).
@@ -111,7 +115,7 @@ see [`docs/roadmap.md`](docs/roadmap.md).
 │   ├── xbox/                    Native UWP/XAML client: a portable core
 │   │                             (Playarr.Core, builds/tests on any OS) plus
 │   │                             a UWP application head (Playarr.Xbox,
-│   │                             Windows/MSBuild-only — see
+│   │                             Windows/MSBuild-only, see
 │   │                             docs/architecture/clients/xbox.md).
 │   └── shared/                     Cross-client tooling, e.g. OpenAPI-
 │                                    generated SDK codegen consumed by every
@@ -128,8 +132,9 @@ see [`docs/roadmap.md`](docs/roadmap.md).
 │                           codegen entry points, and related scripts invoked
 │                           by the Justfile recipes below.
 ├── docs/                  Project documentation.
-│   ├── architecture/overview.md   Start here.
-│   └── roadmap.md                 What's built, what's next.
+│   ├── architecture/overview.md          Start here.
+│   ├── architecture/client-principles.md Native + parity + performance bar.
+│   └── roadmap.md                        What's built, what's next.
 ├── .github/workflows/     CI: per-component workflows plus a top-level
 │                           `ci.yml` that fans out to them.
 ├── Justfile               Cross-language task runner: `just --list`.
@@ -138,7 +143,7 @@ see [`docs/roadmap.md`](docs/roadmap.md).
 ```
 
 Every directory above is independently ownable: a crate, an infra tier, a
-client platform, or a docs subtree. That's deliberate — see the "Why this is
+client platform, or a docs subtree. That's deliberate, see the "Why this is
 a monorepo" section of the architecture overview for the reasoning.
 
 ## Getting started

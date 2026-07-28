@@ -7,6 +7,11 @@ don't overlap with the Kotlin/Android side or the TypeScript-based TV/web
 shell, and this document treats that as an accepted, deliberate fact
 rather than a gap to close.
 
+**Product bar** ([`../client-principles.md`](../client-principles.md)): fully
+native SwiftUI + AVFoundation, full product parity with complete clients, no
+WebView for catalogue/settings/player chrome. Degrade only for real Apple
+platform or App Store capability limits (for example binary OTA rules).
+
 ## Target OS/SDK versions
 
 - **Minimum deployment target:** iOS 17.0 (`platforms: [.iOS(.v17)]` in

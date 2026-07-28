@@ -5,6 +5,12 @@ viewer’s own Playarr Server library. It uses Roku-native focusable lists and t
 native `Video` node, so directional navigation, list scrolling and playback do
 not depend on a browser or JavaScript focus shim.
 
+**Product bar** (`docs/architecture/client-principles.md`): fully native
+SceneGraph, full product parity with complete clients over time, native `Video`
+performance. Incomplete surfaces are gaps to close, not a permanent thin
+client. Degrade only for real Roku capability limits (for example offline
+downloads).
+
 ## Current flow
 
 1. Enter the base URL of a Playarr Server on first launch.

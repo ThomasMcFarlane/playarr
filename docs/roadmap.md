@@ -188,9 +188,13 @@ someone runs them for real.
   doesn't produce correct `Codable` conformances for several `oneOf`
   schemas), not an oversight. Regenerating for real is still available any
   time via `scripts/gen-sdk.sh`.
-- **Android.** **Built.** `clients/android/` is one Gradle project containing
-  one native responsive Compose application and its internal modules, spanning
-  phones, tablets, Android TV, and Google TV with one APK.
+- **Android.** **Built (phones/tablets native; television has a temporary
+  WebView deviation).** `clients/android/` is one Gradle project spanning
+  phones, tablets, Android TV, and Google TV with one APK. Phone and tablet
+  surfaces are native Compose + Media3. Television currently may host Playarr
+  Web in `PlayarrTvWebShell`; that violates
+  [`architecture/client-principles.md`](architecture/client-principles.md) and
+  must return to full native Compose + Media3 with the same parity bar.
 - **iOS.** **Built.** `clients/ios/Playarr Server.xcodeproj` produces a native
   `Playarr.app`, links the reusable `PlayarrKit` package, includes App Store
   bundle/privacy/icon resources, and defines application and kit XCTest
@@ -205,8 +209,11 @@ someone runs them for real.
 
 ## Wave 6 — TV Clients
 
-- **Android TV.** **Built.** The universal `clients/android/` project
-  exposes a Leanback launcher and adapts the same native UI for D-pad use.
+- **Android TV.** **Partial.** The universal `clients/android/` project
+  exposes a Leanback launcher. **Target:** full native Compose + Media3 with
+  D-pad and ten-foot parity (see client principles). **Current:** signed-in
+  television may still use a WebView of Playarr Web; closing that gap is
+  required product work, not optional polish.
 - **webOS.** **Built.** `clients/tv-web/apps/tv-webos/` packages the full
   Playarr Web page tree with hash routing, LG lifecycle handling, conservative
   playback negotiation, and `player-shaka`.

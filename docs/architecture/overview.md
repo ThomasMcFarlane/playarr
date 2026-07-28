@@ -217,6 +217,14 @@ independently, even though they both ultimately shell out to `ffmpeg`.
 
 ## The client strategy
 
+**Product bar first:** every Playarr app is fully native for its platform,
+targets full product parity and native-class performance, and degrades only
+where the platform cannot support a capability (for example offline
+downloads). Temporary WebViews, browser fallbacks, and thinner feature sets
+are not the success criteria. The binding policy is
+[`client-principles.md`](client-principles.md); read it before changing any
+client.
+
 Playarr ships one client per platform surface that matters for a
 home-theatre and mobile media experience. This table has historically been
 called "the 7-client strategy," and the count is already stale for reasons
@@ -224,43 +232,53 @@ beyond this document's current pass — see the note below the table.
 
 | Client | Platform | Doc |
 |---|---|---|
-| Android Mobile | Phones/tablets, Android 8.0+ (universal APK) | [`clients/android-mobile.md`](clients/android-mobile.md) |
-| Android TV | Android TV / Google TV, Android 8.0+ (same universal APK) | [`clients/android-mobile.md`](clients/android-mobile.md) |
-| iOS | iPhone/iPad, iOS 15+ | [`clients/ios.md`](clients/ios.md) |
-| webOS | LG smart TVs | [`clients/webos.md`](clients/webos.md) |
-| Tizen | Samsung smart TVs | [`clients/tizen.md`](clients/tizen.md) |
-| VIDAA | Hisense/Toshiba smart TVs | [`clients/vidaa.md`](clients/vidaa.md) |
-| Web | Browsers, installable PWA | [`clients/web.md`](clients/web.md) |
-| Xbox | Xbox One/Series consoles: native UWP/XAML app (portable core built and tested, UWP head unverified), plus a zero-install Edge-browser fallback | [`clients/xbox.md`](../clients/xbox.md), [architecture detail](clients/xbox.md) |
+| Android Mobile | Phones/tablets, Android 8.0+ (universal APK, native Compose + Media3) | [`clients/android-mobile.md`](clients/android-mobile.md) |
+| Android TV | Android TV / Google TV, Android 8.0+ (same universal APK; target is full native Compose + Media3) | [`clients/android-tv.md`](clients/android-tv.md), [`clients/android-mobile.md`](clients/android-mobile.md) |
+| iOS / Apple TV | iPhone/iPad/tvOS, native SwiftUI + AVFoundation | [`clients/ios.md`](clients/ios.md) |
+| Roku | Roku OS, native SceneGraph + `Video` | `clients/roku/` (architecture doc pending) |
+| webOS | LG smart TVs (vendor package; shared Web UI + platform lifecycle) | [`clients/webos.md`](clients/webos.md) |
+| Tizen | Samsung smart TVs (vendor package; shared Web UI + native AVPlay) | [`clients/tizen.md`](clients/tizen.md) |
+| VIDAA | Hisense/Toshiba smart TVs (hosted Web when no durable package path) | [`clients/vidaa.md`](clients/vidaa.md) |
+| Web | Browsers, installable PWA (browser is the platform) | [`clients/web.md`](clients/web.md) |
+| Xbox | Xbox One/Series: native UWP/XAML app (portable core built and tested, UWP head unverified), plus a zero-install Edge-browser fallback | [`clients/xbox.md`](../clients/xbox.md), [architecture detail](clients/xbox.md) |
 | HarmonyOS | Huawei phones, tablets/foldables, Vision TV: one native ArkTS/ArkUI HAP (`HarmonyMobile`/`HarmonyTv` identities chosen at runtime) | [architecture detail](clients/harmony.md) |
+| Cast | CAF custom receiver + senders; not a full library shell | [`clients/cast.md`](clients/cast.md) |
 
 Code sharing follows the grain of the platforms rather than forcing every
 client through one runtime:
 
-- Android Mobile and Android TV use one APK and responsive React/TypeScript
-  presentation. Runtime UI-mode detection selects touch or D-pad lifecycle,
-  input, update, notification, and fullscreen behaviour.
-- webOS, Tizen, VIDAA, Android Mobile, and Android TV consume the same Playarr
-  Web routes and responsive design, selecting their input and playback profile
-  at runtime.
-- iOS stands alone at the UI layer (SwiftUI, AVFoundation, FairPlay) because
-  nothing else shares Swift or Apple's DRM stack, but still consumes the
-  same OpenAPI-generated client contract as every other platform.
-- Xbox also stands alone at the UI layer — a native UWP/XAML app
+- **Android** is one native Compose APK for phones, tablets, Android TV, and
+  Google TV, with Media3 playback. Runtime UI-mode detection selects touch or
+  D-pad lifecycle, input, update, notification, and fullscreen behaviour.
+  Product parity with Web is behavioural (see
+  [`clients/android-web-parity.md`](clients/android-web-parity.md)), not a
+  shared React tree. A temporary television WebView shell of Playarr Web is a
+  **known policy deviation** and must be removed in favour of the native
+  Compose television experience (see
+  [`client-principles.md`](client-principles.md)).
+- **webOS, Tizen, and VIDAA** share the Playarr Web application and design
+  system, with vendor bootstraps for lifecycle, remote keys, and (on Tizen)
+  the native AVPlay plane. That sharing is a platform-stack choice, not
+  permission to ship second-class features or skip native decode when the
+  vendor provides it.
+- **Web** is the first-class browser client and the foundation those TV
+  packages reuse; it is not a substitute for native apps on OS targets that
+  have a real toolkit.
+- **iOS / Apple TV** stand alone at the UI layer (SwiftUI, AVFoundation)
+  because nothing else shares Swift or Apple's media stack, but still speak
+  the same OpenAPI contract as every other platform.
+- **Roku** is a native SceneGraph channel with the platform `Video` node.
+- **Xbox** stands alone at the UI layer — a native UWP/XAML app
   (`clients/xbox/`) with its own screens and its own portable-core/native-head
-  split, not a wrapper around `clients/tv-web`. It is the only platform with
-  two independently maintained routes at once: the native app for whenever a
-  package exists, and the shared Playarr Web app's Edge-on-Xbox browser
-  detection as a standing zero-install fallback. See
-  [`clients/xbox.md`](clients/xbox.md) for why native was chosen over a
-  packaged web shell here specifically.
+  split, not a wrapper around `clients/tv-web`. The shared Playarr Web
+  Edge-on-Xbox route is a standing zero-install **fallback** only. See
+  [`clients/xbox.md`](clients/xbox.md).
+- **HarmonyOS** is a native ArkTS/ArkUI HAP with runtime phone/TV identity,
+  not a packaged Web app.
 
-This table is also already incomplete for reasons unrelated to Xbox or
-HarmonyOS: `clients/apple-tv/` and `clients/roku/` exist as real client trees
-in the repository, and `ClientPlatform` also has `Cast` and `TvFire`
-variants, none of which have a row here or a doc under
-`docs/architecture/clients/`. That drift predates this pass and is noted
-here rather than fixed, to keep this change scoped.
+`ClientPlatform` also includes `Cast` and `TvFire` (and related) identities
+used for compatibility and device linking; treat incomplete rows as docs
+debt to close, not as optional product surfaces.
 
 Every client, regardless of code sharing, is required to speak the same
 versioned API contract — see [`versioning-policy.md`](../versioning-policy.md)

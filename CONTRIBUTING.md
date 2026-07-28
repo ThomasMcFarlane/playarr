@@ -1,10 +1,16 @@
 # Contributing to Playarr Server / Playarr
 
-This is a monorepo containing the Playarr Server backend, all seven Playarr
+This is a monorepo containing the Playarr Server backend, all Playarr
 clients, and the infrastructure to deploy them. Before making a non-trivial
 change, read [`docs/architecture/overview.md`](docs/architecture/overview.md)
 — it explains why the system is shaped the way it is, and most "why isn't
 this just done the simple way" questions are answered there.
+
+Before changing any client, also read
+[`docs/architecture/client-principles.md`](docs/architecture/client-principles.md):
+every app is fully native for its platform, targets full product parity and
+performance, and degrades only for real capability gaps (not for shipping
+convenience).
 
 ## Monorepo structure
 

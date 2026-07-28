@@ -9,6 +9,11 @@ and the `harmony-mobile` / `harmony-tv` platform identity are both chosen at
 runtime from `deviceInfo.deviceType`, never at build time, mirroring the
 Android client's single-universal-APK strategy.
 
+**Product bar** ([`../client-principles.md`](../client-principles.md)): fully
+native UI and player, full product parity with complete clients, native-class
+performance. Degrade only where HarmonyOS APIs or policy cannot support a
+capability (document each gap; do not thin features for convenience).
+
 ## Target OS/SDK versions
 
 - **`compatibleSdkVersion`:** `5.0.0(12)` — HarmonyOS NEXT / API 12 floor.

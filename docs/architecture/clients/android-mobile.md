@@ -1,8 +1,16 @@
 # Client architecture: universal Android app
 
-Playarr ships one native APK for phones, tablets, Android TV, and Google TV.
-There is one package (`io.playarr.mobile`), one Compose navigation graph, one
-Media3 player, and one public download.
+Playarr ships one APK for phones, tablets, Android TV, and Google TV.
+There is one package (`io.playarr.mobile`), one public download, and a single
+product bar: native Compose + Media3 with full parity to Playarr Web (see
+[`../client-principles.md`](../client-principles.md) and
+[`android-web-parity.md`](android-web-parity.md)).
+
+Phones and tablets use the native Compose navigation graph and Media3 player
+end to end. Television currently has a temporary WebView shell of Playarr Web
+for the signed-in experience; that is a documented policy deviation and must
+return to the same native Compose + Media3 path (see
+[`android-tv.md`](android-tv.md)).
 
 ## Platform baseline
 

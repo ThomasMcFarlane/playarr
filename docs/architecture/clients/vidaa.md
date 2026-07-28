@@ -5,6 +5,12 @@ the same browser-compatible model to run the current Playarr Web
 client instead of maintaining a second user interface or shipping a
 downloadable TV package.
 
+**Product bar** ([`../client-principles.md`](../client-principles.md)): prefer
+a real installed app when VIDAA permits one. Hosted Web in the TV Browser is a
+**capability-limited delivery path**, not a licence to ship a thinner product.
+Implement every feature the browser stack can support; degrade only for real
+gaps (offline downloads, background agents, durable package identity).
+
 ## Delivery decision
 
 There is no public, self-service VIDAA App Store submission route comparable to

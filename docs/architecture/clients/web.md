@@ -7,6 +7,13 @@ this same routed React application into vendor packages, while
 [VIDAA](vidaa.md) opens its hosted build. Understanding this document is
 therefore a prerequisite for understanding those three.
 
+**Product bar** ([`../client-principles.md`](../client-principles.md)): on
+Web, the browser *is* the platform. Ship a first-class web app (real scroll
+containers, full product surfaces, MSE/Shaka performance), not a marketing
+shell. Hosted Web is a valid client and a fallback where no native package
+exists; it must not redefine native OS apps as optional. Degrade only for
+browser capability gaps (storage, codecs, background work).
+
 ## Target OS/SDK versions
 
 - **Target runtimes:** evergreen desktop and mobile browsers with Media

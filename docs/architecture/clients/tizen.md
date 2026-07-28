@@ -6,6 +6,13 @@ same profiles, home, search, libraries, playlists, settings, authentication,
 and player UI as the hosted Web client. The Tizen project is a platform and
 packaging layer, not a second UI and not the earlier `ui-tv` screen skeleton.
 
+**Product bar** ([`../client-principles.md`](../client-principles.md)): full
+feature parity with complete clients, Samsung lifecycle/remote handling, and
+**native AVPlay** for decode (not a long-term reliance on HTML `<video>` alone).
+Sharing React chrome with Web is allowed; skipping AVPlay or shipping a thinner
+catalogue is not. Degrade only for real capability gaps (for example offline
+downloads).
+
 ## Supported runtime
 
 - **Developer-package floor:** Tizen 7.0 (2023 Samsung TVs), declared by

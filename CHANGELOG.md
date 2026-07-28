@@ -9,11 +9,20 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Encode the binding client product bar in
+  [`docs/architecture/client-principles.md`](docs/architecture/client-principles.md): every
+  Playarr app is fully native for its platform, targets full product parity and native-class
+  performance, and degrades only for real capability gaps (for example offline downloads).
+  Wire the policy into `AGENTS.md`, `README.md`, `CONTRIBUTING.md`, the architecture overview,
+  per-client docs, Android README, and roadmap; catalogue known deviations including the
+  temporary Android TV WebView shell.
 - Android television now hosts the Playarr Web TV surface in a full-screen WebView at the
   fixed 1920×1080 stage (`PlayarrTvWebShell`), injecting the redeemed device session so the
   SPA boots signed-in against the same server URL. Phone and tablet keep the native Compose
   experience. Shared `FocusMotion` design tokens (scale, 150 ms cubic-bezier easing) drive
-  native Compose grow-on-focus animations and are covered by unit tests.
+  native Compose grow-on-focus animations and are covered by unit tests. **Policy note:** this
+  WebView path is a temporary deviation from the client principles, not the accepted product
+  shape; the target remains full native Compose + Media3 on television.
 - Add Android TV parity capture tooling under `clients/android/tools/` (`compare_surfaces.py`,
   `parity_ae0.py`) for deterministic 1920×1080 AE comparison and triple-verify runs.
 - Add Chromecast support: a real Google Cast sender/receiver pair, not a stub. A new

@@ -16,6 +16,13 @@ owners a zero-install fallback while the native app has no package to
 install. All three routes are covered here; the end-user instructions for
 each are in [`docs/clients/xbox.md`](../../clients/xbox.md).
 
+**Product bar** ([`../client-principles.md`](../client-principles.md)): the
+native UWP/XAML head is the product client (full parity, Media Foundation
+performance). Edge-on-Xbox is a labelled **zero-install fallback** only; it
+must not replace the native head as the long-term Xbox experience. Degrade
+only for real console/store capability gaps (for example offline downloads if
+policy blocks them).
+
 ## Supported runtime
 
 - **Developer-package floor:** `Windows.Universal`, `MinVersion

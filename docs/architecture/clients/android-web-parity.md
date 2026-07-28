@@ -1,10 +1,16 @@
 # Android and Playarr Web parity audit
 
-The Android application is one native Compose package for phones, tablets,
-Android TV, and Google TV. It does not embed Playarr Web. Product parity means
-that the same account, catalogue, navigation, playback, profile, playlist, and
-settings tasks are available with platform-native controls and the same visual
-hierarchy.
+The Android application is one package for phones, tablets, Android TV, and
+Google TV. **Product bar:** native Compose + Media3 on every form factor, with
+behavioural parity to Playarr Web (same account, catalogue, navigation,
+playback, profile, playlist, and settings tasks, platform-native controls, same
+visual hierarchy). Binding policy:
+[`../client-principles.md`](../client-principles.md).
+
+**Current exception:** signed-in Android TV may still mount `PlayarrTvWebShell`
+(WebView of Playarr Web). That path is not parity-complete under this audit and
+is scheduled for removal; phone and tablet remain the native reference
+implementation of the table below.
 
 ## Audited surfaces
 

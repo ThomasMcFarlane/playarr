@@ -2,6 +2,28 @@
 
 These instructions apply to the entire repository.
 
+## Client product bar (native, parity, performance)
+
+Canonical policy: [`docs/architecture/client-principles.md`](docs/architecture/client-principles.md).
+It overrides weaker or older wording elsewhere in the tree.
+
+- **Every Playarr app is fully native** for its platform (Compose, SwiftUI,
+  SceneGraph, UWP/XAML, ArkUI, vendor TV package + native player plane, or a
+  first-class browser app on Web). Do not introduce WebView shells of Playarr
+  Web as the signed-in product on native-capable OS targets.
+- **Full product parity** across complete clients: same tasks, hierarchy, and
+  server contract. Do not thin a client because another surface already has
+  the UI.
+- **Native-class performance**: prefer direct play and the platform media
+  pipeline; use real scroll and focus systems; do not accept a browser-engine
+  tax where a native toolkit exists.
+- **Graceful degradation only for missing capability** (for example offline
+  downloads on platforms that cannot support them). Hide or disable with an
+  honest reason; never crash or pretend success.
+- Temporary fallbacks (browser on Xbox, hosted Web on VIDAA, transitional TV
+  web packages) stay labelled as fallbacks until the native path matches.
+  Known deviations are listed in the principles doc; do not extend them.
+
 ## Delivery
 
 - Do not leave completed work only in the working tree. Commit and push each logical change as

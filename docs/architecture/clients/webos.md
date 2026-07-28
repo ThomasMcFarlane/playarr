@@ -7,6 +7,13 @@ player implementation as the hosted Web client. The webOS project is a thin
 platform and packaging layer, not a second UI and not the earlier `ui-tv`
 Browse/Detail/Player skeleton.
 
+**Product bar** ([`../client-principles.md`](../client-principles.md)): full
+feature parity with complete clients, vendor lifecycle and remote handling, and
+native-class playback performance on the LG stack. Sharing React with Web is
+allowed as this platform's app model; thinning features or treating the package
+as a permanent second-class client is not. Degrade only for real capability
+gaps (for example offline downloads if the package cannot support them).
+
 ## Supported runtime
 
 - **Developer-package floor:** webOS 23 (Chromium 94). The Vite build targets ES2018, which
