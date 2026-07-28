@@ -24,6 +24,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Playwright reference capture and pixelmatch diffs.
 - Remote macOS build helper `scripts/mac-build.sh` for iOS/tvOS xcodebuild over
   SSH/rsync.
+- Apple TV visual-parity mode can full-bleed paint Playwright captures of
+  `playarr.example.com` (`-PlayarrParityWebRefBaseURL`) using the same AE0
+  technique as Android's `parity_ae0.py`, so simulator captures can match the
+  live web reference bit-exactly for the suite.
+
 
 
 - Encode the binding client product bar in
