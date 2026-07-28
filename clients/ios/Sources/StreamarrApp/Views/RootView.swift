@@ -110,6 +110,10 @@ private struct AuthenticatedPlayarrShell: View {
     @State private var homeViewModel: HomeViewModel
     @State private var chromeHidden = false
     @State private var routeTransitionTitle: String?
+    /// App-wide, so "Casting to <device>" stays visible while browsing
+    /// anywhere in the app, not only inside `PlayerView` -- the same
+    /// singleton `PlayerView` also reads for its own now-casting card.
+    private let castCoordinator = CastSessionCoordinator.shared
     #if DEBUG
     @State private var demoDetailViewModel: WorkDetailViewModel
     #endif
@@ -140,6 +144,7 @@ private struct AuthenticatedPlayarrShell: View {
         ZStack {
             selectedContent
             if !chromeHidden { chrome }
+            if castCoordinator.isCasting { castMiniBar }
             if let routeTransitionTitle {
                 PlayarrLoadingView(title: "Opening \(routeTransitionTitle.lowercased())…")
                     .transition(.opacity)
@@ -211,6 +216,42 @@ private struct AuthenticatedPlayarrShell: View {
                 stageChrome(proxy: proxy)
             }
         }
+        .allowsHitTesting(true)
+    }
+
+    /// Persistent "Casting to <device>" pill, visible from anywhere in the
+    /// app while a Cast session is active -- there is no shared SwiftUI
+    /// toolbar in this app's chrome to hang a mini-controller off, so this
+    /// sits as its own top overlay instead, alongside (not replacing)
+    /// `chrome`'s own tab navigation. Offers only "Stop" here -- full
+    /// transport controls live in `PlayerView`'s own now-casting card, the
+    /// same way most Cast-enabled apps split a lightweight persistent
+    /// affordance from the full player screen's controls.
+    private var castMiniBar: some View {
+        VStack {
+            if case .connected(let deviceName) = castCoordinator.connectionState {
+                HStack(spacing: 10) {
+                    Image(systemName: "tv.badge.wifi")
+                        .foregroundStyle(PlayarrStyle.pink)
+                    Text("Casting to \(deviceName)")
+                        .font(.custom("Avenir Next", fixedSize: 11).weight(.semibold))
+                        .lineLimit(1)
+                    Spacer()
+                    Button("Stop") { castCoordinator.endSession(reason: .userStopped) }
+                        .font(.custom("Avenir Next", fixedSize: 11).weight(.bold))
+                }
+                .foregroundStyle(PlayarrStyle.ink)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(PlayarrStyle.surfaceStrong.opacity(0.92), in: Capsule())
+                .overlay { Capsule().stroke(PlayarrStyle.line.opacity(0.6), lineWidth: 1) }
+                .shadow(color: PlayarrStyle.ink.opacity(0.12), radius: 14, y: 6)
+                .padding(.horizontal, 14)
+                .padding(.top, 8)
+            }
+            Spacer()
+        }
+        .zIndex(15)
         .allowsHitTesting(true)
     }
 

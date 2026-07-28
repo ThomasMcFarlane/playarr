@@ -102,7 +102,15 @@ public protocol PlayerEngine: AnyObject {
     /// other concern — state, seeking, track selection — should go
     /// through this protocol, not this escape hatch, so call sites stay
     /// testable against a mock `PlayerEngine`.
-    var avPlayer: AVPlayer { get }
+    ///
+    /// Optional (not every `PlayerEngine` has one): a Cast-backed engine
+    /// (`StreamarrApp/Cast/CastPlayerEngine.swift`) has no local `AVPlayer`
+    /// at all: playback happens on the receiver device, and `PlayerView`
+    /// swaps its rendering surface to a "Now casting" card instead of a
+    /// `VideoPlayer` in that case. `AVPlayerEngine.avPlayer` below stays
+    /// non-optional; a non-optional witness satisfies an optional `{ get }`
+    /// requirement, so nothing about that conformance needed to change.
+    var avPlayer: AVPlayer? { get }
 
     func load(_ item: PlayableItem) async throws
     func play()

@@ -83,7 +83,11 @@ struct DownloadsView: View {
                     apiClient: apiClient,
                     downloadRepository: downloadRepository,
                     initialMediaFileID: record.mediaFileID.uuidString,
-                    initialTitle: record.title
+                    initialTitle: record.title,
+                    // A downloaded file plays from a sandboxed `file://`
+                    // URL, unreachable from a real Chromecast device -- hide
+                    // the cast affordance rather than let it silently fail.
+                    isOfflinePlayback: true
                 )
             } label: {
                 DownloadRow(record: record)

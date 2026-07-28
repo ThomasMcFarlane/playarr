@@ -7,20 +7,29 @@ struct PlayerView: View {
     let downloadRepository: DownloadRepository
     let mediaFileID: UUID?
     let title: String
+    /// `true` for `DownloadsView`'s completed-download row -- a sandboxed
+    /// `file://` URL is unreachable from a real Chromecast device, so the
+    /// cast affordance is hidden rather than left to silently fail. Also
+    /// backstopped by `viewModel.isPlayingLocalFile`, which catches the
+    /// same case if it's ever reached some other way.
+    let isOfflinePlayback: Bool
 
     @State private var viewModel: PlayerViewModel?
     @State private var controlsVisible = true
+    private let castCoordinator = CastSessionCoordinator.shared
 
     init(
         apiClient: StreamarrAPIClient,
         downloadRepository: DownloadRepository,
         initialMediaFileID: String = "",
-        initialTitle: String = ""
+        initialTitle: String = "",
+        isOfflinePlayback: Bool = false
     ) {
         self.apiClient = apiClient
         self.downloadRepository = downloadRepository
         self.mediaFileID = UUID(uuidString: initialMediaFileID)
         self.title = initialTitle
+        self.isOfflinePlayback = isOfflinePlayback
     }
 
     var body: some View {
@@ -54,9 +63,13 @@ struct PlayerView: View {
                 .padding(30)
             case .playing:
                 if let viewModel {
-                    VideoPlayer(player: viewModel.avPlayer)
-                    .ignoresSafeArea()
-                    .onTapGesture { withAnimation { controlsVisible.toggle() } }
+                    if castCoordinator.isCasting {
+                        nowCastingCard
+                    } else {
+                        VideoPlayer(player: viewModel.avPlayer)
+                        .ignoresSafeArea()
+                        .onTapGesture { withAnimation { controlsVisible.toggle() } }
+                    }
 
                     if controlsVisible {
                         controls(viewModel)
@@ -70,13 +83,52 @@ struct PlayerView: View {
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbarBackground(.hidden, for: .navigationBar)
         .playarrChromeHidden()
+        .overlay(alignment: .topTrailing) {
+            if showsCastAffordance {
+                CastButton(tintColor: .white)
+                    .frame(width: 32, height: 32)
+                    .padding(20)
+            }
+        }
         .task {
             if viewModel == nil {
-                viewModel = PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient, downloadRepository: downloadRepository)
+                viewModel = PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient, downloadRepository: downloadRepository, castCoordinator: castCoordinator)
             }
             if case .idle = viewModel?.loadState { startPlayback() }
         }
-        .onDisappear { viewModel?.stop() }
+        .onDisappear { viewModel?.viewDidDisappear() }
+    }
+
+    private var showsCastAffordance: Bool {
+        CastSessionCoordinator.isConfigured && !isOfflinePlayback && viewModel?.isPlayingLocalFile != true
+    }
+
+    private var nowCastingCard: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "tv.badge.wifi")
+                .font(.system(size: 54, weight: .light))
+                .foregroundStyle(PlayarrStyle.pink)
+            Text("Now casting")
+                .font(.custom("Avenir Next", fixedSize: 13).weight(.bold))
+                .foregroundStyle(.white.opacity(0.6))
+                .textCase(.uppercase)
+            Text(title.isEmpty ? "Playarr" : title)
+                .font(.title2.bold())
+                .multilineTextAlignment(.center)
+            if case .connected(let deviceName) = castCoordinator.connectionState {
+                Text("Playing on \(deviceName)")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.65))
+            }
+            Button("Stop casting") {
+                castCoordinator.endSession(reason: .userStopped)
+            }
+            .buttonStyle(.bordered)
+            .tint(.white)
+        }
+        .padding(40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .foregroundStyle(.white)
     }
 
     private func controls(_ viewModel: PlayerViewModel) -> some View {
@@ -123,6 +175,19 @@ struct PlayerView: View {
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.white.opacity(0.58))
 
+                // NB: while `castCoordinator.isCasting`, these three menus
+                // still list whatever `viewModel.qualityOptions`/
+                // `audioTracks`/`subtitleTracks` were populated from the
+                // *local* negotiation right before the cast handoff --
+                // `viewModel.selectQuality`/`selectAudioTrack`/
+                // `selectSubtitleTrack` already correctly route the
+                // resulting *selection* to the receiver over the cast
+                // channel (see `PlayerViewModel`), but the menu *contents*
+                // aren't re-synced from the receiver's own live
+                // `PlayarrCastStateMessage.qualityOptions`/`audioTracks`/
+                // `subtitleTracks` (a different, cast-protocol-shaped
+                // type) in this pass. Known, scoped-out gap -- not a
+                // functional break, just a possibly-stale option list.
                 ScrollView(.horizontal) {
                     HStack(spacing: 10) {
                         if !viewModel.qualityOptions.isEmpty {

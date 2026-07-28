@@ -29,11 +29,39 @@
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Playarr connects to the Streamarr server you configure on your local network.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_googlecast._tcp</string>
+		<!-- Per-application-id entry required alongside the generic
+		     "_googlecast._tcp" above for on-device discovery on iOS 14+;
+		     one alone silently finds zero devices. "00000000" is an
+		     obviously-fake placeholder (matching this file's own
+		     InstalledAppVersion.appStoreID convention): keep this in sync
+		     with PlayarrCastReceiverAppID below once a real receiver
+		     Application ID is issued via the Google Cast SDK Developer
+		     Console. -->
+		<string>_00000000._googlecast._tcp</string>
+	</array>
+	<key>PlayarrCastReceiverAppID</key>
+	<!-- Empty on purpose: AppDelegate guards on this being non-empty before
+	     initializing GCKCastContext, so a placeholder empty string means
+	     casting is inert, not crashing. Replace with the real Application
+	     ID once one is issued, and update NSBonjourServices' per-app-id
+	     entry above to match. -->
+	<string></string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<!-- Keeps GCKCastContext/session callbacks (and the mini-controller)
+		     alive while the app is backgrounded during a cast, per Google's
+		     Cast iOS integration guidance; not solely for local audio
+		     playback. -->
+		<string>audio</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

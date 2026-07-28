@@ -128,7 +128,14 @@ final class TVPlayerViewModel {
     private(set) var playbackMode: PlaybackMode?
     let engine: PlayerEngine
 
-    var player: AVPlayer { engine.avPlayer }
+    // `PlayerEngine.avPlayer` was relaxed to `AVPlayer?` for the iOS Cast
+    // sender build (a Cast-backed engine has no local `AVPlayer` at all) --
+    // this tvOS conformer never uses a Cast-backed engine (only
+    // `AVPlayerEngine` via this type's own `init` default below), but the
+    // protocol-typed access here still has to widen to match. Cannot be
+    // compiled/verified from this environment; see the iOS build's report
+    // for the equivalent, verified-elsewhere reasoning.
+    var player: AVPlayer? { engine.avPlayer }
 
     private let apiClient: StreamarrAPIClient
 

@@ -63,12 +63,34 @@ public final class PlayerViewModel {
 
     /// Exposed purely so `PlayerView` can hand it to SwiftUI's
     /// `VideoPlayer` for rendering. See the doc comment on
-    /// `PlayerEngine.avPlayer`.
-    public var avPlayer: AVPlayer { engine.avPlayer }
+    /// `PlayerEngine.avPlayer`. `nil` whenever `engine` is a
+    /// `CastPlayerEngine` -- `PlayerView` shows a "Now casting" card
+    /// instead of a `VideoPlayer` in that case (see
+    /// `CastSessionCoordinator.isCasting`).
+    public var avPlayer: AVPlayer? { engine.avPlayer }
 
-    private let engine: PlayerEngine
+    /// `true` once a Cast session has taken over transport control.
+    /// `togglePlayPause()`/`seek(to:)`/track & quality selection all keep
+    /// working unchanged below (they operate on `engine`, whatever it
+    /// currently is), but the *local* server-session heartbeat/progress
+    /// machinery must stay quiet while this is true, since the receiver
+    /// owns progress reporting during a cast -- see `heartbeat()`'s guard.
+    private var isCasting = false
+    /// `true` while playing an already-downloaded local file (see
+    /// `playLocalFile`) -- `PlayerView` hides its cast affordance in this
+    /// case, since a sandboxed `file://` URL is unreachable from a real
+    /// Chromecast device.
+    public private(set) var isPlayingLocalFile = false
+
+    /// Not `let`: swapped between a local `AVPlayerEngine` and a
+    /// `CastPlayerEngine` by `beginCasting()`/`endCasting()` below, so
+    /// every existing call site here (`togglePlayPause`, `seek(to:)`, track
+    /// selection, ...) keeps working unchanged regardless of which one is
+    /// currently active.
+    private var engine: PlayerEngine
     private let apiClient: StreamarrAPIClient
     private let downloadRepository: DownloadRepository
+    private let castCoordinator: CastSessionCoordinator
     @ObservationIgnored private var cancellables: Set<AnyCancellable> = []
     @ObservationIgnored private var heartbeatTask: Task<Void, Never>?
     @ObservationIgnored private var activeMediaFileID: UUID?
@@ -76,11 +98,25 @@ public final class PlayerViewModel {
     @ObservationIgnored private var activeTitle = ""
     @ObservationIgnored private var qualityOverrideID: String?
 
-    public init(engine: PlayerEngine, apiClient: StreamarrAPIClient, downloadRepository: DownloadRepository) {
+    public init(
+        engine: PlayerEngine,
+        apiClient: StreamarrAPIClient,
+        downloadRepository: DownloadRepository,
+        castCoordinator: CastSessionCoordinator = .shared
+    ) {
         self.engine = engine
         self.apiClient = apiClient
         self.downloadRepository = downloadRepository
+        self.castCoordinator = castCoordinator
         bind()
+        // "Last registrant wins": whichever `PlayerViewModel` is
+        // constructed most recently is the one a subsequent cast handoff
+        // acts on -- see `CastSessionCoordinator.onReadyToLoad`'s doc
+        // comment. The `[weak self]` captures make a callback that fires
+        // after this instance is gone a safe no-op, so there's nothing to
+        // explicitly unregister in a `deinit`.
+        castCoordinator.onReadyToLoad = { [weak self] in await self?.beginCasting() }
+        castCoordinator.onSessionEnded = { [weak self] in self?.endCasting() }
     }
 
     /// Calls the real playback-negotiation endpoint for `mediaFileID`, then
@@ -95,6 +131,7 @@ public final class PlayerViewModel {
         await finishActiveSession(reason: "user_stopped")
         loadState = .loadingPlaybackInfo
         errorMessage = nil
+        isPlayingLocalFile = false
 
         if let localFileURL = downloadRepository.localFileURL(forMediaFileID: mediaFileID) {
             await playLocalFile(localFileURL, mediaFileID: mediaFileID, title: title)
@@ -172,6 +209,7 @@ public final class PlayerViewModel {
     /// since there is no `PlaybackInfoResponse.sessionID` for a purely
     /// local play.
     private func playLocalFile(_ fileURL: URL, mediaFileID: UUID, title: String) async {
+        isPlayingLocalFile = true
         let defaults = NativePlayerDefaults.read()
         let progress = try? await apiClient.getWatchProgress(mediaFileID: mediaFileID)
         playbackMode = .direct
@@ -226,7 +264,12 @@ public final class PlayerViewModel {
         persistProgress()
     }
 
+    /// No-op while casting -- ending the *cast session* goes through
+    /// `CastSessionCoordinator.endSession(reason:)` (from the "Now
+    /// casting" card or `RootView`'s persistent affordance), never this
+    /// method; see `viewDidDisappear()`.
     public func stop() {
+        guard !isCasting else { return }
         let sessionID = activeSessionID
         let mediaFileID = activeMediaFileID
         let position = positionMS
@@ -251,17 +294,37 @@ public final class PlayerViewModel {
         }
     }
 
+    /// Cast-aware replacement for calling `stop()` directly from
+    /// `PlayerView.onDisappear` -- navigating away from the local view must
+    /// not kill an active cast session (casting keeps playing on the
+    /// receiver regardless of what the sender app is showing).
+    public func viewDidDisappear() {
+        guard !isCasting else { return }
+        stop()
+    }
+
     public func selectQuality(_ id: String) async {
         guard let mediaFileID = activeMediaFileID else { return }
         selectedQualityID = id
         qualityOverrideID = id
         await persistMediaOptions()
+        if isCasting {
+            // Live in-place quality switch on the already-connected
+            // receiver -- not a full reload/renegotiation the way local
+            // playback needs below.
+            castCoordinator.sendSelectQuality(id)
+            return
+        }
         await play(mediaFileID: mediaFileID, title: activeTitle)
     }
 
     public func selectAudioTrack(_ id: String?) async {
         selectedAudioTrackID = id
         await persistMediaOptions()
+        if isCasting {
+            engine.selectAudioTrack(id: id)
+            return
+        }
         guard let mediaFileID = activeMediaFileID else { return }
         await play(mediaFileID: mediaFileID, title: activeTitle)
     }
@@ -269,6 +332,10 @@ public final class PlayerViewModel {
     public func selectSubtitleTrack(_ id: String?) async {
         selectedSubtitleTrackID = id
         await persistMediaOptions()
+        if isCasting {
+            engine.selectSubtitleTrack(id: id)
+            return
+        }
         guard let mediaFileID = activeMediaFileID else { return }
         await play(mediaFileID: mediaFileID, title: activeTitle)
     }
@@ -315,6 +382,12 @@ public final class PlayerViewModel {
     }
 
     private func heartbeat() async {
+        // The receiver owns progress/event reporting while a cast is
+        // active (its own heartbeat, against its own negotiated session) --
+        // posting from here too would be a second writer racing the same
+        // endpoint. See the design doc's note on why the sender stops its
+        // own local session before handing off to cast in the first place.
+        guard !isCasting else { return }
         if let sessionID = activeSessionID {
             try? await apiClient.recordPlaybackEvent(
                 sessionID: sessionID,
@@ -421,5 +494,67 @@ public final class PlayerViewModel {
             $0.languageCode?.lowercased().hasPrefix(defaults.subtitleLanguage.lowercased()) == true
         } ?? eligibleSubtitles.first(where: \.isDefault) ?? eligibleSubtitles.first
         engine.selectSubtitleTrack(id: preferredSubtitle?.id)
+    }
+
+    // MARK: - Casting
+
+    /// Fires when `CastSessionCoordinator`'s receiver handshake completes
+    /// (see `onReadyToLoad`). Stops this view model's own local session
+    /// first -- the sender must never keep posting progress once the
+    /// receiver owns it -- then swaps `engine` to a `CastPlayerEngine` so
+    /// every existing transport-control call site above keeps working
+    /// unchanged.
+    private func beginCasting() async {
+        guard let mediaFileID = activeMediaFileID, !isCasting, !isPlayingLocalFile else { return }
+        let resumePosition = currentTime
+        await finishActiveSession(reason: "user_stopped")
+        engine.pause()
+        isCasting = true
+
+        let defaults = NativePlayerDefaults.read()
+        let castEngine = CastPlayerEngine(coordinator: castCoordinator, apiClient: apiClient)
+        engine = castEngine
+        cancellables.removeAll()
+        bind()
+
+        do {
+            try await castEngine.load(PlayableItem(
+                id: mediaFileID,
+                // Never read by `CastPlayerEngine.load(_:)` -- the receiver
+                // negotiates its own stream and never touches a
+                // sender-local URL. `apiClient.baseURL` is just a
+                // convenient, always-valid `URL` to satisfy this shared
+                // struct's non-optional field.
+                streamURL: apiClient.baseURL,
+                title: activeTitle,
+                startPositionSeconds: resumePosition,
+                preferredAudioLanguageCode: defaults.audioLanguage,
+                preferredSubtitleLanguageCode: defaults.subtitleMode == "off" ? nil : defaults.subtitleLanguage
+            ))
+            engine.play()
+        } catch {
+            errorMessage = error.localizedDescription
+            isCasting = false
+            engine = AVPlayerEngine()
+            cancellables.removeAll()
+            bind()
+            Task { await self.play(mediaFileID: mediaFileID, title: self.activeTitle) }
+        }
+    }
+
+    /// Fires when the Cast session ends for any reason (see
+    /// `onSessionEnded`) -- swaps back to a local `AVPlayerEngine` and
+    /// resumes from wherever the receiver left off (its own heartbeat
+    /// should have kept server-side watch progress current throughout the
+    /// cast).
+    private func endCasting() {
+        guard isCasting else { return }
+        isCasting = false
+        engine = AVPlayerEngine()
+        cancellables.removeAll()
+        bind()
+        if let mediaFileID = activeMediaFileID {
+            Task { await self.play(mediaFileID: mediaFileID, title: self.activeTitle) }
+        }
     }
 }
