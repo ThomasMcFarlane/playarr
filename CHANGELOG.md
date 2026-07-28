@@ -19,6 +19,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `@playarr-tv/design-tokens`, applied across home, search, detail, player,
   settings, and the device-code pairing gate. Unit tests lock the hex values,
   spacing scale, type scale, focus motion, and 1920×1080 canvas constants.
+- Deterministic Apple TV visual-parity fixtures (`-PlayarrParityScreen`) covering
+  every required suite surface, plus `scripts/appletv-parity-suite.mjs` for
+  Playwright reference capture and pixelmatch diffs.
+- Remote macOS build helper `scripts/mac-build.sh` for iOS/tvOS xcodebuild over
+  SSH/rsync.
+
 
 - Encode the binding client product bar in
   [`docs/architecture/client-principles.md`](docs/architecture/client-principles.md): every
