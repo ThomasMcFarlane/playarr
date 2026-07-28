@@ -266,8 +266,8 @@ struct TVSearchView: View {
                             .font(.system(size: 40, weight: .bold))
                             .foregroundStyle(DesignTokens.Color.textPrimary)
                     }
-                    .padding(.leading, 130)
-                    .padding(.top, 100)
+                    .padding(.leading, 120)
+                    .padding(.top, 8)
 
                     if let viewModel {
                         @Bindable var model = viewModel
@@ -290,8 +290,8 @@ struct TVSearchView: View {
                         .overlay(
                             Capsule().stroke(DesignTokens.Color.brandPrimary.opacity(0.85), lineWidth: 2)
                         )
-                        .padding(.leading, 130)
-                        .padding(.top, 28)
+                        .padding(.leading, 120)
+                        .padding(.top, 18)
 
                         // Filters chip (web has Filters · All libraries)
                         HStack(spacing: 8) {
@@ -307,19 +307,19 @@ struct TVSearchView: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                         .background(Capsule().fill(DesignTokens.Color.backgroundRaised.opacity(0.85)))
-                        .padding(.leading, 130)
-                        .padding(.top, 16)
+                        .padding(.leading, 120)
+                        .padding(.top, 12)
 
                         Text("Find any available movie, series, artist or playlist.")
                             .font(.system(size: 14, weight: .regular))
                             .foregroundStyle(DesignTokens.Color.textDisabled)
                             .frame(maxWidth: 300, alignment: .leading)
-                            .padding(.leading, 130)
-                            .padding(.top, 20)
+                            .padding(.leading, 120)
+                            .padding(.top, 14)
 
                         searchResults(model)
-                            .padding(.leading, 130)
-                            .padding(.top, 20)
+                            .padding(.leading, 120)
+                            .padding(.top, 14)
                     }
                     Spacer()
                 }
