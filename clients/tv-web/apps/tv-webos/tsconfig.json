@@ -5,13 +5,14 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
+    "types": ["vite/client", "chromecast-caf-sender"],
     "allowJs": true,
     "checkJs": true
   },
   "include": [
     "src/index.tsx",
     "src/webosLifecycle.mjs",
-    "../../web/src/global.d.ts"
+    "../../web/src/global.d.ts",
+    "../../web/src/lib/cast/caf-sender-augment.d.ts"
   ]
 }
