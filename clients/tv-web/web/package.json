@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/sync-vidaa-store.mjs && node scripts/generate-build-manifest.mjs && vite",
-    "build": "node scripts/sync-vidaa-store.mjs && node scripts/generate-build-manifest.mjs && tsc -p tsconfig.json --noEmit && vite build",
+    "build": "node scripts/sync-vidaa-store.mjs && node scripts/generate-build-manifest.mjs && tsc -p tsconfig.json --noEmit && vite build && node scripts/copy-cast-receiver.mjs",
     "deploy:cloudflare": "pnpm --filter @streamarr-tv/web... run build && pnpm dlx wrangler@4 deploy",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -15,8 +15,11 @@
   },
   "dependencies": {
     "@streamarr-tv/api-client": "workspace:*",
+    "@streamarr-tv/app-cast-receiver": "workspace:*",
+    "@streamarr-tv/cast-protocol": "workspace:*",
     "@streamarr-tv/device-auth": "workspace:*",
     "@streamarr-tv/domain": "workspace:*",
+    "qrcode": "^1.5.4",
     "@streamarr-tv/player-avplay": "workspace:*",
     "@streamarr-tv/player-core": "workspace:*",
     "@streamarr-tv/player-shaka": "workspace:*",
@@ -26,6 +29,8 @@
     "react-router-dom": "^6.28.0"
   },
   "devDependencies": {
+    "@types/chromecast-caf-sender": "catalog:",
+    "@types/chrome": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",

@@ -12,6 +12,7 @@ import type { PlaybackEngineState } from "@streamarr-tv/player-core";
 import { QualityMatrix } from "../QualityMatrix";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { qualityDefinitionForId } from "../../lib/qualityMatrix";
+import { CastButton } from "./CastButton";
 import {
   AudioTrackIcon,
   FullscreenEnterIcon,
@@ -73,6 +74,11 @@ export interface PlayerControlsProps {
   onTogglePlaylist: () => void;
   onQualityMenuOpenChange: (open: boolean) => void;
   onActivity: () => void;
+  /** Chromecast: hidden entirely (no `CastButton` rendered at all) unless this is true. */
+  castAvailable?: boolean;
+  castConnected?: boolean;
+  castDeviceName?: string | null;
+  onToggleCast?: () => Promise<void>;
 }
 
 function formatTime(totalSeconds: number): string {
@@ -130,6 +136,10 @@ export function PlayerControls({
   onTogglePlaylist,
   onQualityMenuOpenChange,
   onActivity,
+  castAvailable = false,
+  castConnected = false,
+  castDeviceName,
+  onToggleCast,
 }: PlayerControlsProps) {
   const { t } = useLanguage();
   const trackRef = useRef<HTMLDivElement>(null);
@@ -141,6 +151,7 @@ export function PlayerControls({
   const subtitlesButtonRef = useRef<HTMLButtonElement>(null);
   const playlistButtonRef = useRef<HTMLButtonElement>(null);
   const qualityButtonRef = useRef<HTMLButtonElement>(null);
+  const castButtonRef = useRef<HTMLButtonElement>(null);
   const fullscreenButtonRef = useRef<HTMLButtonElement>(null);
   const qualityOptionRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const audioOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -431,6 +442,7 @@ export function PlayerControls({
         subtitlesButtonRef.current,
         playlistButtonRef.current,
         qualityButtonRef.current,
+        castButtonRef.current,
         fullscreenButtonRef.current,
       ].filter(
         (control): control is HTMLButtonElement =>
@@ -1133,6 +1145,16 @@ export function PlayerControls({
             </span>
           </button>
         </div>
+
+        {castAvailable && onToggleCast && (
+          <CastButton
+            ref={castButtonRef}
+            available={castAvailable}
+            connected={castConnected}
+            deviceName={castDeviceName}
+            onToggleCast={onToggleCast}
+          />
+        )}
 
         {!systemVolumeOnly && (
           <button

@@ -114,6 +114,16 @@ export const ja: Translations = {
   "components.player.controls.changingQuality": "変更しています…",
   "components.player.controls.exitFullscreen": "フルスクリーンを終了",
   "components.player.controls.enterFullscreen": "フルスクリーンにする",
+  "components.player.cast.button": "キャスト",
+  "components.player.cast.connecting": "接続中…",
+  "components.player.cast.disconnect": "切断",
+  "components.player.cast.playingOn": "{{device}}で再生中",
+  "components.player.cast.unavailableBrowser":
+    "このブラウザはキャストに対応していません。デスクトップまたはAndroidのChromeかMicrosoft Edgeをお試しください。",
+  "components.player.cast.unavailableInsecureServer":
+    "このサーバーはセキュアな接続(HTTPS)を使用していないため、Chromecastでは再生できません。",
+  "components.player.cast.error":
+    "キャストが予期せず停止しました。もう一度お試しいただくか、このデバイスで視聴を続けてください。",
 
   "components.player.surface.backButtonAriaLabel": "詳細に戻る",
   "components.player.surface.backButtonLabel": "戻る",

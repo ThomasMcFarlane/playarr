@@ -120,6 +120,15 @@ export const en = {
   "components.player.controls.unavailable": "Unavailable",
   "components.player.controls.unmute": "Unmute",
   "components.player.controls.volume": "Volume",
+  "components.player.cast.button": "Cast",
+  "components.player.cast.connecting": "Connecting…",
+  "components.player.cast.disconnect": "Disconnect",
+  "components.player.cast.error": "Casting stopped unexpectedly. Try again, or continue watching here.",
+  "components.player.cast.playingOn": "Playing on {{device}}",
+  "components.player.cast.unavailableBrowser":
+    "This browser doesn’t support casting. Try Chrome or Microsoft Edge on desktop or Android instead.",
+  "components.player.cast.unavailableInsecureServer":
+    "This server isn’t using a secure (HTTPS) address. Chromecast can only play from secure servers.",
   "components.player.surface.audioSurfaceAriaLabel": "Audio playback surface",
   "components.player.surface.backButtonAriaLabel": "Back to details",
   "components.player.surface.backButtonLabel": "Back",

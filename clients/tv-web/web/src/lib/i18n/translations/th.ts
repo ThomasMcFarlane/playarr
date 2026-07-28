@@ -114,6 +114,16 @@ export const th: Translations = {
   "components.player.controls.changingQuality": "กำลังเปลี่ยน…",
   "components.player.controls.exitFullscreen": "ออกจากโหมดเต็มจอ",
   "components.player.controls.enterFullscreen": "เข้าสู่โหมดเต็มจอ",
+  "components.player.cast.button": "แคสต์",
+  "components.player.cast.connecting": "กำลังเชื่อมต่อ…",
+  "components.player.cast.disconnect": "ตัดการเชื่อมต่อ",
+  "components.player.cast.playingOn": "กำลังเล่นบน {{device}}",
+  "components.player.cast.unavailableBrowser":
+    "เบราว์เซอร์นี้ไม่รองรับการแคสต์ กรุณาใช้ Chrome หรือ Microsoft Edge บนคอมพิวเตอร์หรือ Android แทน",
+  "components.player.cast.unavailableInsecureServer":
+    "เซิร์ฟเวอร์นี้ไม่ได้ใช้การเชื่อมต่อที่ปลอดภัย (HTTPS) จึงไม่สามารถแคสต์ไปยัง Chromecast ได้",
+  "components.player.cast.error":
+    "การแคสต์หยุดทำงานกะทันหัน กรุณาลองอีกครั้ง หรือดูต่อบนอุปกรณ์นี้",
 
   "components.player.surface.backButtonAriaLabel": "กลับไปที่หน้ารายละเอียด",
   "components.player.surface.backButtonLabel": "ย้อนกลับ",

@@ -8,10 +8,13 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
+import type { PlayarrCastCredentials, PlayarrCastStateMessage } from "@streamarr-tv/cast-protocol";
+import { PLAYARR_CAST_PROTOCOL_VERSION } from "@streamarr-tv/cast-protocol";
 import {
   usePlaybackEngine,
   type PlaybackLaunchSettings,
 } from "../lib/usePlaybackEngine";
+import { useServerAccessToken, useServerClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { watchInlineMusicHost } from "../lib/inlineMusicHost";
@@ -20,6 +23,15 @@ import {
   type NavigationOrigin,
 } from "../lib/navigationLayer";
 import { advanceMusicPlaybackLifecycle } from "../lib/musicPlaybackLifecycle";
+import { CastProvider, useCast } from "../lib/cast/CastProvider";
+import { CastUnavailableError } from "../lib/cast/castSdk";
+import { ensureDelegatedCastCredentials, persistRotatedDelegatedCastCredentials } from "../lib/cast/delegatedDeviceAuth";
+import { buildPlayarrCastLoadRequest, requestPlayarrCastLoad } from "../lib/cast/castLoad";
+import {
+  sendPlayarrCastMessage,
+  subscribeToPlayarrCastMessages,
+  waitForFirstPlayarrCastMessage,
+} from "../lib/cast/castMessages";
 import {
   InlineMusicMiniPlayer,
   PlayerBackButton,
@@ -145,16 +157,20 @@ function isPlaybackLaunchSettings(value: unknown): value is PlaybackLaunchSettin
  * `mediaFileId` is the real, resolved `MediaFile` id from
  * `WorkDetailSchema.media_file_id` -- see `WorkDetail.tsx`, which only
  * links here once that field is non-null.
+ *
+ * Wrapped in `<CastProvider>` here (not at the app shell) -- casting is
+ * only ever relevant while a player is mounted, and this is the one
+ * component that needs `useCast()`.
  */
-export function PlayerPage({
-  mediaFileId,
-  locationState,
-  minimised,
-  inlineMusic = false,
-  onClose,
-  onMaximise,
-  onSessionChange,
-}: {
+export function PlayerPage(props: PlayerPageProps) {
+  return (
+    <CastProvider>
+      <PlayerPageInner {...props} />
+    </CastProvider>
+  );
+}
+
+interface PlayerPageProps {
   mediaFileId: string;
   locationState: PlayerLocationState | null;
   minimised: boolean;
@@ -165,7 +181,17 @@ export function PlayerPage({
     mediaFileId: string,
     locationState: PlayerLocationState
   ) => void;
-}) {
+}
+
+function PlayerPageInner({
+  mediaFileId,
+  locationState,
+  minimised,
+  inlineMusic = false,
+  onClose,
+  onMaximise,
+  onSessionChange,
+}: PlayerPageProps) {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const [inlineMusicHost, setInlineMusicHost] = useState<HTMLElement | null>(null);
@@ -433,6 +459,173 @@ export function PlayerPage({
     return () => window.removeEventListener("keydown", handleBackKey);
   }, [handleBack, minimised]);
 
+  // --- Chromecast ---------------------------------------------------------
+  const { available: castAvailable, session: castSession, requestSession, endSession } = useCast();
+  const castClient = useServerClient(locationState?.serverUrl);
+  const getCastSenderAccessToken = useServerAccessToken(locationState?.serverUrl);
+  const castServerBaseUrl = useMemo(() => castClient.resolveUrl("/"), [castClient]);
+  const [castState, setCastState] = useState<PlayarrCastStateMessage | null>(null);
+  const [castCredentials, setCastCredentials] = useState<PlayarrCastCredentials | null>(null);
+  const lastCastPositionSecondsRef = useRef<number | null>(null);
+  const previousCastSessionRef = useRef<typeof castSession>(null);
+  const castConnected = castSession !== null;
+  const castDeviceName = castSession?.getCastDevice().friendlyName ?? null;
+
+  // Subscribes to the custom channel for the lifetime of a connected
+  // session -- an external system to synchronize with, not derivable state.
+  useEffect(() => {
+    if (!castSession) return;
+    return subscribeToPlayarrCastMessages(castSession, (message) => {
+      if (message.type === "state") {
+        setCastState(message);
+        lastCastPositionSecondsRef.current = message.positionMs / 1000;
+      } else if (message.type === "auth.rotated") {
+        persistRotatedDelegatedCastCredentials(castServerBaseUrl, message.credentials);
+        setCastCredentials(message.credentials);
+      }
+    });
+  }, [castSession, castServerBaseUrl]);
+
+  // On cast end (however it happened -- the viewer's own disconnect, the
+  // receiver going away, an error): resume locally at the receiver's last
+  // reported position rather than wherever the local engine was left
+  // sitting since it was paused for the handoff.
+  useEffect(() => {
+    const previousSession = previousCastSessionRef.current;
+    previousCastSessionRef.current = castSession;
+    if (previousSession && !castSession) {
+      const resumeAtSeconds = lastCastPositionSecondsRef.current;
+      if (resumeAtSeconds !== null) player.seek(resumeAtSeconds);
+      player.play();
+      lastCastPositionSecondsRef.current = null;
+      setCastState(null);
+      setCastCredentials(null);
+    }
+  }, [castSession, player]);
+
+  // Access tokens live 15 minutes; this keeps the receiver's copy fresh on
+  // its own timer, independent of any single request, rather than waiting
+  // for it to expire and rely on the receiver's own reactive refresh.
+  useEffect(() => {
+    if (!castSession || !castCredentials) return;
+    const msUntilRefresh = Math.max(
+      5_000,
+      castCredentials.accessTokenExpiresAt - Date.now() - 2 * 60_000
+    );
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const refreshed = await ensureDelegatedCastCredentials({
+            apiBaseUrl: castServerBaseUrl,
+            fetchImpl: (input) => fetch(input),
+            getSenderAccessToken: getCastSenderAccessToken,
+          });
+          setCastCredentials(refreshed);
+          await sendPlayarrCastMessage(castSession, {
+            protocolVersion: PLAYARR_CAST_PROTOCOL_VERSION,
+            type: "auth.update",
+            credentials: refreshed,
+          });
+        } catch {
+          // Best-effort -- the receiver's own reactive refresh-on-401
+          // (mirroring `ensureAccessToken`) is the backstop if this
+          // proactive push is ever missed.
+        }
+      })();
+    }, msUntilRefresh);
+    return () => window.clearTimeout(timer);
+  }, [castSession, castCredentials, castServerBaseUrl, getCastSenderAccessToken]);
+
+  const handleToggleCast = useCallback(async (): Promise<void> => {
+    if (castSession) {
+      // A click while connected means "stop casting." Tell the receiver
+      // why first (so it closes its own playback session with the right
+      // reason) before tearing down the native session underneath it.
+      void sendPlayarrCastMessage(castSession, {
+        protocolVersion: PLAYARR_CAST_PROTOCOL_VERSION,
+        type: "session.end",
+        reason: "user_stopped",
+      }).catch(() => undefined);
+      endSession();
+      return;
+    }
+
+    const newSession = await requestSession();
+    if (!newSession) return; // the viewer dismissed the device picker -- not an error
+
+    if (!activePlaylistItem) {
+      throw new Error("No media item is loaded to cast.");
+    }
+
+    // Stop the LOCAL playback session first: once a cast session exists the
+    // receiver becomes the sole writer of watch-progress for this media
+    // file, so the local engine must not keep sending its own background
+    // heartbeats. `pause()` halts local decode immediately and, via
+    // `usePlaybackEngine`'s own pause-triggered flush, persists one last
+    // accurate position -- see this component's build report for why this
+    // is the closest available substitute for a dedicated "close this
+    // session" call, which `usePlaybackEngine` does not expose publicly.
+    player.pause();
+
+    const credentials = await ensureDelegatedCastCredentials({
+      apiBaseUrl: castServerBaseUrl,
+      fetchImpl: (input) => fetch(input),
+      getSenderAccessToken: getCastSenderAccessToken,
+    });
+    setCastCredentials(credentials);
+
+    const request = buildPlayarrCastLoadRequest({
+      serverBaseUrl: castServerBaseUrl,
+      credentials,
+      item: activePlaylistItem,
+      startPositionSeconds: player.engineState.currentTimeSeconds,
+      durationSeconds: player.engineState.durationSeconds,
+      autoplay: true,
+      selectedAudioTrackId: player.selectedAudioTrackId,
+      selectedSubtitleTrackId: player.selectedSubtitleTrackId,
+      audioTracks: player.audioTracks,
+      subtitleTracks: player.subtitleTracks,
+      activeQualityId: player.activeQualityId,
+      qualityOptions: player.qualityOptions,
+      queue: playlistItems.slice(activePlaylistIndex + 1),
+      senderLanguage: typeof navigator === "undefined" ? "en" : navigator.language,
+    });
+
+    await requestPlayarrCastLoad(newSession, request);
+
+    // Give a fast-failing receiver (e.g. `insecure_server`, discovered as
+    // soon as it tries to negotiate against `castServerBaseUrl`) a short
+    // window to surface through this SAME attempt, rather than only ever
+    // showing up later, disconnected from the click that triggered it.
+    const earlyOutcome = await waitForFirstPlayarrCastMessage(
+      newSession,
+      (message) => message.type === "error",
+      { timeoutMs: 4000 }
+    );
+    if (earlyOutcome?.type === "error") {
+      if (earlyOutcome.code === "insecure_server") {
+        throw new CastUnavailableError("insecure-server", earlyOutcome.message);
+      }
+      throw new Error(earlyOutcome.message || `Cast error: ${earlyOutcome.code}`);
+    }
+
+    void sendPlayarrCastMessage(newSession, {
+      protocolVersion: PLAYARR_CAST_PROTOCOL_VERSION,
+      type: "state.request",
+    }).catch(() => undefined);
+  }, [
+    activePlaylistIndex,
+    activePlaylistItem,
+    castServerBaseUrl,
+    castSession,
+    endSession,
+    getCastSenderAccessToken,
+    player,
+    playlistItems,
+    requestSession,
+  ]);
+  // --- /Chromecast ---------------------------------------------------------
+
   if (negotiation.kind === "loading" && !keepInlinePlayerMounted) {
     if (minimised) {
       if (inlineMiniPlayer) return inlineMiniPlayer;
@@ -536,6 +729,11 @@ export function PlayerPage({
         onNext={activePlaylistIndex < playlistItems.length - 1 ? handleNext : undefined}
         detailRoute={backTo}
         detailParentRoute={detailParentBackTo ?? "/"}
+        castAvailable={castAvailable}
+        castConnected={castConnected}
+        castDeviceName={castDeviceName}
+        castState={castState}
+        onToggleCast={handleToggleCast}
       />
     </div>
   );

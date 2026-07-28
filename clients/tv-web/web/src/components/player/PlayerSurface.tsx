@@ -8,6 +8,7 @@ import {
   type RefObject,
 } from "react";
 import type { Work } from "@streamarr-tv/api-client";
+import type { PlayarrCastStateMessage } from "@streamarr-tv/cast-protocol";
 import type { PlaybackEngineController } from "../../lib/usePlaybackEngine";
 import { CachedArtworkImage } from "../../lib/artwork";
 import { useGlobalMediaControls } from "../../lib/useGlobalMediaControls";
@@ -445,6 +446,11 @@ export function PlayerSurface({
   onNext,
   detailRoute = "/",
   detailParentRoute = "/",
+  castAvailable = false,
+  castConnected = false,
+  castDeviceName,
+  castState = null,
+  onToggleCast,
 }: {
   player: PlaybackEngineController;
   title: string;
@@ -463,6 +469,14 @@ export function PlayerSurface({
   onNext?: () => void;
   detailRoute?: string;
   detailParentRoute?: string;
+  /** Chromecast: `CastButton` (rendered by the nested `PlayerControls`) is hidden entirely unless this is true. */
+  castAvailable?: boolean;
+  /** True once a Cast session is connected -- replaces the `<video>` surface with a "Playing on {deviceName}" status card. */
+  castConnected?: boolean;
+  castDeviceName?: string | null;
+  /** Latest `state` message from the receiver, driving the replacement card's progress/negotiating display. */
+  castState?: PlayarrCastStateMessage | null;
+  onToggleCast?: () => Promise<void>;
 }) {
   const {
     videoRef,
@@ -867,11 +881,14 @@ export function PlayerSurface({
   }, [engineState.bufferedSeconds, engineState.currentTimeSeconds, negotiation]);
 
   const isBusy =
-    qualitySwitching ||
-    engineState.state === "idle" ||
-    engineState.state === "loading" ||
-    engineState.state === "buffering";
-  const isFatalError = engineState.state === "error";
+    !castConnected &&
+    (qualitySwitching ||
+      engineState.state === "idle" ||
+      engineState.state === "loading" ||
+      engineState.state === "buffering");
+  const isFatalError = !castConnected && engineState.state === "error";
+  const castPositionSeconds = (castState?.positionMs ?? 0) / 1000;
+  const castDurationSeconds = (castState?.durationMs ?? 0) / 1000;
   const durationSeconds = engineState.durationSeconds;
   const positionSeconds = engineState.currentTimeSeconds;
   const progressPercentage =
@@ -990,6 +1007,24 @@ export function PlayerSurface({
             <MaximiseIcon />
           </span>
         </>
+      )}
+
+      {castConnected && !minimised && (
+        <div className="player-overlay player-overlay-status" role="status">
+          <div className="player-status-card">
+            <p className="player-status-kicker">
+              {t("components.player.cast.playingOn", { device: castDeviceName ?? "" })}
+            </p>
+            <p className="player-error-title">{title}</p>
+            {castState?.negotiating ? (
+              <p className="player-error-message">{t("pages.player.preparingPlayback")}</p>
+            ) : (
+              <p className="player-error-message">
+                {formatPlayerTime(castPositionSeconds)} / {formatPlayerTime(castDurationSeconds)}
+              </p>
+            )}
+          </div>
+        </div>
       )}
 
       {isBusy && !isFatalError && !minimised && (
@@ -1247,6 +1282,10 @@ export function PlayerSurface({
           }}
           onQualityMenuOpenChange={setControlsPinned}
           onActivity={handleActivity}
+          castAvailable={castAvailable}
+          castConnected={castConnected}
+          castDeviceName={castDeviceName}
+          onToggleCast={onToggleCast}
         />
       )}
     </div>
