@@ -125,44 +125,89 @@ enum TVNavTab: String, CaseIterable, Identifiable {
 
 struct TVFloatingNav: View {
     @Binding var selection: TVNavTab
+    /// When true, suppress tvOS focus lift so parity captures match web chrome.
+    var suppressFocusChrome: Bool = false
+
+    private let primaryTabs: [TVNavTab] = [.search, .home, .series, .movies, .music, .playlists]
 
     var body: some View {
+        // Whole nav is one centred column (web: top 50% + translateY(-50%)).
+        // Settings sits just under the primary group, not pinned to the footer.
         VStack(spacing: 14) {
-            ForEach([TVNavTab.search, .home, .series, .movies, .music, .playlists], id: \.self) { tab in
+            navGroup(tabs: primaryTabs)
+            navGroup(tabs: [.settings])
+        }
+        .frame(width: DesignTokens.Shell.navItemSize + DesignTokens.Shell.navGroupPadding * 2)
+    }
+
+    private func navGroup(tabs: [TVNavTab]) -> some View {
+        VStack(spacing: DesignTokens.Shell.navGroupGap) {
+            ForEach(tabs, id: \.self) { tab in
                 navButton(tab)
             }
-            Spacer()
-            navButton(.settings)
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, DesignTokens.Shell.navPaddingInline)
-        .frame(width: DesignTokens.Shell.navItemSize + DesignTokens.Shell.navPaddingInline * 2)
+        .padding(.vertical, DesignTokens.Shell.navGroupPadding)
+        .padding(.horizontal, DesignTokens.Shell.navGroupPadding)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Shell.navGroupRadius, style: .continuous)
+                .fill(DesignTokens.Color.backgroundElevated.opacity(0.56))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Shell.navGroupRadius, style: .continuous)
+                        .stroke(DesignTokens.Color.borderDefault.opacity(0.35), lineWidth: 1)
+                )
+        )
     }
 
     private func navButton(_ tab: TVNavTab) -> some View {
-        Button {
+        let isActive = selection == tab
+        return Button {
             selection = tab
         } label: {
-            Image(systemName: tab.systemImage)
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(
-                    selection == tab ? DesignTokens.Color.textPrimary : DesignTokens.Color.textSecondary
-                )
-                .frame(
-                    width: DesignTokens.Shell.navItemSize,
-                    height: DesignTokens.Shell.navItemSize
-                )
-                .background(
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.navItem, style: .continuous)
-                        .fill(
-                            selection == tab
-                                ? DesignTokens.Color.backgroundRaised.opacity(0.95)
-                                : DesignTokens.Color.backgroundElevated.opacity(0.72)
-                        )
-                )
+            VStack(spacing: 5) {
+                Image(systemName: tab.systemImage)
+                    .font(.system(size: 20, weight: .semibold))
+                Text(tab.title)
+                    .font(.system(size: 9, weight: .semibold))
+                    .tracking(0.3)
+                    .lineLimit(1)
+            }
+            .foregroundStyle(isActive ? DesignTokens.Color.textPrimary : DesignTokens.Color.textDisabled)
+            .frame(
+                width: DesignTokens.Shell.navItemSize,
+                height: DesignTokens.Shell.navItemSize
+            )
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(
+                        isActive
+                            ? DesignTokens.Color.textPrimary.opacity(0.09)
+                            : Color.clear
+                    )
+            )
+            .scaleEffect(isActive && !suppressFocusChrome ? 1.05 : 1)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(tab.title)
+        // Parity captures: disable focusability entirely so the system white
+        // focus pill cannot appear (focusEffectDisabled alone still leaves a
+        // large lift on tvOS). Production keeps full focus chrome.
+        .focusable(!suppressFocusChrome)
+        .focusEffectDisabled(suppressFocusChrome)
+    }
+}
+
+/// Disables the system focus glow during parity captures (E4 residual otherwise
+/// dominates AE). Production navigation keeps default tvOS focus chrome.
+struct TVParityFocusChrome: ViewModifier {
+    let suppressed: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if suppressed {
+            content.focusEffectDisabled(true)
+        } else {
+            content
+        }
     }
 }
 
@@ -173,33 +218,52 @@ struct TVShellHeader: View {
     var body: some View {
         ZStack {
             // Clock is centred on the live SPA header.
-            if frozenClock {
-                HStack(spacing: 10) {
-                    Text("12:00")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
-                    Text("WED 29 JULY")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(DesignTokens.Color.textDisabled)
-                }
+            HStack(spacing: 11) {
+                Text(frozenClock ? "12:00" : Self.liveTimeString())
+                    .font(.system(size: 17, weight: .bold))
+                    .tracking(-0.5)
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                Text(frozenClock ? "WED 29 JULY" : Self.liveDateString())
+                    .font(.system(size: 11, weight: .semibold))
+                    .tracking(0.4)
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
             }
             HStack {
-                // Logo sits on the nav centre-x on web.
+                // Logo sits on the nav centre-x on web
+                // (`--tv-nav-centre-x` − logo/2).
+                let navCentreX = DesignTokens.Shell.navEdge
+                    + DesignTokens.Shell.navPaddingInline
+                    + DesignTokens.Shell.navItemSize / 2
+                    + 1
                 Circle()
                     .fill(DesignTokens.Color.brandPrimary)
                     .frame(width: DesignTokens.Shell.logoSize, height: DesignTokens.Shell.logoSize)
                     .overlay(
                         Image(systemName: "play.fill")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.system(size: 16, weight: .bold))
                             .foregroundStyle(.white)
                             .offset(x: 1)
                     )
-                    .padding(.leading, DesignTokens.Shell.navEdge + 14)
+                    .shadow(color: DesignTokens.Color.brandPrimary.opacity(0.28), radius: 14, y: 8)
+                    .padding(.leading, max(0, navCentreX - DesignTokens.Shell.logoSize / 2))
                 Spacer()
             }
         }
         .padding(.top, DesignTokens.Shell.headerTop)
         .frame(maxWidth: .infinity)
+        .allowsHitTesting(false)
+    }
+
+    private static func liveTimeString() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f.string(from: Date())
+    }
+
+    private static func liveDateString() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "EEE d MMMM"
+        return f.string(from: Date()).uppercased()
     }
 }
 

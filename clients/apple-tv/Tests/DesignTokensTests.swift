@@ -59,7 +59,10 @@ final class DesignTokensTests: XCTestCase {
 
     func testShellNavItemSizeMatchesWeb() {
         XCTAssertEqual(DesignTokens.Shell.navItemSize, 64)
-        XCTAssertEqual(DesignTokens.Shell.navEdge, 36)
+        XCTAssertEqual(DesignTokens.Shell.navEdge, 42)
+        XCTAssertEqual(DesignTokens.Shell.searchContentLeft, 154)
+        XCTAssertEqual(DesignTokens.Shell.searchCopyTop, 130)
+        XCTAssertEqual(DesignTokens.Shell.searchFormHeight, 76)
     }
 
     func testRadiusScale() {

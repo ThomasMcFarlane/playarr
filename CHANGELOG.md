@@ -12,6 +12,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Align `AVPlayerEngine.avPlayer` with the optional `PlayerEngine.avPlayer`
   requirement (`AVPlayer?`) so the Apple TV target builds after the Cast
   relaxation of the protocol witness.
+- Apple TV search shell geometry aligned to live SPA CSS at 1920×1080
+  (heading/form/empty positions, nav group chrome with labels, safe-area
+  ignored for stage coordinates). Honest AE on search improved from ~1.33%
+  to ~0.52% vs authenticated playarr.example.com (still above the 0.1% bar).
 
 ### Added
 
@@ -19,6 +23,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   hero title panel, home rails, search empty state, and Preferences-style
   settings. Stage palette locked to `:root[data-theme="dark"]` hex values;
   production path remains SwiftUI + PlayarrKit (no web-ref paint).
+- Apple TV parity mode suppresses system focus chrome and uses a static
+  search-field replica so the tvOS white focus fill does not dominate AE.
 
 - Apple TV design-token mirror (`DesignTokens` / `TVTheme`) kept in lock-step with
   `@playarr-tv/design-tokens`, applied across home, search, detail, player,

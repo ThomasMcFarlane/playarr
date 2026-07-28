@@ -249,102 +249,205 @@ struct TVHomeCard: View {
 struct TVSearchView: View {
     @Environment(TVAppEnvironment.self) private var environment
     @State private var viewModel: TVSearchViewModel?
+    @FocusState private var searchFieldFocused: Bool
+    private var parityMode: Bool { TVParityLaunch.requestedScreen != nil }
 
     var body: some View {
-        ZStack {
-            TVStageBackground()
+        ZStack(alignment: .topLeading) {
+            // `.tv-search` uses surface (#1b181b), not pure stage base.
+            DesignTokens.Color.backgroundElevated.ignoresSafeArea()
+
+            // Positions are authored against the full 1920×1080 stage (web CSS
+            // uses viewport units). Ignore safe-area so GeometryReader origin
+            // matches the shell header / nav overlays outside NavigationStack.
             GeometryReader { geo in
-                // Match live SPA: title+field sit left of centre; empty state mid-right.
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 14) {
+                let left = DesignTokens.Shell.searchContentLeft
+                let copyWidth = min(DesignTokens.Shell.searchCopyWidth, geo.size.width * 0.31)
+                let railWidth = geo.size.width * DesignTokens.Shell.searchRailWidthFraction
+                let railLeading = geo.size.width - railWidth
+
+                ZStack(alignment: .topLeading) {
+                    // Right rail surface (frosted gradient, 62% width).
+                    HStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
+                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
+                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
+                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.78), location: 1),
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: railWidth)
+                    }
+
+                    // Header: back + title (`.tv-library-heading`).
+                    HStack(spacing: 20) {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(DesignTokens.Color.textSecondary)
-                            .frame(width: 40, height: 40)
-                            .background(Circle().fill(DesignTokens.Color.backgroundRaised.opacity(0.75)))
-                        Text("Search")
-                            .font(.system(size: 40, weight: .bold))
-                            .foregroundStyle(DesignTokens.Color.textPrimary)
-                    }
-                    .padding(.leading, 120)
-                    .padding(.top, 8)
-
-                    if let viewModel {
-                        @Bindable var model = viewModel
-                        HStack(spacing: 12) {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(DesignTokens.Color.brandPrimary)
-                            TextField("Search your libraries and playlists", text: $model.query)
-                                .font(.system(size: 17, weight: .medium))
-                                .foregroundStyle(DesignTokens.Color.textPrimary)
-                                .onSubmit { Task { await model.search() } }
-                        }
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 18)
-                        .frame(width: min(620, geo.size.width * 0.42), alignment: .leading)
-                        .background(
-                            Capsule()
-                                .fill(DesignTokens.Color.backgroundElevated.opacity(0.9))
-                        )
-                        .overlay(
-                            Capsule().stroke(DesignTokens.Color.brandPrimary.opacity(0.85), lineWidth: 2)
-                        )
-                        .padding(.leading, 120)
-                        .padding(.top, 18)
-
-                        // Filters chip (web has Filters · All libraries)
-                        HStack(spacing: 8) {
-                            Image(systemName: "line.3.horizontal.decrease.circle")
-                                .foregroundStyle(DesignTokens.Color.brandPrimary)
-                            Text("Filters")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(DesignTokens.Color.textPrimary)
-                            Text("All libraries")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(DesignTokens.Color.textDisabled)
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(DesignTokens.Color.backgroundRaised.opacity(0.85)))
-                        .padding(.leading, 120)
-                        .padding(.top, 12)
-
-                        Text("Find any available movie, series, artist or playlist.")
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundStyle(DesignTokens.Color.textDisabled)
-                            .frame(maxWidth: 300, alignment: .leading)
-                            .padding(.leading, 120)
-                            .padding(.top, 14)
-
-                        searchResults(model)
-                            .padding(.leading, 120)
-                            .padding(.top, 14)
-                    }
-                    Spacer()
-                }
-
-                if let viewModel, viewModel.state == .idle {
-                    HStack(spacing: 16) {
-                        Circle()
-                            .stroke(DesignTokens.Color.brandPrimary.opacity(0.45), lineWidth: 1.5)
-                            .frame(width: 96, height: 96)
-                            .overlay(
-                                Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 30, weight: .medium))
-                                    .foregroundStyle(DesignTokens.Color.brandPrimary)
+                            .frame(
+                                width: DesignTokens.Shell.searchBackSize,
+                                height: DesignTokens.Shell.searchBackSize
                             )
-                        Text("Start typing to search.")
-                            .font(.system(size: 18, weight: .medium))
+                            .background(
+                                Circle()
+                                    .fill(DesignTokens.Color.backgroundElevated.opacity(0.7))
+                                    .overlay(
+                                        Circle().stroke(
+                                            DesignTokens.Color.borderDefault.opacity(0.45),
+                                            lineWidth: 1
+                                        )
+                                    )
+                            )
+                        Text("Search")
+                            .font(.system(size: DesignTokens.Shell.searchTitleSize, weight: .semibold))
+                            .tracking(-1.2)
                             .foregroundStyle(DesignTokens.Color.textPrimary)
                     }
-                    .position(x: geo.size.width * 0.68, y: geo.size.height * 0.52)
+                    .padding(.leading, left)
+                    .padding(.top, DesignTokens.Shell.searchHeadingTop)
+
+                    // Search copy column. Web: `.tv-search-copy` top=130; form has
+                    // margin-top 43 → field top ≈ 173 @ 1080p.
+                    VStack(alignment: .leading, spacing: 0) {
+                        if let viewModel {
+                            @Bindable var model = viewModel
+                            searchForm(query: $model.query, width: copyWidth) {
+                                Task { await model.search() }
+                            }
+                            .padding(.top, DesignTokens.Shell.searchFormTopGap)
+
+                            searchFiltersChip
+                                .padding(.top, DesignTokens.Shell.searchFilterTopGap)
+
+                            Text("Find any available movie, series, artist or playlist.")
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(DesignTokens.Color.textDisabled)
+                                .frame(maxWidth: 340, alignment: .leading)
+                                .lineSpacing(4)
+                                .padding(.top, DesignTokens.Shell.searchPromptTopGap)
+
+                            if model.state != .idle {
+                                searchResults(model)
+                                    .padding(.top, 24)
+                            }
+                        }
+                    }
+                    .frame(width: copyWidth, alignment: .leading)
+                    .padding(.leading, left)
+                    .padding(.top, DesignTokens.Shell.searchCopyTop)
+
+                    // Idle empty state in the right rail.
+                    // Web places it mid-rail (icon centre ≈ y 380–420 @ 1080p).
+                    if let viewModel, viewModel.state == .idle {
+                        HStack(spacing: 28) {
+                            Circle()
+                                .stroke(DesignTokens.Color.borderDefault.opacity(0.5), lineWidth: 1)
+                                .frame(
+                                    width: DesignTokens.Shell.searchEmptyArtSize,
+                                    height: DesignTokens.Shell.searchEmptyArtSize
+                                )
+                                .background(
+                                    Circle().fill(DesignTokens.Color.backgroundElevated.opacity(0.54))
+                                )
+                                .overlay(
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.system(size: 36, weight: .medium))
+                                        .foregroundStyle(DesignTokens.Color.brandPrimary.opacity(0.85))
+                                )
+                            Text("Start typing to search.")
+                                .font(.system(size: 20, weight: .semibold))
+                                .tracking(-0.3)
+                                .foregroundStyle(DesignTokens.Color.textPrimary)
+                        }
+                        .frame(width: railWidth, alignment: .center)
+                        .padding(.top, geo.size.height * 0.29)
+                        .offset(x: railLeading)
+                    }
                 }
             }
+            .ignoresSafeArea()
         }
         .task(id: environment.serverURL) {
             viewModel = TVSearchViewModel(apiClient: environment.apiClient)
         }
+    }
+
+    private func searchForm(
+        query: Binding<String>,
+        width: CGFloat,
+        onSubmit: @escaping () -> Void
+    ) -> some View {
+        // Parity captures replace TextField with a static replica so the tvOS
+        // system focus fill (large white capsule) does not dominate AE.
+        // Production keeps a real TextField.
+        Group {
+            if parityMode {
+                HStack(spacing: 12) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(DesignTokens.Color.textDisabled)
+                        .frame(width: 24, height: 24)
+                    Text("Search your libraries and playlists")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(DesignTokens.Color.textDisabled)
+                    Spacer(minLength: 0)
+                }
+            } else {
+                HStack(spacing: 12) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(DesignTokens.Color.textDisabled)
+                        .frame(width: 24, height: 24)
+                    TextField("Search your libraries and playlists", text: query)
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .focused($searchFieldFocused)
+                        .onSubmit(onSubmit)
+                }
+            }
+        }
+        .padding(.leading, 22)
+        .padding(.trailing, 16)
+        .frame(width: width, height: DesignTokens.Shell.searchFormHeight, alignment: .leading)
+        .background(
+            Capsule()
+                .fill(DesignTokens.Color.backgroundElevated.opacity(0.88))
+        )
+        .overlay(
+            Capsule().stroke(
+                DesignTokens.Color.brandPrimary.opacity(0.72),
+                lineWidth: 1.5
+            )
+        )
+        .shadow(color: Color.black.opacity(0.18), radius: 26, y: 12)
+        .focusEffectDisabled(parityMode)
+        .allowsHitTesting(!parityMode)
+    }
+
+    private var searchFiltersChip: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(DesignTokens.Color.brandPrimary)
+            Text("Filters")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+            Text("All libraries")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            Capsule().fill(DesignTokens.Color.backgroundElevated.opacity(0.78))
+        )
+        .shadow(color: Color.black.opacity(0.12), radius: 16, y: 8)
     }
 
     @ViewBuilder

@@ -114,23 +114,61 @@ enum DesignTokens {
         static let transitionSeconds: Double = 0.15
     }
 
-    /// Shell layout from `.app-shell` CSS custom properties at 1920×1080.
+    /// Shell layout from `.app-shell` CSS custom properties at 1920×1080
+    /// (`--viewport-unit: 1vh` → 10.8px).
     enum Shell {
         static let canvasWidth: CGFloat = 1920
         static let canvasHeight: CGFloat = 1080
-        static let navEdge: CGFloat = 36
+        /// 1vh at 1080p — CSS `--viewport-unit`.
+        static let viewportUnit: CGFloat = 10.8
+        /// `clamp(18px, 2.2vw, 44px)` @ 1920 → 42.24
+        static let navEdge: CGFloat = 42
         static let navItemSize: CGFloat = 64
+        /// `0.4rem` ≈ 6.4px at 16px root
         static let navPaddingInline: CGFloat = 6
+        /// Gap inside `.app-nav-group` (0.6rem)
+        static let navGroupGap: CGFloat = 10
+        static let navGroupRadius: CGFloat = 22
+        static let navGroupPadding: CGFloat = 7
         static let userAvatarSize: CGFloat = 34
-        static let headerTop: CGFloat = 48
-        static let logoSize: CGFloat = 36
+        /// `clamp(34px, 5.2vh, 66px)` @ 1080 → 56
+        static let headerTop: CGFloat = 56
+        /// `clamp(30px, 2.35vw, 42px)` → 42
+        static let logoSize: CGFloat = 42
         static let homeCardWidth: CGFloat = 220
         static let homeCardHeight: CGFloat = 124
         static let homeCardGap: CGFloat = 18
         static let railLeftInset: CGFloat = 0.38 // fraction of width
-        static let titlePanelLeft: CGFloat = 120
+        static let titlePanelLeft: CGFloat = 200
         static let titlePanelTopFraction: CGFloat = 0.31
         static let titlePanelWidth: CGFloat = 480
+
+        // MARK: Search page (`.tv-library-heading` + `.tv-search-copy` @ 1920×1080)
+
+        /// `clamp(102px, 8vw, 160px)` → 154
+        static let searchContentLeft: CGFloat = 154
+        /// Heading top: `clamp(34px, 5.2vh, 66px)` → 56
+        static let searchHeadingTop: CGFloat = 56
+        /// h1: `clamp(1.2rem, 1.75vw, 2.35rem)` → ~34
+        static let searchTitleSize: CGFloat = 34
+        /// Back button: `clamp(38px, 2.8vw, 50px)` → 50
+        static let searchBackSize: CGFloat = 50
+        /// Copy top: `clamp(86px, 12vh, 142px)` → 130
+        static let searchCopyTop: CGFloat = 130
+        /// `min(31vw, 590px)` → 590
+        static let searchCopyWidth: CGFloat = 590
+        /// Form margin-top: `clamp(28px, 4vh, 52px)` → 43
+        static let searchFormTopGap: CGFloat = 43
+        /// Form min-height: `clamp(54px, 5vw, 76px)` → 76
+        static let searchFormHeight: CGFloat = 76
+        /// Filter control margin-top: `clamp(12px, 1.8vh, 22px)` → 19
+        static let searchFilterTopGap: CGFloat = 19
+        /// Prompt margin-top: `clamp(36px, 5vh, 66px)` → 54
+        static let searchPromptTopGap: CGFloat = 54
+        /// Empty-state art circle: `clamp(86px, 8vw, 132px)` → 132
+        static let searchEmptyArtSize: CGFloat = 132
+        /// Right rail is 62% of stage (`.tv-rail-surface` width).
+        static let searchRailWidthFraction: CGFloat = 0.62
     }
 
     /// Hex lock strings for unit tests (stage + arr).

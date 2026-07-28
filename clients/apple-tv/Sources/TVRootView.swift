@@ -96,34 +96,43 @@ struct TVRootView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .toolbar(.hidden, for: .navigationBar)
             }
 
-            // Floating left nav (web `.app-nav`) — above content.
-            TVFloatingNav(selection: Binding(
-                get: { forcedSelection ?? selectedTab },
-                set: { if forcedSelection == nil { selectedTab = $0 } }
-            ))
+            // Floating left nav (web `.app-nav`) — vertically centred at nav edge.
+            TVFloatingNav(
+                selection: Binding(
+                    get: { forcedSelection ?? selectedTab },
+                    set: { if forcedSelection == nil { selectedTab = $0 } }
+                ),
+                suppressFocusChrome: TVParityLaunch.requestedScreen != nil
+            )
             .padding(.leading, DesignTokens.Shell.navEdge)
-            .padding(.top, 120)
-            .padding(.bottom, 100)
-            .frame(maxHeight: .infinity, alignment: .top)
+            .frame(maxHeight: .infinity, alignment: .center)
             .zIndex(50)
 
             // Logo / clock
             TVShellHeader(frozenClock: TVParityLaunch.requestedScreen != nil)
                 .frame(maxWidth: .infinity, alignment: .top)
+                .zIndex(80)
 
-            // Profile chip
+            // Profile chip (live SPA shows signed-in user under the nav).
             VStack {
                 Spacer()
                 HStack {
-                    TVProfileChip(name: "Viewer")
-                        .padding(.leading, DesignTokens.Shell.navEdge)
-                        .padding(.bottom, 36)
+                    TVProfileChip(
+                        name: TVParityLaunch.requestedScreen != nil ? "Test User A" : "Viewer"
+                    )
+                    .padding(.leading, DesignTokens.Shell.navEdge - 4)
+                    .padding(.bottom, 36)
                     Spacer()
                 }
             }
+            .zIndex(50)
         }
+        // Shell chrome is authored for the full 1920×1080 stage, matching web
+        // CSS viewport units. Safe-area inset would shift logo/nav/header.
+        .ignoresSafeArea()
     }
 }
 
