@@ -76,6 +76,14 @@ minSupported = "0.1.0"
 deprecatedBelow = "0.1.0"
 sunset = "2026-12-31"
 
+[cast]
+# The Cast receiver is a hosted bundle served from playarr.app alongside the
+# Web app, so its version tracks that bundle rather than a store release.
+latestVersion = "0.1.0"
+minSupported = "0.1.0"
+deprecatedBelow = "0.1.0"
+sunset = "2026-12-31"
+
 [tv-fire]
 # Fire TV's native application targets Vega OS, which is Linux-based and is
 # NOT Android -- so despite "Fire TV" historically meaning Fire OS/Android,
@@ -96,6 +104,23 @@ sunset = "2026-12-31"
 # auto-update or a Developer Mode sideload. It has no in-app patch path, so
 # the floor is deliberately held at the first shipped version until a
 # real update channel has actually delivered one.
+latestVersion = "0.1.0"
+minSupported = "0.1.0"
+deprecatedBelow = "0.1.0"
+sunset = "2026-12-31"
+
+[harmony-mobile]
+# One native ArkTS/ArkUI HAP serves phone, tablet/foldable and Huawei
+# Vision TV; the two platform identities (harmony-mobile, harmony-tv) exist
+# so playback sessions and this table can tell a living-room session from
+# a handset one apart, even though both ship in the same package and track
+# the same version.
+latestVersion = "0.1.0"
+minSupported = "0.1.0"
+deprecatedBelow = "0.1.0"
+sunset = "2026-12-31"
+
+[harmony-tv]
 latestVersion = "0.1.0"
 minSupported = "0.1.0"
 deprecatedBelow = "0.1.0"

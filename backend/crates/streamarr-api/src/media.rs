@@ -30,10 +30,14 @@
 //! [`crate::auth_extractor::StreamingUser`], same as
 //! `playback::playback_info_handler` -- a caller who can negotiate a
 //! playback URL is exactly the caller who should be able to fetch it. HLS
-//! rendition/session files additionally accept the narrowly-scoped
-//! `streamarr_playback_session` cookie Samsung AVPlay can attach to its
-//! native requests: it must name a currently-active playback session for
-//! the exact underlying media file.
+//! rendition/session files, and [`media_subtitle_handler`], additionally
+//! accept the narrowly-scoped `streamarr_playback_session` cookie Samsung
+//! AVPlay can attach to its native requests, or the equivalent
+//! `playback_session_id` [`HlsCapabilityQuery`] fallback for callers --
+//! like the Cast receiver's synchronous `PlaybackConfig` request handlers
+//! -- that can attach a query param but not a cookie: either one must name
+//! a currently-active playback session for the exact underlying media
+//! file.
 //!
 //! Every handler that resolves a [`streamarr_model::MediaFile`] (directly,
 //! or indirectly via a [`streamarr_model::Rendition`]/
@@ -1114,21 +1118,25 @@ fn hls_cookie_unauthorized() -> ApiError {
     )
 }
 
-/// Resolves Samsung AVPlay's HLS-only cookie capability. A valid bearer
-/// remains authoritative and bypasses cookie parsing entirely, preserving
-/// the existing bearer-token behavior (including its normal per-library
-/// authorization below). Without a bearer, the cookie must contain the id
-/// of a session that is still present in this node's active registry.
+/// Resolves Samsung AVPlay's HLS-only cookie capability, or the
+/// [`HlsCapabilityQuery`] `playback_session_id` fallback for callers (like
+/// the Cast receiver) that can't attach the cookie. A valid bearer remains
+/// authoritative and bypasses both entirely, preserving the existing
+/// bearer-token behavior (including its normal per-library authorization
+/// below). Without a bearer, the resolved id -- cookie first, query second
+/// -- must name a session that is still present in this node's active
+/// registry.
 fn hls_cookie_playback_session(
     state: &AppState,
     streaming: Option<&StreamingUser>,
+    capability: &HlsCapabilityQuery,
     request: &Request,
 ) -> Result<Option<streamarr_model::PlaybackSession>, ApiError> {
     if streaming.is_some() {
         return Ok(None);
     }
 
-    let session_id = request
+    let cookie_session_id = request
         .headers()
         .get_all(axum::http::header::COOKIE)
         .iter()
@@ -1138,9 +1146,11 @@ fn hls_cookie_playback_session(
         .find_map(|(name, value)| {
             (name.trim() == PLAYBACK_SESSION_COOKIE_NAME).then(|| value.trim())
         })
-        .ok_or_else(hls_cookie_unauthorized)?
-        .parse::<Uuid>()
-        .map_err(|_| hls_cookie_unauthorized())?;
+        .and_then(|value| value.parse::<Uuid>().ok());
+
+    let session_id = cookie_session_id
+        .or(capability.playback_session_id)
+        .ok_or_else(hls_cookie_unauthorized)?;
 
     state
         .session_registry
@@ -1188,6 +1198,20 @@ async fn wait_for_live_hls_file(path: &std::path::Path) {
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct DirectStreamQuery {
     playback_session_id: Option<Uuid>,
+}
+
+/// The same `playback_session_id` capability [`DirectStreamQuery`] gives
+/// direct-play, widened to the HLS rendition/session/subtitle routes (see
+/// [`hls_cookie_playback_session`]). Segment URIs inside a generated HLS
+/// playlist are bare relative filenames the receiving player fetches on
+/// its own -- a Cast Custom Web Receiver's `PlaybackConfig`
+/// `segmentRequestHandler` can append a query param to those URIs
+/// synchronously, but cannot attach the `streamarr_playback_session`
+/// cookie the way Samsung AVPlay's native player does. This gives that
+/// caller an equivalent, cookie-free way to prove the same capability.
+#[derive(Debug, Clone, Default, Deserialize, utoipa::IntoParams)]
+pub struct HlsCapabilityQuery {
+    pub playback_session_id: Option<Uuid>,
 }
 
 #[utoipa::path(
@@ -2032,11 +2056,12 @@ pub async fn update_media_playback_options_handler(
     params(
         ("media_file_id" = Uuid, Path, description = "MediaFile id"),
         ("stream_index" = u32, Path, description = "Global ffprobe stream index"),
-        MediaSubtitleQuery
+        MediaSubtitleQuery,
+        HlsCapabilityQuery
     ),
     responses(
         (status = 200, description = "Embedded text subtitle converted to WebVTT", content_type = "text/vtt"),
-        (status = 401, description = "Missing or invalid access token"),
+        (status = 401, description = "Missing or invalid bearer token, playback-session cookie, or playback_session_id capability query"),
         (status = 403, description = "Caller does not have Playarr streaming access"),
         (status = 404, description = "Unknown media file or unsupported/nonexistent subtitle stream"),
         (status = 500, description = "Subtitle conversion failed")
@@ -2044,20 +2069,28 @@ pub async fn update_media_playback_options_handler(
 )]
 pub async fn media_subtitle_handler(
     State(state): State<AppState>,
-    streaming: StreamingUser,
+    OptionalStreamingUser(streaming): OptionalStreamingUser,
     Path((media_file_id, stream_index)): Path<(Uuid, u32)>,
     Query(query): Query<MediaSubtitleQuery>,
+    Query(capability): Query<HlsCapabilityQuery>,
     request: Request,
 ) -> Result<Response, ApiError> {
+    let cookie_session =
+        hls_cookie_playback_session(&state, streaming.as_ref(), &capability, &request)?;
+    let tracking_session_id =
+        hls_tracking_session_id(streaming.as_ref(), cookie_session.as_ref(), media_file_id)?;
+
     let media_file = state
         .media_files
         .get(media_file_id)
         .await
         .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
-    ensure_library_allowed(
-        media_file.source_instance_id,
-        streaming.allowed_libraries().as_deref(),
-    )?;
+    if let Some(streaming) = streaming.as_ref() {
+        ensure_library_allowed(
+            media_file.source_instance_id,
+            streaming.allowed_libraries().as_deref(),
+        )?;
+    }
     let resolved_path = streamarr_model::resolve_media_path(&media_file.path);
     let supported_tracks = probe_media_subtitle_tracks(&resolved_path).await?;
     if !supported_tracks
@@ -2085,7 +2118,12 @@ pub async fn media_subtitle_handler(
         axum::http::header::CACHE_CONTROL,
         axum::http::HeaderValue::from_static("private, max-age=604800, immutable"),
     );
-    Ok(response)
+    Ok(match tracking_session_id {
+        Some(session_id) => {
+            track_streamed_bytes(response, state.session_registry.clone(), session_id)
+        }
+        None => response,
+    })
 }
 
 #[utoipa::path(
@@ -2138,13 +2176,14 @@ pub async fn media_thumbnail_handler(
     tag = "playback",
     params(
         ("rendition_id" = Uuid, Path, description = "Rendition id"),
-        ("file_name" = String, Path, description = "playlist.m3u8 or a segment file name within the rendition's output directory")
+        ("file_name" = String, Path, description = "playlist.m3u8 or a segment file name within the rendition's output directory"),
+        HlsCapabilityQuery
     ),
     responses(
         (status = 200, description = "Full file content"),
         (status = 206, description = "Partial content for a `Range` request"),
         (status = 400, description = "file_name contains a path separator or `..`"),
-        (status = 401, description = "Missing or invalid bearer token/playback-session cookie"),
+        (status = 401, description = "Missing or invalid bearer token, playback-session cookie, or playback_session_id capability query"),
         (status = 403, description = "Caller does not have Playarr streaming access"),
         (status = 404, description = "Unknown rendition_id, or the file does not exist in its output directory")
     )
@@ -2153,9 +2192,11 @@ pub async fn serve_rendition_file_handler(
     State(state): State<AppState>,
     OptionalStreamingUser(streaming): OptionalStreamingUser,
     Path((rendition_id, file_name)): Path<(Uuid, String)>,
+    Query(capability): Query<HlsCapabilityQuery>,
     request: Request,
 ) -> Result<Response, ApiError> {
-    let cookie_session = hls_cookie_playback_session(&state, streaming.as_ref(), &request)?;
+    let cookie_session =
+        hls_cookie_playback_session(&state, streaming.as_ref(), &capability, &request)?;
     validate_segment_file_name(&file_name)?;
     let rendition = state.transcode.get_rendition(rendition_id).await?;
     let tracking_session_id = hls_tracking_session_id(
@@ -2196,13 +2237,14 @@ pub async fn serve_rendition_file_handler(
     tag = "playback",
     params(
         ("session_id" = Uuid, Path, description = "On-demand TranscodeSession id"),
-        ("file_name" = String, Path, description = "playlist.m3u8 or a segment file name within the session's output directory")
+        ("file_name" = String, Path, description = "playlist.m3u8 or a segment file name within the session's output directory"),
+        HlsCapabilityQuery
     ),
     responses(
         (status = 200, description = "Full file content"),
         (status = 206, description = "Partial content for a `Range` request"),
         (status = 400, description = "file_name contains a path separator or `..`"),
-        (status = 401, description = "Missing or invalid bearer token/playback-session cookie"),
+        (status = 401, description = "Missing or invalid bearer token, playback-session cookie, or playback_session_id capability query"),
         (status = 403, description = "Caller does not have Playarr streaming access"),
         (status = 404, description = "Unknown or expired session_id, or the file hasn't been written yet")
     )
@@ -2211,9 +2253,11 @@ pub async fn serve_session_file_handler(
     State(state): State<AppState>,
     OptionalStreamingUser(streaming): OptionalStreamingUser,
     Path((session_id, file_name)): Path<(Uuid, String)>,
+    Query(capability): Query<HlsCapabilityQuery>,
     request: Request,
 ) -> Result<Response, ApiError> {
-    let cookie_session = hls_cookie_playback_session(&state, streaming.as_ref(), &request)?;
+    let cookie_session =
+        hls_cookie_playback_session(&state, streaming.as_ref(), &capability, &request)?;
     validate_segment_file_name(&file_name)?;
 
     let session = state
@@ -2965,6 +3009,10 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
+    /// Still true now that this handler also accepts a cookie/capability
+    /// query in place of a bearer (see [`hls_cookie_playback_session`]):
+    /// with genuinely no credentials at all -- no header, no cookie, no
+    /// `playback_session_id` -- there is nothing to authorise off of.
     #[tokio::test]
     async fn subtitle_endpoint_requires_a_bearer_token() {
         let (router, _state) = test_state().await;
@@ -2979,6 +3027,37 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn subtitle_endpoint_authorises_via_playback_session_query_param_without_a_bearer_token()
+    {
+        let (router, state) = test_state().await;
+        let media_file_id = Uuid::new_v4();
+        let playback_session = active_playback_session(media_file_id);
+        let playback_session_id = playback_session.id;
+        state.app.session_registry.insert(playback_session);
+
+        let response = router
+            .oneshot(
+                HttpRequest::builder()
+                    .uri(format!(
+                        "/api/v1/media/{media_file_id}/subtitles/3?playback_session_id={playback_session_id}"
+                    ))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // No bearer token and no cookie were sent at all. If the capability
+        // query param had been ignored, `OptionalStreamingUser` would
+        // resolve to `None` and `hls_cookie_playback_session` would 401
+        // before the handler ever looked at `media_file_id`. Reaching the
+        // handler's own "unknown media file" branch instead (this
+        // `media_file_id` was never inserted into `state.media_files`)
+        // proves the query param alone satisfied authorisation.
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
@@ -3303,6 +3382,160 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn active_playback_query_param_authorises_rendition_and_tracks_bytes() {
+        let (router, state) = test_state().await;
+        let contents = b"#EXTM3U\n#EXT-X-ENDLIST\n".to_vec();
+        let output_dir =
+            std::env::temp_dir().join(format!("streamarr-rendition-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&output_dir).unwrap();
+        std::fs::write(output_dir.join("playlist.m3u8"), &contents).unwrap();
+
+        let source = write_temp_file(b"source");
+        let media_file = media_file_at(source.clone());
+        let media_file_id = media_file.id;
+        state.media_files.insert(media_file);
+        let rendition = Rendition {
+            id: Uuid::new_v4(),
+            media_file_id,
+            profile: "h264-720p-4mbps".to_string(),
+            container: "hls".to_string(),
+            codec: "h264".to_string(),
+            bitrate: Some(4_000_000),
+            output_path: output_dir.clone(),
+            produced_by: ProducedBy::Tdarr,
+            produced_at: chrono::Utc::now(),
+            status: RenditionStatus::Ready,
+        };
+        state.rendition_repo.upsert(&rendition).await.unwrap();
+
+        let playback_session = active_playback_session(media_file_id);
+        let playback_session_id = playback_session.id;
+        state.app.session_registry.insert(playback_session);
+
+        // No Cookie header at all -- this is the Cast receiver's own path:
+        // its `PlaybackConfig.segmentRequestHandler` can only append a
+        // query param to the (already relative) segment URI, never attach
+        // a cookie the way Samsung AVPlay's native player does.
+        let response = router
+            .oneshot(
+                HttpRequest::builder()
+                    .uri(format!(
+                        "/api/v1/media/renditions/{}/playlist.m3u8?playback_session_id={playback_session_id}",
+                        rendition.id
+                    ))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(bytes.as_ref(), contents.as_slice());
+        assert_eq!(
+            state
+                .app
+                .session_registry
+                .get(playback_session_id)
+                .expect("query-param-authorised playback session remains active")
+                .bytes_streamed,
+            contents.len() as u64
+        );
+
+        let _ = std::fs::remove_file(source);
+        let _ = std::fs::remove_dir_all(output_dir);
+    }
+
+    #[tokio::test]
+    async fn rendition_cookie_session_takes_priority_over_a_query_param_session() {
+        let (router, state) = test_state().await;
+        let output_dir =
+            std::env::temp_dir().join(format!("streamarr-rendition-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&output_dir).unwrap();
+        std::fs::write(output_dir.join("playlist.m3u8"), b"#EXTM3U\n").unwrap();
+
+        let source = write_temp_file(b"source");
+        let media_file = media_file_at(source.clone());
+        let media_file_id = media_file.id;
+        state.media_files.insert(media_file);
+        let rendition = Rendition {
+            id: Uuid::new_v4(),
+            media_file_id,
+            profile: "h264-720p-4mbps".to_string(),
+            container: "hls".to_string(),
+            codec: "h264".to_string(),
+            bitrate: Some(4_000_000),
+            output_path: output_dir.clone(),
+            produced_by: ProducedBy::Tdarr,
+            produced_at: chrono::Utc::now(),
+            status: RenditionStatus::Ready,
+        };
+        state.rendition_repo.upsert(&rendition).await.unwrap();
+
+        // Two distinct, independently-valid sessions for the same media
+        // file: one named by the cookie, a different one named by the
+        // query param. `hls_cookie_playback_session` resolves "cookie
+        // first, query second", so only the cookie's session should ever
+        // be looked up or tracked.
+        let cookie_session = active_playback_session(media_file_id);
+        let cookie_session_id = cookie_session.id;
+        state.app.session_registry.insert(cookie_session);
+        let query_session = active_playback_session(media_file_id);
+        let query_session_id = query_session.id;
+        state.app.session_registry.insert(query_session);
+
+        let response = router
+            .oneshot(
+                HttpRequest::builder()
+                    .uri(format!(
+                        "/api/v1/media/renditions/{}/playlist.m3u8?playback_session_id={query_session_id}",
+                        rendition.id
+                    ))
+                    .header(
+                        axum::http::header::COOKIE,
+                        format!("{PLAYBACK_SESSION_COOKIE_NAME}={cookie_session_id}"),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        // `track_streamed_bytes` only increments as the body stream is
+        // actually polled, so the response body must be drained before
+        // `bytes_streamed` reflects anything.
+        let _ = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert!(
+            state
+                .app
+                .session_registry
+                .get(cookie_session_id)
+                .unwrap()
+                .bytes_streamed
+                > 0,
+            "the cookie's session should have been tracked"
+        );
+        assert_eq!(
+            state
+                .app
+                .session_registry
+                .get(query_session_id)
+                .unwrap()
+                .bytes_streamed,
+            0,
+            "the query-param session must not be used when a cookie is also present"
+        );
+
+        let _ = std::fs::remove_file(source);
+        let _ = std::fs::remove_dir_all(output_dir);
+    }
+
+    #[tokio::test]
     async fn rendition_cookie_rejects_missing_invalid_expired_and_mismatched_sessions() {
         let (router, state) = test_state().await;
         let output_dir =
@@ -3396,6 +3629,84 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn rendition_query_param_rejects_invalid_and_mismatched_sessions() {
+        let (router, state) = test_state().await;
+        let output_dir =
+            std::env::temp_dir().join(format!("streamarr-rendition-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&output_dir).unwrap();
+        std::fs::write(output_dir.join("playlist.m3u8"), b"#EXTM3U\n").unwrap();
+
+        let source = write_temp_file(b"source");
+        let media_file = media_file_at(source.clone());
+        let media_file_id = media_file.id;
+        state.media_files.insert(media_file);
+        let rendition = Rendition {
+            id: Uuid::new_v4(),
+            media_file_id,
+            profile: "h264-720p-4mbps".to_string(),
+            container: "hls".to_string(),
+            codec: "h264".to_string(),
+            bitrate: Some(4_000_000),
+            output_path: output_dir.clone(),
+            produced_by: ProducedBy::Tdarr,
+            produced_at: chrono::Utc::now(),
+            status: RenditionStatus::Ready,
+        };
+        state.rendition_repo.upsert(&rendition).await.unwrap();
+        let uri = format!("/api/v1/media/renditions/{}/playlist.m3u8", rendition.id);
+
+        // Malformed: axum's `Query<HlsCapabilityQuery>` extractor itself
+        // rejects this before the handler body ever runs, so this is a 400
+        // (query deserialization failure), not the 401 an invalid cookie
+        // value produces.
+        let invalid = router
+            .clone()
+            .oneshot(
+                HttpRequest::builder()
+                    .uri(format!("{uri}?playback_session_id=not-a-uuid"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
+
+        // Well-formed but unknown/expired.
+        let expired = router
+            .clone()
+            .oneshot(
+                HttpRequest::builder()
+                    .uri(format!("{uri}?playback_session_id={}", Uuid::new_v4()))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(expired.status(), StatusCode::UNAUTHORIZED);
+
+        // Active, but negotiated for a different media file -- the
+        // `media_file_id` equality check inside `hls_tracking_session_id`
+        // is unchanged and must still scope the query-param path exactly
+        // as it already scopes the cookie path.
+        let mismatched_session = active_playback_session(Uuid::new_v4());
+        let mismatched_session_id = mismatched_session.id;
+        state.app.session_registry.insert(mismatched_session);
+        let mismatched = router
+            .oneshot(
+                HttpRequest::builder()
+                    .uri(format!("{uri}?playback_session_id={mismatched_session_id}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(mismatched.status(), StatusCode::UNAUTHORIZED);
+
+        let _ = std::fs::remove_file(source);
+        let _ = std::fs::remove_dir_all(output_dir);
+    }
+
+    #[tokio::test]
     async fn active_playback_cookie_authorises_live_session_and_tracks_bytes() {
         let (router, state) = test_state().await;
         let contents = b"#EXTM3U\n#EXT-X-VERSION:3\n".to_vec();
@@ -3446,6 +3757,69 @@ mod tests {
                 .session_registry
                 .get(playback_session_id)
                 .expect("cookie-authorised playback session remains active")
+                .bytes_streamed,
+            contents.len() as u64
+        );
+
+        state
+            .app
+            .transcode
+            .expire_session(transcode_session.id)
+            .await
+            .unwrap();
+        let _ = std::fs::remove_file(source);
+    }
+
+    #[tokio::test]
+    async fn active_playback_query_param_authorises_live_session_and_tracks_bytes() {
+        let (router, state) = test_state().await;
+        let contents = b"#EXTM3U\n#EXT-X-VERSION:3\n".to_vec();
+        let source = write_temp_file(b"source");
+        let media_file = media_file_at(source.clone());
+        let media_file_id = media_file.id;
+        state.media_files.insert(media_file.clone());
+        let transcode_session = state
+            .app
+            .transcode
+            .spawn_on_demand_transcode(&media_file, "h264-720p-4mbps", "test-node")
+            .await
+            .unwrap();
+        let output_dir = state.app.transcode.session_output_dir(transcode_session.id);
+        tokio::fs::write(output_dir.join("playlist.m3u8"), &contents)
+            .await
+            .unwrap();
+
+        let playback_session = active_playback_session(media_file_id);
+        let playback_session_id = playback_session.id;
+        state.app.session_registry.insert(playback_session);
+
+        // Same as `active_playback_query_param_authorises_rendition_and_tracks_bytes`,
+        // but for the live/on-demand transcode session route -- no Cookie
+        // header at all, `playback_session_id` on the URI instead.
+        let response = router
+            .oneshot(
+                HttpRequest::builder()
+                    .uri(format!(
+                        "/api/v1/media/sessions/{}/playlist.m3u8?playback_session_id={playback_session_id}",
+                        transcode_session.id
+                    ))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(bytes.as_ref(), contents.as_slice());
+        assert_eq!(
+            state
+                .app
+                .session_registry
+                .get(playback_session_id)
+                .expect("query-param-authorised playback session remains active")
                 .bytes_streamed,
             contents.len() as u64
         );

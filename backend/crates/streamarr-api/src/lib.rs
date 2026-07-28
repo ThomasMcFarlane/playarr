@@ -68,7 +68,7 @@ use std::sync::Arc;
 
 use axum::extract::FromRef;
 use axum::Router;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowHeaders, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
 use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityRequirement, SecurityScheme};
 use utoipa::{Modify, OpenApi};
@@ -650,6 +650,16 @@ impl FromRef<AppState> for ReadinessState {
 /// logic that would otherwise reject it for having no `Authorization`
 /// header.
 ///
+/// One header-specific refinement, not a loosening of the above: allowed
+/// *headers* are mirrored from each request's own
+/// `Access-Control-Request-Headers` (`AllowHeaders::mirror_request`)
+/// rather than wildcarded. `CorsLayer::permissive()` alone would emit the
+/// literal `Access-Control-Allow-Headers: *`, and the Fetch standard
+/// explicitly excludes `Authorization` from that wildcard -- Chromium
+/// enforces this -- so a wildcard alone would fail preflight for any
+/// cross-origin, Bearer-authenticated caller, e.g. the Playarr Cast
+/// receiver served from `playarr.app` calling a self-hosted server.
+///
 /// `web_assets_dir`, when `Some`, mounts Streamarr Admin's built static
 /// assets (`clients/tv-web/admin/dist`) as this router's fallback —
 /// any request that doesn't match an `/api/*` route, `/healthz`, or
@@ -687,7 +697,15 @@ pub fn build_router(
 
     let router = router
         .layer(version_gate)
-        .layer(CorsLayer::permissive())
+        .layer(
+            // CorsLayer::permissive() emits the literal Access-Control-Allow-Headers: *, and the
+            // Fetch standard explicitly excludes Authorization from that wildcard. Mirroring
+            // Access-Control-Request-Headers names every header the caller actually asked for --
+            // including authorization -- which is the only way a cross-origin, Bearer-authenticated
+            // caller (the Playarr Cast receiver served from playarr.app) can pass preflight. Origin
+            // stays * because this API is never cookie/credential-authenticated.
+            CorsLayer::permissive().allow_headers(AllowHeaders::mirror_request()),
+        )
         .layer(axum::middleware::from_fn_with_state(
             state_for_request_timing,
             request_timing_middleware::record_request_timing,
@@ -815,6 +833,62 @@ mod tests {
         let envelope: VersionEnvelope = serde_json::from_slice(&body).unwrap();
         assert_eq!(envelope.instance_name, "Streamarr");
         assert_eq!(envelope.server_version, "0.1.0");
+    }
+
+    /// Regression test for the Playarr Cast receiver (served cross-origin
+    /// from `playarr.app`) being able to pass CORS preflight at all.
+    /// `CorsLayer::permissive()` alone emits a literal
+    /// `Access-Control-Allow-Headers: *`, which the Fetch standard (and
+    /// Chromium) refuses to treat as covering `Authorization` -- so without
+    /// `AllowHeaders::mirror_request()` this preflight would still succeed,
+    /// but the browser would strip the real request's `Authorization`
+    /// header on the follow-up call anyway. Mirroring
+    /// `Access-Control-Request-Headers` back verbatim is what actually
+    /// fixes that.
+    #[tokio::test]
+    async fn cors_preflight_mirrors_requested_headers_for_a_playback_route() {
+        let (router, _state) = test_support::test_state().await;
+        let media_file_id = uuid::Uuid::new_v4();
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("OPTIONS")
+                    .uri(format!("/api/v1/media/{media_file_id}/stream"))
+                    .header(axum::http::header::ORIGIN, "https://playarr.app")
+                    .header(axum::http::header::ACCESS_CONTROL_REQUEST_METHOD, "GET")
+                    .header(
+                        axum::http::header::ACCESS_CONTROL_REQUEST_HEADERS,
+                        "authorization",
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let allow_headers = response
+            .headers()
+            .get(axum::http::header::ACCESS_CONTROL_ALLOW_HEADERS)
+            .expect("preflight response must carry Access-Control-Allow-Headers")
+            .to_str()
+            .expect("header value is ASCII");
+        assert!(
+            allow_headers
+                .split(',')
+                .any(|header| header.trim().eq_ignore_ascii_case("authorization")),
+            "expected \"authorization\" in Access-Control-Allow-Headers, got {allow_headers:?}",
+        );
+
+        assert_eq!(
+            response
+                .headers()
+                .get(axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN)
+                .expect("preflight response must carry Access-Control-Allow-Origin"),
+            "*",
+        );
     }
 
     #[test]

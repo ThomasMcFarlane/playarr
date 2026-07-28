@@ -2288,6 +2288,14 @@ paths:
         required: true
         schema:
           type: string
+      - name: playback_session_id
+        in: query
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+          format: uuid
       responses:
         '200':
           description: Full file content
@@ -2296,7 +2304,7 @@ paths:
         '400':
           description: file_name contains a path separator or `..`
         '401':
-          description: Missing or invalid bearer token/playback-session cookie
+          description: Missing or invalid bearer token, playback-session cookie, or playback_session_id capability query
         '403':
           description: Caller does not have Playarr streaming access
         '404':
@@ -2322,6 +2330,14 @@ paths:
         required: true
         schema:
           type: string
+      - name: playback_session_id
+        in: query
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+          format: uuid
       responses:
         '200':
           description: Full file content
@@ -2330,7 +2346,7 @@ paths:
         '400':
           description: file_name contains a path separator or `..`
         '401':
-          description: Missing or invalid bearer token/playback-session cookie
+          description: Missing or invalid bearer token, playback-session cookie, or playback_session_id capability query
         '403':
           description: Caller does not have Playarr streaming access
         '404':
@@ -2656,13 +2672,21 @@ paths:
           type: integer
           format: int64
           minimum: 0
+      - name: playback_session_id
+        in: query
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+          format: uuid
       responses:
         '200':
           description: Embedded text subtitle converted to WebVTT
           content:
             text/vtt: {}
         '401':
-          description: Missing or invalid access token
+          description: Missing or invalid bearer token, playback-session cookie, or playback_session_id capability query
         '403':
           description: Caller does not have Playarr streaming access
         '404':
@@ -5016,6 +5040,10 @@ components:
         only selects which check `login_handler` applies, and every *other*
         endpoint still separately enforces the real, persisted `Policy`
         regardless of what a login request once claimed.
+
+        `Cast` identifies the CAF Custom Web Receiver page, not a device the
+        user signs into directly -- it is provisioned via delegated device
+        authorization from an already-signed-in sender.
       enum:
       - android-mobile
       - android-tv
@@ -5024,8 +5052,11 @@ components:
       - tv-webos
       - tv-tizen
       - tv-vidaa
+      - cast
       - tv-fire
       - xbox
+      - harmony-mobile
+      - harmony-tv
       - streamarr-admin
     CompatibilityEntry:
       type: object

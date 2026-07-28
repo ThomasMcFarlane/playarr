@@ -46,9 +46,14 @@ pub struct ClientCompatibilityTable {
     pub tv_tizen: Option<ClientEntry>,
     #[serde(rename = "tv-vidaa")]
     pub tv_vidaa: Option<ClientEntry>,
+    pub cast: Option<ClientEntry>,
     #[serde(rename = "tv-fire")]
     pub tv_fire: Option<ClientEntry>,
     pub xbox: Option<ClientEntry>,
+    #[serde(rename = "harmony-mobile")]
+    pub harmony_mobile: Option<ClientEntry>,
+    #[serde(rename = "harmony-tv")]
+    pub harmony_tv: Option<ClientEntry>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -261,7 +266,10 @@ deprecatedBelow = "1.3.0"
         assert!(table.tv_webos.is_some());
         assert!(table.tv_tizen.is_some());
         assert!(table.tv_vidaa.is_some());
+        assert!(table.cast.is_some());
         assert!(table.tv_fire.is_some());
         assert!(table.xbox.is_some());
+        assert!(table.harmony_mobile.is_some());
+        assert!(table.harmony_tv.is_some());
     }
 }

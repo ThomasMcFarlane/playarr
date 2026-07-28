@@ -20,6 +20,10 @@ use serde::{Deserialize, Serialize};
 /// only selects which check `login_handler` applies, and every *other*
 /// endpoint still separately enforces the real, persisted `Policy`
 /// regardless of what a login request once claimed.
+///
+/// `Cast` identifies the CAF Custom Web Receiver page, not a device the
+/// user signs into directly -- it is provisioned via delegated device
+/// authorization from an already-signed-in sender.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -31,8 +35,11 @@ pub enum ClientPlatform {
     TvWebos,
     TvTizen,
     TvVidaa,
+    Cast,
     TvFire,
     Xbox,
+    HarmonyMobile,
+    HarmonyTv,
     StreamarrAdmin,
 }
 
@@ -50,8 +57,11 @@ impl ClientPlatform {
             ClientPlatform::TvWebos => "tv-webos",
             ClientPlatform::TvTizen => "tv-tizen",
             ClientPlatform::TvVidaa => "tv-vidaa",
+            ClientPlatform::Cast => "cast",
             ClientPlatform::TvFire => "tv-fire",
             ClientPlatform::Xbox => "xbox",
+            ClientPlatform::HarmonyMobile => "harmony-mobile",
+            ClientPlatform::HarmonyTv => "harmony-tv",
             ClientPlatform::StreamarrAdmin => "streamarr-admin",
         }
     }
@@ -65,8 +75,11 @@ impl ClientPlatform {
             "tv-webos" => ClientPlatform::TvWebos,
             "tv-tizen" => ClientPlatform::TvTizen,
             "tv-vidaa" => ClientPlatform::TvVidaa,
+            "cast" => ClientPlatform::Cast,
             "tv-fire" => ClientPlatform::TvFire,
             "xbox" => ClientPlatform::Xbox,
+            "harmony-mobile" => ClientPlatform::HarmonyMobile,
+            "harmony-tv" => ClientPlatform::HarmonyTv,
             "streamarr-admin" => ClientPlatform::StreamarrAdmin,
             _ => return None,
         })
@@ -115,8 +128,11 @@ mod tests {
         ClientPlatform::TvWebos,
         ClientPlatform::TvTizen,
         ClientPlatform::TvVidaa,
+        ClientPlatform::Cast,
         ClientPlatform::TvFire,
         ClientPlatform::Xbox,
+        ClientPlatform::HarmonyMobile,
+        ClientPlatform::HarmonyTv,
         ClientPlatform::StreamarrAdmin,
     ];
 
@@ -139,9 +155,12 @@ mod tests {
             ClientPlatform::TvWebos => 4,
             ClientPlatform::TvTizen => 5,
             ClientPlatform::TvVidaa => 6,
-            ClientPlatform::TvFire => 7,
-            ClientPlatform::Xbox => 8,
-            ClientPlatform::StreamarrAdmin => 9,
+            ClientPlatform::Cast => 7,
+            ClientPlatform::TvFire => 8,
+            ClientPlatform::Xbox => 9,
+            ClientPlatform::HarmonyMobile => 10,
+            ClientPlatform::HarmonyTv => 11,
+            ClientPlatform::StreamarrAdmin => 12,
         }
     }
 
