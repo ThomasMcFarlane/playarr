@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.theme.FocusMotion
+
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -629,7 +631,7 @@ internal fun PlaylistCard(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1.45f)
-            .scale(if (focused) 1.04f else 1f)
+            .scale(if (focused) FocusMotion.tileFocusScale else FocusMotion.restScale)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onSelected()
@@ -1777,7 +1779,7 @@ private fun ProfileChoice(
             enabled = enabled,
             modifier = Modifier
                 .size(size)
-                .scale(if (selected) 1.035f else 1f)
+                .scale(if (selected) FocusMotion.selectedScale else FocusMotion.restScale)
                 .then(if (selected) Modifier.border(4.dp, WebPink.copy(alpha = 0.42f), CircleShape) else Modifier)
                 .onFocusChanged { if (it.isFocused) onFocus() }
                 .semantics { contentDescription = avatarDescription },
@@ -1845,7 +1847,7 @@ private fun AddProfileChoice(
             enabled = enabled,
             modifier = Modifier
                 .size(size)
-                .scale(if (selected) 1.035f else 1f)
+                .scale(if (selected) FocusMotion.selectedScale else FocusMotion.restScale)
                 .then(if (selected) Modifier.border(4.dp, WebPink.copy(alpha = 0.42f), CircleShape) else Modifier)
                 .onFocusChanged { if (it.isFocused) onFocus() },
             shape = CircleShape,

@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -108,7 +109,14 @@ sealed interface RootState {
         val showProfiles: Boolean,
         val canReturnToProfiles: Boolean,
     ) : RootState
-    data class SignedIn(val serverUrl: String, val initialRoute: String) : RootState
+    data class SignedIn(
+        val serverUrl: String,
+        val initialRoute: String,
+        val accessToken: String,
+        val refreshToken: String,
+        val userId: String,
+        val userName: String,
+    ) : RootState
 }
 
 @HiltViewModel
@@ -119,23 +127,37 @@ class PlayarrRootViewModel @Inject constructor(
     private val loginRequested = MutableStateFlow(false)
     private val postAuthRoute = MutableStateFlow("home")
     private val sessionState = combine(
-        tokenStore.accessToken,
-        serverConfigStore.baseUrl,
+        combine(
+            tokenStore.accessToken,
+            tokenStore.refreshToken,
+            tokenStore.currentUserId,
+            tokenStore.currentUserName,
+            serverConfigStore.baseUrl,
+        ) { accessToken, refreshToken, userId, userName, savedServerUrl ->
+            SessionSnapshot(
+                accessToken = accessToken,
+                refreshToken = refreshToken,
+                userId = userId,
+                userName = userName,
+                savedServerUrl = savedServerUrl,
+                savedProfiles = emptyList(),
+            )
+        },
         tokenStore.savedProfiles,
-    ) { token, savedServerUrl, savedProfiles ->
-        Triple(token, savedServerUrl, savedProfiles)
+    ) { partial, savedProfiles ->
+        partial.copy(savedProfiles = savedProfiles)
     }
     private val navigationState = combine(loginRequested, postAuthRoute, ::Pair)
 
     val state: StateFlow<RootState> = combine(sessionState, navigationState) { session, navigation ->
-        val (token, savedServerUrl, savedProfiles) = session
         val (showLogin, initialRoute) = navigation
-        val serverUrl = savedServerUrl.takeIf { it.isNotBlank() }
+        val serverUrl = session.savedServerUrl.takeIf { it.isNotBlank() }
             ?.let { runCatching { normaliseServerUrl(it) }.getOrDefault(it) }
             .orEmpty()
-        if (serverUrl != savedServerUrl) serverConfigStore.setBaseUrl(serverUrl)
-        if (token.isNullOrBlank() || serverUrl.isBlank()) {
-            val hasProfiles = savedProfiles.any { it.serverUrl == serverUrl }
+        if (serverUrl != session.savedServerUrl) serverConfigStore.setBaseUrl(serverUrl)
+        val access = session.accessToken
+        if (access.isNullOrBlank() || serverUrl.isBlank()) {
+            val hasProfiles = session.savedProfiles.any { it.serverUrl == serverUrl }
             RootState.SignedOut(
                 savedServerUrl = serverUrl,
                 showProfiles = hasProfiles && !showLogin,
@@ -143,7 +165,14 @@ class PlayarrRootViewModel @Inject constructor(
             )
         } else {
             tokenStore.bindCurrentServer(serverUrl)
-            RootState.SignedIn(serverUrl, initialRoute)
+            RootState.SignedIn(
+                serverUrl = serverUrl,
+                initialRoute = initialRoute,
+                accessToken = access,
+                refreshToken = session.refreshToken.orEmpty(),
+                userId = session.userId.orEmpty(),
+                userName = session.userName.orEmpty(),
+            )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RootState.Loading)
 
@@ -177,6 +206,15 @@ class PlayarrRootViewModel @Inject constructor(
         postAuthRoute.value = route
     }
 }
+
+private data class SessionSnapshot(
+    val accessToken: String?,
+    val refreshToken: String?,
+    val userId: String?,
+    val userName: String?,
+    val savedServerUrl: String,
+    val savedProfiles: List<io.playarr.shared.auth.SavedProfile>,
+)
 
 sealed interface LoginState {
     data object Idle : LoginState
@@ -395,6 +433,12 @@ fun PlayarrApp(
     val state by rootViewModel.state.collectAsState()
     val display = LocalPlayarrDisplayPreferences.current
     val language = rememberPlayarrLanguageState(display.language)
+    val systemDark = isSystemInDarkTheme()
+    val darkTheme = when (display.theme) {
+        PlayarrThemePreference.System -> systemDark
+        PlayarrThemePreference.Light -> false
+        PlayarrThemePreference.Dark -> true
+    }
     CompositionLocalProvider(LocalPlayarrLanguage provides language) {
         Surface(modifier = Modifier.fillMaxSize(), color = PlayarrBackground, contentColor = Color.White) {
             when (val current = state) {
@@ -417,13 +461,27 @@ fun PlayarrApp(
                 }
                 is RootState.SignedIn -> {
                     val initialRoute = remember(current.serverUrl) { current.initialRoute }
-                    PlayarrExperience(
-                        serverUrl = current.serverUrl,
-                        isTelevision = isTelevision,
-                        initialRoute = initialRoute,
-                        onAddProfile = rootViewModel::addProfile,
-                        onRouteChanged = rootViewModel::rememberRoute,
-                    )
+                    if (isTelevision) {
+                        // Television shares the Playarr Web TV surface so the
+                        // 1920×1080 stage, focus motion, and artwork match the
+                        // live web UI under Chromium.
+                        PlayarrTvWebShell(
+                            serverUrl = current.serverUrl,
+                            accessToken = current.accessToken,
+                            refreshToken = current.refreshToken,
+                            userId = current.userId,
+                            userName = current.userName.ifBlank { "Viewer" },
+                            darkTheme = darkTheme,
+                        )
+                    } else {
+                        PlayarrExperience(
+                            serverUrl = current.serverUrl,
+                            isTelevision = false,
+                            initialRoute = initialRoute,
+                            onAddProfile = rootViewModel::addProfile,
+                            onRouteChanged = rootViewModel::rememberRoute,
+                        )
+                    }
                 }
             }
         }

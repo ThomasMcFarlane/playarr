@@ -5,10 +5,12 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import io.playarr.shared.designsystem.theme.FocusMotion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
@@ -254,6 +256,36 @@ private var webPalette = darkWebPalette
 
 internal fun setPlayarrWebPalette(darkTheme: Boolean) {
     webPalette = if (darkTheme) darkWebPalette else lightWebPalette
+}
+
+/** Cubic-bezier matching Playarr Web `focusMotion.transitionEasing`. */
+private val PlayarrFocusEasing = CubicBezierEasing(
+    FocusMotion.easingControlPoints[0],
+    FocusMotion.easingControlPoints[1],
+    FocusMotion.easingControlPoints[2],
+    FocusMotion.easingControlPoints[3],
+)
+
+/**
+ * Animated focus scale driven by [FocusMotion] tokens so television tiles
+ * grow with the same duration/easing as Playarr Web rather than snapping.
+ */
+@Composable
+internal fun rememberPlayarrFocusScale(
+    focused: Boolean,
+    focusedScale: Float = FocusMotion.tileFocusScale,
+    unfocusedScale: Float = FocusMotion.restScale,
+    label: String = "playarrFocusScale",
+): Float {
+    val scale by animateFloatAsState(
+        targetValue = if (focused) focusedScale else unfocusedScale,
+        animationSpec = tween(
+            durationMillis = FocusMotion.transitionMs,
+            easing = PlayarrFocusEasing,
+        ),
+        label = label,
+    )
+    return scale
 }
 
 internal val WebBackground get() = webPalette.background
@@ -1050,6 +1082,12 @@ private fun TelevisionNavigation(
                         val selected = currentRoute == destination.route
                         val label = playarrString(destination.label)
                         var focused by remember { mutableStateOf(false) }
+                        val navScale = rememberPlayarrFocusScale(
+                            focused = focused,
+                            focusedScale = FocusMotion.navFocusScale,
+                            unfocusedScale = if (selected) FocusMotion.navSelectedScale else FocusMotion.restScale,
+                            label = "tvNavFocus",
+                        )
                         Surface(
                             onClick = { onNavigate(destination.route) },
                             color = if (selected || focused) WebInk.copy(alpha = if (focused) 0.14f else 0.09f) else Color.Transparent,
@@ -1057,7 +1095,7 @@ private fun TelevisionNavigation(
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier
                                 .size(64.dp)
-                                .scale(if (focused) 1.1f else if (selected) 1.05f else 1f)
+                                .scale(navScale)
                                 .onFocusChanged { focused = it.isFocused },
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -1690,7 +1728,11 @@ private fun ExperienceLandscapeCard(
 ) {
     val resolvedSubtitle = displaySubtitle ?: work.kind.playarrSingularLabel()
     var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (focused) 1.045f else 1f, label = "playarrCardFocus")
+    val scale = rememberPlayarrFocusScale(
+        focused = focused,
+        focusedScale = FocusMotion.cardFocusScale,
+        label = "playarrCardFocus",
+    )
     Column(
         modifier = modifier
             .width(width)
@@ -1845,8 +1887,13 @@ private fun LibraryCoverCard(
     onContext: (Work) -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
+    val libraryScale = rememberPlayarrFocusScale(
+        focused = focused || selected,
+        focusedScale = FocusMotion.tileFocusScale,
+        label = "libraryCardFocus",
+    )
     Column(
-        Modifier.width(width).scale(if (focused || selected) 1.04f else 1f)
+        Modifier.width(width).scale(libraryScale)
             .onFocusChanged { focused = it.isFocused; if (it.isFocused) onSelected(work) }.focusable()
             .combinedClickable(onClick = { onSelected(work); onOpen(work) }, onLongClick = { onContext(work) }),
     ) {
@@ -3637,6 +3684,11 @@ private fun EpisodeDetailCard(
 ) {
     var focused by remember(episode.episode.id) { mutableStateOf(false) }
     val available = episode.mediaFileId != null
+    val episodeScale = rememberPlayarrFocusScale(
+        focused = focused,
+        focusedScale = FocusMotion.tileFocusScale,
+        label = "episodeFocus",
+    )
     Column(Modifier.width(if (isTelevision) 220.dp else 184.dp)) {
         Surface(
             onClick = onPlay,
@@ -3644,7 +3696,7 @@ private fun EpisodeDetailCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .scale(if (focused) 1.04f else 1f)
+                .scale(episodeScale)
                 .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused) onSelect() }
                 .then(if (selected) Modifier.border(2.dp, WebPink, RoundedCornerShape(10.dp)) else Modifier),
             shape = RoundedCornerShape(10.dp),
@@ -4107,6 +4159,11 @@ private fun MusicAlbumCard(
     onPlay: () -> Unit,
 ) {
     var focused by remember(album.album.id) { mutableStateOf(false) }
+    val albumScale = rememberPlayarrFocusScale(
+        focused = focused,
+        focusedScale = FocusMotion.navSelectedScale,
+        label = "albumFocus",
+    )
     Column(
         modifier = Modifier.width(if (isTelevision) 200.dp else 142.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -4116,7 +4173,7 @@ private fun MusicAlbumCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .scale(if (focused) 1.05f else 1f)
+                .scale(albumScale)
                 .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused) onSelect() }
                 .then(if (selected) Modifier.border(2.dp, WebPink, RoundedCornerShape(12.dp)) else Modifier),
             shape = RoundedCornerShape(12.dp),
