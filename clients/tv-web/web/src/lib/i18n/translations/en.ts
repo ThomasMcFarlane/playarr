@@ -892,10 +892,10 @@ export const en = {
   "pages.clients.roku.platform": "Roku televisions",
   "pages.clients.roku.description":
     "The preview ZIP is the complete Roku channel bundle. Roku's development installer expects the archive itself, so keep it zipped.",
-  "pages.clients.firetv.name": "Fire TV",
-  "pages.clients.firetv.platform": "Amazon Fire TV devices",
-  "pages.clients.firetv.description":
-    "The native Fire TV client is in development. It will install as a signed package, so no release is available to download yet.",
+  "pages.clients.chromecast.name": "Chromecast",
+  "pages.clients.chromecast.platform": "Chromecast built-in devices",
+  "pages.clients.chromecast.description":
+    "Casting from the Playarr web, Android and iOS apps to a Chromecast is in development. The receiver app is not published yet.",
   "pages.clients.androidMobile.name": "Android Mobile",
   "pages.clients.androidMobile.platform": "Android phones and tablets",
   "pages.clients.androidMobile.description":
@@ -920,6 +920,22 @@ export const en = {
   "pages.clients.tizen.platform": "Samsung smart TVs",
   "pages.clients.tizen.description":
     "The complete Playarr TV experience is available as a package-ready Tizen developer build with signing and sideload instructions.",
+  "pages.clients.xbox.name": "Xbox",
+  "pages.clients.xbox.platform": "Xbox Series X|S and Xbox One",
+  "pages.clients.xbox.description":
+    "The native Xbox client is in development. It will install as a signed package, so no release is available to download yet.",
+  "pages.clients.playstation.name": "PlayStation",
+  "pages.clients.playstation.platform": "PlayStation 5 and PlayStation 4",
+  "pages.clients.playstation.description":
+    "A Playarr client for PlayStation consoles is being scoped. Nothing is available to install yet.",
+  "pages.clients.harmony.name": "HarmonyOS",
+  "pages.clients.harmony.platform": "Huawei phones, tablets and Vision TVs",
+  "pages.clients.harmony.description":
+    "The native HarmonyOS client is in development. It will install as a signed package, so no release is available to download yet.",
+  "pages.clients.firetv.name": "Fire TV",
+  "pages.clients.firetv.platform": "Amazon Fire TV devices",
+  "pages.clients.firetv.description":
+    "The native Fire TV client is in development. It will install as a signed package, so no release is available to download yet.",
   "pages.clients.vidaaSetup": "Install",
   "pages.clients.downloadApk": "Download APK",
   "pages.clients.downloadApp": "Download app",

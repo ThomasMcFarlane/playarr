@@ -142,6 +142,31 @@
   color: #662d91;
 }
 
+.client-choice.is-chromecast .client-platform-icon {
+  color: #ff4444;
+}
+
+.client-choice.is-xbox .client-platform-icon {
+  color: #107c10;
+}
+
+/* The HarmonyOS mark is a monochrome wordmark, so it follows the ink colour
+   like the Apple mark rather than carrying a brand hue of its own. */
+.client-choice.is-harmony .client-platform-icon {
+  color: var(--ink);
+}
+
+/* A wordmark rather than a glyph: it needs the full tile width to stay
+   legible at the size the single-letter brand marks are drawn at. */
+.client-choice.is-harmony .client-platform-icon svg {
+  width: 62%;
+  height: 62%;
+}
+
+.client-choice.is-playstation .client-platform-icon {
+  color: #003791;
+}
+
 .client-choice.is-firetv .client-platform-icon {
   color: #ff9900;
 }
@@ -269,6 +294,18 @@
 
 .client-details-summary.is-roku .client-details-icon {
   color: #662d91;
+}
+
+.client-details-summary.is-chromecast .client-details-icon {
+  color: #ff4444;
+}
+
+.client-details-summary.is-harmony .client-details-icon {
+  color: var(--ink);
+}
+
+.client-details-summary.is-playstation .client-details-icon {
+  color: #003791;
 }
 
 .client-details-summary.is-firetv .client-details-icon {
