@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "io.streamarr.shared.domain"
+    namespace = "io.playarr.shared.domain"
     compileSdk = 37
 
     defaultConfig {

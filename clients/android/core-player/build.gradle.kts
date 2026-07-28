@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "io.streamarr.shared.player"
+    namespace = "io.playarr.shared.player"
     compileSdk = 37
 
     defaultConfig {
@@ -23,7 +23,7 @@ kotlin {
 }
 
 dependencies {
-    // `api`: StreamarrPlayer's public surface (attachPlayer / the state
+    // `api`: PlayarrPlayer's public surface (attachPlayer / the state
     // Flow) exposes androidx.media3.common types directly, so callers in
     // the app modules need those on their compile classpath too.
     api(libs.bundles.media3)

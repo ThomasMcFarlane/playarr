@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "io.streamarr.shared.update"
+    namespace = "io.playarr.shared.update"
     compileSdk = 37
 
     defaultConfig {
@@ -29,7 +29,7 @@ dependencies {
 
     // AppUpdateCoordinator's public surface exposes AppUpdateManager/
     // AppUpdateInfo/InstallStateUpdatedListener types directly (mirrors
-    // core-player's StreamarrPlayer exposing the raw Media3 Player) --
+    // core-player's PlayarrPlayer exposing the raw Media3 Player) --
     // `api`, not `implementation`, so app modules see them too.
     api(libs.play.app.update)
     api(libs.play.app.update.ktx)

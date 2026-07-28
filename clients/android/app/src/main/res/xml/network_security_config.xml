@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Streamarr is self-hosted: an operator's server (see core-data's
+  Playarr Server is self-hosted: an operator's server (see core-data's
   ServerConfigStore/the Settings screen) is very commonly plain HTTP on a
   home LAN with no TLS certificate, not a public HTTPS host. The emulator
   dev default (http://10.0.2.2:8484) is itself cleartext. Android 9+

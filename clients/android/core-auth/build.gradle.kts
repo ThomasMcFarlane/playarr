@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "io.streamarr.shared.auth"
+    namespace = "io.playarr.shared.auth"
     compileSdk = 37
 
     defaultConfig {

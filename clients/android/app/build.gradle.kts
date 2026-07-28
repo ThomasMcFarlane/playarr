@@ -29,11 +29,11 @@ val releaseSigningReady = listOf(
 ).all { it.isPresent }
 
 android {
-    namespace = "io.streamarr.mobile"
+    namespace = "io.playarr.mobile"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "io.streamarr.mobile"
+        applicationId = "io.playarr.mobile"
         // Android 8.0+, per docs/architecture/overview.md's client table.
         minSdk = 26
         targetSdk = 37
@@ -48,7 +48,7 @@ android {
         buildConfigField("String", "FIREBASE_SENDER_ID", "\"${firebaseSenderId.get()}\"")
         buildConfigField("String", "CAST_RECEIVER_APP_ID", "\"${castReceiverAppId.get()}\"")
 
-        // No STREAMARR_BASE_URL buildConfigField: the server base URL is a
+        // No PLAYARR_BASE_URL buildConfigField: the server base URL is a
         // runtime-configurable, DataStore-backed setting now (see
         // core-data's ServerConfigStore + the Settings screen), not a
         // value baked into the build -- a client must be able to point at
@@ -143,7 +143,7 @@ dependencies {
     implementation(libs.androidx.media3.database)
     implementation(libs.androidx.media3.datasource.okhttp)
 
-    // Room: constructs StreamarrDownloadDatabase in di/DownloadModule.kt.
+    // Room: constructs PlayarrDownloadDatabase in di/DownloadModule.kt.
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)

@@ -39,7 +39,7 @@ normally with push registration disabled.
 
 ## Responsive application contract
 
-- The package is `io.streamarr.mobile` on every Android device.
+- The package is `io.playarr.mobile` on every Android device.
 - The manifest exposes both normal and Leanback launcher categories.
 - Runtime UI-mode detection selects `android-mobile` or `android-tv` request
   headers without changing the package or APK.
@@ -49,13 +49,13 @@ normally with push registration disabled.
   editorial stage, right-hand content rails, immersive mode, and D-pad focus
   scaling.
 - Television sign-in starts at `playarr.app`: the app displays a QR and manual code, and the
-  profile selected in the browser supplies the short-lived Streamarr device credential plus its
+  profile selected in the browser supplies the short-lived Playarr Server device credential plus its
   server-address bundle. No server URL is entered or compiled into the television application.
-- Touch-device username/password sign-in still accepts a direct Streamarr URL for account setup.
+- Touch-device username/password sign-in still accepts a direct Playarr Server URL for account setup.
 - All visible screens are native Compose and playback uses Media3. There is no
   WebView presentation layer.
 
-Cleartext HTTP is permitted because self-hosted Streamarr servers commonly run
+Cleartext HTTP is permitted because self-hosted Playarr Server instances commonly run
 on a private LAN. Public deployments should use HTTPS.
 
 ## Publishing

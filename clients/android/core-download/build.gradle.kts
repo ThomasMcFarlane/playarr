@@ -4,13 +4,13 @@ plugins {
 }
 
 android {
-    namespace = "io.streamarr.shared.download"
+    namespace = "io.playarr.shared.download"
     compileSdk = 37
 
     defaultConfig {
         minSdk = 26
         // Room schema export isn't wired to a checked-in schemas/ directory yet; schema 2's
-        // explicit v1 migration is covered directly (see StreamarrDownloadDatabase's KDoc).
+        // explicit v1 migration is covered directly (see PlayarrDownloadDatabase's KDoc).
     }
 
     compileOptions {
@@ -27,7 +27,7 @@ kotlin {
 
 dependencies {
     // DownloadCandidate/DownloadQualityOption/DownloadTicketResponse and the
-    // StreamarrApi download endpoints this module's repository calls.
+    // PlayarrApi download endpoints this module's repository calls.
     api(project(":core-data"))
     api(project(":core-domain"))
     // TokenStore isn't referenced directly here (the authenticated OkHttp

@@ -6,7 +6,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
-    <!-- StreamarrDownloadService: Media3's own DownloadService promotes
+    <!-- PlayarrDownloadService: Media3's own DownloadService promotes
          itself to a foreground service while any download is active, so it
          can keep running (and show real progress) while the app isn't in
          the foreground. These two permissions are required for that
@@ -23,7 +23,7 @@
         android:required="false" />
 
     <application
-        android:name=".StreamarrMobileApp"
+        android:name=".PlayarrMobileApp"
         android:allowBackup="true"
         android:banner="@drawable/tv_banner"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -34,7 +34,7 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Streamarr"
+        android:theme="@style/Theme.Playarr"
         tools:targetApi="34">
 
         <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
@@ -50,7 +50,7 @@
              silently unavailable rather than crash. -->
         <meta-data
             android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
-            android:value="io.streamarr.mobile.cast.PlayarrCastOptionsProvider" />
+            android:value="io.playarr.mobile.cast.PlayarrCastOptionsProvider" />
         <service
             android:name=".InviteApprovalMessagingService"
             android:exported="false">
@@ -70,7 +70,7 @@
         </provider>
 
         <!-- Disables WorkManager's default androidx.startup initializer:
-             StreamarrMobileApp implements Configuration.Provider (a Hilt-
+             PlayarrMobileApp implements Configuration.Provider (a Hilt-
              aware WorkerFactory for KeepUntilSweepWorker's @HiltWorker
              constructor), which only takes effect if WorkManager's own
              automatic, non-Hilt-aware initialization is turned off here. -->
@@ -86,14 +86,14 @@
         </provider>
 
         <service
-            android:name=".download.StreamarrDownloadService"
+            android:name=".download.PlayarrDownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.Streamarr.Splash"
+            android:theme="@style/Theme.Playarr.Splash"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
             android:launchMode="singleTop">
             <intent-filter>

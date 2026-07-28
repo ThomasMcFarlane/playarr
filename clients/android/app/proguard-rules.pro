@@ -30,6 +30,6 @@
 # constructor, and it is not obviously covered by a "<methods>" keep) and
 # so this class's protection does not depend on a third-party AAR's rule
 # never changing.
--keep public class io.streamarr.mobile.cast.PlayarrCastOptionsProvider {
+-keep public class io.playarr.mobile.cast.PlayarrCastOptionsProvider {
     public <init>();
 }

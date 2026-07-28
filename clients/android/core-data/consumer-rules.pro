@@ -7,12 +7,12 @@
 -keepattributes *Annotation*, InnerClasses
 -dontnote kotlinx.serialization.AnnotationsKt
 
--keepclasseswithmembers class io.streamarr.shared.data.**$$serializer {
+-keepclasseswithmembers class io.playarr.shared.data.**$$serializer {
     *** serializer(...);
 }
--keepclassmembers class io.streamarr.shared.data.** {
+-keepclassmembers class io.playarr.shared.data.** {
     *** Companion;
 }
--keepclasseswithmembers class io.streamarr.shared.data.** {
+-keepclasseswithmembers class io.playarr.shared.data.** {
     kotlinx.serialization.KSerializer serializer(...);
 }

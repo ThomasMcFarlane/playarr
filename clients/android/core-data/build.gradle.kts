@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "io.streamarr.shared.data"
+    namespace = "io.playarr.shared.data"
     compileSdk = 37
 
     defaultConfig {
@@ -25,10 +25,10 @@ kotlin {
 }
 
 dependencies {
-    // streamarr-model equivalents (Work, MediaFile, ...) live in this module.
-    // `api` (not `implementation`): the StreamarrApi interface's method
+    // playarr-model equivalents (Work, MediaFile, ...) live in this module.
+    // `api` (not `implementation`): the PlayarrApi interface's method
     // signatures are Retrofit/kotlinx.serialization types, and core-domain
-    // (and the app modules) consume StreamarrApi directly, so those types
+    // (and the app modules) consume PlayarrApi directly, so those types
     // need to be on their compile classpath transitively.
     api(libs.bundles.networking)
     api(libs.kotlinx.coroutines.core)

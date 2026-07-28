@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "io.streamarr.shared.designsystem"
+    namespace = "io.playarr.shared.designsystem"
     compileSdk = 37
 
     defaultConfig {
