@@ -294,6 +294,15 @@ function ClientsSelector({ activeClientId }: { activeClientId: string }) {
       <div className="clients-coverflow-track">
         {PLAYARR_CLIENTS.map((client, index) => {
           const isActive = client.id === activeClientId;
+          const icon = (
+            <span
+              className="client-platform-icon"
+              data-client-icon={client.icon}
+              aria-hidden="true"
+            >
+              <ClientPlatformIcon icon={client.icon} />
+            </span>
+          );
 
           return (
             <article
@@ -301,23 +310,38 @@ function ClientsSelector({ activeClientId }: { activeClientId: string }) {
               key={client.id}
               style={coverflowTileStyle(circularOffset(index, selectedIndex, total))}
             >
-              <Link
-                id={`client-${client.id}`}
-                className="client-platform"
-                to={`/clients/${client.id}`}
-                aria-label={`${t(client.nameKey)} — ${t(client.platformKey)}`}
-                aria-current={isActive ? "page" : undefined}
-                data-tv-focus-default={isActive ? true : undefined}
-                data-navigation-focus-key={`clients:${client.id}`}
-              >
-                <span
-                  className="client-platform-icon"
-                  data-client-icon={client.icon}
-                  aria-hidden="true"
+              {isActive ? (
+                <Link
+                  id={`client-${client.id}`}
+                  className="client-platform"
+                  to={`/clients/${client.id}`}
+                  aria-label={`${t(client.nameKey)} — ${t(client.platformKey)}`}
+                  aria-current="page"
+                  data-tv-focus-default
+                  data-navigation-focus-key={`clients:${client.id}`}
                 >
-                  <ClientPlatformIcon icon={client.icon} />
-                </span>
-              </Link>
+                  {icon}
+                </Link>
+              ) : (
+                // Deliberately not a real <a>/<button>: this app's shared
+                // directional focus system treats every native interactive
+                // element as reachable regardless of tabindex, so a real
+                // link here would let Up/Down land on it from anywhere on
+                // the page (see the keydown handler above). A plain element
+                // stays fully clickable but is invisible to that system --
+                // only the active tile is ever keyboard/remote-focusable;
+                // every other tile is reached by stepping Left/Right onto
+                // it, which swaps it in as the real, focusable Link above.
+                <div
+                  id={`client-${client.id}`}
+                  className="client-platform"
+                  role="link"
+                  aria-label={`${t(client.nameKey)} — ${t(client.platformKey)}`}
+                  onClick={() => navigate(`/clients/${client.id}`, { replace: true })}
+                >
+                  {icon}
+                </div>
+              )}
             </article>
           );
         })}

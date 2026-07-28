@@ -41,13 +41,15 @@ function renderClientRoute(path: string): string {
 }
 
 /**
- * How many platform links the coverflow renders. Every client URL must show
+ * How many platform tiles the coverflow renders. Every client URL must show
  * the same complete set, so the per-route assertions compare against this
  * rather than a literal -- adding a client should not require editing counts
- * scattered through this file.
+ * scattered through this file. Only the active tile is a real link (see
+ * "only the active tile is a real, focusable link" below), so this counts
+ * tiles by id rather than by href.
  */
-function allClientLinkCount(): number {
-  return (renderClientRoute("/clients/vidaa").match(/href="\/clients\//g) ?? [])
+function allClientTileCount(): number {
+  return (renderClientRoute("/clients/vidaa").match(/id="client-[a-z]+"/g) ?? [])
     .length;
 }
 
@@ -76,6 +78,20 @@ describe("ClientsPage", () => {
     expect(markup).not.toContain("data-tv-edge-target-right");
     expect(markup).not.toContain("data-tv-edge-stop-left");
     expect(markup).not.toContain("data-tv-edge-stop-right");
+  });
+
+  it("makes only the active tile a real, natively-focusable link", () => {
+    // The app-wide directional focus system treats every a[href]/button as
+    // always reachable regardless of tabindex, so a real link on a
+    // non-active tile would let Up/Down land on it from elsewhere on the
+    // page -- exactly the bug this markup shape exists to rule out.
+    const markup = renderClientRoute("/clients/vidaa");
+
+    expect(markup.match(/<a\b[^>]*id="client-/g)).toHaveLength(1);
+    expect(markup).toMatch(/<a\b[^>]*id="client-vidaa"/);
+    expect(
+      markup.match(/<div\b[^>]*id="client-[^"]*"[^>]*role="link"/g)
+    ).toHaveLength(allClientTileCount() - 1);
   });
 
   it("renders downloadable clients as a profile-style coverflow", () => {
@@ -130,8 +146,27 @@ describe("ClientsPage", () => {
       "playstation",
       "firetv",
     ]) {
-      expect(markup).toContain(`href="/clients/${client}"`);
+      expect(markup).toContain(`id="client-${client}"`);
     }
+    // Only the active tile (vidaa, on this route) is a real, focusable
+    // link -- every other tile is a click-only element with no href, kept
+    // deliberately invisible to the app-wide directional focus system so
+    // Up/Down can never land on it from anywhere on the page.
+    expect(markup).toContain('href="/clients/vidaa"');
+    for (const client of [
+      "android",
+      "apple",
+      "webos",
+      "tizen",
+      "roku",
+      "chromecast",
+      "harmony",
+      "playstation",
+      "firetv",
+    ]) {
+      expect(markup).not.toContain(`href="/clients/${client}"`);
+    }
+    expect(markup.match(/href="\/clients\//g)).toHaveLength(1);
     expect(markup).not.toContain("playarr-roku.zip");
     expect(markup).not.toContain("playarr-ios-source.zip");
     expect(markup).not.toContain("playarr-apple-tv-source.zip");
@@ -168,7 +203,12 @@ describe("ClientsPage", () => {
       const markup = renderClientRoute(`/clients/${client}`);
 
       expect(markup).toContain('data-navigation-scroll-key="clients:platforms"');
-      expect(markup.match(/href="\/clients\//g)).toHaveLength(allClientLinkCount());
+      expect(markup.match(/id="client-[a-z]+"/g)).toHaveLength(allClientTileCount());
+      // Only the current route's own tile is a real link -- every other
+      // tile is deliberately click-only, invisible to the app-wide
+      // directional focus system.
+      expect(markup.match(/href="\/clients\//g)).toHaveLength(1);
+      expect(markup).toContain(`href="/clients/${client}"`);
       expect(markup).toMatch(
         new RegExp(`id="client-${client}"[^>]*data-tv-focus-default="true"`)
       );
@@ -286,7 +326,8 @@ describe("ClientsPage", () => {
       expect(markup).toContain('data-tv-scroll-axis="horizontal"');
       expect(markup).toContain('target="_blank"');
       expect(markup).toContain('rel="noopener noreferrer"');
-      expect(markup.match(/href="\/clients\//g)).toHaveLength(allClientLinkCount());
+      expect(markup.match(/id="client-[a-z]+"/g)).toHaveLength(allClientTileCount());
+      expect(markup.match(/href="\/clients\//g)).toHaveLength(1);
       expect(markup.match(/data-tv-focus-default="true"/g)).toHaveLength(1);
     }
   });
