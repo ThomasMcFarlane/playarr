@@ -3,6 +3,7 @@ package io.streamarr.shared.data.remote
 import io.streamarr.shared.data.model.AlbumDetail
 import io.streamarr.shared.data.model.Availability
 import io.streamarr.shared.data.model.CatalogPage
+import io.streamarr.shared.data.model.ClientPlatform
 import io.streamarr.shared.data.model.ExternalProvider
 import io.streamarr.shared.data.model.MediaChapter
 import io.streamarr.shared.data.model.MediaPlaybackOptionsResponse
@@ -15,6 +16,7 @@ import io.streamarr.shared.data.model.Playlist
 import io.streamarr.shared.data.model.PlaylistItem
 import io.streamarr.shared.data.model.PlaylistMediaType
 import io.streamarr.shared.data.model.SelfCapabilitiesResponse
+import io.streamarr.shared.data.model.SearchResponse
 import io.streamarr.shared.data.model.WatchProgress
 import io.streamarr.shared.data.model.WatchState
 import io.streamarr.shared.data.model.ViewSummary
@@ -113,6 +115,27 @@ class StreamarrJsonModelTest {
         )
         assertTrue(page.items.isEmpty())
         assertEquals(0L, page.total)
+    }
+
+    @Test
+    fun `decodes the search response object while ignoring remote only results like Web`() {
+        val response = json.decodeFromString(
+            SearchResponse.serializer(),
+            """
+            {
+              "items": [{
+                "id": "movie-1", "kind": "movie", "external_refs": [],
+                "title": "Midnight Signal", "sort_title": "Midnight Signal",
+                "images": [], "genres": [], "tags": [],
+                "added_at": "2026-01-01T00:00:00Z", "monitored": true,
+                "availability": "available"
+              }],
+              "remote_only": [{"origin_peer_id": "peer-1", "work": {"id": "remote-1"}}]
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals(listOf("movie-1"), response.items.map(Work::id))
     }
 
     @Test
@@ -396,6 +419,35 @@ class StreamarrJsonModelTest {
         )
 
         assertEquals("Living Room", version.instanceName)
+    }
+
+    @Test
+    fun `decodes a compatibility row for every ClientPlatform wire name without throwing`() {
+        // Every wire name this closed enum knows about except streamarr-admin,
+        // which identifies the admin UI rather than a Playarr client and so
+        // never appears in a compatibility row. A future platform added to
+        // the server's enum but not this one would make this decode throw
+        // SerializationException instead of silently dropping the row.
+        val wireNames = listOf(
+            "android-mobile", "android-tv", "ios", "web",
+            "tv-webos", "tv-tizen", "tv-vidaa", "tv-fire", "xbox",
+        )
+        val compatibilityJson = wireNames.joinToString(",") { wireName ->
+            """{"platform":"$wireName","latest_version":"1.0.0","min_supported_version":"1.0.0"}"""
+        }
+        val version = json.decodeFromString(
+            VersionEnvelope.serializer(),
+            """{"instance_name":"Living Room","server_version":"0.1.0","api_version":"v1","compatibility":[$compatibilityJson]}""",
+        )
+
+        assertEquals(wireNames.size, version.compatibility.size)
+        assertEquals(
+            setOf(
+                ClientPlatform.AndroidMobile, ClientPlatform.AndroidTv, ClientPlatform.Ios, ClientPlatform.Web,
+                ClientPlatform.TvWebos, ClientPlatform.TvTizen, ClientPlatform.TvVidaa, ClientPlatform.TvFire, ClientPlatform.Xbox,
+            ),
+            version.compatibility.map { it.platform }.toSet(),
+        )
     }
 
     @Test

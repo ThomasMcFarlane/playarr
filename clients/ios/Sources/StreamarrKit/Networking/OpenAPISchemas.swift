@@ -96,6 +96,8 @@ public enum ClientPlatform: String, Codable, Sendable, CaseIterable, Hashable {
     case tvWebOS = "tv-webos"
     case tvTizen = "tv-tizen"
     case tvVidaa = "tv-vidaa"
+    case tvFire = "tv-fire"
+    case xbox
 }
 
 public enum AlbumType: String, Codable, Sendable, CaseIterable, Hashable {

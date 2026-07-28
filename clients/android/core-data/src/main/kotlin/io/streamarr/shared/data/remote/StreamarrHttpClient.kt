@@ -164,4 +164,6 @@ fun ClientPlatform.wireName(): String = when (this) {
     ClientPlatform.TvWebos -> "tv-webos"
     ClientPlatform.TvTizen -> "tv-tizen"
     ClientPlatform.TvVidaa -> "tv-vidaa"
+    ClientPlatform.TvFire -> "tv-fire"
+    ClientPlatform.Xbox -> "xbox"
 }

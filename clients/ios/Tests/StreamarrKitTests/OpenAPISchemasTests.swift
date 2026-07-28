@@ -30,6 +30,32 @@ final class OpenAPISchemasTests: XCTestCase {
         XCTAssertEqual(envelope.compatibility.first?.minSupportedVersion, "1.2.0")
     }
 
+    func testDecodesACompatibilityRowForEveryClientPlatformWireName() throws {
+        // Every ClientPlatform case this mirror knows about (it has no
+        // streamarr-admin case at all -- that identifies the admin UI, not
+        // a Playarr client, and never appears in a compatibility row). A
+        // future case added to the server's enum but not this one would
+        // make this decode throw DecodingError.dataCorrupted instead of
+        // silently dropping the row.
+        let platforms = ClientPlatform.allCases
+        let compatibility = platforms
+            .map { #"{"platform": "\#($0.rawValue)", "latest_version": "1.0.0", "min_supported_version": "1.0.0"}"# }
+            .joined(separator: ",")
+        let json = Data(
+            """
+            {
+              "server_version": "0.9.0",
+              "api_version": "v1",
+              "compatibility": [\#(compatibility)]
+            }
+            """.utf8
+        )
+
+        let envelope = try JSONDecoder().decode(VersionEnvelope.self, from: json)
+
+        XCTAssertEqual(Set(envelope.compatibility.map(\.platform)), Set(platforms))
+    }
+
     func testMovieChildrenRoundTripInServerRepresentation() throws {
         let encoded = try JSONEncoder().encode(WorkChildren.movie)
         XCTAssertEqual(String(decoding: encoded, as: UTF8.self), "\"Movie\"")

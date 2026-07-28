@@ -22,6 +22,8 @@ enum class ClientPlatform {
     @SerialName("tv-webos") TvWebos,
     @SerialName("tv-tizen") TvTizen,
     @SerialName("tv-vidaa") TvVidaa,
+    @SerialName("tv-fire") TvFire,
+    @SerialName("xbox") Xbox,
 }
 
 /**
