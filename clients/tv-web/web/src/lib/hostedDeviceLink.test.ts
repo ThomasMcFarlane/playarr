@@ -25,7 +25,7 @@ describe("hosted device linking", () => {
     ).toBe(false);
   });
 
-  it.each(["tv-webos", "tv-tizen", "tv-vidaa"] as const)(
+  it.each(["tv-webos", "tv-tizen", "tv-vidaa", "tv-fire"] as const)(
     "requests a first-contact code for packaged %s clients",
     async (clientPlatform) => {
       const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>

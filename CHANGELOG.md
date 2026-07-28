@@ -10,9 +10,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Recognise Amazon Fire TV as the first-class `tv-fire` client platform, covering the compatibility
-  table, device-link broker and hosted first-contact linking. Fire TV runs Vega OS, which is
-  Linux-based rather than Android, so it identifies itself honestly instead of masquerading as
-  `android-tv`, and gates on a SemVer string pinned at its first shipped `0.1.0` package.
+  table, device-link broker and hosted first-contact linking. Amazon's newer Fire TV devices run
+  Vega OS, which is Linux-based rather than Android, so the native Fire TV client identifies itself
+  honestly instead of masquerading as `android-tv`, and gates on a SemVer string pinned at its
+  first shipped `0.1.0` package.
 - Recognise Xbox as the first-class `xbox` client platform in the platform enum and compatibility
   table. The native application ships as a signed MSIX with no in-app patch path, so its floor is
   held at the first shipped `0.1.0` until a real update channel has actually delivered one.

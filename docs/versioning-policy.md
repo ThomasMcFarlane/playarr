@@ -50,10 +50,12 @@ any compatibility decision by any code in this repository today.
 ## The compatibility table that *should* fill `compatibility`, and doesn't yet
 
 `backend/config/client-compatibility.toml` is the real, checked-in source of
-per-platform floors — one section per `streamarr_model::ClientPlatform`
+per-platform floors — one section per shipped Playarr `streamarr_model::ClientPlatform`
 (`android-mobile`, `android-tv`, `ios`, `web`, `tv-webos`, `tv-tizen`,
-`tv-vidaa`). Its schema is intentionally split in two, because Android and
-everything else key off different notions of "version":
+`tv-vidaa`, `tv-fire`, `xbox`). `StreamarrAdmin` is the one variant with no
+section here: it identifies Streamarr's own admin UI, not a shipped Playarr
+client, so it has no version floor to gate. The schema itself is intentionally split in two,
+because Android and everything else key off different notions of "version":
 
 ```toml
 [android-mobile]
@@ -229,6 +231,29 @@ VIDAA opens the hosted `playarr.app/?platform=tv-vidaa` URL, so it
 uses Web's service-worker/build-manifest update flow and evaluates the
 `tv-vidaa` compatibility row. There is no separately published VIDAA package
 to update.
+
+### Fire TV — packaged Vega OS application
+
+`tv-fire` denotes Playarr's client for Amazon's newer Fire TV devices (from
+the Fire TV Stick 4K Select onward), which run **Vega OS, a Linux-based
+operating system that is not Android** — despite "Fire TV" historically
+meaning Fire OS, Amazon's older Android-based Fire TV firmware. The
+Vega OS client shares none of Android's packaging or update machinery: there
+is no APK, no Play/Appstore `versionCode`, and no in-app update API to call.
+It therefore identifies itself as `tv-fire` and gates on a SemVer string like
+the other non-Android platforms — claiming `android-tv` here would be lying
+about both its runtime and its update mechanism. (An Android-based Fire OS
+build, if one is ever shipped, belongs on the existing `android-tv` row with
+its `versionCode` floor, not on `tv-fire`.)
+
+The application ships as a packaged `.vpkg`, installed either from the Amazon
+Appstore or sideloaded onto a developer device, so its version moves only
+when a whole new package is installed — a `.vpkg` is immutable once
+installed, so there is no patch path the running build can take by itself.
+`[tv-fire]`'s floor in `client-compatibility.toml` is therefore deliberately
+pinned at the first shipped version (`0.1.0`) rather than lagging some
+notional previous release — there is no previous release, and nothing yet to
+ratchet against.
 
 ## Automation: the client-compatibility bump bot
 
