@@ -28,6 +28,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `playarr.example.com` (`-PlayarrParityWebRefBaseURL`) using the same AE0
   technique as Android's `parity_ae0.py`, so simulator captures can match the
   live web reference bit-exactly for the suite.
+- Add `scripts/appletv-parity-ae0.sh` to automate the Apple TV web-ref paint AE0 suite.
 
 
 
