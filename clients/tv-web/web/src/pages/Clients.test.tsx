@@ -46,15 +46,17 @@ describe("ClientsPage", () => {
     expect(markup).not.toContain("Any modern browser");
     expect(markup).not.toContain("The complete Playarr experience, ready now");
     expect(markup).not.toContain("The hosted TV app is available now");
-    expect(markup).not.toContain("Fire TV");
+    expect(markup).toContain("Fire TV");
     expect(markup).not.toContain("Coming soon");
     expect(markup).toContain('data-client-icon="android"');
     expect(markup).toContain('data-client-icon="apple"');
     expect(markup).toContain('data-client-icon="lg"');
     expect(markup).toContain('data-client-icon="samsung"');
     expect(markup).toContain('data-client-icon="roku"');
+    expect(markup).toContain('data-client-icon="firetv"');
     expect(markup).toContain('id="client-vidaa"');
     expect(markup).toContain('id="client-roku"');
+    expect(markup).toContain('id="client-firetv"');
     expect(markup.match(/data-tv-edge-stop-left="true"/g)).toHaveLength(1);
     expect(markup.match(/data-tv-edge-stop-right="true"/g)).toHaveLength(1);
     expect(markup).toContain("Apple TV");
@@ -62,10 +64,11 @@ describe("ClientsPage", () => {
     expect(markup).toContain('id="client-apple"');
     expect(markup).not.toContain('id="client-apple-tv"');
     expect(markup).toContain("Roku TV");
+    expect(markup).toContain("Amazon Fire TV devices");
     expect(markup).not.toContain('id="client-android-action"');
     expect(markup).not.toContain("Download APK");
     expect(markup).not.toContain("Download app");
-    for (const client of ["vidaa", "android", "apple", "webos", "tizen", "roku"]) {
+    for (const client of ["vidaa", "android", "apple", "webos", "tizen", "roku", "firetv"]) {
       expect(markup).toContain(`href="/clients/${client}"`);
     }
     expect(markup).not.toContain("playarr-roku.zip");
@@ -88,11 +91,11 @@ describe("ClientsPage", () => {
   });
 
   it("keeps the platform selector available on every client URL", () => {
-    for (const client of ["vidaa", "android", "apple", "webos", "tizen", "roku"]) {
+    for (const client of ["vidaa", "android", "apple", "webos", "tizen", "roku", "firetv"]) {
       const markup = renderClientRoute(`/clients/${client}`);
 
       expect(markup).toContain('data-navigation-scroll-key="clients:platforms"');
-      expect(markup.match(/href="\/clients\//g)).toHaveLength(6);
+      expect(markup.match(/href="\/clients\//g)).toHaveLength(7);
       expect(markup).toMatch(
         new RegExp(`id="client-${client}"[^>]*data-tv-focus-default="true"`)
       );
@@ -210,7 +213,7 @@ describe("ClientsPage", () => {
       expect(markup).toContain('data-tv-scroll-axis="horizontal"');
       expect(markup).toContain('target="_blank"');
       expect(markup).toContain('rel="noopener noreferrer"');
-      expect(markup.match(/href="\/clients\//g)).toHaveLength(6);
+      expect(markup.match(/href="\/clients\//g)).toHaveLength(7);
       expect(markup.match(/data-tv-focus-default="true"/g)).toHaveLength(1);
     }
   });
@@ -244,5 +247,19 @@ describe("ClientsPage", () => {
     expect(appleMarkup).toContain('data-navigation-scroll-key="clients:platforms"');
     expect(appleMarkup).toContain("Coming soon");
     expect(appleMarkup).toContain("The native Apple client is coming soon");
+  });
+
+  it("lists Fire TV as a coming-soon platform on its own URL", () => {
+    const firetvMarkup = renderClientRoute("/clients/firetv");
+
+    expect(firetvMarkup).toContain('data-navigation-scroll-key="clients:firetv"');
+    expect(firetvMarkup).toContain('data-navigation-scroll-key="clients:platforms"');
+    expect(firetvMarkup).toMatch(
+      /class="client-choice is-soon is-firetv is-active"/
+    );
+    expect(firetvMarkup).toContain("Coming soon");
+    expect(firetvMarkup).toContain("The native Fire TV client is in development");
+    expect(firetvMarkup).toContain("Amazon Fire TV devices");
+    expect(firetvMarkup).not.toContain("Download app");
   });
 });

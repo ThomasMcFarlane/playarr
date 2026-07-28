@@ -811,6 +811,9 @@ export const th: Translations = {
   "pages.clients.roku.platform": "ทีวี Roku",
   "pages.clients.roku.description":
     "ไฟล์ ZIP รุ่นพรีวิวคือชุดช่อง Roku ที่สมบูรณ์ ตัวติดตั้งสำหรับนักพัฒนาของ Roku ต้องใช้ไฟล์บีบอัดนี้โดยตรง จึงไม่ต้องแตกไฟล์",
+  "pages.clients.firetv.name": "Fire TV",
+  "pages.clients.firetv.platform": "อุปกรณ์ Amazon Fire TV",
+  "pages.clients.firetv.description": "ไคลเอนต์ Fire TV แบบเนทีฟกำลังอยู่ระหว่างการพัฒนา โดยจะติดตั้งเป็นแพ็กเกจที่ลงลายเซ็นแล้ว จึงยังไม่มีรุ่นให้ดาวน์โหลด",
   "pages.clients.androidMobile.name": "Android Mobile",
   "pages.clients.androidMobile.platform": "โทรศัพท์และแท็บเล็ต Android",
   "pages.clients.androidMobile.description": "มีตัวแอปแล้ว แต่ยังไม่มีไฟล์ดาวน์โหลดที่ลงลายเซ็นเผยแพร่",

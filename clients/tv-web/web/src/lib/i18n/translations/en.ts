@@ -892,6 +892,10 @@ export const en = {
   "pages.clients.roku.platform": "Roku televisions",
   "pages.clients.roku.description":
     "The preview ZIP is the complete Roku channel bundle. Roku's development installer expects the archive itself, so keep it zipped.",
+  "pages.clients.firetv.name": "Fire TV",
+  "pages.clients.firetv.platform": "Amazon Fire TV devices",
+  "pages.clients.firetv.description":
+    "The native Fire TV client is in development. It will install as a signed package, so no release is available to download yet.",
   "pages.clients.androidMobile.name": "Android Mobile",
   "pages.clients.androidMobile.platform": "Android phones and tablets",
   "pages.clients.androidMobile.description":

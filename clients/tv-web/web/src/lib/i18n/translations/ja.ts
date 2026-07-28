@@ -807,6 +807,9 @@ export const ja: Translations = {
   "pages.clients.roku.platform": "Rokuテレビ",
   "pages.clients.roku.description":
     "プレビュー版ZIPはRokuチャンネル一式です。Rokuの開発用インストーラーはアーカイブ自体を読み込むため、展開せずに使用してください。",
+  "pages.clients.firetv.name": "Fire TV",
+  "pages.clients.firetv.platform": "Amazon Fire TVデバイス",
+  "pages.clients.firetv.description": "Fire TV向けネイティブクライアントは開発中です。署名済みパッケージとしてインストールされるため、ダウンロードできるリリースはまだありません。",
   "pages.clients.androidMobile.name": "Android Mobile",
   "pages.clients.androidMobile.platform": "Androidスマートフォンとタブレット",
   "pages.clients.androidMobile.description": "クライアントビルドはありますが、署名済みダウンロードはまだ公開されていません。",

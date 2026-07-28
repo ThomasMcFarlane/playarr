@@ -142,6 +142,10 @@
   color: #662d91;
 }
 
+.client-choice.is-firetv .client-platform-icon {
+  color: #ff9900;
+}
+
 .client-choice > strong {
   max-width: 100%;
   overflow: hidden;
@@ -265,6 +269,10 @@
 
 .client-details-summary.is-roku .client-details-icon {
   color: #662d91;
+}
+
+.client-details-summary.is-firetv .client-details-icon {
+  color: #ff9900;
 }
 
 .client-details-status {
