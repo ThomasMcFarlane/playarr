@@ -28,7 +28,11 @@ sub init()
     m.navHighlights = []
     m.navIcons = []
     m.navLabels = []
+<<<<<<< Updated upstream
     for i = 0 to 6
+=======
+    for i = 0 to 7
+>>>>>>> Stashed changes
         m.navHighlights.Push(m.top.findNode("navHighlight" + i.ToStr()))
         m.navIcons.Push(m.top.findNode("navIcon" + i.ToStr()))
         m.navLabels.Push(m.top.findNode("navLabel" + i.ToStr()))
@@ -40,6 +44,7 @@ sub init()
     m.browsePreviewTitle = m.top.findNode("browsePreviewTitle")
     m.browsePreviewMeta = m.top.findNode("browsePreviewMeta")
     m.browsePreviewOverview = m.top.findNode("browsePreviewOverview")
+<<<<<<< Updated upstream
     m.browseAlphabet = m.top.findNode("browseAlphabet")
     buildAlphabetStrip()
     m.browseFiltersButton = m.top.findNode("browseFiltersButton")
@@ -52,6 +57,8 @@ sub init()
     m.browseFilterSizeMedium = m.top.findNode("browseFilterSizeMedium")
     m.browseFilterSizeLarge = m.top.findNode("browseFilterSizeLarge")
     m.browseFilterOptions = [m.browseFilterSortTitle, m.browseFilterSortDate, m.browseFilterOrderAsc, m.browseFilterOrderDesc, m.browseFilterSizeSmall, m.browseFilterSizeMedium, m.browseFilterSizeLarge]
+=======
+>>>>>>> Stashed changes
     m.searchGroup = m.top.findNode("searchGroup")
     m.searchGrid = m.top.findNode("searchGrid")
     m.searchTitle = m.top.findNode("searchTitle")
@@ -74,6 +81,10 @@ sub init()
     m.playlistDetailStage = m.top.findNode("playlistDetailStage")
     m.playlistDetailContent = m.playlistDetailStage.contentTarget
     m.playlistItemsGrid = m.top.findNode("playlistItemsGrid")
+<<<<<<< Updated upstream
+=======
+    m.downloadsGroup = m.top.findNode("downloadsGroup")
+>>>>>>> Stashed changes
     ' playlistItemsGrid is declared as an XML sibling of <TvStage
     ' id="playlistDetailStage" /> (see MainScene.xml's playlistsGroup
     ' comment for why it can't be nested inside the <TvStage> tag itself)
@@ -87,6 +98,7 @@ sub init()
     m.detailOverview = m.top.findNode("detailOverview")
     m.detailActions = m.top.findNode("detailActions")
     m.detailEpisodes = m.top.findNode("detailEpisodes")
+<<<<<<< Updated upstream
     m.detailChapters = m.top.findNode("detailChapters")
     m.detailSimilar = m.top.findNode("detailSimilar")
     ' detailOverview/detailActions/detailEpisodes/detailChapters/
@@ -101,6 +113,18 @@ sub init()
     m.detailContent.AppendChild(m.detailEpisodes)
     m.detailContent.AppendChild(m.detailChapters)
     m.detailContent.AppendChild(m.detailSimilar)
+=======
+    ' detailOverview/detailActions/detailEpisodes are declared as XML
+    ' siblings of <TvStage id="detailStage" /> (see MainScene.xml's
+    ' detailGroup comment for why they can't be nested inside the <TvStage>
+    ' tag itself) and reparented here into detailStage's contentTarget so
+    ' they render inside TvStage's right-hand content panel, mirroring how
+    ' createHomeRail() below builds Home's rail content straight into
+    ' m.homeContent.
+    m.detailContent.AppendChild(m.detailOverview)
+    m.detailContent.AppendChild(m.detailActions)
+    m.detailContent.AppendChild(m.detailEpisodes)
+>>>>>>> Stashed changes
     m.profileLabel = m.top.findNode("profileLabel")
     m.persistentHeader = m.top.findNode("persistentHeader")
     m.video = m.top.findNode("video")
@@ -176,6 +200,7 @@ sub init()
     m.browseLabel = ""
     m.browseItems = []
     m.browseTotal = invalid
+<<<<<<< Updated upstream
     m.browseAlphabetMode = false
     m.browseAlphabetIndex = 0
     m.browseAlphabetPendingLetter = invalid
@@ -184,6 +209,8 @@ sub init()
     m.browseFiltersIndex = 0
     m.browseSort = "title"
     m.browseOrder = "asc"
+=======
+>>>>>>> Stashed changes
     m.searchQuery = ""
     m.searchItems = []
     m.searchDisplayItems = []
@@ -199,8 +226,11 @@ sub init()
     m.detailSeasons = []
     m.detailGroupKind = ""
     m.currentMediaFileId = ""
+<<<<<<< Updated upstream
     m.pendingChapterSeekMs = invalid
     m.similarWorks = []
+=======
+>>>>>>> Stashed changes
     m.playbackEpisodeList = []
     m.playbackEpisodeIndex = -1
     m.settingsSectionIndex = 0
@@ -210,8 +240,11 @@ sub init()
 
     m.detailActions.ObserveField("itemSelected", "onDetailActionSelected")
     m.detailEpisodes.ObserveField("rowItemSelected", "onDetailEpisodeSelected")
+<<<<<<< Updated upstream
     m.detailChapters.ObserveField("rowItemSelected", "onDetailChapterSelected")
     m.detailSimilar.ObserveField("rowItemSelected", "onDetailSimilarSelected")
+=======
+>>>>>>> Stashed changes
     m.pairingTimer.ObserveField("fire", "pollDeviceToken")
     m.clockTimer.ObserveField("fire", "updateClock")
     m.hostedLinkTimer.ObserveField("fire", "pollHostedLink")
@@ -237,7 +270,11 @@ sub init()
     m.refreshToken = m.session.refreshToken
     m.deviceId = m.session.deviceId
     m.profileLabel.text = m.session.profileName
+<<<<<<< Updated upstream
     setListContent(m.profileActions, ["Settings", "Sign out"])
+=======
+    setListContent(m.profileActions, ["Link another profile", "Change server", "Sign out", "Settings"])
+>>>>>>> Stashed changes
     setListContent(m.detailActions, ["Play"])
 
     updateClock()
@@ -296,7 +333,7 @@ end function
 
 sub openServerDialog()
     dialog = CreateObject("roSGNode", "StandardKeyboardDialog")
-    dialog.title = "Connect to Streamarr"
+    dialog.title = "Connect to Playarr Server"
     dialog.message = ["Enter the full HTTP or HTTPS server address. Separate multiple addresses with commas to add fallback servers."]
     dialog.text = joinStrings(m.serverAddresses, ", ")
     dialog.buttons = ["Connect"]
@@ -308,7 +345,7 @@ sub onServerDialogButton(event as Object)
     if event.GetData() <> 0 then return
     candidates = NormaliseServerUrlList(m.top.dialog.text)
     if candidates.Count() = 0
-        m.top.dialog.message = ["Use one or more full addresses such as https://streamarr.example.invalid"]
+        m.top.dialog.message = ["Use one or more full addresses such as https://playarr.example.invalid"]
         return
     end if
     m.serverAddresses = candidates
@@ -322,7 +359,7 @@ end sub
 ' First-launch bootstrap: gets a short code/QR from the same hosted linking
 ' service tv-webos/tv-tizen already use, so a new Roku never needs a typed
 ' server address. The viewer scans it (or visits the URL) on a phone,
-' chooses their Streamarr server there, and approves -- see
+' chooses their Playarr Server there, and approves -- see
 ' acceptHostedLinkClaim for how the resulting claim hands off into the
 ' existing on-device RFC 8628 token exchange.
 sub beginHostedLink()
@@ -510,8 +547,11 @@ sub onApiResult(event as Object)
         acceptPlaylistItemWork(result.data)
     else if action = "playerPrefs" or action = "playerPrefsSave"
         acceptPlayerPreferences(result.data)
+<<<<<<< Updated upstream
     else if action = "profilePin" or action = "profilePinSave"
         acceptProfilePinSetting(result.data)
+=======
+>>>>>>> Stashed changes
     else if action = "watchProgress"
         acceptWatchProgress(result.data)
     else if action = "homeWorkDetail"
@@ -592,6 +632,7 @@ sub handleApiFailure(action as String, result as Object)
         return
     end if
 
+<<<<<<< Updated upstream
     ' Profile lock is best effort exactly like player preferences above -- a
     ' failed fetch leaves the "Loading…" detail text in place (still invalid,
     ' so revisiting the section retries), a failed save just leaves the PIN
@@ -606,6 +647,8 @@ sub handleApiFailure(action as String, result as Object)
         return
     end if
 
+=======
+>>>>>>> Stashed changes
     ' Playlist item hydration is best effort per item, exactly like
     ' Continue Watching's homeWorkDetail below: one failed
     ' GET /api/v1/catalog/{work_id} just skips that item and continues the
@@ -651,6 +694,7 @@ sub handleApiFailure(action as String, result as Object)
         return
     end if
 
+<<<<<<< Updated upstream
     ' Chapters/Similar Titles are best-effort embellishments on the detail
     ' screen, not core to it (the real page functions fine without them,
     ' e.g. /similar 404ing is an expected, handled case there too): a
@@ -672,6 +716,8 @@ sub handleApiFailure(action as String, result as Object)
         return
     end if
 
+=======
+>>>>>>> Stashed changes
     m.lastFailedAction = action
     showStatus("Couldn’t continue", result.error + Chr(10) + "Press OK to retry.", false)
 end sub
@@ -782,6 +828,7 @@ end sub
 sub buildProfileAvatarContent(profiles as Object)
     root = CreateObject("roSGNode", "ContentNode")
     rowNode = root.CreateChild("ContentNode")
+<<<<<<< Updated upstream
     ' A real independent copy, NOT `list = profiles`: BrightScript arrays
     ' are reference types, so that alias would make this sub's own
     ' list.Push(addItem) below silently mutate the CALLER's m.profiles too
@@ -797,6 +844,9 @@ sub buildProfileAvatarContent(profiles as Object)
     for each p in profiles
         list.Push(p)
     end for
+=======
+    list = profiles
+>>>>>>> Stashed changes
     if list.Count() = 0
         list = [{ id: "", display_name: "Linked viewer", is_current: true, pin_locked: false }]
     end if
@@ -819,6 +869,7 @@ sub buildProfileAvatarContent(profiles as Object)
         item.statusText = suffix
     end for
 
+<<<<<<< Updated upstream
     ' Real tv-web's own "+" circle (confirmed live: Profiles.tsx renders it
     ' as a genuine extra avatar-shaped button in the same row, titled "Sign
     ' in" / "ADD ANOTHER PROFILE"), not a separate text menu item -- this
@@ -834,6 +885,8 @@ sub buildProfileAvatarContent(profiles as Object)
     addItem.statusText = "ADD ANOTHER PROFILE"
     list.Push(addItem)
 
+=======
+>>>>>>> Stashed changes
     itemWidth = 271
     spacing = 48
     count = list.Count()
@@ -891,6 +944,7 @@ sub onProfileSelected(event as Object)
     position = event.GetData()
     if position = invalid or position.Count() < 2 then return
     index = position[1]
+<<<<<<< Updated upstream
     ' The row's last item is always the synthetic "+" / Sign in avatar (see
     ' buildProfileAvatarContent's addItem), never a real profile -- matches
     ' tv-web's own Profiles.tsx, which renders that circle as a genuine
@@ -904,6 +958,12 @@ sub onProfileSelected(event as Object)
         enterHome("Viewer")
         return
     end if
+=======
+    if m.profiles.Count() = 0
+        enterHome("Viewer")
+        return
+    end if
+>>>>>>> Stashed changes
     if index < 0 or index >= m.profiles.Count() then return
     profile = m.profiles[index]
     if profile.is_current
@@ -927,14 +987,49 @@ end sub
 sub onProfileActionSelected(event as Object)
     index = event.GetData()
     if index = 0
+<<<<<<< Updated upstream
         openSettings()
     else if index = 1
+=======
+        ' Deliberately does NOT clear the existing session up front (unlike
+        ' Sign out below): SaveTokens() already overwrites the registry
+        ' unconditionally once a new device link actually succeeds
+        ' (acceptTokenResponse), so there was never a need to destroy the
+        ' still-valid old session just to START a new pairing attempt. tv-web's
+        ' equivalent ("Add another profile", Profiles.tsx) is even more
+        ' conservative -- it never touches the current session at all, just
+        ' navigates to a fresh login. The old code cleared eagerly here,
+        ' which meant simply entering this menu item and then backing out
+        ' (or the pairing attempt timing out) silently signed the viewer out
+        ' with no way back -- confirmed live, this is a real bug, not just a
+        ' testing inconvenience.
+        beginPairing()
+    else if index = 1
+        ' Same bug class as index 0 above, confirmed live a second time (a
+        ' fumbled keypress landed on THIS item instead and silently wiped a
+        ' real, working session): openServerDialog() pre-fills its text field
+        ' from m.serverAddresses, so clearing that list first also broke the
+        ' dialog's own "shows your current address(es) to edit" UX -- the
+        ' viewer would see a blank field, not their real server. Nothing here
+        ' is destroyed up front now; onServerDialogButton only overwrites
+        ' m.serverAddresses/serverUrl once the viewer actually confirms a new
+        ' address, and connectToServer()'s version check naturally 401s and
+        ' falls into the existing refresh-failure handler (which already
+        ' does ClearSession + beginPairing, see handleApiFailure's "refresh"
+        ' branch) only if the old tokens genuinely don't work against
+        ' whatever server ends up configured -- the right point for that
+        ' clear to happen, not before the viewer has typed anything.
+        openServerDialog()
+    else if index = 2
+>>>>>>> Stashed changes
         ClearSession(true)
         m.accessToken = ""
         m.refreshToken = ""
         m.deviceId = ""
         m.profileLabel.text = ""
         beginPairing()
+    else if index = 3
+        openSettings()
     end if
 end sub
 
@@ -942,6 +1037,7 @@ end sub
 ' Settings (phase 7, v1 stub)
 '
 ' Reached from profilesGroup's profileActions LabelList ("Settings", index 3
+<<<<<<< Updated upstream
 ' above). Confirmed live the real Preferences page has 8 sections, in this
 ' order: Appearance, Profile avatar, Language, Player, Server connection,
 ' Profile lock, Invite a friend, Request latency. Only 3 of those 8 exist
@@ -954,13 +1050,24 @@ end sub
 ' AdminUser-gated server-side (403s for the non-admin test account, so even
 ' a correct implementation could only ever show an "Admins only" empty
 ' state) -- both real, documented gaps, not UI omissions.
+=======
+' above). See MainScene.xml's settingsGroup comment for the full list of
+' what is deliberately NOT built this phase (Appearance/theme, avatar,
+' language/i18n, profile-lock PIN, invite) and why.
+>>>>>>> Stashed changes
 '
 ' Mirrors profilesGroup's original two-column master/detail layout (now
 ' superseded there by the horizontal avatar row, see MainScene.xml's
 ' profilesGroup comment): settingsSectionList (left column, section names)
+<<<<<<< Updated upstream
 ' drives what settingsDetail/settingsActionList (right column) show. Three
 ' sections exist:
 '   0 Server connection -- lists m.serverAddresses (already loaded via LoadSession() at
+=======
+' drives what settingsDetail/settingsActionList (right column) show. Only
+' two sections exist:
+'   0 Server -- lists m.serverAddresses (already loaded via LoadSession() at
+>>>>>>> Stashed changes
 '     init) and one "Add another server" action that reuses openServerDialog
 '     (the exact same StandardKeyboardDialog/onServerDialogButton pair the
 '     pairing screen's "*" shortcut and profileActions' "Change server" use).
@@ -972,6 +1079,7 @@ end sub
 '     tv-web's Player settings page (quality/subtitle defaults) is a
 '     client-local localStorage preference with no server endpoint at all,
 '     so it is out of scope for this server-preferences-only v1 pass.
+<<<<<<< Updated upstream
 '   2 Profile lock -- GET/PATCH /api/v1/users/me/profile-pin
 '     (ProfilePinSettingResponse is `{ pin_locked: boolean }`,
 '     UpdateProfilePinRequest is `{ pin: string | null }`, confirmed against
@@ -982,6 +1090,12 @@ end sub
 
 sub openSettings()
     setListContent(m.settingsSectionList, ["Server connection", "Player", "Profile lock"])
+=======
+' ---------------------------------------------------------------------------
+
+sub openSettings()
+    setListContent(m.settingsSectionList, ["Server", "Player"])
+>>>>>>> Stashed changes
     m.settingsSectionIndex = 0
     renderSettingsSection(0)
     showOnly("settings")
@@ -1007,9 +1121,12 @@ sub renderSettingsSection(index as Integer)
     else if index = 1
         renderPlayerSettings()
         if m.preferredAudioLanguage = invalid then loadPlayerPreferences()
+<<<<<<< Updated upstream
     else if index = 2
         renderProfileLockSettings()
         if m.profilePinLocked = invalid then loadProfilePinSetting()
+=======
+>>>>>>> Stashed changes
     end if
 end sub
 
@@ -1049,6 +1166,7 @@ function audioLanguageLabel(code as String) as String
     return code
 end function
 
+<<<<<<< Updated upstream
 ' Matches the real ProfileLock.tsx: a boolean status ("PIN is set" / "No PIN
 ' is set") plus one or two actions depending on state -- "Set PIN" alone
 ' when unlocked, or "Replace PIN"/"Remove PIN" once one exists.
@@ -1118,6 +1236,8 @@ sub removeProfilePin()
     sendApi("profilePinSave", "PATCH", "/api/v1/users/me/profile-pin", { pin: invalid }, true)
 end sub
 
+=======
+>>>>>>> Stashed changes
 sub onSettingsActionSelected(event as Object)
     index = event.GetData()
     if index = invalid or index < 0 then return
@@ -1127,6 +1247,7 @@ sub onSettingsActionSelected(event as Object)
         if index >= 0 and index < m.audioLanguageCodes.Count()
             saveAudioLanguage(m.audioLanguageCodes[index])
         end if
+<<<<<<< Updated upstream
     else if m.settingsSectionIndex = 2
         if m.profilePinLocked
             if index = 0 then openProfilePinDialog()
@@ -1134,6 +1255,8 @@ sub onSettingsActionSelected(event as Object)
         else
             if index = 0 then openProfilePinDialog()
         end if
+=======
+>>>>>>> Stashed changes
     end if
 end sub
 
@@ -1218,6 +1341,7 @@ sub openBrowse(kind as String, label as String)
     m.browseLabel = label
     m.browseItems = []
     m.browseTotal = invalid
+<<<<<<< Updated upstream
     m.browseSort = "title"
     m.browseOrder = "asc"
     m.browseArtworkSize = "medium"
@@ -1228,6 +1352,8 @@ sub openBrowse(kind as String, label as String)
     m.browseFiltersPanel.visible = false
     m.browseFiltersButton.color = &hA9B7C9FF
     renderBrowseAlphabetFocus()
+=======
+>>>>>>> Stashed changes
     showStatus("Loading " + label, "Fetching titles…", true)
     loadBrowseCatalog(false)
 end sub
@@ -1240,7 +1366,11 @@ sub loadBrowseCatalog(append as Boolean)
         action = "browseCatalogMore"
     end if
     config = AppConfig()
+<<<<<<< Updated upstream
     path = "/api/v1/catalog?kind=" + m.browseKind + "&available_only=true&sort=" + m.browseSort + "&order=" + m.browseOrder + "&limit=" + config.catalogPageSize.ToStr() + "&offset=" + offset.ToStr()
+=======
+    path = "/api/v1/catalog?kind=" + m.browseKind + "&available_only=true&sort=title&limit=" + config.catalogPageSize.ToStr() + "&offset=" + offset.ToStr()
+>>>>>>> Stashed changes
     sendApi(action, "GET", path, invalid, true)
 end sub
 
@@ -1265,12 +1395,17 @@ sub acceptBrowseCatalog(data as Object, append as Boolean)
 end sub
 
 sub rebuildBrowseContent()
+<<<<<<< Updated upstream
     buildGridContent(m.browseGrid, m.browseItems, browseCardScale())
+=======
+    buildGridContent(m.browseGrid, m.browseItems)
+>>>>>>> Stashed changes
     if m.browseTotal <> invalid
         m.browseTitle.text = m.browseLabel + "  •  " + m.browseItems.Count().ToStr() + " of " + m.browseTotal.ToStr()
     else
         m.browseTitle.text = m.browseLabel + "  •  " + m.browseItems.Count().ToStr()
     end if
+<<<<<<< Updated upstream
     ' A pending letter jump (see jumpToBrowseLetter) means the target
     ' wasn't loaded yet when it was requested -- now that another page has
     ' landed, check again.
@@ -1527,6 +1662,10 @@ function browseCardScale() as Float
     return 1.5
 end function
 
+=======
+end sub
+
+>>>>>>> Stashed changes
 ' Mirrors Home's updateHeroFromWork: tv-web's real Library page
 ' (Library.tsx's aside.tv-library-preview) shows the currently-focused
 ' title's kind/genre, name, year, and synopsis in a fixed left column next
@@ -1553,7 +1692,11 @@ end sub
 ' Flat-content counterpart to buildRailContent() below: MarkupGrid takes one
 ' flat list of item ContentNodes (it auto-wraps them into numColumns-wide
 ' rows itself), unlike RowList's nested per-row ContentNode structure.
+<<<<<<< Updated upstream
 sub buildGridContent(grid as Object, works as Object, cardScale = 1.5 as Float)
+=======
+sub buildGridContent(grid as Object, works as Object)
+>>>>>>> Stashed changes
     root = CreateObject("roSGNode", "ContentNode")
     headers = ClientHeaders(m.accessToken)
     for each work in works
@@ -1567,6 +1710,7 @@ sub buildGridContent(grid as Object, works as Object, cardScale = 1.5 as Float)
         item.AddField("httpHeaders", "assocarray", false)
         item.httpHeaders = artworkHeaders(item.hdPosterUrl, headers)
         ' Grid screens (Library/Search/Playlists) render the real, larger
+<<<<<<< Updated upstream
         ' .tv-title-card (330x216 at medium, confirmed live via
         ' getComputedStyle), not Home's smaller .tv-home-card (220x165)
         ' PosterCard is authored at -- see PosterCard.xml's cardScale
@@ -1577,6 +1721,14 @@ sub buildGridContent(grid as Object, works as Object, cardScale = 1.5 as Float)
         ' Real .tv-title-card also never shows a kind line under the title.
         item.AddField("cardScale", "float", false)
         item.cardScale = cardScale
+=======
+        ' .tv-title-card (330x216, confirmed live via getComputedStyle),
+        ' not Home's smaller .tv-home-card (220x165) PosterCard is authored
+        ' at -- see PosterCard.xml's cardScale comment. 330/220 = 1.5. Real
+        ' .tv-title-card also never shows a kind line under the title.
+        item.AddField("cardScale", "float", false)
+        item.cardScale = 1.5
+>>>>>>> Stashed changes
         item.AddField("showKind", "boolean", false)
         item.showKind = false
     end for
@@ -1974,7 +2126,11 @@ end sub
 ' the first place. Content is rebuilt with the correct flag both at initial
 ' finishHomeLoad() (only rail 0 active) and on every moveHomeFocus() rail
 ' switch (old rail rebuilt false, new rail rebuilt true).
+<<<<<<< Updated upstream
 sub buildRailContent(row as Object, works as Object, isActive as Boolean, cardScale = 1.0 as Float)
+=======
+sub buildRailContent(row as Object, works as Object, isActive as Boolean)
+>>>>>>> Stashed changes
     root = CreateObject("roSGNode", "ContentNode")
     rowNode = root.CreateChild("ContentNode")
     headers = ClientHeaders(m.accessToken)
@@ -1992,19 +2148,23 @@ sub buildRailContent(row as Object, works as Object, isActive as Boolean, cardSc
         item.httpHeaders = artworkHeaders(item.hdPosterUrl, headers)
         item.AddField("activeRailFactor", "float", false)
         item.activeRailFactor = activeRailFactor
+<<<<<<< Updated upstream
         ' Similar Titles (detailSimilar) passes 1.5 to match the real,
         ' larger .tv-title-card sizing used there -- see PosterCard.xml's
         ' cardScale comment. Home's rails never pass this, so it defaults
         ' to a no-op 1.
         item.AddField("cardScale", "float", false)
         item.cardScale = cardScale
+=======
+>>>>>>> Stashed changes
     end for
     row.content = root
 end sub
 
+<<<<<<< Updated upstream
 ' Most catalog images (movies/series, TMDB-sourced) carry a plain fetchable
 ' https:// URL, but *arr-integration-sourced images (confirmed live: every
-' music/artist image) instead carry an internal-only "streamarr-arr://..."
+' music/artist image) instead carry an internal-only "playarr-arr://..."
 ' reference scheme that isn't a real fetchable URL at all -- feeding it
 ' straight to AbsoluteUrl() (which only special-cases http/https, otherwise
 ' treats the value as a server-relative path) produced a mangled URL that
@@ -2020,6 +2180,8 @@ function resolveImageUrl(work as Object, image as Object) as String
     return m.serverUrl + "/api/v1/artwork/work/" + UrlEncode(work.id) + "/" + UrlEncode(image.kind)
 end function
 
+=======
+>>>>>>> Stashed changes
 function artworkUrl(work as Object) as String
     if work.images = invalid then return ""
     fallback = ""
@@ -2036,7 +2198,11 @@ end function
 function heroArtworkUrl(work as Object) as String
     if work.images = invalid then return ""
     for each image in work.images
+<<<<<<< Updated upstream
         if image.kind = "backdrop" then return resolveImageUrl(work, image)
+=======
+        if image.kind = "backdrop" then return AbsoluteUrl(m.serverUrl, image.url)
+>>>>>>> Stashed changes
     end for
     return artworkUrl(work)
 end function
@@ -2211,6 +2377,7 @@ end sub
 ' Simple stable insertion sort by updated_at (ISO 8601 strings compare
 ' lexically in chronological order), newest first. Roku's roArray has no
 ' Sort(comparator) overload, so this is hand-rolled.
+<<<<<<< Updated upstream
 ' Selection sort, swapping array elements by index -- NOT the Insert()-based
 ' approach this used to use: confirmed live (see finishSimilarTitles's own
 ' near-identical fix/comment) that Insert() is not actually available on
@@ -2232,6 +2399,20 @@ function SortWatchProgressDesc(rows as Object) as Object
             result[i] = result[bestIndex]
             result[bestIndex] = temp
         end if
+=======
+function SortWatchProgressDesc(rows as Object) as Object
+    result = []
+    for each row in rows
+        inserted = false
+        for i = 0 to result.Count() - 1
+            if compareUpdatedAt(row, result[i]) > 0
+                result.Insert(i, row)
+                inserted = true
+                exit for
+            end if
+        end for
+        if not inserted then result.Push(row)
+>>>>>>> Stashed changes
     end for
     return result
 end function
@@ -2491,6 +2672,7 @@ end sub
 ' ---------------------------------------------------------------------------
 ' Global left-edge nav dock (real-CSS-audit correction pass)
 '
+<<<<<<< Updated upstream
 ' MainScene.xml's navDock Group declares 7 flat-indexed icon+label buttons:
 ' [Search], [Home, Series, Movies, Sites, Music], [Playlists]. Downloads is
 ' deliberately omitted on this platform -- Roku has no local file-storage /
@@ -2503,6 +2685,16 @@ end sub
 ' m.navDockMode is true, the same pattern the old Home-only homeShortcuts
 ' row used, now generalised to a real (though still only Home-entered --
 ' see below) global dock.
+=======
+' MainScene.xml's navDock Group declares 8 flat-indexed icon+label buttons,
+' in the same top-to-bottom order tv-web's real App.tsx NAV_GROUPS renders:
+' [Downloads, Search], [Home, Series, Movies, Sites, Music], [Playlists].
+' Not a real SGDEX focusable list -- "focus" is hand-simulated by toggling
+' each item's highlight Rectangle/icon opacity/label color and routing keys
+' through onKeyEvent while m.navDockMode is true, the same pattern the old
+' Home-only homeShortcuts row used, now generalised to a real (though still
+' only Home-entered -- see below) global dock.
+>>>>>>> Stashed changes
 '
 ' Scope note: entry into the dock (Up from Home's topmost rail, see
 ' onKeyEvent's "home"+"up" branch -- NOT Left, see that branch's own comment
@@ -2514,11 +2706,19 @@ end sub
 ' ---------------------------------------------------------------------------
 
 function navDockKindList() as Object
+<<<<<<< Updated upstream
     return ["search", "home", "series", "movie", "site", "artist", "playlist"]
 end function
 
 function navDockLabelList() as Object
     return ["Search", "Home", "Series", "Movies", "Sites", "Music", "Playlists"]
+=======
+    return ["downloads", "search", "home", "series", "movie", "site", "artist", "playlist"]
+end function
+
+function navDockLabelList() as Object
+    return ["Downloads", "Search", "Home", "Series", "Movies", "Sites", "Music", "Playlists"]
+>>>>>>> Stashed changes
 end function
 
 ' SetFocus(true) on the Scene alone does not reliably strip focus away from
@@ -2586,20 +2786,47 @@ sub selectNavDockItem()
         openSearchDialog()
     else if kind = "playlist"
         openPlaylists()
+<<<<<<< Updated upstream
+=======
+    else if kind = "downloads"
+        openDownloads()
+>>>>>>> Stashed changes
     else
         openBrowse(kind, labels[idx])
     end if
 end sub
 
 ' ---------------------------------------------------------------------------
+<<<<<<< Updated upstream
+=======
+' Downloads (phase 11, stub)
+'
+' Reached from homeShortcuts' 7th entry (shortcutDownloads, see
+' selectHomeShortcut's "downloads" branch above). See MainScene.xml's
+' downloadsGroup comment for the full rationale: this channel has no local
+' file storage / download-queue infrastructure at all, so this is a static,
+' honest empty-state screen, not a functional download manager. Unlike every
+' other homeShortcuts destination (openBrowse/openSearchDialog/openPlaylists),
+' this makes no API request and shows no loading status -- there is nothing
+' to fetch, so the screen switch is instant.
+' ---------------------------------------------------------------------------
+
+sub openDownloads()
+    showOnly("downloads")
+    m.top.screenState = "downloads"
+    m.top.SetFocus(true)
+end sub
+
+' ---------------------------------------------------------------------------
+>>>>>>> Stashed changes
 ' Detail screen (phase 4)
 '
 ' Branches on work.kind: a movie keeps the original single-Play-button
 ' LabelList path (detailActions), driven by WorkDetailSchema's own
 ' `media_file_id` (only ever populated for WorkKind::Movie -- see
-' streamarr-catalog's WorkDetail doc comment). A series or site instead
+' playarr-catalog's WorkDetail doc comment). A series or site instead
 ' walks WorkChildrenSchema's `{ Series: SeasonDetailSchema[] }` shape (site
-' reuses the series tree server-side, per streamarr-catalog::WorkChildren's
+' reuses the series tree server-side, per playarr-catalog::WorkChildren's
 ' doc comment: "Site reuses the series-shaped tree because Whisparr exposes
 ' sites and scenes through Sonarr-compatible series and episode resources")
 ' into detailEpisodes, a RowList with one row per season, so selecting a
@@ -2651,6 +2878,7 @@ sub showDetail(detail as Object)
     ' string.
     m.detailStage.stageTitle = work.title
     m.detailStage.stageKicker = UCase(work.kind)
+<<<<<<< Updated upstream
     ' Matches the real detail page's own meta line (confirmed live:
     ' "Movie  1h 48m  2003  Released Oct 23, 2003  Action  Crime  Thriller"),
     ' not just "year  •  genres" -- kind + runtime (movies only, from
@@ -2668,6 +2896,17 @@ sub showDetail(detail as Object)
         metaParts.Push(joinStrings(work.genres, ", "))
     end if
     m.detailStage.stageMeta = joinStrings(metaParts, "  •  ")
+=======
+    meta = ""
+    if work.release_date <> invalid and work.release_date.Len() >= 4
+        meta = work.release_date.Left(4)
+    end if
+    if work.genres <> invalid and work.genres.Count() > 0
+        if meta <> "" then meta += "  •  "
+        meta += joinStrings(work.genres, ", ")
+    end if
+    m.detailStage.stageMeta = meta
+>>>>>>> Stashed changes
     ' Full-bleed backdrop key-art replaces the old small poster thumbnail
     ' (detailPoster, removed) -- tv-web's real detail page has no separate
     ' poster once there is hero art behind the title panel. Same helper
@@ -2681,11 +2920,14 @@ sub showDetail(detail as Object)
 
     isSeriesShaped = work.kind = "series" or work.kind = "site"
     isArtistShaped = work.kind = "artist"
+<<<<<<< Updated upstream
     ' Reset before branching: only showMovieDetailActions below sets this
     ' for real, and a stale value from a previously-viewed movie must not
     ' leak into a series/artist detail view (this drives whether the
     ' Chapters rail load fires further down).
     m.currentMediaFileId = ""
+=======
+>>>>>>> Stashed changes
     if isSeriesShaped
         m.detailGroupKind = "series"
         m.detailSeasons = seasonsFromDetail(detail)
@@ -2700,6 +2942,7 @@ sub showDetail(detail as Object)
         showMovieDetailActions(detail)
     end if
 
+<<<<<<< Updated upstream
     ' Chapters + Similar Titles: fetched only once every other detail
     ' response has already landed (see the "detail"/onApiResult chain in
     ' onApiResult) and requests are strictly single-flight on this
@@ -2714,6 +2957,8 @@ sub showDetail(detail as Object)
         loadSimilarTitles(work)
     end if
 
+=======
+>>>>>>> Stashed changes
     showOnly("detail")
     m.top.screenState = "detail"
     ' Unlike Home's one-shot m.homeShown flag, the entrance animation is
@@ -2727,7 +2972,10 @@ sub showDetail(detail as Object)
     ' newly selected title. callFunc() (not dot-call) per the platform bug
     ' documented on TvStage.xml's playEntrance interface function.
     m.detailStage.callFunc("playEntrance")
+<<<<<<< Updated upstream
     m.detailFocusIndex = 0
+=======
+>>>>>>> Stashed changes
     if (isSeriesShaped or isArtistShaped) and m.detailSeasons.Count() > 0 and m.detailEpisodes.visible
         m.detailEpisodes.SetFocus(true)
     else
@@ -2735,6 +2983,7 @@ sub showDetail(detail as Object)
     end if
 end sub
 
+<<<<<<< Updated upstream
 ' Chapters/Similar Titles load in asynchronously after showDetail already
 ' handed focus to detailActions/detailEpisodes (see the request chain
 ' kicked off there), so they're never the initial focus target -- only
@@ -2769,6 +3018,8 @@ function detailFocusTopControl() as Object
     return m.detailActions
 end function
 
+=======
+>>>>>>> Stashed changes
 ' Movie path: unchanged shape from phase 3, just factored out of showDetail
 ' and reading WorkDetailSchema's own `media_file_id`/`runtime_ms` directly
 ' instead of scanning the whole response with findFirstMediaFileId.
@@ -2785,6 +3036,7 @@ sub showMovieDetailActions(detail as Object)
     end if
 end sub
 
+<<<<<<< Updated upstream
 ' ---------------------------------------------------------------------------
 ' Chapters + Similar Titles rails (confirmed live against the real detail
 ' page's own network calls, see MainScene.xml's detailChapters/detailSimilar
@@ -3047,6 +3299,8 @@ sub onDetailSimilarSelected(event as Object)
     openWorkDetail(m.similarWorks[itemIndex], m.detailOrigin)
 end sub
 
+=======
+>>>>>>> Stashed changes
 ' Series/site path: builds detailEpisodes' season/episode RowList content
 ' from m.detailSeasons (already parsed by seasonsFromDetail) and appends a
 ' season/episode count onto the meta line. Falls back to the same
@@ -3071,7 +3325,7 @@ end sub
 ' Parses WorkChildrenSchema off a WorkDetailSchema response. `children` is
 ' either the bare JSON string "Movie" (externally-tagged unit variant) or a
 ' one-key object such as {"Series": [SeasonDetailSchema, ...]} -- see
-' streamarr-catalog::WorkChildren and its generated WorkChildrenSchema type
+' playarr-catalog::WorkChildren and its generated WorkChildrenSchema type
 ' in tv-web's schema.ts. Only the Series shape is handled here; Artist is
 ' handled by albumsFromDetail below (Author remains out of scope for this
 ' phase, same as chapters/cast/crew/similar-titles).
@@ -3433,12 +3687,15 @@ sub onDownloadedSegment()
     seg = m.video.downloadedSegment
     if seg = invalid or seg.Status <> 0 then return
     if seg.SegType <> 0 and seg.SegType <> 2 then return
+<<<<<<< Updated upstream
     ' Confirmed live: some segments (container/init segments with no real
     ' timeline position yet) report SegType 0/2 but a genuinely Invalid
     ' SegStart/SegDuration, not just a 0 value -- "Type Mismatch: + can't
     ' be applied to Invalid and Float" crashed real playback the first
     ' time this ever actually ran this session.
     if seg.SegStart = invalid or seg.SegDuration = invalid then return
+=======
+>>>>>>> Stashed changes
     segEnd = seg.SegStart + (seg.SegDuration / 1000)
     if segEnd > m.bufferedSeconds then m.bufferedSeconds = segEnd
 end sub
@@ -3485,6 +3742,7 @@ function formatPlaybackTime(totalSeconds as Dynamic) as String
     return minutes.ToStr() + ":" + secondsStr
 end function
 
+<<<<<<< Updated upstream
 ' "movie" -> "Movie" (from: the detail page's own meta line, e.g. "Movie
 ' 1h 48m 2003 ..."). A separate copy from PosterCard.brs's identical
 ' function: components have no shared-include mechanism for a plain
@@ -3507,6 +3765,8 @@ function formatRuntime(runtimeMs as Dynamic) as String
     return minutes.ToStr() + "m"
 end function
 
+=======
+>>>>>>> Stashed changes
 ' Shows the control bar and (re)arms the 3s auto-hide countdown. Called on
 ' every playback-state key press (see onKeyEvent), matching tv-web's
 ' "any activity shows the bar and resets the idle timer" behaviour.
@@ -3628,6 +3888,10 @@ sub showOnly(name as String)
     m.browseGroup.visible = name = "browse"
     m.searchGroup.visible = name = "search"
     m.playlistsGroup.visible = name = "playlists"
+<<<<<<< Updated upstream
+=======
+    m.downloadsGroup.visible = name = "downloads"
+>>>>>>> Stashed changes
     m.detailGroup.visible = name = "detail"
     m.navDockMode = false
     renderNavDockFocus()
@@ -3677,10 +3941,13 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             return true
         end if
         return false
+<<<<<<< Updated upstream
     else if state = "detail" and key = "down"
         return moveDetailFocus(1)
     else if state = "detail" and key = "up"
         return moveDetailFocus(-1)
+=======
+>>>>>>> Stashed changes
     else if state = "detail" and key = "back"
         if m.detailOrigin = "library"
             showOnly("library")
@@ -3717,6 +3984,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     else if state = "library" and key = "back"
         loadProfiles()
         return true
+<<<<<<< Updated upstream
     else if state = "browse" and m.browseFiltersMode and key = "back"
         closeBrowseFiltersPanel()
         return true
@@ -3761,6 +4029,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         ' ("Press * to enter a server address").
         enterBrowseAlphabet()
         return true
+=======
+>>>>>>> Stashed changes
     else if state = "browse" and key = "back"
         showOnly("home")
         m.top.screenState = "home"
@@ -3786,6 +4056,14 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         m.top.screenState = "home"
         focusCurrentHomeRail()
         return true
+<<<<<<< Updated upstream
+=======
+    else if state = "downloads" and key = "back"
+        showOnly("home")
+        m.top.screenState = "home"
+        focusCurrentHomeRail()
+        return true
+>>>>>>> Stashed changes
     else if state = "playlists" and key = "back"
         ' Mirrors browse/search's "Back returns to Home" above, except this
         ' one screenState covers two sub-views (see MainScene.xml's

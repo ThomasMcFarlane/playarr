@@ -174,6 +174,7 @@
       <!-- width=1358/scale 0.81 -> visual width 1100, translation.x=960-550=410,
            centering it the same way statusMessage/pairingInstruction above do. -->
       <Label translation="[410,660]" width="1358" height="100" text="Select the linked profile to continue. Choose another profile to link a new session for that viewer." horizAlign="center" wrap="true" scale="[0.81,0.81]" scaleRotateCenter="[679,50]" color="0xA9B7C9FF" />
+<<<<<<< Updated upstream
       <!--
         Matches the real Profiles page exactly now (confirmed live): just
         two small actions, Settings and Sign out, directly under the row,
@@ -186,6 +187,32 @@
         extra menu items with no real-UI basis.
       -->
       <LabelList id="profileActions" translation="[860,795]" itemSize="[200,55]" numRows="2" focusBitmapBlendColor="0xCF3157FF" />
+=======
+      <Label translation="[0,795]" width="1920" height="40" text="Options" horizAlign="center" scale="[0.88,0.88]" scaleRotateCenter="[960,20]" color="0xFFFFFFFF" />
+      <!--
+        Phase 7 adds a 4th "Settings" entry after the original three
+        (Link another profile / Change server / Sign out), see
+        MainScene.brs's onProfileActionSelected index=3 branch and the new
+        settingsGroup below. Appended at the end rather than inserted in the
+        middle so the existing index=0/1/2 branches don't need renumbering.
+        "Change server" is deliberately left in place rather than folded
+        into Settings: it is a quick one-shot reconnect (clears the session
+        and reopens openServerDialog immediately), whereas Settings' Server
+        section is a browse-first view (see what's already saved, then
+        optionally add one), different enough affordances that collapsing
+        them into a single UI would lose the quick-reconnect path.
+
+        Real-screenshot correction pass: this list moves from the old
+        two-column layout's right side to horizontally centered underneath
+        profilesRow, matching the new centered composition above; tv-web's
+        actual per-avatar action buttons only ever appear for the selected
+        avatar itself (a bigger structural change than this pass's "fix the
+        avatar row" scope calls for, see the phase brief), so this stays a
+        LabelList of the same four actions rather than an avatar-inline
+        rebuild.
+      -->
+      <LabelList id="profileActions" translation="[710,835]" itemSize="[500,55]" numRows="4" focusBitmapBlendColor="0xCF3157FF" />
+>>>>>>> Stashed changes
     </Group>
 
     <!--
@@ -308,6 +335,7 @@
       <MarkupGrid id="browseGrid" translation="[560,245]" itemComponentName="PosterCard"
         numColumns="3" numRows="3" itemSize="[330,216]" itemSpacing="[27,27]"
         focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" />
+<<<<<<< Updated upstream
       <Label id="browseHint" translation="[160,995]" width="1700" height="50" text="OK details  •  *  A-Z / Filters  •  Back home" scale="[0.69,0.69]" color="0xA9B7C9FF" />
       <!-- Alphabet jump strip (from: .tv-alphabet, confirmed live: "#" then
            A-Z, right edge, entered from the grid via Right at its last
@@ -350,6 +378,9 @@
         <Label id="browseFilterSizeMedium" translation="[1610,615]" width="280" height="40" text="Medium" scale="[0.62,0.62]" color="0xCF3157FF" />
         <Label id="browseFilterSizeLarge" translation="[1610,665]" width="280" height="40" text="Large" scale="[0.62,0.62]" color="0xA9B7C9FF" />
       </Group>
+=======
+      <Label id="browseHint" translation="[160,995]" width="1700" height="50" text="OK details  •  Back home" scale="[0.69,0.69]" color="0xA9B7C9FF" />
+>>>>>>> Stashed changes
     </Group>
 
     <!--
@@ -459,6 +490,37 @@
     </Group>
 
     <!--
+<<<<<<< Updated upstream
+=======
+      Phase 11: Downloads screen (stub), reached from homeShortcuts' new 7th
+      entry (shortcutDownloads, see selectHomeShortcut/openDownloads in
+      MainScene.brs). This channel has zero local file-storage / download-
+      queue infrastructure anywhere in this codebase (no roFileSystem
+      writes, no persisted queue state, nothing), and building a real
+      download engine (actually fetching/storing video locally and playing
+      it back offline) is a substantial feature well beyond this phase's
+      "close the missing-page navigation gap" scope (see the phase brief).
+
+      This screen is therefore a deliberately honest, static empty-state
+      stub, NOT a functional download manager: it makes no API request (there
+      is nothing to fetch), fetches/stores nothing, and its copy never claims
+      Roku supports downloads. It exists purely so "Downloads" is reachable
+      from Home, matching tv-web's navigation structure, instead of the page
+      being entirely absent from this client.
+    -->
+    <!-- Shifted right (title/hint 90->160; centered body text re-centred on
+         the dock-cleared content area's midpoint ~1024 instead of the full
+         screen's 960) to clear the global nav dock, same fix as
+         browseGroup/searchGroup/etc above. -->
+    <Group id="downloadsGroup" visible="false">
+      <Label id="downloadsTitle" translation="[160,155]" width="1700" height="60" text="Downloads" scale="[1.31,1.31]" color="0xFFFFFFFF" />
+      <Label translation="[374,420]" width="1300" height="55" text="Downloads aren’t available on this device yet" horizAlign="center" scale="[0.94,0.94]" scaleRotateCenter="[650,28]" color="0xFFFFFFFF" />
+      <Label translation="[424,500]" width="1200" height="160" horizAlign="center" vertAlign="top" wrap="true" scale="[0.75,0.75]" scaleRotateCenter="[600,80]" color="0xA9B7C9FF" text="Playarr Server can’t save video to local storage on this Roku device, so there’s nothing to download or manage here. Play titles directly instead — your progress is still saved to Continue Watching." />
+      <Label translation="[160,995]" width="1700" height="50" text="Back home" scale="[0.69,0.69]" color="0xA9B7C9FF" />
+    </Group>
+
+    <!--
+>>>>>>> Stashed changes
       Phase 4 (branch logic) / phase 9 (visual migration to TvStage): detail
       screen branches on work.kind. Movies keep the original single-Play-
       button LabelList (detailActions). Series/site works instead show
@@ -514,6 +576,7 @@
         rowLabelOffset="[[0,-30]]" focusXOffset="[0]"
         focusBitmapBlendColor="0x00000000" rowFocusAnimationStyle="fixedFocusWrap"
         visible="false" />
+<<<<<<< Updated upstream
       <!-- Chapters + Similar Titles rails (confirmed live against the real
            detail page): movies show a "Chapters" rail (from GET
            /api/v1/media/{media_file_id}/chapters, each card's art from GET
@@ -543,6 +606,8 @@
         rowLabelOffset="[[0,-30]]" focusXOffset="[0]"
         focusBitmapBlendColor="0x00000000" rowFocusAnimationStyle="fixedFocusWrap"
         visible="false" />
+=======
+>>>>>>> Stashed changes
       <Label translation="[100,915]" width="1600" height="50" text="Back library" scale="[0.69,0.69]" color="0xA9B7C9FF" />
     </Group>
 
@@ -588,6 +653,7 @@
           top, horizontally centred over the nav dock,
         - a fixed nav dock pinned to the LEFT edge, vertically centred,
           split into three visually-grouped rounded panels top-to-bottom:
+<<<<<<< Updated upstream
           [Search], [Home, Series, Movies, Sites, Music], [Playlists], 7
           icon+label buttons total, always visible on every authenticated
           screen (not a Home-only affordance). Downloads is deliberately
@@ -598,6 +664,15 @@
       Roku has no rounded-rectangle primitive (Rectangle is always sharp-
       cornered) and no SVG renderer, so the group panels are plain
       Rectangles and the icons are pre-rendered PNGs (images/nav-*.png,
+=======
+          [Downloads, Search], [Home, Series, Movies, Sites, Music],
+          [Playlists], 8 icon+label buttons total, always visible on every
+          authenticated screen (not a Home-only affordance), and
+        - the linked-profile identity pinned bottom-left, near the dock.
+      Roku has no rounded-rectangle primitive (Rectangle is always sharp-
+      cornered) and no SVG renderer, so the group panels are plain
+      Rectangles and the 8 icons are pre-rendered PNGs (images/nav-*.png,
+>>>>>>> Stashed changes
       generated from tv-web's actual NavIcons.tsx paths), both documented
       simplifications, not missing features. The on-screen clock tv-web also
       shows here is deliberately deferred (lower-impact than the structural
@@ -613,6 +688,7 @@
       <Label id="clockTime" translation="[90,40]" width="200" height="30" scale="[0.46,0.46]" color="0xF4F0F1FF" />
       <Label id="clockDate" translation="[90,64]" width="260" height="26" scale="[0.34,0.34]" color="0x887A82FF" />
 
+<<<<<<< Updated upstream
       <!-- navDock: 7 flat-indexed items (see MainScene.brs's navDockKindList
            for the matching order/behaviour), grouped visually into 3 panels
            by background Rectangles declared first so they paint behind the
@@ -622,20 +698,37 @@
            715-803, symmetric 203px top/bottom margins. Downloads is
            deliberately omitted, Roku has no local file-storage /
            download-queue infrastructure to lead a Downloads tab to. -->
+=======
+      <!-- navDock: 8 flat-indexed items (see MainScene.brs's NAV_DOCK_KINDS
+           for the matching order/behaviour), grouped visually into 3 panels
+           by background Rectangles declared first so they paint behind the
+           icons/labels that follow. Vertically centred as a whole on the
+           1080-tall canvas: group A (Downloads/Search) 203-365, group B
+           (Home/Series/Movies/Sites/Music) 385-769, group C (Playlists)
+           789-877, symmetric 203px top/bottom margins. -->
+>>>>>>> Stashed changes
       <!-- NOT opaque group-background panels: confirmed live against the
            real app's own nav (.app-nav computed style) that its container
            is fully transparent (background: rgba(0,0,0,0)), there is no
            panel behind the icon groups at all, only each individual link
            getting its own small rounded highlight on hover/active
            (.app-nav-link's own background, already matched by this app's
+<<<<<<< Updated upstream
            navHighlight0-6 rectangles below). The 3 solid ~85%-opaque panels
+=======
+           navHighlight0-7 rectangles below). The 3 solid ~85%-opaque panels
+>>>>>>> Stashed changes
            this used to have were blocking the hero backdrop art behind them
            with no basis in the real design. -->
       <Group id="navDock">
 
         <!-- Icon centre = panel centre (32 + 96/2 = 80), so icon translation.x
              = 80 - width/2 = 64. Labels use a wide (200px) pre-scale box so
+<<<<<<< Updated upstream
              the longest word ("Playlists") doesn't wrap/truncate
+=======
+             the longest words ("Downloads"/"Playlists") don't wrap/truncate
+>>>>>>> Stashed changes
              at the default (unscaled) font size before scale shrinks them
              down. scaleRotateCenter = [width/2,height/2] = [100,10] is the
              point that stays fixed under scale, so the point that lands at
@@ -647,6 +740,7 @@
              corrected). Solving translation.x + 100 = 80 gives
              translation.x = -20. -->
         <Rectangle id="navHighlight0" translation="[40,211]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+<<<<<<< Updated upstream
         <Poster id="navIcon0" translation="[64,223]" width="32" height="32" uri="pkg:/images/nav-search.png" opacity="0.62" />
         <Label id="navLabel0" translation="[-20,257]" width="200" height="20" text="Search" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
 
@@ -673,6 +767,38 @@
         <Rectangle id="navHighlight6" translation="[40,723]" width="80" height="70" color="0xF4F0F13D" visible="false" />
         <Poster id="navIcon6" translation="[64,735]" width="32" height="32" uri="pkg:/images/nav-playlists.png" opacity="0.62" />
         <Label id="navLabel6" translation="[-20,769]" width="200" height="20" text="Playlists" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
+=======
+        <Poster id="navIcon0" translation="[64,223]" width="32" height="32" uri="pkg:/images/nav-downloads.png" opacity="0.62" />
+        <Label id="navLabel0" translation="[-20,257]" width="200" height="20" text="Downloads" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
+
+        <Rectangle id="navHighlight1" translation="[40,285]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Poster id="navIcon1" translation="[64,297]" width="32" height="32" uri="pkg:/images/nav-search.png" opacity="0.62" />
+        <Label id="navLabel1" translation="[-20,331]" width="200" height="20" text="Search" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
+
+        <Rectangle id="navHighlight2" translation="[40,393]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Poster id="navIcon2" translation="[64,405]" width="32" height="32" uri="pkg:/images/nav-home.png" opacity="0.62" />
+        <Label id="navLabel2" translation="[-20,439]" width="200" height="20" text="Home" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
+
+        <Rectangle id="navHighlight3" translation="[40,467]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Poster id="navIcon3" translation="[64,479]" width="32" height="32" uri="pkg:/images/nav-series.png" opacity="0.62" />
+        <Label id="navLabel3" translation="[-20,513]" width="200" height="20" text="Series" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
+
+        <Rectangle id="navHighlight4" translation="[40,541]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Poster id="navIcon4" translation="[64,553]" width="32" height="32" uri="pkg:/images/nav-movies.png" opacity="0.62" />
+        <Label id="navLabel4" translation="[-20,587]" width="200" height="20" text="Movies" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
+
+        <Rectangle id="navHighlight5" translation="[40,615]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Poster id="navIcon5" translation="[64,627]" width="32" height="32" uri="pkg:/images/nav-sites.png" opacity="0.62" />
+        <Label id="navLabel5" translation="[-20,661]" width="200" height="20" text="Sites" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
+
+        <Rectangle id="navHighlight6" translation="[40,689]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Poster id="navIcon6" translation="[64,701]" width="32" height="32" uri="pkg:/images/nav-music.png" opacity="0.62" />
+        <Label id="navLabel6" translation="[-20,735]" width="200" height="20" text="Music" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
+
+        <Rectangle id="navHighlight7" translation="[40,797]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Poster id="navIcon7" translation="[64,809]" width="32" height="32" uri="pkg:/images/nav-playlists.png" opacity="0.62" />
+        <Label id="navLabel7" translation="[-20,843]" width="200" height="20" text="Playlists" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
+>>>>>>> Stashed changes
       </Group>
 
       <!-- Linked-profile identity, bottom-left near the dock (tv-web's

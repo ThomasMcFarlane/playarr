@@ -1,19 +1,19 @@
 # Playarr for Roku
 
 Playarr for Roku is a native SceneGraph channel for browsing and playing a
-viewer’s own Streamarr library. It uses Roku-native focusable lists and the
+viewer’s own Playarr Server library. It uses Roku-native focusable lists and the
 native `Video` node, so directional navigation, list scrolling and playback do
 not depend on a browser or JavaScript focus shim.
 
 ## Current flow
 
-1. Enter the base URL of a Streamarr server on first launch.
-2. Link the Roku through Streamarr’s RFC 8628 device-authorisation flow.
+1. Enter the base URL of a Playarr Server on first launch.
+2. Link the Roku through Playarr Server’s RFC 8628 device-authorisation flow.
 3. Select the linked household profile.
 4. Browse the available catalogue, open a title and play its first available
    media file.
 5. Report playback start, pause, resume, heartbeat and stop events to the
-   Streamarr session API.
+   Playarr Server session API.
 
 The server URL, rotating refresh token and current access token are stored in
 the Roku registry. Signing out removes all session material. No credentials,

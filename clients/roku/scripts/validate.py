@@ -16,6 +16,8 @@ REQUIRED_MANIFEST_KEYS = {
     "minor_version",
     "build_version",
     "ui_resolutions",
+    "mm_icon_focus_hd",
+    "mm_icon_side_hd",
 }
 FORBIDDEN_SUFFIXES = {".db", ".env", ".key", ".pem", ".p12", ".zip"}
 PLACEHOLDER_PATTERNS = (
@@ -43,6 +45,14 @@ def validate_manifest() -> None:
         fail(f"manifest is missing: {', '.join(sorted(missing))}")
     if values["ui_resolutions"] != "fhd":
         fail("the Roku scene is designed for the fhd coordinate space")
+    for key in ("mm_icon_focus_hd", "mm_icon_side_hd", "mm_icon_focus_fhd", "mm_icon_side_fhd"):
+        value = values.get(key)
+        if value is None:
+            continue
+        if not value.startswith("pkg:/"):
+            fail(f"manifest {key} must reference a packaged pkg:/ asset")
+        if not (ROOT / value.removeprefix("pkg:/")).is_file():
+            fail(f"manifest {key} points at a missing file: {value}")
 
 
 def validate_xml() -> None:
@@ -114,6 +124,7 @@ def validate_source_contract() -> None:
         "/api/v1/catalog?",
         "/api/v1/catalog/",
         "/api/v1/playback/",
+        "/api/v1/playback/progress",
         "/events",
     )
     for fragment in required_fragments:
