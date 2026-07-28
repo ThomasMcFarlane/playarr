@@ -15,6 +15,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Apple TV shell rewritten toward the live SPA dark stage: floating left nav,
+  hero title panel, home rails, search empty state, and Preferences-style
+  settings. Stage palette locked to `:root[data-theme="dark"]` hex values;
+  production path remains SwiftUI + PlayarrKit (no web-ref paint).
+
 - Apple TV design-token mirror (`DesignTokens` / `TVTheme`) kept in lock-step with
   `@playarr-tv/design-tokens`, applied across home, search, detail, player,
   settings, and the device-code pairing gate. Unit tests lock the hex values,

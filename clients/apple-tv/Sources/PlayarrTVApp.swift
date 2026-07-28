@@ -6,8 +6,11 @@ struct PlayarrTVApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if let parityScreen = TVParityLaunch.requestedScreen {
-                // Deterministic chrome-only surfaces for the visual parity suite.
+            // Always use production SwiftUI shell. Parity suite forces tabs via
+            // `-PlayarrParityScreen` (handled inside TVRootView) — web-ref paint
+            // is only used when `-PlayarrParityWebRefBaseURL` is set (AE0 tooling).
+            if let parityScreen = TVParityLaunch.requestedScreen,
+               TVParityLaunch.webRefBaseURL != nil {
                 TVParityRootView(screen: parityScreen)
             } else {
                 TVRootView()

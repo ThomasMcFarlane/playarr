@@ -4,93 +4,165 @@ struct TVSettingsView: View {
     @Environment(TVAppEnvironment.self) private var environment
     @State private var serverError: String?
     @State private var pairingTask: Task<Void, Never>?
+    @State private var selectedSection = 0
+
+    private let sections: [(number: String, title: String, description: String)] = [
+        ("01", "Appearance", "Choose this device’s theme and home screen artwork."),
+        ("02", "Profile avatar", "Pick the face this device uses on the home rail."),
+        ("03", "Language", "Interface language for this device."),
+        ("04", "Player", "Playback preferences for this Apple TV."),
+        ("05", "Server connection", "Playarr Server address and pairing."),
+        ("06", "Profile lock", "PIN gate for this profile."),
+        ("07", "Invite a friend", "Share access to this server."),
+        ("08", "Request latency", "Diagnostics for API round-trips."),
+    ]
 
     var body: some View {
         @Bindable var environment = environment
 
         ZStack {
             TVStageBackground()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: DesignTokens.Spacing.xl) {
-                    Text("Settings")
-                        .font(TVTheme.displayFont())
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
-
-                    settingsCard(title: "Playarr Server") {
-                        TextField("Server address", text: $environment.serverAddress)
-                            .font(TVTheme.bodyFont())
+            HStack(alignment: .top, spacing: 0) {
+                // Left: section list (web Preferences)
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack(spacing: 16) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(DesignTokens.Color.backgroundRaised.opacity(0.85)))
+                        Text("Preferences")
+                            .font(.system(size: 34, weight: .bold))
                             .foregroundStyle(DesignTokens.Color.textPrimary)
-                            .padding(DesignTokens.Spacing.md)
-                            .background(
-                                RoundedRectangle(cornerRadius: DesignTokens.Radius.input, style: .continuous)
-                                    .fill(DesignTokens.Color.backgroundBase)
-                            )
-                            .textContentType(.URL)
-                            .autocorrectionDisabled()
+                        Text(sections[selectedSection].title.uppercased())
+                            .font(.system(size: 11, weight: .heavy))
+                            .tracking(1.4)
+                            .foregroundStyle(DesignTokens.Color.textDisabled)
+                    }
+                    Text(sections[selectedSection].description)
+                        .font(TVTheme.captionFont())
+                        .foregroundStyle(DesignTokens.Color.textDisabled)
 
-                        Button("Save server") {
-                            serverError = environment.saveServerAddress()
-                                ? nil
-                                : "Enter a valid HTTP or HTTPS server address."
+                    VStack(spacing: 8) {
+                        ForEach(Array(sections.enumerated()), id: \.offset) { index, section in
+                            Button {
+                                selectedSection = index
+                            } label: {
+                                HStack(spacing: 16) {
+                                    Text(section.number)
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundStyle(DesignTokens.Color.textDisabled)
+                                        .frame(width: 28, alignment: .leading)
+                                    Text(section.title)
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                                    Spacer()
+                                    Image(systemName: "arrow.right")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(DesignTokens.Color.textDisabled)
+                                }
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(
+                                            selectedSection == index
+                                                ? DesignTokens.Color.backgroundRaised
+                                                : Color.clear
+                                        )
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .font(TVTheme.bodyFont(emphasis: true))
-                        .foregroundStyle(DesignTokens.Color.brandPrimary)
-
-                        if let serverError {
-                            Label(serverError, systemImage: "exclamationmark.triangle")
-                                .font(TVTheme.captionFont())
-                                .foregroundStyle(DesignTokens.Color.stateError)
-                        }
                     }
-
-                    settingsCard(title: "Account") {
-                        pairingContent
-                    }
-
-                    settingsCard(title: "About") {
-                        labeledRow("App", value: "Playarr for Apple TV")
-                        labeledRow("Server", value: environment.serverURL.absoluteString)
-                        labeledRow("Theme base", value: DesignTokens.Hex.backgroundBase)
-                        labeledRow("Brand primary", value: DesignTokens.Hex.brandPrimary)
-                    }
+                    .frame(width: 420)
+                    Spacer()
                 }
-                .padding(DesignTokens.Spacing.xxxl)
-                .frame(maxWidth: 1100, alignment: .leading)
+                .padding(.leading, 140)
+                .padding(.top, 110)
+
+                // Right: section detail
+                VStack(alignment: .leading, spacing: 28) {
+                    sectionDetail
+                    Spacer()
+                }
+                .padding(.leading, 48)
+                .padding(.top, 160)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .navigationTitle("Settings")
         .onDisappear {
             pairingTask?.cancel()
             pairingTask = nil
         }
     }
 
-    private func settingsCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: DesignTokens.Spacing.md) {
-            Text(title)
-                .font(TVTheme.titleFont())
+    @ViewBuilder
+    private var sectionDetail: some View {
+        @Bindable var environment = environment
+        switch selectedSection {
+        case 0:
+            Text("Colour theme")
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(DesignTokens.Color.textPrimary)
-            content()
-        }
-        .padding(DesignTokens.Spacing.xl)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
-                .fill(DesignTokens.Color.backgroundElevated)
-        )
-    }
-
-    private func labeledRow(_ label: String, value: String) -> some View {
-        HStack {
-            Text(label)
+            HStack(spacing: 0) {
+                themeChip("System", selected: false)
+                themeChip("Light", selected: false)
+                themeChip("Dark", selected: true)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(DesignTokens.Color.backgroundElevated)
+            )
+        case 4:
+            Text("Playarr Server")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+            TextField("Server address", text: $environment.serverAddress)
+                .font(TVTheme.bodyFont())
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .padding(DesignTokens.Spacing.md)
+                .frame(maxWidth: 520)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(DesignTokens.Color.backgroundElevated)
+                )
+                .textContentType(.URL)
+                .autocorrectionDisabled()
+            Button("Save server") {
+                serverError = environment.saveServerAddress()
+                    ? nil
+                    : "Enter a valid HTTP or HTTPS server address."
+            }
+            .font(TVTheme.bodyFont(emphasis: true))
+            .foregroundStyle(DesignTokens.Color.brandPrimary)
+            if let serverError {
+                Text(serverError)
+                    .font(TVTheme.captionFont())
+                    .foregroundStyle(DesignTokens.Color.stateError)
+            }
+            pairingContent
+        default:
+            Text(sections[selectedSection].title)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+            Text(sections[selectedSection].description)
                 .font(TVTheme.bodyFont())
                 .foregroundStyle(DesignTokens.Color.textSecondary)
-            Spacer()
-            Text(value)
-                .font(TVTheme.bodyFont())
-                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .frame(maxWidth: 480, alignment: .leading)
         }
+    }
+
+    private func themeChip(_ label: String, selected: Bool) -> some View {
+        Text(label)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(selected ? DesignTokens.Color.backgroundBase : DesignTokens.Color.textPrimary)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(selected ? DesignTokens.Color.textPrimary : Color.clear)
+            )
     }
 
     @ViewBuilder
@@ -101,27 +173,14 @@ struct TVSettingsView: View {
         case .requestingCode:
             ProgressView("Requesting a pairing code…")
                 .tint(DesignTokens.Color.brandPrimary)
-                .foregroundStyle(DesignTokens.Color.textSecondary)
         case .awaitingApproval(let pending):
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.md) {
-                Text("On your phone or computer, open")
-                    .font(TVTheme.bodyFont())
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
                 Text(pending.verificationUri)
-                    .font(TVTheme.titleFont())
+                    .font(TVTheme.bodyFont())
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                 Text(pending.userCode)
-                    .font(.system(size: 58, weight: .bold, design: .monospaced))
+                    .font(.system(size: 42, weight: .bold, design: .monospaced))
                     .foregroundStyle(DesignTokens.Color.textPrimary)
-                    .padding(.horizontal, DesignTokens.Spacing.xl)
-                    .padding(.vertical, DesignTokens.Spacing.md)
-                    .background(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
-                            .fill(DesignTokens.Color.backgroundRaised)
-                    )
-                    .accessibilityLabel("Pairing code \(pending.userCode)")
-                ProgressView("Waiting for approval…")
-                    .tint(DesignTokens.Color.brandPrimary)
                 Button("Cancel pairing", role: .cancel) {
                     pairingTask?.cancel()
                     pairingTask = nil
@@ -129,18 +188,13 @@ struct TVSettingsView: View {
                 }
                 .foregroundStyle(DesignTokens.Color.textSecondary)
             }
-            .padding(.vertical, DesignTokens.Spacing.md)
         case .signedIn:
             Label("Paired", systemImage: "checkmark.circle.fill")
-                .font(TVTheme.bodyFont())
                 .foregroundStyle(DesignTokens.Color.stateSuccess)
             Button("Sign out", role: .destructive) { environment.signOut() }
-                .font(TVTheme.bodyFont())
                 .foregroundStyle(DesignTokens.Color.stateError)
         case .failed(let message):
-            Label(message, systemImage: "exclamationmark.triangle")
-                .font(TVTheme.bodyFont())
-                .foregroundStyle(DesignTokens.Color.stateError)
+            Text(message).foregroundStyle(DesignTokens.Color.stateError)
             TVPrimaryButton(label: "Try pairing again") { beginPairing() }
         }
     }

@@ -24,6 +24,13 @@ final class TVHomeViewModel {
 
     func load() async {
         state = .loading
+        // Parity suite: seed deterministic catalogue so production SwiftUI
+        // chrome can be captured without depending on network/ATS.
+        if TVParityLaunch.requestedScreen != nil, TVParityLaunch.webRefBaseURL == nil {
+            works = TVParityFixtures.sampleWorks()
+            state = .loaded
+            return
+        }
         do {
             works = try await apiClient.browseCatalog(
                 kind: nil,

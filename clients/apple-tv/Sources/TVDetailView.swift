@@ -32,85 +32,86 @@ struct TVWorkDetailView: View {
                 }
             }
         }
-        .navigationTitle(work.title)
         .task {
             if viewModel.state == .idle { await viewModel.load() }
         }
     }
 
-    /// Full-bleed backdrop + synopsis + Play/Back actions matching ui-tv `DetailScreen`.
     private func detailContent(_ detail: WorkDetail) -> some View {
-        let backdropURL = backdropURL(for: detail.work)
-
-        return ScrollView {
-            ZStack(alignment: .bottomLeading) {
-                AsyncImage(url: backdropURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(minWidth: TVTheme.canvasWidth, minHeight: 600)
-                            .clipped()
-                    default:
-                        DesignTokens.Color.backgroundBase
-                            .frame(minHeight: 600)
-                    }
-                }
-                .overlay {
-                    LinearGradient(
-                        colors: [
-                            .clear,
-                            DesignTokens.Color.backgroundOverlay,
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                }
-
-                VStack(alignment: .leading, spacing: DesignTokens.Spacing.md) {
-                    Text(detail.work.title)
-                        .font(TVTheme.displayFont())
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
-                        .frame(maxWidth: 800, alignment: .leading)
-
-                    Text(detail.work.overview ?? "No synopsis available.")
-                        .font(TVTheme.bodyFont())
-                        .foregroundStyle(DesignTokens.Color.textSecondary)
-                        .lineSpacing(6)
-                        .frame(maxWidth: 800, alignment: .leading)
-
-                    HStack(spacing: DesignTokens.Spacing.md) {
-                        if detail.work.kind == .movie, let mediaFileID = detail.mediaFileID {
-                            NavigationLink {
-                                TVPlayerView(
-                                    mediaFileID: mediaFileID,
-                                    title: detail.work.title,
-                                    apiClient: apiClient
-                                )
-                            } label: {
-                                Text("Play")
-                                    .font(TVTheme.bodyFont(emphasis: true))
-                                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                                    .padding(.horizontal, DesignTokens.Spacing.xl)
-                                    .padding(.vertical, DesignTokens.Spacing.sm)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous)
-                                            .fill(DesignTokens.Color.brandPrimary)
-                                    )
-                            }
-                            .buttonStyle(.card)
+        GeometryReader { geo in
+            ZStack(alignment: .topLeading) {
+                // Backdrop
+                if let url = backdropURL(for: detail.work) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: geo.size.width, height: geo.size.height)
+                                .clipped()
+                                .saturation(0)
+                                .opacity(0.45)
+                        default:
+                            EmptyView()
                         }
                     }
-                    .padding(.top, DesignTokens.Spacing.lg)
+                }
+                LinearGradient(
+                    colors: [
+                        DesignTokens.Color.backgroundBase.opacity(0.2),
+                        DesignTokens.Color.backgroundBase.opacity(0.95),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+
+                VStack(alignment: .leading, spacing: 20) {
+                    Text(detail.work.kind.rawValue.uppercased())
+                        .font(.system(size: 12, weight: .heavy))
+                        .tracking(1.2)
+                        .foregroundStyle(DesignTokens.Color.brandPrimary)
+                    Text(detail.work.title)
+                        .font(TVTheme.heroTitleFont())
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .frame(maxWidth: 700, alignment: .leading)
+                    if let overview = detail.work.overview, !overview.isEmpty {
+                        Text(overview)
+                            .font(.system(size: 17))
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
+                            .frame(maxWidth: 700, alignment: .leading)
+                            .lineLimit(6)
+                    }
+
+                    if detail.work.kind == .movie, let mediaFileID = detail.mediaFileID {
+                        NavigationLink {
+                            TVPlayerView(
+                                mediaFileID: mediaFileID,
+                                title: detail.work.title,
+                                apiClient: apiClient
+                            )
+                        } label: {
+                            Text("Play")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundStyle(DesignTokens.Color.textPrimary)
+                                .padding(.horizontal, 36)
+                                .padding(.vertical, 14)
+                                .background(Capsule().fill(DesignTokens.Color.brandPrimary))
+                        }
+                        .buttonStyle(.card)
+                        .padding(.top, 12)
+                    }
 
                     children(detail.children)
-                        .padding(.top, DesignTokens.Spacing.xl)
+                        .padding(.top, 28)
                 }
-                .padding(DesignTokens.Spacing.xxxl)
+                .padding(.leading, 140)
+                .padding(.top, 140)
+                .padding(.trailing, 80)
+                .padding(.bottom, 80)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .ignoresSafeArea()
     }
 
     @ViewBuilder
@@ -120,7 +121,7 @@ struct TVWorkDetailView: View {
             EmptyView()
         case .series(let seasons):
             ForEach(seasons, id: \.season.id) { season in
-                VStack(alignment: .leading, spacing: DesignTokens.Spacing.md) {
+                VStack(alignment: .leading, spacing: 12) {
                     Text(season.season.title ?? "Season \(season.season.seasonNumber)")
                         .font(TVTheme.titleFont())
                         .foregroundStyle(DesignTokens.Color.textPrimary)
@@ -135,7 +136,7 @@ struct TVWorkDetailView: View {
             }
         case .artist(let albums):
             ForEach(albums, id: \.album.id) { album in
-                VStack(alignment: .leading, spacing: DesignTokens.Spacing.md) {
+                VStack(alignment: .leading, spacing: 12) {
                     Text(album.album.title)
                         .font(TVTheme.titleFont())
                         .foregroundStyle(DesignTokens.Color.textPrimary)
@@ -149,7 +150,7 @@ struct TVWorkDetailView: View {
                 }
             }
         case .author(let books):
-            VStack(alignment: .leading, spacing: DesignTokens.Spacing.md) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text("Books")
                     .font(TVTheme.titleFont())
                     .foregroundStyle(DesignTokens.Color.textPrimary)
@@ -168,21 +169,16 @@ struct TVWorkDetailView: View {
     private func playbackRow(mediaFileID: UUID?, title: String, label: String) -> some View {
         if let mediaFileID {
             NavigationLink {
-                TVPlayerView(
-                    mediaFileID: mediaFileID,
-                    title: title,
-                    apiClient: apiClient
-                )
+                TVPlayerView(mediaFileID: mediaFileID, title: title, apiClient: apiClient)
             } label: {
                 Label(label, systemImage: "play.fill")
                     .font(TVTheme.bodyFont())
                     .foregroundStyle(DesignTokens.Color.textPrimary)
-                    .frame(maxWidth: 900, alignment: .leading)
-                    .padding(.horizontal, DesignTokens.Spacing.lg)
-                    .padding(.vertical, DesignTokens.Spacing.sm)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
                     .background(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.button, style: .continuous)
-                            .fill(DesignTokens.Color.brandPrimary)
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(DesignTokens.Color.backgroundRaised.opacity(0.9))
                     )
             }
             .buttonStyle(.card)
@@ -190,7 +186,6 @@ struct TVWorkDetailView: View {
             Label("\(label) — unavailable", systemImage: "play.slash")
                 .font(TVTheme.bodyFont())
                 .foregroundStyle(DesignTokens.Color.textSecondary)
-                .padding(.vertical, DesignTokens.Spacing.sm)
         }
     }
 

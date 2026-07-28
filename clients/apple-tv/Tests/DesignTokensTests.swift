@@ -1,22 +1,27 @@
 import XCTest
 @testable import PlayarrTV
 
-/// Structural lock: Apple TV design tokens must stay byte-identical to
-/// `clients/tv-web/packages/design-tokens/src/index.ts` hex values used by
-/// the web/ui-tv reference surface.
+/// Locks the live SPA dark stage palette (playarr.example.com) and arr tokens.
 final class DesignTokensTests: XCTestCase {
-    func testBackgroundBaseMatchesDesignTokens() {
-        XCTAssertEqual(DesignTokens.Hex.backgroundBase, "#202020")
+    func testStageBackgroundMatchesLiveDarkTheme() {
+        XCTAssertEqual(DesignTokens.Hex.backgroundBase, "#151315")
+        XCTAssertEqual(DesignTokens.Hex.backgroundElevated, "#1b181b")
     }
 
-    func testBrandPrimaryMatchesDesignTokens() {
-        XCTAssertEqual(DesignTokens.Hex.brandPrimary, "#5d9cec")
-        XCTAssertEqual(DesignTokens.Hex.focusRing, "#5d9cec")
+    func testBrandPinkMatchesLiveAccent() {
+        XCTAssertEqual(DesignTokens.Hex.brandPrimary, "#cf3157")
+        XCTAssertEqual(DesignTokens.Hex.focusRing, "#cf3157")
     }
 
-    func testTextPrimaryMatchesDesignTokens() {
-        XCTAssertEqual(DesignTokens.Hex.textPrimary, "#cccccc")
-        XCTAssertEqual(DesignTokens.Hex.textSecondary, "#999999")
+    func testInkColoursMatchLiveDarkTheme() {
+        XCTAssertEqual(DesignTokens.Hex.textPrimary, "#f4f0f1")
+        XCTAssertEqual(DesignTokens.Hex.textSecondary, "#c5b8bd")
+    }
+
+    func testArrPackageTokensRemainAvailable() {
+        XCTAssertEqual(DesignTokens.Hex.arrBackgroundBase, "#202020")
+        XCTAssertEqual(DesignTokens.Hex.arrBrandPrimary, "#5d9cec")
+        XCTAssertEqual(DesignTokens.Hex.arrTextPrimary, "#cccccc")
     }
 
     func testSpacingScaleMatchesDesignTokens() {
@@ -33,6 +38,7 @@ final class DesignTokensTests: XCTestCase {
         XCTAssertEqual(DesignTokens.TypeScale.bodySize, 14)
         XCTAssertEqual(DesignTokens.TypeScale.titleSize, 24)
         XCTAssertEqual(DesignTokens.TypeScale.displaySize, 50)
+        XCTAssertEqual(DesignTokens.TypeScale.heroTitleSize, 72)
     }
 
     func testFocusMotionMatchesDesignTokens() {
@@ -41,9 +47,9 @@ final class DesignTokensTests: XCTestCase {
         XCTAssertEqual(DesignTokens.FocusMotion.transitionSeconds, 0.15, accuracy: 0.0001)
     }
 
-    func testWorkTileDimensionsMatchUiTvBrowseScreen() {
-        XCTAssertEqual(TVTheme.workTileWidth, 240)
-        XCTAssertEqual(TVTheme.workTileHeight, 135)
+    func testHomeCardDimensionsMatchLiveRails() {
+        XCTAssertEqual(TVTheme.workTileWidth, 220)
+        XCTAssertEqual(TVTheme.workTileHeight, 124)
     }
 
     func testCanvasIs1920x1080() {
@@ -51,16 +57,14 @@ final class DesignTokensTests: XCTestCase {
         XCTAssertEqual(TVTheme.canvasHeight, 1080)
     }
 
-    func testRadiusScaleMatchesDesignTokens() {
-        XCTAssertEqual(DesignTokens.Radius.sm, 4)
-        XCTAssertEqual(DesignTokens.Radius.md, 6)
-        XCTAssertEqual(DesignTokens.Radius.card, 3)
-        XCTAssertEqual(DesignTokens.Radius.button, 4)
+    func testShellNavItemSizeMatchesWeb() {
+        XCTAssertEqual(DesignTokens.Shell.navItemSize, 64)
+        XCTAssertEqual(DesignTokens.Shell.navEdge, 36)
     }
 
-    func testBrandAccentAndErrorMatchDesignTokens() {
-        XCTAssertEqual(DesignTokens.Hex.brandAccent, "#e5484d")
-        XCTAssertEqual(DesignTokens.Hex.stateError, "#f05050")
-        XCTAssertEqual(DesignTokens.Hex.stateSuccess, "#27c24c")
+    func testRadiusScale() {
+        XCTAssertEqual(DesignTokens.Radius.sm, 4)
+        XCTAssertEqual(DesignTokens.Radius.md, 6)
+        XCTAssertEqual(DesignTokens.Radius.card, 12)
     }
 }

@@ -2,65 +2,123 @@ import SwiftUI
 
 struct TVRootView: View {
     @Environment(TVAppEnvironment.self) private var environment
+    @State private var selectedTab: TVNavTab = .home
+
+    /// When `-PlayarrParityScreen` is set without a web-ref paint URL, force
+    /// that tab so simctl captures hit the production SwiftUI path.
+    private var parityForcedTab: TVNavTab? {
+        guard TVParityLaunch.webRefBaseURL == nil,
+              let screen = TVParityLaunch.requestedScreen else { return nil }
+        switch screen {
+        case .search: return .search
+        case .homeRecentlyAdded: return .home
+        case .settings: return .settings
+        case .deviceCodePairing: return nil // full-screen gate
+        case .detailMovie, .detailEpisode, .detailTrack, .detailBook, .player:
+            return .home
+        }
+    }
 
     var body: some View {
         ZStack {
             TVStageBackground()
 
-            // Device-code pairing is the first-run gate (RFC 8628), matching
-            // ui-tv `TvApp` which shows `PairingScreen` until authenticated.
             switch environment.pairingState {
             case .signedIn:
-                signedInTabs
+                signedInShell
             default:
-                NavigationStack {
+                // Also allow parity screens to force chrome while signed out.
+                if let forced = parityForcedTab {
+                    signedInShell(forcedSelection: forced)
+                } else if TVParityLaunch.requestedScreen == .deviceCodePairing
+                            || TVParityLaunch.requestedScreen == nil {
                     TVPairingGateView()
+                } else {
+                    signedInShell
                 }
             }
         }
         .preferredColorScheme(.dark)
         .tint(DesignTokens.Color.brandPrimary)
+        .onAppear {
+            if let forced = parityForcedTab {
+                selectedTab = forced
+            }
+        }
     }
 
-    private var signedInTabs: some View {
-        TabView {
-            NavigationStack {
-                TVHomeView()
-            }
-            .tabItem { Label("Home", systemImage: "house") }
+    private var signedInShell: some View {
+        signedInShell(forcedSelection: nil)
+    }
 
+    private func signedInShell(forcedSelection: TVNavTab?) -> some View {
+        let tab = forcedSelection ?? selectedTab
+        return ZStack(alignment: .topLeading) {
+            // Main content fills the stage
             NavigationStack {
-                TVSearchView()
+                Group {
+                    switch tab {
+                    case .home:
+                        TVHomeView()
+                    case .search:
+                        TVSearchView()
+                    case .settings:
+                        TVSettingsView()
+                    case .series:
+                        TVLibraryKindView(kindLabel: "Series", emptyMessage: "No series in your library yet.")
+                    case .movies:
+                        TVLibraryKindView(kindLabel: "Movies", emptyMessage: "No movies in your library yet.")
+                    case .music:
+                        TVLibraryKindView(kindLabel: "Music", emptyMessage: "No music in your library yet.")
+                    case .playlists:
+                        TVLibraryKindView(kindLabel: "Playlists", emptyMessage: "No playlists yet.")
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .tabItem { Label("Search", systemImage: "magnifyingglass") }
 
-            NavigationStack {
-                TVSettingsView()
+            // Floating left nav (web `.app-nav`)
+            TVFloatingNav(selection: Binding(
+                get: { forcedSelection ?? selectedTab },
+                set: { if forcedSelection == nil { selectedTab = $0 } }
+            ))
+            .padding(.leading, DesignTokens.Shell.navEdge)
+            .padding(.top, 120)
+            .padding(.bottom, 100)
+            .frame(maxHeight: .infinity, alignment: .top)
+
+            // Logo / clock
+            TVShellHeader(frozenClock: TVParityLaunch.requestedScreen != nil)
+                .frame(maxWidth: .infinity, alignment: .top)
+
+            // Profile chip
+            VStack {
+                Spacer()
+                HStack {
+                    TVProfileChip(name: "Viewer")
+                        .padding(.leading, DesignTokens.Shell.navEdge)
+                        .padding(.bottom, 36)
+                    Spacer()
+                }
             }
-            .tabItem { Label("Settings", systemImage: "gearshape") }
         }
     }
 }
 
-/// Full-screen pairing gate aligned with ui-tv `PairingScreen`.
+/// Full-screen pairing gate aligned with ui-tv / device-code display.
 struct TVPairingGateView: View {
     @Environment(TVAppEnvironment.self) private var environment
     @State private var pairingTask: Task<Void, Never>?
     @State private var serverError: String?
 
     var body: some View {
-        @Bindable var environment = environment
-
         ZStack {
             TVStageBackground()
-
             VStack(spacing: DesignTokens.Spacing.lg) {
                 Text("Playarr Server")
-                    .font(TVTheme.displayFont())
+                    .font(TVTheme.heroTitleFont())
                     .foregroundStyle(DesignTokens.Color.textPrimary)
-
                 pairingBody
-
                 serverAddressEditor
             }
             .padding(DesignTokens.Spacing.xxxl)
@@ -84,8 +142,7 @@ struct TVPairingGateView: View {
             Text("Requesting a pairing code...")
                 .font(TVTheme.bodyFont())
                 .foregroundStyle(DesignTokens.Color.textSecondary)
-            ProgressView()
-                .tint(DesignTokens.Color.brandPrimary)
+            ProgressView().tint(DesignTokens.Color.brandPrimary)
         case .awaitingApproval(let pending):
             VStack(spacing: DesignTokens.Spacing.md) {
                 Text("Scan the QR code, or visit")
@@ -108,7 +165,6 @@ struct TVPairingGateView: View {
                         RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
                             .fill(DesignTokens.Color.backgroundRaised)
                     )
-                    .accessibilityLabel("Pairing code \(pending.userCode)")
                 ProgressView("Waiting for approval…")
                     .tint(DesignTokens.Color.brandPrimary)
                     .foregroundStyle(DesignTokens.Color.textSecondary)
@@ -140,16 +196,16 @@ struct TVPairingGateView: View {
                 "https://playarr.example",
                 text: Bindable(environment).serverAddress
             )
-                .font(TVTheme.bodyFont())
-                .foregroundStyle(DesignTokens.Color.textPrimary)
-                .padding(DesignTokens.Spacing.md)
-                .frame(maxWidth: 720)
-                .background(
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.input, style: .continuous)
-                        .fill(DesignTokens.Color.backgroundRaised)
-                )
-                .textContentType(.URL)
-                .autocorrectionDisabled()
+            .font(TVTheme.bodyFont())
+            .foregroundStyle(DesignTokens.Color.textPrimary)
+            .padding(DesignTokens.Spacing.md)
+            .frame(maxWidth: 720)
+            .background(
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                    .fill(DesignTokens.Color.backgroundRaised)
+            )
+            .textContentType(.URL)
+            .autocorrectionDisabled()
             Button("Save server") {
                 serverError = environment.saveServerAddress()
                     ? nil

@@ -47,10 +47,10 @@ enum TVServerAddress {
 final class TVAppEnvironment {
     static let serverURLKey = "com.playarr.playarr.tvos.serverURL"
     static let deviceIDKey = "com.playarr.playarr.tvos.deviceID"
-    /// Default points at the shared example Playarr instance so simulator
-    /// builds have a reachable catalogue without manual settings entry.
-    /// Operators can still override via Settings → Server address.
-    static let defaultServerURL = URL(string: "https://playarr.example.com")!
+    /// Default Playarr Server API. The SPA host (playarr.example.com) is not
+    /// the API — use the LAN/Tailscale API port operators expose for clients.
+    /// Overridable via Settings → Server address or `-PlayarrServerURL`.
+    static let defaultServerURL = URL(string: "http://192.0.2.83:8484")!
 
     private(set) var apiClient: PlayarrAPIClient
     private(set) var pairingState: TVPairingState = .signedOut
@@ -75,8 +75,14 @@ final class TVAppEnvironment {
         self.defaults = defaults
         self.serverGroupStore = UserDefaultsKnownServerGroupStore(defaults: defaults)
 
+        let args = ProcessInfo.processInfo.arguments
+        let launchURL: URL? = {
+            guard let idx = args.firstIndex(of: "-PlayarrServerURL"),
+                  args.indices.contains(idx + 1) else { return nil }
+            return TVServerAddress.normalisedURL(from: args[idx + 1])
+        }()
         let storedURL = defaults.string(forKey: Self.serverURLKey).flatMap(URL.init(string:))
-        let resolvedURL = storedURL ?? Self.defaultServerURL
+        let resolvedURL = launchURL ?? storedURL ?? Self.defaultServerURL
         serverURL = resolvedURL
         serverAddress = resolvedURL.absoluteString
 
@@ -89,7 +95,23 @@ final class TVAppEnvironment {
         }
 
         let configuration = Self.apiConfiguration(serverURL: resolvedURL, deviceID: deviceID)
-        apiClient = APIClient(configuration: configuration)
+        // Optional parity bootstrap: `-PlayarrAccessToken <jwt>` forces signed-in
+        // so visual captures hit the production shell with a real catalogue.
+        let launchToken: String? = {
+            guard let idx = args.firstIndex(of: "-PlayarrAccessToken"),
+                  args.indices.contains(idx + 1) else { return nil }
+            return args[idx + 1]
+        }()
+        if let launchToken {
+            accessToken = Sensitive(launchToken)
+            pairingState = .signedIn
+            apiClient = APIClient(
+                configuration: configuration,
+                tokenProvider: StaticTokenProvider(accessToken: launchToken)
+            )
+        } else {
+            apiClient = APIClient(configuration: configuration)
+        }
         deviceAuthorizer = DeviceFlowClient(
             configuration: DeviceFlowConfiguration(
                 baseURL: resolvedURL,
@@ -250,4 +272,21 @@ final class TVAppEnvironment {
             return underlying.localizedDescription
         }
     }
+}
+
+/// Minimal token provider for parity-suite bootstrap (static access token).
+private struct StaticTokenProvider: AccessTokenProviding {
+    let accessToken: String
+
+    func currentSession() async -> StoredAuthSession? {
+        StoredAuthSession(
+            accessToken: accessToken,
+            refreshToken: accessToken,
+            tokenType: "Bearer",
+            expiresAt: Date().addingTimeInterval(86_400)
+        )
+    }
+
+    func storeSession(_ session: StoredAuthSession) async throws {}
+    func clearSession() async throws {}
 }

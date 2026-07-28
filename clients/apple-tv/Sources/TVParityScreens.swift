@@ -1,3 +1,4 @@
+import PlayarrKit
 import SwiftUI
 import UIKit
 
@@ -53,6 +54,37 @@ enum TVParityFixtures {
     static let verificationURI = "https://playarr.example.com/link"
     static let overview =
         "A fixed synopsis used by the Apple TV visual parity suite so native and web captures share identical copy."
+
+    /// Deterministic catalogue for production-SwiftUI parity captures (no network).
+    static func sampleWorks() -> [Work] {
+        let titles = [
+            ("Test Series Y", WorkKind.series, "A serial killer stalks the Scottish wilderness."),
+            ("Test Series R", WorkKind.series, "Crime drama set in Aberdeen."),
+            ("10,000 Sample", WorkKind.movie, "A prehistoric adventure."),
+            ("2001: A Sample Voyage", WorkKind.movie, "A voyage to Jupiter."),
+            ("Sample Film 2012", WorkKind.movie, "The end of the world."),
+            ("28 Sample Years", WorkKind.movie, "The rage virus returns."),
+            ("28 Sample Years: The Sequel", WorkKind.movie, "The next chapter."),
+            ("30 Sample Nights", WorkKind.movie, "Vampires in the arctic dark."),
+            ("30 Sample Nights: The Sequel", WorkKind.movie, "The sequel."),
+            ("47 Sample Metres", WorkKind.movie, "Sharks and a shark cage."),
+        ]
+        return titles.enumerated().map { index, item in
+            Work(
+                id: UUID(uuidString: String(format: "00000000-0000-4000-8000-%012d", index + 1))!,
+                kind: item.1,
+                title: item.0,
+                sortTitle: item.0.lowercased(),
+                overview: item.2,
+                images: [],
+                genres: ["Drama"],
+                tags: [],
+                addedAt: Date(timeIntervalSince1970: 1_700_000_000 + Double(index)),
+                monitored: true,
+                availability: .available
+            )
+        }
+    }
 }
 
 /// Root used only when `-PlayarrParityScreen` is present.
