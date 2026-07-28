@@ -1,9 +1,9 @@
 # Playarr marketing site
 
-The public marketing and documentation site for **Playarr** (the server) and
-**Playarr** (the clients). It is deliberately separate from
+The public marketing and documentation site for **Playarr**: the self-hosted
+server and its native clients. It is deliberately separate from
 [`playarr.app`](https://playarr.app), which is the hosted Playarr *web client*
-and its clients hub — this site is the product story and the installation
+and its clients hub. This site is the product story and the installation
 documentation, and links out to that app rather than replacing it.
 
 Astro with MDX, static output, no runtime.
@@ -22,7 +22,7 @@ site/
 │   │                      between pages so they cannot drift apart
 │   ├── styles/           Design tokens copied from the Playarr web client
 │   └── consts.ts         Site strings, navigation, outbound links
-├── scripts/check-copy.mjs  Copy compliance linter — see below
+├── scripts/check-copy.mjs  Copy compliance linter, see below
 ├── Dockerfile            Runs the dev server for the local cluster
 └── k8s/                  Kubernetes manifests for a development deployment
 ```
@@ -47,12 +47,12 @@ That serves the site at `playarr-marketing.localhost`,
 production hostname is not settled yet; set `SITE_URL` at build time to control
 canonical URLs, Open Graph tags and the sitemap.
 
-## The copy linter — read this before writing any page
+## The copy linter (read this before writing any page)
 
 `scripts/check-copy.mjs` is not a style checker. It exists because
 [`docs/artifacts/playarr-legal-release.html`](../docs/artifacts/playarr-legal-release.html)
 concludes that for a project of this shape **the exposure surface is the
-marketing, not the code** — TickBox, Grokster and Filmspeler were each sunk
+marketing, not the code**: TickBox, Grokster and Filmspeler were each sunk
 primarily by their own promotional conduct rather than by what their software
 did.
 

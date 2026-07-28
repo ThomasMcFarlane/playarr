@@ -1,7 +1,7 @@
 /**
  * Entirely fictional catalogue used only to illustrate the UI on this
  * marketing site. None of these titles, artists or people are real, and none
- * of this is a screenshot of any actual Playarr installation — see
+ * of this is a screenshot of any actual Playarr installation, see
  * DemoScreen.astro. Poster art is a gradient, not an image, so there is
  * nothing here that could be mistaken for real cover art either.
  */

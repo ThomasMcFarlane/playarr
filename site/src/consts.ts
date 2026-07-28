@@ -19,7 +19,7 @@ export const SITE = {
 
 /** Outbound destinations. The hosted Playarr Web App is the primary call to action. */
 export const LINKS = {
-  /** The hosted Playarr Web App — sign in against your own Playarr server. */
+  /** The hosted Playarr Web App, sign in against your own Playarr server. */
   playarrApp: 'https://playarr.app',
   /** Public hub listing every Playarr client and how to install it. */
   playarrClients: 'https://playarr.app/clients',

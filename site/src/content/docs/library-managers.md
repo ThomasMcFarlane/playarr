@@ -6,12 +6,12 @@ order: 11
 ---
 
 You already run the *arr suite to keep your library tidy on disk. Playarr does not replace any of
-it — it reads the organised result. Each app you register becomes a **source instance**: a name, a
+it, it reads the organised result. Each app you register becomes a **source instance**: a name, a
 base URL and that app's own API key. Playarr then re-reads it on a schedule and turns what it
 finds into the catalogue your Playarr clients browse.
 
 > **What Playarr does not do.** Playarr supplies no media and obtains none. Every request it
-> makes to a connected *arr app is an HTTP `GET` — there is no `POST`, `PUT` or `DELETE` helper
+> makes to a connected *arr app is an HTTP `GET`, there is no `POST`, `PUT` or `DELETE` helper
 > anywhere in `playarr-arr-client`. It reads the library those apps have already organised; it
 > never changes it, and it never reaches past it.
 
@@ -19,13 +19,13 @@ finds into the catalogue your Playarr clients browse.
 
 - A running Playarr server, reachable in your browser.
 - **Playarr Admin actually being the thing served at `/`.** The Playarr binary co-hosts one
-  built web UI on the same origin and port as the API — whatever is at `PLAYARR_WEB_ASSETS_DIR`,
+  built web UI on the same origin and port as the API, whatever is at `PLAYARR_WEB_ASSETS_DIR`,
   or a `web/` directory next to the binary. The published container image puts the Playarr **Web**
   client there, not Playarr Admin, so on a Docker deployment you must build Admin and point
   `PLAYARR_WEB_ASSETS_DIR` at it yourself. [First run](/docs/first-run) covers that step; if you
   would rather not, every instruction below is also available over the API.
-- An admin account. On first boot Playarr provisions one — username from
-  `PLAYARR_BOOTSTRAP_ADMIN_USERNAME`, default `admin` — and, when
+- An admin account. On first boot Playarr provisions one, username from
+  `PLAYARR_BOOTSTRAP_ADMIN_USERNAME`, default `admin`, and, when
   `PLAYARR_BOOTSTRAP_ADMIN_PASSWORD` is unset, generates a random password and logs it exactly
   once at `WARN` level.
 - Each *arr app you want to connect, reachable from the Playarr server over HTTP, plus its API
@@ -42,7 +42,7 @@ Every *arr app exposes its key at **Settings → General → API Key** in its ow
 | Bazarr | `bazarr` | `/api` | 6767 |
 | Prowlarr | `prowlarr` | `v1` | 9696 |
 
-> **Note on ports.** Those are each application's own defaults, not Playarr settings — Playarr
+> **Note on ports.** Those are each application's own defaults, not Playarr settings, Playarr
 > has no built-in port list and takes whatever base URL you give it. The same six ports are what
 > `infra/docker/docker-compose.dev.yml` in the repository maps for its local test stack, so they are
 > a reasonable starting guess; confirm each against your own installation.
@@ -57,7 +57,7 @@ only `GET` requests. The shared HTTP helpers are `get_json` and `get_status`; no
 **Polling is the truth.** A `ReconciliationPoller` runs a full listing pass per instance and diffs
 it against Playarr's own catalogue. The interval is **300 seconds (five minutes)**, and the first
 pass fires immediately at start-up so your catalogue populates without waiting. There is no way to
-change the interval — the 300-second value is compiled in, not a config key. A webhook body is by
+change the interval, the 300-second value is compiled in, not a config key. A webhook body is by
 design never trusted as data, only as a nudge to re-read sooner, and that nudge is **not yet wired
 up**; see [Webhooks](#webhooks-endpoint-built-faster-updates-not-built-yet) below.
 
@@ -68,7 +68,7 @@ with a `502`, rather than silently succeeding and going wrong later.
 ## Add a source instance in Playarr Admin
 
 1. Open Playarr Admin at `http://<YOUR-SERVER-URL>/` and sign in as an admin. (If you land in
-   Playarr Web instead, the server is co-hosting the wrong bundle — see **Before you start**.)
+   Playarr Web instead, the server is co-hosting the wrong bundle, see **Before you start**.)
 2. **Source instances** is the root page. You will see a card grid with a **+** tile.
 3. Click **+** to open the **Add source instance** modal.
 4. Fill in four fields:
@@ -78,7 +78,7 @@ with a `502`, rather than silently succeeding and going wrong later.
 | **Kind** | `radarr` | Chosen from a dropdown. |
 | **Name** | `My Radarr` | Your own label; shown on the card. |
 | **Base URL** | `http://192.168.1.10:7878` | Scheme, host and port. No trailing API path. |
-| **API key** | *(the app's key)* | Write-only — never echoed back, not even redacted. |
+| **API key** | *(the app's key)* | Write-only, never echoed back, not even redacted. |
 
 5. Click **Add & test connection**. The button reads *Testing connection…* while the health check
    runs.
@@ -86,7 +86,7 @@ with a `502`, rather than silently succeeding and going wrong later.
    (**Not synced** / **Syncing** / **Synced** / **Sync failed**) and a **Sync now** button. The page
    re-polls sync status every 5000 ms.
 7. Leave it for a moment. A worker-side watch loop ticks every 10 seconds and starts a
-   reconciliation poller for any instance registered since its last tick — no restart required —
+   reconciliation poller for any instance registered since its last tick, no restart required , 
    and that poller's first pass runs immediately. The pill should move to **Syncing** and then
    **Synced** on its own.
 
@@ -177,7 +177,7 @@ dates and runtimes for episodes; and, per imported episode file, the path, size,
 runtime). Each series becomes a `Series` work keyed on TVDB, with one media-file row per playable
 episode file.
 
-It reads nothing else from Sonarr — the request shapes are a deliberately hand-picked subset.
+It reads nothing else from Sonarr, the request shapes are a deliberately hand-picked subset.
 
 ### Radarr
 
@@ -186,7 +186,7 @@ on the movie itself, so there is no separate file listing.
 
 Fields taken: title, sort title, TMDB id, monitored, `hasFile`, path, runtime, overview, genres,
 images, `digitalRelease` and `physicalRelease`, plus the embedded `movieFile` (path, size, quality,
-`mediaInfo`). Availability is derived rather than guessed — a file present means **Available**,
+`mediaInfo`). Availability is derived rather than guessed, a file present means **Available**,
 monitored without a file means **Pending**, anything else is **Unknown**. Release date prefers
 `digitalRelease` and falls back to `physicalRelease`.
 
@@ -230,7 +230,7 @@ Bazarr can be registered as a source instance, is health-checked against `GET /a
 is persisted, and appears as a card in the Admin UI like any other. A client with tests exists in
 the codebase.
 
-> **Not yet wired into sync — not built yet.** Bazarr's listing calls are never invoked by
+> **Not yet wired into sync, not built yet.** Bazarr's listing calls are never invoked by
 > `playarr-arr-sync`; only its constructor and health check are. Subtitle-completeness state has
 > no repository to be written into, and there is an explicit `TODO` in the code saying so. A
 > reconciliation pass for a Bazarr instance logs that the kind has no catalogue surface and returns.
@@ -253,7 +253,7 @@ surface and returns immediately. Nothing degrades if you never register it.
 | App | Playarr reads | Becomes | If absent |
 | --- | --- | --- | --- |
 | **Sonarr** | Series, episodes, episode files | `Series` works keyed on TVDB, one media file per episode | No series in the catalogue. Nothing else degrades. |
-| **Radarr** | Films, embedded movie file, credits | `Movie` works keyed on TMDB, plus every person record | No films — **and no cast or crew anywhere**, since no other app provides them. |
+| **Radarr** | Films, embedded movie file, credits | `Movie` works keyed on TMDB, plus every person record | No films, **and no cast or crew anywhere**, since no other app provides them. |
 | **Lidarr** | Artists, albums, tracks, track files | `Artist` works keyed on MusicBrainz, albums classified by type, one media file per track | No music in the catalogue. |
 | **Readarr** | Authors, books, book files | `Author` works keyed on Goodreads (identity only) | No books. Best-effort quality even when present. |
 | **Bazarr** | Health check only *(sync integration not built yet)* | Nothing | Nothing degrades. Embedded subtitles are unaffected. |
@@ -264,12 +264,12 @@ surface and returns immediately. Nothing degrades if you never register it.
 Every 300 seconds, per instance:
 
 1. List everything from the app and normalise it into a source-agnostic shape.
-2. Diff by external metadata id — TVDB, TMDB, MusicBrainz, Goodreads — not by Playarr's own UUID,
+2. Diff by external metadata id, TVDB, TMDB, MusicBrainz, Goodreads, not by Playarr's own UUID,
    into insert / update / delete operations.
 3. Apply them, then run file-level sync and artwork prewarm for every touched work, followed by
    embedding sync. Embedding sync is best-effort: the local embedding model is downloaded on first
    use, and if it fails to load the server logs a warning and skips this step for the rest of the
-   run — nothing else about reconciliation is affected.
+   run, nothing else about reconciliation is affected.
 4. Backfill any work already marked **Available** that has zero file rows, at up to 8 concurrent
    requests against the app, reporting progress as `backfilling media files: {completed}/{total}`.
 
@@ -298,13 +298,13 @@ POST http://<YOUR-SERVER-URL>/webhooks/<SOURCE-INSTANCE-ID>
 ```
 
 You would add that as a generic webhook connection in the *arr app's own **Settings → Connect**.
-Playarr extracts only `eventType` and, where it can, one entity id — `/series/id` for Sonarr,
+Playarr extracts only `eventType` and, where it can, one entity id, `/series/id` for Sonarr,
 `/movie/id` for Radarr, `/artist/id` for Lidarr, `/author/id` for Readarr. Bazarr and Prowlarr
 signals carry no usable entity id. The extracted signal is turned into a re-fetch request and
 offered to the poller; because nothing is listening for it yet, it is dropped and logged at `DEBUG`.
 
 Responses today: `202` when the payload parsed, `400` if the body has no `eventType`, `404` for an
-unknown instance id. A `202` means "parsed and enqueued", never "synced" — even once the fast path
+unknown instance id. A `202` means "parsed and enqueued", never "synced", even once the fast path
 lands, the design deliberately drops signals rather than blocking the HTTP response when the
 poller's inbox is full, on the basis that the next scheduled pass catches whatever they would have
 covered.
@@ -338,14 +338,14 @@ curl -sS -X POST "http://<YOUR-SERVER-URL>/api/v1/admin/source-instances/<ID>/sy
 | --- | --- | --- |
 | `502` when adding an instance | The health check failed: wrong base URL, wrong key, or the app is unreachable from the Playarr host. | Check the URL from the Playarr machine, not your laptop. Container deployments need a resolvable hostname or the host IP, not `localhost`. |
 | `401` / `403` on any admin call | No token, or a non-admin token. | Log in as an admin and resend the bearer token. |
-| `503` from "Sync now" | No reconciliation poller is running for that instance yet. | Wait about ten seconds and retry — a worker-side watch loop ticks every 10 s and spawns a poller for any instance registered since the last tick. No restart is needed. |
+| `503` from "Sync now" | No reconciliation poller is running for that instance yet. | Wait about ten seconds and retry, a worker-side watch loop ticks every 10 s and spawns a poller for any instance registered since the last tick. No restart is needed. |
 | Titles appear but nothing plays | Works imported before their file rows. | The next pass backfills them automatically; watch for `backfilling media files:` in the logs. |
 | Instance card stuck on **Not synced** | The poller has not completed a pass since the last restart. | Give it up to five minutes, then check `sync-status` for an `error`. |
 
 ## Known limitations
 
 - **Two instances of the same kind will fight.** The reconciliation diff compares against every
-  local work of the matching kind, not only the ones a given instance produced — so two Radarr
+  local work of the matching kind, not only the ones a given instance produced, so two Radarr
   instances covering disjoint libraries would each delete the other's works. This is a documented
   gap with a `TODO` in `playarr-arr-sync`. Do not run same-kind instances over separate libraries
   yet.
@@ -357,14 +357,14 @@ curl -sS -X POST "http://<YOUR-SERVER-URL>/api/v1/admin/source-instances/<ID>/sy
 - **Bazarr's catalogue integration is not built yet**, and Prowlarr has none by design.
 - **Readarr is best-effort** with unverified request shapes.
 - Playarr has no metadata-provider client of any kind. There is no TMDB, TVDB, MusicBrainz or
-  Goodreads HTTP client in the backend — Playarr holds only the identifiers your *arr apps pass
+  Goodreads HTTP client in the backend, Playarr holds only the identifiers your *arr apps pass
   through, and downloads and caches the artwork at whatever image URLs they supply. Everything you
   see in Playarr traces back to the apps you already run.
 
 ## Where to go next
 
-- **[Transcoding](/docs/transcoding)** — what the server does when a file will not play natively on
+- **[Transcoding](/docs/transcoding)**, what the server does when a file will not play natively on
   a given device.
-- **[Install the apps](/docs/clients)** — getting Playarr onto a browser, a phone and a TV now that
+- **[Install the apps](/docs/clients)**, getting Playarr onto a browser, a phone and a TV now that
   there is a catalogue to browse.
-- **[Remote access and TLS](/docs/remote-access)** — reaching the server from outside your network.
+- **[Remote access and TLS](/docs/remote-access)**, reaching the server from outside your network.

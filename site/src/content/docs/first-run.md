@@ -14,7 +14,7 @@ first reconciliation pass completed.
 ## Reach the server
 
 Playarr listens on `0.0.0.0:8484` by default, and serves a Prometheus scrape endpoint on
-`0.0.0.0:9090`. Neither is a bare port setting — both take a full socket address.
+`0.0.0.0:9090`. Neither is a bare port setting, both take a full socket address.
 
 | Port | Purpose | Environment variable |
 | --- | --- | --- |
@@ -30,8 +30,8 @@ curl -sS -i http://<YOUR-SERVER-URL>:8484/readyz
 curl -sS http://<YOUR-SERVER-URL>:8484/api/system/version
 ```
 
-`GET /healthz` is liveness. `GET /readyz` returns `200` only once startup has finished — the pool is
-connected and migrations have been applied — and `503` until then. `GET /api/system/version` needs no
+`GET /healthz` is liveness. `GET /readyz` returns `200` only once startup has finished, the pool is
+connected and migrations have been applied, and `503` until then. `GET /api/system/version` needs no
 token and returns the instance name, server version, API version, build SHA, and the per-platform
 client compatibility table.
 
@@ -43,7 +43,7 @@ client compatibility table.
 > before that host is reachable from anywhere you do not trust.
 
 If you deployed with the reference Compose production stack, Caddy fronts everything on ports 80 and
-443 instead, and the Playarr containers publish nothing directly — reach the API through Caddy's
+443 instead, and the Playarr containers publish nothing directly, reach the API through Caddy's
 hostname rather than `:8484`.
 
 ## Find the first administrator password
@@ -53,8 +53,8 @@ does, nothing happens. If the database is empty, it provisions exactly one admin
 
 - The username comes from `PLAYARR_BOOTSTRAP_ADMIN_USERNAME`, defaulting to `admin`.
 - The password comes from `PLAYARR_BOOTSTRAP_ADMIN_PASSWORD`. **If you did not set it, Playarr
-  generates a random 64-character password** — there is no fixed default password shipped in the
-  code — and logs it exactly once, at `WARN`.
+  generates a random 64-character password**, there is no fixed default password shipped in the
+  code, and logs it exactly once, at `WARN`.
 - Either way, only the Argon2id hash is stored. The cleartext is never logged a second time.
 
 Retrieve it from the logs:
@@ -75,7 +75,7 @@ shown again`. Save it in a password manager, then change it.
 
 > **This account has no playback access, on purpose.** The bootstrap administrator is created with
 > `can_stream: false`. It exists to run Playarr's operator surface, not as a household viewer
-> account — `is_admin` deliberately does not imply Playarr access. Create a separate account for
+> account, `is_admin` deliberately does not imply Playarr access. Create a separate account for
 > yourself as a viewer (see below).
 
 To avoid the log-scraping step entirely, set the password in your environment file before the very
@@ -111,7 +111,7 @@ curl -sS -X POST http://<YOUR-SERVER-URL>:8484/api/v1/auth/login \
 ```
 
 `device_id`, `device_name`, `client_platform` and `client_version` are all mandatory alongside the
-credentials — `device_id` must be a UUID, and a request that omits `client_version` is rejected
+credentials, `device_id` must be a UUID, and a request that omits `client_version` is rejected
 before the handler ever sees it. `client_platform` is a closed set: `android-mobile`, `android-tv`,
 `ios`, `web`, `tv-webos`, `tv-tizen`, `tv-vidaa`, `xbox` or `playarr-admin`. Resend the same
 `device_id` on every later login and refresh from this machine, so device limits count one device
@@ -126,7 +126,7 @@ export PLAYARR_TOKEN=<ACCESS-TOKEN>
 
 `client_platform` matters here. Declaring `playarr-admin` selects the operator login check, which
 does not require `Policy::can_stream`; any Playarr platform value (`web`, `android-tv`, `ios`, …)
-requires it. Declaring a platform grants nothing by itself — every other endpoint still enforces the
+requires it. Declaring a platform grants nothing by itself, every other endpoint still enforces the
 persisted policy.
 
 ### The operator web UI
@@ -162,11 +162,11 @@ it in isolation is not enough.
 | Mode | Value | What a login requires | Status |
 | --- | --- | --- | --- |
 | Full account | `full-account` (**the default**) | Username and password | Built |
-| Trusted network | `trusted-network` | Nothing — requests from allowlisted source IPs auto-authenticate as the default administrator | Built, opt-in |
-| Managed profiles (PIN-only household logins) | — | — | Implemented in the auth crate but **not selectable**: no `PLAYARR_AUTH_MODE` value maps to it today |
+| Trusted network | `trusted-network` | Nothing, requests from allowlisted source IPs auto-authenticate as the default administrator | Built, opt-in |
+| Managed profiles (PIN-only household logins) |, |, | Implemented in the auth crate but **not selectable**: no `PLAYARR_AUTH_MODE` value maps to it today |
 
-Under `trusted-network`, the allowlist defaults to RFC 1918 plus loopback — `10.0.0.0/8`,
-`172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.1/32`, `::1/128` — and deliberately not `0.0.0.0/0`, so
+Under `trusted-network`, the allowlist defaults to RFC 1918 plus loopback, `10.0.0.0/8`,
+`172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.1/32`, `::1/128`, and deliberately not `0.0.0.0/0`, so
 a stray port forward cannot hand administrator access to the internet. `PLAYARR_TRUSTED_NETWORK_CIDR`
 **replaces** that list rather than extending it.
 
@@ -182,9 +182,9 @@ What is built alongside it:
 - **Administrator-issued invitations** are real: `POST /api/v1/admin/user-invites` mints a one-use,
   24-hour bearer invitation, and the invitee redeems it at `POST /api/v1/auth/signup` to create one
   ordinary account. Consumption is atomic, so one invitation can never produce two accounts. There is
-  no open, self-service registration — an invitation is always required.
+  no open, self-service registration, an invitation is always required.
 - **TV and console sign-in** uses a real RFC 8628 device authorisation grant. In-flight pairings are
-  held in process only, so a restart (or a second replica) loses an incomplete pairing — start it
+  held in process only, so a restart (or a second replica) loses an incomplete pairing, start it
   again.
 
 ### Create an account you can actually watch with
@@ -221,7 +221,7 @@ own. Its catalogue is built by reconciling against the library-management apps y
 those apps' own read-only REST endpoints. A deployment with nothing connected has an empty catalogue.
 
 So "adding a library" means registering a **source instance**. Each registered instance is one
-library for permission purposes — the UUIDs in a policy's `library_allow` are source-instance ids.
+library for permission purposes, the UUIDs in a policy's `library_allow` are source-instance ids.
 
 ```bash
 curl -sS -X POST http://<YOUR-SERVER-URL>:8484/api/v1/admin/source-instances \
@@ -237,7 +237,7 @@ curl -sS -X POST http://<YOUR-SERVER-URL>:8484/api/v1/admin/source-instances \
   }'
 ```
 
-A `200` response carries the saved instance, including the server-generated `id` — that UUID is what
+A `200` response carries the saved instance, including the server-generated `id`, that UUID is what
 every later command on this page means by `<SOURCE-INSTANCE-ID>` or `<INSTANCE-ID>`. If you lose it,
 list them all back:
 
@@ -253,11 +253,11 @@ landing page: pick a kind, give it a name, paste the base URL and API key, and p
 | `kind` | What it contributes | Status |
 | --- | --- | --- |
 | `sonarr` | Series, seasons, episodes and episode files | Built |
-| `radarr` | Films and their files — and, uniquely, cast and crew | Built |
+| `radarr` | Films and their files, and, uniquely, cast and crew | Built |
 | `lidarr` | Artists, albums and tracks | Built |
-| `readarr` | Authors and books, identity and files only | Built, best-effort — the upstream API is unmaintained and these types are unverified against a spec |
-| `bazarr` | Nothing — the connection registers and health-checks, but no catalogue data is read from it yet | Connection only |
-| `prowlarr` | Nothing — the connection registers and health-checks, but no catalogue data is read from it yet | Connection only |
+| `readarr` | Authors and books, identity and files only | Built, best-effort, the upstream API is unmaintained and these types are unverified against a spec |
+| `bazarr` | Nothing, the connection registers and health-checks, but no catalogue data is read from it yet | Connection only |
+| `prowlarr` | Nothing, the connection registers and health-checks, but no catalogue data is read from it yet | Connection only |
 
 Things worth knowing before you register anything:
 
@@ -275,8 +275,8 @@ Things worth knowing before you register anything:
 
 ### Media paths
 
-Playarr stores the file paths exactly as the source app reports them. In the ordinary case —
-Playarr running on the same host as the media — that is already correct and there is nothing to
+Playarr stores the file paths exactly as the source app reports them. In the ordinary case , 
+Playarr running on the same host as the media, that is already correct and there is nothing to
 configure.
 
 If Playarr runs somewhere else and reaches the same files through a network mount at a different
@@ -287,7 +287,7 @@ PLAYARR_MEDIA_REMOTE_ROOT=/data/media    # the prefix as the source app reports 
 PLAYARR_MEDIA_LOCAL_ROOT=/mnt/nas/media  # where that same root is mounted on this host
 ```
 
-Both must be set — with only one, the substitution is skipped entirely and the original path is used
+Both must be set, with only one, the substitution is skipped entirely and the original path is used
 unchanged. Only a single prefix pair is supported. A path that does not begin with the remote root is
 returned untouched.
 
@@ -311,7 +311,7 @@ curl -sS -H "Authorization: Bearer $PLAYARR_TOKEN" \
 ```
 
 Each entry reports `status` as `running`, `succeeded` or `failed`, with `error` set on failure and a
-free-text `detail` while running — a large first pass reports live progress such as
+free-text `detail` while running, a large first pass reports live progress such as
 `backfilling media files: 412/9310`. A `null` status means no poller has reported yet, which is normal
 for an instance registered in the last ten seconds or so. Nothing here survives a restart; it is
 runtime state, not history.
@@ -329,7 +329,7 @@ yet.
 What a first pass actually does, in order:
 
 1. Lists everything from the source app and normalises it into Playarr's own model.
-2. Diffs by external metadata id — not by Playarr's internal UUID — into inserts, updates and
+2. Diffs by external metadata id, not by Playarr's internal UUID, into inserts, updates and
    deletes.
 3. Syncs file-level rows for every touched work.
 4. Backfills media files for anything already marked available but holding zero file rows, at up to
@@ -338,13 +338,13 @@ What a first pass actually does, in order:
 5. Warms the artwork cache and computes similarity embeddings for every touched work.
 
 Expect the first pass on a large library to take minutes rather than seconds, and expect the API to
-stay responsive throughout — reconciliation runs in the worker role, and on a multi-node deployment a
+stay responsive throughout, reconciliation runs in the worker role, and on a multi-node deployment a
 per-instance lock ensures only one node reconciles a given instance at a time.
 
 > **One first-run network dependency.** The "more like this" feature uses a small 384-dimension,
 > CPU-only sentence-embedding model that runs entirely on your server. Its weights are fetched once
 > from Hugging Face on first use and cached locally, after which it is offline. Every caller treats a
-> failure here as non-fatal, so an air-gapped server simply has no similarity data — nothing else
+> failure here as non-fatal, so an air-gapped server simply has no similarity data, nothing else
 > breaks.
 
 Two library shelves, **Newly Added** and **Newly Released**, are seeded on first boot. They can be
@@ -378,7 +378,7 @@ Artwork specifically:
   the process temp directory on Postgres, so set `PLAYARR_ARTWORK_CACHE_DIR` explicitly for anything
   other than a single-node SQLite install.
 
-Cast and crew come from Radarr only — it is the one app in this family that exposes credits. An empty
+Cast and crew come from Radarr only, it is the one app in this family that exposes credits. An empty
 credits list on a series, album or book is the normal case, not an error.
 
 This website uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by
@@ -386,8 +386,8 @@ TMDB.
 
 ## Next
 
-- **[Connect your library managers](/docs/library-managers)** — per-app detail on what Playarr
+- **[Connect your library managers](/docs/library-managers)**, per-app detail on what Playarr
   reads from Sonarr, Radarr, Lidarr and Readarr, optional webhooks, and connecting Tdarr for
   background transcoding.
-- **[Install the clients](/docs/clients)** — how to get Playarr onto a browser, a phone and a TV, and
+- **[Install the clients](/docs/clients)**, how to get Playarr onto a browser, a phone and a TV, and
   how device-code sign-in pairs a TV with this server.

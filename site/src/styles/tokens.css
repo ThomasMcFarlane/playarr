@@ -5,7 +5,7 @@
  * Web client (clients/tv-web/web/src/styles/global.css and its Play
  * button/section-eyebrow accent) so the marketing site, the app and the
  * published research artifacts read as one product. Do not drift these
- * values independently — change them in the client first, then mirror here.
+ * values independently, change them in the client first, then mirror here.
  *
  * Everything below the colour block is marketing-site-only: a type ramp, a
  * spacing scale and layout widths that the app has no need for.
@@ -36,7 +36,7 @@
   --focus-outline: #675961;
 
   /*
-   * Brand ramp — the player's own crimson Play button and section-eyebrow
+   * Brand ramp, the player's own crimson Play button and section-eyebrow
    * colour, carried onto the site as the one accent used for CTAs, links,
    * icons and section identity, so the two never read as two similar reds.
    */

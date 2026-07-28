@@ -21,10 +21,10 @@ subprocess of the Playarr process (or of a Tdarr node). No Playarr client app em
 | Runs where | The Playarr node handling the request | Your Tdarr worker nodes |
 | Priority | Immediate; blocks the viewer | Low; throttled while people are watching |
 | Output | Live HLS, written to a temp directory, TTL'd | A durable `Rendition`, reused by later playbacks |
-| Lifetime | Ephemeral — dies with the session | Persistent until you remove it |
+| Lifetime | Ephemeral, dies with the session | Persistent until you remove it |
 | Configured by | Environment variables + client capability parameters | `POST /api/v1/admin/tdarr`, persisted in the database |
 | Role required | `api` or `all` | `worker` or `all` |
-| Optional? | No — always available | Yes — Playarr works fine with no Tdarr at all |
+| Optional? | No, always available | Yes, Playarr works fine with no Tdarr at all |
 
 > Playarr is perfectly usable with no Tdarr instance. You simply pay for an on-demand transcode
 > every time a device cannot play a file directly, instead of reusing a rendition someone else's
@@ -37,23 +37,23 @@ subprocess of the Playarr process (or of a Tdarr node). No Playarr client app em
 `GET /api/v1/playback/{media_file_id}` runs three steps strictly in order and stops at the first
 one that resolves:
 
-1. **Direct play** — serve the source file byte-for-byte. Cheapest and by far the most common
+1. **Direct play**, serve the source file byte-for-byte. Cheapest and by far the most common
    outcome. Byte serving goes through `tower_http::services::ServeFile`, so `Range` requests, 206
    Partial Content and seeking all work.
-2. **Existing rendition** — reuse an already-`Ready` rendition for this `(media_file_id, profile)`
+2. **Existing rendition**, reuse an already-`Ready` rendition for this `(media_file_id, profile)`
    pair, regardless of whether Tdarr or an earlier on-demand session produced it.
-3. **On-demand transcode** — last resort. Spawn a supervised FFmpeg process producing HLS, just for
+3. **On-demand transcode**, last resort. Spawn a supervised FFmpeg process producing HLS, just for
    this playback.
 
 ### What actually triggers step 3
 
-Direct play is rejected — and a transcode starts — when any of these is true:
+Direct play is rejected, and a transcode starts, when any of these is true:
 
 - The **container** is not in the client's `containers` list.
 - The **video codec** is not in the client's `video_codecs` (or `audio_codecs`) list.
 - The file's **known** bitrate exceeds the client's **known** `max_bitrate_bps` cap. An unknown
   source bitrate, or an uncapped client, cannot fail this check.
-- The client passed `force_transcode=true` — an explicit quality choice in the player.
+- The client passed `force_transcode=true`, an explicit quality choice in the player.
 - The client passed `audio_stream_index` to select a non-default audio track, which always forces a
   fresh session so a track-specific request never reuses a default-audio rendition.
 - **This viewer has a saved quality preference for this file that is not `original`**, and the
@@ -84,19 +84,19 @@ curl -sS -X POST "https://<YOUR-SERVER-URL>/api/v1/auth/login" \
       }'
 ```
 
-> Audio-codec compatibility is only partly enforced. `MediaFile` carries a single `codec` field —
-> the video codec the source library manager reported — so `audio_codecs` is accepted and used to
+> Audio-codec compatibility is only partly enforced. `MediaFile` carries a single `codec` field , 
+> the video codec the source library manager reported, so `audio_codecs` is accepted and used to
 > widen the codec match, but there is no separate audio-codec gate.
 
 ### What the client receives
 
 When step 3 fires, the response points at an HLS manifest served by Playarr itself:
 
-- `GET /api/v1/media/sessions/{session_id}/{file_name}` — the live session's `playlist.m3u8` and its
+- `GET /api/v1/media/sessions/{session_id}/{file_name}`, the live session's `playlist.m3u8` and its
   `segment_00000.ts`, `segment_00001.ts`, … files.
-- `GET /api/v1/media/renditions/{rendition_id}/{file_name}` — the equivalent for a durable rendition
+- `GET /api/v1/media/renditions/{rendition_id}/{file_name}`, the equivalent for a durable rendition
   resolved at step 2.
-- `GET /api/v1/media/{media_file_id}/stream` — direct play, resolved at step 1.
+- `GET /api/v1/media/{media_file_id}/stream`, direct play, resolved at step 1.
 
 The generated FFmpeg command is fixed and worth knowing, because it explains several client-side
 behaviours:
@@ -106,10 +106,10 @@ behaviours:
 | `-c:v` | `libx264` | Software H.264. See [hardware acceleration](#hardware-acceleration) below. |
 | `-c:a` | `aac` | |
 | `-b:v` `-b:a` | From the profile | The kbps figures in the ladder table below. |
-| `-map` | `0:v:0` plus `0:a:0?` — or `0:<index>` | The second `-map` is what `audio_stream_index` selects; with no index the first audio stream is used, and the `?` makes a file with no audio track still encode. |
+| `-map` | `0:v:0` plus `0:a:0?`, or `0:<index>` | The second `-map` is what `audio_stream_index` selects; with no index the first audio stream is used, and the `?` makes a file with no audio track still encode. |
 | `-pix_fmt` | `yuv420p` | Browser MSE implementations accept 8-bit H.264 but reject High 10 output; without this, a 10-bit source produces segments Chrome and Safari fail to append. |
-| `-vf` | `scale=-2:min(<height>,ih)` | Never upscales — the profile height is a ceiling, not a target. |
-| `-sn` | — | Subtitles are not burned in; they are served separately as WebVTT. |
+| `-vf` | `scale=-2:min(<height>,ih)` | Never upscales, the profile height is a ceiling, not a target. |
+| `-sn` |, | Subtitles are not burned in; they are served separately as WebVTT. |
 | `-f hls` `-hls_time` | `4` | Fixed 4-second segments (`HLS_SEGMENT_SECONDS`). |
 | `-hls_playlist_type` | `event` | The player tails the playlist while it is still being written. |
 | `-hls_list_size` | `0` | Segments are never pruned from the playlist mid-session. |
@@ -140,11 +140,11 @@ Profile names are the values you pass as `profile=` on the negotiation call and 
 | `h264-480p-3mbps` | 480 | High | 3 000 | 128 |
 
 If no `profile` is supplied, `h264-720p-4mbps` is the default. An unrecognised profile name does not
-error — it resolves to a conservative H.264/AAC fallback at 720p, 4 000 kbps video and 128 kbps
+error, it resolves to a conservative H.264/AAC fallback at 720p, 4 000 kbps video and 128 kbps
 audio, so a bad name degrades to something playable rather than failing the whole playback attempt.
 
 > **The ladder is not admin-editable.** It is a fixed array in the server binary. Making it a
-> per-deployment, configurable bitrate ladder is an explicit TODO in the source — **planned, not
+> per-deployment, configurable bitrate ladder is an explicit TODO in the source, **planned, not
 > built yet.**
 
 ### Session lifecycle and configuration
@@ -155,12 +155,12 @@ as a durable database row.
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `PLAYARR_TRANSCODE_SESSION_IDLE_TTL_SECS` | `60` | Idle deadline for a live session. Every manifest and segment request slides it forward, so this is not a cap on playback length — it is how long a session survives after a viewer closes the tab or loses connection before the FFmpeg process and its capacity slot are freed. A non-positive or unparseable value logs a warning and falls back to 60. |
+| `PLAYARR_TRANSCODE_SESSION_IDLE_TTL_SECS` | `60` | Idle deadline for a live session. Every manifest and segment request slides it forward, so this is not a cap on playback length, it is how long a session survives after a viewer closes the tab or loses connection before the FFmpeg process and its capacity slot are freed. A non-positive or unparseable value logs a warning and falls back to 60. |
 
 Set it in the usual place for your deployment tier:
 
 ```bash
-# Tier 1, systemd — /etc/playarr/playarr.env
+# Tier 1, systemd, /etc/playarr/playarr.env
 PLAYARR_TRANSCODE_SESSION_IDLE_TTL_SECS=60
 ```
 
@@ -186,8 +186,8 @@ consumes. So a file that somebody watched once through a temporary FFmpeg sessio
 rendition produced in the background, after which every later playback of that file at that profile
 resolves at step 2 instead of paying for step 3 again.
 
-The send is fire-and-forget (`try_send`, never awaited), so a full or absent channel — no Tdarr
-registered, or a process that does not run the worker role — never affects playback.
+The send is fire-and-forget (`try_send`, never awaited), so a full or absent channel, no Tdarr
+registered, or a process that does not run the worker role, never affects playback.
 
 > **This bridge only works when one process runs both roles** (`PLAYARR_ROLE=all`). In a split
 > `api` / `worker` deployment the receiver lives in a different process, the channel receiver is
@@ -209,7 +209,7 @@ registering it you need:
    `/api/v2/scan-individual-file`, `/api/v2/scan-files`, `/api/v2/search-db`, `/api/v2/get-nodes`
    and `/api/v2/alter-worker-limit`, authenticating with the `x-api-key` header on every request.
 2. **An API key** for that server.
-3. **A Tdarr library**, with its **database id**. This is Tdarr's own concept — you create the
+3. **A Tdarr library**, with its **database id**. This is Tdarr's own concept, you create the
    library on the Tdarr side and copy its id into Playarr. Playarr assumes exactly one Tdarr
    library per deployment; the connection is deliberately a singleton, and routing different
    libraries to different Tdarr instances is not a feature that exists.
@@ -218,7 +218,7 @@ registering it you need:
    at the mount level, or with `PLAYARR_MEDIA_REMOTE_ROOT` / `PLAYARR_MEDIA_LOCAL_ROOT`.
 5. **A Tdarr flow or plugin stack that actually produces your target output.** Playarr tells Tdarr
    *which file* to process; what Tdarr does with it is entirely Tdarr's own configuration.
-6. **The name of the worker pool to throttle** — one of Tdarr's process identifiers, e.g.
+6. **The name of the worker pool to throttle**, one of Tdarr's process identifiers, e.g.
    `transcodecpu`, `transcodegpu`, `healthcheckcpu`, `healthcheckgpu`.
 
 ### Registering the connection
@@ -257,8 +257,8 @@ curl -sS -X DELETE -H "Authorization: Bearer <ADMIN-ACCESS-TOKEN>" \
 
 | Key | Required | Default | Meaning |
 | --- | --- | --- | --- |
-| `base_url` | **Yes** | — | Your Tdarr server's base URL. |
-| `api_key` | **Yes** | — | Write-only. Never echoed back in any response, not even redacted. |
+| `base_url` | **Yes** |, | Your Tdarr server's base URL. |
+| `api_key` | **Yes** |, | Write-only. Never echoed back in any response, not even redacted. |
 | `tdarr_db_id` | No | `playarr` | The Tdarr library database id dispatched work targets. |
 | `default_profile` | No | `h264-720p-4mbps` | The rendition profile checked before dispatching. If a `Ready` rendition already exists at this profile, there is nothing for Tdarr to do and the file is skipped. |
 | `worker_process` | No | `transcodecpu` | Which Tdarr worker pool gets throttled. |
@@ -271,7 +271,7 @@ Registration is not accepted blindly: Playarr calls Tdarr's `GET /api/v2/get-nod
 returns `502` if the URL or key is rejected or Tdarr cannot be reached. A wrong value fails
 immediately rather than surfacing later as silently missing renditions.
 
-Re-`POST`ing updates the single row in place — that is how you rotate the API key.
+Re-`POST`ing updates the single row in place, that is how you rotate the API key.
 
 ### How throttling works
 
@@ -300,7 +300,7 @@ deployment the dispatcher only sees the sessions on its own node.
   step 2 of playback negotiation.
 - **There is no Tdarr page in Playarr Admin.** The web admin has pages for source instances,
   users, library, views, playlists, tasks, activity, system settings, peer groups and an API
-  explorer — Tdarr is configured through the API, or through Admin's built-in API explorer.
+  explorer, Tdarr is configured through the API, or through Admin's built-in API explorer.
 
 > **Not built yet: checkpointed dispatch progress.** A dispatcher restart loses in-flight job
 > progress. Some architecture notes in the repository describe progress as checkpointed in the
@@ -328,8 +328,8 @@ What that means per tier:
 | --- | --- | --- |
 | systemd | The unit's private `/tmp` (`PrivateTmp=true`) | If `/tmp` is a tmpfs on your host, segments consume RAM. |
 | Docker Compose (prod) | `tmpfs: /tmp` on a read-only root filesystem | A RAM disk sized by Docker's default. |
-| Kubernetes — Helm chart | An `emptyDir` mounted at `/tmp` | Node-local, sized by the node's ephemeral storage. |
-| Kubernetes — Kustomize base | Nowhere in particular | `infra/kubernetes/base/deployment-api.yaml` declares no volumes and no `readOnlyRootFilesystem`, so segments land in the container's own writable layer. Add an `emptyDir` yourself if you use the overlays rather than the chart. |
+| Kubernetes, Helm chart | An `emptyDir` mounted at `/tmp` | Node-local, sized by the node's ephemeral storage. |
+| Kubernetes, Kustomize base | Nowhere in particular | `infra/kubernetes/base/deployment-api.yaml` declares no volumes and no `readOnlyRootFilesystem`, so segments land in the container's own writable layer. Add an `emptyDir` yourself if you use the overlays rather than the chart. |
 
 To move it onto disk on a systemd install, point `TMPDIR` at a directory the unit may write to. The
 unit's `ProtectSystem=strict` allows writes only to `ReadWritePaths`, which is
@@ -368,7 +368,7 @@ This is the honest position, and it is worth stating precisely rather than hedgi
 | QSV (Intel Quick Sync) | **Not built.** |
 | VideoToolbox (macOS) | **Not built.** |
 
-Every on-demand transcode resolves `-c:v libx264` — software H.264 — and there is no configuration
+Every on-demand transcode resolves `-c:v libx264`, software H.264, and there is no configuration
 key, feature flag or manifest option that changes it. Nor can you substitute a wrapper binary for
 the on-demand path: `PLAYARR_FFMPEG_BINARY` and `PLAYARR_FFPROBE_BINARY` exist, but they are
 read only by the thumbnail and subtitle-extraction helpers. The transcode orchestrator does have an
@@ -396,7 +396,7 @@ FFmpeg is a **server-side subprocess** in every case:
   outlive the Playarr process with nothing left to expire its session.
 - Tdarr nodes run their own FFmpeg, on their own machines, under their own configuration.
 - **No Playarr client app embeds FFmpeg.** Clients receive HLS or a direct byte stream over HTTP and
-  play it with the platform's own player — ExoPlayer/Media3 on Android, AVKit on Apple platforms,
+  play it with the platform's own player, ExoPlayer/Media3 on Android, AVKit on Apple platforms,
   the native `Video` node on Roku, `webapis.avplay` on Tizen, and Media Source Extensions in the
   browser.
 
@@ -435,7 +435,7 @@ docker compose \
 ```
 
 > `docker-compose.prod.yml` interpolates `${PLAYARR_DB_PASSWORD:?…}`, so it fails every
-> invocation — `logs` included — unless your local override or `.env` supplies it. Always pass the
+> invocation, `logs` included, unless your local override or `.env` supplies it. Always pass the
 > same file list and profile you brought the stack up with; see
 > [Docker Compose](/docs/install/docker-compose).
 
@@ -452,11 +452,11 @@ Common causes, in the order worth checking:
 | --- | --- |
 | Everything transcodes, nothing direct-plays | The client is sending an empty or wrong `containers` / `video_codecs` list, or a `max_bitrate_bps` cap lower than your files. |
 | Playback stalls a few seconds in | The transcode temp directory filled up, or its tmpfs is too small. |
-| Sessions vanish behind a load balancer | No session-to-node affinity — pin sticky sessions to one backend. |
+| Sessions vanish behind a load balancer | No session-to-node affinity, pin sticky sessions to one backend. |
 | Playback works but no renditions ever appear | No Tdarr connection registered, no node running the `worker` role, or a split `api`/`worker` deployment (the live-playback bridge needs `PLAYARR_ROLE=all`). |
 | Tdarr connection rejected with `502` | `base_url` or `api_key` wrong, or `GET /api/v2/get-nodes` unreachable from the Playarr node. |
 | Tdarr accepts work but never produces anything | The dispatched path does not exist from Tdarr's side, or the Tdarr flow does not act on it. |
-| 10-bit source plays as audio only in a browser | Should not happen — `-pix_fmt yuv420p` is forced. Confirm you are on a current build. |
+| 10-bit source plays as audio only in a browser | Should not happen, `-pix_fmt yuv420p` is forced. Confirm you are on a current build. |
 
 Live sessions are also visible to admins: `GET /api/v1/admin/playback/sessions/active` for who is
 watching right now, `GET /api/v1/admin/playback/sessions/history` for the filtered session history,
@@ -467,4 +467,4 @@ In Playarr Admin they are split across two pages:
 | Page | What it shows |
 | --- | --- |
 | **Activity** | The polled "who is watching now" list from `.../sessions/active`, plus the filtered history from `.../sessions/history`. |
-| **Tasks** | An **In-progress transcodes** panel — the same `active` list filtered to `play_method == "transcode"` — with a per-row stop button that calls `.../sessions/{session_id}/stop`. |
+| **Tasks** | An **In-progress transcodes** panel, the same `active` list filtered to `play_method == "transcode"`, with a per-row stop button that calls `.../sessions/{session_id}/stop`. |

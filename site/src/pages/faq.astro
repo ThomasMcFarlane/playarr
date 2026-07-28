@@ -25,7 +25,7 @@ const groups = [
       },
       {
         q: 'What does it cost?',
-        a: 'Nothing. It is free and open source under the MIT licence. There is no paid tier, no subscription, and no feature held back behind one — including hardware transcoding, which simply is not built yet for anybody.',
+        a: 'Nothing. It is free and open source under the MIT licence. There is no paid tier, no subscription, and no feature held back behind one, including hardware transcoding, which simply is not built yet for anybody.',
       },
       {
         q: 'Is it ready to rely on?',
@@ -42,7 +42,7 @@ const groups = [
       },
       {
         q: 'Will it run on a Raspberry Pi or a NAS?',
-        a: 'The single-binary tier is designed for exactly that. Be aware there is no hardware-accelerated transcoding yet, so anything that cannot direct play will be encoded in software — which low-power hardware feels sharply. Direct play is unaffected.',
+        a: 'The single-binary tier is designed for exactly that. Be aware there is no hardware-accelerated transcoding yet, so anything that cannot direct play will be encoded in software, which low-power hardware feels sharply. Direct play is unaffected.',
       },
       {
         q: 'SQLite or Postgres?',
@@ -54,7 +54,7 @@ const groups = [
       },
       {
         q: 'Does it phone home?',
-        a: 'The server is yours and is not designed to report to us. If you use the hosted Playarr web app to link a device for the first time, that handshake passes through the hosted service by definition — it holds a device secret, the server addresses you chose and a single-use code, for a few minutes.',
+        a: 'The server is yours and is not designed to report to us. If you use the hosted Playarr web app to link a device for the first time, that handshake passes through the hosted service by definition, it holds a device secret, the server addresses you chose and a single-use code, for a few minutes.',
       },
     ],
   },
@@ -63,7 +63,7 @@ const groups = [
     items: [
       {
         q: 'Do I have to use Sonarr, Radarr and friends?',
-        a: 'At least one of them, yes — Playarr Server builds its catalogue from what those applications have already reconciled, reusing the file paths and identifiers they resolved, rather than scanning folders itself.',
+        a: 'At least one of them, yes, Playarr Server builds its catalogue from what those applications have already reconciled, reusing the file paths and identifiers they resolved, rather than scanning folders itself.',
       },
       {
         q: 'Does it replace them?',
@@ -154,7 +154,7 @@ const groups = [
   /*
    * NOT CSS multi-column: combining `columns` with the transform-based
    * [data-reveal] animation on children reliably fails to paint content in
-   * Chromium (verified against this exact markup) — the column-fragmentation
+   * Chromium (verified against this exact markup), the column-fragmentation
    * algorithm and a translateY() on a fragmented child don't coexist. A
    * two-column grid (no fragmentation) gets the same layout safely.
    */

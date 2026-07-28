@@ -8,14 +8,14 @@ import { LINKS } from '../consts'
 /*
  * Every entry here is something present in the repository today. Anything not
  * yet built belongs in the "Not built yet" table at the foot of the page, with
- * an explicit label — never quietly folded in beside shipped capability.
+ * an explicit label, never quietly folded in beside shipped capability.
  */
 const areas = [
   {
     name: 'Library and catalogue',
     lede: 'One catalogue across every kind of media you keep.',
     items: [
-      ['Films, series, music and books', 'A single catalogue spanning video, audio and publishing, each with the structure that suits it — seasons and episodes, artists and albums, authors and books.'],
+      ['Films, series, music and books', 'A single catalogue spanning video, audio and publishing, each with the structure that suits it, seasons and episodes, artists and albums, authors and books.'],
       ['Matched against real identifiers', 'Titles are reconciled using the identifiers your library tools already resolved, rather than guessed from file names alone.'],
       ['Views and filters', 'Browse by kind, filter down, and sort within a library without waiting on a full re-scan.'],
       ['Search across your library', 'One search over everything catalogued, returning works, people and collections.'],
@@ -40,7 +40,7 @@ const areas = [
     lede: 'A model that suits a household, not just an owner.',
     items: [
       ['Profile picker with PINs and avatars', 'The “who is watching” screen, with a PIN where you want one.'],
-      ['Deny-by-default library grants', 'Nobody reaches a library until they are granted it — an empty grant list gives access to nothing.'],
+      ['Deny-by-default library grants', 'Nobody reaches a library until they are granted it, an empty grant list gives access to nothing.'],
       ['Streaming is a separate grant', 'Being an administrator does not silently grant the ability to watch. An admin account still needs the streaming grant, deliberately.'],
       ['Keeping files off-device is the default', 'Permission to retain a copy on a device is off unless it is granted.'],
       ['Invitations', 'Bring someone in with a one-use, time-limited invitation rather than by handing over credentials.'],
@@ -54,7 +54,7 @@ const areas = [
       ['Two authentication postures', 'Full accounts with hashed passwords by default, or zero-credential auto-login for a trusted LAN if the operator explicitly opts in.'],
       ['Private ranges by default', 'The trusted-network opt-in is limited to private and loopback address ranges, so a mistaken port forward does not hand out an admin session.'],
       ['Sign in on a television by code', 'Standards-based device-code pairing, so nobody types a password with a remote control.'],
-      ['Hosted first-contact linking', 'The hosted Playarr service can broker the first handshake between an app and your server. The short-lived record carries device and server details only — never a password or a browser token.'],
+      ['Hosted first-contact linking', 'The hosted Playarr service can broker the first handshake between an app and your server. The short-lived record carries device and server details only, never a password or a browser token.'],
       ['Tokens that rotate', 'Access tokens with refresh rotation rather than one long-lived credential.'],
     ],
   },
@@ -64,7 +64,7 @@ const areas = [
     items: [
       ['Single binary, role-gated', 'The same executable runs as the API, as a worker, or as a coordinator. Splitting roles is a configuration change.'],
       ['SQLite or Postgres', 'Start on SQLite on one machine; move to Postgres when it earns its keep.'],
-      ['Three deployment tiers', 'A systemd unit, a Docker Compose stack, or Kubernetes with a Helm chart and overlays — all shipped in the repository.'],
+      ['Three deployment tiers', 'A systemd unit, a Docker Compose stack, or Kubernetes with a Helm chart and overlays, all shipped in the repository.'],
       ['HTTPS without a reverse proxy', 'Built-in ACME with an HTTP-01 listener, for home servers that would rather not run another moving part in front.'],
       ['Admin console', 'Live sessions and playback history, with the ability to stop a session.'],
       ['A published API contract', 'The OpenAPI description is generated from the handlers, drift-tested in CI and served by the running server. The TypeScript client is generated from it.'],

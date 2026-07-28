@@ -4,7 +4,7 @@
  * Deliberately JS-additive rather than CSS-default: elements are visible
  * until this script explicitly hides them (.reveal-pending), and only once
  * it has also set up the observer that will unhide them. If this script
- * fails to run at all — disabled JS, a thrown error, a slow/blocked load —
+ * fails to run at all, disabled JS, a thrown error, a slow/blocked load , 
  * content simply never gets hidden, instead of getting hidden forever with
  * nothing left to reveal it. See global.css for the corresponding CSS.
  */

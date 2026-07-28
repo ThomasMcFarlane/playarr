@@ -1,6 +1,6 @@
 ---
 title: Remote access and TLS
-summary: Reach your Playarr server from outside your own network — ports, reverse proxies, certificates and the client-side address settings that go with them.
+summary: Reach your Playarr server from outside your own network, ports, reverse proxies, certificates and the client-side address settings that go with them.
 group: Setup
 order: 13
 ---
@@ -21,10 +21,10 @@ your security.
 
 | Port | Protocol | What listens | Set by | Expose publicly? |
 | --- | --- | --- | --- | --- |
-| `8484` | TCP | The API, the HLS and byte-range media endpoints, and — when `PLAYARR_WEB_ASSETS_DIR` points at a built Admin bundle — Playarr Admin at `/` | `PLAYARR_HTTP_BIND_ADDR` (default `0.0.0.0:8484`) | This is the only one that should ever be reachable, and only behind TLS |
+| `8484` | TCP | The API, the HLS and byte-range media endpoints, and, when `PLAYARR_WEB_ASSETS_DIR` points at a built Admin bundle, Playarr Admin at `/` | `PLAYARR_HTTP_BIND_ADDR` (default `0.0.0.0:8484`) | This is the only one that should ever be reachable, and only behind TLS |
 | `9090` | TCP | Prometheus `/metrics`, served unconditionally by every role | `PLAYARR_METRICS_BIND_ADDR` (default `0.0.0.0:9090`) | **No.** Never proxy it to the edge |
-| `80` | TCP | ACME HTTP-01 challenge listener — only when Playarr's own automatic HTTPS is enabled | `PLAYARR_ACME_HTTP01_BIND_ADDR` (default `0.0.0.0:80`) | Only while automatic HTTPS is in use |
-| `53` | UDP + TCP | Optional authoritative relay DNS, served from the same process — off unless explicitly enabled | `PLAYARR_RELAY_DNS_BIND_ADDR` (unset by default) | Only for the relay-hostname flow below |
+| `80` | TCP | ACME HTTP-01 challenge listener, only when Playarr's own automatic HTTPS is enabled | `PLAYARR_ACME_HTTP01_BIND_ADDR` (default `0.0.0.0:80`) | Only while automatic HTTPS is in use |
+| `53` | UDP + TCP | Optional authoritative relay DNS, served from the same process, off unless explicitly enabled | `PLAYARR_RELAY_DNS_BIND_ADDR` (unset by default) | Only for the relay-hostname flow below |
 
 Every one of those bind variables takes a **full socket address**, not a bare port number.
 `PLAYARR_HTTP_BIND_ADDR=8484` is a startup error.
@@ -38,7 +38,7 @@ PLAYARR_HTTP_BIND_ADDR=127.0.0.1:8484
 PLAYARR_METRICS_BIND_ADDR=127.0.0.1:9090
 ```
 
-Apply it with `sudo systemctl restart playarr.service`. There is no hot reload — every value
+Apply it with `sudo systemctl restart playarr.service`. There is no hot reload, every value
 `Config::from_env` resolves is read once at startup.
 
 ## Choose how TLS is terminated
@@ -47,7 +47,7 @@ There are three mutually exclusive options. Pick one.
 
 | Mode | How it is enabled | Certificate source | Reverse proxy needed |
 | --- | --- | --- | --- |
-| Plain HTTP | The default — no TLS variables set | None | No, but then nothing is encrypted |
+| Plain HTTP | The default, no TLS variables set | None | No, but then nothing is encrypted |
 | Static-certificate HTTPS | `PLAYARR_TLS_CERT_PATH` + `PLAYARR_TLS_KEY_PATH` | A PEM chain and key you supply | No |
 | Automatic HTTPS | `PLAYARR_ACME_DOMAIN` + `PLAYARR_ACME_ENVIRONMENT` + `PLAYARR_ACME_ACCEPT_TERMS` | Let's Encrypt, via HTTP-01 | No |
 
@@ -75,7 +75,7 @@ sudo install -o root -g playarr -m 0640 <YOUR-PRIVATE-KEY>.pem /etc/playarr/tls/
 sudo systemctl restart playarr.service
 ```
 
-Both files are read once, at startup — renewing the certificate on disk requires a restart.
+Both files are read once, at startup, renewing the certificate on disk requires a restart.
 
 ### Playarr terminates TLS itself, with automatic Let's Encrypt
 
@@ -95,7 +95,7 @@ this is your explicit acceptance of Let's Encrypt's subscriber agreement.
 Prerequisites, both on you:
 
 1. `<YOUR-SERVER-HOSTNAME>` already resolves publicly to this machine. Playarr validates the value
-   as a bare DNS hostname — no scheme, port, path or trailing dot.
+   as a bare DNS hostname, no scheme, port, path or trailing dot.
 2. Inbound TCP port 80 reaches the machine, for the HTTP-01 challenge.
 
 Playarr then runs its own challenge listener on port 80, persists the account and certificate
@@ -121,9 +121,9 @@ The shipped systemd unit grants `CAP_NET_BIND_SERVICE`, which is what allows the
 > for the block above. `PLAYARR_RELAY_DNS_BIND_ADDR` turns on an authoritative listener for the
 > `relay.playarr.app` zone inside the same process, and `PLAYARR_RELAY_DNS_ACME_CHALLENGE`
 > makes that listener serve one temporary TXT record so *some other* ACME client's DNS-01 validation
-> can be answered. The value must be `_acme-challenge.v4-A-B-C-D.relay.playarr.app=<VALIDATION>` —
+> can be answered. The value must be `_acme-challenge.v4-A-B-C-D.relay.playarr.app=<VALIDATION>` , 
 > the hostname is validated and rejected unless it starts with `v4-` and ends with
-> `.relay.playarr.app` — and it requires `PLAYARR_RELAY_DNS_BIND_ADDR` to be set too. Remove the
+> `.relay.playarr.app`, and it requires `PLAYARR_RELAY_DNS_BIND_ADDR` to be set too. Remove the
 > challenge setting immediately after the certificate is issued. The repository does not document an
 > end-to-end procedure for obtaining and installing a certificate this way, so treat it as a
 > low-level building block rather than a supported route.
@@ -134,7 +134,7 @@ Leave `PLAYARR_TLS_*` and `PLAYARR_ACME_*` unset, bind Playarr to `127.0.0.1:848
 to it. Four things the proxy must get right:
 
 - **`X-Forwarded-Proto` and `X-Forwarded-Host`.** When `PLAYARR_DEVICE_VERIFICATION_URI` is a
-  relative path — and its default, `/link`, is — `POST /api/v1/oauth/device/code` builds the
+  relative path, and its default, `/link`, is, `POST /api/v1/oauth/device/code` builds the
   absolute verification URI it returns from these two headers, falling back to `Host` and then to
   `http://localhost`. Get them wrong and every client using the server's own device-code flow
   displays an unreachable pairing address.
@@ -146,7 +146,7 @@ to it. Four things the proxy must get right:
 
 ### Caddy
 
-Complete `Caddyfile`, TLS included — Caddy obtains and renews the certificate itself as long as the
+Complete `Caddyfile`, TLS included, Caddy obtains and renews the certificate itself as long as the
 hostname resolves to this machine and ports 80 and 443 are reachable:
 
 ```caddyfile
@@ -301,10 +301,10 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-> **Warning — `trusted-network` auth and reverse proxies do not mix.** With
+> **Warning, `trusted-network` auth and reverse proxies do not mix.** With
 > `PLAYARR_AUTH_MODE=trusted-network`, Playarr decides whether to auto-log-in a caller as admin
 > from the **socket peer address**, not from `X-Forwarded-For`. Behind a proxy, every request
-> appears to come from the proxy itself — which is on a private range, and therefore inside the
+> appears to come from the proxy itself, which is on a private range, and therefore inside the
 > default allowlist. The effect is that anyone who reaches the proxy is admitted as an admin with
 > no credentials. Keep the default `PLAYARR_AUTH_MODE=full-account` for anything reachable from
 > outside your LAN. `PLAYARR_TRUSTED_NETWORK_CIDR` replaces the default allowlist with a single
@@ -317,7 +317,7 @@ sudo systemctl reload nginx
 Two honest statements about what the server exposes here.
 
 **CORS is permissive and there is no configuration key for it.** The API attaches
-`CorsLayer::permissive` — any origin, any method, any header, no credentials — as the outermost
+`CorsLayer::permissive`, any origin, any method, any header, no credentials, as the outermost
 layer, so preflight `OPTIONS` requests are answered before authentication runs. This is deliberate,
 not an oversight: the API is Bearer-token authenticated and never cookie- or session-authenticated,
 so there is no CSRF surface an origin allowlist would protect. It is also load-bearing, because the
@@ -329,18 +329,18 @@ the `Host` header against a configured list, and does not have a setting that te
 upstream proxies to trust. If you need origin restriction or proxy-aware client-IP handling, it has
 to be implemented in your proxy.
 
-Three request headers must survive the proxy — all three are already covered by the configurations
+Three request headers must survive the proxy, all three are already covered by the configurations
 above, but strip headers at your own risk:
 
 | Header | Purpose |
 | --- | --- |
 | `x-playarr-client-platform` | Client platform identity, read by the API version gate |
 | `x-playarr-client-version` | Client build version, read by the API version gate |
-| `Authorization` | Bearer access token — the only access control the API has |
+| `Authorization` | Bearer access token, the only access control the API has |
 
 ## Telling the clients where the server is
 
-No Playarr client ships with a server address baked in. Each one learns it, once, from you — but
+No Playarr client ships with a server address baked in. Each one learns it, once, from you, but
 not all of them learn it the same way.
 
 | Client | Status | How the address is supplied |
@@ -351,7 +351,7 @@ not all of them learn it the same way.
 | LG webOS, Samsung Tizen | Available · Experimental install | Same hosted link flow as Android TV on a generic first launch |
 | Hisense VIDAA | Available · Experimental install | Same hosted link flow |
 | Roku | Available · Experimental install | Server base URL on first launch, then RFC 8628 device-code sign-in; current builds also point at the hosted link flow |
-| iOS, iPadOS, Apple TV | Coming soon — **not built yet**, source only, no distributable signed build | Editable server address plus phone-friendly device-code pairing, in the source as it stands |
+| iOS, iPadOS, Apple TV | Coming soon, **not built yet**, source only, no distributable signed build | Editable server address plus phone-friendly device-code pairing, in the source as it stands |
 
 Which of those two paths a device takes decides which of the settings below matters, so it is worth
 being clear about it: the hosted link flow at `playarr.app/link` never touches
@@ -362,12 +362,12 @@ Additional settings that affect what clients see:
 - **`PLAYARR_DEVICE_VERIFICATION_URI`** (default `/link`) sets the base URI returned by
   `POST /api/v1/oauth/device/code` for on-screen display. Because the default is a relative path it
   is resolved against `X-Forwarded-Proto`/`X-Forwarded-Host`, which is what turns it into the
-  address a viewer types on their phone. Note that **Playarr Admin serves no `/link` route** —
+  address a viewer types on their phone. Note that **Playarr Admin serves no `/link` route** , 
   the default therefore produces a URL on your own host that has no page behind it. Set this to an
   absolute URL that does (for example `https://playarr.app/link`) if you rely on the server's own
   device flow. Setting an absolute value skips the forwarded-header rewrite altogether.
 - **`PUT /api/v1/admin/peer-nodes/self`** records the addresses this node advertises to clients.
-  Each entry carries a `client_reachable` flag that is *operator-asserted and never auto-detected* —
+  Each entry carries a `client_reachable` flag that is *operator-asserted and never auto-detected* , 
   NAT and firewall topology cannot be guessed. Only `client_reachable: true` addresses are handed to
   clients:
 
@@ -394,7 +394,7 @@ plain-HTTP server. Playarr marks private and loopback addresses as local-network
 browser that implements Local Network Access can prompt for permission and relax mixed-content
 blocking, and you approve that prompt the first time. Browser support is still uneven: **a browser
 without Local Network Access cannot connect from the HTTPS hosted app to a private plain-HTTP
-server.** Giving your server a real hostname and a real certificate — by either route above — is the
+server.** Giving your server a real hostname and a real certificate, by either route above, is the
 way around that.
 
 For a **public IPv4 address**, Playarr rewrites what you typed into the deterministic hostname
@@ -405,21 +405,21 @@ the address you entered, and Playarr terminates TLS itself. That means setting
 `PLAYARR_ACME_ENVIRONMENT=production` and `PLAYARR_ACME_ACCEPT_TERMS=true`.
 
 Two consequences of that, both easy to miss. The clients build the URL with port `8484` hard-coded,
-so `PLAYARR_HTTP_BIND_ADDR` must keep listening on `8484` — do not move it. And because Playarr
+so `PLAYARR_HTTP_BIND_ADDR` must keep listening on `8484`, do not move it. And because Playarr
 issues that certificate over HTTP-01, inbound port 80 still has to reach the machine, exactly as in
 the automatic-HTTPS section above.
 
-## Security posture — what the project does and does not do
+## Security posture, what the project does and does not do
 
 **What Playarr does:**
 
 - Authenticates every non-public route with a Bearer access token. The unauthenticated route
   allowlist is a short, closed list: `/api/system/health`, `/api/system/ready`,
   `/api/system/version`, `/api/v1/auth/login`, `/api/v1/auth/signup` (which itself requires a valid
-  `invite_token` in the body — it is not open registration), `/api/v1/auth/refresh`,
+  `invite_token` in the body, it is not open registration), `/api/v1/auth/refresh`,
   `/api/v1/oauth/device/code`, `/api/v1/oauth/token`, `/webhooks/{instance_id}` and
   `/api/v1/peer/enroll` (authorised by a one-shot join token in the request body rather than a JWT).
-  Note that `/webhooks/{instance_id}` takes no token at all — if you expose the server publicly,
+  Note that `/webhooks/{instance_id}` takes no token at all, if you expose the server publicly,
   anyone who guesses an instance UUID can post to it.
 - Hashes account passwords with Argon2id.
 - Generates a random bootstrap admin password when `PLAYARR_BOOTSTRAP_ADMIN_PASSWORD` is unset and
@@ -437,14 +437,14 @@ the automatic-HTTPS section above.
 - It does not restrict origins or validate the `Host` header, and has no trusted-proxy setting.
 - It does not rate-limit or lock out repeated sign-in attempts.
 - It does not encrypt integration credentials at rest. Despite the `api_key_encrypted` column name,
-  the API keys you give it for your library-management apps are stored as plain text — protect the
+  the API keys you give it for your library-management apps are stored as plain text, protect the
   database file and its backups accordingly.
 - It does not open ports, manage your firewall, register DNS, or create tunnels.
 - It has no built-in fail2ban-style protection, no WAF, and no audit log of failed authentication.
 
 > **Exposing a server to the internet is your decision and your responsibility.** If you are not
 > comfortable operating a public HTTPS endpoint, keep Playarr on your LAN and reach it over a VPN
-> you control instead — the client address settings above work identically over a VPN, and nothing
+> you control instead, the client address settings above work identically over a VPN, and nothing
 > in Playarr needs to change.
 
 ## Verifying it works
@@ -453,12 +453,12 @@ the automatic-HTTPS section above.
 # Liveness through the proxy, from another machine.
 curl -fsS https://<YOUR-SERVER-HOSTNAME>/healthz
 
-# Readiness — 200 only once migrations have applied and the pool is connected.
+# Readiness, 200 only once migrations have applied and the pool is connected.
 curl -fsS -o /dev/null -w '%{http_code}\n' https://<YOUR-SERVER-HOSTNAME>/readyz
 
 # Confirm the forwarded headers reach Playarr: the verification_uri in this
 # response must be your public HTTPS address, not http://localhost/link.
-# client_platform is required and must be one of the ClientPlatform values —
+# client_platform is required and must be one of the ClientPlatform values , 
 # android-mobile, android-tv, ios, web, tv-webos, tv-tizen, tv-vidaa,
 # playarr-admin. Omitting it returns 422, not a device code.
 curl -fsS -X POST https://<YOUR-SERVER-HOSTNAME>/api/v1/oauth/device/code \
@@ -475,6 +475,6 @@ sending `X-Forwarded-Proto` and `X-Forwarded-Host`.
 
 > The repository ships a reference Caddy configuration for the Docker Compose tier at
 > `infra/docker/prod/Caddyfile`, and no reverse-proxy example at all for the systemd tier or the
-> Kubernetes tier — the Helm chart and kustomize manifests contain no Ingress or Gateway resource,
+> Kubernetes tier, the Helm chart and kustomize manifests contain no Ingress or Gateway resource,
 > because ingress class, certificate issuer and hostname are all cluster-specific. The nginx
 > configuration above is written for this documentation rather than copied from the repository.

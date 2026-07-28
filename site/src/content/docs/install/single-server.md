@@ -1,12 +1,12 @@
 ---
 title: Single server (systemd)
-summary: Install Playarr as a single systemd service backed by SQLite on one always-on Linux box — a Raspberry Pi, a NAS, a mini-PC or a home server.
+summary: Install Playarr as a single systemd service backed by SQLite on one always-on Linux box, a Raspberry Pi, a NAS, a mini-PC or a home server.
 group: Install
 order: 2
 badge: Preview
 ---
 
-This is the smallest way to run Playarr: one compiled binary, one SQLite file, one machine. It suits a Raspberry Pi 4/5, a Synology or QNAP NAS, a mini-PC or any always-on Linux box you administer directly. There are no external services to stand up — no Postgres, no Redis, no message broker — and the whole thing survives an unattended reboot because systemd owns it.
+This is the smallest way to run Playarr: one compiled binary, one SQLite file, one machine. It suits a Raspberry Pi 4/5, a Synology or QNAP NAS, a mini-PC or any always-on Linux box you administer directly. There are no external services to stand up, no Postgres, no Redis, no message broker, and the whole thing survives an unattended reboot because systemd owns it.
 
 Playarr never picks a deployment tier from a flag. It derives one from the scheme of `DATABASE_URL`: a `sqlite:` URL means single-node, so the coordinator is a no-op and the cache is in-process. Pointing the same binary at `postgres://` later is all it takes to graduate to a bigger tier.
 
@@ -62,7 +62,7 @@ cd playarr/backend
 cargo build --release --bin playarr
 ```
 
-`backend/Cargo.toml` is both the Cargo workspace root and the `playarr-bin` package, so the binary lands at `backend/target/release/playarr`. Both the SQLite and Postgres database drivers are compiled into every build — the backend is a runtime configuration value, never a build feature — so this one artefact serves every tier.
+`backend/Cargo.toml` is both the Cargo workspace root and the `playarr-bin` package, so the binary lands at `backend/target/release/playarr`. Both the SQLite and Postgres database drivers are compiled into every build, the backend is a runtime configuration value, never a build feature, so this one artefact serves every tier.
 
 ### Or unpack a release tarball, once one exists
 
@@ -79,7 +79,7 @@ The tarball contains the bare executable. `install.sh` refuses a source path tha
 
 ## 2. Run the installer
 
-`infra/systemd/install.sh` creates the service user, the directory layout, and installs the unit files. It deliberately does **not** enable or start anything — that is a separate, explicit decision you make after reviewing the configuration.
+`infra/systemd/install.sh` creates the service user, the directory layout, and installs the unit files. It deliberately does **not** enable or start anything, that is a separate, explicit decision you make after reviewing the configuration.
 
 ```bash
 sudo ./infra/systemd/install.sh /path/to/playarr
@@ -93,7 +93,7 @@ Re-running the installer is safe: it never overwrites an existing `/etc/playarr/
 
 | Path | Owner : group | Mode | Purpose |
 | --- | --- | --- | --- |
-| `playarr` system user and group | — | — | `useradd --system --user-group --home-dir /var/lib/playarr --no-create-home --shell /usr/sbin/nologin` |
+| `playarr` system user and group |, |, | `useradd --system --user-group --home-dir /var/lib/playarr --no-create-home --shell /usr/sbin/nologin` |
 | `/etc/playarr` | `root:playarr` | `0750` | Configuration directory |
 | `/etc/playarr/playarr.env` | `root:playarr` | `0640` | Seeded from `playarr.env.example` only if absent |
 | `/var/lib/playarr` | `playarr:playarr` | `0750` | `WorkingDirectory`; the SQLite database and all caches live here |
@@ -105,7 +105,7 @@ Re-running the installer is safe: it never overwrites an existing `/etc/playarr/
 
 It finishes with `systemctl daemon-reload` and prints the remaining steps.
 
-> **Ignore one line of the installer's own output.** Its printed summary says "at minimum DATABASE_URL and REDIS_URL are required". `REDIS_URL` is not required, and is ignored outright on this tier — see [the corrections below](#three-corrections-to-the-shipped-example-file).
+> **Ignore one line of the installer's own output.** Its printed summary says "at minimum DATABASE_URL and REDIS_URL are required". `REDIS_URL` is not required, and is ignored outright on this tier, see [the corrections below](#three-corrections-to-the-shipped-example-file).
 
 > Playarr's logging layer writes JSON to stdout, so in practice everything goes to the journal rather than to `/var/log/playarr`. The directory exists and is writable because the sandbox allowlists it.
 
@@ -129,7 +129,7 @@ For any deployment you intend to keep, add a stable signing secret:
 
 ```bash
 DATABASE_URL=sqlite:///var/lib/playarr/playarr.db
-PLAYARR_JWT_SECRET=<64 random hex characters — generate with: openssl rand -hex 32>
+PLAYARR_JWT_SECRET=<64 random hex characters, generate with: openssl rand -hex 32>
 PLAYARR_LOG=info
 PLAYARR_HTTP_BIND_ADDR=0.0.0.0:8484
 PLAYARR_METRICS_BIND_ADDR=0.0.0.0:9090
@@ -149,11 +149,11 @@ The seeded `/etc/playarr/playarr.env` is a copy of `infra/systemd/playarr.env.ex
 
 ### Configuration reference
 
-These are the variables that matter on a single server. Every one is read at startup only — there is no hot reload.
+These are the variables that matter on a single server. Every one is read at startup only, there is no hot reload.
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | *(none — startup fails)* | `sqlite:///var/lib/playarr/playarr.db` for this tier. |
+| `DATABASE_URL` | *(none, startup fails)* | `sqlite:///var/lib/playarr/playarr.db` for this tier. |
 | `PLAYARR_ROLE` | `all` | Pinned to `all` by the unit file; anything you set here is overridden. |
 | `PLAYARR_JWT_SECRET` | random per boot | Minimum 32 bytes. Set it. |
 | `PLAYARR_LOG` | `info` | A `tracing` `EnvFilter` directive, e.g. `info,playarr_api=debug`. |
@@ -185,7 +185,7 @@ Everything Playarr owns sits under `/var/lib/playarr`, which is the unit's `Work
 | ACME account and certificate | `/var/lib/playarr/acme` (only when automatic HTTPS is on) |
 | On-demand transcode output | `<tmpdir>/playarr-transcode` inside the unit's private `/tmp` |
 
-The database file is created on first connect — `?mode=rwc` is appended automatically to any `sqlite:` URL that does not already specify a mode. The pool then sets `PRAGMA journal_mode = WAL` and `PRAGMA busy_timeout = 30000`. Schema migrations are embedded in the binary and applied automatically at every startup.
+The database file is created on first connect, `?mode=rwc` is appended automatically to any `sqlite:` URL that does not already specify a mode. The pool then sets `PRAGMA journal_mode = WAL` and `PRAGMA busy_timeout = 30000`. Schema migrations are embedded in the binary and applied automatically at every startup.
 
 The artwork cache path is derived from the database file's parent directory when `DATABASE_URL` begins `sqlite://`. If you move the database elsewhere, set `PLAYARR_ARTWORK_CACHE_DIR` explicitly so the cache follows it.
 
@@ -240,8 +240,8 @@ What each of the load-bearing directives is doing:
 | Directive | Why |
 | --- | --- |
 | `ExecStart=/usr/local/bin/playarr` | No subcommand. Running the binary with no subcommand *is* `serve`. There is no `--role` or `--config` flag; `serve` takes zero arguments. |
-| `Environment=PLAYARR_ROLE=all` | Appears **after** `EnvironmentFile=`, and systemd lets the later directive win for duplicate keys — so this always beats anything in `playarr.env`. A single server runs the API and the background worker loops in one process, which is also the only configuration where a live transcode can be promoted into a durable rendition, because that hand-off is an in-process channel. |
-| `EnvironmentFile=-/etc/playarr/playarr.env` | The `-` prefix means a missing file does not block startup — but the process will then fail its own validation for the missing `DATABASE_URL` and restart-loop until you fix it. |
+| `Environment=PLAYARR_ROLE=all` | Appears **after** `EnvironmentFile=`, and systemd lets the later directive win for duplicate keys, so this always beats anything in `playarr.env`. A single server runs the API and the background worker loops in one process, which is also the only configuration where a live transcode can be promoted into a durable rendition, because that hand-off is an in-process channel. |
+| `EnvironmentFile=-/etc/playarr/playarr.env` | The `-` prefix means a missing file does not block startup, but the process will then fail its own validation for the missing `DATABASE_URL` and restart-loop until you fix it. |
 | `Restart=on-failure` + `StartLimitIntervalSec=300` / `StartLimitBurst=5` | Restart on crash, but give up after five failures in five minutes rather than hammering a broken configuration forever. |
 | `TimeoutStopSec=30` | Time to drain in-flight requests and jobs on `SIGTERM` before systemd escalates to `SIGKILL`. |
 | `ProtectSystem=strict`, `ProtectHome=true`, `PrivateTmp=true`, `NoNewPrivileges=true`, `UMask=0027` | A conservative sandbox: the filesystem is read-only apart from `ReadWritePaths=`, home directories are hidden, `/tmp` is private, and privileges cannot be escalated. |
@@ -268,11 +268,11 @@ On the very first boot against an empty database, Playarr provisions exactly one
 journalctl -u playarr.service | grep 'bootstrap admin'
 ```
 
-Save it now — it is not shown again. If any user already exists, this step is a no-op.
+Save it now, it is not shown again. If any user already exists, this step is a no-op.
 
 > The bootstrap admin is granted `is_admin` but deliberately **not** `can_stream`. It exists to operate Playarr's admin surface, not to watch things. Create a separate account for yourself as a viewer.
 
-Authentication defaults to `full-account`, meaning every sign-in needs a real username and password. The `trusted-network` mode is opt-in and auto-signs-in any request from an allowlisted private range as the default admin — convenient on a trusted LAN, unsuitable anywhere else.
+Authentication defaults to `full-account`, meaning every sign-in needs a real username and password. The `trusted-network` mode is opt-in and auto-signs-in any request from an allowlisted private range as the default admin, convenient on a trusted LAN, unsuitable anywhere else.
 
 ## 7. Check it is healthy
 
@@ -294,7 +294,7 @@ Metrics are served on their own port, by every role, unconditionally:
 curl -fsS http://127.0.0.1:9090/metrics | head
 ```
 
-A healthy first boot emits, roughly in this order: `starting playarr` carrying the resolved `role` and derived `deployment_tier`; `metrics listener listening` on the metrics address; the bootstrap admin `WARN` (first boot only); and finally `http server listening` — or `https server listening with static certificate` — on the application address. Migrations, and the creation of the two default library views ("Newly Added" and "Newly Released"), are both silent when they succeed and only log if they fail — so their absence from the journal is the expected case rather than a problem.
+A healthy first boot emits, roughly in this order: `starting playarr` carrying the resolved `role` and derived `deployment_tier`; `metrics listener listening` on the metrics address; the bootstrap admin `WARN` (first boot only); and finally `http server listening`, or `https server listening with static certificate`, on the application address. Migrations, and the creation of the two default library views ("Newly Added" and "Newly Released"), are both silent when they succeed and only log if they fail, so their absence from the journal is the expected case rather than a problem.
 
 ## Logs
 
@@ -354,7 +354,7 @@ If you prefer your own proxy, leave both sets unset and reverse-proxy to `127.0.
 
 ## Optional: co-host Playarr Admin
 
-Playarr Admin is the operator-facing React UI, served by the same binary at `/` on the same origin and port as the API — the same pattern the *arr apps use. If no `index.html` is found at the resolved path, the server serves the API only and logs an informational line saying so. Nothing is installed for you: `install.sh` copies the binary and the units and nothing else.
+Playarr Admin is the operator-facing React UI, served by the same binary at `/` on the same origin and port as the API, the same pattern the *arr apps use. If no `index.html` is found at the resolved path, the server serves the API only and logs an informational line saying so. Nothing is installed for you: `install.sh` copies the binary and the units and nothing else.
 
 Building it needs Node 20 or newer and pnpm 9 or newer; the workspace pins pnpm through Corepack. From a checkout of the repository:
 
@@ -365,7 +365,7 @@ pnpm install --frozen-lockfile
 pnpm --filter @playarr-tv/admin... run build
 ```
 
-The trailing `...` on the filter matters. `@playarr-tv/admin` imports three workspace packages (`@playarr-tv/api-client`, `@playarr-tv/device-auth`, `@playarr-tv/domain`) whose `main`/`exports` point at their own `dist/` output, so the build fails on a fresh checkout without it. Do not substitute `pnpm -r run build` — that also drives the TV app shells' packaging steps, which need `ares-package` and the Tizen Studio CLI.
+The trailing `...` on the filter matters. `@playarr-tv/admin` imports three workspace packages (`@playarr-tv/api-client`, `@playarr-tv/device-auth`, `@playarr-tv/domain`) whose `main`/`exports` point at their own `dist/` output, so the build fails on a fresh checkout without it. Do not substitute `pnpm -r run build`, that also drives the TV app shells' packaging steps, which need `ares-package` and the Tizen Studio CLI.
 
 Copy the result into a directory the sandbox can read, then point the server at it:
 
@@ -376,7 +376,7 @@ sudo chown -R playarr:playarr /var/lib/playarr/web
 ```
 
 ```bash
-# in /etc/playarr/playarr.env — the shipped example file already sets
+# in /etc/playarr/playarr.env, the shipped example file already sets
 # this exact line, so on a seeded install there is usually nothing to add.
 PLAYARR_WEB_ASSETS_DIR=/var/lib/playarr/web
 ```
@@ -385,7 +385,7 @@ PLAYARR_WEB_ASSETS_DIR=/var/lib/playarr/web
 sudo systemctl restart playarr.service
 ```
 
-Playarr, the viewing client, is a separate application, and `install.sh` never installs or serves it either. The same `PLAYARR_WEB_ASSETS_DIR` mechanism *can* serve Playarr Web's build instead — that is exactly what the official container image does with `clients/tv-web/web/dist` — but only one of the two can occupy `/` on a given server.
+Playarr, the viewing client, is a separate application, and `install.sh` never installs or serves it either. The same `PLAYARR_WEB_ASSETS_DIR` mechanism *can* serve Playarr Web's build instead, that is exactly what the official container image does with `clients/tv-web/web/dist`, but only one of the two can occupy `/` on a given server.
 
 ## Updating and backing up
 
@@ -406,7 +406,7 @@ sudo tar -czf playarr-backup-$(date +%F).tar.gz -C /var/lib playarr
 sudo systemctl start playarr.service
 ```
 
-Stopping the service first is the simple way to get a consistent copy of a WAL-mode SQLite database along with its `-wal` and `-shm` companions. Keep `/etc/playarr/playarr.env` somewhere safe too — losing `PLAYARR_JWT_SECRET` signs out every device.
+Stopping the service first is the simple way to get a consistent copy of a WAL-mode SQLite database along with its `-wal` and `-shm` companions. Keep `/etc/playarr/playarr.env` somewhere safe too, losing `PLAYARR_JWT_SECRET` signs out every device.
 
 **Growing to a bigger tier.** Point `DATABASE_URL` at a Postgres instance and the binary switches coordinator and cache backends by itself. There is no built-in tool to move existing SQLite data into Postgres; that is on you today.
 

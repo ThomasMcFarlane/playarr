@@ -226,7 +226,7 @@ th {
 }
 
 /*
- * Scroll-reveal. [data-reveal] content is visible by default — reveal.ts is
+ * Scroll-reveal. [data-reveal] content is visible by default, reveal.ts is
  * what applies .reveal-pending (the hidden starting state), immediately
  * before it also arranges to remove it via IntersectionObserver. This order
  * matters: if JavaScript is disabled, errors, or never runs, content is never

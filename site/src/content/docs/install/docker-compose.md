@@ -6,7 +6,7 @@ order: 3
 badge: Preview
 ---
 
-Tier 2 runs Playarr and its database as containers on a single Docker host — a home server, a small VPS, or anywhere Docker is already how you run things. The reference topology lives at `infra/docker/docker-compose.prod.yml`: a `postgres` service, a `caddy` edge proxy, and one or more `playarr` containers built from the same image and split by role. This page walks the whole thing from a clean checkout to a healthy stack.
+Tier 2 runs Playarr and its database as containers on a single Docker host, a home server, a small VPS, or anywhere Docker is already how you run things. The reference topology lives at `infra/docker/docker-compose.prod.yml`: a `postgres` service, a `caddy` edge proxy, and one or more `playarr` containers built from the same image and split by role. This page walks the whole thing from a clean checkout to a healthy stack.
 
 > **Nothing here has been booted end to end yet.** There is no tagged backend release and no container image published to any registry, so the stack builds the image locally from source. The Compose files have been reconciled against the real configuration code but have not been verified on live hardware. Expect to read logs.
 
@@ -14,22 +14,22 @@ Tier 2 runs Playarr and its database as containers on a single Docker host — a
 
 | Service | Image | Role | Published ports |
 | --- | --- | --- | --- |
-| `postgres` | `postgres:16-alpine` | Database for every Playarr container | none — internal only |
-| `redis` | `redis:7-alpine` | Optional shared cache and pub/sub, `ha` profile only | none — internal only |
-| `playarr-api` | built from `infra/docker/backend.Dockerfile` | `PLAYARR_ROLE=api`, 2 replicas | none — `expose`s 8484 and 9090 |
+| `postgres` | `postgres:16-alpine` | Database for every Playarr container | none, internal only |
+| `redis` | `redis:7-alpine` | Optional shared cache and pub/sub, `ha` profile only | none, internal only |
+| `playarr-api` | built from `infra/docker/backend.Dockerfile` | `PLAYARR_ROLE=api`, 2 replicas | none, `expose`s 8484 and 9090 |
 | `playarr-api-2` | same image | `PLAYARR_ROLE=api`, `ha` profile only | none |
 | `playarr-worker` | same image | `PLAYARR_ROLE=worker`, 2 replicas | none |
 | `playarr-worker-2` | same image | `PLAYARR_ROLE=worker`, `ha` profile only | none |
 | `caddy` | `caddy:2-alpine` | Reverse proxy, TLS, round-robin across healthy API containers | **80, 443, 443/udp** |
 
-All four `playarr-*` services are the same image with a different `PLAYARR_ROLE`. There is no separate worker image to build or keep in sync. `serve` takes no command-line arguments — role selection is entirely the environment variable.
+All four `playarr-*` services are the same image with a different `PLAYARR_ROLE`. There is no separate worker image to build or keep in sync. `serve` takes no command-line arguments, role selection is entirely the environment variable.
 
 Two Docker networks are used: `playarr-net` carries everything, and `playarr-edge` carries only Caddy. Caddy sits on both, because it is the only service with a published host port and it must still reach `playarr-api`.
 
 ## Before you start
 
 - A Linux host with Docker Engine and the Compose v2 plugin (`docker compose version`).
-- A git checkout of the repository. There is no published image to pull, so the host also needs enough headroom to compile the Rust binary and build the web assets — the build is multi-stage and not small.
+- A git checkout of the repository. There is no published image to pull, so the host also needs enough headroom to compile the Rust binary and build the web assets, the build is multi-stage and not small.
 - Your media already on disk, reachable from this host at a stable path.
 - Ports 80 and 443 free on the host. Nothing else in the stack publishes a port.
 
@@ -46,12 +46,12 @@ Every build in `infra/docker/` uses the repository root as its build context, so
 
 `docker-compose.prod.yml` refuses to start without a database password. It uses `${PLAYARR_DB_PASSWORD:?…}`, so an unset value fails the entire `docker compose` invocation with `Set PLAYARR_DB_PASSWORD (e.g. in a .env file) before starting the prod stack` rather than quietly starting with a blank credential.
 
-> **The `.env` file must sit next to the Compose file, not at the repository root.** Compose resolves the default `.env` from the project directory, which is the directory containing the first `-f` file — here, `infra/docker/`. A `.env` at the repository root is silently ignored. `infra/docker/.env` is already covered by `.gitignore`.
+> **The `.env` file must sit next to the Compose file, not at the repository root.** Compose resolves the default `.env` from the project directory, which is the directory containing the first `-f` file, here, `infra/docker/`. A `.env` at the repository root is silently ignored. `infra/docker/.env` is already covered by `.gitignore`.
 
 There is no `.env.example` anywhere under `infra/docker/`; you create the file yourself. This is a complete example built only from keys `docker-compose.prod.yml` actually interpolates:
 
 ```bash
-# infra/docker/.env — untracked; never commit this file.
+# infra/docker/.env, untracked; never commit this file.
 
 # --- Required ---
 # Interpolated into POSTGRES_PASSWORD and into DATABASE_URL. Keep it
@@ -91,16 +91,16 @@ Generate the password rather than typing one:
 printf 'PLAYARR_DB_PASSWORD=%s\n' "$(openssl rand -hex 24)" > infra/docker/.env
 ```
 
-> **Compose `.env` values are for interpolation only.** They reach a container solely because `docker-compose.prod.yml` names them in a service's `environment:` block. Adding, say, `PLAYARR_JWT_SECRET` to `.env` does nothing on its own — the shipped file never references it. Everything else the binary reads goes in the override file in step 3.
+> **Compose `.env` values are for interpolation only.** They reach a container solely because `docker-compose.prod.yml` names them in a service's `environment:` block. Adding, say, `PLAYARR_JWT_SECRET` to `.env` does nothing on its own, the shipped file never references it. Everything else the binary reads goes in the override file in step 3.
 
 ## 3. Write an override for media, caches and the rest of the configuration
 
 The reference file deliberately mounts no media and sets only the handful of variables it needs. Two things must be added before the stack is genuinely usable, and both belong in your own overlay file rather than an edit to a tracked file.
 
-Create `infra/docker/docker-compose.local.yml`. **This file is not in the repository** — you are writing it now, and you will pass it with a second `-f` on every command.
+Create `infra/docker/docker-compose.local.yml`. **This file is not in the repository**, you are writing it now, and you will pass it with a second `-f` on every command.
 
 ```yaml
-# infra/docker/docker-compose.local.yml — yours, untracked.
+# infra/docker/docker-compose.local.yml, yours, untracked.
 #
 # Layer onto docker-compose.prod.yml:
 #   docker compose \
@@ -110,7 +110,7 @@ Create `infra/docker/docker-compose.local.yml`. **This file is not in the reposi
 
 x-local-env: &local-env
   # 32 bytes or more, or it is ignored with a warning and a per-boot
-  # random secret is used instead — which signs every client out on
+  # random secret is used instead, which signs every client out on
   # restart and means no two containers agree on a token.
   PLAYARR_JWT_SECRET: ${PLAYARR_JWT_SECRET:?Set PLAYARR_JWT_SECRET in infra/docker/.env}
   # full-account is the default: every login needs a real username and
@@ -123,7 +123,7 @@ x-local-env: &local-env
   # PLAYARR_MEDIA_LOCAL_ROOT: /srv/media
   # Extracted-subtitle cache. Without this it lands in the container's
   # tmpfs and is lost on restart. The path below only works because
-  # x-local-volumes mounts a named volume there — every playarr-*
+  # x-local-volumes mounts a named volume there, every playarr-*
   # container runs with read_only: true, so any path that is not a volume
   # or a tmpfs cannot even be created, let alone written.
   PLAYARR_SUBTITLE_CACHE_DIR: /data/playarr-cache/subtitles
@@ -168,11 +168,11 @@ printf 'PLAYARR_JWT_SECRET=%s\n' "$(openssl rand -hex 32)" >> infra/docker/.env
 
 Compose merges `environment` maps and `volumes` lists across `-f` files, so the base file's `DATABASE_URL`, `PLAYARR_ROLE`, bind addresses and artwork cache directory all survive. Volume entries are merged by target path, so re-listing the artwork cache for the API services is a no-op rather than a duplicate mount. `docker compose config` after step 4 shows you the merged result.
 
-> **Every writable path must be a volume or a tmpfs.** The base file sets `read_only: true` on all four `playarr-*` services. Only `/tmp` (tmpfs) and explicitly mounted volumes can be written. Pointing a cache variable at a path with no mount behind it does not silently fall back — the container gets `Read-only file system` and that cache is dead.
+> **Every writable path must be a volume or a tmpfs.** The base file sets `read_only: true` on all four `playarr-*` services. Only `/tmp` (tmpfs) and explicitly mounted volumes can be written. Pointing a cache variable at a path with no mount behind it does not silently fall back, the container gets `Read-only file system` and that cache is dead.
 
 > **Mount media at the identical path the *arr apps report, and no path mapping is needed at all.** If Sonarr says a file lives at `/srv/media/tv/Show/S01E01.mkv`, mount that same tree at `/srv/media` inside the Playarr containers. Only reach for `PLAYARR_MEDIA_REMOTE_ROOT` / `PLAYARR_MEDIA_LOCAL_ROOT` when you cannot. Both must be set together; a single prefix pair is supported, and a path that does not match the prefix is passed through unchanged.
 
-> **`/data` is the one path you cannot use for media.** The base file already mounts a volume at `/data/playarr-cache/artwork`, and Docker cannot create that nested mount point inside a read-only bind mount at `/data`. Try it and the container never starts — `create mountpoint for /data/playarr-cache/artwork mount: … Read-only file system`. If your *arr apps really do report paths under `/data`, mount the tree somewhere else and use the prefix substitution pair instead:
+> **`/data` is the one path you cannot use for media.** The base file already mounts a volume at `/data/playarr-cache/artwork`, and Docker cannot create that nested mount point inside a read-only bind mount at `/data`. Try it and the container never starts, `create mountpoint for /data/playarr-cache/artwork mount: … Read-only file system`. If your *arr apps really do report paths under `/data`, mount the tree somewhere else and use the prefix substitution pair instead:
 >
 > ```yaml
 >   PLAYARR_MEDIA_REMOTE_ROOT: /data
@@ -229,7 +229,7 @@ What happens, in order:
 1. **Postgres initialises.** The official `postgres:16-alpine` image creates the cluster on first start because `postgres_prod_data` is empty, then creates the `playarr` database and the `playarr` role from `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD`. On every later start the volume is already populated and this is skipped.
 2. **Compose waits.** Every `playarr-*` service declares `depends_on: postgres: condition: service_healthy`, and the `postgres` healthcheck is `pg_isready -U playarr -d playarr` every 15 seconds after a 15-second grace period.
 3. **Playarr containers start and migrate.** Each one resolves `DATABASE_URL` to `postgres://playarr:<your password>@postgres:5432/playarr`, opens the pool, and runs the embedded Postgres migration set before serving anything. Migrations are compiled into the binary; there is no separate migration container, no `migrate` subcommand to run, and nothing to invoke by hand.
-4. **The API containers seed first-run state.** Two default library views are created idempotently, the durable node identity is minted, any previously registered *arr source instances are rehydrated from the database, and — only if the database has no users at all — a bootstrap admin is provisioned.
+4. **The API containers seed first-run state.** Two default library views are created idempotently, the durable node identity is minted, any previously registered *arr source instances are rehydrated from the database, and, only if the database has no users at all, a bootstrap admin is provisioned.
 5. **Caddy starts** and begins round-robin proxying to every healthy `playarr-api*` container, health-checked against `/healthz` every 10 seconds.
 
 Follow it:
@@ -262,9 +262,9 @@ curl -fsS http://localhost/readyz    && echo READY
 curl -fsS http://localhost/api/system/version
 ```
 
-`/healthz` is liveness. `/readyz` returns 200 only once startup finished — pool connected and migrations applied — and 503 before that. `/api/system/version` is an unauthenticated version envelope. If you set a real `PLAYARR_DOMAIN`, use `https://<YOUR-DOMAIN>/` instead.
+`/healthz` is liveness. `/readyz` returns 200 only once startup finished, pool connected and migrations applied, and 503 before that. `/api/system/version` is an unauthenticated version envelope. If you set a real `PLAYARR_DOMAIN`, use `https://<YOUR-DOMAIN>/` instead.
 
-> **Worker containers serve `/healthz` only.** In `worker` role the process runs a minimal listener with just that one route; `/readyz` is not served there. That is fine at this tier, because nothing probes the workers' readiness — but do not point an external monitor at a worker's `/readyz`.
+> **Worker containers serve `/healthz` only.** In `worker` role the process runs a minimal listener with just that one route; `/readyz` is not served there. That is fine at this tier, because nothing probes the workers' readiness, but do not point an external monitor at a worker's `/readyz`.
 
 ### Metrics
 
@@ -289,14 +289,14 @@ docker compose \
   --profile standard logs playarr-api | grep 'bootstrap admin'
 ```
 
-The username defaults to `admin`; the password is 64 random hex characters unless you set one. To choose both up front, add them to your override's `x-local-env` block **before the first boot** — they are only consulted when the user table is empty:
+The username defaults to `admin`; the password is 64 random hex characters unless you set one. To choose both up front, add them to your override's `x-local-env` block **before the first boot**, they are only consulted when the user table is empty:
 
 ```yaml
   PLAYARR_BOOTSTRAP_ADMIN_USERNAME: admin
   PLAYARR_BOOTSTRAP_ADMIN_PASSWORD: ${PLAYARR_BOOTSTRAP_ADMIN_PASSWORD:-}
 ```
 
-What the API containers serve at `/` is the **Playarr Web client**, and the bootstrap admin cannot sign in there. Login enforces the account's `can_stream` policy for every client platform except `playarr-admin`, and the bootstrap admin is created with `can_stream: false` deliberately — so those credentials return a 403 from Playarr Web rather than a token.
+What the API containers serve at `/` is the **Playarr Web client**, and the bootstrap admin cannot sign in there. Login enforces the account's `can_stream` policy for every client platform except `playarr-admin`, and the bootstrap admin is created with `can_stream: false` deliberately, so those credentials return a 403 from Playarr Web rather than a token.
 
 Two ways forward, and you will probably want both:
 
@@ -321,7 +321,7 @@ Two ways forward, and you will probably want both:
      - /absolute/path/to/playarr/clients/tv-web/admin/dist:/srv/playarr-admin:ro
    ```
 
-   Recreate the API containers and `/` now serves the admin console. If no `index.html` is found at the resolved path the server runs API-only and logs an informational line saying so — that log line is how you tell a bad path from a bad build.
+   Recreate the API containers and `/` now serves the admin console. If no `index.html` is found at the resolved path the server runs API-only and logs an informational line saying so, that log line is how you tell a bad path from a bad build.
 
 Either way, create a separate ordinary account with streaming access for actually watching things. The bootstrap admin is an operator account and nothing else.
 
@@ -334,11 +334,11 @@ Set by `docker-compose.prod.yml` itself, per service:
 | Variable | Value in the shipped file |
 | --- | --- |
 | `DATABASE_URL` | `postgres://playarr:${PLAYARR_DB_PASSWORD}@postgres:5432/playarr` |
-| `REDIS_URL` | `${PLAYARR_REDIS_URL:-}` — optional; only reachable under `--profile ha` |
+| `REDIS_URL` | `${PLAYARR_REDIS_URL:-}`, optional; only reachable under `--profile ha` |
 | `PLAYARR_ROLE` | `api` or `worker`, per service |
 | `PLAYARR_LOG` | `${PLAYARR_LOG_LEVEL:-info}` |
-| `PLAYARR_HTTP_BIND_ADDR` | `0.0.0.0:8484` — a full socket address, not a bare port |
-| `PLAYARR_METRICS_BIND_ADDR` | `0.0.0.0:9090` — likewise |
+| `PLAYARR_HTTP_BIND_ADDR` | `0.0.0.0:8484`, a full socket address, not a bare port |
+| `PLAYARR_METRICS_BIND_ADDR` | `0.0.0.0:9090`, likewise |
 | `PLAYARR_ARTWORK_CACHE_DIR` | `/data/playarr-cache/artwork` |
 
 Worth adding through the override file:
@@ -348,14 +348,14 @@ Worth adding through the override file:
 | `PLAYARR_JWT_SECRET` | random per boot | Under 32 bytes it is ignored with a warning. Unset means every restart signs every client out and no two containers agree on a token. Set it. |
 | `PLAYARR_AUTH_MODE` | `full-account` | `trusted-network` auto-logs in any request from an allowed CIDR with no credentials. |
 | `PLAYARR_TRUSTED_NETWORK_CIDR` | RFC 1918 plus loopback | **Replaces** the default allowlist rather than extending it. Only relevant in `trusted-network` mode. |
-| `PLAYARR_SUBTITLE_CACHE_DIR` | temp directory | Otherwise extracted subtitles land in the container's tmpfs and are rebuilt after every restart. Must point at a volume mount — the root filesystem is read-only. |
+| `PLAYARR_SUBTITLE_CACHE_DIR` | temp directory | Otherwise extracted subtitles land in the container's tmpfs and are rebuilt after every restart. Must point at a volume mount, the root filesystem is read-only. |
 | `PLAYARR_WEB_ASSETS_DIR` | `web/` next to the binary, i.e. `/app/web` in this image | Which built UI is served at `/`. The image ships the Playarr Web build here; override it to serve Playarr Admin instead. |
 | `PLAYARR_MEDIA_REMOTE_ROOT` / `PLAYARR_MEDIA_LOCAL_ROOT` | unset | Prefix substitution when the path a library manager reports is not the path this host can read. Both required. |
 | `PLAYARR_BOOTSTRAP_ADMIN_USERNAME` / `_PASSWORD` | `admin` / random | First-boot admin only; ignored once any user exists. |
 | `PLAYARR_OTLP_ENDPOINT` | unset | OTLP collector. When unset, the OpenTelemetry layer is a no-op. |
 | `PLAYARR_TRANSCODE_SESSION_IDLE_TTL_SECS` | `60` | Idle deadline for an on-demand transcode session; every manifest or segment request slides it forward. |
 
-Playarr's TLS and ACME variables (`PLAYARR_TLS_CERT_PATH`, `PLAYARR_ACME_DOMAIN` and friends) are not useful here — Caddy terminates TLS at the edge and the Playarr containers speak plain HTTP on the internal network.
+Playarr's TLS and ACME variables (`PLAYARR_TLS_CERT_PATH`, `PLAYARR_ACME_DOMAIN` and friends) are not useful here, Caddy terminates TLS at the edge and the Playarr containers speak plain HTTP on the internal network.
 
 ## Volumes and state
 
@@ -365,17 +365,17 @@ Playarr's TLS and ACME variables (`PLAYARR_TLS_CERT_PATH`, `PLAYARR_ACME_DOMAIN`
 | `playarr_prod_artwork_cache` | `/data/playarr-cache/artwork` | Cached artwork. Rebuildable, but slow to rebuild. |
 | `redis_prod_data` | `/data` on `redis` | Redis append-only file, `ha` profile only. |
 | `caddy_data`, `caddy_config` | Caddy's own paths | Issued certificates and Caddy state. Losing `caddy_data` means re-issuing certificates. |
-| `playarr_prod_subtitle_cache` | `/data/playarr-cache/subtitles` | Extracted subtitles — yours, from the override in step 3, not the base file. |
+| `playarr_prod_subtitle_cache` | `/data/playarr-cache/subtitles` | Extracted subtitles, yours, from the override in step 3, not the base file. |
 
-> **Compose names the project after the directory holding the first `-f` file.** That is `infra/docker/`, so the project is called `docker` and every volume above is created with a `docker_` prefix — `docker_postgres_prod_data`, not `postgres_prod_data`. That is what `docker volume ls` shows you, and what any backup you write has to name. Pass `-p playarr` on every invocation if you would rather it were called something else, but be consistent: changing it later orphans the old volumes.
+> **Compose names the project after the directory holding the first `-f` file.** That is `infra/docker/`, so the project is called `docker` and every volume above is created with a `docker_` prefix, `docker_postgres_prod_data`, not `postgres_prod_data`. That is what `docker volume ls` shows you, and what any backup you write has to name. Pass `-p playarr` on every invocation if you would rather it were called something else, but be consistent: changing it later orphans the old volumes.
 
-Every `playarr-*` container runs with `read_only: true`, `no-new-privileges:true` and a tmpfs at `/tmp`, and `restart: unless-stopped`. On-demand transcode output goes to `/tmp`, which means it is a RAM disk sized by Docker's default — no environment variable relocates it.
+Every `playarr-*` container runs with `read_only: true`, `no-new-privileges:true` and a tmpfs at `/tmp`, and `restart: unless-stopped`. On-demand transcode output goes to `/tmp`, which means it is a RAM disk sized by Docker's default, no environment variable relocates it.
 
 > **No backup or restore procedure exists in the repository.** There is no `pg_dump` recipe, no snapshot script and no documented restore path. Whatever you build around `postgres_prod_data` is yours to design and yours to test.
 
 ## Hardware acceleration
 
-**Not built yet.** There is no VAAPI, NVENC, QSV, CUDA or VideoToolbox support anywhere in the backend, and no `/dev/dri` device passthrough, NVIDIA runtime or GPU resource request in any Compose file, Dockerfile or Kubernetes manifest in the repository. The on-demand transcode path invokes `ffmpeg` with the software encoder `libx264`. Only the binary paths are overridable, via `PLAYARR_FFMPEG_BINARY` and `PLAYARR_FFPROBE_BINARY`, so substituting a wrapper is possible — but nothing in the product exposes device passthrough as a supported feature, and none of it is documented. Size your host for software encoding.
+**Not built yet.** There is no VAAPI, NVENC, QSV, CUDA or VideoToolbox support anywhere in the backend, and no `/dev/dri` device passthrough, NVIDIA runtime or GPU resource request in any Compose file, Dockerfile or Kubernetes manifest in the repository. The on-demand transcode path invokes `ffmpeg` with the software encoder `libx264`. Only the binary paths are overridable, via `PLAYARR_FFMPEG_BINARY` and `PLAYARR_FFPROBE_BINARY`, so substituting a wrapper is possible, but nothing in the product exposes device passthrough as a supported feature, and none of it is documented. Size your host for software encoding.
 
 ## Optional: Prometheus and Grafana
 
@@ -385,7 +385,7 @@ Every `playarr-*` container runs with `read_only: true`, `no-new-privileges:true
 docker compose -f infra/docker/observability/docker-compose.yml up -d
 ```
 
-Prometheus lands on host port **9091** (remapped from its in-container 9090) and Grafana on **3000**. Run it as its own project, not merged with `-f` onto the base file — relative bind-mount paths would otherwise resolve against the first file's directory.
+Prometheus lands on host port **9091** (remapped from its in-container 9090) and Grafana on **3000**. Run it as its own project, not merged with `-f` onto the base file, relative bind-mount paths would otherwise resolve against the first file's directory.
 
 ## Updating
 
@@ -408,12 +408,12 @@ docker compose \
 
 `up -d` recreates only the containers whose image actually changed, and migrations run automatically on the next start. Once images are published to a registry, `docker compose pull` replaces the `build` step.
 
-`infra/docker/docker-compose.watchtower.optional.yml` is an opt-in overlay that labels only the `playarr-*` services for Watchtower, repins them from the exact `MAJOR.MINOR.PATCH` tag to a floating `${PLAYARR_MINOR_TAG:-0.1}`, and runs a real `containrrr/watchtower` container polling every 300 seconds. It needs a published registry image to be of any use, and it acts through the Docker Engine API rather than Compose — so run `docker compose up -d` afterwards to reconcile Compose's own view of the stack.
+`infra/docker/docker-compose.watchtower.optional.yml` is an opt-in overlay that labels only the `playarr-*` services for Watchtower, repins them from the exact `MAJOR.MINOR.PATCH` tag to a floating `${PLAYARR_MINOR_TAG:-0.1}`, and runs a real `containrrr/watchtower` container polling every 300 seconds. It needs a published registry image to be of any use, and it acts through the Docker Engine API rather than Compose, so run `docker compose up -d` afterwards to reconcile Compose's own view of the stack.
 
 ## Growing out of this tier
 
-Moving to Kubernetes means pointing the same binary at a Postgres instance the cluster already has. See [Kubernetes](/docs/install/kubernetes). Coming the other way from a single-server SQLite install, note that no SQLite-to-Postgres data migration tool exists — the CLI's only subcommands are `serve` and `update`, so moving existing data is on you.
+Moving to Kubernetes means pointing the same binary at a Postgres instance the cluster already has. See [Kubernetes](/docs/install/kubernetes). Coming the other way from a single-server SQLite install, note that no SQLite-to-Postgres data migration tool exists, the CLI's only subcommands are `serve` and `update`, so moving existing data is on you.
 
 ## Licensing
 
-The container images built from `infra/docker/backend.Dockerfile` bundle FFmpeg, which is licensed GPLv2-or-later, while Playarr's own source is MIT — see [Licences and attribution](/legal/licences).
+The container images built from `infra/docker/backend.Dockerfile` bundle FFmpeg, which is licensed GPLv2-or-later, while Playarr's own source is MIT, see [Licences and attribution](/legal/licences).
