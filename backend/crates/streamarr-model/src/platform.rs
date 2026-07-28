@@ -31,6 +31,8 @@ pub enum ClientPlatform {
     TvWebos,
     TvTizen,
     TvVidaa,
+    TvFire,
+    Xbox,
     StreamarrAdmin,
 }
 
@@ -48,6 +50,8 @@ impl ClientPlatform {
             ClientPlatform::TvWebos => "tv-webos",
             ClientPlatform::TvTizen => "tv-tizen",
             ClientPlatform::TvVidaa => "tv-vidaa",
+            ClientPlatform::TvFire => "tv-fire",
+            ClientPlatform::Xbox => "xbox",
             ClientPlatform::StreamarrAdmin => "streamarr-admin",
         }
     }
@@ -61,6 +65,8 @@ impl ClientPlatform {
             "tv-webos" => ClientPlatform::TvWebos,
             "tv-tizen" => ClientPlatform::TvTizen,
             "tv-vidaa" => ClientPlatform::TvVidaa,
+            "tv-fire" => ClientPlatform::TvFire,
+            "xbox" => ClientPlatform::Xbox,
             "streamarr-admin" => ClientPlatform::StreamarrAdmin,
             _ => return None,
         })
@@ -92,4 +98,89 @@ pub struct VersionEnvelope {
     pub api_version: String,
     pub build_sha: Option<String>,
     pub compatibility: Vec<CompatibilityEntry>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every [`ClientPlatform`] variant. [`exhaustiveness_guard`] below
+    /// makes the compiler reject a new variant that isn't listed here too,
+    /// so the round-trip test can never silently stop covering one.
+    const ALL_PLATFORMS: &[ClientPlatform] = &[
+        ClientPlatform::AndroidMobile,
+        ClientPlatform::AndroidTv,
+        ClientPlatform::Ios,
+        ClientPlatform::Web,
+        ClientPlatform::TvWebos,
+        ClientPlatform::TvTizen,
+        ClientPlatform::TvVidaa,
+        ClientPlatform::TvFire,
+        ClientPlatform::Xbox,
+        ClientPlatform::StreamarrAdmin,
+    ];
+
+    /// Not a test — a compile-time tripwire. Adding a variant to
+    /// [`ClientPlatform`] makes this match non-exhaustive, and the
+    /// resulting error lands here, next to `ALL_PLATFORMS`, which has to
+    /// gain the same variant for the tests below to cover it.
+    ///
+    /// [`ClientPlatform::wire_name`] is already exhaustive and so
+    /// self-enforcing, but [`ClientPlatform::from_wire_name`] ends in
+    /// `_ => return None` and would otherwise accept a new variant
+    /// silently — leaving it unparseable at every call site that decodes a
+    /// stored or header-supplied platform.
+    fn exhaustiveness_guard(platform: ClientPlatform) -> usize {
+        match platform {
+            ClientPlatform::AndroidMobile => 0,
+            ClientPlatform::AndroidTv => 1,
+            ClientPlatform::Ios => 2,
+            ClientPlatform::Web => 3,
+            ClientPlatform::TvWebos => 4,
+            ClientPlatform::TvTizen => 5,
+            ClientPlatform::TvVidaa => 6,
+            ClientPlatform::TvFire => 7,
+            ClientPlatform::Xbox => 8,
+            ClientPlatform::StreamarrAdmin => 9,
+        }
+    }
+
+    #[test]
+    fn all_platforms_lists_every_variant() {
+        assert_eq!(
+            ALL_PLATFORMS.len(),
+            exhaustiveness_guard(ClientPlatform::StreamarrAdmin) + 1,
+            "ALL_PLATFORMS is missing a variant that exhaustiveness_guard knows about",
+        );
+    }
+
+    #[test]
+    fn every_variant_round_trips_through_its_wire_name() {
+        for platform in ALL_PLATFORMS {
+            assert_eq!(
+                ClientPlatform::from_wire_name(platform.wire_name()),
+                Some(*platform),
+                "{platform:?} does not round-trip through from_wire_name",
+            );
+        }
+    }
+
+    /// `wire_name` is used for the `X-Streamarr-Client-Platform` header and
+    /// the `client-compatibility.toml` table keys, while serde's
+    /// container-level `rename_all = "kebab-case"` drives the JSON/OpenAPI
+    /// representation. The two are written independently, so a variant
+    /// whose PascalCase spelling kebab-cases differently from its hand-
+    /// written wire name (`TvWebOS` would yield `tv-web-o-s`) would split
+    /// the wire contract in half without this check.
+    #[test]
+    fn wire_names_match_the_serde_representation() {
+        for platform in ALL_PLATFORMS {
+            let encoded = serde_json::to_string(platform).expect("platform serialises");
+            assert_eq!(
+                encoded,
+                format!("\"{}\"", platform.wire_name()),
+                "{platform:?} serialises differently from its wire_name",
+            );
+        }
+    }
 }

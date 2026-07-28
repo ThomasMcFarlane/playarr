@@ -5024,6 +5024,8 @@ components:
       - tv-webos
       - tv-tizen
       - tv-vidaa
+      - tv-fire
+      - xbox
       - streamarr-admin
     CompatibilityEntry:
       type: object

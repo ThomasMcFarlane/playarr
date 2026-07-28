@@ -69,6 +69,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/metrics/http-latency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Aggregated p50/p95/p99/avg/max/count HTTP latency per (method, route
+         *     template), computed on demand from whatever
+         *     `request_timing_middleware::record_request_timing` has recorded in
+         *     `AppState::request_timing` since this process started -- see that
+         *     registry's own doc comment for the bounded-ring-buffer shape backing
+         *     it. Sorted by `p95_ms` descending, so the routes worth investigating
+         *     first are always at the top. Purely in-memory and per-node, like
+         *     `sync_status_handler`'s view of sync state: nothing here survives a
+         *     restart, and a multi-node deployment reports each node's own traffic
+         *     only.
+         */
+        get: operations["http_latency_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/peer-groups": {
         parameters: {
             query?: never;
@@ -1871,6 +1899,23 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Every account this endpoint returns is implicitly disclosed -- id,
+         *     username, display name, PIN-lock status -- to every other account it's
+         *     also returned to. That's the intended "who's watching" tradeoff *within
+         *     one household* (`AuthMode::TrustedNetwork`/`ManagedProfiles`: nobody
+         *     reaches this endpoint who isn't already on the trusted LAN, so household
+         *     members already know who else lives there). It stops being a reasonable
+         *     tradeoff the moment two accounts might belong to unrelated people
+         *     (`AuthMode::FullAccount`, "remote access, shared with people outside the
+         *     household" per `docs/architecture/auth-modes.md`) -- there is no
+         *     `household_id` or account-grouping concept anywhere in `streamarr-model`/
+         *     `streamarr-db` to scope by (see that doc's "no `household_id`... claim"
+         *     note), so under `FullAccount` this must fall back to "every account is a
+         *     stranger" and list only the caller's own profile. This is a strict
+         *     server-side gate, not merely relied on by the client: it must hold even
+         *     for a direct API call, not just Playarr's own UI.
+         */
         get: operations["list_available_profiles_handler"];
         put?: never;
         post?: never;
@@ -2084,6 +2129,12 @@ export interface components {
          * @description Minimal household-profile projection for Playarr's 'who is watching'
          *     screen. Password hashes, email addresses and policy details are never
          *     exposed.
+         *
+         *     Only ever lists *sibling* profiles -- accounts that share the operator's
+         *     single-household trust boundary. See
+         *     [`list_available_profiles_handler`]'s doc comment for what "sibling"
+         *     means per `AuthMode` and why this must never include a stranger's
+         *     account.
          */
         AvailableProfileResponse: {
             display_name: string;
@@ -2146,7 +2197,7 @@ export interface components {
          *     regardless of what a login request once claimed.
          * @enum {string}
          */
-        ClientPlatform: "android-mobile" | "android-tv" | "ios" | "web" | "tv-webos" | "tv-tizen" | "tv-vidaa" | "streamarr-admin";
+        ClientPlatform: "android-mobile" | "android-tv" | "ios" | "web" | "tv-webos" | "tv-tizen" | "tv-vidaa" | "tv-fire" | "xbox" | "streamarr-admin";
         /**
          * @description One platform's row in the compatibility table: what the latest client
          *     build is, the floor below which the version-gate middleware rejects
@@ -3526,6 +3577,28 @@ export interface components {
             library_allow?: string[];
         };
         /**
+         * @description Aggregated latency stats for one (method, route template) pair --
+         *     exactly the shape `streamarr-api`'s `admin::http_latency_handler`
+         *     returns, one element per key [`RequestTimingRegistry`] has ever
+         *     recorded a sample for.
+         */
+        RouteLatencyStats: {
+            /** Format: double */
+            avg_ms: number;
+            /** Format: double */
+            max_ms: number;
+            method: string;
+            /** Format: double */
+            p50_ms: number;
+            /** Format: double */
+            p95_ms: number;
+            /** Format: double */
+            p99_ms: number;
+            route: string;
+            /** Format: int64 */
+            sample_count: number;
+        };
+        /**
          * @description One routing policy row. `group_library_id = None` matches any library;
          *     `user_id = None` matches any user. Among rules that match equally
          *     specifically, `priority` is the tiebreak (higher wins -- see §5.2).
@@ -4342,6 +4415,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SourceMatrixResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    http_latency_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aggregated request-duration stats per (method, route template), sorted by p95_ms descending */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "avg_ms": 4.2,
+                     *         "max_ms": 58.7,
+                     *         "method": "GET",
+                     *         "p50_ms": 3.1,
+                     *         "p95_ms": 11.4,
+                     *         "p99_ms": 22,
+                     *         "route": "/api/v1/catalog/{id}",
+                     *         "sample_count": 812
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["RouteLatencyStats"][];
                 };
             };
             /** @description Missing or invalid access token */
@@ -7397,7 +7518,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Missing or invalid access token */
+            /** @description Missing or invalid bearer token/playback-session cookie */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -7455,7 +7576,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Missing or invalid access token */
+            /** @description Missing or invalid bearer token/playback-session cookie */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -10391,7 +10512,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Enabled Playarr profiles available on this server */
+            /** @description Enabled Playarr profiles available to the caller -- every enabled account under AuthMode::TrustedNetwork/ManagedProfiles (single trusted household), or only the caller's own account under AuthMode::FullAccount (accounts may belong to unrelated people) */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -75,3 +75,28 @@ latestVersion = "0.1.0"
 minSupported = "0.1.0"
 deprecatedBelow = "0.1.0"
 sunset = "2026-12-31"
+
+[tv-fire]
+# Fire TV's native application targets Vega OS, which is Linux-based and is
+# NOT Android -- so despite "Fire TV" historically meaning Fire OS/Android,
+# this platform gates on a semver string and deliberately has no
+# `versionCode`. It ships as a packaged `.vpkg` installed either from the
+# Amazon Appstore or sideloaded during development, so its version moves
+# only when a whole new package is installed. Like the Xbox MSIX below it
+# has no in-app patch path, so the floor is deliberately held at the first
+# shipped version until a real update channel has actually delivered one.
+latestVersion = "0.1.0"
+minSupported = "0.1.0"
+deprecatedBelow = "0.1.0"
+sunset = "2026-12-31"
+
+[xbox]
+# The native Xbox application ships as a signed MSIX, so its version moves
+# only when a new package is installed -- through the Microsoft Store's own
+# auto-update or a Developer Mode sideload. It has no in-app patch path, so
+# the floor is deliberately held at the first shipped version until a
+# real update channel has actually delivered one.
+latestVersion = "0.1.0"
+minSupported = "0.1.0"
+deprecatedBelow = "0.1.0"
+sunset = "2026-12-31"

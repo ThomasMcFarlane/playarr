@@ -79,7 +79,7 @@ function waitForHostedLink(milliseconds: number, signal?: AbortSignal): Promise<
 
 /** Starts first-contact TV linking against playarr.app, before a TV knows any Streamarr URL. */
 export async function requestHostedDeviceLink(
-  clientPlatform: Extract<ClientPlatform, "tv-webos" | "tv-tizen" | "tv-vidaa">,
+  clientPlatform: Extract<ClientPlatform, "tv-webos" | "tv-tizen" | "tv-vidaa" | "tv-fire">,
   options: HostedLinkRequestOptions = {}
 ): Promise<HostedLinkCode> {
   const response = await hostedLinkFetch(options.fetchImpl)(`${HOSTED_LINK_ORIGIN}/api/link/code`, {

@@ -17,6 +17,8 @@ const LINK_CLIENT_PLATFORMS = new Set([
   "android-tv",
   "tv-webos",
   "tv-tizen",
+  "tv-roku",
+  "tv-fire",
 ]);
 
 function json(body, init = {}) {

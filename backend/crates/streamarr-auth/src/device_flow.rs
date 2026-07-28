@@ -1,8 +1,9 @@
 //! RFC 8628 (OAuth 2.0 Device Authorization Grant) types and handler
 //! shapes, for limited-input clients (`tv-webos`/`tv-tizen`/`tv-vidaa`/
-//! `android-tv`) that can't reasonably host a password/OAuth-redirect
-//! login flow: the TV displays a `user_code` and a URL, the user completes
-//! login on a phone/laptop, and the TV polls until it receives a token.
+//! `tv-fire`/`android-tv`/`xbox`) that can't reasonably host a
+//! password/OAuth-redirect login flow: the TV displays a `user_code` and a
+//! URL, the user completes login on a phone/laptop, and the TV polls until
+//! it receives a token.
 
 use std::sync::Arc;
 
