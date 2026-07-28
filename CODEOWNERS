@@ -1,4 +1,4 @@
-# CODEOWNERS for the Streamarr / Playarr monorepo.
+# CODEOWNERS for the Playarr Server / Playarr monorepo.
 #
 # Currently a single-owner repo: every path resolves to @ThomasMcFarlane.
 # The per-directory sections below are NOT redundant with the catch-all --
@@ -26,12 +26,12 @@
 /Justfile                  @ThomasMcFarlane
 
 # ------------------------------------------------------------------------
-# Backend (Streamarr core: Rust workspace, API, workers, migrations)
+# Backend (Playarr Server core: Rust workspace, API, workers, migrations)
 # ------------------------------------------------------------------------
 /backend/                  @ThomasMcFarlane
-/backend/crates/streamarr-api/        @ThomasMcFarlane
-/backend/crates/streamarr-auth/       @ThomasMcFarlane
-/backend/crates/streamarr-db/         @ThomasMcFarlane
+/backend/crates/playarr-api/        @ThomasMcFarlane
+/backend/crates/playarr-auth/       @ThomasMcFarlane
+/backend/crates/playarr-db/         @ThomasMcFarlane
 /backend/migrations/       @ThomasMcFarlane
 
 # ------------------------------------------------------------------------
@@ -41,6 +41,7 @@
 /clients/android/          @ThomasMcFarlane
 /clients/ios/              @ThomasMcFarlane
 /clients/tv-web/           @ThomasMcFarlane
+/clients/xbox/             @ThomasMcFarlane
 /clients/shared/           @ThomasMcFarlane
 
 # ------------------------------------------------------------------------

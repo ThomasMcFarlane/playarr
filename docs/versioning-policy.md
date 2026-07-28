@@ -1,7 +1,7 @@
 # Versioning Policy
 
 This document describes the **real, current** version-negotiation contract
-between Streamarr and its clients — what `GET /api/system/version` actually
+between Playarr Server and its clients — what `GET /api/system/version` actually
 returns today, what the version-gate middleware actually enforces (and does
 not yet enforce), and the update mechanism each client platform actually
 implements in its own source tree. It is written against the code, not
@@ -15,11 +15,11 @@ were live.
 
 ## `GET /api/system/version`
 
-Defined in [`backend/crates/streamarr-api/src/version.rs`](../backend/crates/streamarr-api/src/version.rs),
+Defined in [`backend/crates/playarr-api/src/version.rs`](../backend/crates/playarr-api/src/version.rs),
 mounted like any other route in `api_router()` with no auth extractor — it is
 genuinely unauthenticated, so a client can ask "what version are you" before
-it has a session. The response body is `streamarr_model::VersionEnvelope`,
-documented in [`backend/openapi/streamarr.yaml`](../backend/openapi/streamarr.yaml)
+it has a session. The response body is `playarr_model::VersionEnvelope`,
+documented in [`backend/openapi/playarr.yaml`](../backend/openapi/playarr.yaml)
 as the `VersionEnvelope`/`CompatibilityEntry` schemas. The OpenAPI file is
 generated from the handler's `#[utoipa::path]` annotation and drift-checked
 in CI (`openapi_spec_matches_checked_in_file`), not hand-maintained, so the
@@ -40,20 +40,20 @@ The real shape, as returned by a fresh checkout today:
 |---|---|
 | `server_version` | The server's own product version string. Sourced from `[server].version` in `backend/config/client-compatibility.toml` — there is no separate versioning source for this. |
 | `api_version` | A free-form **string** (not an integer), sourced from `[server].apiVersion` in the same file. Purely descriptive today: no code anywhere, backend or client, parses or compares it. It is surfaced as informational metadata only — see e.g. `bundle-manifest.ts`'s optional `apiVersion` field, whose own comment calls it "informational only today". |
-| `build_sha` | `option_env!("STREAMARR_BUILD_SHA")` at build time; `null` unless that env var was set for the build. |
+| `build_sha` | `option_env!("PLAYARR_BUILD_SHA")` at build time; `null` unless that env var was set for the build. |
 | `compatibility` | A `CompatibilityEntry[]`, one row per platform. **Always an empty array in the current build** — see below. |
 
 **There is no `apiVersionFloor`, no `apiVersionDeprecated` list, and no
-per-request `X-Streamarr-Api-Version` header.** `api_version` is not used in
+per-request `X-Playarr-Api-Version` header.** `api_version` is not used in
 any compatibility decision by any code in this repository today.
 
 ## The compatibility table that *should* fill `compatibility`, and doesn't yet
 
 `backend/config/client-compatibility.toml` is the real, checked-in source of
-per-platform floors — one section per shipped Playarr `streamarr_model::ClientPlatform`
+per-platform floors — one section per shipped Playarr `playarr_model::ClientPlatform`
 (`android-mobile`, `android-tv`, `ios`, `web`, `tv-webos`, `tv-tizen`,
-`tv-vidaa`, `tv-fire`, `xbox`). `StreamarrAdmin` is the one variant with no
-section here: it identifies Streamarr's own admin UI, not a shipped Playarr
+`tv-vidaa`, `tv-fire`, `xbox`). `PlayarrAdmin` is the one variant with no
+section here: it identifies Playarr Server's own admin UI, not a shipped Playarr
 client, so it has no version floor to gate. The schema itself is intentionally split in two,
 because Android and everything else key off different notions of "version":
 
@@ -74,7 +74,7 @@ sunset = "2026-12-31"
 Android platforms (`android-mobile`, `android-tv`) gate on Android's own
 monotonic `versionCode` integer; every other platform gates on a SemVer-shaped
 version string. `ClientCompatibilityTable` in
-[`version_gate.rs`](../backend/crates/streamarr-api/src/version_gate.rs)
+[`version_gate.rs`](../backend/crates/playarr-api/src/version_gate.rs)
 parses this with an untagged `ClientEntry` enum so both shapes deserialize
 correctly, and a test (`shipped_client_compatibility_toml_parses`) pins the
 checked-in file against that struct so the two can't silently drift apart.
@@ -93,17 +93,17 @@ platform as having no row to enforce against.
 
 ## Version-gate middleware: real plumbing, stubbed comparison
 
-[`version_gate.rs`](../backend/crates/streamarr-api/src/version_gate.rs)
+[`version_gate.rs`](../backend/crates/playarr-api/src/version_gate.rs)
 implements a genuine `tower::Layer`/`tower::Service` pair, and it is really
 layered over the whole router in `build_router` (`(router.layer(version_gate), api)`
-in `streamarr-api::lib.rs`) — every request really does pass through it, not
+in `playarr-api::lib.rs`) — every request really does pass through it, not
 just the ones that happen to need it.
 
 It reads two request headers, **not** an `apiVersion` header:
 
 ```http
-X-Streamarr-Client-Platform: android-mobile
-X-Streamarr-Client-Version: 2.4.1
+X-Playarr-Client-Platform: android-mobile
+X-Playarr-Client-Version: 2.4.1
 ```
 
 Its `evaluate()` function is a deliberate, documented stub:
@@ -118,7 +118,7 @@ Concretely: `evaluate()` reads both headers, ignores their values, and always
 returns `Pass`. **No request has ever been rejected by this middleware in a
 real deployment.** The `426 Upgrade Required` response path
 (`upgrade_required_response`, real JSON body `{"error": "client_upgrade_required",
-"minimum_version": ...}` plus an RFC 7231 `Upgrade: streamarr-client/<version>`
+"minimum_version": ...}` plus an RFC 7231 `Upgrade: playarr-client/<version>`
 header) is fully implemented and unit-tested, but its only caller
 (`VersionGateDecision::Reject`) is currently unreachable dead code
 (`#[allow(dead_code)]`) — it is ready for the day the per-platform comparison
@@ -131,10 +131,10 @@ this pass, but be aware the same kind of drift exists there.)
 
 ## Real per-platform update mechanisms
 
-Two of the headers above (`X-Streamarr-Client-Platform` /
-`X-Streamarr-Client-Version`) are genuinely sent on every request by the
+Two of the headers above (`X-Playarr-Client-Platform` /
+`X-Playarr-Client-Version`) are genuinely sent on every request by the
 Android and iOS clients today; the Web/TV-web client has the plumbing to send
-them (`@streamarr-tv/api-client`'s `defaultHeaders`) but no call site
+them (`@playarr-tv/api-client`'s `defaultHeaders`) but no call site
 currently populates them. Since the gate is a stub regardless, this has no
 behavioural effect yet — it's noted here for accuracy, not as a bug report.
 
@@ -162,7 +162,7 @@ behavioural effect yet — it's noted here for accuracy, not as a bug report.
   and Google Play update flow on touch devices, while television sideloads use
   the signed playarr.app manifest and checksum-verified installer.
 
-### iOS — `clients/ios/Sources/StreamarrKit/Update/`
+### iOS — `clients/ios/Sources/PlayarrKit/Update/`
 
 - **`AppUpdateEvaluator.evaluate()`** — the same style of numeric comparator
   (`compareVersions`), producing `.upToDate` / `.softNudge(latestVersion:)` /
@@ -203,7 +203,7 @@ mechanisms:
    changes. This is the one genuinely OTA-capable client update path in the
    whole system.
 2. **Compatibility check.** `evaluateClientVersion()` (from
-   `@streamarr-tv/domain`'s `version-check.ts`) computes a tri-state
+   `@playarr-tv/domain`'s `version-check.ts`) computes a tri-state
    `"supported" | "deprecated" | "unsupported"` against
    `VersionEnvelope.compatibility`; `"unsupported"` forces an **automatic,
    non-dismissible** reload rather than merely offering one.
@@ -255,6 +255,29 @@ pinned at the first shipped version (`0.1.0`) rather than lagging some
 notional previous release — there is no previous release, and nothing yet to
 ratchet against.
 
+### Xbox — packaged MSIX, no OTA
+
+`xbox` denotes Playarr for Xbox, the native UWP/XAML client at
+`clients/xbox/` (see
+[`docs/architecture/clients/xbox.md`](architecture/clients/xbox.md)). Like
+Fire TV's `.vpkg`, an MSIX is immutable once installed: there is no in-app
+patch path the running build can take by itself. A new version only reaches
+a device through the Microsoft Store's own auto-update mechanism (once a
+Store listing exists — it does not yet) or a fresh Xbox Developer Mode
+sideload of a newly built package. `[xbox]`'s floor in
+`client-compatibility.toml` is deliberately pinned at the first shipped
+version (`0.1.0` for `latestVersion`, `minSupported`, and `deprecatedBelow`
+alike) for the same reason as `[tv-fire]`: no package has shipped yet, so
+there is nothing to ratchet a floor against.
+
+This is a separate, narrower path from the Edge-on-Xbox browser fallback
+covered in `docs/architecture/clients/xbox.md`: that route runs inside
+Xbox's built-in browser and uses the ordinary hosted Web update flow (the
+same service-worker/build-manifest mechanism VIDAA uses), not this MSIX
+update model. The two are evaluated independently — a viewer using the
+browser fallback is unaffected by whatever version floor the native `xbox`
+row states, and vice versa.
+
 ## Automation: the client-compatibility bump bot
 
 [`.github/workflows/release-client-compat-bot.yml`](../.github/workflows/release-client-compat-bot.yml)
@@ -274,7 +297,7 @@ There is no pinned-fixture compatibility matrix, no per-`apiVersion` frozen
 request/response fixtures under `tests/compat/`, and no client-SDK
 compile/run matrix test at `apiVersion`/`apiVersion - 1`/`apiVersion - 2` —
 none of that exists. The only CI safety net in this area today is
-`openapi_spec_matches_checked_in_file` in `streamarr-api`, and that only
+`openapi_spec_matches_checked_in_file` in `playarr-api`, and that only
 checks that the checked-in OpenAPI spec still matches the live
 `#[utoipa::path]` annotations — a schema-drift check on the *current* spec,
 not a backward-compatibility promise across old client builds.

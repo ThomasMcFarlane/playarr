@@ -9,9 +9,9 @@ Playarr APK or USB package for VIDAA.
 
 1. Update the TV under **Settings > Support > System Upgrade > Check Firmware
    Upgrade**.
-2. Put the TV and Streamarr server on the same trusted home network.
+2. Put the TV and Playarr Server on the same trusted home network.
 3. Open <https://playarr.app> from another phone or computer and confirm that
-   you can connect to your Streamarr server and sign in.
+   you can connect to your Playarr Server and sign in.
 
 Use HTTPS if the server already has a certificate trusted by the television.
 Plain HTTP may work in the Browser on a trusted, isolated home LAN, but it must
@@ -23,10 +23,10 @@ not be exposed directly to the internet.
 2. Enter `https://playarr.app/?platform=tv-vidaa`.
 3. When Playarr loads, save it as a Browser favourite if the television offers
    that option.
-4. Sign in with the same Streamarr account you use on other devices.
+4. Sign in with the same Playarr Server account you use on other devices.
 
 The `platform=tv-vidaa` marker is saved after the first visit. It identifies the
-TV correctly to Streamarr and selects a conservative VIDAA playback profile;
+TV correctly to Playarr Server and selects a conservative VIDAA playback profile;
 normal in-app navigation does not need to keep the query string visible.
 
 ## About launcher installation
@@ -95,11 +95,11 @@ before partner access is granted.
 ### Playarr submission gap
 
 The current Playarr VIDAA client is a public bootstrap at `playarr.app` that
-connects to each viewer's Streamarr server. Before an App Store submission,
+connects to each viewer's Playarr Server. Before an App Store submission,
 confirm this delivery model with VIDAA or agree an alternative:
 
 - the existing public HTTPS Playarr bootstrap that lets the user configure or
-  navigate to their private Streamarr server; or
+  navigate to their private Playarr Server; or
 - a VIDAA-packaged shell, if the partner programme permits it, with equivalent
   server configuration.
 

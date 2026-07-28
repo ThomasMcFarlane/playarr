@@ -1,9 +1,9 @@
 # Multi-Node / Peer Groups
 
-This document specifies how independent, self-owned Streamarr installations
+This document specifies how independent, self-owned Playarr Server installations
 ("home", "east", "west") join into a **group** that shares accounts, policy,
 and catalog metadata, and can route playback between members, without
-Streamarr ever moving media bytes itself except to actually serve a stream.
+Playarr Server ever moving media bytes itself except to actually serve a stream.
 
 It synthesizes three independently-written proposals into one design. Where
 the proposals disagreed, this document picks one answer and states why,
@@ -25,15 +25,15 @@ violate it, and is the final checklist item before any phase ships.
 
 `docs/architecture/distributed-design.md` already uses "node" for something
 else: an interchangeable, **stateless** process sharing one Postgres
-database with other processes of the same deployment (`STREAMARR_ROLE=api`/
+database with other processes of the same deployment (`PLAYARR_ROLE=api`/
 `worker`/`all`, `DeploymentTier::MultiNodePostgres{,Redis}`). Concretely,
 that's `AppState.node_id`, which `backend/src/main.rs:1076` mints fresh
 with `Uuid::new_v4()` on every process boot, and
-`streamarr_coordination::PostgresCoordinator`'s own `node_id` concept, used
+`playarr_coordination::PostgresCoordinator`'s own `node_id` concept, used
 as the leaseholder identity in `cluster_leader` (`docs/architecture/
 distributed-design.md`'s coordinator section). This document introduces a
 genuinely different thing: an independently-addressed, independently
-databased Streamarr **installation**, which may itself internally be a
+databased Playarr Server **installation**, which may itself internally be a
 Tier-1 single process or a Tier-2/3 multi-process deployment.
 
 This document uses:
@@ -41,7 +41,7 @@ This document uses:
 | Term | Meaning | Existing code |
 |---|---|---|
 | **replica** | The *existing* concept above: one stateless process within one installation's own deployment | `AppState.node_id`, `PostgresCoordinator`, `DeploymentTier` |
-| **peer node** (or **peer**, or just **node** in prose once the term is established) | *New*: one independently-run, independently-databased Streamarr installation, with its own name, address(es), and its own copy (full or partial) of the media | This document |
+| **peer node** (or **peer**, or just **node** in prose once the term is established) | *New*: one independently-run, independently-databased Playarr Server installation, with its own name, address(es), and its own copy (full or partial) of the media | This document |
 | **group** | *New*: the set of peer nodes that have agreed to sync with each other | This document |
 
 **No existing code is renamed.** `AppState.node_id` keeps meaning exactly
@@ -50,21 +50,21 @@ axes compose freely: a single peer node can itself be a Tier-2/3 multi-replica
 deployment sharing one Postgres database, and every "guard against two
 processes doing the same work" mechanism this design needs (the
 peer-sync poller, background availability rollups) reuses
-`streamarr_coordination::ClusterCoordinator` exactly the way
-`streamarr-arr-sync` already does, for exactly that reason: it is already
+`playarr_coordination::ClusterCoordinator` exactly the way
+`playarr-arr-sync` already does, for exactly that reason: it is already
 the right tool for "only one replica of *this* peer should do X."
 
 **Correction folded into this design, not deferred:** `distributed-design.md`
-currently states "there is no `UserRepo`/`PolicyRepo` in `streamarr-db`, and
+currently states "there is no `UserRepo`/`PolicyRepo` in `playarr-db`, and
 no `users`/`sessions`/`refresh_tokens`/`policies` table in either migration
 set," and describes `InMemoryUserDirectory`/`InMemoryRefreshTokenStore` as
-the live implementation. That is stale: `streamarr-db/src/repo/{user,policy,
+the live implementation. That is stale: `playarr-db/src/repo/{user,policy,
 refresh_token}.rs` are real, `users`/`policies` have existed since
 `backend/migrations/postgres/0010_users_policies.sql`, and
 `backend/src/main.rs:919-920` wires `SqlxRefreshTokenRepo` (durable), not
 the in-memory store. The **one** part of that paragraph still accurate today
 is `InMemoryDeviceAuthorizationStore`/`DashMapDeviceFlowHandler`
-(`streamarr-auth/src/device_flow.rs`): genuinely still in-process-only, no
+(`playarr-auth/src/device_flow.rs`): genuinely still in-process-only, no
 `Sqlx*` implementation exists. Phase 1 (§8) includes fixing that paragraph
 as a same-day, low-risk documentation correction, independent of and not
 blocking the rest of this feature.
@@ -88,7 +88,7 @@ call this document makes. Full rationale is in the referenced section.
 
 ### 1.3 What this design explicitly does not attempt
 
-- Streamarr never moves media bytes at rest between peers. A `Proxy`
+- Playarr Server never moves media bytes at rest between peers. A `Proxy`
   delivery streams bytes live, on demand, for the duration of one playback
   session; nothing is copied to disk on the entry node.
 - `WatchProgress` (resume position) is **not** synced in this design's
@@ -98,9 +98,9 @@ call this document makes. Full rationale is in the referenced section.
   noted in §8 as future work, not built here.
 - No hosted media or peer-sync relay is introduced. Android first-contact
   linking is the narrow exception: `playarr.app` stores a ten-minute pairing
-  record containing a single-use Streamarr device code, but never a password,
+  record containing a single-use Playarr Server device code, but never a password,
   browser bearer token, refresh token, or media request. The Android client
-  still redeems the credential and reaches Streamarr directly.
+  still redeems the credential and reaches Playarr Server directly.
 
 ---
 
@@ -110,7 +110,7 @@ All new tables follow the two conventions already established across every
 existing migration pair (confirmed against `backend/migrations/postgres/
 0010_users_policies.sql`'s own file-level note): `id`/foreign-key columns
 are `TEXT` (stringified UUIDs) on **both** engines, booleans are `INTEGER`
-0/1 via `streamarr_db::codec::bool_to_i64`/`bool_from_i64` on **both**
+0/1 via `playarr_db::codec::bool_to_i64`/`bool_from_i64` on **both**
 engines (not a native Postgres `boolean`), and list/optional-list fields are
 JSON-encoded into a single `TEXT` column rather than a normalized child
 table, when nothing needs to filter or sort on them at the SQL level. This
@@ -122,7 +122,7 @@ Current tips: `backend/migrations/postgres/0034_can_download_least_privilege.sql
 `backend/migrations/sqlite/0031_can_download_least_privilege.sql`. New
 migrations below take the next free numbers on each side, keeping the
 existing offset-by-3 convention between the two independent `Migrator`s
-(`SQLITE_MIGRATIONS`/`POSTGRES_MIGRATIONS` in `streamarr-db::pool`).
+(`SQLITE_MIGRATIONS`/`POSTGRES_MIGRATIONS` in `playarr-db::pool`).
 
 ### 2.1 Node & group identity (Phase 1)
 
@@ -146,7 +146,7 @@ CREATE TABLE IF NOT EXISTS node_identity (
     -- Ed25519 seed, base64. Plain TEXT: no encryption-at-rest exists
     -- anywhere in this codebase today -- `source_instances.api_key_
     -- encrypted` is TEXT for the identical, already-documented reason
-    -- (see streamarr-db/src/repo/source_instance.rs:18). This inherits
+    -- (see playarr-db/src/repo/source_instance.rs:18). This inherits
     -- that gap; it does not introduce a new one.
     private_key TEXT NOT NULL,
     group_id TEXT,                    -- NULL until this node founds/joins a group
@@ -181,7 +181,7 @@ CREATE TABLE IF NOT EXISTS peer_nodes (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_peer_nodes_group_name ON peer_nodes (group_id, name);
 
 -- Single-use, short-TTL, admin-issued -- mirrors UserInvite's token_hash
--- shape exactly (see backend/crates/streamarr-model/src/user.rs).
+-- shape exactly (see backend/crates/playarr-model/src/user.rs).
 CREATE TABLE IF NOT EXISTS peer_join_tokens (
     token_hash TEXT PRIMARY KEY,
     group_id TEXT NOT NULL REFERENCES peer_groups (id) ON DELETE CASCADE,
@@ -193,7 +193,7 @@ CREATE TABLE IF NOT EXISTS peer_join_tokens (
 CREATE INDEX IF NOT EXISTS idx_peer_join_tokens_expires_at ON peer_join_tokens (expires_at);
 ```
 
-`backend/crates/streamarr-model/src/peer.rs` (new file):
+`backend/crates/playarr-model/src/peer.rs` (new file):
 
 ```rust
 #[derive(Debug, Clone, PartialEq)]
@@ -201,7 +201,7 @@ pub struct NodeIdentity {
     pub peer_id: Uuid,
     /// Ed25519 seed. Never `Serialize`d into any API response --
     /// `Sensitive<T>` only redacts `Debug`/`Display` (see
-    /// streamarr-model/src/sensitive.rs's own doc comment), it does NOT
+    /// playarr-model/src/sensitive.rs's own doc comment), it does NOT
     /// suppress `Serialize`, so callers must never place this on any DTO
     /// that reaches an HTTP response body, the same discipline already
     /// required of `SourceInstance.api_key_encrypted`.
@@ -229,7 +229,7 @@ pub struct PeerAddress {
     pub label: String,          // "lan" | "wan" | "relay", informational
     /// Operator-asserted, never auto-detected (NAT/firewall topology
     /// cannot be reliably guessed -- same philosophy already used for
-    /// STREAMARR_ACME_DOMAIN). Drives DeliveryMode::Auto, see §5.3.
+    /// PLAYARR_ACME_DOMAIN). Drives DeliveryMode::Auto, see §5.3.
     pub client_reachable: bool,
 }
 
@@ -249,9 +249,9 @@ pub struct PeerNode {
 }
 ```
 
-New `streamarr-db` repo traits (each a `Sqlx*Repo`, same shape as
+New `playarr-db` repo traits (each a `Sqlx*Repo`, same shape as
 `SqlxSourceInstanceRepo`/`SqlxUserInviteRepo`):
-`streamarr-db/src/repo/node_identity.rs` (`NodeIdentityRepo`, singleton
+`playarr-db/src/repo/node_identity.rs` (`NodeIdentityRepo`, singleton
 get/put), `peer_group.rs` (`PeerGroupRepo`), `peer_node.rs`
 (`PeerNodeRepo`, including `list_others()` returning every non-`is_self`
 active row: the fan-out target list every later section reads),
@@ -311,7 +311,7 @@ ALTER TABLE source_instances ADD COLUMN origin_peer_id TEXT;
 
 **Scope note, stated explicitly rather than left implicit:** adding these
 columns is necessary but not sufficient. Every existing write path in
-`streamarr-db::repo::{user,policy,source_instance}::Sqlx*Repo`'s
+`playarr-db::repo::{user,policy,source_instance}::Sqlx*Repo`'s
 `create`/`update` methods must be audited, in the same migration's
 accompanying code change, to set `updated_at` server-side on every write
 (never client-supplied): otherwise pre-existing rows sync with a stale or
@@ -404,7 +404,7 @@ CREATE INDEX IF NOT EXISTS idx_routing_rules_group_library_id ON routing_rules (
 CREATE INDEX IF NOT EXISTS idx_routing_rules_user_id ON routing_rules (user_id);
 ```
 
-`backend/crates/streamarr-model/src/group_library.rs` (new, Phase 2):
+`backend/crates/playarr-model/src/group_library.rs` (new, Phase 2):
 
 ```rust
 pub struct GroupLibrary { pub id: Uuid, pub group_id: Uuid, pub name: String,
@@ -437,7 +437,7 @@ pub struct PeerLeafAvailability {
 }
 ```
 
-`backend/crates/streamarr-model/src/routing.rs` (new, Phase 3):
+`backend/crates/playarr-model/src/routing.rs` (new, Phase 3):
 
 ```rust
 pub struct RoutingRule {
@@ -464,7 +464,7 @@ pub enum DeliveryMode {
 }
 ```
 
-New `streamarr-db` repos: `group_library.rs` (`GroupLibraryRepo`),
+New `playarr-db` repos: `group_library.rs` (`GroupLibraryRepo`),
 `peer_leaf_availability.rs` (`PeerLeafAvailabilityRepo`), `routing_rule.rs`
 (`RoutingRuleRepo`), `peer_sync_state.rs` (`PeerSyncStateRepo`),
 `sync_conflict_log.rs` (`SyncConflictLogRepo`).
@@ -485,7 +485,7 @@ ALTER TABLE user_invites ADD COLUMN consumed_by_peer_id TEXT;
 ALTER TABLE user_invite_requests ADD COLUMN group_library_allow TEXT NOT NULL DEFAULT '[]';
 ```
 
-`streamarr_model::UserInvite`/`UserInviteRequest` (`streamarr-model/src/
+`playarr_model::UserInvite`/`UserInviteRequest` (`playarr-model/src/
 user.rs`) each gain `pub group_library_allow: Vec<Uuid>` alongside the
 existing `pub library_allow: Vec<Uuid>` (unchanged), plus `UserInvite` gains
 `pub consumed_at: Option<DateTime<Utc>>`, `pub consumed_by_user_id:
@@ -500,13 +500,13 @@ correctness (the link is generated once and that's what gets shared), and
 skipping it avoids one more migration column and one more thing that could
 drift from the live membership table.
 
-### 2.6 New crate: `streamarr-peer-sync`
+### 2.6 New crate: `playarr-peer-sync`
 
-Mirrors `streamarr-arr-sync`'s shape (one new crate, not a module bolted
+Mirrors `playarr-arr-sync`'s shape (one new crate, not a module bolted
 onto an existing one: justified in §3.2):
 
 ```
-backend/crates/streamarr-peer-sync/src/
+backend/crates/playarr-peer-sync/src/
   lib.rs
   signing.rs           // Ed25519 sign/verify, pure, no I/O
   peer_client.rs        // signed HTTP client against another peer's /api/v1/peer/*
@@ -519,7 +519,7 @@ backend/crates/streamarr-peer-sync/src/
 ```
 
 Added to the workspace `Cargo.toml` members list alongside the other
-`streamarr-*` crates.
+`playarr-*` crates.
 
 ---
 
@@ -537,10 +537,10 @@ Added to the workspace `Cargo.toml` members list alongside the other
 | complete `source_instances` rows, including connection configuration and tombstones | `MediaFile.path` (filesystem path, meaningless/sensitive off-node) |
 | `peer_leaf_availability` (derived, read-only per peer) | `WatchProgress`, playback analytics, `TranscodeSession`/`cluster_leader` (Tier-2/3-local coordination, unrelated axis) |
 
-### 3.2 Why a new crate, not a module in `streamarr-arr-sync`
+### 3.2 Why a new crate, not a module in `playarr-arr-sync`
 
 `ReconciliationPoller`/`SyncOp` are keyed to a single source's `Work` diff
-against one *arr app and have zero dependency on `streamarr-auth`/user or
+against one *arr app and have zero dependency on `playarr-auth`/user or
 policy tables today. Peer sync diffs several distinct entity classes,
 including auth-sensitive ones (`users`, `policies`), against a *different
 node's own database*, under a genuinely different trust and conflict model
@@ -549,7 +549,7 @@ privilege-bearing `Policy`/`User` fields: §3.5): folding that into a
 crate whose only job today is "poll *arr apps" would give it an
 auth-sensitive dependency graph it doesn't need for anything else. The new
 crate's **shape** is copied 1:1 from `ReconciliationPoller`, including reuse
-of the existing `streamarr_arr_sync::poller::{SyncRunStatus,
+of the existing `playarr_arr_sync::poller::{SyncRunStatus,
 SyncStatusReporter}` types (implemented a second time by `PeerSyncPoller`,
 not modified) so the admin "sync status" concept extends rather than
 forking.
@@ -565,20 +565,20 @@ forking.
 - *Rejected: mutual TLS.* Requires every self-hosting operator to run a
   private CA and distribute client certs to a reverse proxy they may not
   fully control (Caddy/Nginx/Cloudflare Tunnel are all common in front of
-  a Streamarr install): real operational cost this project's own stated
-  config philosophy ("zero surprise precedence rules," `streamarr-config`'s
+  a Playarr Server install): real operational cost this project's own stated
+  config philosophy ("zero surprise precedence rules," `playarr-config`'s
   module doc) does not want to impose for a threat model that's a handful
   of personally-run boxes, not a fleet.
 - **Chosen:** each request to `/api/v1/peer/*` is signed by the caller's
   own `node_identity.private_key` over `method|path|sha256(body)|
-  timestamp|nonce`, with `X-Streamarr-Peer-Id: <caller peer_id>` naming the
+  timestamp|nonce`, with `X-Playarr-Peer-Id: <caller peer_id>` naming the
   claimed signer. The receiver looks up that id's `public_key` in its own
   `peer_nodes` table and verifies. A compromised peer can only forge
   requests *as itself*; revocation is `peer_nodes.status = 'left'` on every
   honest node (checked in addition to a valid signature), needing no
   secret rotation anywhere else in the group.
 
-New extractor `streamarr-api/src/peer_extractor.rs::PeerSignedRequest`,
+New extractor `playarr-api/src/peer_extractor.rs::PeerSignedRequest`,
 structurally parallel to `auth_extractor.rs`'s bearer-JWT extractors: rejects with 401 before the handler body runs.
 
 ### 3.4 Join / leave: concrete, synchronous, admin-driven
@@ -684,13 +684,13 @@ response was lost and retried is safe.
 ### 3.6 `PeerSyncPoller` and endpoints
 
 One `PeerSyncPoller` instance per non-self row in `peer_nodes`, default
-interval `STREAMARR_PEER_SYNC_INTERVAL_SECS=60` (new, optional config var,
-`streamarr-config`), spawned from `backend/src/main.rs`. Each poller wraps
-its pass in `coordinator.try_lock(&format!("peer-sync:{peer_id}"), ttl)`: exact reuse of the pattern `streamarr-arr-sync` already uses for
+interval `PLAYARR_PEER_SYNC_INTERVAL_SECS=60` (new, optional config var,
+`playarr-config`), spawned from `backend/src/main.rs`. Each poller wraps
+its pass in `coordinator.try_lock(&format!("peer-sync:{peer_id}"), ttl)`: exact reuse of the pattern `playarr-arr-sync` already uses for
 `"arr-sync:<source_instance_id>"`: so a peer node that is itself internally
 Tier-2/3-scaled never double-polls the same remote peer. On failure, the
 poller tries the next address in that peer's `addresses` list before giving
-up the cycle; after `STREAMARR_PEER_UNREACHABLE_THRESHOLD` (default 3)
+up the cycle; after `PLAYARR_PEER_UNREACHABLE_THRESHOLD` (default 3)
 consecutive full-cycle failures, that peer's `status` flips to
 `unreachable`. Already-synced data is left as-is (stale, not discarded): the same best-effort philosophy `arr-sync`'s `best_effort` flag already
 encodes.
@@ -708,7 +708,7 @@ Axum's general 2 MiB default because the first aggregate push can contain
 thousands of availability rows, while retaining a finite allocation bound for
 requests from known peers.
 
-Inbound endpoints, `streamarr-api/src/peer.rs` (new file), all
+Inbound endpoints, `playarr-api/src/peer.rs` (new file), all
 `PeerSignedRequest`-gated except `enroll` (bearer is the one-shot join
 token instead):
 
@@ -735,7 +735,7 @@ page reading `sync_conflict_log`.
 
 ### 3.7 Refresh tokens are explicitly not synced
 
-`POST /api/v1/auth/refresh` (`streamarr-api/src/refresh.rs`) already
+`POST /api/v1/auth/refresh` (`playarr-api/src/refresh.rs`) already
 rotates a durable, DB-backed opaque token (`SqlxRefreshTokenRepo`,
 confirmed wired at `backend/src/main.rs:919-920`: **not**
 `InMemoryRefreshTokenStore`; that in-memory store exists only for tests,
@@ -770,7 +770,7 @@ bundle on the pairing artifact) plus client-side fan-out, not state sync.
 
 Deferred to §5.4, since it only matters once `Redirect` delivery (§5.3)
 needs a token minted by one peer to verify on another: until Phase 3, no
-change to `streamarr-auth/src/jwt.rs` is required.
+change to `playarr-auth/src/jwt.rs` is required.
 
 ---
 
@@ -801,7 +801,7 @@ sync avoids the problem outright.
 
 ### 4.2 The portability layer: external refs + `LeafSelector`
 
-`ExternalRef`/`ExternalProvider` (`streamarr-model/src/work.rs`) are
+`ExternalRef`/`ExternalProvider` (`playarr-model/src/work.rs`) are
 already a stable, dedup-able cross-source key. The existing client-side
 precedent, `clients/tv-web/web/src/lib/joinedServers.ts`'s
 `workIdentityKeys`/`fallbackIdentity` (matching by external ref, falling
@@ -824,12 +824,12 @@ its own `LeafRef`/`media_file_id`: it never adopts a sender's id.
 
 ### 4.3 Catalog API changes
 
-`streamarr-catalog::CatalogService` (`browse`/`get_by_id`,
-`streamarr-catalog/src/lib.rs`) gains a hydration step: for each returned
+`playarr-catalog::CatalogService` (`browse`/`get_by_id`,
+`playarr-catalog/src/lib.rs`) gains a hydration step: for each returned
 `Work`, join `peer_leaf_availability` on `local_work_id` and attach:
 
 ```rust
-// streamarr-api/src/catalog.rs, new DTO
+// playarr-api/src/catalog.rs, new DTO
 pub struct AvailabilityBadge {
     pub peer_node_id: Uuid,
     pub peer_name: String,
@@ -890,7 +890,7 @@ and `Policy.group_library_allow` are expressed once, portably, at that
 level; the existing `Policy.library_allow`/per-`SourceInstance` grant stays
 available unchanged for the narrower case of granting only one of two
 `SourceInstance`s backing the same `GroupLibrary` (e.g. a 4K vs. 1080p
-pair). `ensure_library_allowed` (`streamarr-api/src/auth_extractor.rs`)
+pair). `ensure_library_allowed` (`playarr-api/src/auth_extractor.rs`)
 gains one extra step: resolve `group_library_allow` to local
 `SourceInstance` ids (via a new `SourceInstanceRegistry` lookup by
 `group_library_id`) before comparing, unioned with the existing
@@ -898,24 +898,24 @@ gains one extra step: resolve `group_library_allow` to local
 
 ### 5.2 Evaluation point, and why the whole negotiation must move, not just the URL
 
-`playback_info_handler` (`streamarr-api/src/playback.rs:750`) gets a new
+`playback_info_handler` (`playarr-api/src/playback.rs:750`) gets a new
 step immediately after its existing `ensure_library_allowed` check and
 **before** its existing direct-play/rendition/transcode-negotiation logic
 (`can_direct_play` and everything downstream). This ordering is load-
 bearing, not stylistic: `resolve_media_path`'s own design assumption is
-"Streamarr co-located with its media," and transcoding, HLS rendition
+"Playarr Server co-located with its media," and transcoding, HLS rendition
 selection, and on-demand `ffmpeg` spawning are all inherently tied to
 whichever process can see the file on disk. **A routing decision that only
 swapped the final stream URL while continuing to run the entry node's own
 negotiation logic locally would be silently wrong**: the entry node has no
 file to probe and no encoder output to serve for content it doesn't hold.
 So when routing resolves to a different peer, the **entire** negotiation
-request is forwarded: via the signed `streamarr-peer-sync::peer_client`: to that peer's own `playback_info_handler`, and its response (already
+request is forwarded: via the signed `playarr-peer-sync::peer_client`: to that peer's own `playback_info_handler`, and its response (already
 correct, because that peer *does* have the file) is what gets returned or
 redirected to.
 
 ```rust
-// streamarr-api/src/routing.rs, new file
+// playarr-api/src/routing.rs, new file
 pub struct RoutingContext {
     pub group_library_id: Option<Uuid>,
     pub user_id: Uuid,
@@ -986,10 +986,10 @@ serve it), and forwards exactly the same way step 2 above does.
 Decided per-request by `DeliveryMode` (§2.4), using `PeerAddress.
 client_reachable` (§2.1) as the deciding signal: operator-asserted, never
 auto-detected, matching the same explicit-operator-input philosophy already
-used for `STREAMARR_ACME_DOMAIN`.
+used for `PLAYARR_ACME_DOMAIN`.
 
 - **`ServeLocally`**: unchanged: `stream_media_handler`
-  (`streamarr-api/src/media.rs`) serves the local path via `ServeFile`,
+  (`playarr-api/src/media.rs`) serves the local path via `ServeFile`,
   exactly as today.
 - **`Redirect`**: the resolved `PlaybackInfoResponse.url` becomes an
   absolute URL at the target peer's own client-reachable address. Best
@@ -1032,7 +1032,7 @@ reqwest call."
 
 ### 5.4 Cross-node JWT trust
 
-`AccessTokenClaims` (`streamarr-auth/src/jwt.rs`) already carries an `iss`
+`AccessTokenClaims` (`playarr-auth/src/jwt.rs`) already carries an `iss`
 field; `JwtIssuer` today issues and verifies HS256 (confirmed: "Issues and
 verifies HMAC-signed (HS256) access tokens... for a symmetric algorithm,
 [encoding and decoding key are] the same secret"). A shared secret across a
@@ -1061,7 +1061,7 @@ server=<apiBaseUrl>&invite=<token>`, parsed by
 single `{serverUrl, inviteToken}` (confirmed against the current file).
 That single-address shape is exactly what a multi-peer group breaks.
 
-New backend endpoint, `streamarr-api/src/admin_peer.rs`: `GET
+New backend endpoint, `playarr-api/src/admin_peer.rs`: `GET
 /api/v1/admin/peer-groups/self/address-bundle` (`AdminUser`-gated),
 returning:
 
@@ -1107,7 +1107,7 @@ answered), reordered so the winner tries first next time.
 
 ### 6.2 `UserInvite`/`UserInviteRequest` model changes
 
-Covered in §2.5. Invite-creation call sites in `streamarr-api` (wherever
+Covered in §2.5. Invite-creation call sites in `playarr-api` (wherever
 `admin.rs`/`users.rs` build a `UserInvite` today) additionally populate
 `group_library_allow` from the same admin-selected grants that populate
 `library_allow`, mapped through `SourceInstance.group_library_id` where
@@ -1116,18 +1116,18 @@ one exists.
 ### 6.3 Device pairing
 
 RFC 8628 issuance stays a per-peer concern (`POST /api/v1/oauth/device/
-code`, `streamarr-api/src/oauth.rs`): some one peer has to generate and
+code`, `playarr-api/src/oauth.rs`): some one peer has to generate and
 hold the `device_code`/`user_code` pair, and §3.8 already established that
 pending-authorization state itself is not synced. What changes is what
 that one peer tells both ends about the *group*, not the pairing state:
 
 - The **Android TV client** requests its visible QR/manual code from the
   hosted `playarr.app` Durable Object broker, so first contact needs no
-  Streamarr address. After the browser claims that code with its selected
+  Playarr Server address. After the browser claims that code with its selected
   profile, Android receives a single-use per-peer device code and the
-  profile's address bundle, then redeems directly against Streamarr. Other
+  profile's address bundle, then redeems directly against Playarr Server. Other
   TV clients continue to try their remembered addresses in order.
-- **`request_verification_uri`** (`streamarr-api/src/oauth.rs:122`)
+- **`request_verification_uri`** (`playarr-api/src/oauth.rs:122`)
   changes: the device-code response's `verification_uri_complete` now
   embeds a `PeerAddressBundle` (§6.1, reused as-is) via the identical
   `servers=` query param the invite flow already uses, built from the
@@ -1160,8 +1160,8 @@ that one peer tells both ends about the *group*, not the pairing state:
   above.
 - The prior first-contact server-entry requirement is removed for Android
   TV by the narrowly scoped hosted broker. Manual address entry and
-  `streamarr-config.json` remain compatibility paths for clients that have
-  not adopted hosted pairing; once any client receives a Streamarr device
+  `playarr-config.json` remain compatibility paths for clients that have
+  not adopted hosted pairing; once any client receives a Playarr Server device
   response, the full group bundle still travels with the artifact and is
   remembered locally.
 
@@ -1171,10 +1171,10 @@ The same multi-address shape (§7's `knownServers`) needs an equivalent on
 every non-web client. Confirmed real files, current single-address
 implementations:
 
-- **Android**: `clients/android/core-auth/src/main/kotlin/io/streamarr/
+- **Android**: `clients/android/core-auth/src/main/kotlin/io/playarr/
   shared/auth/DeviceAuthClient.kt`.
-- **iOS**: `clients/ios/Sources/StreamarrApp/LoginServerURL.swift` (server
-  entry) and `clients/ios/Sources/StreamarrKit/Auth/DeviceFlowClient.swift`
+- **iOS**: `clients/ios/Sources/PlayarrApp/LoginServerURL.swift` (server
+  entry) and `clients/ios/Sources/PlayarrKit/Auth/DeviceFlowClient.swift`
   (device pairing).
 - **Apple TV** (`clients/apple-tv/`: a distinct target from `clients/ios/`
   in this repo, not the same codebase): `clients/apple-tv/Sources/
@@ -1203,7 +1203,7 @@ Persistence differs per platform (SharedPreferences / Keychain /
 ### 7.1 Remembered group of addresses, not one address
 
 New module `clients/tv-web/packages/domain/src/knownServers.ts`, replacing
-the single `streamarr:apiBaseUrl` localStorage key:
+the single `playarr:apiBaseUrl` localStorage key:
 
 ```ts
 export interface KnownServer { url: string; lastSuccessAt?: number }
@@ -1225,7 +1225,7 @@ export async function resolveReachableServer(
 ): Promise<string>;   // tries lastGoodUrl first, then servers[] in order; throws only if every address failed
 ```
 
-**Self-healing**: every login/refresh response (`streamarr-api/src/
+**Self-healing**: every login/refresh response (`playarr-api/src/
 {login,refresh}.rs`) gains an optional `peer_addresses:
 PeerAddressBundle | null` field (§6.1's type, reused: cheap to attach). The
 client writes it straight into `KnownServerGroup` on every successful
@@ -1285,11 +1285,11 @@ never puts an ungrouped, single-node install at risk.
 ### Phase 1: Node identity + registry + group join
 
 **Adds:** `backend/migrations/{postgres/0035,sqlite/0032}_node_identity.sql`;
-`streamarr-model/src/peer.rs`; `streamarr-db/src/repo/{node_identity,
-peer_group,peer_node,peer_join_token}.rs`; `streamarr-api/src/
+`playarr-model/src/peer.rs`; `playarr-db/src/repo/{node_identity,
+peer_group,peer_node,peer_join_token}.rs`; `playarr-api/src/
 {admin_peer.rs (self/group/join-token endpoints), peer.rs (enroll only for
 now), peer_extractor.rs}`.
-**Touches:** `streamarr-api/src/lib.rs` (`AppState` gains
+**Touches:** `playarr-api/src/lib.rs` (`AppState` gains
 `node_identity_repo`, `peer_group_repo`, `peer_node_repo`,
 `peer_join_token_repo`, plus route wiring); `backend/src/main.rs`
 (boot-time `node_identity` load-or-seed; no `PeerSyncPoller` yet: that's
@@ -1304,21 +1304,21 @@ limitation, not a bug.
 
 ### Phase 2: Sync protocol + content aggregation
 
-**Adds:** new crate `streamarr-peer-sync` (full); migrations `{postgres/
+**Adds:** new crate `playarr-peer-sync` (full); migrations `{postgres/
 0036,sqlite/0033}` (`peer_sync_state`, `sync_conflict_log`, `users`/
 `policies`/`source_instances` additive columns), `{0037,0034}`
 (`group_libraries`, `source_instances.group_library_id`, `policies.
 group_library_allow`), `{0038,0035}` (`peer_leaf_availability`);
-`streamarr-model/src/group_library.rs`; `streamarr-db/src/repo/
+`playarr-model/src/group_library.rs`; `playarr-db/src/repo/
 {peer_sync_state,group_library,peer_leaf_availability,sync_conflict_log}.rs`;
 follow-up migrations `{postgres/0042,sqlite/0039}` add
 `source_instances.origin_peer_id` and reset library/push cursors once so
 identity-only rows from older releases are replayed as complete sources.
-**Touches:** `streamarr-api/src/peer.rs` (real sync endpoints, now
+**Touches:** `playarr-api/src/peer.rs` (real sync endpoints, now
 `PeerSignedRequest`-enforced), `catalog.rs` (`AvailabilityBadge`/
 `RemoteOnlyWork` DTOs), `auth_extractor.rs` (`group_library_allow` check);
-`streamarr-catalog/src/lib.rs` (`browse`/`get_by_id` hydration);
-`streamarr-auth/src/policy.rs`; `streamarr-db/src/repo/{user,policy,
+`playarr-catalog/src/lib.rs` (`browse`/`get_by_id` hydration);
+`playarr-auth/src/policy.rs`; `playarr-db/src/repo/{user,policy,
 source_instance}.rs` (the §2.2 "always set `updated_at` server-side" audit: required here, not optional); `backend/src/main.rs` (spawn
 `PeerSyncPoller` per known peer, `ClusterCoordinator`-guarded: **blocked
 on the Phase-2 prerequisite in §9**).
@@ -1331,12 +1331,12 @@ peers.
 ### Phase 3: Routing rules + redirect/proxy streaming
 
 **Adds:** migration `{postgres/0039,sqlite/0036}` (`routing_rules`);
-`streamarr-model/src/routing.rs`; `streamarr-db/src/repo/routing_rule.rs`;
-`streamarr-api/src/routing.rs`.
-**Touches:** `streamarr-api/src/playback.rs` (routing step + full-
+`playarr-model/src/routing.rs`; `playarr-db/src/repo/routing_rule.rs`;
+`playarr-api/src/routing.rs`.
+**Touches:** `playarr-api/src/playback.rs` (routing step + full-
 negotiation forwarding, `POST /api/v1/playback/by-external-ref`);
-`streamarr-api/src/media.rs` (`Proxy` passthrough path, `AppState.
-peer_http`); `streamarr-auth/src/jwt.rs` (EdDSA mode, §5.4: a **hard**
+`playarr-api/src/media.rs` (`Proxy` passthrough path, `AppState.
+peer_http`); `playarr-auth/src/jwt.rs` (EdDSA mode, §5.4: a **hard**
 dependency of this phase, not soft: `Redirect` cannot ship without it);
 `backend/src/main.rs` (JWT algorithm selection by `group_id`, `peer_http`
 client construction).
@@ -1351,10 +1351,10 @@ fallback rather than a hard failure.
 `user_invite_requests` additive columns); `GET /api/v1/admin/peer-groups/
 self/address-bundle` in `admin_peer.rs`.
 **Touches:** wherever `UserInvite`/`UserInviteRequest` rows are constructed
-today in `streamarr-api`'s admin/users handlers; `streamarr-api/src/
+today in `playarr-api`'s admin/users handlers; `playarr-api/src/
 {login,refresh}.rs` (attach `peer_addresses` to responses: small, could
 also land at the start of Phase 5, listed here since it reuses this
-phase's address-bundle logic directly); `streamarr-api/src/oauth.rs`
+phase's address-bundle logic directly); `playarr-api/src/oauth.rs`
 (`request_verification_uri` embeds the `PeerAddressBundle` into
 `verification_uri_complete` via `servers=`, §6.3 — the one place device
 pairing's server-side surface *does* change, narrowly, to carry addresses
@@ -1376,7 +1376,7 @@ knownServers.ts`; `RUNTIME_CONFIG_FILE_NAME`'s `apiBaseUrl` → plural
 **Touches:** `clients/tv-web/web/src/lib/{ApiClientProvider.tsx,
 loginServerUrl.ts}`; `clients/tv-web/packages/device-auth/src/session.ts`
 (`ensureAccessToken` retry-across-group); native mirrors: `clients/android/core-auth/.../DeviceAuthClient.kt`,
-`clients/ios/Sources/{StreamarrApp/LoginServerURL.swift,StreamarrKit/Auth/
+`clients/ios/Sources/{PlayarrApp/LoginServerURL.swift,PlayarrKit/Auth/
 DeviceFlowClient.swift}`, `clients/apple-tv/Sources/{TVAppEnvironment.swift,
 TVSettingsView.swift}`, `clients/roku/source/{Config.brs,Storage.brs}`
 (narrower scope, per §6.4).
@@ -1409,10 +1409,10 @@ codebase rather than assumed from the source proposals.
 All three source proposals flagged "`SourceInstanceRegistry` does not
 hydrate from the DB on boot" as an open prerequisite. **That is only true
 for half the deployment shape today.** `backend/src/main.rs`'s `boot_api`
-path (`STREAMARR_ROLE=api` or `all`) already hydrates the registry from
+path (`PLAYARR_ROLE=api` or `all`) already hydrates the registry from
 `SourceInstanceRepo::list_all()` before serving (confirmed at
 `backend/src/main.rs:922-952`, with an explicit doc comment on
-`AppState.source_instance_repo` in `streamarr-api/src/lib.rs` describing
+`AppState.source_instance_repo` in `playarr-api/src/lib.rs` describing
 this as "the actual fix for registered `*arr` connections not surviving a
 restart"). The **remaining, narrower** gap: `boot_worker`, in a split
 `api`/`worker` (Postgres Tier 2/3) deployment, runs in a *different
@@ -1447,7 +1447,7 @@ setting `updated_at` server-side, not just the column existing.
 ### 9.3 `docs/architecture/distributed-design.md` is stale on user/policy persistence
 
 Confirmed (§1.1): its claim that "there is no `UserRepo`/`PolicyRepo` in
-`streamarr-db`" and that refresh tokens live only in
+`playarr-db`" and that refresh tokens live only in
 `InMemoryRefreshTokenStore` is false today: both are real and durably
 wired. The **one** claim in that same paragraph still accurate is
 `InMemoryDeviceAuthorizationStore` remaining in-process-only. Folded into
@@ -1458,7 +1458,7 @@ description of it.
 
 ### 9.4 No encryption-at-rest exists anywhere in this codebase
 
-Confirmed at `backend/crates/streamarr-db/src/repo/source_instance.rs:18`:
+Confirmed at `backend/crates/playarr-db/src/repo/source_instance.rs:18`:
 `api_key_encrypted` is stored as plain `TEXT`, with an explicit comment
 that no encryption-at-rest exists. This is not a gap this design closes: `node_identity.private_key` (§2.1) is stored the same way, inheriting the
 same already-accepted, already-documented posture rather than introducing
@@ -1467,7 +1467,7 @@ this feature.
 
 ### 9.5 `Sensitive<T>` does not protect `Serialize`
 
-Confirmed at `backend/crates/streamarr-model/src/sensitive.rs`:
+Confirmed at `backend/crates/playarr-model/src/sensitive.rs`:
 `Sensitive<T>` redacts `Debug`/`Display` only; `Serialize`/`Deserialize`
 round-trip the wrapped value transparently, by design (so legitimate
 callers like the outbound HTTP client can still get the secret out). This

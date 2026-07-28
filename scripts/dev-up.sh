@@ -2,7 +2,7 @@
 #
 # scripts/dev-up.sh
 #
-# Brings up the Streamarr local dev stack:
+# Brings up the Playarr Server local dev stack:
 #   1. The dependency containers declared in infra/docker/docker-compose.dev.yml
 #      (Postgres, the *arr suite, wiremock stand-ins, observability, etc.)
 #   2. The backend itself, run *natively* via `cargo run` (not containerised)
@@ -23,10 +23,10 @@
 # Env overrides:
 #   COMPOSE_FILE        path to the dev compose file
 #                        (default: infra/docker/docker-compose.dev.yml)
-#   COMPOSE_PROJECT_NAME docker compose project name (default: streamarr-dev)
+#   COMPOSE_PROJECT_NAME docker compose project name (default: playarr-dev)
 #   BACKEND_MANIFEST    path to the backend workspace Cargo.toml
 #                        (default: backend/Cargo.toml)
-#   BACKEND_BIN         cargo bin target to run (default: streamarr)
+#   BACKEND_BIN         cargo bin target to run (default: playarr)
 #   SKIP_COMPOSE_WAIT   set to 1 to skip `--wait` on `docker compose up`
 #                        (useful if your compose file has no/incomplete
 #                        healthchecks yet and `--wait` would just time out)
@@ -51,9 +51,9 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_ROOT}"
 
 COMPOSE_FILE="${COMPOSE_FILE:-${REPO_ROOT}/infra/docker/docker-compose.dev.yml}"
-COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-streamarr-dev}"
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-playarr-dev}"
 BACKEND_MANIFEST="${BACKEND_MANIFEST:-${REPO_ROOT}/backend/Cargo.toml}"
-BACKEND_BIN="${BACKEND_BIN:-streamarr}"
+BACKEND_BIN="${BACKEND_BIN:-playarr}"
 SKIP_COMPOSE_WAIT="${SKIP_COMPOSE_WAIT:-0}"
 
 RUN_DEPS=1

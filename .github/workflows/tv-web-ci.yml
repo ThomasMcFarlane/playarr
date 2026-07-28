@@ -34,18 +34,18 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Test Samsung AVPlay adapter
-        run: pnpm --filter @streamarr-tv/player-avplay run test
+        run: pnpm --filter @playarr-tv/player-avplay run test
 
       - name: Test package gates
         run: |
           pnpm run test:legacy-tv-css
-          pnpm --filter @streamarr-tv/app-webos run test
-          pnpm --filter @streamarr-tv/app-tizen run test
+          pnpm --filter @playarr-tv/app-webos run test
+          pnpm --filter @playarr-tv/app-tizen run test
 
       - name: Build full Playarr applications
         run: |
-          pnpm --filter @streamarr-tv/app-webos... run build
-          pnpm --filter @streamarr-tv/app-tizen... run build
+          pnpm --filter @playarr-tv/app-webos... run build
+          pnpm --filter @playarr-tv/app-tizen... run build
 
       # These are complete vendor package roots. LG's ares-package can turn
       # the webOS directory into an IPK without signing material. Samsung's

@@ -1,8 +1,8 @@
-# Streamarr / Playarr Design Reference
+# Playarr Server / Playarr Design Reference
 
 Status: living reference, first written 2026-07-16. Covers the design system (elevation, color,
 components) and a page inventory for both client apps in this repo. Written to directly inform an
-upcoming redesign of Streamarr Admin's Source Instances page, so it favors concrete hex values and
+upcoming redesign of Playarr Server Admin's Source Instances page, so it favors concrete hex values and
 class names over general design principles.
 
 Snapshot note: file lengths and statements labelled "current" describe the 2026-07-16 research
@@ -19,11 +19,11 @@ in one accent custom property per app. Only the pages the scan actually visited 
 (see §5 for what wasn't visited); everywhere this document generalizes beyond an observed page, it
 says so explicitly as an inference.
 
-Streamarr's own side of the comparison — its current design tokens — was **read in full, not
+Playarr Server's own side of the comparison — its current design tokens — was **read in full, not
 assumed**, from both:
 
 - `clients/tv-web/web/src/styles/global.css` (Playarr Web, the consumer streaming client) — 1056 lines
-- `clients/tv-web/admin/src/styles/global.css` (Streamarr Admin, the operator control plane) — 998 lines
+- `clients/tv-web/admin/src/styles/global.css` (Playarr Server Admin, the operator control plane) — 998 lines
 
 A full diff of the two files confirms the research notes' claim that Admin copied Web's stylesheet
 verbatim, with two small, apparently-unintentional gaps where Admin hasn't caught up to a later Web
@@ -39,7 +39,7 @@ byte-identical on tokens the same way Sonarr/Radarr/Lidarr are):
    improvises its own layout inline with a `.page` wrapper and inline `style={{ maxWidth: 360,
    margin: "4rem auto" }}`, rather than using shared classes.
 
-Every hex value quoted below for Streamarr/Playarr's *current* state is copied directly from these
+Every hex value quoted below for Playarr Server/Playarr's *current* state is copied directly from these
 two files as they exist today, not from the earlier research summary.
 
 ## 2. Elevation & layout
@@ -47,16 +47,16 @@ two files as they exist today, not from the earlier research summary.
 ### 2.1 Three-tier dark background system
 
 Confirmed identical on Sonarr and Radarr via `getComputedStyle`, and already matched almost
-exactly in Streamarr's tokens:
+exactly in Playarr Server's tokens:
 
-| Tier | Real *arr value | Streamarr token | Streamarr value | Match |
+| Tier | Real *arr value | Playarr Server token | Playarr Server value | Match |
 |---|---|---|---|---|
 | Base (page background) | `#202020` | `--color-bg-base` | `#202020` | exact |
 | Chrome (sidebar / header / modals / popovers) | `#2a2a2a` | `--color-bg-chrome` | `#2a2a2a` | exact |
 | Raised (cards, inputs) | real theme doesn't separately name this tier in the findings, but sidebar active-item bg is `#333333` | `--color-bg-raised` | `#333333` | consistent |
 | Shadow | `#111` card shadow color | `--shadow-color` / `--card-shadow` | `#111111`, `0 0 10px 1px var(--shadow-color)` | exact |
 | Text primary / help / disabled | `#ccc` / `#555` / `#999` | `--color-text-primary` / `--color-text-help` / `--color-text-disabled` | `#cccccc` / `#909293` / `#909293` | primary exact; help/disabled use one shared `#909293` token where the real theme uses two distinct grays (`#555` and `#999`) — see §5, not independently re-verified which real element maps to which |
-| Border | `#858585` general / `#dde6e9` input-only | `--color-border` | `#858585` | exact (Streamarr doesn't yet have a distinct lighter input-border token) |
+| Border | `#858585` general / `#dde6e9` input-only | `--color-border` | `#858585` | exact (Playarr Server doesn't yet have a distinct lighter input-border token) |
 | Font | Roboto, "open sans", "Helvetica Neue", Helvetica, Arial, sans-serif @ 14px body | `--font-sans` / `--font-size-body` | identical stack, `14px` | exact |
 
 No new work is needed here — this is already a faithful port. Flagged only because the color-system
@@ -66,21 +66,21 @@ work in §3 will sit on top of it.
 
 Observed on both Sonarr and Radarr: a persistent left rail, ~200px wide, icon+label rows stacked
 vertically, with the active (and, per the CSS, hovered) item distinguished by **a colored left
-border strip plus text recoloring to the app's accent** — not a filled background block. Streamarr
+border strip plus text recoloring to the app's accent** — not a filled background block. Playarr Server
 already implements this exactly:
 
 - `.sidebar` is `--sidebar-width: 210px` (real *arr is "~200px" per the scan — close enough to be
   the same design decision, not independently re-measured to the pixel).
 - `.sidebar-link` has `border-left: 3px solid transparent` at rest.
 - `.sidebar-link.is-active` sets `border-left-color: var(--color-accent)` and `color:
-  var(--color-accent)`, plus (a Streamarr-specific addition not called out in the *arr findings)
+  var(--color-accent)`, plus (a Playarr Server-specific addition not called out in the *arr findings)
   a `background: var(--color-bg-raised)` fill on the active row — the real *arr pattern per the
-  findings is left-border-strip-only, with no fill; Streamarr's raised-background fill is an
+  findings is left-border-strip-only, with no fill; Playarr Server's raised-background fill is an
   enhancement beyond what was observed, not a contradiction of it, but should be understood as
-  Streamarr's own choice rather than a directly-copied fact.
+  Playarr Server's own choice rather than a directly-copied fact.
 - `.sidebar-link:hover` also recolors to `--color-accent`, matching the observed hover behavior.
 
-Both client apps (Playarr Web and Streamarr Admin) already use this shell (`App.tsx` in both).
+Both client apps (Playarr Web and Playarr Server Admin) already use this shell (`App.tsx` in both).
 Playarr Web additionally has an accordion-style nested nav group (`.sidebar-section`) for
 settings-with-children; this wasn't something the Sonarr/Radarr scan specifically documented, so
 treat it as a plausible *arr-family pattern (Sonarr/Radarr do have collapsible Settings sub-items
@@ -96,7 +96,7 @@ Advanced", "No Changes" (a disabled save button when nothing's changed), "Test A
 "Manage Clients". Radarr's Movies screen has the same toolbar composition plus a right-aligned
 View/Sort/Filter icon-button cluster.
 
-**This pattern does not exist in Streamarr yet.** Neither Playarr Web nor Streamarr Admin currently
+**This pattern does not exist in Playarr Server yet.** Neither Playarr Web nor Playarr Server Admin currently
 renders a toolbar row under `.app-header` — `.app-header` is present as an empty `<header
 className="app-header" />` in both apps' `App.tsx` today (a fixed-height chrome band with no content
 in it). Page-level actions currently live inline in the page body instead (e.g. Source Instances'
@@ -104,7 +104,7 @@ in it). Page-level actions currently live inline in the page body instead (e.g. 
 
 **Inference, not an observed fact:** it's reasonable to generalize that every *arr settings-style
 page uses this same toolbar composition, since it was observed consistently across two different
-Radarr screens with two different button sets. Adopting it for Streamarr would mean building a
+Radarr screens with two different button sets. Adopting it for Playarr Server would mean building a
 `.toolbar` / `.toolbar-btn` (icon-over-label, transparent at rest, bottom divider) class pair and
 mounting instances of it inside `.app-header` per-page — this is a real gap worth a follow-up task,
 but out of scope for the color-token change this document exists to drive.
@@ -128,21 +128,21 @@ input-focus border variant (`#66afe9`), and info-colored text, in **both** apps.
 `~#27c24c` button, danger `#f05050`, warning `#ffa500`, info `#5d9cec`.
 
 So each *arr app has exactly **one** identity color, and it is used narrowly (nav + logo) while a
-shared blue does all the actual UI-primary work. Streamarr's current tokens copy this structure
-faithfully: `--color-brand: #5d9cec` (explicitly commented "NOT Streamarr's own color") does the
-general-purpose work, and `--color-accent: #e5484d` (explicitly commented "Streamarr's own red
+shared blue does all the actual UI-primary work. Playarr Server's current tokens copy this structure
+faithfully: `--color-brand: #5d9cec` (explicitly commented "NOT Playarr Server's own color") does the
+general-purpose work, and `--color-accent: #e5484d` (explicitly commented "Playarr Server's own red
 identity") is scoped only to `.sidebar-link:hover`, `.sidebar-link.is-active`, `.app-logo-accent`,
 and `.sidebar-section-toggle:hover` — i.e. nav-hover/active plus the logo, nothing else. That is a
 correct, literal translation of the observed Sonarr/Radarr pattern.
 
 ### 3.2 The color decision this task asks for
 
-The task is explicitly to widen Streamarr's red beyond that narrow nav-only role: make
+The task is explicitly to widen Playarr Server's red beyond that narrow nav-only role: make
 `--color-accent` (the `#e5484d` family) the **primary brand/action color** — buttons, active states,
 focus rings — the same way Sonarr's cyan and Radarr's gold are, in principle, each app's *one*
 consistent identity color. This is a deliberate **departure** from what was literally observed
 (where the identity color stays nav-only and a shared blue does the primary-action work), made
-because Streamarr/Playarr are not third-party skins of someone else's shared *arr theme — they're
+because Playarr Server/Playarr are not third-party skins of someone else's shared *arr theme — they're
 products in their own right, and the user has directed that their own red carry the brand
 everywhere, not just in the sidebar. Flagging this explicitly: §3.1's observed pattern is being used
 as *precedent for having one consistent identity color*, not as license to claim "the real apps also
@@ -150,7 +150,7 @@ use their accent for primary actions" — they don't, per the findings.
 
 ### 3.3 The `--color-danger` naming collision
 
-Streamarr today has two reds sitting close to each other:
+Playarr Server today has two reds sitting close to each other:
 
 - `--color-accent: #e5484d` (currently nav-only; proposed to become primary brand)
 - `--color-danger: #f05050` (destructive actions: `.btn-danger`, `.error-text`, `.badge-danger`,
@@ -165,7 +165,7 @@ all page long that "red = this app's normal color", not "red = stop."
 **Recommendation: keep the two reds, but push them further apart and give danger a different hue
 lean, not just a different lightness.** Concretely:
 
-- Keep `--color-accent` at `#e5484d` (Streamarr's brand red — already well-established across both
+- Keep `--color-accent` at `#e5484d` (Playarr Server's brand red — already well-established across both
   apps' logos in the codebase, no reason to reprint it everywhere as a different value).
 - **Change `--color-danger` from `#f05050` to `#dc2626`** — a cooler, more saturated, noticeably
   darker red (closer to a fire-engine/Tailwind `red-600` than the current fairly pastel `#f05050`).
@@ -175,7 +175,7 @@ lean, not just a different lightness.** Concretely:
   reds read as "brand" vs. "alarm" even at a glance, at small sizes, and for red/green colorblind
   users who rely on lightness/saturation cues rather than hue alone. This also happens to be closer
   to the real *arr theme's own semantic-danger intent (`#f05050` was already the *arr-standard
-  danger red pre-Streamarr; `#dc2626` keeps the same role, same family, just pushed to stay legible
+  danger red pre-Playarr Server; `#dc2626` keeps the same role, same family, just pushed to stay legible
   against a now-red-heavy brand palette).
 - Do **not** try to solve this by making danger a non-red color (e.g. orange) — that would break
   the universal "red = destructive" convention the *arr family (and virtually every dark-themed
@@ -203,7 +203,7 @@ table is one edit applied twice, keeping them in sync as they are today.
 
 **Why `--color-info` stays blue:** `--color-info` is a *semantic* color (like danger/warning/success),
 not a *brand* color — in the real *arr theme it happens to reuse the same hex as `--primaryColor`
-because that app's primary action color *is* blue. Streamarr's primary is becoming red, but its
+because that app's primary action color *is* blue. Playarr Server's primary is becoming red, but its
 "informational" semantic meaning shouldn't also become red — that would collide with danger even
 harder than the current brand/danger closeness does. Recommend `--color-info` keep `#5d9cec` as its
 own standalone value (no longer aliased to primary, just its own blue) so info-badges, help-icons,
@@ -221,7 +221,7 @@ Per §1's verified diff, `clients/tv-web/admin/src/styles/global.css` and
 limited to two component-level rules unrelated to color, see §1). The token table in §3.4 applies
 to both files verbatim, and both logos (`<span class="app-logo-accent">Play</span>arr` in Web,
 `<span class="app-logo-accent">Stream</span>arr` in Admin) already key off `--color-accent`, so no
-logo-specific change is needed — they'll simply continue rendering in Streamarr's red, now
+logo-specific change is needed — they'll simply continue rendering in Playarr Server's red, now
 reinforced by the rest of the UI matching it instead of being an isolated red accent against an
 otherwise-blue app.
 
@@ -242,7 +242,7 @@ The grid's **last tile** is a dedicated "add new" tile: identical size/shape to 
 just a large "+" glyph centered in a thin-bordered (not filled) box. Clicking it opens the same
 modal used for editing, in "create" mode.
 
-**Maps to Streamarr's `.provider-grid` / `.provider-card`** (already defined in `global.css`,
+**Maps to Playarr Server's `.provider-grid` / `.provider-card`** (already defined in `global.css`,
 already documented there as "Admin -> Source Instances, and any future provider-style config
 list"). **Applies to:**
 - **Source Instances** (`clients/tv-web/admin/src/pages/SourceInstances.tsx`) — this is the
@@ -272,9 +272,9 @@ list"). **Applies to:**
 **Observed on:** Radarr Download Clients cards (gray "Disabled" / green "Enabled" pill, rounded,
 padded, no border).
 
-**Maps to Streamarr's `.badge` + `.badge-pill`** combination (already defined), specifically
+**Maps to Playarr Server's `.badge` + `.badge-pill`** combination (already defined), specifically
 `.badge-success.badge-pill` for an "Enabled"/"Reachable" state and `.badge-neutral.badge-pill` for
-"Disabled". Streamarr already has both badge-success and badge-neutral defined; no new CSS needed,
+"Disabled". Playarr Server already has both badge-success and badge-neutral defined; no new CSS needed,
 just applying the existing pair in the enabled/disabled role Radarr uses it for, on Source Instances
 and Users cards per §4.1.
 
@@ -299,7 +299,7 @@ and Users cards per §4.1.
    - Right-aligned cluster, in this order: a small gear/reset icon, "Test", "Cancel", "Save"
      (blue/primary) — **Save is rightmost, the most prominent position.**
 
-**Maps to:** Streamarr already has every primitive this modal needs (`.input`, the checkbox pattern
+**Maps to:** Playarr Server already has every primitive this modal needs (`.input`, the checkbox pattern
 with checkmark glyph — currently only in Web's copy of `global.css`, see §1's fix-it note — `.btn`
 variants, `.hint` for helper text, `.section`/`.section-title` for the divider). What's **missing**
 is the modal container itself: there is no `.modal` / `.modal-overlay` / `.modal-header` /
@@ -324,13 +324,13 @@ confirming the real theme mixes card-grid and table layouts on one page dependin
 actually is (a handful of rich, individually-configurable entities → cards; a flat list of simple
 tuples → table).
 
-**Maps to Streamarr's `.table` class** (already defined, already explicitly commented in
+**Maps to Playarr Server's `.table` class** (already defined, already explicitly commented in
 `global.css`: "for any data-heavy table; provider-config lists should use the `.provider-grid` /
 `.provider-card` set below instead of a table" — i.e. this distinction is already understood and
-encoded in the existing stylesheet). No current Streamarr page was found using `.table` yet (Home,
+encoded in the existing stylesheet). No current Playarr Server page was found using `.table` yet (Home,
 Library, WorkDetail, Settings, Source Instances, and Users were all checked; none render a
 `<table>`). Worth keeping in mind for any future screen that's a flat list of simple fields (e.g. if
-Source Instances ever grows a "Remote Path Mappings"-equivalent), but there's no current Streamarr
+Source Instances ever grows a "Remote Path Mappings"-equivalent), but there's no current Playarr Server
 screen this pattern needs to be retrofitted onto today.
 
 ### 4.5 Poster grid (out of scope for this task, noted for later)
@@ -342,14 +342,14 @@ alphabet index rail pinned to the viewport's right edge for scroll-to-letter, an
 same icon-over-label composition as settings pages *plus* a right-aligned View/Sort/Filter icon
 cluster.
 
-**Maps to Streamarr's `.poster-grid` / `.poster-card`** (already defined and already in active use
+**Maps to Playarr Server's `.poster-grid` / `.poster-card`** (already defined and already in active use
 — `Home.tsx` renders a `<ul className="poster-grid">` of `WorkCard` components for "recently added"
 titles; `Library.tsx` presumably extends this to the full catalog, though its file wasn't inspected
-in detail this pass). This is Streamarr's own catalog/library browsing surface (`Home.tsx`,
+in detail this pass). This is Playarr Server's own catalog/library browsing surface (`Home.tsx`,
 `Library.tsx`, `WorkDetail.tsx` in Playarr Web) and is explicitly **out of scope for the Source
 Instances redesign this document exists to drive** — noted here only so the pattern is on record for
 whenever that screen gets its own design pass (e.g. the alphabet index rail and the colored
-underline-strip status signal are both real *arr details Streamarr hasn't attempted to port yet).
+underline-strip status signal are both real *arr details Playarr Server hasn't attempted to port yet).
 
 ## 5. Explicitly out of scope / not yet observed
 
@@ -361,7 +361,7 @@ verification:
   handed to this task). Radarr was scanned more deeply: its Download Clients settings page (cards +
   modal + table) and its Movies library page (poster grid + toolbar-with-filters). No other Sonarr
   page, and no Radarr page beyond those two, was part of the findings this document is based on.
-- **Lidarr, Bazarr, Prowlarr, and Readarr were not scanned at all** — despite Streamarr's own
+- **Lidarr, Bazarr, Prowlarr, and Readarr were not scanned at all** — despite Playarr Server's own
   `SOURCE_KINDS` list (`sonarr`, `radarr`, `lidarr`, `bazarr`, `prowlarr`, `readarr`) treating all
   six as first-class source types. The "byte-identical CSS architecture" claim is stated by the
   research findings to hold for Sonarr/Radarr/Lidarr, but only Sonarr and Radarr were actually
@@ -371,5 +371,5 @@ verification:
 - **No light theme was scanned.** Everything in this document is the dark theme only; the real *arr
   apps do ship a light theme, but no tokens for it were captured.
 - **No responsive/mobile behavior was scanned.** Sidebar-collapse-on-narrow-viewport, modal behavior
-  on small screens, etc. are unaddressed — Streamarr's own `@media (max-width: 720px)` rule in
+  on small screens, etc. are unaddressed — Playarr Server's own `@media (max-width: 720px)` rule in
   `global.css` (padding-only) is not verified against any real *arr equivalent.

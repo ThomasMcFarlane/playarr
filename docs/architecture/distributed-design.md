@@ -1,6 +1,6 @@
 # Distributed Design
 
-This document covers what changes when Streamarr moves from a single
+This document covers what changes when Playarr Server moves from a single
 process (Tier 1) to multiple cooperating processes (Tiers 2 and 3): the
 statelessness requirements that make horizontal scaling safe, the
 `ClusterCoordinator` abstraction, and the one deliberate, documented
@@ -8,8 +8,8 @@ exception to statelessness — on-demand transcode sessions.
 
 ## Statelessness requirements
 
-Every `STREAMARR_ROLE=api` process must be interchangeable with every other
-`STREAMARR_ROLE=api` process from the point of view of an incoming request, with
+Every `PLAYARR_ROLE=api` process must be interchangeable with every other
+`PLAYARR_ROLE=api` process from the point of view of an incoming request, with
 exactly one documented exception (transcode session affinity, below). This
 is the property that makes horizontal scaling, rolling deploys, and pod
 eviction in Kubernetes safe rather than something that silently drops
@@ -21,7 +21,7 @@ requests or corrupts state. Concretely:
   `Work`/`MediaFile`/`Rendition` catalog data, playback analytics, `User`
   accounts, `Policy` records, and refresh-token secrets all really do live
   in the database (SQLite at Tier 1, Postgres at Tiers 2/3) via real
-  `streamarr-db` repositories — `streamarr-db/src/repo/{user,policy,
+  `playarr-db` repositories — `playarr-db/src/repo/{user,policy,
   refresh_token}.rs` are real, `users`/`policies` have existed since
   `backend/migrations/postgres/0010_users_policies.sql`, and
   `backend/src/main.rs` wires `SqlxRefreshTokenRepo` (durable), not
@@ -30,21 +30,21 @@ requests or corrupts state. Concretely:
   an earlier pass of this document said the opposite for this paragraph;
   see `docs/architecture/peer-groups.md` §1.1 for how that staleness was
   caught.) **RFC 8628 device-authorization state does not yet** —
-  `streamarr-auth`'s `InMemoryDeviceAuthorizationStore`/
+  `playarr-auth`'s `InMemoryDeviceAuthorizationStore`/
   `DashMapDeviceFlowHandler` remain real, working, thread-safe (not mocks),
   making the device-pairing flow fully functional *within one process's
   lifetime* — but that state does not survive a restart and is not visible
   to a second node, which directly violates the interchangeability
   property this section otherwise describes. See
   [`auth-modes.md`](auth-modes.md) for what this means concretely for each
-  `AuthMode`. This is the single remaining asterisk on "Streamarr is
+  `AuthMode`. This is the single remaining asterisk on "Playarr Server is
   stateless above the database" as of this pass, and a multi-node
   deployment should not expect device-pairing approvals to work across
   nodes until real persistence lands here.
 - **Ephemeral, non-durable state (rate limiting, short-lived caches) is
   either per-node with a short TTL and no cross-node consistency
   requirement, or lives in a shared store when correctness genuinely
-  depends on cross-node visibility.** Streamarr does not require Redis or
+  depends on cross-node visibility.** Playarr Server does not require Redis or
   another shared cache as a hard dependency at any tier; where a shared
   cache would help (e.g. cross-node rate limiting at Tier 3), it degrades
   gracefully to per-node behaviour if unavailable rather than being load
@@ -55,7 +55,7 @@ requests or corrupts state. Concretely:
   that another node might need to serve — anything a differently-routed
   request might need must be reachable from the database or object storage,
   not assumed to be on "the node that handled it last time."
-- **Background work is resumable, not owned.** A `STREAMARR_ROLE=worker` process
+- **Background work is resumable, not owned.** A `PLAYARR_ROLE=worker` process
   that dies mid-job (background Tdarr transcode, library scan) leaves
   checkpointed progress in the database; any other worker process can pick
   the job back up. Nothing about a background job assumes it will finish on
@@ -73,7 +73,7 @@ single-node deployments don't: mutual exclusion (don't let two nodes run
 the same short-lived unit of work concurrently) and leader election (let
 exactly one node own a longer-lived singleton responsibility until it dies
 or gives it up). Both are abstracted behind one `ClusterCoordinator` trait
-in `streamarr-coordination`, sharing a trait because they share a backend
+in `playarr-coordination`, sharing a trait because they share a backend
 and both are needed by `backend/src/main.rs`'s worker composition: the
 background Tdarr dispatch loop campaigns for leadership of the
 `"transcode-dispatcher"` role (via the `run_while_leader` helper — campaign,
@@ -168,8 +168,8 @@ upsert, and no way to enumerate which nodes currently exist or what roles
 they hold. An earlier draft of this document also proposed an opt-in
 SWIM-style gossip membership layer for large Tier 3 clusters as an
 alternative to a heartbeat table; neither the heartbeat table nor gossip
-was ever built. There is no `streamarr-cluster` crate (coordination lives
-in `streamarr-coordination`) and no `gossip` Cargo feature anywhere in the
+was ever built. There is no `playarr-cluster` crate (coordination lives
+in `playarr-coordination`) and no `gossip` Cargo feature anywhere in the
 workspace. This is corrected here rather than left in as if it existed;
 membership tracking is a real gap for anything that would need it (e.g.
 routing a request to a specific *other* node by address), not something
@@ -192,7 +192,7 @@ behaviour is the subject of this document.
 On-demand transcode sessions (see [`overview.md`](overview.md#the-tdarr-background-vs-on-demand-transcode-split))
 are the one deliberate exception to full statelessness. When a client
 requests playback of a file it can't direct-play,
-`streamarr_transcode::TranscodeOrchestrator::spawn_on_demand_transcode`
+`playarr_transcode::TranscodeOrchestrator::spawn_on_demand_transcode`
 spawns a supervised `ffmpeg` process on whichever node received the
 request, writing its segmented output to a local, per-session directory
 under that node's own filesystem. That `ffmpeg` process and its output
@@ -201,7 +201,7 @@ no cheap way to make "an in-flight transcode" relocatable mid-session.
 
 The session record itself — `TranscodeSession { id, media_file_id, profile,
 owning_node_id, current_segment, expires_at }` — is **not** a durable SQL
-table. It lives in whichever `streamarr_cache::CacheAndPubSub`
+table. It lives in whichever `playarr_cache::CacheAndPubSub`
 implementation the deployment is wired with (moka in-process at Tier 1;
 Redis or Postgres `LISTEN`/`NOTIFY` at Tiers 2/3), keyed
 `transcode-session:<id>`, with the cache entry's own TTL set from
@@ -218,12 +218,12 @@ runs the direct-play/existing-rendition/on-demand-transcode decision) is
 implemented and does construct a `TranscodeSession` tagged with the
 spawning node's id, but the well-known-convention URL it returns
 (`/api/v1/media/sessions/{session_id}/playlist.m3u8`) is not itself a route
-this workspace serves yet — there is no `X-Streamarr-Node` header, no `307`
-redirect, and no `streamarr-session` sticky-routing cookie; see the
-`TODO(streaming)` on `streamarr_api::playback::PlaybackInfoResponse`. A
+this workspace serves yet — there is no `X-Playarr-Node` header, no `307`
+redirect, and no `playarr-session` sticky-routing cookie; see the
+`TODO(streaming)` on `playarr_api::playback::PlaybackInfoResponse`. A
 single-node deployment doesn't need this (there's only ever one node to
 route to); a multi-node deployment does, and it's an open follow-up rather
-than something this pass built. `streamarr-transcode`'s own code already
+than something this pass built. `playarr-transcode`'s own code already
 anticipates the gap this creates: `TranscodeOrchestrator::expire_session`
 can only actually kill the `ffmpeg` process when called on the node that
 owns it (it keeps a `HashMap<Uuid, Child>` of only the sessions *this*

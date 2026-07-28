@@ -1,6 +1,6 @@
-# Streamarr / Playarr
+# Playarr Server / Playarr
 
-**Streamarr** is a self-hosted media server. **Playarr** is the suite of
+**Playarr Server** is a self-hosted media server. **Playarr** is the suite of
 native clients that watch things on it. This repository is the monorepo for
 both: one Rust backend, seven playback clients, and the infrastructure to run
 the whole thing on anything from a Raspberry Pi to a Kubernetes cluster.
@@ -10,21 +10,25 @@ the whole thing on anything from a Raspberry Pi to a Kubernetes cluster.
 If you already run Sonarr, Radarr, Lidarr, Bazarr, Prowlarr, and/or Readarr,
 you have a great acquisition and organisation pipeline but no single, polished
 place to *watch* the result — and no first-class native apps for phones,
-tablets, or TVs. Streamarr sits on top of that stack: it owns your media
+tablets, or TVs. Playarr Server sits on top of that stack: it owns your media
 library (scanning, metadata, artwork), playback (on-demand and background
 transcoding, via [Tdarr](https://github.com/HaveAGitGat/Tdarr) for the
 library-wide encode work), authentication, and a single unified HTTP/JSON API
 — while leaving indexing, acquisition, and subtitle-fetching to the *arr apps
 that already do it well. Playarr is what you actually install to watch things:
-Android Mobile, Android TV, iOS, LG webOS, Samsung Tizen, Hisense VIDAA, and a
-browser-based Web client, all speaking the same versioned API contract.
+Android Mobile, Android TV, iOS, LG webOS, Samsung Tizen, Hisense VIDAA, a
+browser-based Web client, and a native Xbox client, all speaking the same
+versioned API contract.
 
 See the public [Playarr Clients page](https://playarr.app/clients) for current
 availability. Hisense owners can follow the [VIDAA guide](docs/clients/vidaa.md)
 to open the hosted Playarr Web App in the television Browser or try the
-experimental, temporary-DNS launcher installer on compatible firmware.
+experimental, temporary-DNS launcher installer on compatible firmware. Xbox
+owners can follow the [Xbox guide](docs/clients/xbox.md) to use Playarr in
+Xbox's built-in Edge browser today, ahead of a native Developer Mode/Store
+release.
 
-Streamarr is designed to run at three tiers without a different codebase or a
+Playarr Server is designed to run at three tiers without a different codebase or a
 data-migration story at each step: a single systemd-managed binary against
 SQLite on a home server, a small Docker Compose stack against Postgres, or a
 Kubernetes deployment with independently scaled API/worker/coordinator roles
@@ -37,7 +41,7 @@ built this way.
 Self-hosted media is currently a patchwork: great acquisition tooling (the
 *arr apps), a great transcode farm (Tdarr), and then a gap where a coherent,
 native, multi-platform *playback* experience should be. Commercial media
-servers fill that gap but keep you out of your own stack. Streamarr/Playarr
+servers fill that gap but keep you out of your own stack. Playarr Server/Playarr
 exists to close that gap without giving up ownership: wrap the tools you
 already trust, add the library/playback/auth layer they don't provide, and
 ship real native clients — not just a web view wrapped in each platform's
@@ -50,10 +54,11 @@ app shell — for every screen people actually watch on.
                     │              Playarr clients               │
                     │  Android Mobile · Android TV · iOS · Web    │
                     │  webOS · Tizen · VIDAA (hosted Web App)     │
+                    │  Xbox (native UWP + Edge browser fallback)  │
                     └───────────────────┬─────────────────────────┘
                                         │  versioned HTTP/JSON API
                     ┌───────────────────▼─────────────────────────┐
-                    │                 Streamarr                   │
+                    │                 Playarr Server                   │
                     │  (single Rust binary, role-gated: API /     │
                     │   worker / coordinator)                     │
                     │                                             │
@@ -69,7 +74,7 @@ app shell — for every screen people actually watch on.
                 └───────────────┘   └─────────────────┘   └────────┘
 ```
 
-Streamarr treats each *arr application as a managed external service rather
+Playarr Server treats each *arr application as a managed external service rather
 than reimplementing indexing/acquisition/subtitles itself, and splits
 transcoding into two independent problems: latency-sensitive on-demand
 transcode-on-play, and low-priority library-wide background re-encoding
@@ -85,23 +90,29 @@ see [`docs/roadmap.md`](docs/roadmap.md).
 
 ```
 .
-├── backend/            Streamarr: the Rust workspace (Cargo workspace under
+├── backend/            Playarr Server: the Rust workspace (Cargo workspace under
 │                        backend/crates/*, migrations, OpenAPI spec, config,
-│                        integration tests). Builds a single `streamarr`
+│                        integration tests). Builds a single `playarr`
 │                        binary; see docs/architecture/overview.md for the
 │                        role-gating model.
 ├── clients/             Playarr: the native and web clients.
 │   ├── android/                 One native responsive Android project and APK
 │   │                            for phones, tablets, Android TV, and Google TV.
 │   ├── ios/                    Swift package (SwiftUI app target +
-│   │                            UIKit-free StreamarrKit library target).
+│   │                            UIKit-free PlayarrKit library target).
 │   │                            Source-only for now: no Xcode project yet,
 │   │                            wraps in one once Xcode is available.
 │   ├── tv-web/                   Responsive TypeScript/React Playarr workspace
 │   │                              shared by the Web client and the
 │   │                              webOS/Tizen/VIDAA TV platform wrappers,
 │   │                              plus platform-specific packaging under
-│   │                              tv-web/apps/*.
+│   │                              tv-web/apps/*. Also where Xbox's Edge
+│   │                              browser fallback is detected/served from.
+│   ├── xbox/                    Native UWP/XAML client: a portable core
+│   │                             (Playarr.Core, builds/tests on any OS) plus
+│   │                             a UWP application head (Playarr.Xbox,
+│   │                             Windows/MSBuild-only — see
+│   │                             docs/architecture/clients/xbox.md).
 │   └── shared/                     Cross-client tooling, e.g. OpenAPI-
 │                                    generated SDK codegen consumed by every
 │                                    client above.
@@ -136,7 +147,7 @@ a monorepo" section of the architecture overview for the reasoning.
 just --list        # see every available recipe
 just backend-check  # fmt + clippy + cargo check for the Rust backend
 just backend-test    # backend test suite
-just backend-run      # run the Streamarr server locally
+just backend-run      # run the Playarr Server locally
 just tv-web-dev        # tv-web client dev server
 just dev-up              # bring up the local Docker Compose dev stack
 just dev-seed              # seed it with sample data

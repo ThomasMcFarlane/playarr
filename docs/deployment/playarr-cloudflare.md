@@ -19,8 +19,8 @@ television self-update action.
 
 The Worker also owns the short-lived Android first-contact broker under `/api/link/*`. Each
 generated code is isolated in a Durable Object and expires after ten minutes. The record contains
-only the Android device secret, the selected Streamarr server addresses, and a single-use
-Streamarr device code; it never receives a password, browser bearer token, or refresh token.
+only the Android device secret, the selected Playarr Server addresses, and a single-use
+Playarr Server device code; it never receives a password, browser bearer token, or refresh token.
 
 ## One-time Cloudflare and GitHub setup
 
@@ -74,20 +74,20 @@ The equivalent command without `just` is:
 ```sh
 cd clients/tv-web
 pnpm install --frozen-lockfile
-pnpm --filter @streamarr-tv/web run deploy:cloudflare
+pnpm --filter @playarr-tv/web run deploy:cloudflare
 ```
 
 For non-interactive local use, export `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID` in the shell instead of running `wrangler login`.
 
-## Connect the hosted client to Streamarr
+## Connect the hosted client to Playarr Server
 
 Playarr does not proxy playback or API traffic; each viewer still connects it to
-their own Streamarr server. In a browser, enter an IP address such as
+their own Playarr Server. In a browser, enter an IP address such as
 `http://192.168.1.50:8484` or `http://203.0.113.10:8484` on the sign-in screen.
 On Android TV, scan or enter the generated `playarr.app/link` code and select an existing browser
 profile instead; its server URLs are transferred automatically. Cloudflare never proxies the
-Streamarr API, and the client stores server-specific profile sessions locally.
+Playarr Server API, and the client stores server-specific profile sessions locally.
 
 On browsers that implement Local Network Access, approve the browser prompt
 the first time `playarr.app` connects to a private or loopback IP. Playarr marks
@@ -98,13 +98,13 @@ plain-HTTP server.
 
 For a public IPv4 address, Playarr converts the address to the deterministic
 `https://v4-A-B-C-D.relay.playarr.app:8484` hostname. The parent Cloudflare
-records are DNS-only: Streamarr's built-in authoritative DNS resolves that name
-straight back to the entered IP, and Streamarr terminates HTTPS itself. Enable
-the matching `STREAMARR_ACME_DOMAIN` in production mode so Streamarr acquires
+records are DNS-only: Playarr Server's built-in authoritative DNS resolves that name
+straight back to the entered IP, and Playarr Server terminates HTTPS itself. Enable
+the matching `PLAYARR_ACME_DOMAIN` in production mode so Playarr Server acquires
 and renews the browser-trusted certificate; the operator must also explicitly
 accept the certificate authority's terms with
-`STREAMARR_ACME_ACCEPT_TERMS=true`. Playarr never relays requests
-through Cloudflare, and Streamarr never installs or serves a copy of Playarr.
+`PLAYARR_ACME_ACCEPT_TERMS=true`. Playarr never relays requests
+through Cloudflare, and Playarr Server never installs or serves a copy of Playarr.
 
 ## Domain changes
 

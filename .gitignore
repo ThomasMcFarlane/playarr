@@ -1,5 +1,5 @@
 # ==============================================================================
-# Streamarr / Playarr monorepo .gitignore
+# Playarr Server / Playarr monorepo .gitignore
 # Covers: Rust (backend), Node/pnpm (tv-web client), Gradle (Android clients),
 # Xcode (iOS client), plus general OS/editor junk.
 # Component-specific rules can still live in per-directory .gitignore files;
@@ -16,7 +16,7 @@ Cargo.lock.bak
 # lockfiles accidentally generated inside example/scratch crates.
 **/*.rs.bk
 *.pdb
-# Local SQLite dev databases (e.g. `DATABASE_URL=sqlite://./dev-streamarr.db`
+# Local SQLite dev databases (e.g. `DATABASE_URL=sqlite://./dev-playarr.db`
 # for `cargo run` outside a real deployment) -- never meant to be committed.
 *.db
 *.db-shm

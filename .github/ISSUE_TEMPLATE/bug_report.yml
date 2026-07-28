@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a defect in the Streamarr backend or a Playarr client.
+description: Report a defect in the Playarr Server backend or a Playarr client.
 title: "[Bug]: "
 labels: ["bug", "needs-triage"]
 body:
@@ -13,7 +13,7 @@ body:
     id: component
     attributes:
       label: Affected component
-      description: Which part of Streamarr does this bug affect?
+      description: Which part of Playarr Server does this bug affect?
       options:
         - Backend (Rust/Axum API)
         - Playarr Android (mobile)
@@ -32,7 +32,7 @@ body:
     attributes:
       label: Version
       description: >
-        Server version (from the streamarr status endpoint or the Docker image
+        Server version (from the playarr status endpoint or the Docker image
         tag) and/or client app version where you saw this.
       placeholder: "backend-v1.4.2 / android-v2.3.0"
     validations:
@@ -82,7 +82,7 @@ body:
       description: OS/device, browser, deployment method (Docker/bare metal/Kubernetes), etc.
       placeholder: |
         - OS: Ubuntu 22.04 / macOS 15 / Android 14 / iOS 18
-        - Deployment: Docker (ghcr.io/streamarr/streamarr-backend:backend-v1.4.2)
+        - Deployment: Docker (ghcr.io/playarr/playarr-backend:backend-v1.4.2)
         - Browser (if web/tv-web): Chrome 126
 
   - type: checkboxes

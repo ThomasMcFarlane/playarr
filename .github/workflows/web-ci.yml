@@ -51,10 +51,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Test web client
-        run: pnpm --filter @streamarr-tv/web run test
+        run: pnpm --filter @playarr-tv/web run test
 
       - name: Build web client
-        run: pnpm --filter @streamarr-tv/web... run build
+        run: pnpm --filter @playarr-tv/web... run build
 
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v4

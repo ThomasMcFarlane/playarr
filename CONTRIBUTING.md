@@ -1,6 +1,6 @@
-# Contributing to Streamarr / Playarr
+# Contributing to Playarr Server / Playarr
 
-This is a monorepo containing the Streamarr backend, all seven Playarr
+This is a monorepo containing the Playarr Server backend, all seven Playarr
 clients, and the infrastructure to deploy them. Before making a non-trivial
 change, read [`docs/architecture/overview.md`](docs/architecture/overview.md)
 — it explains why the system is shaped the way it is, and most "why isn't
@@ -9,7 +9,7 @@ this just done the simple way" questions are answered there.
 ## Monorepo structure
 
 ```
-backend/          Streamarr: Rust workspace (Cargo workspace under backend/crates/*)
+backend/          Playarr Server: Rust workspace (Cargo workspace under backend/crates/*)
 clients/          Playarr: android/ (one universal app project), ios/,
                    tv-web/ (Web + webOS + Tizen + VIDAA), shared/
 infra/            systemd/, docker/, kubernetes/, k6/ — deployment for all three tiers
@@ -37,7 +37,7 @@ up automatically).
 ```sh
 just backend-check   # cargo fmt --check + clippy (warnings denied) + cargo check
 just backend-test     # cargo test --workspace
-just backend-run       # cargo run --bin streamarr (foreground, debug build)
+just backend-run       # cargo run --bin playarr (foreground, debug build)
 ```
 
 `backend-run` forwards extra arguments to the binary, e.g.
@@ -77,7 +77,7 @@ Command Line Tools), not full Xcode:
 just ios-build   # swift build
 ```
 
-This type-checks and builds the `StreamarrApp`/`StreamarrKit` targets but
+This type-checks and builds the `PlayarrApp`/`PlayarrKit` targets but
 does not produce a signed, installable `.app` — that needs an Xcode project
 wrapping the package, and full Xcode. `just ios-build` will move to
 `xcodebuild` once that project exists.
@@ -91,7 +91,7 @@ verifiable without the SDK.
 ## Local dev stack
 
 `infra/docker/` holds the Docker Compose stack used for local development
-(Streamarr plus the wrapped *arr apps and Tdarr, wired together).
+(Playarr Server plus the wrapped *arr apps and Tdarr, wired together).
 
 ```sh
 just dev-up      # bring the stack up in the background
@@ -108,7 +108,7 @@ just dev-down        # tear it down
   monorepo exists specifically so that kind of atomic, cross-component PR is
   possible, but it should be the exception, not the default.
 - **Title format:** `<component>: <imperative summary>`, e.g.
-  `backend(streamarr-transcode): fix HLS segment numbering on resume` or
+  `backend(playarr-transcode): fix HLS segment numbering on resume` or
   `clients/ios: fix FairPlay license renewal race`. Use `infra`, `docs`, or
   `repo` as the component for changes that don't belong to a single crate or
   client.

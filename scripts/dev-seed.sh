@@ -3,7 +3,7 @@
 # scripts/dev-seed.sh
 #
 # Scripts past the first-run setup wizard of every *arr application in the
-# Streamarr dev stack (started by scripts/dev-up.sh, defined in
+# Playarr Server dev stack (started by scripts/dev-up.sh, defined in
 # infra/docker/docker-compose.dev.yml), so a fresh stack is immediately
 # usable instead of presenting six separate onboarding wizards.
 #
@@ -32,7 +32,7 @@
 #
 # Env overrides:
 #   COMPOSE_FILE          default: infra/docker/docker-compose.dev.yml
-#   COMPOSE_PROJECT_NAME  default: streamarr-dev
+#   COMPOSE_PROJECT_NAME  default: playarr-dev
 #   <APP>_URL              e.g. SONARR_URL (default: http://localhost:<port>)
 #   <APP>_CONTAINER         e.g. SONARR_CONTAINER (default: compose service name)
 #   <APP>_CONFIG_DIR        host path to the app's /config volume, if bind-mounted
@@ -56,7 +56,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_ROOT}"
 
 COMPOSE_FILE="${COMPOSE_FILE:-${REPO_ROOT}/infra/docker/docker-compose.dev.yml}"
-COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-streamarr-dev}"
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-playarr-dev}"
 
 for cmd in docker curl jq; do
   if ! command -v "$cmd" >/dev/null 2>&1; then

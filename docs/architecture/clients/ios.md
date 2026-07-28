@@ -11,16 +11,16 @@ rather than a gap to close.
 
 - **Minimum deployment target:** iOS 17.0 (`platforms: [.iOS(.v17)]` in
   `Package.swift`) — narrower than earlier drafts of this document assumed
-  (iOS 15.0), chosen because `StreamarrKit`/`StreamarrApp` lean on modern
+  (iOS 15.0), chosen because `PlayarrKit`/`PlayarrApp` lean on modern
   Swift Concurrency and Observation-framework APIs (`@Observable`) without
   back-compat shims.
 - **Built with:** whatever Xcode release is available when the app is
   actually opened and built as an Xcode project — see "No Xcode in this
   build environment" below for the current, real state of that.
-- **tvOS:** not a separately shipped client. `StreamarrKit` (Networking,
+- **tvOS:** not a separately shipped client. `PlayarrKit` (Networking,
   Player, Auth) has zero UIKit import anywhere — Foundation, Combine,
   Observation, AVFoundation, and AVKit are all available on iOS, tvOS, and
-  macOS alike — so a tvOS target sharing this package's `StreamarrKit`
+  macOS alike — so a tvOS target sharing this package's `PlayarrKit`
   product remains a low-cost, additive future step (add `.tvOS(.v17)` to
   `platforms`, add a new executable target). It is deliberately not
   committed to yet.
@@ -32,20 +32,20 @@ rather than a gap to close.
 | Language | Swift |
 | UI | SwiftUI with a native Playarr design system matching the responsive web shell; no WebView |
 | Async | Swift Concurrency (`async`/`await`), Observation (`@Observable`) |
-| Networking | `URLSession` + a hand-written client (`Networking/APIClient.swift`, `OpenAPISchemas.swift`) checked field-by-field against `backend/openapi/streamarr.yaml` and the real backend Rust structs — not a generated client |
+| Networking | `URLSession` + a hand-written client (`Networking/APIClient.swift`, `OpenAPISchemas.swift`) checked field-by-field against `backend/openapi/playarr.yaml` and the real backend Rust structs — not a generated client |
 | Local persistence | Per-server access/refresh sessions in the iOS Keychain; server URL and stable device id in `UserDefaults` |
 | Playback | `AVFoundation`/`AVKit` (`AVPlayer`, `AVPlayerItem`, picture-in-picture) |
 | DRM | Not implemented — see "Playback / DRM approach" below |
 
 The project is organised as a local Swift package, `clients/ios/`
-(`Package.swift` at the package root, not nested under a `StreamarrKit/`
-subdirectory), exporting one real SPM product, **`StreamarrKit`**
-(`Sources/StreamarrKit/`: `Networking/`, `Player/`, `Auth/`, `Models/`) —
-there is no separate `StreamarrAPI`/`PlaybackKit` module split; networking,
+(`Package.swift` at the package root, not nested under a `PlayarrKit/`
+subdirectory), exporting one real SPM product, **`PlayarrKit`**
+(`Sources/PlayarrKit/`: `Networking/`, `Player/`, `Auth/`, `Models/`) —
+there is no separate `PlayarrAPI`/`PlaybackKit` module split; networking,
 playback, and auth are subdirectories of one library target, not three
-independent products. `Sources/StreamarrApp/` is the SwiftUI app target
+independent products. `Sources/PlayarrApp/` is the SwiftUI app target
 (views, view models, the `AppEnvironment` composition root) consuming
-`StreamarrKit`.
+`PlayarrKit`.
 
 ## Playback / DRM approach
 
@@ -60,13 +60,13 @@ calls that negotiation endpoint first and only then hands the resolved
 item to `AVPlayerEngine`.
 
 The negotiated media URL is still authenticated. `PlayerViewModel` obtains the current bearer
-header through `StreamarrAPIClient`, and `AVPlayerEngine` supplies it when constructing the
+header through `PlayarrAPIClient`, and `AVPlayerEngine` supplies it when constructing the
 `AVURLAsset` so direct files, HLS manifests, and their child requests do not fall through to a
 server-side `401` after negotiation succeeds.
 
 **No DRM is implemented today.** There is no `AVContentKeySession` wiring,
 no FairPlay SPC/CKC exchange, and no `/api/drm/...` endpoint anywhere in
-the real API surface (`backend/openapi/streamarr.yaml` defines no DRM
+the real API surface (`backend/openapi/playarr.yaml` defines no DRM
 paths at all) — playback is unencrypted HLS only. Earlier drafts of this
 document described a `/api/drm/fairplay/license` endpoint and an
 Apple-issued FPS certificate provisioning story; neither was ever actually
@@ -91,7 +91,7 @@ every subsequent call:
   and switches profiles through the same login endpoint, supplying the profile id
   and a four-digit PIN when the selected profile is locked.
 - **RFC 8628 device pairing** (`Auth/DeviceFlowClient.swift`) remains available
-  in `StreamarrKit` for device-oriented sibling clients and uses the same token store.
+  in `PlayarrKit` for device-oriented sibling clients and uses the same token store.
 - **Transparent trusted-network login.** `APIClient`'s `attachAuth` calls
   `POST /api/v1/auth/login` on demand — no user action, no credentials
   needed under the server's default `AuthMode::TrustedNetwork` — the first
@@ -125,8 +125,8 @@ entirely by `GET /api/system/version`.
 ## Code-sharing story with sibling platforms
 
 None at the source-code level, by design — see the framing above. What is
-shared is the **contract**: `StreamarrKit`'s Swift types are checked
-against the same `backend/openapi/streamarr.yaml` spec that the Kotlin
+shared is the **contract**: `PlayarrKit`'s Swift types are checked
+against the same `backend/openapi/playarr.yaml` spec that the Kotlin
 client for Android and the TypeScript client for the Web/webOS/Tizen/VIDAA
 shell are checked against, so a server-side API change surfaces as a
 diff needing porting on every platform rather than being silently missed
@@ -140,16 +140,16 @@ platform's client from one command.
 
 ## Xcode project and local validation
 
-`clients/ios/Streamarr.xcodeproj` is a checked-in, installable application
+`clients/ios/Playarr Server.xcodeproj` is a checked-in, installable application
 project generated from `project.yml`. It builds the SwiftUI sources as
-`Playarr.app`, links the local `StreamarrKit` package, and includes bundle
+`Playarr.app`, links the local `PlayarrKit` package, and includes bundle
 metadata, entitlements, the privacy manifest, the accent colour, and a real
-1024 px application icon. The shared scheme also contains `StreamarrKitTests`
-and `StreamarrAppTests` XCTest targets.
+1024 px application icon. The shared scheme also contains `PlayarrKitTests`
+and `PlayarrAppTests` XCTest targets.
 
 Local validation now compiles the complete application, including its asset
 catalogue and privacy manifest, against the iOS Simulator SDK. The shared
-scheme executes all eleven `StreamarrKitTests` and `StreamarrAppTests` successfully
+scheme executes all eleven `PlayarrKitTests` and `PlayarrAppTests` successfully
 on an iPhone 17 Pro simulator running iOS 26.5. The responsive shell is also
 render-checked on an iPad Air 11-inch simulator. Signing, archive validation,
 physical-device testing, TestFlight and App Store submission still require the
@@ -163,12 +163,12 @@ appropriate Apple developer account and distribution configuration.
   happened yet.
 - Full App Review applies to every release, including patch releases —
   there is no fast-track or self-service publish path, and review turnaround
-  is outside Streamarr's control.
+  is outside Playarr Server's control.
 - **No OTA (over-the-air) code updates are possible or attempted.** Apple's
   App Store guidelines prohibit downloading and executing new
   interpreted/native code outside what App Review approved; every update,
   including trivial ones, must go through a full build-and-review cycle.
-  This is a hard platform constraint, not a Streamarr policy choice. The
+  This is a hard platform constraint, not a Playarr Server policy choice. The
   real client-side mechanism (see "Auto-update" above) is `UpdateViewModel`
   polling `GET /api/system/version` on every
   foreground and comparing this build's version against its platform's
@@ -184,6 +184,6 @@ appropriate Apple developer account and distribution configuration.
   and has no effect at the network/API layer; real enforcement, if ever
   needed, has to happen server-side.
 - Content/privacy: the app collects no data beyond what's needed to talk to
-  the user's own configured Streamarr server, simplifying the App Privacy
+  the user's own configured Playarr Server, simplifying the App Privacy
   "nutrition label" disclosure in App Store Connect considerably (no
   third-party SDKs, no analytics, no advertising identifiers).

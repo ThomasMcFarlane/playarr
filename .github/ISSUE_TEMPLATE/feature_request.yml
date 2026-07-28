@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest an enhancement for the Streamarr backend or a Playarr client.
+description: Suggest an enhancement for the Playarr Server backend or a Playarr client.
 title: "[Feature]: "
 labels: ["enhancement", "needs-triage"]
 body:
@@ -14,7 +14,7 @@ body:
     id: component
     attributes:
       label: Affected component
-      description: Which part of Streamarr is this feature request about?
+      description: Which part of Playarr Server is this feature request about?
       options:
         - Backend (Rust/Axum API)
         - Playarr Android (mobile)
@@ -56,7 +56,7 @@ body:
       label: Does this require an API/contract change?
       description: >
         If yes, expect the implementing PR to include a regenerated
-        backend/openapi/streamarr.yaml (see the openapi-contract-check CI job).
+        backend/openapi/playarr.yaml (see the openapi-contract-check CI job).
       options:
         - "No"
         - "Yes"

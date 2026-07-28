@@ -1,0 +1,126 @@
+# =============================================================================
+# Xbox Release
+# =============================================================================
+#
+# Release-track workflow for the Xbox client. Triggered by pushing a tag
+# like `xbox-v1.0.4`.
+#
+# clients/xbox is a .NET solution (Playarr.Xbox.sln) split into two
+# projects:
+#   - src/Playarr.Core (netstandard2.0): the portable client core -- API
+#     client, device-code auth, session/catalog/playback models. This
+#     genuinely builds and tests with the `dotnet` CLI, so `core-check`
+#     below is a real, working job, not a placeholder. It mirrors the
+#     Justfile's `xbox-core-build` / `xbox-core-test` recipes.
+#   - src/Playarr.Xbox (UWP, TargetPlatformIdentifier=UAP): the Xbox
+#     application head. This is a legacy UWP project -- it needs MSBuild,
+#     the Windows 10 SDK, and Visual Studio's UWP workload, and cannot be
+#     built with the `dotnet` CLI at all (on any OS, not just Linux). It
+#     also has no signing certificate or Microsoft Partner Center
+#     credentials configured yet. The `build-and-package` job below sets up
+#     real Windows/MSBuild tooling but its actual restore/build/package/
+#     upload steps are TODO placeholders for that reason, same as
+#     ios-ci.yml's placeholders for the iOS release job (clients/ios has
+#     the identical "no signable target yet" problem). Replace the
+#     placeholders with real MSBuild/MSIX steps once Playarr.Xbox has a
+#     signing certificate and the packaging steps have been verified by
+#     hand at least once. See ci.yml's xbox-check job for the PR-time
+#     `dotnet build`/`dotnet test` gate on Playarr.Core that already runs
+#     today.
+# =============================================================================
+
+name: Xbox Release
+
+on:
+  push:
+    tags:
+      - 'xbox-v*'
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Real, working job: build & test the portable client core. Uses the
+  # same two csproj paths as the Justfile's xbox-core-build/xbox-core-test
+  # recipes.
+  # ---------------------------------------------------------------------
+  core-check:
+    name: Build & test Playarr.Core
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: clients/xbox
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: dotnet build (Playarr.Core)
+        run: dotnet build src/Playarr.Core/Playarr.Core.csproj
+
+      - name: dotnet test (Playarr.Core.Tests)
+        run: dotnet test tests/Playarr.Core.Tests/Playarr.Core.Tests.csproj
+
+  # ---------------------------------------------------------------------
+  # Placeholder job: the UWP application head (src/Playarr.Xbox) cannot be
+  # built with the dotnet CLI at all -- it needs real MSBuild + the
+  # Windows 10 SDK + the UWP workload, so this runs on windows-latest with
+  # genuine checkout/toolchain-setup steps. The restore/build/package/
+  # upload steps themselves are unverified TODO placeholders -- see the
+  # file header comment above for why, and ios-ci.yml for the identical
+  # pattern applied to the iOS release job.
+  # ---------------------------------------------------------------------
+  build-and-package:
+    name: Build & package UWP MSIX (placeholder)
+    needs: core-check
+    runs-on: windows-latest
+    environment: release-xbox
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      # TODO: restore a code-signing certificate for the MSIX package.
+      # This would decode a base64-encoded .pfx from a repository secret,
+      # the same pattern android-ci.yml uses for ANDROID_KEYSTORE_BASE64 /
+      # ANDROID_KEYSTORE_PASSWORD -- e.g. secrets named something like
+      # XBOX_SIGNING_CERT_BASE64 and XBOX_SIGNING_CERT_PASSWORD. NEITHER OF
+      # THOSE SECRETS EXISTS IN THIS REPO YET. Do not reference
+      # `secrets.XBOX_SIGNING_CERT_BASE64` (or similar) in a real `env:`/
+      # `with:` block until they've actually been created in the
+      # release-xbox environment -- this step is an unverified placeholder.
+      - name: Restore signing certificate (placeholder)
+        run: |
+          echo "TODO: decode a base64-encoded .pfx into a temporary file from a secret such as XBOX_SIGNING_CERT_BASE64 (does not exist yet), then import it so MSBuild can sign the MSIX package."
+
+      # TODO: once src/Playarr.Xbox exists with a valid UWP project and
+      # package manifest (Package.appxmanifest), replace with a real
+      # MSBuild invocation, e.g. (UNVERIFIED -- do not copy verbatim
+      # without testing on an actual Windows/UWP toolchain):
+      #   msbuild src/Playarr.Xbox/Playarr.Xbox.csproj `
+      #     /p:Configuration=Release /p:Platform=x64 `
+      #     /p:AppxBundlePlatforms=x64 /p:AppxPackageDir=artifacts/msix `
+      #     /p:AppxBundle=Always /p:UapAppxPackageBuildMode=StoreUpload
+      - name: Build & package MSIX (placeholder)
+        run: |
+          echo "TODO: msbuild src/Playarr.Xbox/Playarr.Xbox.csproj (Release, MSIX packaging) for tag ${env:GITHUB_REF_NAME}. Command above is unverified -- confirm against a real UWP toolchain before using it."
+
+      # TODO: publish the signed MSIX -- to a GitHub release
+      # (softprops/action-gh-release@v2, matching android-ci.yml), to
+      # Cloudflare R2 (matching android-ci.yml's wrangler r2 upload), and/or
+      # submit via the Microsoft Store submission API once Partner Center
+      # credentials exist. None of those credentials/targets are wired up
+      # yet.
+      - name: Publish MSIX (placeholder)
+        run: |
+          echo "TODO: upload the signed MSIX package for tag ${env:GITHUB_REF_NAME}."

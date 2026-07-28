@@ -1,11 +1,11 @@
-# Deploying Streamarr: Kubernetes (Tier 3 — scaled cluster)
+# Deploying Playarr Server: Kubernetes (Tier 3 — scaled cluster)
 
-Tier 3 is for operators running Streamarr as shared infrastructure:
+Tier 3 is for operators running Playarr Server as shared infrastructure:
 autoscaled API capacity, a separate worker pool for background transcode
 work, and a Postgres instance that already exists as cluster-managed or
 externally managed infrastructure — the chart never provisions Postgres
 itself. Coordination uses `PostgresCoordinator`
-(`backend/crates/streamarr-coordination`) automatically, the same as any
+(`backend/crates/playarr-coordination`) automatically, the same as any
 other deployment whose `DATABASE_URL` is a `postgres://`/`postgresql://`
 URL (see [`../distributed-design.md`](../distributed-design.md) and
 [ADR 0001](../adr/0001-storage-engine.md)) — there is no
@@ -18,7 +18,7 @@ implementation exists in the codebase today.
 picked one per cluster/environment rather than layered on top of each
 other:
 
-1. **`helm/streamarr/`** — a real Helm chart: autoscaling for both roles,
+1. **`helm/playarr/`** — a real Helm chart: autoscaling for both roles,
    a PodDisruptionBudget for the worker pool, and an optional Prometheus
    `ServiceMonitor`. This is the more complete path and what the rest of
    this document focuses on.
@@ -28,14 +28,14 @@ other:
    ServiceMonitor equivalents yet.
 
 Both paths deploy the same two workloads from the same image
-(`ghcr.io/streamarr/streamarr`, built from `infra/docker/backend.Dockerfile`):
-a `streamarr-api` Deployment (`STREAMARR_ROLE=api`) behind a `ClusterIP`
-Service, and a separate `streamarr-worker` Deployment
-(`STREAMARR_ROLE=worker`) behind its own headless `ClusterIP` Service used
+(`ghcr.io/playarr/playarr`, built from `infra/docker/backend.Dockerfile`):
+a `playarr-api` Deployment (`PLAYARR_ROLE=api`) behind a `ClusterIP`
+Service, and a separate `playarr-worker` Deployment
+(`PLAYARR_ROLE=worker`) behind its own headless `ClusterIP` Service used
 only for probe/metrics routing. **Neither Deployment overrides the
 container's command or args** — the image's default
-`CMD ["/app/streamarr", "serve"]` (from `backend.Dockerfile`) runs
-unchanged; role selection is entirely the `STREAMARR_ROLE` environment
+`CMD ["/app/playarr-server", "serve"]` (from `backend.Dockerfile`) runs
+unchanged; role selection is entirely the `PLAYARR_ROLE` environment
 variable, matching how `serve` actually works in `backend/src/main.rs`
 today (the `serve` subcommand itself takes no `--role`, or any other,
 flag). Tier 2's `docker-compose.prod.yml` used to override `command:` with
@@ -50,8 +50,8 @@ Both roles expose the same two ports from the same binary:
 | `8484` (`http`) | Application traffic (`api`) / probe-only (`worker`) |
 | `9090` (`metrics`) | Prometheus `/metrics` |
 
-and the same two probe paths, both real, tested routes in `streamarr-api`
-(`backend/crates/streamarr-api/src/lib.rs`):
+and the same two probe paths, both real, tested routes in `playarr-api`
+(`backend/crates/playarr-api/src/lib.rs`):
 
 | Path | Used by |
 |------|---------|
@@ -59,20 +59,20 @@ and the same two probe paths, both real, tested routes in `streamarr-api`
 | `/readyz` | `readinessProbe` |
 
 There is **no Ingress or Gateway API resource** anywhere in this chart or
-the kustomize skeleton — fronting the `streamarr-api` Service with an
+the kustomize skeleton — fronting the `playarr-api` Service with an
 ingress controller/gateway of your choice is left entirely to the cluster
 operator.
 
-## The Helm chart (`infra/kubernetes/helm/streamarr/`)
+## The Helm chart (`infra/kubernetes/helm/playarr/`)
 
 ```
-helm/streamarr/
-  Chart.yaml               # name=streamarr, appVersion="0.1.0", no subchart dependencies
+helm/playarr/
+  Chart.yaml               # name=playarr, appVersion="0.1.0", no subchart dependencies
   values.yaml                # image, probes, config (ConfigMap), secret, api.*, worker.*, serviceMonitor
   templates/
     _helpers.tpl              # name/label/selector helpers
-    deployment-api.yaml        # STREAMARR_ROLE=api
-    deployment-worker.yaml     # STREAMARR_ROLE=worker
+    deployment-api.yaml        # PLAYARR_ROLE=api
+    deployment-worker.yaml     # PLAYARR_ROLE=worker
     hpa-api.yaml                 # HorizontalPodAutoscaler for the api Deployment
     hpa-worker.yaml               # HorizontalPodAutoscaler for the worker Deployment
     service.yaml                    # ClusterIP for api, headless ClusterIP for worker
@@ -89,17 +89,17 @@ Representative shape of the `api` Deployment template
 
 ```yaml
 containers:
-  - name: streamarr-api
+  - name: playarr-api
     image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
     env:
-      - name: STREAMARR_ROLE
+      - name: PLAYARR_ROLE
         value: {{ .Values.api.role | quote }}   # "api"
       - name: DATABASE_URL
         valueFrom: { secretKeyRef: { name: <secret.name>, key: DATABASE_URL } }
       - name: REDIS_URL
         valueFrom: { secretKeyRef: { name: <secret.name>, key: REDIS_URL } }
     envFrom:
-      - configMapRef: { name: <configmap-name> }   # STREAMARR_LOG/STREAMARR_HTTP_BIND_ADDR/STREAMARR_METRICS_BIND_ADDR
+      - configMapRef: { name: <configmap-name> }   # PLAYARR_LOG/PLAYARR_HTTP_BIND_ADDR/PLAYARR_METRICS_BIND_ADDR
     ports:
       - { name: http, containerPort: 8484 }
       - { name: metrics, containerPort: 9090 }
@@ -108,7 +108,7 @@ containers:
 ```
 
 The `worker` Deployment template is identical apart from
-`STREAMARR_ROLE: worker` and its own `HorizontalPodAutoscaler`
+`PLAYARR_ROLE: worker` and its own `HorizontalPodAutoscaler`
 (`hpa-worker.yaml` carries a commented example of wiring in an `External`
 queue-depth metric via KEDA/Prometheus Adapter once one is installed — CPU
 utilization is the only real scaling target today).
@@ -131,35 +131,35 @@ credentials there.
 
 There is **no bundled Postgres subchart dependency** of any kind
 (`Chart.yaml` declares none): this chart never provisions a database
-itself. Be aware that `streamarr-config` resolves the deployment tier from
+itself. Be aware that `playarr-config` resolves the deployment tier from
 `DATABASE_URL`'s URL scheme alone — pointing more than one `api`/`worker`
 pod at a non-Postgres URL (e.g. a shared `sqlite:` path) is a real
 misconfiguration hazard the chart does nothing to prevent.
 
 ### Config keys, and the manual sync a fixed bug left behind
 
-`values.yaml`'s non-secret `config:` block (`STREAMARR_LOG: "info"`,
-`STREAMARR_HTTP_BIND_ADDR: "0.0.0.0:8484"`,
-`STREAMARR_METRICS_BIND_ADDR: "0.0.0.0:9090"`) is rendered into a
+`values.yaml`'s non-secret `config:` block (`PLAYARR_LOG: "info"`,
+`PLAYARR_HTTP_BIND_ADDR: "0.0.0.0:8484"`,
+`PLAYARR_METRICS_BIND_ADDR: "0.0.0.0:9090"`) is rendered into a
 ConfigMap and consumed via `envFrom` — these are the real names
-`streamarr-config::Config::from_env` reads (`backend/crates/streamarr-config`).
+`playarr-config::Config::from_env` reads (`backend/crates/playarr-config`).
 An earlier pass of this chart instead shipped `APP_ENV`/`LOG_LEVEL`/
 `LOG_FORMAT`/`METRICS_ENABLED`/`METRICS_PORT`/`HTTP_PORT`, none of which
 the binary read at all; fixed.
 
 The container/Service port fields (`containerPort`/`port` in
 `deployment-{api,worker}.yaml` and `service.yaml`) can't reference
-`STREAMARR_METRICS_BIND_ADDR` directly — it's a full socket address
+`PLAYARR_METRICS_BIND_ADDR` directly — it's a full socket address
 string (`"0.0.0.0:9090"`), and Kubernetes port fields need a plain
 integer — so a separate top-level `metricsPort: 9090` value exists
 specifically for that (same reasoning as `probes.port: 8484` for the HTTP
 side, which already existed). **Nothing derives one from the other**:
 `metricsPort`/`probes.port` and the port numbers embedded in
-`config.STREAMARR_METRICS_BIND_ADDR`/`STREAMARR_HTTP_BIND_ADDR` must be
+`config.PLAYARR_METRICS_BIND_ADDR`/`PLAYARR_HTTP_BIND_ADDR` must be
 kept in sync by hand if either changes. (An earlier pass had the port
 fields read `{{ get .Values.config "METRICS_PORT" | int }}` directly,
 which broke when that ConfigMap key was renamed to the real
-`STREAMARR_METRICS_BIND_ADDR` name above — fixed by introducing
+`PLAYARR_METRICS_BIND_ADDR` name above — fixed by introducing
 `metricsPort` as its own value.)
 
 ### Autoscaling, PDB, ServiceMonitor
@@ -181,8 +181,8 @@ which broke when that ConfigMap key was renamed to the real
 ## Installing
 
 ```bash
-helm install streamarr infra/kubernetes/helm/streamarr \
-  --namespace streamarr --create-namespace \
+helm install playarr infra/kubernetes/helm/playarr \
+  --namespace playarr --create-namespace \
   -f my-values.yaml
 ```
 
@@ -202,9 +202,9 @@ terminating, before SIGTERM.
 
 ## Self-update story: GitOps/Flux only — never self-updating
 
-Kubernetes is the one tier where Streamarr **never** updates itself, by
+Kubernetes is the one tier where Playarr Server **never** updates itself, by
 design — there is no opt-in escape hatch equivalent to Tier 1's
-`streamarr update` subcommand or Tier 2's Watchtower overlay (and, per
+`playarr update` subcommand or Tier 2's Watchtower overlay (and, per
 [`systemd.md`](systemd.md#self-update-story-opt-in-check-only-and-today-largely-stubbed),
 that subcommand's real update logic is still a stub everywhere it exists
 today, so this tier isn't giving up much by not having it). No component
@@ -216,7 +216,7 @@ cluster.
 sanctioned path — **an example file, not wired into any live Flux
 Kustomization/HelmRelease in this repository**:
 
-- An `ImageRepository` watching `ghcr.io/streamarr/streamarr` for new
+- An `ImageRepository` watching `ghcr.io/playarr/playarr` for new
   tags (5 minute interval).
 - An `ImagePolicy` selecting the highest tag matching a semver range
   (`>=0.1.0` in the example — narrow this per environment, e.g. dev
@@ -224,7 +224,7 @@ Kustomization/HelmRelease in this repository**:
 - An `ImageUpdateAutomation` that commits the resulting tag bump back into
   *this git repository* (recommended to a side branch,
   `flux-image-updates`, behind a PR — not straight to `main`) at whatever
-  file carries a `# {"$imagepolicy": "flux-system:streamarr:tag"}` marker
+  file carries a `# {"$imagepolicy": "flux-system:playarr:tag"}` marker
   comment next to an image reference. For the Helm chart, that's
   `values.yaml`'s `image.tag` field; for the kustomize skeleton, it's
   `base/kustomization.yaml`'s `images[].newTag`. **Neither file in this

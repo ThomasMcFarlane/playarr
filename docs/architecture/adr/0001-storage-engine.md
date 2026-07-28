@@ -2,19 +2,19 @@
 
 - **Status:** Accepted
 - **Date:** 2026-07-15
-- **Owners:** Streamarr core team
+- **Owners:** Playarr Server core team
 - **Related:** [`docs/architecture/overview.md`](../overview.md) (crate layout, deployment tiers),
   [`docs/architecture/distributed-design.md`](../distributed-design.md) (`ClusterCoordinator`)
 
 ## Context
 
-Streamarr must run acceptably across three very different deployment tiers
+Playarr Server must run acceptably across three very different deployment tiers
 (see the overview doc's tier table): a single unattended process on
 consumer NAS/ARM hardware, a small docker-compose deployment, and a
 horizontally scaled Kubernetes cluster. All three tiers need a relational
 store for the same schema — library metadata, users, sessions, policies,
 transcode job state, cluster membership — and the persistence layer has to
-be chosen once, early, because the domain layer (`streamarr-model`) and every
+be chosen once, early, because the domain layer (`playarr-model`) and every
 crate above it will be written against whatever abstraction is chosen here.
 
 Three shapes of solution were on the table:
@@ -23,9 +23,9 @@ Three shapes of solution were on the table:
    single-node install to run a full Postgres server as a sibling process or
    dependency.
 2. **An embedded/bundled Postgres** used as the *default* backend at every
-   tier — i.e. Streamarr ships and manages its own Postgres server process
+   tier — i.e. Playarr Server ships and manages its own Postgres server process
    internally (via an embedded-postgres approach: a bundled `postgres`
-   binary per target triple, started and stopped by the `streamarr` process
+   binary per target triple, started and stopped by the `playarr` process
    itself), so the rest of the codebase only ever talks to one database
    engine, full stop.
 3. **A dual backend**: SQLite as the default, embedded, zero-dependency
@@ -33,7 +33,7 @@ Three shapes of solution were on the table:
    server is already an expected and normal part of the deployment (a
    docker-compose service, a managed or in-cluster Postgres instance).
 
-The deciding constraint is Tier 1. Streamarr's single-node tier is targeted
+The deciding constraint is Tier 1. Playarr Server's single-node tier is targeted
 explicitly at NAS devices (Synology, QNAP), Raspberry Pi–class ARM boards,
 and other consumer hardware running unattended, often for months between
 reboots, administered by people who are not database operators. Whatever
@@ -46,7 +46,7 @@ Option 2 is attractive on paper: it collapses the storage layer to a single
 engine, meaning one set of migrations, one SQL dialect to write against, one
 set of Postgres-only features (`LISTEN`/`NOTIFY`, advisory locks, `JSONB`
 operators) available unconditionally everywhere, and no need for the
-`streamarr-db` crate to abstract over two engines' quirks at all. Several
+`playarr-db` crate to abstract over two engines' quirks at all. Several
 embedded-Postgres approaches exist in the Rust ecosystem (bundling a
 `postgres` binary per platform and driving it as a managed child process),
 and this is a well-trodden pattern in other self-hosted software.
@@ -56,12 +56,12 @@ reasons specific to the hardware Tier 1 targets:
 
 - **ARM binary distribution is a real packaging burden.** A bundled Postgres
   needs a working, tested `postgres` server binary for every architecture
-  Streamarr supports as a single-node install — at minimum `aarch64` (NAS,
+  Playarr Server supports as a single-node install — at minimum `aarch64` (NAS,
   Raspberry Pi 4/5) and `armv7` (older Pi boards still in the wild) in
   addition to `x86_64`. Getting this wrong silently (a subtly broken ARM
   build of the bundled engine) is a materially worse failure mode than
   SQLite, which is a few hundred kilobytes of C compiled directly into the
-  binary via the same toolchain that builds Streamarr itself, with no
+  binary via the same toolchain that builds Playarr Server itself, with no
   separate server binary to source or verify per architecture.
 - **fsync/WAL behaviour on the storage these devices actually use is
   unpredictable.** NAS filesystems (btrfs with NAS-vendor overlays, SMB/NFS
@@ -74,16 +74,16 @@ reasons specific to the hardware Tier 1 targets:
   numerous other self-hosted single-node NAS software for exactly this
   reason.
 - **Process supervision doubles.** A bundled Postgres is a second process
-  Streamarr has to start, health-check, and crash-recover *itself*, on top
+  Playarr Server has to start, health-check, and crash-recover *itself*, on top
   of already being responsible for its own process lifecycle under systemd.
   A wedged or corrupted embedded Postgres data directory on an unattended
-  NAS, with no operator watching, is a support burden Streamarr cannot
+  NAS, with no operator watching, is a support burden Playarr Server cannot
   absorb for its primary, most common deployment tier. SQLite has no
   separate process to wedge.
 - **Startup latency and resource floor.** A Postgres server process,
   bundled or not, has a meaningfully higher idle memory footprint and
   startup time than an embedded SQLite connection, which matters on the
-  lower end of Tier 1 hardware (1–2GB RAM NAS boxes) where Streamarr is
+  lower end of Tier 1 hardware (1–2GB RAM NAS boxes) where Playarr Server is
   competing for resources with the NAS vendor's own OS and other
   self-hosted apps already running on the box.
 
@@ -93,19 +93,19 @@ hardware, and Tier 1 is explicitly the tier for that hardware.
 
 ## Decision
 
-Streamarr uses a **dual-backend storage engine, selected via `sqlx`**:
+Playarr Server uses a **dual-backend storage engine, selected via `sqlx`**:
 
 - **SQLite** is the default and only supported backend for **Tier 1
   (systemd/single-node)**. It requires no separate server process, no
   network port, and no operator action; the database is a file inside
-  Streamarr's data directory.
+  Playarr Server's data directory.
 - **Postgres** is the default and only supported backend for **Tier 2
   (docker-compose)** and **Tier 3 (Kubernetes)**, where a real database
   server is already a normal, expected part of the deployment topology (a
   `postgres` service in `docker-compose.prod.yml`, or an in-cluster/managed
   Postgres referenced by the Helm chart's `values.yaml`).
 
-Implementation shape in `streamarr-db` (as actually built — see that
+Implementation shape in `playarr-db` (as actually built — see that
 crate's `src/pool.rs`, `src/codec.rs`, and `src/repo/*.rs`):
 
 - `DbPool` is a single concrete type alias, `sqlx::AnyPool` — not a
@@ -132,7 +132,7 @@ crate's `src/pool.rs`, `src/codec.rs`, and `src/repo/*.rs`):
   own type system only encodes/decodes `bool`/`i16`/`i32`/`i64`/`f32`/`f64`/
   `String`/`Vec<u8>` — there is no `Uuid` or `chrono` support at the `Any`
   layer, and SQLite's bridge into `Any` has no mapping at all for a
-  `BOOLEAN`-affinity column. `streamarr-db::codec` is the one place every
+  `BOOLEAN`-affinity column. `playarr-db::codec` is the one place every
   repository maps its domain types to one of those primitives: UUIDs and
   timestamps round-trip as `TEXT` (RFC 3339 with millisecond precision for
   timestamps, parsed back with `chrono`), booleans as `INTEGER` `0`/`1`
@@ -144,8 +144,8 @@ crate's `src/pool.rs`, `src/codec.rs`, and `src/repo/*.rs`):
 - Migrations are maintained as **parallel migration sets**, embedded at
   compile time via `sqlx::migrate!` from `backend/migrations/sqlite/` and
   `backend/migrations/postgres/` (workspace-root-relative — not nested
-  inside `streamarr-db`'s own crate directory), and run automatically at
-  process startup (`streamarr_db::run_migrations`, called from
+  inside `playarr-db`'s own crate directory), and run automatically at
+  process startup (`playarr_db::run_migrations`, called from
   `backend/src/main.rs`'s `connect_and_migrate`) rather than requiring a
   separate `migrate` subcommand. The two sets are schema-equivalent for the
   tables both backends need, but are **not** migration-number-aligned 1:1:
@@ -154,15 +154,15 @@ crate's `src/pool.rs`, `src/codec.rs`, and `src/repo/*.rs`):
   that are genuinely Postgres-only (see the next bullet and
   [`distributed-design.md`](../distributed-design.md)).
 - Backend selection is purely a function of `DATABASE_URL`'s scheme (a
-  `sqlite:...` value resolves `streamarr_config::DeploymentTier::SingleNode`;
+  `sqlite:...` value resolves `playarr_config::DeploymentTier::SingleNode`;
   `postgres://`/`postgresql://` resolves one of the two multi-node tiers,
   further split on whether `REDIS_URL` is also set) — there is no separate
   `database.backend` config key to keep in sync with it.
 - Anything that is genuinely Postgres-only and has no reasonable SQLite
   substitute — advisory-lock-based leader election and the `cluster_leader`
   heartbeat table, in `PostgresCoordinator` — is not forced into
-  `streamarr-db`'s `AnyPool`-based repositories at all. It lives in its own
-  crate, `streamarr-coordination`, with an explicit `SingleNodeCoordinator`
+  `playarr-db`'s `AnyPool`-based repositories at all. It lives in its own
+  crate, `playarr-coordination`, with an explicit `SingleNodeCoordinator`
   no-op counterpart for Tier 1, rather than being faked with a
   lowest-common-denominator abstraction that would compromise the Postgres
   implementation to accommodate SQLite. See
@@ -174,7 +174,7 @@ crate's `src/pool.rs`, `src/codec.rs`, and `src/repo/*.rs`):
   Postgres-only logic (`PostgresCoordinator`'s advisory locks,
   `PostgresListenNotify`) is unit-tested against the literal SQL text and
   local in-process state it produces, not against a live Postgres server —
-  see `streamarr-coordination`'s own test module doc comment for why that
+  see `playarr-coordination`'s own test module doc comment for why that
   was a deliberate choice (connection-failure behaviour to a closed port is
   environment-dependent and was a source of flaky tests) rather than an
   oversight. A live-Postgres integration suite is a documented follow-up,
@@ -219,10 +219,10 @@ crate's `src/pool.rs`, `src/codec.rs`, and `src/repo/*.rs`):
   extra author and review overhead on every schema change.
 - **Backend-specific features are either avoided or isolated.** Postgres
   capabilities with no SQLite equivalent (`LISTEN`/`NOTIFY`, advisory locks,
-  richer `JSONB` querying) cannot be used inside `streamarr-db`'s
+  richer `JSONB` querying) cannot be used inside `playarr-db`'s
   `AnyPool`-based repositories; they have to live in Postgres-only crates/
-  code paths (as `streamarr-coordination::PostgresCoordinator` and
-  `streamarr-cache::PostgresListenNotify` already do), which means some
+  code paths (as `playarr-coordination::PostgresCoordinator` and
+  `playarr-cache::PostgresListenNotify` already do), which means some
   features are simply unavailable, or behave differently, on Tier 1.
 - **Tier-1-to-Tier-2/3 migration requires an explicit data export/import
   step** (SQLite → Postgres), rather than "just point at a bigger Postgres,"
@@ -247,7 +247,7 @@ crate's `src/pool.rs`, `src/codec.rs`, and `src/repo/*.rs`):
 
 ## Revisit trigger
 
-This decision is not considered final. If, once `streamarr-db`'s
+This decision is not considered final. If, once `playarr-db`'s
 dual-backend abstraction has been in production use for a while, the ongoing
 cost of maintaining two query surfaces and two migration sets (the
 "Negative" section above) turns out to be a chronic, worsening maintenance

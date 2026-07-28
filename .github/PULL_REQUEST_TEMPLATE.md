@@ -30,7 +30,7 @@ screenshots, migration steps, deliberate scope decisions).
       if this PR touches `backend/`'s dependencies.
 - [ ] **If this PR changes any `#[utoipa::path]`/schema annotation or other
       API-visible behaviour**, the OpenAPI contract was regenerated and
-      `backend/openapi/streamarr.yaml` was committed with the diff.
+      `backend/openapi/playarr.yaml` was committed with the diff.
       `openapi-contract-check` enforces this in CI, but please double-check
       the diff itself is intentional and reviewed, not just "made CI pass".
 - [ ] `pnpm run lint` and `pnpm run typecheck` pass, if this PR touches

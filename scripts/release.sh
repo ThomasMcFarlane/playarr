@@ -2,7 +2,7 @@
 #
 # scripts/release.sh
 #
-# Cuts a release for one component of the Streamarr monorepo: bumps that
+# Cuts a release for one component of the Playarr Server monorepo: bumps that
 # component's version file (if one exists yet), commits the bump, and
 # creates an annotated git tag using the repo's tag scheme:
 #
@@ -148,7 +148,7 @@ else
   case "${COMPONENT}" in
     backend)
       # backend/Cargo.toml doubles as both the workspace root manifest AND
-      # the `streamarr-bin` package manifest (see the comment at the top of
+      # the `playarr-bin` package manifest (see the comment at the top of
       # that file), so there are two `version = "..."` fields to keep in
       # sync: the workspace-wide one under [workspace.package] (which
       # member crates using `version.workspace = true` inherit) and the

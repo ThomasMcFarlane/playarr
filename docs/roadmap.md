@@ -25,16 +25,16 @@ on this codebase should be scoped and handed out.
 ## Wave 1 — Foundations
 
 - **Crate skeleton and the single-role-gated binary.** **Built**, under
-  different names than originally sketched: there is no `streamarr-core`
-  crate or `RoleSet` bitflag. Domain types live in `streamarr-model`
+  different names than originally sketched: there is no `playarr-core`
+  crate or `RoleSet` bitflag. Domain types live in `playarr-model`
   (`Work`, `User`, `Session`, `Device`, `MediaFile`, `Rendition`, ...);
-  role-gating is `streamarr-config::Role` (`All` / `Api` / `Worker`, read
-  from `STREAMARR_ROLE`) plus `DeploymentTier`; the single binary is
-  `streamarr-bin` (package name), producing the `streamarr` binary from
+  role-gating is `playarr-config::Role` (`All` / `Api` / `Worker`, read
+  from `PLAYARR_ROLE`) plus `DeploymentTier`; the single binary is
+  `playarr-bin` (package name), producing the `playarr` binary from
   `backend/src/main.rs`, a real `clap` CLI with subcommands. Functionally
   equivalent to the planned design (one binary, gated by role at startup),
   just simpler than a bitflag.
-- **The dual-backend storage engine.** **Built.** `streamarr-db` genuinely
+- **The dual-backend storage engine.** **Built.** `playarr-db` genuinely
   supports both SQLite and Postgres via `sqlx`, auto-detecting the backend
   from the connection URL scheme (`Backend::from_database_url`), with
   separate embedded migration sets under `backend/migrations/sqlite/` and
@@ -44,9 +44,9 @@ on this codebase should be scoped and handed out.
   `WorkRepo`, `DeviceRepo`, `RenditionRepo`, and `MediaFileRepo` traits with
   Sqlx-backed implementations, per [ADR 0001](architecture/adr/0001-storage-engine.md).
 - **The OpenAPI spec.** **Built**, and further along than "skeleton": it
-  is not hand-maintained at all. `backend/openapi/streamarr.yaml` is
+  is not hand-maintained at all. `backend/openapi/playarr.yaml` is
   generated from `#[utoipa::path]` annotations on every real handler
-  (`streamarr-api::openapi_spec()`), with a checked-in drift test
+  (`playarr-api::openapi_spec()`), with a checked-in drift test
   (`openapi_spec_matches_checked_in_file`) that fails CI if the file and the
   live route annotations disagree. Every route in the section below is
   real and reflected in this spec — there's no separate "planned" spec to
@@ -55,14 +55,14 @@ on this codebase should be scoped and handed out.
 ## Wave 2 — Platform Services
 
 - **Auth engine.** **Built** for the mechanism, **Partial/Deferred** for
-  persistence. `streamarr-auth` has real JWT access-token issuance and
+  persistence. `playarr-auth` has real JWT access-token issuance and
   verification, real refresh-token rotation, and a real RFC 8628 device
   flow (`DeviceFlowHandler`, `DashMapDeviceFlowHandler`). All three trust
   tiers from `docs/architecture/auth-modes.md` exist as `AuthMode`
   variants (`TrustedNetwork`, `ManagedProfiles`, `FullAccount`) with real
   login-resolution logic, and a real `PolicyEvaluator`/`DefaultPolicyEvaluator`
   for authorization decisions. Bearer-token enforcement is real and wired
-  into every route that needs it: `streamarr-api::auth_extractor`'s
+  into every route that needs it: `playarr-api::auth_extractor`'s
   `AuthUser`/`AdminUser` are genuine Axum `FromRequestParts` extractors
   that reject a missing/invalid/expired token with a real 401 (and a
   non-admin token with a real 403) before the handler body runs — see e.g.
@@ -75,12 +75,12 @@ on this codebase should be scoped and handed out.
   permissions don't survive a restart. **Deferred: `FullAccount` login has
   no provisioning story.** The login-time verification path for
   `AuthMode::FullAccount` is real, but nothing in the API creates a user —
-  there's no register/signup endpoint anywhere in `streamarr-api`; a
+  there's no register/signup endpoint anywhere in `playarr-api`; a
   comment in `login.rs` explicitly scopes user provisioning as
   "out-of-scope" for that module. Both are deferred because they need a
   real persistence/admin-tooling design decision, not because they're hard.
 - **`ClusterCoordinator`.** **Built** for the two shipped implementations,
-  **Deferred** for gossip. `streamarr-coordination` (not `streamarr-cluster`)
+  **Deferred** for gossip. `playarr-coordination` (not `playarr-cluster`)
   has a real `ClusterCoordinator` trait with two real implementations:
   `SingleNodeCoordinator` (correct-by-construction, no contention) and
   `PostgresCoordinator` (genuine `pg_try_advisory_lock`/`pg_advisory_unlock`
@@ -91,32 +91,32 @@ on this codebase should be scoped and handed out.
   needed yet: nothing currently deployed exceeds a Postgres-coordinated
   cluster's needs.
 - **arr-ecosystem adapters.** **Built**, and broader than planned:
-  `streamarr-arr-client` (not `streamarr-arr`) has one real adapter each
+  `playarr-arr-client` (not `playarr-arr`) has one real adapter each
   for Sonarr, Radarr, Prowlarr, Bazarr, **and** Lidarr and Readarr (music
   and books, beyond the original four-adapter scope), all over a shared
   `http.rs` client.
 - **Metadata scanning.** **Built, but architecturally different from the
-  plan.** There is no standalone `streamarr-metadata` crate doing its own
-  independent library scanning/artwork fetch. Instead, `streamarr-arr-sync`
+  plan.** There is no standalone `playarr-metadata` crate doing its own
+  independent library scanning/artwork fetch. Instead, `playarr-arr-sync`
   polls and receives webhooks from the wrapped *arr apps
   (`poller.rs`/`webhook.rs`) and reconciles their already-scanned metadata
-  into `streamarr-model::Work`/`MediaFile` rows (`media_sync.rs`), while
-  `streamarr-catalog` serves the read-side browse/search/detail API on top.
+  into `playarr-model::Work`/`MediaFile` rows (`media_sync.rs`), while
+  `playarr-catalog` serves the read-side browse/search/detail API on top.
   This is a deliberate, reasonable shape for a server that wraps Sonarr/
   Radarr/etc. rather than replacing them — those apps already do metadata
-  scanning, so Streamarr consumes their output instead of duplicating it.
+  scanning, so Playarr Server consumes their output instead of duplicating it.
   One real gap versus even this narrower scope: artwork (`ImageAsset`) is
   stored as a URL reference passed through from the source app, with no
   server-side fetch/cache/proxy pipeline of its own.
 
 ## Wave 3 — Media Pipeline
 
-- **On-demand transcode session manager.** **Partial.** `streamarr-transcode`
+- **On-demand transcode session manager.** **Partial.** `playarr-transcode`
   has a real `TranscodeOrchestrator` implementing the planned three-step
   decision order (direct-play → existing rendition → spawn on-demand
   transcode), real ffmpeg HLS argument construction
   (`build_ffmpeg_hls_args`), and session state in whatever
-  `streamarr-cache::CacheAndPubSub` backend is configured (in-memory or
+  `playarr-cache::CacheAndPubSub` backend is configured (in-memory or
   Redis). **Deferred: DRM license endpoints (Widevine, FairPlay, PlayReady)
   do not exist** — there is no license-serving code anywhere in the
   transcode crate or the OpenAPI spec, despite being named explicitly in
@@ -127,7 +127,7 @@ on this codebase should be scoped and handed out.
   once a real multi-node/DRM-required deployment exists to drive the
   design, and neither has one yet.
 - **Background transcode dispatch.** **Built.** A real `TdarrDispatcher`
-  (in `streamarr-transcode`) hands work off through `streamarr-tdarr-client`,
+  (in `playarr-transcode`) hands work off through `playarr-tdarr-client`,
   a genuine typed client for Tdarr's REST v2 API (`x-api-key` auth, node/
   worker-capacity queries, file-scan requests). **Deferred:** checkpointed
   progress tracking across dispatcher restarts, mentioned in the original
@@ -140,15 +140,15 @@ All three tiers are **Built** as real, checked-in files (not just
 scaffolding), with paths shifted from the original plan's `infra/`
 sketch to what's actually there:
 
-- **systemd tier.** `infra/systemd/streamarr.service`, `install.sh`,
-  `streamarr.env.example`, and an update-check timer/service pair
-  (`streamarr-update-check.timer`/`.service`) — the opt-in update timer
+- **systemd tier.** `infra/systemd/playarr.service`, `install.sh`,
+  `playarr.env.example`, and an update-check timer/service pair
+  (`playarr-update-check.timer`/`.service`) — the opt-in update timer
   from the plan is real.
 - **docker-compose tier.** `infra/docker/docker-compose.{dev,prod,ci,mock}.yml`
   plus `docker-compose.watchtower.optional.yml` for the opt-in
   auto-update overlay, and a real `backend.Dockerfile`.
 - **Kubernetes tier.** `infra/kubernetes/` has both a real Helm chart
-  (`helm/streamarr/Chart.yaml`+`values.yaml`) and a plain Kustomize
+  (`helm/playarr/Chart.yaml`+`values.yaml`) and a plain Kustomize
   `base/`+`overlays/{dev,staging,prod}` set, plus an example Flux
   image-automation manifest — narrower than the plan's implied full
   `deploy/gitops/` tree (one example file, not a maintained GitOps
@@ -175,14 +175,14 @@ someone runs them for real.
   divergence: only the **TypeScript** client is actually generated and
   committed as generated output — `clients/tv-web/packages/api-client`'s
   `pnpm run generate` runs `openapi-typescript` against
-  `backend/openapi/streamarr.yaml` for real, and `src/generated/schema.ts`
+  `backend/openapi/playarr.yaml` for real, and `src/generated/schema.ts`
   is that real generated file. **Kotlin and Swift codegen are configured
   but never executed**: `clients/shared/sdk-codegen/{kotlin,swift}-config.yaml`
   and `scripts/gen-sdk.sh` are real `openapi-generator` configs pointing at
   output directories (`clients/android/sdk`,
-  `clients/ios/StreamarrSDK`) that don't exist in the tree. Android and iOS
+  `clients/ios/PlayarrSDK`) that don't exist in the tree. Android and iOS
   instead ship **hand-written mirrors** of the OpenAPI schemas
-  (`StreamarrHttpClient.kt`'s models, `OpenAPISchemas.swift`), written by
+  (`PlayarrHttpClient.kt`'s models, `OpenAPISchemas.swift`), written by
   reading the spec directly — a deliberate choice documented in
   `OpenAPISchemas.swift`'s own comment (the generic Swift5 generator
   doesn't produce correct `Codable` conformances for several `oneOf`
@@ -191,8 +191,8 @@ someone runs them for real.
 - **Android.** **Built.** `clients/android/` is one Gradle project containing
   one native responsive Compose application and its internal modules, spanning
   phones, tablets, Android TV, and Google TV with one APK.
-- **iOS.** **Built.** `clients/ios/Streamarr.xcodeproj` produces a native
-  `Playarr.app`, links the reusable `StreamarrKit` package, includes App Store
+- **iOS.** **Built.** `clients/ios/Playarr Server.xcodeproj` produces a native
+  `Playarr.app`, links the reusable `PlayarrKit` package, includes App Store
   bundle/privacy/icon resources, and defines application and kit XCTest
   targets. Its native SwiftUI shell mirrors Playarr Web's responsive navigation,
   login, home rails, libraries, search, playlists, profiles, details, settings,
@@ -235,7 +235,7 @@ normal Web update flow described in [`versioning-policy.md`](versioning-policy.m
   progress heartbeats, and subtitle/artwork sideloading; it builds,
   typechecks, and passes 82/82 unit tests, and is genuinely hosted at
   `playarr.app/cast/` (`clients/tv-web/web/worker.js`'s `/cast` routes, 30/30
-  hosting tests passing). The shared `@streamarr-tv/cast-protocol` package
+  hosting tests passing). The shared `@playarr-tv/cast-protocol` package
   (18/18 tests) defines one wire protocol mirrored by hand into Kotlin and
   Swift. The Web sender (`clients/tv-web/web/`) adds a Cast button, session
   management, and the delegated-auth flow, covered by 326 passing web tests.
@@ -249,7 +249,7 @@ normal Web update flow described in [`versioning-policy.md`](versioning-policy.m
   `Access-Control-Allow-Headers` silently excludes `Authorization` per the
   Fetch spec: every cross-origin Bearer-authenticated caller, not just Cast,
   was affected), all covered by the backend suite. **What's missing:** the
-  iOS sender (`clients/ios/Sources/StreamarrApp/Cast/`) is written to the
+  iOS sender (`clients/ios/Sources/PlayarrApp/Cast/`) is written to the
   same protocol but has never been compiled: no macOS/Xcode toolchain
   exists in this environment, and the Google Cast iOS SDK has no SPM
   distribution to vendor automatically. No Google Cast Developer Console app
@@ -259,6 +259,35 @@ normal Web update flow described in [`versioning-policy.md`](versioning-policy.m
   breaks, queueing beyond simple up-next, and casting a local on-device
   download. Full picture in
   [`docs/architecture/clients/cast.md`](architecture/clients/cast.md).
+- **Xbox.** **Partial.** `clients/xbox/` splits a portable core
+  (`Playarr.Core`, netstandard2.0, no `Windows.*` reference) from a native
+  UWP/XAML application head (`Playarr.Xbox`). The portable core is real and
+  tested — it builds and its full xUnit suite passes on Linux (`dotnet build
+  src/Playarr.Core/Playarr.Core.csproj`, `dotnet test
+  tests/Playarr.Core.Tests/Playarr.Core.Tests.csproj`, 36/36 passing) — and
+  includes a real RFC 8628 device-flow client, session/model layer, and a
+  per-console `XboxPlaybackProfile` capability matrix (H.264 1080p60
+  everywhere, HEVC up to 2160p60 on everything but the original Xbox One,
+  VP9 limited to One X/Series S/Series X, no AV1 on any console). The UWP
+  head has eight real screens (Login, Profiles, Home, Library, Search,
+  WorkDetail, Player, Settings), a `NavigationService`/`ObservableObject`
+  pattern, and a native `MediaPlayerElement`/`AdaptiveMediaSource` playback
+  path negotiating direct-play vs. on-demand-HLS — but **none of it has ever
+  been compiled**: there is no MSBuild, Windows 10 SDK, or UWP workload in
+  this environment or in this repo's CI, so every file was instead validated
+  statically (`xmllint`, manual brace-balance and `using`/namespace checks).
+  **Deferred/open gaps:** direct-mode playback sends no `Authorization`
+  header (a real correctness gap once a server enforces bearer auth on that
+  route); audio/subtitle track selection assumes an unverified WinRT API
+  shape; `XboxModelDetector` can only confirm "some Xbox," never which
+  model; no MSIX has been built or signed; no Microsoft Store submission has
+  happened (prep material only, `clients/xbox/docs/store-submission.md`);
+  no icon/tile/splash art exists. The one thing that works today: the shared
+  Playarr Web app now detects Xbox's built-in Edge/Chromium browser via
+  user-agent sniff and serves it a narrower playback profile (no MKV, HEVC,
+  or AV1) than the native client's, giving Xbox owners a zero-install
+  fallback while the native app has no installable package yet — see
+  [`docs/architecture/clients/xbox.md`](architecture/clients/xbox.md).
 
 ## Wave 7 — Hardening and Versioning Rollout
 

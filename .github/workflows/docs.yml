@@ -59,8 +59,8 @@ jobs:
             exit 0
           fi
           cat > mkdocs.yml <<'YAML'
-          site_name: Streamarr Docs
-          site_description: Streamarr backend and Playarr client documentation.
+          site_name: Playarr Server Docs
+          site_description: Playarr Server backend and Playarr client documentation.
           docs_dir: docs
           theme:
             name: material

@@ -6,11 +6,11 @@ iOS) discovers and connects to a Chromecast device, which launches Playarr's
 own **custom web receiver**, a small standalone app hosted at
 `playarr.app/cast/`, inside the Cast device itself. Sender and receiver talk
 to each other over a Cast custom message channel; the receiver talks to the
-Streamarr server directly for playback negotiation, progress reporting, and
+Playarr Server directly for playback negotiation, progress reporting, and
 media.
 
 ```text
-Sender (Web / Android / iOS)              Chromecast device                Streamarr server
+Sender (Web / Android / iOS)              Chromecast device                Playarr Server
 ┌─────────────────────────┐   Cast SDK    ┌───────────────────────┐   HTTPS   ┌───────────────┐
 │ requestSession()         │──────────────▶│ Playarr custom        │──────────▶│ /api/v1/...   │
 │ loadMedia(customData)    │  session +    │ web receiver           │  Bearer   │               │
@@ -18,7 +18,7 @@ Sender (Web / Android / iOS)              Chromecast device                Strea
 └─────────────────────────┘◀──────────────└───────────────────────┘◀──────────└───────────────┘
 ```
 
-The receiver is the thing that actually plays media and holds a Streamarr
+The receiver is the thing that actually plays media and holds a Playarr Server
 session; the sender only launches it, hands it a load request, and relays
 UI-level control messages afterwards. This split is what makes casting
 survive the sender's own app (or browser tab) closing.
@@ -26,7 +26,7 @@ survive the sender's own app (or browser tab) closing.
 ## Why the receiver never gets the sender's own token: delegated device auth
 
 The obvious design (hand the receiver the signed-in sender's own access and
-refresh token over the custom channel) was deliberately rejected. Streamarr's
+refresh token over the custom channel) was deliberately rejected. Playarr Server's
 refresh-token rotation includes reuse detection: if a rotated-and-then-reused
 refresh token is ever presented, the server treats it as theft and revokes the
 whole session lineage. A sender and a receiver both rotating from the same
@@ -56,21 +56,21 @@ with its own rotation lineage, and cannot revoke the sender's session or vice
 versa.
 
 `cast` is a first-class `ClientPlatform` variant end to end: the backend
-enum (`streamarr-model::platform::ClientPlatform`), `client-compatibility.toml`
+enum (`playarr-model::platform::ClientPlatform`), `client-compatibility.toml`
 (a `[cast]` entry mirroring `[tv-vidaa]`'s shape), and every hand-written
 client-side mirror (Kotlin, Swift, TypeScript-generated schema).
 
 Reference implementations of the flow:
 - Web sender: `clients/tv-web/web/src/lib/cast/delegatedDeviceAuth.ts`
-- Android sender: `clients/android/app/src/main/kotlin/io/streamarr/mobile/cast/PlayarrDelegatedDeviceAuth.kt`
-- iOS sender: `clients/ios/Sources/StreamarrApp/Cast/CastSessionCoordinator.swift`
+- Android sender: `clients/android/app/src/main/kotlin/io/playarr/mobile/cast/PlayarrDelegatedDeviceAuth.kt`
+- iOS sender: `clients/ios/Sources/PlayarrApp/Cast/CastSessionCoordinator.swift`
 - Receiver-side credential handling: `clients/tv-web/apps/cast-receiver/src/auth.ts`
 
 ## The CORS/auth fix this build required
 
 Once the receiver exists, it is a page served from `playarr.app` calling a
-self-hosted Streamarr server on a different origin: a genuinely
-cross-origin, Bearer-authenticated request. Streamarr's CORS policy was
+self-hosted Playarr Server on a different origin: a genuinely
+cross-origin, Bearer-authenticated request. Playarr Server's CORS policy was
 already deliberately wide open (`CorsLayer::permissive()`: any origin, no
 credentials, because the API is Bearer-token authenticated and has no
 cookie/session CSRF surface an origin allow-list would protect). That
@@ -89,7 +89,7 @@ browser CORS enforcement at all) never hit this path. It only surfaces for a
 genuinely cross-origin browser context sending `Authorization`, exactly what
 the Cast receiver is.
 
-The fix, in `backend/crates/streamarr-api/src/lib.rs`:
+The fix, in `backend/crates/playarr-api/src/lib.rs`:
 
 ```rust
 CorsLayer::permissive().allow_headers(AllowHeaders::mirror_request())
@@ -126,7 +126,7 @@ subtitle handler): the cookie is tried first, and `playback_session_id` is
 the fallback when no cookie is present. This is a capability-style grant, not
 a fresh authentication: the id must already resolve to a live
 `PlaybackSession` the caller's own negotiation created; see
-`backend/crates/streamarr-api/src/media.rs`.
+`backend/crates/playarr-api/src/media.rs`.
 
 ## Protocol namespace and message shapes
 
@@ -138,9 +138,9 @@ and shared, not duplicated per platform:
   [`clients/tv-web/packages/cast-protocol/src/index.ts`](../../../clients/tv-web/packages/cast-protocol/src/index.ts),
   used directly by the Web sender and the receiver.
 - **Kotlin mirror:**
-  `clients/android/app/src/main/kotlin/io/streamarr/mobile/cast/PlayarrCastProtocol.kt`
+  `clients/android/app/src/main/kotlin/io/playarr/mobile/cast/PlayarrCastProtocol.kt`
 - **Swift mirror:**
-  `clients/ios/Sources/StreamarrApp/Cast/PlayarrCastProtocol.swift`
+  `clients/ios/Sources/PlayarrApp/Cast/PlayarrCastProtocol.swift`
 
 All three define the same namespace (`urn:x-cast:app.playarr.cast.v1`),
 protocol version constant, a `PlayarrCastLoadRequest` carried as `loadMedia`'s
@@ -174,7 +174,7 @@ limitations below.
   real Cast device against Playarr's own receiver, because no such
   registration/App ID exists to launch.
 - **iOS sender is unverified.** This environment has no macOS/Xcode
-  toolchain, so `clients/ios/Sources/StreamarrApp/Cast/` has never been
+  toolchain, so `clients/ios/Sources/PlayarrApp/Cast/` has never been
   compiled, let alone run. It was written carefully against documented Cast
   iOS SDK shapes, but several call sites (`GCKMediaLoadRequestDataBuilder`,
   error-code bridging, `GCKDevice`/`GCKCastSession` API surface) are flagged
@@ -182,7 +182,7 @@ limitations below.
 - **Plain `http://` self-hosted servers cannot be cast to from the
   `https://playarr.app` receiver.** The receiver page is always served over
   HTTPS; a browser/Cast device refuses mixed-content requests from an HTTPS
-  page to an HTTP origin. Casting only works today against an HTTPS Streamarr
+  page to an HTTP origin. Casting only works today against an HTTPS Playarr Server
   server.
 - **No DRM.** Same as every other Playarr client: the playback-negotiation
   API returns no DRM configuration or license endpoint today, so this only

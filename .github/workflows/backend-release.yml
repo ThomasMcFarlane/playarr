@@ -1,5 +1,5 @@
 # =============================================================================
-# Streamarr Backend Release
+# Playarr Server Backend Release
 # =============================================================================
 #
 # Triggered by pushing a tag like `backend-v1.4.2` (or a pre-release such as
@@ -70,20 +70,20 @@ jobs:
 
       - name: Build release binary
         working-directory: backend
-        run: cargo zigbuild --release --target ${{ matrix.target }} --bin streamarr
+        run: cargo zigbuild --release --target ${{ matrix.target }} --bin playarr-server
 
       - name: Package binary
         working-directory: backend
         run: |
           set -euo pipefail
-          bin_path="target/${{ matrix.target }}/release/streamarr"
+          bin_path="target/${{ matrix.target }}/release/playarr-server"
           mkdir -p dist
-          tar -C "$(dirname "$bin_path")" -czf "dist/streamarr-${{ matrix.target }}.tar.gz" "$(basename "$bin_path")"
-          shasum -a 256 "dist/streamarr-${{ matrix.target }}.tar.gz" > "dist/streamarr-${{ matrix.target }}.tar.gz.sha256"
+          tar -C "$(dirname "$bin_path")" -czf "dist/playarr-${{ matrix.target }}.tar.gz" "$(basename "$bin_path")"
+          shasum -a 256 "dist/playarr-${{ matrix.target }}.tar.gz" > "dist/playarr-${{ matrix.target }}.tar.gz.sha256"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: streamarr-${{ matrix.target }}
+          name: playarr-${{ matrix.target }}
           path: backend/dist/*
           if-no-files-found: error
           retention-days: 14
@@ -106,7 +106,7 @@ jobs:
       - name: Compute image name
         id: image
         run: |
-          echo "name=ghcr.io/$(echo '${{ github.repository_owner }}/streamarr-backend' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          echo "name=ghcr.io/$(echo '${{ github.repository_owner }}/playarr-backend' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
       - name: Docker metadata (semver + digest/sha tags)
         id: meta
@@ -182,7 +182,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: streamarr-*
+          pattern: playarr-*
           path: dist
           merge-multiple: true
 

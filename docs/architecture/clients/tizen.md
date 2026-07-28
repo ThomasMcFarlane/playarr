@@ -41,7 +41,7 @@ point. Its Vite config supplies:
 The package uses `base: "./"`; the shared entry point selects hash routing for
 installed TVs. Those choices make all assets and routes work from a widget
 package path rather than an HTTP server with rewrite rules. The generic
-package leaves `streamarr-config.json` empty. On a fresh install it obtains a
+package leaves `playarr-config.json` empty. On a fresh install it obtains a
 short-lived QR/manual code from `playarr.app`; the phone-side link flow chooses
 an existing profile/server and returns a server-scoped device authorisation to
 the TV. No localhost default or TV-keyboard server entry is part of that
@@ -109,7 +109,7 @@ physical Tizen TV even when unit tests cover call order and state transitions.
 
 `tizen-manifest.xml` declares the TV profile, Tizen 7.0 floor, full-HD
 viewport, network/input/filesystem privileges, cross-origin access, and
-application ID `StrmarrTV1.Streamarr`. `scripts/prepare-package.mjs` copies it
+application ID `StrmarrTV1.Playarr Server`. `scripts/prepare-package.mjs` copies it
 to the required package-root `config.xml`, adds the launcher icon and runtime
 configuration, and rejects a build missing the Product API script or AVPlay
 surface.

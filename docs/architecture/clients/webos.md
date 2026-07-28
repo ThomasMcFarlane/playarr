@@ -46,11 +46,11 @@ emitted HTML/CSS file and fails if Vite emits a root-absolute asset reference.
 
 On a generic first launch, the packaged login screen requests a hosted
 `playarr.app` device-link code. The viewer scans its QR code (or visits the
-displayed URL and types the short code), chooses a Streamarr server/profile in
+displayed URL and types the short code), chooses a Playarr Server/profile in
 the browser, and approves the TV. Playarr then transfers the chosen server
 addresses into the same known-server group, authentication, profile, and
 session persistence used by the hosted client. An operator-specific build may
-instead seed an absolute server default in `streamarr-config.json`; the generic
+instead seed an absolute server default in `playarr-config.json`; the generic
 package deliberately ships that field empty.
 
 ## Remote navigation and lifecycle
@@ -87,7 +87,7 @@ real-device certification exist.
 ## Package contract
 
 `appinfo.json` contains only current webOS TV metadata. Its app ID is
-`com.streamarr.tv`; the main page is `index.html`; Back history and system
+`com.playarr.tv`; the main page is `index.html`; Back history and system
 relaunch behavior are explicit. Launcher assets are checked in at LG's required
 80×80 (`icon.png`) and 130×130 (`largeIcon.png`) sizes. The shared
 `playarr-icon.svg` mark is also packaged because the login and TV chrome load

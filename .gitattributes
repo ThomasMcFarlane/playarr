@@ -1,5 +1,5 @@
 # ==============================================================================
-# Streamarr / Playarr monorepo .gitattributes
+# Playarr Server / Playarr monorepo .gitattributes
 # Standard line-ending normalization: text files are normalized to LF in the
 # repository and checked out as LF (Git handles per-OS checkout translation
 # only if you override it locally). Binary/media assets are marked so Git

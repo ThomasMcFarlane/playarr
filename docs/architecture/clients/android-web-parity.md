@@ -45,7 +45,7 @@ hierarchy.
 - Profile switching replaces the token and identity together so the new
   profile does not inherit the previous profile's catalogue state.
 - A server address is entered at runtime and stored for the account; no
-  Streamarr URL is compiled into the APK.
+  Playarr Server URL is compiled into the APK.
 
 ## Release verification
 

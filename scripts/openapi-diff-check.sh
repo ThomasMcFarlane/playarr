@@ -2,7 +2,7 @@
 #
 # scripts/openapi-diff-check.sh
 #
-# Diffs the working-tree OpenAPI spec (backend/openapi/streamarr.yaml)
+# Diffs the working-tree OpenAPI spec (backend/openapi/playarr.yaml)
 # against the last committed/tagged version of that same file, and fails
 # (non-zero exit) if the diff contains a breaking change. This is what
 # CI's `openapi-contract-check` job runs on every PR that touches the spec.
@@ -30,7 +30,7 @@
 # Usage:
 #   ./scripts/openapi-diff-check.sh
 #   ./scripts/openapi-diff-check.sh --base backend-v1.2.0
-#   ./scripts/openapi-diff-check.sh --spec backend/openapi/streamarr.yaml
+#   ./scripts/openapi-diff-check.sh --spec backend/openapi/playarr.yaml
 #   ./scripts/openapi-diff-check.sh --changelog   # also print the full changelog, not just breaking changes
 #
 # Exit codes:
@@ -39,7 +39,7 @@
 #   2  usage/tooling error (spec missing, git ref not found, etc.)
 #
 # NOTE: this script is authored as scaffolding. It requires
-# backend/openapi/streamarr.yaml and at least one commit containing it to
+# backend/openapi/playarr.yaml and at least one commit containing it to
 # do anything meaningful, neither of which exists yet in this repo -- it is
 # not executed as part of building this repo.
 
@@ -49,7 +49,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_ROOT}"
 
-SPEC_PATH_REL="backend/openapi/streamarr.yaml"
+SPEC_PATH_REL="backend/openapi/playarr.yaml"
 BASE_REF=""
 SHOW_CHANGELOG=0
 OASDIFF_IMAGE="${OASDIFF_IMAGE:-tufin/oasdiff:latest}"

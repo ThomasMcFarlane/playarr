@@ -1,7 +1,7 @@
 # Client architecture: universal Android app
 
 Playarr ships one native APK for phones, tablets, Android TV, and Google TV.
-There is one package (`io.streamarr.mobile`), one Compose navigation graph, one
+There is one package (`io.playarr.mobile`), one Compose navigation graph, one
 Media3 player, and one public download.
 
 ## Platform baseline
@@ -32,7 +32,7 @@ layout to Playarr Web's 1920 x 1080 presentation canvas.
 ## Authentication and server ownership
 
 The server URL is never compiled into the app. Each sign-in supplies its
-Streamarr URL with the username and password. `ServerConfigStore` persists the
+Playarr Server URL with the username and password. `ServerConfigStore` persists the
 normalised URL for that account on the device, while `TokenStore` persists the
 issued session. Signing out clears the session and returns to the sign-in form,
 where a different account or server can be selected.
@@ -44,8 +44,8 @@ to the current device mode.
 
 ## Playback and updates
 
-The native player calls Streamarr's playback negotiation endpoint, maps direct
-and HLS responses onto the shared `StreamarrPlayer`, and renders Media3's
+The native player calls Playarr Server's playback negotiation endpoint, maps direct
+and HLS responses onto the shared `PlayarrPlayer`, and renders Media3's
 `PlayerView`. The same implementation runs on touch and television devices.
 
 Google Play and signed sideload update mechanisms remain native. Both update

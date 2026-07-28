@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Streamarr and Playarr are documented in this file.
+All notable changes to Playarr Server and Playarr are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -10,7 +10,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Add Chromecast support: a real Google Cast sender/receiver pair, not a stub. A new
-  `@streamarr-tv/cast-protocol` package defines one shared wire protocol (mirrored by hand into
+  `@playarr-tv/cast-protocol` package defines one shared wire protocol (mirrored by hand into
   Kotlin and Swift); a new CAF (Cast Application Framework) custom web receiver at
   `clients/tv-web/apps/cast-receiver/`, hosted at `playarr.app/cast/`, negotiates playback,
   reports progress, and sideloads subtitles/artwork; the Web (`clients/tv-web/web/`) and Android
@@ -18,7 +18,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   first-class `cast` `ClientPlatform`. Every sender mints the Cast receiver its own delegated
   device identity via the existing RFC 8628 device-flow (self-approved, never the sender's own
   token), so the receiver's own token rotation can never trip reuse-detection against the
-  sender's session. An iOS sender at `clients/ios/Sources/StreamarrApp/Cast/` is written to the
+  sender's session. An iOS sender at `clients/ios/Sources/PlayarrApp/Cast/` is written to the
   same protocol but is entirely unverified (no macOS/Xcode toolchain here, and no SPM
   distribution exists for the Google Cast iOS SDK to vendor automatically). No Google Cast
   Developer Console app has been registered yet, so every sender's App ID is a placeholder and
@@ -33,8 +33,28 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Recognise Xbox as the first-class `xbox` client platform in the platform enum and compatibility
   table. The native application ships as a signed MSIX with no in-app patch path, so its floor is
   held at the first shipped `0.1.0` until a real update channel has actually delivered one.
+- Add Playarr for Xbox, a native UWP/XAML client at `clients/xbox/`: a portable core
+  (`Playarr.Core`, builds and passes 36 tests on any OS) plus a UWP application head
+  (`Playarr.Xbox`) with Login, Profiles, Home, Library, Search, WorkDetail, Player, and Settings
+  screens, gamepad-driven focus navigation, a per-console `XboxPlaybackProfile` capability matrix,
+  and `MediaPlayerElement`/`AdaptiveMediaSource` playback negotiating direct-play against on-demand
+  HLS. The UWP head cannot be compiled or verified without Windows/MSBuild/the Windows 10 SDK, so
+  it is checked in unbuilt; no MSIX has been signed or submitted to the Microsoft Store yet.
+- Detect Xbox's built-in Edge browser from the shared Playarr Web app as a zero-install fallback,
+  with its own narrower playback-capability profile (no MKV, HEVC, or AV1, unlike the native
+  client) reflecting that browser's real MSE decode limits rather than what it falsely reports as
+  supported.
+- Document Playarr for Xbox: an architecture doc covering the portable-core/native-head split and
+  why native was chosen over a packaged web shell, an end-user guide covering the Edge-browser
+  route available today alongside the not-yet-available Developer Mode and Store routes, and a
+  Microsoft Store submission checklist (`clients/xbox/docs/store-submission.md`) that is
+  preparation material only.
 - Cover every `ClientPlatform` variant with round-trip, exhaustiveness and serde-representation
   tests, so a newly added platform can no longer be unparseable or split its wire contract in half.
+- List PlayStation as a coming-soon entry on the Playarr clients page in English, Japanese and
+  Thai, with the Simple Icons brand mark used by every other supported-platform tile. The copy
+  makes no delivery promise, because Sony publishes no console SDK outside its partner programme
+  and the shape of the client is still being scoped.
 
 ### Changed
 
@@ -59,6 +79,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Decode Android catalogue search's current `{items, remote_only}` response envelope instead of
+  the obsolete bare work array, matching Playarr Web and restoring search against real servers.
 - Keep the Android phone profile stage logo and language control below the system status bar while
   preserving their Playarr Web-aligned television placement.
 - Release ArrowUp and ArrowDown from every Android single-line text field into spatial focus
@@ -67,7 +89,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   edge-to-edge, so Series, Movies, Sites, and Music no longer overlap system chrome.
 - Keep sideloaded Android phone builds and devices without Play services running when Play Core's
   optional in-app update check or launch cannot bind, and skip the store lookup when no update is
-  required by the connected Streamarr server.
+  required by the connected Playarr Server.
 - Cache Android avatar choices by server and saved profile so every profile keeps its chosen avatar
   offline and the shared shell reflects settings changes immediately, matching Playarr Web.
 - Mount Android's Play Store update effect on phone builds so resume-time recommended and required
@@ -82,7 +104,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   package and version against its release tag before publishing it to Playarr or GitHub.
 - Serve the Roku developer ZIP from Playarr's public same-origin download storage instead of
   linking the public Clients page to an inaccessible private GitHub release.
-- Re-register rotated Android Firebase messaging tokens with Streamarr and identify universal APK
+- Re-register rotated Android Firebase messaging tokens with Playarr Server and identify universal APK
   push registrations as phone or television so invite approvals keep reaching the correct device.
 - Localize Android-generated HTTP, loading, server-source, playback, and queue-title fallback
   messages at render time while preserving upstream diagnostics across phone and television.
@@ -100,7 +122,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   at the absolute playhead, and guard each failed session URL from an automatic recovery loop.
 - Make Android report the same playback session heartbeat and terminal lifecycle as Playarr Web,
   while mapping resumed on-demand HLS playheads back to absolute source time exactly once.
-- Resolve Android's server-relative direct-play and HLS paths against the selected Streamarr
+- Resolve Android's server-relative direct-play and HLS paths against the selected Playarr Server
   server before handing them to Media3, while preserving absolute peer URLs.
 - Send the current bearer token on Android live-player media and HLS requests by sharing the
   authenticated Media3 data source already used for offline downloads.
@@ -114,7 +136,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the Downloads destination in Playarr Web order on both mobile and television navigation.
 - Match the hosted TV-link page to the profile selector's shared full-screen layout, and always
   include the required OAuth device grant type when Android completes an approved link so the
-  Streamarr token request cannot fail with HTTP 422.
+  Playarr Server token request cannot fail with HTTP 422.
 - Keep the Android Clients download button on the version-independent latest APK instead of a
   stale versioned release, and recognise vendor TV firmware through its Leanback or television
   hardware features so first launch cannot fall back to the mobile Server URL form.
@@ -213,7 +235,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   remote sequence, web installer login, unchanged ZIP upload, first-launch linking, and Roku's
   one-sideloaded-app limitation.
 - Let Android TV generate its QR and manual sign-in code through `playarr.app`, so selecting a
-  signed-in Playarr profile transfers a short-lived Streamarr device credential and remembered
+  signed-in Playarr profile transfers a short-lived Playarr Server device credential and remembered
   server addresses without entering a Server URL on the television.
 - Add Grid, List, and Peer group matrix Library views, with peer-node columns, expandable
   Source-instance/media-type/folder trees, per-node physical file details, and peer-group
@@ -233,12 +255,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   cards, and softly fade scrolled items at the left edge of shared tracks.
 - Let the authoritative relay DNS instance serve one explicitly configured, temporary DNS-01
   challenge so direct relay nodes behind filtered HTTP-01 port 80 can obtain trusted certificates.
-- Let a Streamarr administrator leave the current peer group with explicit confirmation, notify
+- Let a Playarr Server administrator leave the current peer group with explicit confirmation, notify
   reachable members, preserve local users and media, and immediately create or join another group.
-- Let administrators enrol independent Streamarr deployments into a signed peer group, synchronise
+- Let administrators enrol independent Playarr Server deployments into a signed peer group, synchronise
   membership and account, library, availability, and routing metadata, route playback across nodes,
   and give Playarr clients ordered failover addresses.
-- Add a dedicated Peer Groups screen to Streamarr Admin for creating or joining groups, editing
+- Add a dedicated Peer Groups screen to Playarr Server Admin for creating or joining groups, editing
   node addresses, issuing one-use join tokens, and checking every member's current status.
 - Add an opt-in VIDAA installer Helm chart with source-IP-filtered LAN DNS policy,
   out-of-band TLS, and an Emissary route to the fixed hosted Playarr portal.
@@ -263,12 +285,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Publish one native responsive Compose Android APK for phones, tablets, Android TV, and Google
   TV, with per-account server sign-in, adaptive touch/D-pad navigation, native Media3 playback,
   and a single playarr.app download and update manifest. Existing
-  `io.streamarr.tv` preview installs require one manual reinstall to move to `io.streamarr.mobile`.
+  `io.playarr.tv` preview installs require one manual reinstall to move to `io.playarr.mobile`.
 - Publish the installable Roku developer-mode app package and link it from the public Clients
   catalogue with its installation requirement stated explicitly.
 - Add a native Playarr Apple TV app with focus-friendly catalogue browsing, search, device-code
   pairing, server configuration, and AVKit playback backed by the shared Swift client kit.
-- Add an installable native Playarr iPhone and iPad project with reusable StreamarrKit business
+- Add an installable native Playarr iPhone and iPad project with reusable PlayarrKit business
   logic, App Store-ready bundle metadata, privacy resources, and iOS unit-test targets.
 - Add a native Roku SceneGraph client with server setup, device linking, household
   profiles, paginated library browsing, title details, native playback and session telemetry.
@@ -290,22 +312,22 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   albums, or complete artists while keeping existing and new video playlists free of audio items.
 - Link live and historical administrator playback activity to named users and catalogue items,
   with a scaffolded settings page for each user.
-- Let administrators name each instance through persisted Streamarr system settings, and show that
+- Let administrators name each instance through persisted Playarr Server system settings, and show that
   name in Playarr's connected-server settings and invitation sign-up screen.
-- Acquire and hot-renew browser-trusted HTTPS certificates inside Streamarr through an explicitly
+- Acquire and hot-renew browser-trusted HTTPS certificates inside Playarr Server through an explicitly
   configured Let's Encrypt ACME environment and a built-in HTTP-01 challenge listener.
-- Serve authoritative DNS-only public IPv4 hostnames inside the Streamarr process when enabled.
-- Add native TLS certificate support to the Streamarr server without requiring a reverse proxy.
+- Serve authoritative DNS-only public IPv4 hostnames inside the Playarr Server process when enabled.
+- Add native TLS certificate support to the Playarr Server without requiring a reverse proxy.
 - Notify Playarr users in Chrome, Android mobile, and Android TV when an admin approves their friend-invite request.
-- Let Playarr users request a friend-invite QR, let Streamarr admins approve or deny it, and start the one-use invite's 24-hour lifetime only when the approved user generates it.
+- Let Playarr users request a friend-invite QR, let Playarr Server admins approve or deny it, and start the one-use invite's 24-hour lifetime only when the approved user generates it.
 - Show accessible confirmation toasts when Playarr settings, watch state, and playlists change.
-- Let each Playarr Web profile connect directly to multiple Streamarr servers, browse their
+- Let each Playarr Web profile connect directly to multiple Playarr Server instances, browse their
   libraries as one joined catalogue, and choose a server when duplicate media is played.
-- Add expiring, one-use QR invitations from Streamarr Admin that open `playarr.app`, lock the
+- Add expiring, one-use QR invitations from Playarr Server Admin that open `playarr.app`, lock the
   inviting server address, and let a new Playarr user create and sign into their account.
 - Deploy Playarr Web to `playarr.app` through Cloudflare Workers after successful main-branch CI,
   with fresh-on-reload app shells, an equivalent local command, and an operator setup guide.
-- Allow each Playarr Web login to select an absolute Streamarr server URL, connect to it
+- Allow each Playarr Web login to select an absolute Playarr Server URL, connect to it
   directly from the browser, and keep saved profile sessions scoped to that server.
 - Add QR and manual-code TV sign-in with an authenticated, phone-friendly approval page for
   Android TV, VIDAA, webOS, Tizen, and the fallback TV client.
@@ -315,11 +337,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Add durable users, policies, rotating refresh-token families, profile PINs, player preferences,
   per-title playback preferences, and watch-progress storage for SQLite and PostgreSQL.
 - Add saved library views, nested personal and system playlists, cast and crew credits, people
-  lookups, semantic similarity, and a Streamarr-owned artwork cache with proactive prewarming.
+  lookups, semantic similarity, and a Playarr Server-owned artwork cache with proactive prewarming.
 - Add authenticated direct-play, rendition, live-session, subtitle, chapter, metadata, thumbnail,
   playback-event, and administrator playback-session APIs.
 - Add Whisparr source support and persisted, administrator-managed Tdarr connection settings.
-- Add a dedicated Streamarr administrator web application for source instances, users, library
+- Add a dedicated Playarr Server administrator web application for source instances, users, library
   browsing, saved views, playlists, tasks, playback activity, and Tdarr configuration.
 - Redesign Playarr Web with light and dark themes, TV-friendly navigation, profiles, search,
   playlists, saved-view shelves, infinite catalogue browsing, media actions, and richer detail
@@ -436,7 +458,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   buttons, without showing settings beneath the sign-in card.
 - Normalise bare, HTTP, and HTTPS public IPv4 server inputs, with or without a port, to the
   deterministic direct relay hostname on port `8484`.
-- Standardise Streamarr's direct application port on `8484`.
+- Standardise Playarr Server's direct application port on `8484`.
 - Let Playarr convert public IPv4 HTTP addresses to deterministic DNS-only HTTPS names without
   proxying application or media traffic.
 - Split Playarr Web's settings screen into a hub with one focused page per section (appearance,
@@ -464,7 +486,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   visual language.
 - Resolve remote media paths through configurable local mount roots and treat live transcode
   expiry as an idle timeout that advances while playback remains active.
-- Separate the consumer Playarr experience from the Streamarr administrator application and remove
+- Separate the consumer Playarr experience from the Playarr Server administrator application and remove
   the obsolete in-client administration screen.
 - Rebrand the Android TV launcher as Playarr and use a hardware-accelerated fullscreen WebView so
   the television client stays aligned with the web experience.
@@ -502,7 +524,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Keep restored mobile music controls attached beneath Cover Flow when playback mounts before the
   artist detail and its inline host finish loading.
 - Keep the native iOS login form and its error feedback active while switching to the entered
-  Streamarr server instead of clearing the fields during an unnecessary session restore.
+  Playarr Server instead of clearing the fields during an unnecessary session restore.
 - Complete the native iOS Playarr parity pass across responsive library, search, title detail,
   playlist, and settings screens; use dark appearance for new installs, keep artwork fallbacks
   dark, and apply login-equivalent server URL correction when changing servers in settings.
@@ -511,22 +533,22 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   correction and strict server URL validation during login.
 - Give the native iOS client real username/password and managed-profile login, persist those
   sessions per server, and carry bearer authentication into AVPlayer media and HLS requests.
-- Canonicalise Android public-IPv4 Streamarr addresses to their secure direct relay hostname before
+- Canonicalise Android public-IPv4 Playarr Server addresses to their secure direct relay hostname before
   login and migrate saved addresses, preventing cross-host redirects from stripping bearer tokens
   and making every catalogue request appear to have an expired session.
 - Make the iOS Xcode target produce the `Playarr.app` bundle expected by its shared scheme and
   app-hosted unit tests.
 - Authenticate iOS catalogue and playback requests, rotate expired sessions through the server's
   refresh endpoint, and persist each server's token pair in the iOS Keychain across relaunches.
-- Rebind every iOS screen to the newly selected Streamarr server as soon as its saved URL changes.
+- Rebind every iOS screen to the newly selected Playarr Server as soon as its saved URL changes.
 - Refresh and retry the native Android app's authenticated request after an access-token `401`,
   persisting the server's rotated token pair so a successful login no longer immediately appears
   as an expired session.
 - Replace the blank Android WebView shell with the single native responsive Compose application
   and defer notification permission until it is relevant to the signed-in user, without logging
   account credentials or access tokens from debug-signed distribution builds.
-- Make the Android shell load only hosted Playarr, remove its native Streamarr-address editor and
-  startup server-version request, and leave each account's Streamarr URL to the web login flow.
+- Make the Android shell load only hosted Playarr, remove its native Playarr Server-address editor and
+  startup server-version request, and leave each account's Playarr Server URL to the web login flow.
 - Let Android browsers follow the Clients APK link as a normal direct navigation instead of
   forcing the browser's broken download-attribute filename handling.
 - Hand public APK links from the Android WebView to Android's download-capable browser so the
@@ -552,12 +574,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   outdated server instead of silently leaving a video playlist behind.
 - Replace the playlist type dropdown with styled video and audio icon buttons that support
   directional remote and keyboard navigation.
-- Render Streamarr activity links in the surrounding text colour and report bytes actually
+- Render Playarr Server activity links in the surrounding text colour and report bytes actually
   delivered during direct and adaptive playback instead of leaving session totals at zero.
 - Keep global Space/K playback shortcuts active across Playarr unless the viewer is typing in an
   input, textarea, or editable field.
 - Prevent the minimised player from hiding a video element that still retains browser focus.
-- Load authenticated, cached work and album artwork throughout Streamarr Admin, including music,
+- Load authenticated, cached work and album artwork throughout Playarr Server Admin, including music,
   with visible loading placeholders and graceful missing-artwork fallbacks.
 - Focus Play/Pause only when moving Up from the first music track or Down from the inline scrubber,
   and scroll newly focused tracks into view immediately instead of clipping them during animation.
@@ -605,8 +627,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Playarr page while keeping ArrowUp and ArrowDown navigation available from text inputs.
 - Show only users signed in on the current device in Playarr's profile selector.
 - Accept bare `v4-A-B-C-D.relay.playarr.app` hostnames in Playarr server fields and normalise
-  them to HTTPS on Streamarr's application port.
-- Redirect plaintext requests on Streamarr's HTTP and HTTPS ports to the configured browser-trusted
+  them to HTTPS on Playarr Server's application port.
+- Redirect plaintext requests on Playarr Server's HTTP and HTTPS ports to the configured browser-trusted
   HTTPS hostname instead of returning a 404 or an invalid TLS response.
 - Load cross-origin media with CORS enabled so Playarr's Web Audio visualiser receives real audio
   samples instead of browser-sanitised zeroes.
@@ -614,7 +636,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   from audio files.
 - Accept bare IP addresses in Playarr server fields without native browser URL validation blocking
   submission.
-- Reuse Streamarr's existing Rustls crypto provider for native TLS builds instead of requiring an
+- Reuse Playarr Server's existing Rustls crypto provider for native TLS builds instead of requiring an
   additional CMake-based provider.
 - Let ArrowUp and ArrowDown move remote/keyboard focus out of a text field on Playarr Web instead
   of getting stuck there, since those keys have no native effect in a single-line input.
@@ -629,8 +651,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Apply the systemd service restart-rate limit from the valid unit section instead of silently
   ignoring it during installation.
 - Request browser Local Network Access for direct private HTTP connections from `playarr.app`,
-  without requiring Streamarr to be exposed publicly or use HTTPS.
-- Leave the Streamarr server field blank on `playarr.app` instead of suggesting the hosted
+  without requiring Playarr Server to be exposed publicly or use HTTPS.
+- Leave the Playarr Server field blank on `playarr.app` instead of suggesting the hosted
   client origin, while retaining explicit and self-hosted server defaults.
 - Build Playarr Web's workspace dependencies before local or CI Cloudflare deployments.
 - Correct the VIDAA guide to use the reachable Playarr Web endpoint in the TV
@@ -690,5 +712,5 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Document VIDAA's invite-only partner registration and App Store release gates,
   including the production bootstrap decision required for self-hosted Playarr.
-- Document the Streamarr and Playarr design research snapshot and preserve a sanitised historical
+- Document the Playarr Server and Playarr design research snapshot and preserve a sanitised historical
   Playarr redesign handover for future implementation and debugging context.

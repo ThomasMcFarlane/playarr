@@ -1,21 +1,21 @@
 # Auth Modes
 
-Streamarr's authentication model spans a deliberate spectrum from "no
+Playarr Server's authentication model spans a deliberate spectrum from "no
 credentials at all, on your own network" to "real per-user accounts." It is
-encoded as a single operator-wide setting, `streamarr_auth::AuthMode`, with
+encoded as a single operator-wide setting, `playarr_auth::AuthMode`, with
 three variants — each a coherent, supported login tier, not one system with
 optional bits switched off. `AuthMode` governs *authentication* (who, if
 anyone, a request gets to become), resolved by
-`streamarr_auth::login::evaluate_login`. A separate module,
-`streamarr_auth::policy`, governs *authorization* (what an already-identified
+`playarr_auth::login::evaluate_login`. A separate module,
+`playarr_auth::policy`, governs *authorization* (what an already-identified
 user is allowed to do) via a `Policy`. See ["What's actually wired up
 today"](#whats-actually-wired-up-today) below for how much of each is live
-in `streamarr-api` right now — there's a real, important gap between "this
+in `playarr-api` right now — there's a real, important gap between "this
 logic exists and is tested" and "this is enforced on a live request path."
 
 ## Why a spectrum, not one model
 
-Streamarr runs across all three deployment tiers in
+Playarr Server runs across all three deployment tiers in
 [`overview.md`](overview.md), and the right amount of auth ceremony is
 different at each end: a household running a single NAS on their own LAN
 should not be forced through account creation and password policies just to
@@ -24,7 +24,7 @@ their library with friends over the internet needs real accounts and real
 sessions. Forcing everyone into the heavier model is the single most common
 complaint about self-hosted media servers that only offer one auth posture;
 forcing everyone into the lighter model makes the software unsafe to expose
-to the internet at all. Streamarr supports both, explicitly, as first-class
+to the internet at all. Playarr Server supports both, explicitly, as first-class
 configurations.
 
 ## The three trust tiers (`AuthMode`)
@@ -35,7 +35,7 @@ configurations.
 | `AuthMode::ManagedProfiles` | PIN only | Multiple people in one household, "who's watching" style |
 | `AuthMode::FullAccount` — **the default** | Username + password | Remote access, shared with people outside the household |
 
-Set server-wide via `STREAMARR_AUTH_MODE` — `full-account` (the default;
+Set server-wide via `PLAYARR_AUTH_MODE` — `full-account` (the default;
 also the fallback when the variable is unset or holds an unrecognized
 value) or `trusted-network` (opt-in only — see
 [`auth_mode_from_env`'s doc comment](../../backend/src/main.rs) for why the
@@ -43,10 +43,10 @@ default flipped from `trusted-network` to `full-account`: a real,
 persistent `UserRepo`/`PolicyRepo` now backs real per-user accounts, so
 IP-based zero-credential auto-admin is no longer the only login path that
 could possibly work, and is no longer handed out by default). There is
-currently no `STREAMARR_AUTH_MODE` value
+currently no `PLAYARR_AUTH_MODE` value
 that selects `ManagedProfiles` from `backend/src/main.rs`'s composition
 root, even though the mode itself is fully implemented and tested in
-`streamarr-auth` — wiring a config value (or a way to select it per
+`playarr-auth` — wiring a config value (or a way to select it per
 profile) to it is a small follow-up, not a design gap. All three tiers
 funnel a successful login through the same `RefreshTokenService`, so every
 tier ultimately hands the client the same access + refresh token pair via
@@ -58,7 +58,7 @@ Every request whose source IP falls inside a configured CIDR range
 auto-logs-in as that range's single bound user id, with zero credentials
 required; a source IP outside every range is denied outright (`401
 untrusted_network`) — this mode never falls back to a password prompt.
-Unless `STREAMARR_TRUSTED_NETWORK_CIDR` is set (which replaces the whole
+Unless `PLAYARR_TRUSTED_NETWORK_CIDR` is set (which replaces the whole
 list with that one custom range), the default allowlist is the RFC 1918
 private-address ranges plus loopback:
 
@@ -76,14 +76,14 @@ mapping should not silently hand out admin to the entire internet). It is
 still not a substitute for real per-user auth on a shared or untrusted LAN
 (guest wifi, a dorm/apartment building network): anyone else on that same
 private range is just as trusted as the operator. For those cases, narrow
-`STREAMARR_TRUSTED_NETWORK_CIDR` to the actual trusted subnet, switch to
+`PLAYARR_TRUSTED_NETWORK_CIDR` to the actual trusted subnet, switch to
 `AuthMode::FullAccount` (see its documented gap below), or put a real
 authenticating reverse proxy in front of the server. See
 `trusted_network_auth_mode`'s doc comment in `backend/src/main.rs` for the
 full writeup this section summarizes.
 
 The user every trusted-network login resolves to is whichever id
-`STREAMARR_DEFAULT_ADMIN_USER_ID` names (or a boot-lifetime-random id if
+`PLAYARR_DEFAULT_ADMIN_USER_ID` names (or a boot-lifetime-random id if
 unset — every session issued before a restart is then orphaned, which
 today is a non-issue only because sessions don't survive a restart
 either; see below).
@@ -95,18 +95,18 @@ watching" style. There is no separate PIN field on `User`: a managed
 profile's PIN *is* its `password_hash`, verified through the exact same
 Argon2id check as a full-account password (`Argon2PasswordVerifier`), just
 a deliberately short secret by convention. Provisioning a profile with a
-known PIN is a user-provisioning concern outside `streamarr-auth`'s current
+known PIN is a user-provisioning concern outside `playarr-auth`'s current
 scope — see the persistence gap below.
 
 **Security note:** `GET /api/v1/users/profiles`
-(`streamarr-api::users::list_available_profiles_handler`) and
+(`playarr-api::users::list_available_profiles_handler`) and
 `POST /api/v1/users/profiles/{id}/verify-pin`
 (`verify_profile_pin_handler`) implement this "who's watching" picker, and
 are only safe to show every enabled account for because
 `TrustedNetwork`/`ManagedProfiles` both mean "one trusted household" — no
 one reaches either endpoint who isn't already inside that trust boundary.
 Since there is no `household_id`/account-grouping concept anywhere in
-`streamarr-model`/`streamarr-db` (see below), both handlers gate on
+`playarr-model`/`playarr-db` (see below), both handlers gate on
 `AuthMode` directly: under `AuthMode::FullAccount` ("shared with people
 outside the household" — two accounts may be complete strangers), the list
 endpoint returns only the caller's own profile and the PIN-verify endpoint
@@ -118,10 +118,10 @@ in the same pass that added this note.
 ### `AuthMode::FullAccount` — the default
 
 Ordinary username + password, Argon2id-hashed
-(`streamarr_auth::login::hash_password` / `Argon2PasswordVerifier`) —
+(`playarr_auth::login::hash_password` / `Argon2PasswordVerifier`) —
 correct and fully unit-tested at the `evaluate_login` level, not a stub.
 **Known gap, documented directly in `backend/src/main.rs`'s
-`auth_mode_from_env`:** flipping `STREAMARR_AUTH_MODE=full-account` today
+`auth_mode_from_env`:** flipping `PLAYARR_AUTH_MODE=full-account` today
 leaves a fresh deployment with **no way to log in at all**. There is no
 user-provisioning tool and no persisted `UserRepo`; the only seeded `User`
 (the trusted-network default admin) gets a random, never-recorded password
@@ -138,26 +138,26 @@ sits behind each trust boundary, and what happens after a successful
 login, has some real gaps worth being explicit about rather than implying
 a fully-built system:
 
-- **No persisted `User`/`Policy` store.** `streamarr_auth::InMemoryUserDirectory`
+- **No persisted `User`/`Policy` store.** `playarr_auth::InMemoryUserDirectory`
   (real, not a mock — see its own doc comment) is the only `UserDirectory`
   implementation anywhere in the workspace; there is no `UserRepo` in
-  `streamarr-db`, no `users` table in either migration set, and no
+  `playarr-db`, no `users` table in either migration set, and no
   `PolicyRepo`/`policies` table at all. Accounts do not survive a process
   restart and are not shared across nodes in a multi-node deployment.
 - **`Policy`-based authorization is implemented but not evaluated on any
-  request path yet.** `streamarr_auth::policy::DefaultPolicyEvaluator` is a
+  request path yet.** `playarr_auth::policy::DefaultPolicyEvaluator` is a
   real, fully unit-tested implementation of every rule in the "The `Policy`
-  struct" section below — but no handler in `streamarr-api` currently
+  struct" section below — but no handler in `playarr-api` currently
   constructs an `AccessContext` and calls it. The only authorization check
   actually enforced today is the binary admin/non-admin check described
   next.
 - **"Admin" is a flat id set, not `Policy.is_admin`.** The source-instance
   management endpoints (`POST`/`GET`/`DELETE`/`.../{id}/sync` under
-  `/api/v1/admin/source-instances`, `backend/crates/streamarr-api/src/admin.rs`)
+  `/api/v1/admin/source-instances`, `backend/crates/playarr-api/src/admin.rs`)
   are the concrete example of what requires more than "logged in" today:
   they're gated by an `AdminUser` Axum extractor
-  (`streamarr-api::auth_extractor`), which checks
-  `streamarr_auth::admin::InMemoryAdminRegistry::is_admin(user_id)` — a
+  (`playarr-api::auth_extractor`), which checks
+  `playarr_auth::admin::InMemoryAdminRegistry::is_admin(user_id)` — a
   real, thread-safe, in-process set of admin user ids, seeded at boot with
   the trusted-network default admin's id — rather than loading and
   evaluating an actual `Policy`. There is nowhere to load one *from* yet.
@@ -181,7 +181,7 @@ what should replace it.
 `Policy` governs *authorization*, not login trust tier — it's evaluated
 once a request already carries an identified `User` (`User::policy_id`
 names which `Policy` applies to them), judging what that user is allowed to
-do. Real shape, from `streamarr-model`:
+do. Real shape, from `playarr-model`:
 
 ```rust
 pub struct Policy {
@@ -217,7 +217,7 @@ pub struct Policy {
 }
 ```
 
-`streamarr_auth::policy::DefaultPolicyEvaluator::evaluate` checks these in
+`playarr_auth::policy::DefaultPolicyEvaluator::evaluate` checks these in
 cheapest/most-decisive-first order (admin bypass, library allow-list,
 blocked folder prefix match, rating ceiling, blocked/allowed tags, device
 allow-list, concurrent-session cap, then the access-schedule window scan,
@@ -235,7 +235,7 @@ verification anywhere in the workspace yet).
 ## RFC 8628 device flow for TV pairing
 
 For platforms where typing a password with a remote control is a genuinely
-bad experience, Streamarr implements the OAuth 2.0 Device Authorization
+bad experience, Playarr Server implements the OAuth 2.0 Device Authorization
 Grant ([RFC 8628](https://www.rfc-editor.org/rfc/rfc8628)) — real, working,
 JSON-over-HTTP endpoints (not form-urlencoded, and not the `/api/auth/...`
 paths an earlier draft of this doc used):
@@ -255,8 +255,8 @@ paths an earlier draft of this doc used):
    {
      "device_code": "3fa85f64...c9563b2a2",
      "user_code": "WXYZ-2349",
-     "verification_uri": "https://streamarr.example/link",
-     "verification_uri_complete": "https://streamarr.example/link?user_code=WXYZ-2349",
+     "verification_uri": "https://playarr.example/link",
+     "verification_uri_complete": "https://playarr.example/link?user_code=WXYZ-2349",
      "expires_in": 600,
      "interval": 5
    }
@@ -265,7 +265,7 @@ paths an earlier draft of this doc used):
    `expires_in`/`interval` are configuration (`DeviceFlowConfig::code_ttl`/
    `polling_interval`), not hardcoded — `backend/src/main.rs` wires them to
    10 minutes and 5 seconds respectively today. Unless
-   `STREAMARR_DEVICE_VERIFICATION_URI` supplies a public URL, the API builds
+   `PLAYARR_DEVICE_VERIFICATION_URI` supplies a public URL, the API builds
    the `/link` origin from the request's `Host` and standard forwarded host/
    protocol headers so a LAN TV does not display the server's unusable
    `0.0.0.0` bind address.
@@ -314,10 +314,10 @@ waiting out a long-lived token's expiry.
 
 **Access token** — JWT, **HS256** (HMAC-SHA256, via the `jsonwebtoken`
 crate's `JwtIssuer`), not EdDSA — a single shared secret
-(`STREAMARR_JWT_SECRET`, at least 32 bytes; falls back to a
+(`PLAYARR_JWT_SECRET`, at least 32 bytes; falls back to a
 boot-lifetime-generated secret with a loud warning if unset) signs and
 verifies every token, which is sufficient today because there is exactly
-one process type (the combined `streamarr` binary) doing both; splitting
+one process type (the combined `playarr` binary) doing both; splitting
 issuance and verification across services that shouldn't share a symmetric
 secret would be the reason to move to an asymmetric algorithm, and hasn't
 come up yet. Default lifetime 15 minutes. Real claims
@@ -328,7 +328,7 @@ come up yet. Default lifetime 15 minutes. Real claims
   "sub": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
   "device_id": "9d3b1f4a-...",
   "session_id": "6c1e2a90-...",
-  "iss": "streamarr",
+  "iss": "playarr",
   "iat": 1752537600,
   "exp": 1752538500
 }
@@ -338,13 +338,13 @@ come up yet. Default lifetime 15 minutes. Real claims
 reason about `Policy::device_allow`/`max_concurrent_sessions` or per-device
 revocation without a second lookup. There is no `household_id`,
 `trust_tier`, `role`, or `apiv` claim — client-version enforcement is a
-separate concern, handled by `streamarr-api`'s version-gate middleware
+separate concern, handled by `playarr-api`'s version-gate middleware
 against request headers, not carried in the token.
 
 **Refresh token** — an opaque, cryptographically random 256-bit value (two
-concatenated UUIDv4s, hex-encoded — `streamarr_auth::secret::opaque_token`),
+concatenated UUIDv4s, hex-encoded — `playarr_auth::secret::opaque_token`),
 never a JWT. Only its SHA-256 hash is stored server-side
-(`streamarr_auth::secret::hash_token` — a fast, unsalted hash, deliberately:
+(`playarr_auth::secret::hash_token` — a fast, unsalted hash, deliberately:
 the input is already high-entropy random data, not a human-chosen secret,
 so there's nothing for an attacker holding the hash to dictionary-guess).
 **As of this pass that storage is `InMemoryRefreshTokenStore`, not a
@@ -368,13 +368,13 @@ never belonged to this family at all is just `RefreshError::UnknownToken`
 — not proof of compromise, and doesn't revoke anything.
 
 There is currently no dedicated HTTP endpoint wrapping
-`RefreshTokenService::rotate` in `streamarr-api` — `POST
+`RefreshTokenService::rotate` in `playarr-api` — `POST
 /api/v1/auth/login` and the device flow's `POST /api/v1/oauth/token` are
 the two live paths that call into refresh-token issuance
 (`RefreshTokenService::issue`); a rotation/refresh-grant HTTP route is a
 documented follow-up, not something this pass wired up. `max_concurrent_sessions`,
 when a real `Policy` is loaded and evaluated (see the gap above), is
-enforced by `streamarr_auth::policy::DefaultPolicyEvaluator` at the point
+enforced by `playarr_auth::policy::DefaultPolicyEvaluator` at the point
 of the *authorization* check, not by refresh-token issuance evicting the
 oldest session — there's no session-eviction-on-issuance logic anywhere in
-`streamarr-auth` today.
+`playarr-auth` today.

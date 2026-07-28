@@ -13,7 +13,7 @@ require a VIDAA partner relationship or device-specific developer access.
 
 Playarr remains a hosted Web App at `playarr.app`, not an APK, `.ipk`, `.wgt`,
 or USB-installable binary. Opening Playarr in the TV Browser receives the latest
-hosted bundle independently of the selected Streamarr server.
+hosted bundle independently of the selected Playarr Server.
 
 An experimental fixed-purpose gateway under `infra/vidaa-gateway/` can give an
 activated household temporary DNS access and serve a launcher portal at the
@@ -34,13 +34,13 @@ The VIDAA surface is the production client in `clients/tv-web/web/`:
 - `?platform=tv-vidaa` selects and persists the `tv-vidaa` client identity;
 - modern user agents containing `VIDAA` or `Hisense` are detected as a fallback;
 - VIDAA advertises a conservative H.264/H.265/VP9 and AAC/Opus/MP3 playback
-  profile during Streamarr playback negotiation;
+  profile during Playarr Server playback negotiation;
 - `playarr.webmanifest` plus 192 px and 512 px PNG artwork provide launcher/PWA
   metadata;
 - remote Back key codes already handled by Playarr Web include VIDAA's common
   browser Back value; and
 - the existing Playarr Web service worker provides the hosted client's update
-  path while leaving cross-origin Streamarr API requests untouched.
+  path while leaving cross-origin Playarr Server API requests untouched.
 
 The older `clients/tv-web/apps/tv-vidaa-fallback/` package remains an
 experimental shared-TV-shell prototype. It is not the recommended household
@@ -58,11 +58,11 @@ Store release process.
 The existing per-household hosted URL is not yet an App Store distribution
 artifact. Store publication requires VIDAA to approve either a public HTTPS
 bootstrap/configuration origin or a packaged shell that can connect to the
-user's private Streamarr server. That decision must account for mixed-content
+user's private Playarr Server. That decision must account for mixed-content
 rules, local-network access, reviewer access, and territory/device certification.
 
 The Browser route is available only when the television can reach the
-Streamarr host and its embedded browser supports the required media features.
+Playarr Server host and its embedded browser supports the required media features.
 The experimental gateway is firmware-dependent and separate from official
 VIDAA distribution. Use a Browser favourite, casting, or an external Android
 TV/Google TV device if it is incompatible and no partner deployment is available.

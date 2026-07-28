@@ -2,11 +2,11 @@
 #
 # scripts/gen-sdk.sh
 #
-# Generates the Streamarr client SDKs from backend/openapi/streamarr.yaml,
+# Generates the Playarr Server client SDKs from backend/openapi/playarr.yaml,
 # for each of the three non-Rust client platforms:
 #
 #   kotlin      -> clients/android/sdk       (Android mobile + TV)
-#   swift5      -> clients/ios/StreamarrSDK          (iOS + tvOS)
+#   swift5      -> clients/ios/PlayarrSDK          (iOS + tvOS)
 #   typescript  -> clients/tv-web/packages/api-client/src/generated
 #                  (Web, webOS, Tizen, VIDAA-fallback -- the pnpm workspace
 #                  at clients/tv-web)
@@ -33,18 +33,18 @@
 #                      the same Docker image used for kotlin/swift5.
 #
 # Env overrides:
-#   OPENAPI_SPEC_PATH        default: backend/openapi/streamarr.yaml
+#   OPENAPI_SPEC_PATH        default: backend/openapi/playarr.yaml
 #   OPENAPI_GENERATOR_IMAGE  default: openapitools/openapi-generator-cli:v7.9.0
 #   NODE_IMAGE               default: node:20-alpine (only used for the
 #                              default TypeScript openapi-fetch mode)
 #   KOTLIN_OUTPUT_DIR        default: clients/android/sdk
-#   SWIFT_OUTPUT_DIR         default: clients/ios/StreamarrSDK
+#   SWIFT_OUTPUT_DIR         default: clients/ios/PlayarrSDK
 #   TS_OUTPUT_DIR             default (openapi-fetch mode):
 #                              clients/tv-web/packages/api-client/src/generated
 #                             default (typescript-fetch mode):
 #                              clients/tv-web/packages/api-client-generated
 #
-# NOTE: this script is authored as scaffolding. backend/openapi/streamarr.yaml
+# NOTE: this script is authored as scaffolding. backend/openapi/playarr.yaml
 # does not exist yet (the backend hasn't landed its OpenAPI export step), so
 # running this script today will fail fast at the spec-existence check below
 # by design -- it is not executed as part of building this repo.
@@ -55,7 +55,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_ROOT}"
 
-OPENAPI_SPEC_PATH="${OPENAPI_SPEC_PATH:-${REPO_ROOT}/backend/openapi/streamarr.yaml}"
+OPENAPI_SPEC_PATH="${OPENAPI_SPEC_PATH:-${REPO_ROOT}/backend/openapi/playarr.yaml}"
 OPENAPI_GENERATOR_IMAGE="${OPENAPI_GENERATOR_IMAGE:-openapitools/openapi-generator-cli:v7.9.0}"
 NODE_IMAGE="${NODE_IMAGE:-node:20-alpine}"
 
@@ -64,7 +64,7 @@ SWIFT_CONFIG="${REPO_ROOT}/clients/shared/sdk-codegen/swift-config.yaml"
 TS_CONFIG="${REPO_ROOT}/clients/shared/sdk-codegen/typescript-config.yaml"
 
 KOTLIN_OUTPUT_DIR="${KOTLIN_OUTPUT_DIR:-${REPO_ROOT}/clients/android/sdk}"
-SWIFT_OUTPUT_DIR="${SWIFT_OUTPUT_DIR:-${REPO_ROOT}/clients/ios/StreamarrSDK}"
+SWIFT_OUTPUT_DIR="${SWIFT_OUTPUT_DIR:-${REPO_ROOT}/clients/ios/PlayarrSDK}"
 
 TS_MODE="openapi-fetch"
 DRY_RUN=0
@@ -136,7 +136,7 @@ require_cmd docker
 
 if [[ ! -f "${OPENAPI_SPEC_PATH}" ]]; then
   echo "gen-sdk.sh: OpenAPI spec not found: ${OPENAPI_SPEC_PATH}" >&2
-  echo "            (expected backend/openapi/streamarr.yaml -- generate/export it from the" >&2
+  echo "            (expected backend/openapi/playarr.yaml -- generate/export it from the" >&2
   echo "            backend first, e.g. via its utoipa-driven OpenAPI export step)" >&2
   exit 1
 fi
@@ -207,7 +207,7 @@ gen_typescript_openapi_fetch() {
     NOTE: openapi-typescript only emits types (schema.d.ts). It does not add
     'openapi-fetch' as a runtime dependency -- if clients/tv-web/packages/api-client
     doesn't already depend on it, add it from within clients/tv-web:
-      pnpm --filter @streamarr-tv/api-client add openapi-fetch
+      pnpm --filter @playarr-tv/api-client add openapi-fetch
     then point src/index.ts's ApiClient at
       import type { paths } from "./generated/schema";
       import createClient from "openapi-fetch";
