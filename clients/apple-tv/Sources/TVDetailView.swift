@@ -1,12 +1,12 @@
-import StreamarrKit
+import PlayarrKit
 import SwiftUI
 
 struct TVWorkDetailView: View {
     let work: Work
-    let apiClient: StreamarrAPIClient
+    let apiClient: PlayarrAPIClient
     @State private var viewModel: TVWorkDetailViewModel
 
-    init(work: Work, apiClient: StreamarrAPIClient) {
+    init(work: Work, apiClient: PlayarrAPIClient) {
         self.work = work
         self.apiClient = apiClient
         _viewModel = State(initialValue: TVWorkDetailViewModel(workID: work.id, apiClient: apiClient))

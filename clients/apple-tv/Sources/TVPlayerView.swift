@@ -1,5 +1,5 @@
 import AVKit
-import StreamarrKit
+import PlayarrKit
 import SwiftUI
 
 struct TVPlayerView: View {
@@ -7,7 +7,7 @@ struct TVPlayerView: View {
     let title: String
     @State private var viewModel: TVPlayerViewModel
 
-    init(mediaFileID: UUID, title: String, apiClient: StreamarrAPIClient) {
+    init(mediaFileID: UUID, title: String, apiClient: PlayarrAPIClient) {
         self.mediaFileID = mediaFileID
         self.title = title
         _viewModel = State(initialValue: TVPlayerViewModel(apiClient: apiClient))

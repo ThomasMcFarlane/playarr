@@ -1,16 +1,16 @@
 # Playarr for Apple TV
 
-Native SwiftUI tvOS client for Streamarr. It uses the shared
-`clients/ios/StreamarrKit` package for API schemas, networking, RFC 8628
+Native SwiftUI tvOS client for Playarr Server. It uses the shared
+`clients/ios/PlayarrKit` package for API schemas, networking, RFC 8628
 device-code authentication, and AVFoundation playback.
 
 ## Features
 
 - Native tvOS tab, focus, card, scroll, and remote-control behaviour.
-- Recently added and search views backed by the Streamarr catalogue API.
+- Recently added and search views backed by the Playarr Server catalogue API.
 - Movie, episode, track, and book detail-to-playback navigation using real
   media-file identifiers returned by the server.
-- AVKit playback after Streamarr direct-play/HLS negotiation.
+- AVKit playback after Playarr Server direct-play/HLS negotiation.
 - Phone-friendly device-code pairing and an editable self-hosted server address.
 
 The backend currently has one Apple-platform `ios` compatibility and policy

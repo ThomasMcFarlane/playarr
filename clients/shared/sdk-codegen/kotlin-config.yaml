@@ -2,7 +2,7 @@
 #
 # Consumed by scripts/gen-sdk.sh via:
 #   docker run --rm -v "$PWD:/local" openapitools/openapi-generator-cli generate \
-#     -i /local/backend/openapi/streamarr.yaml \
+#     -i /local/backend/openapi/playarr.yaml \
 #     -g kotlin \
 #     -c /local/clients/shared/sdk-codegen/kotlin-config.yaml \
 #     -o /local/clients/android/sdk
@@ -21,13 +21,13 @@
 # interfaces since both the mobile and TV UI modules are Compose +
 # coroutines-based per docs/architecture/overview.md.
 
-packageName: com.streamarr.sdk
-apiPackage: com.streamarr.sdk.api
-modelPackage: com.streamarr.sdk.model
-invokerPackage: com.streamarr.sdk.client
+packageName: com.playarr.sdk
+apiPackage: com.playarr.sdk.api
+modelPackage: com.playarr.sdk.model
+invokerPackage: com.playarr.sdk.client
 
-groupId: com.streamarr
-artifactId: streamarr-sdk
+groupId: com.playarr
+artifactId: playarr-sdk
 artifactVersion: 0.1.0
 
 library: jvm-retrofit2

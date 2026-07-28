@@ -1,4 +1,4 @@
-# Pins the toolchain used to build every crate in backend/ (the Streamarr
+# Pins the toolchain used to build every crate in backend/ (the Playarr Server
 # Rust workspace). `rustup` reads this automatically whenever a `cargo`
 # command is run anywhere under this repo, so all contributors and CI jobs
 # build with the same compiler regardless of what they have installed

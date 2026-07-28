@@ -12,7 +12,7 @@
 		4667E9FA407CD2E4D3FA1F50 /* TVRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D582C12CA26152EFDEE5953 /* TVRootView.swift */; };
 		5F8107D4351619115ED35636 /* TVPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E53D2E91ED2B7BA71E18FA96 /* TVPlayerView.swift */; };
 		9C02BF2443FB6202643F7608 /* TVLibraryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F39006E3292B3C3FCE2911BE /* TVLibraryViews.swift */; };
-		AF7DF9EA8CB93994B825C73E /* StreamarrKit in Frameworks */ = {isa = PBXBuildFile; productRef = ABDF4D6CFC05316980A29BBD /* StreamarrKit */; };
+		AF7DF9EA8CB93994B825C73E /* PlayarrKit in Frameworks */ = {isa = PBXBuildFile; productRef = ABDF4D6CFC05316980A29BBD /* PlayarrKit */; };
 		B3106D278BEB5C717AF146C8 /* TVSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61029885CE1ECACC599117A4 /* TVSettingsView.swift */; };
 		BDE28F6F95544F39B3758DF4 /* TVServerAddressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12FAD6061A7EC7A3F76D02CF /* TVServerAddressTests.swift */; };
 		D4F8C82E8C75016BF2E13541 /* TVViewModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3BE36C32CF04D86B4AE838A /* TVViewModels.swift */; };
@@ -49,7 +49,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				AF7DF9EA8CB93994B825C73E /* StreamarrKit in Frameworks */,
+				AF7DF9EA8CB93994B825C73E /* PlayarrKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -122,7 +122,7 @@
 			);
 			name = PlayarrTV;
 			packageProductDependencies = (
-				ABDF4D6CFC05316980A29BBD /* StreamarrKit */,
+				ABDF4D6CFC05316980A29BBD /* PlayarrKit */,
 			);
 			productName = PlayarrTV;
 			productReference = 7D92F8DF06F34E21C388ADDB /* PlayarrTV.app */;
@@ -290,7 +290,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.streamarr.playarr.tvos;
+				PRODUCT_BUNDLE_IDENTIFIER = com.playarr.playarr.tvos;
 				PRODUCT_MODULE_NAME = PlayarrTV;
 				SDKROOT = appletvos;
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -309,7 +309,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.streamarr.playarr.tvos.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.playarr.playarr.tvos.tests;
 				SDKROOT = appletvos;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 5.0;
@@ -330,7 +330,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.streamarr.playarr.tvos;
+				PRODUCT_BUNDLE_IDENTIFIER = com.playarr.playarr.tvos;
 				PRODUCT_MODULE_NAME = PlayarrTV;
 				SDKROOT = appletvos;
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -349,7 +349,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.streamarr.playarr.tvos.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.playarr.playarr.tvos.tests;
 				SDKROOT = appletvos;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 5.0;
@@ -454,9 +454,9 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		ABDF4D6CFC05316980A29BBD /* StreamarrKit */ = {
+		ABDF4D6CFC05316980A29BBD /* PlayarrKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = StreamarrKit;
+			productName = PlayarrKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

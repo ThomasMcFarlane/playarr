@@ -9,7 +9,7 @@ struct TVSettingsView: View {
         @Bindable var environment = environment
 
         Form {
-            Section("Streamarr server") {
+            Section("Playarr Server") {
                 TextField("Server address", text: $environment.serverAddress)
                     .textContentType(.URL)
                     .autocorrectionDisabled()

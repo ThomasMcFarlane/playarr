@@ -28,6 +28,6 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Playarr connects to the Streamarr server on your network.</string>
+	<string>Playarr connects to the Playarr Server on your network.</string>
 </dict>
 </plist>

@@ -2,12 +2,12 @@
 #
 # Consumed by scripts/gen-sdk.sh via:
 #   docker run --rm -v "$PWD:/local" openapitools/openapi-generator-cli generate \
-#     -i /local/backend/openapi/streamarr.yaml \
+#     -i /local/backend/openapi/playarr.yaml \
 #     -g swift5 \
 #     -c /local/clients/shared/sdk-codegen/swift-config.yaml \
-#     -o /local/clients/ios/StreamarrSDK
+#     -o /local/clients/ios/PlayarrSDK
 #
-# Output lands in clients/ios/StreamarrSDK as a standalone Swift Package
+# Output lands in clients/ios/PlayarrSDK as a standalone Swift Package
 # (useSPMFileStructure below), which the iOS app target depends on as a
 # local SPM package dependency rather than vendoring generated files
 # directly into the app target -- keeps regeneration a clean directory
@@ -19,13 +19,13 @@
 # than elsewhere given App Store binary size and review scrutiny of
 # third-party networking stacks.
 
-projectName: StreamarrSDK
-podName: StreamarrSDK
+projectName: PlayarrSDK
+podName: PlayarrSDK
 podVersion: 0.1.0
-podAuthors: Streamarr
-podSummary: Generated Streamarr backend API client for iOS and tvOS.
-podHomepage: https://github.com/streamarr/streamarr
-podDocumentationURL: https://github.com/streamarr/streamarr
+podAuthors: Playarr Server
+podSummary: Generated Playarr Server backend API client for iOS and tvOS.
+podHomepage: https://github.com/ThomasMcFarlane/playarr
+podDocumentationURL: https://github.com/ThomasMcFarlane/playarr
 podLicense: MIT
 # Placeholder: intentionally not a real fetchable source until the SDK is
 # actually published as a versioned SPM/CocoaPods dependency. Until then
@@ -33,7 +33,7 @@ podLicense: MIT
 # once that client lands).
 podSource: '{ :path => "." }'
 
-swiftPackagePath: StreamarrSDK
+swiftPackagePath: PlayarrSDK
 useSPMFileStructure: true
 useClasses: false
 usesAsync: true

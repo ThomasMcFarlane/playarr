@@ -1,4 +1,4 @@
-import StreamarrKit
+import PlayarrKit
 import SwiftUI
 
 struct TVHomeView: View {
@@ -10,7 +10,7 @@ struct TVHomeView: View {
             if let viewModel {
                 homeContent(viewModel)
             } else {
-                ProgressView("Connecting to Streamarr…")
+                ProgressView("Connecting to Playarr Server…")
             }
         }
         .navigationTitle("Playarr")
@@ -34,7 +34,7 @@ struct TVHomeView: View {
             ContentUnavailableView(
                 "Your library is empty",
                 systemImage: "rectangle.stack",
-                description: Text("Add media sources in Streamarr, then return here.")
+                description: Text("Add media sources in Playarr Server, then return here.")
             )
         case .loaded:
             ScrollView(.vertical) {
@@ -120,7 +120,7 @@ struct TVSearchView: View {
 
 struct TVWorkCard: View {
     let work: Work
-    let apiClient: StreamarrAPIClient
+    let apiClient: PlayarrAPIClient
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {

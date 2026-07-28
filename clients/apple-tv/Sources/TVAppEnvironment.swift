@@ -1,6 +1,6 @@
 import Foundation
 import Observation
-import StreamarrKit
+import PlayarrKit
 
 protocol TVDeviceAuthorizing: Sendable {
     /// The server this authorizer talks to — lets the retry-across-known-
@@ -45,11 +45,11 @@ enum TVServerAddress {
 @MainActor
 @Observable
 final class TVAppEnvironment {
-    static let serverURLKey = "com.streamarr.playarr.tvos.serverURL"
-    static let deviceIDKey = "com.streamarr.playarr.tvos.deviceID"
+    static let serverURLKey = "com.playarr.playarr.tvos.serverURL"
+    static let deviceIDKey = "com.playarr.playarr.tvos.deviceID"
     static let defaultServerURL = URL(string: "http://localhost:8484")!
 
-    private(set) var apiClient: StreamarrAPIClient
+    private(set) var apiClient: PlayarrAPIClient
     private(set) var pairingState: TVPairingState = .signedOut
     private(set) var serverURL: URL
 
@@ -63,7 +63,7 @@ final class TVAppEnvironment {
     /// The remembered *group* of server addresses for this Apple TV —
     /// `docs/architecture/peer-groups.md` §6.4/§7.1, §8 Phase 5. Mirrors
     /// `AppEnvironment.serverGroupStore` on the iOS target exactly (same
-    /// `StreamarrKit` type, since `PlayarrTV.xcodeproj` links that package
+    /// `PlayarrKit` type, since `PlayarrTV.xcodeproj` links that package
     /// product directly) -- one address book for this install, independent
     /// of `serverURL` (the address currently in use).
     private let serverGroupStore: UserDefaultsKnownServerGroupStore

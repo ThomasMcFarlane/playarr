@@ -5,7 +5,7 @@
 #
 #   --ts-mode openapi-fetch (DEFAULT)
 #     Runs `openapi-typescript` (a Node CLI, not part of openapi-generator)
-#     to turn backend/openapi/streamarr.yaml into a pure `.d.ts` types file,
+#     to turn backend/openapi/playarr.yaml into a pure `.d.ts` types file,
 #     which the already-published `openapi-fetch` runtime package (a ~2KB
 #     wrapper, added as a normal npm dependency, NOT generated) consumes via
 #     `createClient<paths>()`. openapi-typescript has no generator "config
@@ -24,13 +24,13 @@
 #     on openapi-fetch.
 #
 # Package identity is kept in sync with clients/tv-web/packages/api-client's
-# package.json (@streamarr-tv/api-client) even though that package is
+# package.json (@playarr-tv/api-client) even though that package is
 # presently hand-written, so that switching modes later is a drop-in change
 # rather than a rename.
 
-npmName: "@streamarr-tv/api-client"
+npmName: "@playarr-tv/api-client"
 npmVersion: 0.1.0
-npmRepository: "https://github.com/streamarr/streamarr"
+npmRepository: "https://github.com/ThomasMcFarlane/playarr"
 
 supportsES6: true
 typescriptThreePlus: true

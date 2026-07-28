@@ -2,7 +2,7 @@ import AVFoundation
 import Combine
 import Foundation
 import Observation
-import StreamarrKit
+import PlayarrKit
 
 @MainActor
 @Observable
@@ -16,9 +16,9 @@ final class TVHomeViewModel {
 
     private(set) var state: State = .idle
     private(set) var works: [Work] = []
-    private let apiClient: StreamarrAPIClient
+    private let apiClient: PlayarrAPIClient
 
-    init(apiClient: StreamarrAPIClient) {
+    init(apiClient: PlayarrAPIClient) {
         self.apiClient = apiClient
     }
 
@@ -55,9 +55,9 @@ final class TVSearchViewModel {
     var query = ""
     private(set) var state: State = .idle
     private(set) var results: [Work] = []
-    private let apiClient: StreamarrAPIClient
+    private let apiClient: PlayarrAPIClient
 
-    init(apiClient: StreamarrAPIClient) {
+    init(apiClient: PlayarrAPIClient) {
         self.apiClient = apiClient
     }
 
@@ -94,9 +94,9 @@ final class TVWorkDetailViewModel {
     private(set) var state: State = .idle
     private(set) var detail: WorkDetail?
     private let workID: UUID
-    private let apiClient: StreamarrAPIClient
+    private let apiClient: PlayarrAPIClient
 
-    init(workID: UUID, apiClient: StreamarrAPIClient) {
+    init(workID: UUID, apiClient: PlayarrAPIClient) {
         self.workID = workID
         self.apiClient = apiClient
     }
@@ -137,9 +137,9 @@ final class TVPlayerViewModel {
     // for the equivalent, verified-elsewhere reasoning.
     var player: AVPlayer? { engine.avPlayer }
 
-    private let apiClient: StreamarrAPIClient
+    private let apiClient: PlayarrAPIClient
 
-    init(apiClient: StreamarrAPIClient, engine: PlayerEngine = AVPlayerEngine()) {
+    init(apiClient: PlayarrAPIClient, engine: PlayerEngine = AVPlayerEngine()) {
         self.apiClient = apiClient
         self.engine = engine
     }
