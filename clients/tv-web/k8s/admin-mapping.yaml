@@ -1,0 +1,9 @@
+apiVersion: getambassador.io/v3alpha1
+kind: Mapping
+metadata:
+  name: ${PROJECT}-admin
+  namespace: dev
+spec:
+  hostname: admin.${PROJECT}.localhost
+  prefix: /
+  service: ${PROJECT}-admin.dev:80
