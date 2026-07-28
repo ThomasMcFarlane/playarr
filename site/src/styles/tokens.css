@@ -1,0 +1,157 @@
+/*
+ * Streamarr / Playarr design tokens.
+ *
+ * The colour ramp is copied verbatim from the Playarr Web client
+ * (clients/tv-web/web/src/styles/global.css) so the marketing site, the app and
+ * the published research artifacts all read as one product. Do not drift these
+ * values independently — change them in the client first, then mirror here.
+ *
+ * Everything below the colour block is marketing-site-only: a type ramp, a
+ * spacing scale and layout widths that the app has no need for.
+ */
+
+:root {
+  /* ---- Playarr palette (light) ---- */
+  --bg: #f5f3f2;
+  --surface: #fbfaf9;
+  --surface-strong: #ffffff;
+  --surface-soft: #dfdcdd;
+  --ink: #382621;
+  --ink-soft: #675961;
+  --ink-muted: #a5969e;
+  --line: rgba(56, 38, 33, 0.14);
+  --line-strong: rgba(56, 38, 33, 0.28);
+  --accent: #675961;
+  --accent-soft: #c5b8bd;
+  --on-accent: #ffffff;
+  --danger: #a8464c;
+  --danger-soft: #f2dfe1;
+  --success: #347559;
+  --success-soft: #e4efe9;
+  --pill-ok-ink: #2d6a4f;
+  --pill-warn-ink: #9d4046;
+  --shadow-soft: 0 22px 65px rgba(56, 38, 33, 0.09);
+  --shadow-focus: 0 24px 70px rgba(56, 38, 33, 0.2);
+  --focus-outline: #675961;
+
+  /* The player's signature crimson, used sparingly as a highlight. */
+  --highlight: #cf3157;
+  --highlight-soft: rgba(207, 49, 87, 0.12);
+
+  --font: "Avenir Next", Avenir, "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: "SFMono-Regular", Consolas, monospace;
+
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #151315;
+  --surface: #1b181b;
+  --surface-strong: #211d21;
+  --surface-soft: #312a30;
+  --ink: #f4f0f1;
+  --ink-soft: #c5b8bd;
+  --ink-muted: #887a82;
+  --line: rgba(223, 220, 221, 0.11);
+  --line-strong: rgba(223, 220, 221, 0.23);
+  --accent: #dfdcdd;
+  --accent-soft: #675961;
+  --on-accent: #211d21;
+  --danger: #ee9297;
+  --danger-soft: #392326;
+  --success: #7fc09d;
+  --success-soft: #20302a;
+  --pill-ok-ink: #7fc09d;
+  --pill-warn-ink: #ee9297;
+  --shadow-soft: 0 24px 72px rgba(0, 0, 0, 0.3);
+  --shadow-focus: 0 30px 85px rgba(0, 0, 0, 0.5);
+  --focus-outline: #dfdcdd;
+
+  --highlight: #ff6b88;
+  --highlight-soft: rgba(255, 107, 136, 0.16);
+
+  color-scheme: dark;
+}
+
+/*
+ * System-preference fallback. The pre-paint script in BaseLayout always writes
+ * an explicit data-theme, so this only governs visitors without JavaScript.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #151315;
+    --surface: #1b181b;
+    --surface-strong: #211d21;
+    --surface-soft: #312a30;
+    --ink: #f4f0f1;
+    --ink-soft: #c5b8bd;
+    --ink-muted: #887a82;
+    --line: rgba(223, 220, 221, 0.11);
+    --line-strong: rgba(223, 220, 221, 0.23);
+    --accent: #dfdcdd;
+    --accent-soft: #675961;
+    --on-accent: #211d21;
+    --danger: #ee9297;
+    --danger-soft: #392326;
+    --success: #7fc09d;
+    --success-soft: #20302a;
+    --pill-ok-ink: #7fc09d;
+    --pill-warn-ink: #ee9297;
+    --shadow-soft: 0 24px 72px rgba(0, 0, 0, 0.3);
+    --shadow-focus: 0 30px 85px rgba(0, 0, 0, 0.5);
+    --focus-outline: #dfdcdd;
+    --highlight: #ff6b88;
+    --highlight-soft: rgba(255, 107, 136, 0.16);
+    color-scheme: dark;
+  }
+}
+
+:root {
+  /* ---- Type ramp ---- */
+  --text-xs: 0.78rem;
+  --text-sm: 0.88rem;
+  --text-base: 1rem;
+  --text-lg: 1.14rem;
+  --text-xl: clamp(1.25rem, 1.6vw, 1.45rem);
+  --text-2xl: clamp(1.5rem, 2.2vw, 1.9rem);
+  --text-3xl: clamp(1.9rem, 3.2vw, 2.6rem);
+  --text-4xl: clamp(2.4rem, 5vw, 3.8rem);
+  --text-hero: clamp(2.8rem, 7vw, 5.2rem);
+
+  --tracking-eyebrow: 0.16em;
+
+  /* ---- Spacing scale ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+  --space-10: 128px;
+
+  /* ---- Layout ---- */
+  --gutter: clamp(20px, 5vw, 64px);
+  --measure: 68ch;
+  --width-wide: 1240px;
+  --width-prose: 780px;
+  --width-docs: 1440px;
+
+  /* ---- Shape and motion ---- */
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 22px;
+  --radius-pill: 999px;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 160ms;
+  --dur: 260ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur: 0ms;
+  }
+}

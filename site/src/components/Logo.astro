@@ -1,0 +1,49 @@
+---
+/*
+ * Wordmark for the marketing site.
+ *
+ * The repository ships platform app icons but no vector wordmark, so this is
+ * drawn inline: a rounded tile carrying a play glyph, set against the product
+ * name. Everything inherits currentColor apart from the tile, which uses the
+ * accent token, so the mark tracks the active theme without a second asset.
+ */
+interface Props {
+  /** Hide the word and render the tile alone, for tight spaces. */
+  markOnly?: boolean
+  class?: string
+}
+
+const { markOnly = false, class: className } = Astro.props
+---
+
+<span class:list={['logo', className]}>
+  <svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+    <rect x="0" y="0" width="32" height="32" rx="9" fill="currentColor" />
+    <path d="M12.6 10.2 22 16l-9.4 5.8Z" fill="var(--bg)" />
+  </svg>
+  {markOnly ? null : <span class="logo-word">Streamarr</span>}
+</span>
+
+<style>
+  .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    color: var(--ink);
+    font-weight: 750;
+    font-size: var(--text-lg);
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+  }
+
+  .logo-mark {
+    width: 1.55em;
+    height: 1.55em;
+    flex: none;
+    color: var(--ink);
+  }
+
+  .logo-word {
+    line-height: 1;
+  }
+</style>

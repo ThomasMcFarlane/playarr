@@ -1,0 +1,48 @@
+---
+interface Props {
+  eyebrow?: string
+  title?: string
+  lede?: string
+  /** Tints the band so alternating sections read as distinct. */
+  tint?: boolean
+  id?: string
+  class?: string
+}
+
+const { eyebrow, title, lede, tint = false, id, class: className } = Astro.props
+---
+
+<section class:list={['section band', { tint }, className]} id={id}>
+  <div class="wrap">
+    {
+      (eyebrow || title || lede) && (
+        <header class="head">
+          {eyebrow && <p class="eyebrow">{eyebrow}</p>}
+          {title && <h2>{title}</h2>}
+          {lede && <p class="lede">{lede}</p>}
+        </header>
+      )
+    }
+    <slot />
+  </div>
+</section>
+
+<style>
+  .band.tint {
+    background: var(--surface);
+    border-block: 1px solid var(--line);
+  }
+
+  .head {
+    max-width: var(--measure);
+    margin-bottom: var(--space-7);
+  }
+
+  .head :global(h2) {
+    margin-bottom: var(--space-4);
+  }
+
+  .head :global(.lede:last-child) {
+    margin-bottom: 0;
+  }
+</style>

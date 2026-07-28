@@ -1,0 +1,134 @@
+---
+import Logo from './Logo.astro'
+import { FOOTER_GROUPS, SITE, LINKS } from '../consts'
+
+const year = new Date().getFullYear()
+---
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="grid">
+      <div class="about">
+        <Logo />
+        <p class="blurb">
+          A self-hosted media server for the library you already own, with native {SITE.clientName}
+          apps for phones, tablets, televisions and the browser.
+        </p>
+      </div>
+
+      {
+        FOOTER_GROUPS.map((group) => (
+          <nav class="group" aria-label={group.title}>
+            <h2 class="group-title">{group.title}</h2>
+            <ul>
+              {group.links.map((link) => (
+                <li>
+                  <a href={link.href} rel={link.external ? 'noopener' : undefined}>
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        ))
+      }
+    </div>
+
+    <div class="base">
+      <p>
+        © {year} Thomas McFarlane and {SITE.name} contributors. {SITE.name}'s own source is
+        released under the <a href={LINKS.licence} rel="noopener">MIT licence</a>; published
+        container images additionally bundle FFmpeg, which is GPLv2-or-later. See
+        <a href="/legal/licences">licences and attribution</a>.
+      </p>
+      <p class="fine">
+        {SITE.name} plays media you supply from storage you control. It does not search for,
+        index or obtain content. See <a href="/legal/acceptable-use">acceptable use</a>.
+      </p>
+      <p class="fine">
+        This website uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise
+        approved by TMDB.
+      </p>
+      <p class="fine">
+        {SITE.name} and {SITE.clientName} are independent projects and are not affiliated with,
+        endorsed by, or sponsored by Sonarr, Radarr, Lidarr, Bazarr, Prowlarr, Readarr, Tdarr,
+        Plex, Jellyfin, Emby, Apple, Google, LG, Samsung, Hisense, Roku, or TMDB. All trademarks
+        are the property of their respective owners.
+      </p>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    margin-top: var(--space-10);
+    padding-block: var(--space-8) var(--space-6);
+    border-top: 1px solid var(--line);
+    background: var(--surface);
+    font-size: var(--text-sm);
+  }
+
+  .grid {
+    display: grid;
+    gap: var(--space-7);
+    grid-template-columns: minmax(220px, 1.4fr) repeat(4, minmax(120px, 1fr));
+  }
+
+  @media (max-width: 960px) {
+    .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .about {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .blurb {
+    max-width: 34ch;
+    margin-top: var(--space-4);
+    color: var(--ink-soft);
+  }
+
+  .group-title {
+    margin: 0 0 var(--space-4);
+    color: var(--ink-muted);
+    font-size: var(--text-xs);
+    font-weight: 750;
+    letter-spacing: var(--tracking-eyebrow);
+    text-transform: uppercase;
+  }
+
+  .group ul {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .group a {
+    color: var(--ink-soft);
+    text-decoration: none;
+  }
+
+  .group a:hover {
+    color: var(--ink);
+  }
+
+  .base {
+    margin-top: var(--space-8);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--line);
+    color: var(--ink-muted);
+    font-size: var(--text-xs);
+  }
+
+  .base p {
+    margin: 0 0 var(--space-2);
+  }
+
+  .fine {
+    max-width: var(--measure);
+  }
+</style>

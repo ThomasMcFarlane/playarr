@@ -1,0 +1,90 @@
+---
+/*
+ * Light/dark switch. The resolved theme already lives on the root element from
+ * the pre-paint script in BaseLayout; this only flips the attribute and
+ * persists the choice.
+ */
+---
+
+<button class="theme-toggle" type="button" aria-pressed="false" data-theme-toggle>
+  <span class="visually-hidden">Switch between light and dark theme</span>
+  <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <circle cx="12" cy="12" r="4.6" fill="currentColor"></circle>
+    <g stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+      <path d="M12 2.4v2.4M12 19.2v2.4M2.4 12h2.4M19.2 12h2.4M5.2 5.2l1.7 1.7M17.1 17.1l1.7 1.7M18.8 5.2l-1.7 1.7M6.9 17.1l-1.7 1.7"></path>
+    </g>
+  </svg>
+  <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path
+      d="M20.3 14.3A8.5 8.5 0 0 1 9.7 3.7a8.5 8.5 0 1 0 10.6 10.6Z"
+      fill="currentColor"></path>
+  </svg>
+</button>
+
+<style>
+  .theme-toggle {
+    display: inline-grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pill);
+    background: var(--surface);
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition:
+      background var(--dur-fast) var(--ease),
+      color var(--dur-fast) var(--ease),
+      border-color var(--dur-fast) var(--ease);
+  }
+
+  .theme-toggle:hover {
+    border-color: var(--line-strong);
+    color: var(--ink);
+  }
+
+  .icon {
+    grid-area: 1 / 1;
+    width: 17px;
+    height: 17px;
+  }
+
+  /* Show the theme you would switch *to*. */
+  .icon-sun {
+    display: none;
+  }
+
+  :global(:root[data-theme='dark']) .icon-sun {
+    display: block;
+  }
+
+  :global(:root[data-theme='dark']) .icon-moon {
+    display: none;
+  }
+</style>
+
+<script>
+  const KEY = 'streamarr-site-theme'
+
+  function sync(button: HTMLButtonElement) {
+    button.setAttribute(
+      'aria-pressed',
+      document.documentElement.dataset.theme === 'dark' ? 'true' : 'false',
+    )
+  }
+
+  for (const node of document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]')) {
+    sync(node)
+    node.addEventListener('click', () => {
+      const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+      document.documentElement.dataset.theme = next
+      try {
+        localStorage.setItem(KEY, next)
+      } catch {
+        /* Private-mode storage denial is not worth surfacing. */
+      }
+      sync(node)
+    })
+  }
+</script>

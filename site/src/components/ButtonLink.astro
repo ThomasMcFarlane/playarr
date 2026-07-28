@@ -1,0 +1,74 @@
+---
+interface Props {
+  href: string
+  variant?: 'solid' | 'outline' | 'quiet'
+  external?: boolean
+  class?: string
+}
+
+const { href, variant = 'solid', external = false, class: className } = Astro.props
+---
+
+<a
+  href={href}
+  class:list={['btn', variant, className]}
+  rel={external ? 'noopener' : undefined}
+>
+  <slot />
+</a>
+
+<style>
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5em;
+    padding: 13px 26px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    text-align: center;
+    text-decoration: none;
+    transition:
+      opacity var(--dur-fast) var(--ease),
+      background var(--dur-fast) var(--ease),
+      border-color var(--dur-fast) var(--ease),
+      transform var(--dur-fast) var(--ease);
+  }
+
+  .btn:hover {
+    transform: translateY(-1px);
+  }
+
+  .solid {
+    background: var(--ink);
+    color: var(--bg);
+  }
+
+  .solid:hover {
+    color: var(--bg);
+    opacity: 0.86;
+  }
+
+  .outline {
+    border-color: var(--line-strong);
+    background: transparent;
+    color: var(--ink);
+  }
+
+  .outline:hover {
+    border-color: var(--ink);
+    color: var(--ink);
+  }
+
+  .quiet {
+    padding-inline: 0;
+    color: var(--ink-soft);
+  }
+
+  .quiet:hover {
+    color: var(--highlight);
+    transform: none;
+  }
+</style>
