@@ -1,28 +1,22 @@
 ---
-import { Image } from 'astro:assets'
-import type { ImageMetadata } from 'astro'
-
 /*
- * Browser-chrome mockup for real product screenshots. Every screenshot in
- * src/assets/ is a genuine capture of the tv-web client (see the tvweb_*.png
- * files at the repo root this was copied from) — nothing here is a stock
- * photo or a fabricated UI.
+ * Browser-chrome shell used to present the fictional DemoScreen mockups (see
+ * DemoScreen.astro and data/demo-content.ts) as if seen in a browser tab.
+ * Deliberately illustrative, not a screenshot: nothing rendered inside it is
+ * a capture of a real Streamarr installation.
  */
-interface Props {
-  src: ImageMetadata
-  alt: string
+interface Props extends astroHTML.JSX.HTMLAttributes {
   /** Visual weight in a stacked showcase — larger frames sit forward. */
   size?: 'lg' | 'md' | 'sm'
+  /** 'tall' suits detail-page style content (hero + rails); 'wide' suits grids. */
+  aspect?: 'wide' | 'tall'
   class?: string
-  priority?: boolean
 }
 
-const { src, alt, size = 'md', class: className, priority = false } = Astro.props
-
-const widths: Record<string, number> = { lg: 1200, md: 860, sm: 620 }
+const { size = 'md', aspect = 'wide', class: className, ...rest } = Astro.props
 ---
 
-<figure class:list={['frame', size, className]}>
+<figure class:list={['frame', size, aspect, className]} {...rest}>
   <div class="chrome">
     <span class="dot red"></span>
     <span class="dot amber"></span>
@@ -30,17 +24,7 @@ const widths: Record<string, number> = { lg: 1200, md: 860, sm: 620 }
     <span class="url">playarr.app</span>
   </div>
   <div class="viewport">
-    <Image
-      src={src}
-      alt={alt}
-      width={widths[size]}
-      widths={[widths[size], Math.round(widths[size] * 1.6)]}
-      sizes={`(max-width: 760px) 92vw, ${widths[size]}px`}
-      loading={priority ? 'eager' : 'lazy'}
-      fetchpriority={priority ? 'high' : 'auto'}
-      format="webp"
-      quality={82}
-    />
+    <slot />
   </div>
 </figure>
 
@@ -70,7 +54,6 @@ const widths: Record<string, number> = { lg: 1200, md: 860, sm: 620 }
     background: var(--line-strong);
   }
 
-  :root[data-theme='light'] .dot.red,
   .frame .dot.red {
     background: #e0685f;
   }
@@ -91,13 +74,15 @@ const widths: Record<string, number> = { lg: 1200, md: 860, sm: 620 }
     font-weight: 650;
   }
 
-  .viewport {
-    line-height: 0;
+  .wide .viewport {
+    aspect-ratio: 16 / 10;
   }
 
-  .viewport :global(img) {
-    display: block;
-    width: 100%;
-    height: auto;
+  .lg.wide .viewport {
+    aspect-ratio: 16 / 9;
+  }
+
+  .tall .viewport {
+    aspect-ratio: 1 / 1;
   }
 </style>
