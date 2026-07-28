@@ -1,0 +1,17 @@
+[package]
+name = "playarr-coordination"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Cross-node coordination (mutual exclusion, leader election) for the Playarr Server backend. No-op/always-leader for single-node deployments, Postgres advisory-lock-backed for multi-node."
+
+[dependencies]
+async-trait = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+tracing = { workspace = true }
+# Postgres-only: session-level advisory locks (`pg_try_advisory_lock`) and a
+# heartbeat table are the mechanism `PostgresCoordinator` is built around,
+# so unlike `playarr-db` this crate doesn't need to abstract over SQLite.
+sqlx = { workspace = true, features = ["postgres"] }

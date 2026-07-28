@@ -1,12 +1,12 @@
--- Catalog + device + rendition tables backing `streamarr_model::{Work,
+-- Catalog + device + rendition tables backing `playarr_model::{Work,
 -- Device, Rendition}` and the `WorkRepo`/`DeviceRepo`/`RenditionRepo` traits
--- in `streamarr-db::repo`.
+-- in `playarr-db::repo`.
 --
 -- Portability note (same convention as `0002_analytics.sql`): ids are TEXT
 -- (stringified UUIDs), timestamps are TEXT in ISO-8601 form, and the closed
 -- Rust enums (`WorkKind`, `Availability`, `RenditionStatus`, `ProducedBy`,
 -- `ClientPlatform`) are stored as their lowercase discriminant string — see
--- `streamarr_db::codec` for the single place those mappings live — so the
+-- `playarr_db::codec` for the single place those mappings live — so the
 -- same application-level SQL works unmodified against both engines. BIGINT
 -- for `bitrate` matches SQLite's dynamically-sized `INTEGER` (Postgres's own
 -- `INTEGER` is a fixed 32 bits and would silently narrow the range).
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS works (
     added_at TEXT NOT NULL,
     -- 0/1, not a native `boolean` column — kept as `INTEGER` on this side
     -- too (rather than the engine-appropriate native type) so the
-    -- application-level SQL and Rust row-mapping in `streamarr_db::codec`
+    -- application-level SQL and Rust row-mapping in `playarr_db::codec`
     -- stay identical across both engines; see `bool_to_i64` for the SQLite
     -- driver limitation that motivates it.
     monitored INTEGER NOT NULL DEFAULT 0,

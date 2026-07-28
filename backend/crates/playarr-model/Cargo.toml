@@ -1,0 +1,18 @@
+[package]
+name = "playarr-model"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Domain types shared across the Playarr Server backend. No I/O, no framework dependencies."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+utoipa = { workspace = true, optional = true }
+
+[features]
+# Derives utoipa::ToSchema on the API-facing types. Off by default so
+# non-HTTP crates (workers, CLI) don't pull utoipa in transitively.
+openapi = ["dep:utoipa"]

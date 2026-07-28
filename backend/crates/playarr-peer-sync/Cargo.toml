@@ -1,0 +1,48 @@
+[package]
+name = "playarr-peer-sync"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Node-to-node peer group sync protocol: signed requests, membership gossip, account/availability sync, and the poller that drives them -- see docs/architecture/peer-groups.md."
+
+[dependencies]
+playarr-model = { path = "../playarr-model" }
+playarr-db = { path = "../playarr-db" }
+playarr-auth = { path = "../playarr-auth" }
+playarr-coordination = { path = "../playarr-coordination" }
+# `PeerSyncPoller` reuses `SyncRunStatus`/`SyncStatusReporter` from here
+# as-is (implemented a second time, not modified) rather than forking the
+# admin "sync status" concept -- `docs/architecture/peer-groups.md` §3.2.
+playarr-arr-sync = { path = "../playarr-arr-sync" }
+reqwest = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+# Peer-to-peer request signing -- this node's own durable Ed25519 identity
+# (`node_identity.private_key`, minted by `playarr-api`'s `admin_peer.rs`)
+# signs, and every other peer's stored public key verifies. Same version pin
+# `playarr-api`'s own `peer_extractor.rs` already uses for the receiving
+# side of this exact protocol (`docs/architecture/peer-groups.md` §3.3) --
+# both sides must agree byte-for-byte on the canonical string they sign.
+ed25519-dalek = "2"
+# `sha2`/`hex` for `sha256(body)` in the peer-signing canonical string --
+# same version pin `playarr-api::peer_extractor` and `playarr-auth::secret`
+# already use.
+sha2 = "0.10"
+hex = "0.4"
+# Base64 for Ed25519 keys/signatures on the wire -- same version pin
+# `playarr-api` already uses for the identical purpose.
+base64 = "0.22.1"
+
+[dev-dependencies]
+wiremock = "0.6"
+# Test-only: opens a real in-memory SQLite `DbPool` (see `playarr-arr-sync`'s
+# and `playarr-api`'s own test harnesses for the identical pattern) so
+# `account_sync`/`availability_sync`/`membership_sync`'s tests exercise the
+# real repos through real migrations, not hand-rolled fakes.
+sqlx = { workspace = true, features = ["any", "sqlite"] }

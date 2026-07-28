@@ -1,11 +1,11 @@
-# Client version compatibility table, consumed by `streamarr-api`'s
-# `version_gate` middleware (see backend/crates/streamarr-api/src/version_gate.rs)
-# and served verbatim (via `streamarr-model::VersionEnvelope`) at
+# Client version compatibility table, consumed by `playarr-api`'s
+# `version_gate` middleware (see backend/crates/playarr-api/src/version_gate.rs)
+# and served verbatim (via `playarr-model::VersionEnvelope`) at
 # `GET /api/system/version` so clients can self-check before being rejected.
 #
 # Schema:
 #   [server]                     server's own version + API version
-#   [<platform>]                 one section per streamarr_model::ClientPlatform
+#   [<platform>]                 one section per playarr_model::ClientPlatform
 #                                 (kebab-case wire name — see ClientPlatform::wire_name)
 #
 # Android platforms (android-mobile, android-tv) gate on Android's own

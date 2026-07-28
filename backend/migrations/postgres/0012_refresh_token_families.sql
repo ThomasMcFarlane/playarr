@@ -1,6 +1,6 @@
 -- Postgres mirror of `../sqlite/0009_refresh_token_families.sql` -- see
 -- that file for the full rationale. Durable storage for
--- `streamarr_auth::refresh::RefreshTokenRecord`, replacing the previous
+-- `playarr_auth::refresh::RefreshTokenRecord`, replacing the previous
 -- in-process-only `InMemoryRefreshTokenStore`.
 
 CREATE TABLE IF NOT EXISTS refresh_token_families (

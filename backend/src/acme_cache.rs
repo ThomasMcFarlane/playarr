@@ -170,7 +170,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let cache = SecureDirCache::new(directory.path().join("acme"));
         let contacts = vec!["mailto:admin@example.com".to_string()];
-        let domains = vec!["streamarr.example.com".to_string()];
+        let domains = vec!["playarr.example.com".to_string()];
 
         cache
             .store_account(&contacts, "https://acme.example/directory", b"account-key")
@@ -209,7 +209,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let cache_directory = directory.path().join("acme");
         let cache = SecureDirCache::new(cache_directory.clone());
-        let domains = vec!["streamarr.example.com".to_string()];
+        let domains = vec!["playarr.example.com".to_string()];
 
         cache
             .store_cert(&domains, "https://acme.example/directory", b"first")

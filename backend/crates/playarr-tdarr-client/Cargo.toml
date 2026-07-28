@@ -1,0 +1,18 @@
+[package]
+name = "playarr-tdarr-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Typed client for Tdarr's REST v2 API — the background transcode pipeline Playarr Server's Tdarr-produced Rendition path dispatches work to."
+
+[dependencies]
+playarr-model = { path = "../playarr-model" }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+wiremock = "0.6"

@@ -1,22 +1,22 @@
-//! `streamarr` — the combined server binary and maintenance CLI.
+//! `playarr` — the combined server binary and maintenance CLI.
 //!
-//! With no subcommand, boots the server: resolves [`streamarr_config::Config`]
-//! from the environment, initializes [`streamarr_telemetry`], connects and
-//! migrates the database, and then, depending on `STREAMARR_ROLE`:
+//! With no subcommand, boots the server: resolves [`playarr_config::Config`]
+//! from the environment, initializes [`playarr_telemetry`], connects and
+//! migrates the database, and then, depending on `PLAYARR_ROLE`:
 //!
 //! - `api`/`all`: serves the full Axum router built by
-//!   [`streamarr_api::build_router`], with a real [`streamarr_api::AppState`]
+//!   [`playarr_api::build_router`], with a real [`playarr_api::AppState`]
 //!   behind it (catalog, requests, transcode orchestrator, device-flow auth,
 //!   session login, webhook receiver). Every mutating request-management
 //!   route requires a verified `Authorization: Bearer <token>` (see
-//!   `streamarr_api::auth_extractor`); `auth_mode_from_env`/
+//!   `playarr_api::auth_extractor`); `auth_mode_from_env`/
 //!   `default_admin_user_id_from_env` below resolve this deployment's login
 //!   trust tier and default admin identity.
 //! - `worker`/`all`: spawns the arr-sync reconciliation pollers (one per
 //!   configured `SourceInstance`), the peer-sync pollers (one per non-self
 //!   `peer_nodes` row -- see `docs/architecture/peer-groups.md` §3.6; zero
 //!   for an ungrouped node), and the Tdarr background dispatch loop (each
-//!   gated by [`streamarr_coordination::ClusterCoordinator`] leader
+//!   gated by [`playarr_coordination::ClusterCoordinator`] leader
 //!   election or a per-peer lock, so only one node runs/polls a given one
 //!   in a multi-node deployment) as background tasks. `worker`-only
 //!   additionally serves a minimal `/healthz` listener, since it runs no
@@ -29,8 +29,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use clap::{Parser, Subcommand, ValueEnum};
-use streamarr_config::{Config, DeploymentTier};
-use streamarr_db::DbPool;
+use playarr_config::{Config, DeploymentTier};
+use playarr_db::DbPool;
 
 mod acme_cache;
 mod relay_dns;
@@ -116,9 +116,9 @@ fn https_origin(domain: &str, port: u16) -> String {
 
 #[derive(Parser)]
 #[command(
-    name = "streamarr",
+    name = "playarr",
     version,
-    about = "Streamarr backend server and maintenance CLI"
+    about = "Playarr Server backend server and maintenance CLI"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -129,7 +129,7 @@ struct Cli {
 enum Command {
     /// Run the server. This is the default when no subcommand is given.
     Serve,
-    /// Check for, and optionally apply, a Streamarr binary update.
+    /// Check for, and optionally apply, a Playarr Server binary update.
     Update {
         /// Only check for an update and report it; never apply one, even
         /// if `--yes` is also passed.
@@ -176,12 +176,12 @@ async fn main() -> anyhow::Result<()> {
 
 async fn serve() -> anyhow::Result<()> {
     let config = Config::from_env()?;
-    let _telemetry_guard = streamarr_telemetry::init(&config);
+    let _telemetry_guard = playarr_telemetry::init(&config);
 
     tracing::info!(
         role = %config.role,
         deployment_tier = ?config.deployment_tier,
-        "starting streamarr"
+        "starting playarr"
     );
 
     let pool = connect_and_migrate(&config).await?;
@@ -190,25 +190,25 @@ async fn serve() -> anyhow::Result<()> {
     // decisions (`TranscodeOrchestrator`, in `boot_api`) and background
     // throttle checks (`TdarrDispatcher`, in `boot_worker`) agree on how
     // many on-demand sessions are actually active right now.
-    let active_sessions = streamarr_transcode::ActiveSessionCounter::new();
+    let active_sessions = playarr_transcode::ActiveSessionCounter::new();
     // Composition-root-owned registry of configured *arr `SourceInstance`s,
     // shared between the API's request-submission/webhook routes and the
     // worker's reconciliation-poller spawner. Starts empty here -- it's
     // `boot_api` that hydrates it from the real `SourceInstanceRepo`
     // (persisted `SourceInstance` rows) right before constructing
     // `AppState`, so a restart no longer forgets every registered
-    // instance. See `streamarr_api::SourceInstanceRegistry`'s doc comment
+    // instance. See `playarr_api::SourceInstanceRegistry`'s doc comment
     // for the split between this fast in-memory read path and the durable
     // repo behind it.
-    let source_instances = Arc::new(streamarr_api::SourceInstanceRegistry::new());
+    let source_instances = Arc::new(playarr_api::SourceInstanceRegistry::new());
 
     // Connects `boot_api`'s `TranscodeOrchestrator` (an on-demand session
     // starting is the send side) to `boot_worker`'s `TdarrDispatcher` (the
-    // receive side) -- see `streamarr_transcode`'s module docs, "other
+    // receive side) -- see `playarr_transcode`'s module docs, "other
     // bridge" section, for why: it's what promotes a live, temporary
     // on-demand transcode into a durable, Tdarr-produced `Rendition` for
     // future requests. Constructed once here (not inside either `boot_*`
-    // function) since both live in the same process for `STREAMARR_ROLE=all`
+    // function) since both live in the same process for `PLAYARR_ROLE=all`
     // -- the only topology this local `mpsc` channel can bridge; a split
     // api/worker deployment needs a cross-node signal instead (same
     // limitation already noted on `TranscodeOrchestrator::active_children`),
@@ -216,7 +216,7 @@ async fn serve() -> anyhow::Result<()> {
     // `TDARR_URL` isn't set, `tdarr_notify_rx` is simply dropped and every
     // `try_send` on the other end harmlessly fails closed.
     let (tdarr_notify_tx, tdarr_notify_rx) =
-        tokio::sync::mpsc::channel::<streamarr_transcode::MediaFileImportEvent>(64);
+        tokio::sync::mpsc::channel::<playarr_transcode::MediaFileImportEvent>(64);
 
     // Playback-activity analytics plumbing, shared across roles the same
     // way `active_sessions`/`source_instances` above are: `analytics`
@@ -224,27 +224,27 @@ async fn serve() -> anyhow::Result<()> {
     // `AppState`, while the cluster-wide-singleton background jobs that
     // operate on the same store/registry (`RollupScheduler`,
     // `SessionReaper`, `RetentionSweeper`) run leader-gated inside
-    // `boot_worker`. See `streamarr_telemetry::analytics::collector`'s
+    // `boot_worker`. See `playarr_telemetry::analytics::collector`'s
     // module doc comment for the overall architecture.
-    let analytics_store: Arc<dyn streamarr_db::analytics::AnalyticsStore> = Arc::new(
-        streamarr_db::analytics::SqlxAnalyticsStore::new(pool.clone()),
+    let analytics_store: Arc<dyn playarr_db::analytics::AnalyticsStore> = Arc::new(
+        playarr_db::analytics::SqlxAnalyticsStore::new(pool.clone()),
     );
-    let session_registry: Arc<dyn streamarr_telemetry::analytics::SessionRegistry> =
-        Arc::new(streamarr_telemetry::analytics::InMemorySessionRegistry::new());
+    let session_registry: Arc<dyn playarr_telemetry::analytics::SessionRegistry> =
+        Arc::new(playarr_telemetry::analytics::InMemorySessionRegistry::new());
     // Drained by `AnalyticsFlusher`, spawned inside `boot_api` -- see that
     // function for why the flusher lives there rather than here: only an
     // API-role process ever calls `AnalyticsCollector::on_event`/
     // `on_session_start` (there's no HTTP handler in the worker role), so
     // it's the only role that ever produces events into this channel.
     let (analytics_event_tx, analytics_event_rx) =
-        tokio::sync::mpsc::channel::<streamarr_model::PlaybackEvent>(4096);
-    let analytics = Arc::new(streamarr_telemetry::analytics::AnalyticsCollector::new(
+        tokio::sync::mpsc::channel::<playarr_model::PlaybackEvent>(4096);
+    let analytics = Arc::new(playarr_telemetry::analytics::AnalyticsCollector::new(
         session_registry.clone(),
         analytics_store.clone(),
         analytics_event_tx,
     ));
 
-    // `streamarr-telemetry`'s own docs are explicit that `init` above only
+    // `playarr-telemetry`'s own docs are explicit that `init` above only
     // covers logging -- the /metrics HTTP listener is real, tested code
     // that this composition root is documented as responsible for
     // spawning, and (until now) never actually did: every deployment
@@ -253,7 +253,7 @@ async fn serve() -> anyhow::Result<()> {
     // requests, and it silently didn't -- nothing was listening on that
     // port at all. Spawned unconditionally, before the role branch below,
     // since both api and worker roles expose metrics per the Helm chart.
-    let metrics_registry = streamarr_telemetry::metrics::MetricsRegistry::new();
+    let metrics_registry = playarr_telemetry::metrics::MetricsRegistry::new();
     tokio::spawn(spawn_metrics_listener(
         config.metrics_bind_addr,
         metrics_registry,
@@ -302,7 +302,7 @@ async fn serve() -> anyhow::Result<()> {
     };
 
     if let Some(bind_addr) = config.relay_dns_bind_addr {
-        tracing::info!(addr = %bind_addr, "authoritative relay DNS enabled inside streamarr");
+        tracing::info!(addr = %bind_addr, "authoritative relay DNS enabled inside playarr");
         tokio::try_join!(
             application_listener,
             relay_dns::serve(bind_addr, config.relay_dns_acme_challenge.clone())
@@ -315,34 +315,34 @@ async fn serve() -> anyhow::Result<()> {
 }
 
 /// Opens the connection pool for `config.database_url` (SQLite or Postgres,
-/// auto-detected by `streamarr_db::connect`) and applies the matching
+/// auto-detected by `playarr_db::connect`) and applies the matching
 /// embedded migration set.
 async fn connect_and_migrate(config: &Config) -> anyhow::Result<DbPool> {
-    let pool = streamarr_db::connect(&config.database_url).await?;
+    let pool = playarr_db::connect(&config.database_url).await?;
     let is_postgres = !matches!(config.deployment_tier, DeploymentTier::SingleNode);
-    streamarr_db::run_migrations(&pool, is_postgres).await?;
+    playarr_db::run_migrations(&pool, is_postgres).await?;
     Ok(pool)
 }
 
 /// Cache + pub/sub backend selection, mirroring
-/// `streamarr_config::DeploymentTier`'s own three-way split: in-process for
+/// `playarr_config::DeploymentTier`'s own three-way split: in-process for
 /// single-node, Postgres `LISTEN`/`NOTIFY` for multi-node-without-Redis,
 /// real Redis for the fully horizontally-scaled tier.
-async fn build_cache(config: &Config) -> anyhow::Result<Arc<dyn streamarr_cache::CacheAndPubSub>> {
+async fn build_cache(config: &Config) -> anyhow::Result<Arc<dyn playarr_cache::CacheAndPubSub>> {
     match config.deployment_tier {
-        DeploymentTier::SingleNode => Ok(Arc::new(streamarr_cache::InMemory::new())),
+        DeploymentTier::SingleNode => Ok(Arc::new(playarr_cache::InMemory::new())),
         DeploymentTier::MultiNodePostgresRedis => {
             let redis_url = config
                 .redis_url
                 .clone()
                 .ok_or_else(|| anyhow::anyhow!("REDIS_URL is required for this deployment tier"))?;
-            Ok(Arc::new(streamarr_cache::Redis::new(redis_url)))
+            Ok(Arc::new(playarr_cache::Redis::new(redis_url)))
         }
         DeploymentTier::MultiNodePostgres => {
             let pg_pool = sqlx::postgres::PgPoolOptions::new()
                 .connect(&config.database_url)
                 .await?;
-            Ok(Arc::new(streamarr_cache::PostgresListenNotify::new(
+            Ok(Arc::new(playarr_cache::PostgresListenNotify::new(
                 pg_pool,
             )))
         }
@@ -352,19 +352,19 @@ async fn build_cache(config: &Config) -> anyhow::Result<Arc<dyn streamarr_cache:
 /// Coordination backend selection: trivially-always-leader/uncontended
 /// locks for single-node, real Postgres advisory locks + a leader heartbeat
 /// table for both multi-node tiers (coordination has no Redis path — see
-/// `streamarr_coordination`'s own docs).
+/// `playarr_coordination`'s own docs).
 async fn build_coordinator(
     config: &Config,
-) -> anyhow::Result<Arc<dyn streamarr_coordination::ClusterCoordinator>> {
+) -> anyhow::Result<Arc<dyn playarr_coordination::ClusterCoordinator>> {
     match config.deployment_tier {
         DeploymentTier::SingleNode => Ok(Arc::new(
-            streamarr_coordination::SingleNodeCoordinator::new(),
+            playarr_coordination::SingleNodeCoordinator::new(),
         )),
         DeploymentTier::MultiNodePostgres | DeploymentTier::MultiNodePostgresRedis => {
             let pg_pool = sqlx::postgres::PgPoolOptions::new()
                 .connect(&config.database_url)
                 .await?;
-            Ok(Arc::new(streamarr_coordination::PostgresCoordinator::new(
+            Ok(Arc::new(playarr_coordination::PostgresCoordinator::new(
                 pg_pool,
                 uuid::Uuid::new_v4(),
             )))
@@ -372,26 +372,26 @@ async fn build_coordinator(
     }
 }
 
-/// Resolves the HS256 secret [`streamarr_auth::JwtIssuer`] signs access
-/// tokens with, from `STREAMARR_JWT_SECRET`. Falls back to a secret
+/// Resolves the HS256 secret [`playarr_auth::JwtIssuer`] signs access
+/// tokens with, from `PLAYARR_JWT_SECRET`. Falls back to a secret
 /// generated fresh at boot (logged loudly) rather than a hardcoded default
 /// -- fine for local/dev use (single-process lifetime), but tokens won't
 /// validate across a restart or between nodes in a real deployment without
 /// a real, stable, operator-provided secret.
 fn jwt_secret_from_env() -> String {
-    match std::env::var("STREAMARR_JWT_SECRET") {
+    match std::env::var("PLAYARR_JWT_SECRET") {
         Ok(secret) if secret.len() >= 32 => secret,
         Ok(_) => {
             tracing::warn!(
-                "STREAMARR_JWT_SECRET is shorter than the required 32 bytes; ignoring it and \
+                "PLAYARR_JWT_SECRET is shorter than the required 32 bytes; ignoring it and \
                  generating a boot-lifetime secret instead"
             );
             generated_dev_jwt_secret()
         }
         Err(_) => {
             tracing::warn!(
-                "STREAMARR_JWT_SECRET not set; generating a boot-lifetime secret. Fine for local \
-                 development; set STREAMARR_JWT_SECRET explicitly for any deployment where tokens \
+                "PLAYARR_JWT_SECRET not set; generating a boot-lifetime secret. Fine for local \
+                 development; set PLAYARR_JWT_SECRET explicitly for any deployment where tokens \
                  must survive a restart or be honored across multiple nodes."
             );
             generated_dev_jwt_secret()
@@ -399,11 +399,11 @@ fn jwt_secret_from_env() -> String {
     }
 }
 
-/// How long an on-demand [`streamarr_transcode::TranscodeSession`] survives
+/// How long an on-demand [`playarr_transcode::TranscodeSession`] survives
 /// without being accessed before it's eligible for cleanup -- an *idle*
 /// deadline (every real manifest/segment request slides it forward, see
 /// `TranscodeOrchestrator::lookup_session`'s doc comment), not a cap on how
-/// long a single playback can run. `STREAMARR_TRANSCODE_SESSION_IDLE_TTL_SECS`,
+/// long a single playback can run. `PLAYARR_TRANSCODE_SESSION_IDLE_TTL_SECS`,
 /// defaulting to 60s -- long enough that normal HLS segment-fetch cadence
 /// (a few seconds apart) never lapses it, short enough that a viewer who
 /// closes the tab or loses their connection frees the ffmpeg process and
@@ -411,13 +411,13 @@ fn jwt_secret_from_env() -> String {
 /// much longer default.
 fn transcode_session_idle_ttl_from_env() -> std::time::Duration {
     const DEFAULT_SECS: u64 = 60;
-    match std::env::var("STREAMARR_TRANSCODE_SESSION_IDLE_TTL_SECS") {
+    match std::env::var("PLAYARR_TRANSCODE_SESSION_IDLE_TTL_SECS") {
         Ok(raw) => match raw.parse::<u64>() {
             Ok(secs) if secs > 0 => std::time::Duration::from_secs(secs),
             _ => {
                 tracing::warn!(
                     value = %raw,
-                    "STREAMARR_TRANSCODE_SESSION_IDLE_TTL_SECS is not a positive integer; \
+                    "PLAYARR_TRANSCODE_SESSION_IDLE_TTL_SECS is not a positive integer; \
                      falling back to the default of {DEFAULT_SECS}s"
                 );
                 std::time::Duration::from_secs(DEFAULT_SECS)
@@ -429,22 +429,22 @@ fn transcode_session_idle_ttl_from_env() -> std::time::Duration {
 
 /// How often each `PeerSyncPoller` (`docs/architecture/peer-groups.md`
 /// §3.6) runs a full sync cycle against its one peer.
-/// `STREAMARR_PEER_SYNC_INTERVAL_SECS`, defaulting to
-/// [`streamarr_peer_sync::DEFAULT_PEER_SYNC_INTERVAL_SECS`] (60s) -- read
-/// here, at the boot boundary, rather than inside `streamarr-peer-sync`
-/// itself, matching every other `STREAMARR_*_SECS` var in this codebase
+/// `PLAYARR_PEER_SYNC_INTERVAL_SECS`, defaulting to
+/// [`playarr_peer_sync::DEFAULT_PEER_SYNC_INTERVAL_SECS`] (60s) -- read
+/// here, at the boot boundary, rather than inside `playarr-peer-sync`
+/// itself, matching every other `PLAYARR_*_SECS` var in this codebase
 /// (e.g. [`transcode_session_idle_ttl_from_env`] just above) and
 /// `PeerSyncPoller::new`'s own doc comment, which explains why it takes an
 /// already-resolved `Duration` rather than reading the env var itself.
 fn peer_sync_interval_secs_from_env() -> Duration {
-    let default_secs = streamarr_peer_sync::DEFAULT_PEER_SYNC_INTERVAL_SECS;
-    match std::env::var("STREAMARR_PEER_SYNC_INTERVAL_SECS") {
+    let default_secs = playarr_peer_sync::DEFAULT_PEER_SYNC_INTERVAL_SECS;
+    match std::env::var("PLAYARR_PEER_SYNC_INTERVAL_SECS") {
         Ok(raw) => match raw.parse::<u64>() {
             Ok(secs) if secs > 0 => Duration::from_secs(secs),
             _ => {
                 tracing::warn!(
                     value = %raw,
-                    "STREAMARR_PEER_SYNC_INTERVAL_SECS is not a positive integer; falling back \
+                    "PLAYARR_PEER_SYNC_INTERVAL_SECS is not a positive integer; falling back \
                      to the default of {default_secs}s"
                 );
                 Duration::from_secs(default_secs)
@@ -456,19 +456,19 @@ fn peer_sync_interval_secs_from_env() -> Duration {
 
 /// How many consecutive full-cycle failures a `PeerSyncPoller` tolerates
 /// before flipping its peer's `peer_nodes.status` to `Unreachable`
-/// (§3.6). `STREAMARR_PEER_UNREACHABLE_THRESHOLD`, defaulting to
-/// [`streamarr_peer_sync::DEFAULT_PEER_UNREACHABLE_THRESHOLD`] (3) -- same
+/// (§3.6). `PLAYARR_PEER_UNREACHABLE_THRESHOLD`, defaulting to
+/// [`playarr_peer_sync::DEFAULT_PEER_UNREACHABLE_THRESHOLD`] (3) -- same
 /// "read at the boot boundary" convention as
 /// [`peer_sync_interval_secs_from_env`] just above.
 fn peer_sync_unreachable_threshold_from_env() -> u32 {
-    let default_threshold = streamarr_peer_sync::DEFAULT_PEER_UNREACHABLE_THRESHOLD;
-    match std::env::var("STREAMARR_PEER_UNREACHABLE_THRESHOLD") {
+    let default_threshold = playarr_peer_sync::DEFAULT_PEER_UNREACHABLE_THRESHOLD;
+    match std::env::var("PLAYARR_PEER_UNREACHABLE_THRESHOLD") {
         Ok(raw) => match raw.parse::<u32>() {
             Ok(threshold) if threshold > 0 => threshold,
             _ => {
                 tracing::warn!(
                     value = %raw,
-                    "STREAMARR_PEER_UNREACHABLE_THRESHOLD is not a positive integer; falling \
+                    "PLAYARR_PEER_UNREACHABLE_THRESHOLD is not a positive integer; falling \
                      back to the default of {default_threshold}"
                 );
                 default_threshold
@@ -488,27 +488,27 @@ fn generated_dev_jwt_secret() -> String {
 
 /// Resolves the id of the account `AuthMode::TrustedNetwork`'s
 /// zero-credential auto-login binds to, from
-/// `STREAMARR_DEFAULT_ADMIN_USER_ID`. `fallback` is the id
+/// `PLAYARR_DEFAULT_ADMIN_USER_ID`. `fallback` is the id
 /// [`bootstrap_admin_if_needed`] resolved (either a freshly bootstrapped
 /// admin, or the id of an existing admin/user already in the database) --
 /// used whenever the env var is unset or doesn't parse.
 ///
 /// Unlike the old boot-lifetime-random-UUID fallback this function used to
 /// generate, `fallback` is guaranteed to actually resolve against
-/// `AppState::user_directory` (`streamarr_api::user_directory::
+/// `AppState::user_directory` (`playarr_api::user_directory::
 /// RepoBackedUserDirectory`, backed by the real `UserRepo` -- unlike the
 /// in-memory stand-in it replaced, this one only ever resolves ids that are
 /// genuinely persisted). A random, nothing-resolves-to-it id would make
 /// trusted-network mode's auto-login fail every login attempt.
 fn default_admin_user_id_from_env(fallback: uuid::Uuid) -> uuid::Uuid {
-    match std::env::var("STREAMARR_DEFAULT_ADMIN_USER_ID") {
+    match std::env::var("PLAYARR_DEFAULT_ADMIN_USER_ID") {
         Ok(raw) => match uuid::Uuid::parse_str(&raw) {
             Ok(id) => id,
             Err(err) => {
                 tracing::warn!(
                     value = %raw,
                     %err,
-                    "STREAMARR_DEFAULT_ADMIN_USER_ID is not a valid UUID; falling back to the \
+                    "PLAYARR_DEFAULT_ADMIN_USER_ID is not a valid UUID; falling back to the \
                      resolved bootstrap admin id instead"
                 );
                 fallback
@@ -518,14 +518,14 @@ fn default_admin_user_id_from_env(fallback: uuid::Uuid) -> uuid::Uuid {
     }
 }
 
-/// Resolves the directory Streamarr Admin's built static assets
+/// Resolves the directory Playarr Server Admin's built static assets
 /// (`index.html` + `assets/`) live in, so `boot_api` can co-host the UI on
-/// the same origin/port as the API -- see [`streamarr_api::build_router`]'s
+/// the same origin/port as the API -- see [`playarr_api::build_router`]'s
 /// `web_assets_dir` doc comment for why that's the goal (parity with how
 /// every `*arr` app ships its own UI, rather than requiring a separately
 /// hosted web client pointed at this API).
 ///
-/// `STREAMARR_WEB_ASSETS_DIR` wins if set. Otherwise defaults to a `web/`
+/// `PLAYARR_WEB_ASSETS_DIR` wins if set. Otherwise defaults to a `web/`
 /// directory next to this binary's own executable (not the process's
 /// current working directory, which is unreliable across systemd/Docker/
 /// direct-invocation) -- `infra/docker/backend.Dockerfile` copies the built
@@ -536,7 +536,7 @@ fn default_admin_user_id_from_env(fallback: uuid::Uuid) -> uuid::Uuid {
 /// where nobody has run `pnpm run build` for the web app, which must keep
 /// working without requiring a web build first.
 fn web_assets_dir_from_env() -> Option<std::path::PathBuf> {
-    let candidate = match std::env::var("STREAMARR_WEB_ASSETS_DIR") {
+    let candidate = match std::env::var("PLAYARR_WEB_ASSETS_DIR") {
         Ok(raw) => std::path::PathBuf::from(raw),
         Err(_) => std::env::current_exe().ok()?.parent()?.join("web"),
     };
@@ -546,20 +546,20 @@ fn web_assets_dir_from_env() -> Option<std::path::PathBuf> {
     } else {
         tracing::info!(
             path = %candidate.display(),
-            "no built web UI found at this path; serving API only. Set STREAMARR_WEB_ASSETS_DIR, \
-             or build clients/tv-web/admin and place its dist/ output there, to co-host Streamarr Admin."
+            "no built web UI found at this path; serving API only. Set PLAYARR_WEB_ASSETS_DIR, \
+             or build clients/tv-web/admin and place its dist/ output there, to co-host Playarr Server Admin."
         );
         None
     }
 }
 
 /// Resolves the operator's configured login trust tier
-/// (`STREAMARR_AUTH_MODE` -- `full-account` (the default as of this pass)
+/// (`PLAYARR_AUTH_MODE` -- `full-account` (the default as of this pass)
 /// or `trusted-network`, opt-in only) for `POST /api/v1/auth/login`.
 ///
 /// **Why the default flipped from `trusted-network` to `full-account`:**
 /// real username/password accounts now have a real, always-available,
-/// durable persistence layer (`streamarr_db::UserRepo`/`PolicyRepo`) and
+/// durable persistence layer (`playarr_db::UserRepo`/`PolicyRepo`) and
 /// `boot_api` guarantees at least one real admin account exists before
 /// this deployment ever serves traffic (see [`bootstrap_admin_if_needed`]).
 /// With a genuine credential-based login path always available, defaulting
@@ -572,16 +572,16 @@ fn web_assets_dir_from_env() -> Option<std::path::PathBuf> {
 /// choice for some deployments (e.g. a household box where nobody wants to
 /// remember a password) -- see [`trusted_network_auth_mode`]'s doc comment
 /// for its real security tradeoff -- but it now requires the operator to
-/// explicitly opt in with `STREAMARR_AUTH_MODE=trusted-network` rather than
+/// explicitly opt in with `PLAYARR_AUTH_MODE=trusted-network` rather than
 /// being handed out to anyone who reaches the socket by default.
-fn auth_mode_from_env(admin_user_id: uuid::Uuid) -> streamarr_auth::AuthMode {
-    use streamarr_auth::AuthMode;
+fn auth_mode_from_env(admin_user_id: uuid::Uuid) -> playarr_auth::AuthMode {
+    use playarr_auth::AuthMode;
 
-    match std::env::var("STREAMARR_AUTH_MODE") {
+    match std::env::var("PLAYARR_AUTH_MODE") {
         Ok(value) if value == "trusted-network" => trusted_network_auth_mode(admin_user_id),
         Ok(value) if value == "full-account" => {
             tracing::info!(
-                "STREAMARR_AUTH_MODE=full-account: POST /api/v1/auth/login requires a real \
+                "PLAYARR_AUTH_MODE=full-account: POST /api/v1/auth/login requires a real \
                  username/password for every login -- see bootstrap_admin_if_needed's doc \
                  comment for how this deployment's first admin account gets provisioned."
             );
@@ -590,15 +590,15 @@ fn auth_mode_from_env(admin_user_id: uuid::Uuid) -> streamarr_auth::AuthMode {
         Ok(other) => {
             tracing::warn!(
                 value = %other,
-                "unrecognized STREAMARR_AUTH_MODE (expected full-account or trusted-network); \
+                "unrecognized PLAYARR_AUTH_MODE (expected full-account or trusted-network); \
                  falling back to full-account, the default"
             );
             AuthMode::FullAccount
         }
         Err(_) => {
             tracing::info!(
-                "STREAMARR_AUTH_MODE not set; defaulting to full-account -- set \
-                 STREAMARR_AUTH_MODE=trusted-network to opt into IP-based zero-credential \
+                "PLAYARR_AUTH_MODE not set; defaulting to full-account -- set \
+                 PLAYARR_AUTH_MODE=trusted-network to opt into IP-based zero-credential \
                  auto-admin instead (see trusted_network_auth_mode's doc comment for the \
                  tradeoff before doing so)."
             );
@@ -609,7 +609,7 @@ fn auth_mode_from_env(admin_user_id: uuid::Uuid) -> streamarr_auth::AuthMode {
 
 /// The RFC 1918 private-address ranges plus loopback -- what "trusted home
 /// LAN" actually means. This, not `0.0.0.0/0`, is the default allowlist
-/// [`trusted_network_auth_mode`] builds when `STREAMARR_TRUSTED_NETWORK_CIDR`
+/// [`trusted_network_auth_mode`] builds when `PLAYARR_TRUSTED_NETWORK_CIDR`
 /// is unset: a request whose source IP is outside every private range (i.e.
 /// arrived over the public internet, including through an operator's own
 /// unintentional port-forward/UPnP exposure) is *not* auto-logged-in as
@@ -623,9 +623,9 @@ const DEFAULT_TRUSTED_NETWORK_CIDRS: &[&str] = &[
 ];
 
 /// Builds the `AuthMode::TrustedNetwork` mode, only reached when the
-/// operator explicitly opts in with `STREAMARR_AUTH_MODE=trusted-network`
+/// operator explicitly opts in with `PLAYARR_AUTH_MODE=trusted-network`
 /// (see [`auth_mode_from_env`]'s doc comment for why this is no longer the
-/// implicit default): `STREAMARR_TRUSTED_NETWORK_CIDR`, if set, replaces
+/// implicit default): `PLAYARR_TRUSTED_NETWORK_CIDR`, if set, replaces
 /// [`DEFAULT_TRUSTED_NETWORK_CIDRS`] with that single custom range; either
 /// way, every request whose source IP falls inside the resulting allowlist
 /// auto-logs in as `admin_user_id`, with zero credentials.
@@ -641,14 +641,14 @@ const DEFAULT_TRUSTED_NETWORK_CIDRS: &[&str] = &[
 /// It is still not a substitute for real per-user auth on a shared or
 /// untrusted LAN (guest wifi, a dorm/apartment building network, etc):
 /// anyone else on that same private range is just as trusted as the
-/// operator. For those cases, narrow `STREAMARR_TRUSTED_NETWORK_CIDR` to
-/// the actual trusted subnet, switch to `STREAMARR_AUTH_MODE=full-account`
+/// operator. For those cases, narrow `PLAYARR_TRUSTED_NETWORK_CIDR` to
+/// the actual trusted subnet, switch to `PLAYARR_AUTH_MODE=full-account`
 /// (see that mode's own documented gap above), or put a real authenticating
 /// reverse proxy in front of it.
-fn trusted_network_auth_mode(admin_user_id: uuid::Uuid) -> streamarr_auth::AuthMode {
-    use streamarr_auth::{AuthMode, TrustedNetwork};
+fn trusted_network_auth_mode(admin_user_id: uuid::Uuid) -> playarr_auth::AuthMode {
+    use playarr_auth::{AuthMode, TrustedNetwork};
 
-    let configured_cidr = std::env::var("STREAMARR_TRUSTED_NETWORK_CIDR").ok();
+    let configured_cidr = std::env::var("PLAYARR_TRUSTED_NETWORK_CIDR").ok();
     let cidrs: Vec<String> = match &configured_cidr {
         Some(cidr) => vec![cidr.clone()],
         None => DEFAULT_TRUSTED_NETWORK_CIDRS
@@ -696,7 +696,7 @@ fn trusted_network_auth_mode(admin_user_id: uuid::Uuid) -> streamarr_auth::AuthM
     tracing::warn!(
         cidrs = ?cidrs,
         admin_user_id = %admin_user_id,
-        "STREAMARR_AUTH_MODE=trusted-network (explicitly opted into): every request whose \
+        "PLAYARR_AUTH_MODE=trusted-network (explicitly opted into): every request whose \
          source IP falls inside this allowlist auto-logs in as the default admin user with \
          zero credentials -- see trusted_network_auth_mode's doc comment for the real security \
          implications before exposing this server beyond a genuinely trusted network"
@@ -705,7 +705,7 @@ fn trusted_network_auth_mode(admin_user_id: uuid::Uuid) -> streamarr_auth::AuthM
     AuthMode::TrustedNetwork { allowlist }
 }
 
-/// The bootstrap admin username used when `STREAMARR_BOOTSTRAP_ADMIN_USERNAME`
+/// The bootstrap admin username used when `PLAYARR_BOOTSTRAP_ADMIN_USERNAME`
 /// is unset.
 const DEFAULT_BOOTSTRAP_ADMIN_USERNAME: &str = "admin";
 
@@ -717,7 +717,7 @@ const DEFAULT_BOOTSTRAP_ADMIN_USERNAME: &str = "admin";
 /// either). Called once, from [`boot_api`], before `AppState` is
 /// constructed.
 ///
-/// If [`streamarr_db::UserRepo::list_all`] already returns at least one
+/// If [`playarr_db::UserRepo::list_all`] already returns at least one
 /// row, this is a no-op: returns the id of an existing admin (found by
 /// checking each user's `Policy::is_admin`), or, if none of them is an
 /// admin, the first user found at all -- either way, [`default_admin_user_id_from_env`]
@@ -725,8 +725,8 @@ const DEFAULT_BOOTSTRAP_ADMIN_USERNAME: &str = "admin";
 /// to bind to if that mode is explicitly opted into.
 ///
 /// Otherwise, provisions exactly one admin account: reads
-/// `STREAMARR_BOOTSTRAP_ADMIN_USERNAME` (default `"admin"`) and
-/// `STREAMARR_BOOTSTRAP_ADMIN_PASSWORD`. When the password env var is
+/// `PLAYARR_BOOTSTRAP_ADMIN_USERNAME` (default `"admin"`) and
+/// `PLAYARR_BOOTSTRAP_ADMIN_PASSWORD`. When the password env var is
 /// unset (or empty), a real random password is generated -- never a fixed,
 /// shipped-in-code default, which would be a real, exploitable
 /// vulnerability the moment two deployments share it -- and logged exactly
@@ -739,12 +739,12 @@ const DEFAULT_BOOTSTRAP_ADMIN_USERNAME: &str = "admin";
 /// explicit values instead of racily mutating process-global env vars
 /// under parallel test execution).
 async fn bootstrap_admin_if_needed(
-    user_repo: &Arc<dyn streamarr_db::UserRepo>,
-    policy_repo: &Arc<dyn streamarr_db::PolicyRepo>,
+    user_repo: &Arc<dyn playarr_db::UserRepo>,
+    policy_repo: &Arc<dyn playarr_db::PolicyRepo>,
 ) -> anyhow::Result<uuid::Uuid> {
-    let username = std::env::var("STREAMARR_BOOTSTRAP_ADMIN_USERNAME")
+    let username = std::env::var("PLAYARR_BOOTSTRAP_ADMIN_USERNAME")
         .unwrap_or_else(|_| DEFAULT_BOOTSTRAP_ADMIN_USERNAME.to_string());
-    let explicit_password = std::env::var("STREAMARR_BOOTSTRAP_ADMIN_PASSWORD").ok();
+    let explicit_password = std::env::var("PLAYARR_BOOTSTRAP_ADMIN_PASSWORD").ok();
     bootstrap_admin_with(
         user_repo,
         policy_repo,
@@ -761,8 +761,8 @@ async fn bootstrap_admin_if_needed(
 /// setting/clearing the same env var concurrently is a real flakiness
 /// source, not a hypothetical one).
 async fn bootstrap_admin_with(
-    user_repo: &Arc<dyn streamarr_db::UserRepo>,
-    policy_repo: &Arc<dyn streamarr_db::PolicyRepo>,
+    user_repo: &Arc<dyn playarr_db::UserRepo>,
+    policy_repo: &Arc<dyn playarr_db::PolicyRepo>,
     username: &str,
     explicit_password: Option<&str>,
 ) -> anyhow::Result<uuid::Uuid> {
@@ -789,7 +789,7 @@ async fn bootstrap_admin_with(
         _ => (generate_bootstrap_password(), true),
     };
 
-    let policy = streamarr_model::Policy {
+    let policy = playarr_model::Policy {
         id: uuid::Uuid::new_v4(),
         name: "Bootstrap Admin".to_string(),
         library_allow: Vec::new(),
@@ -806,7 +806,7 @@ async fn bootstrap_admin_with(
         max_concurrent_sessions: None,
         access_schedule: None,
         // Deliberately no Playarr access -- this account exists to run
-        // Streamarr's own admin surface, not as a household viewer
+        // Playarr Server's own admin surface, not as a household viewer
         // account. See `Policy::can_stream`'s doc comment: `is_admin`
         // does not imply it. An operator who also wants to use Playarr
         // day to day should provision (or grant `can_stream` on) a
@@ -816,18 +816,18 @@ async fn bootstrap_admin_with(
     };
     policy_repo.upsert(&policy).await?;
 
-    let user = streamarr_model::User {
+    let user = playarr_model::User {
         id: uuid::Uuid::new_v4(),
         username: username.to_string(),
         display_name: username.to_string(),
         email: None,
-        password_hash: streamarr_model::Sensitive::new(streamarr_auth::login::hash_password(
+        password_hash: playarr_model::Sensitive::new(playarr_auth::login::hash_password(
             &password,
         )),
         policy_id: policy.id,
         created_at: chrono::Utc::now(),
         disabled: false,
-        preferred_audio_language: streamarr_model::DEFAULT_PREFERRED_AUDIO_LANGUAGE.to_string(),
+        preferred_audio_language: playarr_model::DEFAULT_PREFERRED_AUDIO_LANGUAGE.to_string(),
     };
     let user_id = user.id;
     user_repo.upsert(&user).await?;
@@ -840,7 +840,7 @@ async fn bootstrap_admin_with(
     } else {
         tracing::warn!(
             username = %username,
-            "bootstrap admin created using STREAMARR_BOOTSTRAP_ADMIN_PASSWORD from the \
+            "bootstrap admin created using PLAYARR_BOOTSTRAP_ADMIN_PASSWORD from the \
              environment -- save it now if you haven't already, it will not be logged again"
         );
     }
@@ -866,26 +866,26 @@ fn generate_bootstrap_password() -> String {
 async fn boot_api(
     config: &Config,
     pool: DbPool,
-    source_instances: Arc<streamarr_api::SourceInstanceRegistry>,
-    active_sessions: streamarr_transcode::ActiveSessionCounter,
-    tdarr_notify_tx: tokio::sync::mpsc::Sender<streamarr_transcode::MediaFileImportEvent>,
-    analytics_store: Arc<dyn streamarr_db::analytics::AnalyticsStore>,
-    session_registry: Arc<dyn streamarr_telemetry::analytics::SessionRegistry>,
-    analytics: Arc<streamarr_telemetry::analytics::AnalyticsCollector>,
-    analytics_event_rx: tokio::sync::mpsc::Receiver<streamarr_model::PlaybackEvent>,
-    coordinator: Arc<dyn streamarr_coordination::ClusterCoordinator>,
+    source_instances: Arc<playarr_api::SourceInstanceRegistry>,
+    active_sessions: playarr_transcode::ActiveSessionCounter,
+    tdarr_notify_tx: tokio::sync::mpsc::Sender<playarr_transcode::MediaFileImportEvent>,
+    analytics_store: Arc<dyn playarr_db::analytics::AnalyticsStore>,
+    session_registry: Arc<dyn playarr_telemetry::analytics::SessionRegistry>,
+    analytics: Arc<playarr_telemetry::analytics::AnalyticsCollector>,
+    analytics_event_rx: tokio::sync::mpsc::Receiver<playarr_model::PlaybackEvent>,
+    coordinator: Arc<dyn playarr_coordination::ClusterCoordinator>,
 ) -> anyhow::Result<()> {
-    use streamarr_api::user_directory::RepoBackedUserDirectory;
-    use streamarr_api::{
+    use playarr_api::user_directory::RepoBackedUserDirectory;
+    use playarr_api::{
         admin_peer, build_router, AppState, ClientCompatibilityTable, ReadinessState,
         RepoBackedMediaFileLookup, VersionGateLayer, VersionState,
     };
-    use streamarr_auth::{
+    use playarr_auth::{
         DashMapDeviceFlowHandler, DeviceFlowConfig, DeviceFlowHandler, InMemoryAdminRegistry,
         InMemoryDeviceAuthorizationStore, JwtIssuer, RefreshTokenService, RefreshTokenStore,
         UserDirectory,
     };
-    use streamarr_db::repo::{
+    use playarr_db::repo::{
         seed_default_views, SqlxCreditRepo, SqlxDeviceRepo, SqlxDownloadTicketRepo,
         SqlxGroupLibraryRepo, SqlxLibraryViewRepo, SqlxMediaFileRepo, SqlxNodeIdentityRepo,
         SqlxPeerGroupRepo, SqlxPeerJoinTokenRepo, SqlxPeerLeafAvailabilityRepo, SqlxPeerNodeRepo,
@@ -895,7 +895,7 @@ async fn boot_api(
         SqlxSystemSettingsRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo,
         SqlxUserInviteRequestRepo, SqlxUserRepo, SqlxWatchProgressRepo, SqlxWorkRepo,
     };
-    use streamarr_db::{
+    use playarr_db::{
         CreditRepo, DeviceRepo, DownloadTicketRepo, GroupLibraryRepo, LibraryViewRepo,
         MediaFileRepo, NodeIdentityRepo, PeerGroupRepo, PeerJoinTokenRepo,
         PeerLeafAvailabilityRepo, PeerNodeRepo, PeerSourceInstanceRepo, PeerSyncStateRepo,
@@ -904,7 +904,7 @@ async fn boot_api(
         TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo, WatchProgressRepo,
         WorkRepo,
     };
-    use streamarr_model::{VersionEnvelope, DEFAULT_INSTANCE_NAME};
+    use playarr_model::{VersionEnvelope, DEFAULT_INSTANCE_NAME};
 
     let compatibility_table = ClientCompatibilityTable::from_toml_str(CLIENT_COMPATIBILITY_TOML)?;
 
@@ -912,9 +912,9 @@ async fn boot_api(
         instance_name: DEFAULT_INSTANCE_NAME.to_string(),
         server_version: compatibility_table.server.version.clone(),
         api_version: compatibility_table.server.api_version.clone(),
-        build_sha: option_env!("STREAMARR_BUILD_SHA").map(str::to_string),
+        build_sha: option_env!("PLAYARR_BUILD_SHA").map(str::to_string),
         // The per-platform compatibility rows aren't projected from
-        // `compatibility_table` into `streamarr_model::CompatibilityEntry`
+        // `compatibility_table` into `playarr_model::CompatibilityEntry`
         // yet (that mapping needs the version-code-vs-semver comparison
         // logic `version_gate::evaluate` is also waiting on) — an empty
         // list here is honest about that rather than fabricating entries.
@@ -937,19 +937,19 @@ async fn boot_api(
         Arc::new(SqlxUserInviteRequestRepo::new(pool.clone()));
     let push_registration_repo: Arc<dyn PushRegistrationRepo> =
         Arc::new(SqlxPushRegistrationRepo::new(pool.clone()));
-    let push_notifier: Arc<dyn streamarr_api::notifications::PushNotifier> =
+    let push_notifier: Arc<dyn playarr_api::notifications::PushNotifier> =
         match std::env::var("GOOGLE_APPLICATION_CREDENTIALS") {
             Ok(path) => Arc::new(
-                streamarr_api::notifications::FcmNotifier::from_service_account_file(path)
+                playarr_api::notifications::FcmNotifier::from_service_account_file(path)
                     .map_err(anyhow::Error::msg)?,
             ),
-            Err(_) => streamarr_api::notifications::disabled_notifier(),
+            Err(_) => playarr_api::notifications::disabled_notifier(),
         };
-    let firebase_web_config = std::env::var("STREAMARR_FIREBASE_WEB_CONFIG")
+    let firebase_web_config = std::env::var("PLAYARR_FIREBASE_WEB_CONFIG")
         .ok()
         .map(|value| serde_json::from_str(&value))
         .transpose()
-        .map_err(|err| anyhow::anyhow!("invalid STREAMARR_FIREBASE_WEB_CONFIG JSON: {err}"))?;
+        .map_err(|err| anyhow::anyhow!("invalid PLAYARR_FIREBASE_WEB_CONFIG JSON: {err}"))?;
     let profile_pin_repo: Arc<dyn ProfilePinRepo> = Arc::new(SqlxProfilePinRepo::new(pool.clone()));
     let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
     let watch_progress: Arc<dyn WatchProgressRepo> =
@@ -977,7 +977,7 @@ async fn boot_api(
         Arc::new(SqlxSystemSettingsRepo::new(pool.clone()));
     // Phase 1 of `docs/architecture/peer-groups.md` -- byte-for-byte inert
     // for a single, ungrouped node (every table nullable/empty until an
-    // admin actually founds or joins a group via `streamarr_api::admin_peer`).
+    // admin actually founds or joins a group via `playarr_api::admin_peer`).
     let node_identity_repo: Arc<dyn NodeIdentityRepo> =
         Arc::new(SqlxNodeIdentityRepo::new(pool.clone()));
     let peer_group_repo: Arc<dyn PeerGroupRepo> = Arc::new(SqlxPeerGroupRepo::new(pool.clone()));
@@ -988,16 +988,16 @@ async fn boot_api(
         Arc::new(SqlxGroupLibraryRepo::new(pool.clone()));
     // Operator-configured routing policy (`docs/architecture/
     // peer-groups.md` §2.4) -- `peer::routing_rules_handler`'s own read,
-    // `routing_sync.rs` (`streamarr-peer-sync`, wired below in
+    // `routing_sync.rs` (`playarr-peer-sync`, wired below in
     // `boot_worker`) is the other side's writer.
     let routing_rule_repo: Arc<dyn RoutingRuleRepo> =
         Arc::new(SqlxRoutingRuleRepo::new(pool.clone()));
     // Read-only, per-peer leaf availability cache (`docs/architecture/
     // peer-groups.md` §2.3/§4.3) -- `availability_sync.rs`
-    // (`streamarr-peer-sync`) is its only writer; the API role only ever
+    // (`playarr-peer-sync`) is its only writer; the API role only ever
     // reads it, both via `CatalogService`'s browse/get_by_id hydration
     // below and, directly off `AppState` (Phase 3), Playarr's own routing-
-    // context gathering (`streamarr_api::playback::
+    // context gathering (`playarr_api::playback::
     // resolve_route_for_local_media_file`/`by_external_ref_playback_info_handler`,
     // §5.2) -- hence the clone before this `Arc` is moved into `catalog`.
     let peer_leaf_availability_repo: Arc<dyn PeerLeafAvailabilityRepo> =
@@ -1027,7 +1027,7 @@ async fn boot_api(
         "node identity ready"
     );
     // Optional operator convenience: pre-fill `PUT /api/v1/admin/
-    // peer-nodes/self`'s in-memory staging cell from `STREAMARR_NODE_NAME`
+    // peer-nodes/self`'s in-memory staging cell from `PLAYARR_NODE_NAME`
     // so a fresh install doesn't have to retype its own name before
     // founding/joining a group. Never written to `node_identity` itself
     // (that table has no name column -- see §2.1's schema) and never
@@ -1036,7 +1036,7 @@ async fn boot_api(
     // comment). Purely additive: unset (the default), this is exactly
     // `None`, identical to today's behavior.
     let pending_self_peer_profile = if node_identity.group_id.is_none() {
-        std::env::var("STREAMARR_NODE_NAME")
+        std::env::var("PLAYARR_NODE_NAME")
             .ok()
             .filter(|name| !name.is_empty())
             .map(|name| admin_peer::PendingSelfPeerProfile {
@@ -1047,7 +1047,7 @@ async fn boot_api(
         None
     };
     // Durable, not `InMemoryRefreshTokenStore` -- see
-    // `streamarr_db::repo::refresh_token`'s doc comment: without this, a
+    // `playarr_db::repo::refresh_token`'s doc comment: without this, a
     // process restart silently invalidated every refresh token, forcing a
     // fresh login the moment each client's short-lived access token next
     // expired even though its refresh token was still well within its own
@@ -1092,21 +1092,21 @@ async fn boot_api(
         }
     }
 
-    let media_files: Arc<dyn streamarr_api::MediaFileLookup> =
+    let media_files: Arc<dyn playarr_api::MediaFileLookup> =
         Arc::new(RepoBackedMediaFileLookup::new(media_file_repo.clone()));
 
     // The API role only ever *reads* cached embeddings (`GET /api/v1/
     // catalog/{id}/similar` brute-force cosine-scans `embedding_repo`); it
-    // never loads the actual `streamarr_embeddings::Embedder` model itself
+    // never loads the actual `playarr_embeddings::Embedder` model itself
     // -- that's the worker role's job (see `spawn_poller_for`'s
     // `embedding_sync` wiring below). A work with no cached embedding yet
     // (not synced, or the worker hasn't loaded its model) just 404s from
     // `similar` (see that method's doc comment) -- there's nothing to
     // gate at boot here.
-    let embedding_repo: Arc<dyn streamarr_db::EmbeddingRepo> =
-        Arc::new(streamarr_db::repo::SqlxEmbeddingRepo::new(pool.clone()));
+    let embedding_repo: Arc<dyn playarr_db::EmbeddingRepo> =
+        Arc::new(playarr_db::repo::SqlxEmbeddingRepo::new(pool.clone()));
     let catalog = Arc::new(
-        streamarr_catalog::CatalogService::new(
+        playarr_catalog::CatalogService::new(
             work_repo.clone(),
             media_file_repo.clone(),
             cache.clone(),
@@ -1118,8 +1118,8 @@ async fn boot_api(
     );
 
     let transcode = Arc::new(
-        streamarr_transcode::TranscodeOrchestrator::new(rendition_repo, cache, active_sessions)
-            .with_output_root(std::env::temp_dir().join("streamarr-transcode"))
+        playarr_transcode::TranscodeOrchestrator::new(rendition_repo, cache, active_sessions)
+            .with_output_root(std::env::temp_dir().join("playarr-transcode"))
             .with_session_ttl(transcode_session_idle_ttl_from_env())
             .with_tdarr_notify(tdarr_notify_tx),
     );
@@ -1137,7 +1137,7 @@ async fn boot_api(
     let jwt = Arc::new(
         JwtIssuer::new(
             jwt_secret.as_bytes(),
-            "streamarr",
+            "playarr",
             chrono::Duration::minutes(15),
         )
         .with_group_identity(&node_identity, peer_node_repo.clone()),
@@ -1153,7 +1153,7 @@ async fn boot_api(
         DeviceFlowConfig {
             code_ttl: chrono::Duration::minutes(10),
             polling_interval: chrono::Duration::seconds(5),
-            verification_base_uri: std::env::var("STREAMARR_DEVICE_VERIFICATION_URI")
+            verification_base_uri: std::env::var("PLAYARR_DEVICE_VERIFICATION_URI")
                 .unwrap_or_else(|_| "/link".to_string()),
             refresh_ttl: chrono::Duration::days(30),
         },
@@ -1161,7 +1161,7 @@ async fn boot_api(
 
     // -- Real, durable user/policy persistence + login wiring --
     // `user_repo`/`policy_repo` (constructed above) replace the old
-    // `streamarr_auth::login::InMemoryUserDirectory`/`admin_registry`
+    // `playarr_auth::login::InMemoryUserDirectory`/`admin_registry`
     // in-memory stand-ins that doc comment used to describe as interim.
     // `bootstrap_admin_if_needed` guarantees at least one real admin
     // account exists in the database before `state` (and therefore the
@@ -1186,7 +1186,7 @@ async fn boot_api(
     // degrades gracefully rather than erroring when its trigger channel has
     // no live receiver (see that method's doc comment).
     let (webhook_tx, _webhook_rx) = tokio::sync::mpsc::channel(256);
-    let webhook = Arc::new(streamarr_arr_sync::WebhookReceiver::new(webhook_tx));
+    let webhook = Arc::new(playarr_arr_sync::WebhookReceiver::new(webhook_tx));
 
     // Phase 3 (`docs/architecture/peer-groups.md` §5.2/§5.3): one shared,
     // pooled `reqwest::Client` for every outbound node-to-node call this
@@ -1199,7 +1199,7 @@ async fn boot_api(
     // Deliberately a *separate* `reqwest::Client` instance from that one:
     // this is the API role's own client, `boot_worker`'s is the worker
     // role's -- the same two-roles-can-run-in-different-processes split
-    // `STREAMARR_ROLE=api`/`worker` already makes everywhere else.
+    // `PLAYARR_ROLE=api`/`worker` already makes everywhere else.
     let peer_http = reqwest::Client::new();
 
     let state = AppState {
@@ -1254,7 +1254,7 @@ async fn boot_api(
         sync_conflict_log_repo,
         coordinator,
         peer_http,
-        request_timing: Arc::new(streamarr_telemetry::request_timing::RequestTimingRegistry::new()),
+        request_timing: Arc::new(playarr_telemetry::request_timing::RequestTimingRegistry::new()),
     };
     let version_gate = VersionGateLayer::new(compatibility_table);
 
@@ -1264,8 +1264,8 @@ async fn boot_api(
     // handlers this router just got wired with above), so each node has
     // its own buffered events that only it can flush; gating this behind
     // leadership would silently drop every non-leader node's events. See
-    // `streamarr_telemetry::analytics::flusher`'s module doc comment.
-    let analytics_flusher = streamarr_telemetry::analytics::AnalyticsFlusher::new(
+    // `playarr_telemetry::analytics::flusher`'s module doc comment.
+    let analytics_flusher = playarr_telemetry::analytics::AnalyticsFlusher::new(
         analytics_store,
         analytics_event_rx,
         std::time::Duration::from_secs(3),
@@ -1277,13 +1277,13 @@ async fn boot_api(
     // API role gives a node with outbound-only connectivity a signed path to
     // publish its local changes to a reachable peer; that same node's worker
     // still pulls the peer's changes in the opposite direction.
-    let push_identity = streamarr_peer_sync::PeerIdentity::from_seed_b64(
+    let push_identity = playarr_peer_sync::PeerIdentity::from_seed_b64(
         node_identity.peer_id,
         node_identity.private_key.expose_secret(),
     )
     .map_err(|err| anyhow::anyhow!("failed to load peer identity for push sync: {err}"))?;
-    let push_client = streamarr_peer_sync::PeerClient::new(state.peer_http.clone(), push_identity);
-    tokio::spawn(streamarr_api::peer::run_push_sync_loop(
+    let push_client = playarr_peer_sync::PeerClient::new(state.peer_http.clone(), push_identity);
+    tokio::spawn(playarr_api::peer::run_push_sync_loop(
         state.clone(),
         push_client,
         peer_sync_interval_secs_from_env(),
@@ -1298,7 +1298,7 @@ async fn boot_api(
 /// automatic ACME HTTPS, static-certificate HTTPS, or plain HTTP. The ACME
 /// state is continuously polled for the lifetime of the process, so renewed
 /// certificates are installed into the shared rustls resolver without a
-/// Streamarr restart.
+/// Playarr Server restart.
 ///
 /// `POST /api/v1/auth/login`'s `AuthMode::TrustedNetwork` tier needs the
 /// caller's real source IP (`ConnectInfo`) to decide whether to auto-login.
@@ -1306,7 +1306,7 @@ async fn boot_api(
 async fn serve_application_router(
     config: &Config,
     router: axum::Router,
-    readiness: Option<streamarr_api::ReadinessState>,
+    readiness: Option<playarr_api::ReadinessState>,
 ) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(config.http_bind_addr).await?;
 
@@ -1315,7 +1315,7 @@ async fn serve_application_router(
         use rustls_acme::{AcmeConfig, EventOk, UseChallenge};
 
         // HTTP-01 intentionally gets its own listener. It never exposes the
-        // Streamarr API over cleartext: challenge paths stay local and every
+        // Playarr Server API over cleartext: challenge paths stay local and every
         // other request redirects to this node's browser-trusted HTTPS name.
         let challenge_listener = tokio::net::TcpListener::bind(acme.http01_bind_addr).await?;
         let contacts: Vec<String> = acme.contact.iter().cloned().collect();
@@ -1451,18 +1451,18 @@ async fn serve_application_router(
 /// startup) share exactly one construction path.
 #[allow(clippy::too_many_arguments)]
 fn spawn_poller_for(
-    instance: &streamarr_model::SourceInstance,
-    source_instances: &Arc<streamarr_api::SourceInstanceRegistry>,
-    work_repo: Arc<dyn streamarr_db::WorkRepo>,
-    media_file_repo: Arc<dyn streamarr_db::MediaFileRepo>,
-    credit_repo: Arc<dyn streamarr_db::CreditRepo>,
-    artwork_prewarm: Option<streamarr_arr_sync::ArtworkPrewarm>,
-    embedding_sync: Option<streamarr_arr_sync::EmbeddingSync>,
+    instance: &playarr_model::SourceInstance,
+    source_instances: &Arc<playarr_api::SourceInstanceRegistry>,
+    work_repo: Arc<dyn playarr_db::WorkRepo>,
+    media_file_repo: Arc<dyn playarr_db::MediaFileRepo>,
+    credit_repo: Arc<dyn playarr_db::CreditRepo>,
+    artwork_prewarm: Option<playarr_arr_sync::ArtworkPrewarm>,
+    embedding_sync: Option<playarr_arr_sync::EmbeddingSync>,
     pool: DbPool,
-    coordinator: Arc<dyn streamarr_coordination::ClusterCoordinator>,
+    coordinator: Arc<dyn playarr_coordination::ClusterCoordinator>,
 ) -> tokio::task::JoinHandle<()> {
-    use streamarr_arr_sync::{ArrClient, ReconciliationPoller};
-    use streamarr_telemetry::correlation::spawn::spawn_traced;
+    use playarr_arr_sync::{ArrClient, ReconciliationPoller};
+    use playarr_telemetry::correlation::spawn::spawn_traced;
 
     let arr_client = ArrClient::from_source_instance(instance);
     // No webhook wired to this specific poller yet (see the TODO in
@@ -1489,7 +1489,7 @@ fn spawn_poller_for(
     // that type's doc comment) -- reusing the same `Arc` already threaded
     // through this function rather than introducing a separate status
     // store. Backs `GET /api/v1/admin/source-instances/sync-status`
-    // (Streamarr Admin's "Tasks" screen).
+    // (Playarr Server Admin's "Tasks" screen).
     .with_status_reporter(source_instances.clone())
     // A no-op for every source kind except Radarr (see
     // `MediaSync::with_credit_repo`'s doc comment) -- passed unconditionally
@@ -1529,16 +1529,16 @@ fn spawn_poller_for(
 /// booting the rest of `boot_worker`. See `docs/architecture/
 /// peer-groups.md` §3.6.
 fn newly_discovered_peers(
-    peers: Vec<streamarr_model::PeerNode>,
+    peers: Vec<playarr_model::PeerNode>,
     spawned_peer_node_ids: &mut std::collections::HashSet<uuid::Uuid>,
-) -> Vec<streamarr_model::PeerNode> {
+) -> Vec<playarr_model::PeerNode> {
     peers
         .into_iter()
         .filter(|peer| spawned_peer_node_ids.insert(peer.id))
         .collect()
 }
 
-/// Spawns one [`streamarr_peer_sync::PeerSyncPoller`] for `peer` -- the
+/// Spawns one [`playarr_peer_sync::PeerSyncPoller`] for `peer` -- the
 /// `PeerSyncPoller` counterpart to [`spawn_poller_for`] above, same
 /// "construct once per row, hand it its own clone of every shared repo,
 /// spawn a traced detached task running `.run()` forever" shape. Each
@@ -1550,27 +1550,27 @@ fn newly_discovered_peers(
 /// `run_while_leader` itself.
 #[allow(clippy::too_many_arguments)]
 fn spawn_peer_sync_poller_for(
-    peer: &streamarr_model::PeerNode,
-    self_identity: &streamarr_peer_sync::PeerIdentity,
+    peer: &playarr_model::PeerNode,
+    self_identity: &playarr_peer_sync::PeerIdentity,
     http_client: reqwest::Client,
     poll_interval: Duration,
     unreachable_threshold: u32,
-    coordinator: Arc<dyn streamarr_coordination::ClusterCoordinator>,
-    peer_node_repo: Arc<dyn streamarr_db::PeerNodeRepo>,
-    user_repo: Arc<dyn streamarr_db::UserRepo>,
-    policy_repo: Arc<dyn streamarr_db::PolicyRepo>,
-    group_library_repo: Arc<dyn streamarr_db::GroupLibraryRepo>,
-    source_instance_repo: Arc<dyn streamarr_db::SourceInstanceRepo>,
-    user_invite_repo: Arc<dyn streamarr_db::UserInviteRepo>,
-    user_invite_request_repo: Arc<dyn streamarr_db::UserInviteRequestRepo>,
-    work_repo: Arc<dyn streamarr_db::WorkRepo>,
-    availability_repo: Arc<dyn streamarr_db::PeerLeafAvailabilityRepo>,
-    routing_rule_repo: Arc<dyn streamarr_db::RoutingRuleRepo>,
-    sync_state_repo: Arc<dyn streamarr_db::PeerSyncStateRepo>,
-    conflict_log_repo: Arc<dyn streamarr_db::SyncConflictLogRepo>,
+    coordinator: Arc<dyn playarr_coordination::ClusterCoordinator>,
+    peer_node_repo: Arc<dyn playarr_db::PeerNodeRepo>,
+    user_repo: Arc<dyn playarr_db::UserRepo>,
+    policy_repo: Arc<dyn playarr_db::PolicyRepo>,
+    group_library_repo: Arc<dyn playarr_db::GroupLibraryRepo>,
+    source_instance_repo: Arc<dyn playarr_db::SourceInstanceRepo>,
+    user_invite_repo: Arc<dyn playarr_db::UserInviteRepo>,
+    user_invite_request_repo: Arc<dyn playarr_db::UserInviteRequestRepo>,
+    work_repo: Arc<dyn playarr_db::WorkRepo>,
+    availability_repo: Arc<dyn playarr_db::PeerLeafAvailabilityRepo>,
+    routing_rule_repo: Arc<dyn playarr_db::RoutingRuleRepo>,
+    sync_state_repo: Arc<dyn playarr_db::PeerSyncStateRepo>,
+    conflict_log_repo: Arc<dyn playarr_db::SyncConflictLogRepo>,
 ) -> tokio::task::JoinHandle<()> {
-    use streamarr_peer_sync::{PeerClient, PeerSyncPoller};
-    use streamarr_telemetry::correlation::spawn::spawn_traced;
+    use playarr_peer_sync::{PeerClient, PeerSyncPoller};
+    use playarr_telemetry::correlation::spawn::spawn_traced;
 
     let peer_client = PeerClient::new(http_client, self_identity.clone());
     let poller = PeerSyncPoller::new(
@@ -1611,24 +1611,24 @@ fn spawn_peer_sync_poller_for(
 #[allow(clippy::too_many_arguments)]
 async fn boot_worker(
     pool: DbPool,
-    coordinator: Arc<dyn streamarr_coordination::ClusterCoordinator>,
-    source_instances: Arc<streamarr_api::SourceInstanceRegistry>,
-    active_sessions: streamarr_transcode::ActiveSessionCounter,
-    tdarr_notify_rx: tokio::sync::mpsc::Receiver<streamarr_transcode::MediaFileImportEvent>,
-    analytics_store: Arc<dyn streamarr_db::analytics::AnalyticsStore>,
-    session_registry: Arc<dyn streamarr_telemetry::analytics::SessionRegistry>,
-    analytics: Arc<streamarr_telemetry::analytics::AnalyticsCollector>,
+    coordinator: Arc<dyn playarr_coordination::ClusterCoordinator>,
+    source_instances: Arc<playarr_api::SourceInstanceRegistry>,
+    active_sessions: playarr_transcode::ActiveSessionCounter,
+    tdarr_notify_rx: tokio::sync::mpsc::Receiver<playarr_transcode::MediaFileImportEvent>,
+    analytics_store: Arc<dyn playarr_db::analytics::AnalyticsStore>,
+    session_registry: Arc<dyn playarr_telemetry::analytics::SessionRegistry>,
+    analytics: Arc<playarr_telemetry::analytics::AnalyticsCollector>,
 ) -> anyhow::Result<Vec<tokio::task::JoinHandle<()>>> {
     use std::collections::HashSet;
 
-    use streamarr_db::repo::{
+    use playarr_db::repo::{
         SqlxCreditRepo, SqlxEmbeddingRepo, SqlxGroupLibraryRepo, SqlxMediaFileRepo,
         SqlxNodeIdentityRepo, SqlxPeerLeafAvailabilityRepo, SqlxPeerNodeRepo,
         SqlxPeerSyncStateRepo, SqlxPolicyRepo, SqlxRoutingRuleRepo, SqlxSourceInstanceRepo,
         SqlxSyncConflictLogRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxUserRepo,
         SqlxWorkRepo,
     };
-    use streamarr_db::{
+    use playarr_db::{
         CreditRepo, EmbeddingRepo, GroupLibraryRepo, MediaFileRepo, NodeIdentityRepo,
         PeerLeafAvailabilityRepo, PeerNodeRepo, PeerSyncStateRepo, PolicyRepo, RoutingRuleRepo,
         SourceInstanceRepo, SyncConflictLogRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo,
@@ -1675,11 +1675,11 @@ async fn boot_worker(
     let peer_sync_interval = peer_sync_interval_secs_from_env();
     let peer_sync_unreachable_threshold = peer_sync_unreachable_threshold_from_env();
 
-    // Proactive artwork cache warming (see `streamarr_arr_sync::
+    // Proactive artwork cache warming (see `playarr_arr_sync::
     // artwork_prewarm`'s doc comment) -- unconditional, no fallible setup,
     // so this is always `Some`.
-    let artwork_prewarm = Some(streamarr_arr_sync::ArtworkPrewarm::new(
-        streamarr_artwork::shared(),
+    let artwork_prewarm = Some(playarr_arr_sync::ArtworkPrewarm::new(
+        playarr_artwork::shared(),
     ));
 
     // Best-effort, same tradeoff `boot_api`'s own embedding-repo wiring
@@ -1690,11 +1690,11 @@ async fn boot_worker(
     // succeeds.
     let embedding_repo: Arc<dyn EmbeddingRepo> = Arc::new(SqlxEmbeddingRepo::new(pool.clone()));
     let embedding_sync = match tokio::task::spawn_blocking(
-        streamarr_embeddings::FastEmbedEmbedder::new,
+        playarr_embeddings::FastEmbedEmbedder::new,
     )
     .await
     {
-        Ok(Ok(embedder)) => Some(streamarr_arr_sync::EmbeddingSync::new(
+        Ok(Ok(embedder)) => Some(playarr_arr_sync::EmbeddingSync::new(
             Arc::new(embedder),
             embedding_repo,
         )),
@@ -1759,7 +1759,7 @@ async fn boot_worker(
     // from `SourceInstanceRepo`/`PeerNodeRepo` -- the same durable source
     // `boot_api` already hydrates its own registry from before serving --
     // instead of assuming the snapshot this loop started with (empty, for
-    // a worker-only process) was complete. `STREAMARR_ROLE=all` (worker and
+    // a worker-only process) was complete. `PLAYARR_ROLE=all` (worker and
     // api sharing one process/registry, e.g. `docker-compose.standalone.
     // yml`) just re-upserts what's already there, which is harmless.
     {
@@ -1793,7 +1793,7 @@ async fn boot_worker(
         // until it appears" shape this function's own Tdarr
         // connection-watch loop below already uses for a comparable
         // "not configured yet" gap.
-        let mut self_peer_identity: Option<streamarr_peer_sync::PeerIdentity> = None;
+        let mut self_peer_identity: Option<playarr_peer_sync::PeerIdentity> = None;
         handles.push(tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(10));
             interval.tick().await; // first tick fires immediately; hydrate from the DB below before the loop starts reacting to changes
@@ -1858,7 +1858,7 @@ async fn boot_worker(
                 if self_peer_identity.is_none() {
                     match node_identity_repo.get().await {
                         Ok(Some(identity)) => {
-                            match streamarr_peer_sync::PeerIdentity::from_seed_b64(
+                            match playarr_peer_sync::PeerIdentity::from_seed_b64(
                                 identity.peer_id,
                                 identity.private_key.expose_secret(),
                             ) {
@@ -1941,7 +1941,7 @@ async fn boot_worker(
     // (though not unsafe -- every one of them is idempotent) if every node
     // ran it concurrently.
     {
-        let rollup = streamarr_telemetry::analytics::RollupScheduler::new(
+        let rollup = playarr_telemetry::analytics::RollupScheduler::new(
             analytics_store.clone(),
             Duration::from_secs(300),
         );
@@ -1960,7 +1960,7 @@ async fn boot_worker(
         // 60s idle threshold: four missed heartbeats at the recommended
         // 15s client heartbeat cadence -- see `SessionReaper`'s own doc
         // comment for the tradeoff this balances.
-        let reaper = streamarr_telemetry::analytics::SessionReaper::new(
+        let reaper = playarr_telemetry::analytics::SessionReaper::new(
             session_registry.clone(),
             analytics.clone(),
             Duration::from_secs(60),
@@ -1976,9 +1976,9 @@ async fn boot_worker(
         )));
     }
     {
-        let retention = streamarr_telemetry::analytics::RetentionSweeper::new(
+        let retention = playarr_telemetry::analytics::RetentionSweeper::new(
             pool.clone(),
-            streamarr_telemetry::analytics::RetentionPolicy::default(),
+            playarr_telemetry::analytics::RetentionPolicy::default(),
             Duration::from_secs(3600),
         );
         handles.push(tokio::spawn(run_while_leader(
@@ -1994,12 +1994,12 @@ async fn boot_worker(
     }
 
     // Sourced from the admin-registered `TdarrConnection` (see
-    // `streamarr_api::tdarr`'s module doc comment) -- replaces the old
+    // `playarr_api::tdarr`'s module doc comment) -- replaces the old
     // `TDARR_URL`/`TDARR_API_KEY`/`TDARR_DB_ID` env-var-only config, same
     // "durable, admin-registerable, not a restart-required env var"
     // upgrade `SourceInstance` already went through for `*arr` apps.
-    let tdarr_connection_repo: Arc<dyn streamarr_db::TdarrConnectionRepo> = Arc::new(
-        streamarr_db::repo::SqlxTdarrConnectionRepo::new(pool.clone()),
+    let tdarr_connection_repo: Arc<dyn playarr_db::TdarrConnectionRepo> = Arc::new(
+        playarr_db::repo::SqlxTdarrConnectionRepo::new(pool.clone()),
     );
     match tdarr_connection_repo.get().await {
         Ok(Some(connection)) => {
@@ -2025,7 +2025,7 @@ async fn boot_worker(
             // do this once) and stops watching -- registering a *second*
             // time (e.g. to rotate the API key) updates the row in place
             // but does not hot-swap the already-running dispatcher; that
-            // still needs a restart, same as changing `STREAMARR_AUTH_MODE`
+            // still needs a restart, same as changing `PLAYARR_AUTH_MODE`
             // does.
             let coordinator = coordinator.clone();
             handles.push(tokio::spawn(async move {
@@ -2072,28 +2072,28 @@ async fn boot_worker(
 }
 
 /// Builds and spawns the leader-gated `TdarrDispatcher` loop from a
-/// persisted [`streamarr_model::TdarrConnection`] -- the single spawn
+/// persisted [`playarr_model::TdarrConnection`] -- the single spawn
 /// point both `boot_worker`'s boot-time hydration and its registration
 /// watch loop (see that function's body) call into, so the two paths
 /// can't drift.
 fn spawn_tdarr_dispatcher(
-    connection: streamarr_model::TdarrConnection,
+    connection: playarr_model::TdarrConnection,
     pool: DbPool,
-    active_sessions: streamarr_transcode::ActiveSessionCounter,
-    tdarr_notify_rx: tokio::sync::mpsc::Receiver<streamarr_transcode::MediaFileImportEvent>,
-    coordinator: Arc<dyn streamarr_coordination::ClusterCoordinator>,
+    active_sessions: playarr_transcode::ActiveSessionCounter,
+    tdarr_notify_rx: tokio::sync::mpsc::Receiver<playarr_transcode::MediaFileImportEvent>,
+    coordinator: Arc<dyn playarr_coordination::ClusterCoordinator>,
 ) -> tokio::task::JoinHandle<()> {
-    use streamarr_db::repo::SqlxRenditionRepo;
-    use streamarr_db::RenditionRepo;
+    use playarr_db::repo::SqlxRenditionRepo;
+    use playarr_db::RenditionRepo;
 
     let rendition_repo: Arc<dyn RenditionRepo> = Arc::new(SqlxRenditionRepo::new(pool));
-    let tdarr = streamarr_tdarr_client::TdarrClient::new(
+    let tdarr = playarr_tdarr_client::TdarrClient::new(
         connection.base_url,
         connection.api_key_encrypted.expose_secret().clone(),
     );
     // `tdarr_notify_rx` is the receive side of the channel `boot_api`'s
     // `TranscodeOrchestrator` sends on every time it starts a live
-    // on-demand session (see `streamarr_transcode`'s module docs, "other
+    // on-demand session (see `playarr_transcode`'s module docs, "other
     // bridge" section) -- this is what turns "someone is watching this
     // file right now via a temporary session" into a durable,
     // Tdarr-produced `Rendition` for future requests. Real *arr
@@ -2102,12 +2102,12 @@ fn spawn_tdarr_dispatcher(
     // arr-sync's own reconciliation flow to source them from) -- a
     // separate, not-yet-addressed gap; the on-demand path above is real
     // and live today regardless.
-    let dispatcher = streamarr_transcode::TdarrDispatcher::new(
+    let dispatcher = playarr_transcode::TdarrDispatcher::new(
         tdarr,
         rendition_repo,
         active_sessions,
         tdarr_notify_rx,
-        streamarr_transcode::TdarrDispatcherConfig {
+        playarr_transcode::TdarrDispatcherConfig {
             tdarr_db_id: connection.tdarr_db_id,
             default_profile: connection.default_profile,
             worker_process: connection.worker_process,
@@ -2150,7 +2150,7 @@ fn spawn_tdarr_dispatcher(
 /// restarts) is safe for both loops' idempotent, upsert-shaped operations,
 /// just not maximally clean.
 async fn run_while_leader<Fut>(
-    coordinator: Arc<dyn streamarr_coordination::ClusterCoordinator>,
+    coordinator: Arc<dyn playarr_coordination::ClusterCoordinator>,
     role: &'static str,
     ttl: Duration,
     task: Fut,
@@ -2189,13 +2189,13 @@ async fn run_while_leader<Fut>(
     renewal.abort();
 }
 
-/// Binds `streamarr_telemetry::metrics::http::router` (the real, tested
+/// Binds `playarr_telemetry::metrics::http::router` (the real, tested
 /// `/metrics` Prometheus-exposition-format handler that crate ships but
 /// never wires up itself) to `metrics_bind_addr`, on its own listener
 /// separate from the public API port -- so it can be firewalled off from
 /// public-facing ingress without needing auth middleware of its own,
 /// matching every deployment tier's existing assumption that this port is
-/// a private/internal one (see infra/kubernetes/helm/streamarr/values.yaml's
+/// a private/internal one (see infra/kubernetes/helm/playarr/values.yaml's
 /// `metricsPort`, never exposed via an Ingress). Logged, not propagated
 /// via `?`, since this runs detached via `tokio::spawn` -- a failure here
 /// (e.g. the port already in use) shouldn't take the whole process down
@@ -2204,9 +2204,9 @@ async fn run_while_leader<Fut>(
 /// problem worth seeing in the logs.
 async fn spawn_metrics_listener(
     metrics_bind_addr: std::net::SocketAddr,
-    registry: streamarr_telemetry::metrics::MetricsRegistry,
+    registry: playarr_telemetry::metrics::MetricsRegistry,
 ) {
-    let router = streamarr_telemetry::metrics::http::router(registry);
+    let router = playarr_telemetry::metrics::http::router(registry);
     let listener = match tokio::net::TcpListener::bind(metrics_bind_addr).await {
         Ok(listener) => listener,
         Err(err) => {
@@ -2256,7 +2256,7 @@ async fn update(check: bool, yes: bool, channel: UpdateChannel) -> anyhow::Resul
 
     match outcome {
         UpdateCheckOutcome::UpToDate { current_version } => {
-            println!("streamarr {current_version} is up to date ({channel} channel)");
+            println!("playarr {current_version} is up to date ({channel} channel)");
         }
         UpdateCheckOutcome::UpdateAvailable {
             current_version,
@@ -2302,7 +2302,7 @@ async fn check_for_update(channel: UpdateChannel) -> anyhow::Result<UpdateCheckO
 ///
 /// 1. Download the release artifact and its cosign signature for
 ///    `target_version` from the release feed.
-/// 2. `cosign verify-blob --key <streamarr-release-pubkey> --signature
+/// 2. `cosign verify-blob --key <playarr-release-pubkey> --signature
 ///    <sig.file> <artifact>` — refuse to proceed at all if verification
 ///    fails; a failed signature check is not a retryable error.
 /// 3. Write the verified artifact to a staging path on the *same*
@@ -2316,7 +2316,7 @@ async fn check_for_update(channel: UpdateChannel) -> anyhow::Result<UpdateCheckO
 ///    where the path points at a partially-written file) and re-exec.
 async fn apply_update(target_version: &str) -> anyhow::Result<()> {
     anyhow::bail!(
-        "streamarr update --yes is not implemented yet (would update to {target_version})"
+        "playarr update --yes is not implemented yet (would update to {target_version})"
     );
 }
 
@@ -2324,18 +2324,18 @@ async fn apply_update(target_version: &str) -> anyhow::Result<()> {
 mod bootstrap_tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
-    use streamarr_auth::PasswordVerifier as _;
-    use streamarr_db::repo::{SqlxPolicyRepo, SqlxUserRepo};
-    use streamarr_db::{DbPool, PolicyRepo, UserRepo};
+    use playarr_auth::PasswordVerifier as _;
+    use playarr_db::repo::{SqlxPolicyRepo, SqlxUserRepo};
+    use playarr_db::{DbPool, PolicyRepo, UserRepo};
 
     /// Same private, migrated, in-memory SQLite pool idiom
-    /// `streamarr-api`'s `test_support::test_pool` and `streamarr-catalog`'s
+    /// `playarr-api`'s `test_support::test_pool` and `playarr-catalog`'s
     /// own tests use -- a fresh, uniquely named `:memory:`-equivalent
     /// database per call.
     async fn test_pool() -> DbPool {
         static SEQ: AtomicU64 = AtomicU64::new(0);
         let n = SEQ.fetch_add(1, Ordering::Relaxed);
-        let url = format!("sqlite://streamarr_bin_bootstrap_test_{n}?mode=memory&cache=shared");
+        let url = format!("sqlite://playarr_bin_bootstrap_test_{n}?mode=memory&cache=shared");
 
         sqlx::any::install_default_drivers();
         let pool: DbPool = sqlx::any::AnyPoolOptions::new()
@@ -2343,7 +2343,7 @@ mod bootstrap_tests {
             .connect(&url)
             .await
             .expect("open in-memory sqlite pool");
-        streamarr_db::run_migrations(&pool, false)
+        playarr_db::run_migrations(&pool, false)
             .await
             .expect("run real embedded sqlite migrations");
         pool
@@ -2393,7 +2393,7 @@ mod bootstrap_tests {
         // (a wrong guess must not verify against it), not recover what the
         // generated password actually was.
         assert!(
-            !streamarr_auth::login::Argon2PasswordVerifier.verify(
+            !playarr_auth::login::Argon2PasswordVerifier.verify(
                 "definitely-not-the-generated-password",
                 user.password_hash.expose_secret()
             ),
@@ -2421,7 +2421,7 @@ mod bootstrap_tests {
 
         // The explicit password must actually be the one that verifies --
         // not a generated one -- since an explicit password was passed.
-        assert!(streamarr_auth::login::Argon2PasswordVerifier.verify(
+        assert!(playarr_auth::login::Argon2PasswordVerifier.verify(
             "a-real-known-test-password-123",
             users_after_first[0].password_hash.expose_secret()
         ));
@@ -2450,16 +2450,16 @@ mod bootstrap_tests {
         assert!(a.len() >= 20, "must be comfortably longer than 20 chars");
     }
 
-    fn test_peer_node(id: uuid::Uuid) -> streamarr_model::PeerNode {
+    fn test_peer_node(id: uuid::Uuid) -> playarr_model::PeerNode {
         let now = chrono::Utc::now();
-        streamarr_model::PeerNode {
+        playarr_model::PeerNode {
             id,
             group_id: uuid::Uuid::new_v4(),
             name: format!("peer-{id}"),
             addresses: Vec::new(),
             public_key: "test-pubkey".to_string(),
             is_self: false,
-            status: streamarr_model::PeerNodeStatus::Active,
+            status: playarr_model::PeerNodeStatus::Active,
             last_seen_at: None,
             last_sync_error: None,
             joined_at: now,
@@ -2529,14 +2529,14 @@ mod bootstrap_tests {
     }
 
     #[test]
-    fn https_redirect_origin_keeps_nonstandard_streamarr_port() {
+    fn https_redirect_origin_keeps_nonstandard_playarr_port() {
         assert_eq!(
             https_origin("v4-203-0-113-10.relay.playarr.app", 8484),
             "https://v4-203-0-113-10.relay.playarr.app:8484"
         );
         assert_eq!(
-            https_origin("streamarr.example.com", 443),
-            "https://streamarr.example.com"
+            https_origin("playarr.example.com", 443),
+            "https://playarr.example.com"
         );
     }
 

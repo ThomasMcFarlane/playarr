@@ -11,20 +11,20 @@
 --
 -- `provider`/`external_id` are the portable cross-node title key
 -- (`ExternalProvider`/`ExternalRef`, already stable and dedup-able --
--- `streamarr_model::work`). `leaf_selector` is the portable substitute for
+-- `playarr_model::work`). `leaf_selector` is the portable substitute for
 -- a peer-local `LeafRef`/`Uuid`, which is meaningless off the node that
--- minted it -- see `streamarr_model::group_library::LeafSelector` (§2.4/
+-- minted it -- see `playarr_model::group_library::LeafSelector` (§2.4/
 -- §4.2). `local_work_id` is a cache of the local `Work` this row matches,
 -- recomputed at ingest by the same external-ref-match algorithm §4.2
 -- describes; `NULL` means this peer has zero local record of the title at
 -- all (the partial-cache-node case, §4.3).
 --
 -- `title`/`kind`/`release_date` are the reporting peer's own values for
--- this title: the matching input `resolve_local_work`'s (`streamarr-peer-
+-- this title: the matching input `resolve_local_work`'s (`playarr-peer-
 -- sync::availability_sync`) normalized-title + release-year fallback reads
 -- on every ingest, and, when `local_work_id` is `NULL`, the only display
 -- data available for the partial-cache-node `RemoteOnlyWork` case
--- (`streamarr-catalog`'s browse/search hydration, §4.3) -- there is no
+-- (`playarr-catalog`'s browse/search hydration, §4.3) -- there is no
 -- local `works` row to read a title/kind from in that case.
 CREATE TABLE IF NOT EXISTS peer_leaf_availability (
     peer_node_id TEXT NOT NULL,

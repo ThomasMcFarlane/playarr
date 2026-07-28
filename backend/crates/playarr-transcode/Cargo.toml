@@ -1,0 +1,23 @@
+[package]
+name = "playarr-transcode"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Playback transcode decision-making: direct-play/existing-rendition/on-demand-transcode ordering, plus the background Tdarr dispatch path."
+
+[dependencies]
+playarr-model = { path = "../playarr-model" }
+playarr-db = { path = "../playarr-db" }
+playarr-tdarr-client = { path = "../playarr-tdarr-client" }
+playarr-cache = { path = "../playarr-cache" }
+tokio = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+async-trait = { workspace = true }
+wiremock = "0.6"

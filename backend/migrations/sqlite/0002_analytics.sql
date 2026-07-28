@@ -1,11 +1,11 @@
--- Playback analytics tables. Mirrors `streamarr_model::{PlaybackSession,
+-- Playback analytics tables. Mirrors `playarr_model::{PlaybackSession,
 -- PlaybackEvent}` — keep the two in sync when either changes.
 --
 -- Portability note: UUIDs and timestamps are stored as TEXT in ISO-8601
 -- form (`strftime('%Y-%m-%dT%H:%M:%fZ', ...)` on SQLite, `to_char(...)` on
 -- Postgres) rather than native UUID/TIMESTAMPTZ types, and counters are
 -- plain INTEGER, so the same logical schema (and the same application-level
--- SQL in `streamarr-db::analytics`) works unmodified against both engines.
+-- SQL in `playarr-db::analytics`) works unmodified against both engines.
 -- `INTEGER` here is SQLite's dynamically-sized integer affinity (effectively
 -- 64-bit); the matching Postgres migration uses `BIGINT` for the same
 -- columns for identical range, since Postgres `INTEGER` is a fixed 32 bits.
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS playback_events (
     -- The rest of the event's fields (seek from/to, buffer duration, stop
     -- reason, error message, ...), JSON-encoded. Kept schemaless at the
     -- storage layer because the event shape varies per `kind`; the
-    -- authoritative typed shape is `streamarr_model::PlaybackEventKind` and
+    -- authoritative typed shape is `playarr_model::PlaybackEventKind` and
     -- application code decodes this column through that enum.
     payload TEXT NOT NULL DEFAULT '{}'
 );
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS playback_events (
 CREATE INDEX IF NOT EXISTS idx_playback_events_session_id ON playback_events (session_id);
 CREATE INDEX IF NOT EXISTS idx_playback_events_occurred_at ON playback_events (occurred_at);
 
--- Pre-aggregated daily rollups, written by `streamarr-telemetry::analytics::rollup`
+-- Pre-aggregated daily rollups, written by `playarr-telemetry::analytics::rollup`
 -- so dashboard/reporting queries never have to scan raw session/event rows.
 CREATE TABLE IF NOT EXISTS stats_daily (
     day TEXT NOT NULL,

@@ -1,5 +1,5 @@
 -- Leader-election heartbeat table backing `PostgresCoordinator::{campaign_leader,
--- renew_leadership}` in `streamarr-coordination`. One row per contended
+-- renew_leadership}` in `playarr-coordination`. One row per contended
 -- role (e.g. "arr-sync:sonarr", "transcode-dispatcher"); `node_id` is
 -- whichever node currently holds the lease for that role, and `expires_at`
 -- is when that lease lapses if it isn't renewed first.

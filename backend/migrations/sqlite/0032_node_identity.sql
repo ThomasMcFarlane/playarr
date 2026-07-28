@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS node_identity (
     -- Ed25519 seed, base64. Plain TEXT: no encryption-at-rest exists
     -- anywhere in this codebase today -- `source_instances.api_key_
     -- encrypted` is TEXT for the identical, already-documented reason
-    -- (see streamarr-db/src/repo/source_instance.rs:18). This inherits
+    -- (see playarr-db/src/repo/source_instance.rs:18). This inherits
     -- that gap; it does not introduce a new one.
     private_key TEXT NOT NULL,
     group_id TEXT,                    -- NULL until this node founds/joins a group
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS peer_nodes (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_peer_nodes_group_name ON peer_nodes (group_id, name);
 
 -- Single-use, short-TTL, admin-issued -- mirrors UserInvite's token_hash
--- shape exactly (see backend/crates/streamarr-model/src/user.rs).
+-- shape exactly (see backend/crates/playarr-model/src/user.rs).
 CREATE TABLE IF NOT EXISTS peer_join_tokens (
     token_hash TEXT PRIMARY KEY,
     group_id TEXT NOT NULL REFERENCES peer_groups (id) ON DELETE CASCADE,

@@ -1,0 +1,13 @@
+[package]
+name = "playarr-config"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Env/file configuration resolution for the Playarr Server backend. Hand-rolled std::env parsing, kept dependency-light on purpose."
+
+[dependencies]
+# Intentionally minimal: this crate is on the critical path of process
+# startup, before tracing/telemetry exist, so config errors have to be
+# reportable with nothing more than `eprintln!`/`Display`. No config
+# framework, no serde-with-figment stack — just `std::env`.
+thiserror = { workspace = true }

@@ -1,0 +1,45 @@
+[package]
+name = "playarr-arr-sync"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Webhook-as-signal, poll-as-truth reconciliation between Playarr Server's catalog and the configured *arr source instances."
+
+[dependencies]
+playarr-model = { path = "../playarr-model" }
+playarr-db = { path = "../playarr-db" }
+playarr-coordination = { path = "../playarr-coordination" }
+playarr-arr-client = { path = "../playarr-arr-client" }
+playarr-artwork = { path = "../playarr-artwork" }
+playarr-embeddings = { path = "../playarr-embeddings" }
+reqwest = { workspace = true }
+tokio = { workspace = true }
+# `StreamExt::buffer_unordered` -- lets the missing-media-file backfill
+# (see `poller::ReconciliationPoller::backfill_missing_media_files`) have
+# several *arr API requests in flight at once instead of one at a time,
+# without needing to restructure the poller to spawn real `tokio::spawn`
+# tasks (which would require `Arc<Self>` -- this achieves I/O concurrency
+# within the poller's own already-running task instead).
+futures = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+# `seasons`/`episodes`/`albums`/`tracks`/`books` don't have a repository in
+# `playarr-db` yet (see that crate's `repo::work` doc comment -- the same
+# gap `playarr-catalog` documents and works around for its *read* path);
+# `crate::media_sync` is this crate's write-path counterpart, so it queries
+# `DbPool` directly for just that slice too, the same way `playarr-catalog`
+# already does for reads.
+sqlx = { workspace = true, features = ["any"] }
+
+[dev-dependencies]
+wiremock = "0.6"
+# Test-only: opens a real in-memory SQLite `DbPool` (see `playarr-catalog`'s
+# and `playarr-api`'s own test harnesses for the identical pattern) so
+# `crate::media_sync`'s tests exercise the real `seasons`/`episodes`/
+# `albums`/`tracks`/`books`/`media_files` tables through real migrations.
+sqlx = { workspace = true, features = ["any", "sqlite"] }

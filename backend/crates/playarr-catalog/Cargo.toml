@@ -1,0 +1,45 @@
+[package]
+name = "playarr-catalog"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Read-optimized catalog query API: browse/search/get-by-id over the Work aggregate, cache-fronted."
+
+[dependencies]
+playarr-model = { path = "../playarr-model" }
+playarr-db = { path = "../playarr-db" }
+playarr-cache = { path = "../playarr-cache" }
+playarr-embeddings = { path = "../playarr-embeddings" }
+# Fuzzy (misspelling-tolerant) string scoring for `CatalogService::search`
+# -- Jaro-Winkler, a small, dependency-free, long-established metric well
+# suited to short title-length strings with typos/near-misses.
+strsim = "0.11"
+# NFKD Unicode decomposition, used to fold locale/diacritic differences
+# (e.g. "Semon" vs "Sémon") before comparing in `search`.
+unicode-normalization = "0.1"
+# `WorkRepo` (from `playarr-db`) owns the `works` table, but season/
+# episode/album/track/book children don't have a repository anywhere yet
+# (see `playarr-db::repo::work`'s doc comment) — `CatalogService::get_by_id`
+# is the first and only reader of that data, so it queries `DbPool` directly
+# for just that slice rather than waiting on a repo that doesn't exist.
+sqlx = { workspace = true, features = ["any"] }
+uuid = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+# Test-only: an in-process, SQL-backed `WorkRepo` double (see `tests` module)
+# that exercises the real `works`/`work_external_refs` tables through real
+# migrations, since `playarr-db`'s own `SqlxWorkRepo` is still mid-flight
+# (`unimplemented!()`) as of when this crate's tests were written.
+async-trait = { workspace = true }
+tokio = { workspace = true }
+# `sqlite` isn't enabled by `[dependencies]` above (production code only
+# needs `AnyPool` query plumbing, not a concrete driver — whatever composed
+# the pool already picked one); tests open a real `sqlite::memory:` pool, so
+# they need the driver compiled in explicitly rather than relying on it
+# arriving transitively via `playarr-db`'s default features.
+sqlx = { workspace = true, features = ["any", "sqlite"] }

@@ -1,0 +1,20 @@
+[package]
+name = "playarr-arr-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Typed HTTP clients for the *arr apps Playarr Server treats as sources of catalog/download truth: Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, Readarr, Whisparr."
+
+[dependencies]
+playarr-model = { path = "../playarr-model" }
+chrono = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+wiremock = "0.6"

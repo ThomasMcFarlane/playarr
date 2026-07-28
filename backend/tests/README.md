@@ -1,6 +1,6 @@
 # Integration tests
 
-This directory is for integration tests that exercise the Streamarr
+This directory is for integration tests that exercise the Playarr Server
 backend against real infrastructure — Postgres, Redis, and (where
 relevant) fake/recorded *arr and Tdarr HTTP endpoints — brought up via the
 repo's `docker-compose` dev stack, as opposed to the unit tests that live

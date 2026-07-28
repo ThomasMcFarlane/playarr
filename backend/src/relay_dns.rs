@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::Context;
-use streamarr_config::RelayDnsAcmeChallenge;
+use playarr_config::RelayDnsAcmeChallenge;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream, UdpSocket},
@@ -45,7 +45,7 @@ const RCODE_NXDOMAIN: u16 = 3;
 const RCODE_NOTIMP: u16 = 4;
 const RCODE_REFUSED: u16 = 5;
 
-/// Serve Streamarr's authoritative `relay.playarr.app` DNS zone over UDP and TCP.
+/// Serve Playarr Server's authoritative `relay.playarr.app` DNS zone over UDP and TCP.
 ///
 /// The server deliberately implements no recursive resolution. A hostname such as
 /// `v4-11-22-33-44.relay.playarr.app` resolves directly to `11.22.33.44`.

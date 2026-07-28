@@ -1,56 +1,56 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/streamarr-model",
-    "crates/streamarr-config",
-    "crates/streamarr-db",
-    "crates/streamarr-coordination",
-    "crates/streamarr-cache",
-    "crates/streamarr-arr-client",
-    "crates/streamarr-arr-sync",
-    "crates/streamarr-peer-sync",
-    "crates/streamarr-catalog",
-    "crates/streamarr-embeddings",
-    "crates/streamarr-artwork",
-    "crates/streamarr-tdarr-client",
-    "crates/streamarr-transcode",
-    "crates/streamarr-auth",
-    "crates/streamarr-telemetry",
-    "crates/streamarr-api",
+    "crates/playarr-model",
+    "crates/playarr-config",
+    "crates/playarr-db",
+    "crates/playarr-coordination",
+    "crates/playarr-cache",
+    "crates/playarr-arr-client",
+    "crates/playarr-arr-sync",
+    "crates/playarr-peer-sync",
+    "crates/playarr-catalog",
+    "crates/playarr-embeddings",
+    "crates/playarr-artwork",
+    "crates/playarr-tdarr-client",
+    "crates/playarr-transcode",
+    "crates/playarr-auth",
+    "crates/playarr-telemetry",
+    "crates/playarr-api",
 ]
 
-# The workspace root manifest doubles as the `streamarr-bin` package: cargo
+# The workspace root manifest doubles as the `playarr-bin` package: cargo
 # allows a manifest to declare both `[workspace]` and `[package]`, with the
 # package's crate root resolved relative to this file (`src/main.rs`). This
 # keeps the top-level binary out of `crates/` per the task's "consistent
 # either way" instruction while avoiding an extra nested workspace member.
 [package]
-name = "streamarr-bin"
+name = "playarr-bin"
 version = "0.1.0"
 edition = "2021"
-description = "Streamarr server entrypoint: boots the API/worker roles and hosts the `streamarr` CLI (update checks, etc)."
-default-run = "streamarr"
+description = "Playarr Server entrypoint: boots the API/worker roles and hosts the `playarr` CLI (update checks, etc)."
+default-run = "playarr-server"
 
 [[bin]]
-name = "streamarr"
+name = "playarr-server"
 path = "src/main.rs"
 
 [dependencies]
-streamarr-model = { path = "crates/streamarr-model" }
-streamarr-config = { path = "crates/streamarr-config" }
-streamarr-api = { path = "crates/streamarr-api" }
-streamarr-telemetry = { path = "crates/streamarr-telemetry" }
-streamarr-db = { path = "crates/streamarr-db", features = ["sqlite", "postgres"] }
-streamarr-cache = { path = "crates/streamarr-cache" }
-streamarr-coordination = { path = "crates/streamarr-coordination" }
-streamarr-catalog = { path = "crates/streamarr-catalog" }
-streamarr-transcode = { path = "crates/streamarr-transcode" }
-streamarr-auth = { path = "crates/streamarr-auth" }
-streamarr-arr-sync = { path = "crates/streamarr-arr-sync" }
-streamarr-peer-sync = { path = "crates/streamarr-peer-sync" }
-streamarr-embeddings = { path = "crates/streamarr-embeddings" }
-streamarr-artwork = { path = "crates/streamarr-artwork" }
-streamarr-tdarr-client = { path = "crates/streamarr-tdarr-client" }
+playarr-model = { path = "crates/playarr-model" }
+playarr-config = { path = "crates/playarr-config" }
+playarr-api = { path = "crates/playarr-api" }
+playarr-telemetry = { path = "crates/playarr-telemetry" }
+playarr-db = { path = "crates/playarr-db", features = ["sqlite", "postgres"] }
+playarr-cache = { path = "crates/playarr-cache" }
+playarr-coordination = { path = "crates/playarr-coordination" }
+playarr-catalog = { path = "crates/playarr-catalog" }
+playarr-transcode = { path = "crates/playarr-transcode" }
+playarr-auth = { path = "crates/playarr-auth" }
+playarr-arr-sync = { path = "crates/playarr-arr-sync" }
+playarr-peer-sync = { path = "crates/playarr-peer-sync" }
+playarr-embeddings = { path = "crates/playarr-embeddings" }
+playarr-artwork = { path = "crates/playarr-artwork" }
+playarr-tdarr-client = { path = "crates/playarr-tdarr-client" }
 axum = { workspace = true }
 axum-server = { workspace = true }
 rustls-acme = { version = "=0.15.3", default-features = false, features = ["ring", "tls12", "webpki-roots", "axum"] }
@@ -74,7 +74,7 @@ reqwest = { workspace = true }
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/streamarr/streamarr"
+repository = "https://github.com/ThomasMcFarlane/playarr"
 
 # Centralised dependency versions so every member crate stays in lockstep.
 # Individual crates opt in with `dep = { workspace = true, features = [...] }`.
@@ -95,7 +95,7 @@ thiserror = "1"
 anyhow = "1"
 
 # --- http client / server ---
-# "stream" is needed by `streamarr-api::media::proxy_response_from`
+# "stream" is needed by `playarr-api::media::proxy_response_from`
 # (`docs/architecture/peer-groups.md` §5.3's `DeliveryMode::Proxy`
 # passthrough): `reqwest::Response::bytes_stream()` is gated behind it.
 reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"], default-features = false }

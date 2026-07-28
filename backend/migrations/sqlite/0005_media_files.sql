@@ -1,5 +1,5 @@
--- `media_files` table backing `streamarr_model::MediaFile` and the
--- `MediaFileRepo` trait in `streamarr-db::repo`. A `MediaFile` is the
+-- `media_files` table backing `playarr_model::MediaFile` and the
+-- `MediaFileRepo` trait in `playarr-db::repo`. A `MediaFile` is the
 -- on-disk file a source *arr instance imported; `leaf_ref` records which
 -- leaf of the parent `works` aggregate (see `0003_catalog.sql`) the file is
 -- the source for -- the work itself for movies, or a specific
@@ -10,11 +10,11 @@
 -- `0003_catalog.sql`): ids are TEXT (stringified UUIDs), and `leaf_ref` is
 -- encoded into a single TEXT column the same way
 -- `work_external_refs.provider`/`ExternalProvider::Other` already is (see
--- `streamarr_db::codec::provider_to_str`) -- the data-less `LeafRef::Work`
+-- `playarr_db::codec::provider_to_str`) -- the data-less `LeafRef::Work`
 -- variant as its own bare discriminant string ("work"), and the
 -- data-carrying variants as "<discriminant>:<uuid>" (e.g.
 -- "episode:3fa8..."), rather than a second nullable leaf-id column. See
--- `streamarr_db::codec::leaf_ref_to_str`/`leaf_ref_from_str` for the one
+-- `playarr_db::codec::leaf_ref_to_str`/`leaf_ref_from_str` for the one
 -- place that encoding lives.
 
 CREATE TABLE IF NOT EXISTS media_files (

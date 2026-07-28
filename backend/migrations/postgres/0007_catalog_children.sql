@@ -2,7 +2,7 @@
 -- for the full rationale. Numbered 0007 here (rather than 0004, matching the
 -- sqlite side) because the two migration directories are independent
 -- `Migrator`s (`SQLITE_MIGRATIONS` / `POSTGRES_MIGRATIONS` in
--- `streamarr-db::pool`), so their version numbers don't need to line up, and
+-- `playarr-db::pool`), so their version numbers don't need to line up, and
 -- because this file's `REFERENCES works (id)` foreign keys need `works` to
 -- already exist -- it was originally 0005 (the next free slot when it was
 -- added), but `0006_catalog.sql` -- the migration that actually creates

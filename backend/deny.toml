@@ -1,4 +1,4 @@
-# cargo-deny configuration for the Streamarr backend workspace.
+# cargo-deny configuration for the Playarr Server backend workspace.
 # Run with: cargo deny check
 # (requires `cargo install cargo-deny`; not invoked automatically here.)
 

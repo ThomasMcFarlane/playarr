@@ -1,5 +1,5 @@
 -- Table-backed key/value cache for `PostgresListenNotify`
--- (`streamarr-cache`), used by `DeploymentTier::MultiNodePostgres` (Postgres
+-- (`playarr-cache`), used by `DeploymentTier::MultiNodePostgres` (Postgres
 -- without Redis). `LISTEN`/`NOTIFY` has no storage of its own, so
 -- `PostgresListenNotify::{get,set,delete}` read and write this table
 -- directly; `PostgresListenNotify` also runs a periodic background sweep

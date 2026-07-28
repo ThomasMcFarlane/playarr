@@ -1,0 +1,33 @@
+[package]
+name = "playarr-cache"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Cache + pub/sub abstraction for the Playarr Server backend: an in-memory (moka) implementation for single-node deployments, and real Redis / Postgres LISTEN-NOTIFY implementations for multi-node."
+
+[dependencies]
+async-trait = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+moka = { workspace = true }
+# Backing store for the PostgresListenNotify implementation —
+# LISTEN/NOTIFY is a Postgres-only mechanism, so this crate depends on the
+# driver directly rather than routing through `playarr-db`'s
+# backend-agnostic `AnyPool`.
+sqlx = { workspace = true, features = ["postgres"] }
+# `tokio-comp` for the async runtime integration this crate needs
+# throughout; `connection-manager` for the auto-reconnecting multiplexed
+# connection `Redis::get`/`set`/`delete`/`publish` share.
+redis = { version = "1.4.0", features = ["tokio-comp", "connection-manager"] }
+# Postgres `NOTIFY` payloads must be text; cache values and pub/sub
+# payloads are arbitrary `Vec<u8>` per `CacheAndPubSub`, so
+# `PostgresListenNotify::publish` base64-encodes onto the wire and decodes
+# on receipt.
+base64 = "0.22.1"
+# Timestamps for `cache_entries.expires_at` in PostgresListenNotify's
+# table-backed cache.
+chrono.workspace = true
+# `StreamExt` for draining `redis::aio::PubSubStream` in `Redis::subscribe`'s
+# background listener task.
+futures.workspace = true

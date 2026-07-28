@@ -1,21 +1,21 @@
 -- Postgres mirror of `../sqlite/0007_users_policies.sql` -- see that file
 -- for the full rationale. Numbered 0010 here (the sqlite/postgres migration
 -- directories are independent `Migrator`s -- `SQLITE_MIGRATIONS` /
--- `POSTGRES_MIGRATIONS` in `streamarr-db::pool` -- so their version numbers
+-- `POSTGRES_MIGRATIONS` in `playarr-db::pool` -- so their version numbers
 -- have already diverged and don't need to line up; this table has no FK
 -- dependency on anything added since `0009_source_instances.sql`, so it
 -- simply takes the next free slot on this side).
 --
--- `policies` and `users` back `streamarr_model::{Policy, User}` and the new
--- `PolicyRepo`/`UserRepo` traits in `streamarr-db::repo`. This is the
--- persistence half of moving Streamarr off `trusted-network` auto-admin
+-- `policies` and `users` back `playarr_model::{Policy, User}` and the new
+-- `PolicyRepo`/`UserRepo` traits in `playarr-db::repo`. This is the
+-- persistence half of moving Playarr Server off `trusted-network` auto-admin
 -- (source-IP allowlist login) and onto real username/password accounts
--- (`STREAMARR_AUTH_MODE=full-account` in `streamarr_auth::AuthMode`).
--- `streamarr_auth::login::evaluate_login` already handles `full-account`
+-- (`PLAYARR_AUTH_MODE=full-account` in `playarr_auth::AuthMode`).
+-- `playarr_auth::login::evaluate_login` already handles `full-account`
 -- correctly, including real Argon2id password hashing
--- (`streamarr_auth::login::hash_password` / `Argon2PasswordVerifier`) --
+-- (`playarr_auth::login::hash_password` / `Argon2PasswordVerifier`) --
 -- what was missing is that every account today only lives in
--- `streamarr_auth::login::InMemoryUserDirectory`, which starts empty on
+-- `playarr_auth::login::InMemoryUserDirectory`, which starts empty on
 -- every boot. These two tables are that directory's real, durable backing
 -- store.
 --
@@ -29,7 +29,7 @@
 -- (`can_transcode`, `can_download`, `can_delete`, `can_share_public`,
 -- `is_admin`, `disabled`) is kept as `INTEGER` 0/1 on this side too (rather
 -- than a native Postgres `boolean`), bound/read via
--- `streamarr_db::codec::bool_to_i64`/`bool_from_i64` -- so the
+-- `playarr_db::codec::bool_to_i64`/`bool_from_i64` -- so the
 -- application-level SQL and Rust row-mapping stay identical across both
 -- engines; see `bool_to_i64`'s doc comment for the SQLite driver
 -- limitation that motivates it.
@@ -48,9 +48,9 @@
 -- distinction.
 --
 -- `password_hash` is plain `TEXT`: it already holds an Argon2id PHC hash
--- string produced by `streamarr_auth::login::hash_password`, not a
+-- string produced by `playarr_auth::login::hash_password`, not a
 -- plaintext secret, so no additional column-level protection is needed
--- beyond what `streamarr_model::Sensitive<String>` already gives it on the
+-- beyond what `playarr_model::Sensitive<String>` already gives it on the
 -- Rust side (keeping it out of `Debug`/`Display`/logs).
 
 CREATE TABLE IF NOT EXISTS policies (

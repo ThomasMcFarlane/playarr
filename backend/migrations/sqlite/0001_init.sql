@@ -2,7 +2,7 @@
 -- has been migrated to. sqlx already tracks applied migration files in its
 -- own `_sqlx_migrations` table; this one is a deliberately separate,
 -- human-readable summary that application code and support tooling
--- (`streamarr diagnostics`, health checks) can query without depending on
+-- (`playarr diagnostics`, health checks) can query without depending on
 -- sqlx's internal table shape.
 CREATE TABLE IF NOT EXISTS schema_version (
     id INTEGER PRIMARY KEY CHECK (id = 1),
