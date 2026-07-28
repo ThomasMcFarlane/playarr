@@ -121,3 +121,24 @@ block its own UI, but it cannot install code outside Apple's reviewed release pr
 
 The App Store ID and production signing team are intentionally unset because they are allocated
 outside the repository.
+
+## Chromecast
+
+`Sources/StreamarrApp/Cast/` adds a Google Cast sender, mirroring the same
+protocol and delegated device-auth model as the Web and Android senders; see
+[`docs/architecture/clients/cast.md`](../../docs/architecture/clients/cast.md).
+The receiver App ID is read from the `PlayarrCastReceiverAppID` key in
+`Resources/Info.plist`, left empty on purpose; `AppDelegate` only initialises
+`GCKCastContext` when that value is non-empty.
+
+**This code is entirely unverified.** There is no Google Cast iOS SDK
+distribution via Swift Package Manager (confirmed by checking the SDK's SPM
+repository directly: it remains an empty placeholder with no
+`Package.swift`), so `GoogleCast.framework` has not been vendored into this
+project at all; the Cast Swift files will not compile until a human adds it
+via CocoaPods or a manually vendored XCFramework in Xcode. Separately, this
+development environment has no macOS or Xcode toolchain, so even the parts of
+this code that don't touch the Cast SDK (e.g. the `PlayerEngine` protocol
+changes it required) have never been built or run here. Treat every file
+under `Cast/` as a first draft that needs real-Xcode verification before
+relying on it.

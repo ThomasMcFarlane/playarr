@@ -226,6 +226,40 @@ service-worker OTA path; an unsupported package shows a persistent reinstall
 notice instead of reloading the same immutable bundle. Hosted VIDAA uses the
 normal Web update flow described in [`versioning-policy.md`](versioning-policy.md).
 
+- **Chromecast.** **Partial.** A real sender/receiver pair, not a stub.
+  `clients/tv-web/apps/cast-receiver/` is a CAF (Cast Application Framework)
+  custom web receiver: full LOAD/PRELOAD/SEEK interception, delegated
+  device-auth (a receiver-scoped identity minted via the existing RFC 8628
+  device-flow, self-approved by the sender, never the sender's own token;
+  see [`docs/architecture/clients/cast.md`](architecture/clients/cast.md)),
+  progress heartbeats, and subtitle/artwork sideloading; it builds,
+  typechecks, and passes 82/82 unit tests, and is genuinely hosted at
+  `playarr.app/cast/` (`clients/tv-web/web/worker.js`'s `/cast` routes, 30/30
+  hosting tests passing). The shared `@streamarr-tv/cast-protocol` package
+  (18/18 tests) defines one wire protocol mirrored by hand into Kotlin and
+  Swift. The Web sender (`clients/tv-web/web/`) adds a Cast button, session
+  management, and the delegated-auth flow, covered by 326 passing web tests.
+  The Android sender (`clients/android/`) adds the same on phone/tablet only
+  (hidden on TV, since a television casting to another Cast device isn't
+  meaningful), verified by compiling, 15/15 Cast-specific unit tests, and a
+  real R8-shrunk release build. The backend gained a first-class `cast`
+  `ClientPlatform`, the delegated device-auth endpoints, the
+  `playback_session_id` HLS capability-query fallback the receiver needs, and
+  a real CORS fix (`CorsLayer::permissive()`'s wildcarded
+  `Access-Control-Allow-Headers` silently excludes `Authorization` per the
+  Fetch spec: every cross-origin Bearer-authenticated caller, not just Cast,
+  was affected), all covered by the backend suite. **What's missing:** the
+  iOS sender (`clients/ios/Sources/StreamarrApp/Cast/`) is written to the
+  same protocol but has never been compiled: no macOS/Xcode toolchain
+  exists in this environment, and the Google Cast iOS SDK has no SPM
+  distribution to vendor automatically. No Google Cast Developer Console app
+  has ever been registered, so every sender's App ID is an inert placeholder
+  and nothing here has been exercised against a real Chromecast device. Also
+  out of scope for this pass: DRM, Cast Connect/Android TV receiver, ad
+  breaks, queueing beyond simple up-next, and casting a local on-device
+  download. Full picture in
+  [`docs/architecture/clients/cast.md`](architecture/clients/cast.md).
+
 ## Wave 7 — Hardening and Versioning Rollout
 
 - **Versioning enforcement middleware + CI compatibility matrix.**
@@ -273,9 +307,10 @@ Consolidated from the wave-by-wave detail above, for anyone scanning for
   in-memory implementations. Needs a real persistence design decision.
 - **`FullAccount` login has no provisioning story.** Login verification
   exists; nothing creates a user via the API.
-- **No Chromecast/AirPlay, push notifications, offline downloads, or deep
-  linking**, on any client. None of this exists in the client trees at all
-  — not attempted yet, not partially built.
+- **No AirPlay, push notifications, offline downloads, or deep linking**, on
+  any client. None of this exists in the client trees at all — not attempted
+  yet, not partially built. (Chromecast used to be listed here too; it is
+  now Partial: see the **Chromecast** entry in Wave 6.)
 - **No DRM (Widevine/FairPlay/PlayReady) license endpoints.** Named in the
   original Wave 3 plan, never implemented.
 - **No live docker-compose (or Helm/systemd) end-to-end boot proof.** The

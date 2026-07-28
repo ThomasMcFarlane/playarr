@@ -9,6 +9,22 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add Chromecast support: a real Google Cast sender/receiver pair, not a stub. A new
+  `@streamarr-tv/cast-protocol` package defines one shared wire protocol (mirrored by hand into
+  Kotlin and Swift); a new CAF (Cast Application Framework) custom web receiver at
+  `clients/tv-web/apps/cast-receiver/`, hosted at `playarr.app/cast/`, negotiates playback,
+  reports progress, and sideloads subtitles/artwork; the Web (`clients/tv-web/web/`) and Android
+  (`clients/android/`) apps add a Cast button and session management; and the backend gains a
+  first-class `cast` `ClientPlatform`. Every sender mints the Cast receiver its own delegated
+  device identity via the existing RFC 8628 device-flow (self-approved, never the sender's own
+  token), so the receiver's own token rotation can never trip reuse-detection against the
+  sender's session. An iOS sender at `clients/ios/Sources/StreamarrApp/Cast/` is written to the
+  same protocol but is entirely unverified (no macOS/Xcode toolchain here, and no SPM
+  distribution exists for the Google Cast iOS SDK to vendor automatically). No Google Cast
+  Developer Console app has been registered yet, so every sender's App ID is a placeholder and
+  none of this has been exercised against a real Chromecast device. See
+  [`docs/architecture/clients/cast.md`](docs/architecture/clients/cast.md) for the full
+  architecture, auth model, and known limitations.
 - Recognise Amazon Fire TV as the first-class `tv-fire` client platform, covering the compatibility
   table, device-link broker and hosted first-contact linking. Amazon's newer Fire TV devices run
   Vega OS, which is Linux-based rather than Android, so the native Fire TV client identifies itself

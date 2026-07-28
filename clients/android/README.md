@@ -73,3 +73,20 @@ the APK package and version against the release tag before uploading anything.
 
 The first production signing certificate is permanent: later APKs signed with a different
 certificate cannot update existing installations.
+
+## Chromecast
+
+The app can act as a Google Cast sender, launching Playarr's own custom web
+receiver on a Chromecast device rather than casting through a generic media
+receiver. The receiver's App ID is set via the `castReceiverAppId` Gradle
+property, surfaced to the app as the `CAST_RECEIVER_APP_ID` `BuildConfig`
+field; with no value supplied, casting stays inert. See
+[`docs/architecture/clients/cast.md`](../../docs/architecture/clients/cast.md)
+for the full protocol, auth model, and configuration story shared across all
+three senders.
+
+The Cast button only appears on phone/tablet form factors: it is hidden on
+the television layout, since a television casting to another Cast device is
+not a meaningful action. No Google Cast Developer Console registration exists
+yet, so the App ID above is a placeholder and casting has not been exercised
+against a real device.

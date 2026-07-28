@@ -79,6 +79,12 @@ tv-web-build:
 playarr-deploy:
     cd {{tv_web_dir}} && pnpm install --frozen-lockfile && pnpm --filter @streamarr-tv/web run deploy:cloudflare
 
+# Build the Chromecast custom web receiver in isolation (see
+# clients/tv-web/apps/cast-receiver/README.md to test it standalone with the
+# Cast Command & Control tool before touching any sender).
+cast-receiver-build:
+    cd {{tv_web_dir}} && pnpm install --frozen-lockfile && pnpm --filter @streamarr-tv/app-cast-receiver run build
+
 # ------------------------------------------------------------------------
 # Playarr native clients
 # ------------------------------------------------------------------------
