@@ -38,10 +38,6 @@ const { markOnly = false, class: className } = Astro.props
     width: 1.85em;
     height: 1.85em;
     flex: none;
-    /* The icon's own artwork (rings + play glyph) sits slightly low and
-       left of its 512x512 canvas centre, so a naive flex-center against the
-       wordmark reads as misaligned. Nudge up to compensate. */
-    transform: translateY(-0.09em);
   }
 
   .logo-word {
