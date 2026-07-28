@@ -1150,6 +1150,20 @@ internal enum class PlayarrString(
 
     ProfileViewerFallback("Viewer", "ผู้ชม", "視聴者"),
     ProfileControl("Profiles for {{name}}", "โปรไฟล์สำหรับ {{name}}", "{{name}}のプロフィール"),
+
+    CastButtonLabel("Cast", "แคสต์", "キャスト"),
+    CastButtonConnectedLabel(
+        "Casting to {{device}}",
+        "กำลังแคสต์ไปยัง {{device}}",
+        "{{device}}にキャスト中",
+    ),
+    CastPickerTitle("Cast to device", "แคสต์ไปยังอุปกรณ์", "デバイスにキャスト"),
+    CastPickerSearching(
+        "Looking for devices…",
+        "กำลังค้นหาอุปกรณ์…",
+        "デバイスを検索しています…",
+    ),
+    CastStopCasting("Stop casting", "หยุดแคสต์", "キャストを停止"),
 }
 
 @Immutable

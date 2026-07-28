@@ -57,6 +57,12 @@ kotlinxCoroutines = "1.11.0"
 # --- Images ---------------------------------------------------------------
 coil = "3.5.0"
 
+# --- Cast --------------------------------------------------------------
+# 22.3.1 is the latest stable Cast SDK release as of 2026-04-07, pinned
+# exactly (not a +) so a conflicting transitive resolution fails loudly
+# instead of silently drifting.
+playServicesCast = "22.3.1"
+
 # --- Play In-App Updates ---------------------------------------------------
 # Client auto-update module (see docs/versioning-policy.md's per-platform
 # table): Flexible flow for a routine update, escalating to Immediate once
@@ -149,6 +155,9 @@ kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 # Images
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
+
+# Cast
+play-services-cast-framework = { group = "com.google.android.gms", name = "play-services-cast-framework", version.ref = "playServicesCast" }
 
 # Play In-App Updates
 play-app-update = { group = "com.google.android.play", name = "app-update", version.ref = "playAppUpdate" }

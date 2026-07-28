@@ -54,6 +54,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.CastConnected
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.FilterList
@@ -78,6 +79,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -132,6 +134,26 @@ import coil3.request.ImageRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.streamarr.mobile.BuildConfig
 import io.streamarr.mobile.R
+import io.streamarr.mobile.cast.PlayarrCastAuthRotatedMessage
+import io.streamarr.mobile.cast.PlayarrCastConnectionState
+import io.streamarr.mobile.cast.PlayarrCastCredentials
+import io.streamarr.mobile.cast.PlayarrCastEndSessionMessage
+import io.streamarr.mobile.cast.PlayarrCastItem
+import io.streamarr.mobile.cast.PlayarrCastItemKind
+import io.streamarr.mobile.cast.PlayarrCastLoadRequest
+import io.streamarr.mobile.cast.PlayarrCastPlaybackIntent
+import io.streamarr.mobile.cast.PlayarrCastQueueEntry
+import io.streamarr.mobile.cast.PlayarrCastRoute
+import io.streamarr.mobile.cast.PlayarrCastSelectQualityMessage
+import io.streamarr.mobile.cast.PlayarrCastSelectTracksMessage
+import io.streamarr.mobile.cast.PlayarrCastSender
+import io.streamarr.mobile.cast.PlayarrCastSenderPlatform
+import io.streamarr.mobile.cast.PlayarrCastServer
+import io.streamarr.mobile.cast.PlayarrCastSession
+import io.streamarr.mobile.cast.PlayarrCastStateMessage
+import io.streamarr.mobile.cast.PlayarrCastStopReason
+import io.streamarr.mobile.cast.PlayarrDelegatedDeviceAuth
+import io.streamarr.mobile.cast.shouldOfferPlayarrCast
 import io.streamarr.mobile.connected.PlayarrWorkSourceChoice
 import io.streamarr.mobile.connected.PlayarrWorkSourceSelector
 import io.streamarr.shared.auth.TokenStore
@@ -193,6 +215,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -4401,6 +4424,35 @@ private fun PlayRow(
     }
 }
 
+/** The sender only ever sends *intent* over Playarr Cast, never a raw negotiated URL -- the receiver does its own negotiation, so no local/on-demand session or transcode profile carries over. */
+private fun PlayarrPlaybackQueueItem.playarrCastItemKind(): PlayarrCastItemKind = when {
+    music -> PlayarrCastItemKind.Track
+    seasonNumber != null && episodeNumber != null -> PlayarrCastItemKind.Episode
+    artworkWork?.kind == WorkKind.Movie -> PlayarrCastItemKind.Movie
+    else -> PlayarrCastItemKind.Other
+}
+
+private fun PlayarrPlaybackQueueItem.toPlayarrCastItem(language: PlayarrLanguageState): PlayarrCastItem = PlayarrCastItem(
+    mediaFileId = mediaFileId,
+    workId = artworkWork?.id,
+    kind = playarrCastItemKind(),
+    title = displayTitle(language),
+    subtitle = subtitle,
+    seasonNumber = seasonNumber,
+    episodeNumber = episodeNumber,
+    releaseDate = artworkWork?.releaseDate?.toString(),
+)
+
+private fun PlayarrPlaybackQueueItem.toPlayarrCastQueueEntry(language: PlayarrLanguageState): PlayarrCastQueueEntry = PlayarrCastQueueEntry(
+    mediaFileId = mediaFileId,
+    workId = artworkWork?.id,
+    kind = playarrCastItemKind(),
+    title = displayTitle(language),
+    subtitle = subtitle,
+    seasonNumber = seasonNumber,
+    episodeNumber = episodeNumber,
+)
+
 @HiltViewModel
 internal class ExperiencePlayerViewModel @Inject constructor(
     val player: StreamarrPlayer,
@@ -4409,11 +4461,71 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     private val serverAccessResolver: StreamarrServerAccessResolver,
     private val downloadRepository: DownloadRepository,
     private val offlineProgressRepository: OfflineProgressRepository,
+    private val castSession: PlayarrCastSession,
+    private val delegatedDeviceAuth: PlayarrDelegatedDeviceAuth,
 ) : ViewModel() {
     private val _state = MutableStateFlow<ExperienceLoad<Unit>>(ExperienceLoad.Loading)
     val state = _state.asStateFlow()
     private val _controls = MutableStateFlow(PlayarrPlaybackControls())
     val controls = _controls.asStateFlow()
+    val castAvailable: Boolean get() = castSession.isAvailable
+    val castConnection: StateFlow<PlayarrCastConnectionState> = castSession.connectionState
+    val castRoutes: StateFlow<List<PlayarrCastRoute>> = castSession.routes
+    private val castReceiverState: StateFlow<PlayarrCastStateMessage?> = castSession.receiverState
+    private val _castingMediaFileId = MutableStateFlow<String?>(null)
+    val castingMediaFileId: StateFlow<String?> = _castingMediaFileId.asStateFlow()
+
+    /** While casting a currently-loaded item, shows the RECEIVER's reported track/quality options instead of this device's own (never-negotiated, for this item) local ones -- see this file's Ground Truth notes on the receiver owning negotiation while a cast is active. */
+    val effectiveControls: StateFlow<PlayarrPlaybackControls> = combine(
+        _controls,
+        _castingMediaFileId,
+        castReceiverState,
+    ) { local, castingId, receiverState ->
+        if (castingId != null && receiverState != null && receiverState.mediaFileId == castingId) {
+            PlayarrPlaybackControls(
+                qualityOptions = receiverState.qualityOptions.map { option ->
+                    io.streamarr.shared.data.model.PlaybackQualityOption(
+                        id = option.id,
+                        label = option.label,
+                        height = option.height,
+                        videoBitrateBps = option.videoBitrateBps,
+                    )
+                },
+                activeQualityId = receiverState.selectedQualityId,
+                audioTracks = receiverState.audioTracks.map { track ->
+                    io.streamarr.shared.data.model.PlaybackAudioTrackOption(
+                        id = track.id,
+                        streamIndex = 0,
+                        label = track.label,
+                        language = track.language,
+                        isDefault = track.isDefault,
+                    )
+                },
+                selectedAudioTrackId = receiverState.selectedAudioTrackId,
+                subtitleTracks = receiverState.subtitleTracks.map { track ->
+                    io.streamarr.shared.data.model.PlaybackSubtitleTrackOption(
+                        id = track.id,
+                        streamIndex = 0,
+                        label = track.label,
+                        language = track.language,
+                        // Not used by the remote-controls dialog while
+                        // casting (only .id/.label/.language/.isDefault are
+                        // ever read there) -- codec/url are local-only
+                        // concepts fed to player.prepare(...), which never
+                        // runs while a Playarr Cast session is active.
+                        codec = "",
+                        url = "",
+                        isDefault = track.isDefault,
+                        forced = track.forced,
+                    )
+                },
+                selectedSubtitleTrackId = receiverState.selectedSubtitleTrackId,
+                switching = receiverState.negotiating,
+            )
+        } else {
+            local
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlayarrPlaybackControls())
     private var activeMediaFileId: String? = null
     private var activeServerUrl = ""
     private var activeDefaults = PlayarrPlayerDefaults()
@@ -4468,6 +4580,82 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                 }
             }
         }
+        viewModelScope.launch {
+            castSession.events.collect { message ->
+                // Refresh tokens are rotate-on-use -- without persisting a
+                // rotation the receiver reports mid-session, the next
+                // obtainCredentials() call would redeem an already-consumed
+                // token and be forced into a needless full re-mint.
+                if (message is PlayarrCastAuthRotatedMessage) {
+                    delegatedDeviceAuth.onCredentialsRotated(message.credentials)
+                }
+            }
+        }
+        viewModelScope.launch {
+            castSession.connectionState.collect { connection ->
+                if (connection !is PlayarrCastConnectionState.Connected && connection !is PlayarrCastConnectionState.Connecting) {
+                    _castingMediaFileId.value = null
+                }
+            }
+        }
+    }
+
+    /** Call once the owning screen enters composition. */
+    fun startCastSession() = castSession.start()
+
+    /** Call from the owning screen's teardown. */
+    fun stopCastSession() = castSession.stop()
+
+    fun startCastDiscovery(receiverAppId: String) = castSession.startDiscovery(receiverAppId)
+
+    fun stopCastDiscovery() = castSession.stopDiscovery()
+
+    fun selectCastRoute(routeId: String) = castSession.selectRoute(routeId)
+
+    /**
+     * Stops local playback (per the design's Ground Truth: the sender must
+     * end its own session, reason `user_stopped`, BEFORE handing off, so
+     * the receiver -- not this device -- is the only writer of
+     * watch-progress/events from this point on) then sends a fully
+     * self-negotiating load intent to the connected receiver. Never
+     * resolves or sends a raw playback URL itself.
+     */
+    fun startCasting(
+        item: PlayarrPlaybackQueueItem,
+        queue: List<PlayarrPlaybackQueueItem>,
+        sender: PlayarrCastSender,
+        language: PlayarrLanguageState,
+    ) {
+        val mediaFileId = item.mediaFileId
+        val startPositionMs = if (activeMediaFileId == mediaFileId) {
+            currentSourcePositionMs()
+        } else {
+            item.startPositionMs ?: 0L
+        }
+        viewModelScope.launch {
+            val serverUrlForItem = runCatching { serverAccessResolver.forMedia(mediaFileId).serverUrl }
+                .getOrDefault(activeServerUrl)
+            stopPlayback()
+            val credentials = runCatching { delegatedDeviceAuth.obtainCredentials() }.getOrNull() ?: return@launch
+            val loaded = castSession.loadMedia(
+                PlayarrCastLoadRequest(
+                    server = PlayarrCastServer(baseUrl = serverUrlForItem),
+                    credentials = credentials,
+                    item = item.toPlayarrCastItem(language),
+                    playback = PlayarrCastPlaybackIntent(startPositionMs = startPositionMs, autoplay = true),
+                    sender = sender,
+                    queue = queue.map { queueItem -> queueItem.toPlayarrCastQueueEntry(language) },
+                ),
+            )
+            _castingMediaFileId.value = if (loaded) mediaFileId else null
+        }
+    }
+
+    /** Ends the cast session entirely (both the custom-protocol intent and the underlying Cast SDK session). */
+    fun stopCasting() {
+        castSession.send(PlayarrCastEndSessionMessage(reason = PlayarrCastStopReason.UserStopped))
+        castSession.endSession(stopCasting = true)
+        _castingMediaFileId.value = null
     }
 
     fun play(
@@ -4538,6 +4726,10 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     }
 
     fun selectQuality(qualityId: String) {
+        if (castingMediaFileId.value != null) {
+            castSession.send(PlayarrCastSelectQualityMessage(qualityId = qualityId))
+            return
+        }
         val option = _controls.value.qualityOptions.firstOrNull { it.id == qualityId } ?: return
         if (_controls.value.switching || _controls.value.activeQualityId == qualityId) return
         switchNegotiatedPlayback(
@@ -4549,6 +4741,10 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     }
 
     fun selectAudioTrack(trackId: String) {
+        if (castingMediaFileId.value != null) {
+            castSession.send(PlayarrCastSelectTracksMessage(audioTrackId = trackId))
+            return
+        }
         val track = _controls.value.audioTracks.firstOrNull { it.id == trackId } ?: return
         if (_controls.value.switching || _controls.value.selectedAudioTrackId == trackId) return
         val quality = _controls.value.qualityOptions
@@ -4562,6 +4758,10 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     }
 
     fun selectSubtitleTrack(trackId: String?) {
+        if (castingMediaFileId.value != null) {
+            castSession.send(PlayarrCastSelectTracksMessage(subtitleTrackId = trackId))
+            return
+        }
         if (trackId != null && _controls.value.subtitleTracks.none { it.id == trackId }) return
         player.selectSubtitleTrack(trackId)
         _controls.value = _controls.value.copy(selectedSubtitleTrackId = trackId)
@@ -4705,6 +4905,13 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     }
 
     fun togglePlayback() {
+        if (castingMediaFileId.value != null) {
+            // Standard Cast media-protocol transport control, handled
+            // natively by the receiver's PlayerManager -- not reinvented on
+            // the custom namespace; see PlayarrCastSession.togglePlayback.
+            castSession.togglePlayback()
+            return
+        }
         if (player.state.value.playWhenReady) {
             player.pause()
         } else {
@@ -4713,10 +4920,23 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     }
 
     fun seekBy(deltaMs: Long) {
-        seekToSourcePosition(currentSourcePositionMs() + deltaMs)
+        val currentPositionMs = if (castingMediaFileId.value != null) {
+            castReceiverState.value?.positionMs ?: 0L
+        } else {
+            currentSourcePositionMs()
+        }
+        seekToSourcePosition(currentPositionMs + deltaMs)
     }
 
     fun seekToSourcePosition(positionMs: Long) {
+        val castingId = castingMediaFileId.value
+        if (castingId != null) {
+            val receiverState = castReceiverState.value
+            val duration = receiverState?.durationMs ?: 0L
+            val coerced = if (duration > 0L) positionMs.coerceIn(0L, duration) else positionMs.coerceAtLeast(0L)
+            castSession.seekTo(playarrEnginePositionMs(coerced, receiverState?.sourceOffsetMs ?: 0L))
+            return
+        }
         val sourceDuration = currentSourceDurationMs()
         val sourcePosition = if (sourceDuration > 0L) {
             positionMs.coerceIn(0L, sourceDuration)
@@ -4755,6 +4975,17 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     }
 
     fun timelineSnapshot(): PlayarrPlayerTimeline {
+        // While casting, position/duration must come from the receiver's
+        // reported state, not this (paused, stopped) local player's raw
+        // position -- per the design's Ground Truth. No second player
+        // instance is introduced: this reads the same single `player`
+        // binding's local timeline otherwise, below.
+        val castingId = castingMediaFileId.value
+        if (castingId != null) {
+            castReceiverState.value?.takeIf { it.mediaFileId == castingId }?.let { state ->
+                return PlayarrPlayerTimeline(state.positionMs, state.durationMs, state.positionMs)
+            }
+        }
         val durationMs = currentSourceDurationMs()
         val positionMs = currentSourcePositionMs()
         val bufferedPositionMs = playarrSourcePositionMs(
@@ -4829,6 +5060,35 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     }
 }
 
+/** Placeholder shown in place of the (paused) local player surface while a Playarr Cast session is actively driving this item -- no second player instance is ever created for this. */
+@Composable
+private fun PlayarrCastingVisual(deviceName: String?, title: String) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            Icons.Outlined.CastConnected,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.85f),
+            modifier = Modifier.size(64.dp),
+        )
+        Text(
+            playarrString(
+                PlayarrString.CastButtonConnectedLabel,
+                "device" to (deviceName ?: playarrString(PlayarrString.CastButtonLabel)),
+            ),
+            color = Color.White,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        if (title.isNotBlank()) {
+            Text(title, color = WebInkMuted, fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
+    }
+}
+
 @Composable
 private fun ExperiencePlayerScreen(
     mediaFileId: String,
@@ -4845,15 +5105,39 @@ private fun ExperiencePlayerScreen(
     val activeMediaFileId = playbackQueue.currentMediaFileId ?: mediaFileId
     val playerDefaults = LocalPlayarrDisplayPreferences.current.playerDefaults
     val state by viewModel.state.collectAsState()
-    val controls by viewModel.controls.collectAsState()
+    val controls by viewModel.effectiveControls.collectAsState()
     val playbackState by viewModel.player.state.collectAsState()
+    val castConnection by viewModel.castConnection.collectAsState()
+    val castRoutes by viewModel.castRoutes.collectAsState()
+    val castingMediaFileId by viewModel.castingMediaFileId.collectAsState()
+    val language = LocalPlayarrLanguage.current
     var timeline by remember(activeMediaFileId) { mutableStateOf(PlayarrPlayerTimeline()) }
+    DisposableEffect(Unit) {
+        viewModel.startCastSession()
+        onDispose { viewModel.stopCastSession() }
+    }
     LaunchedEffect(state, activeMediaFileId) {
         if (state !is ExperienceLoad.Ready) return@LaunchedEffect
         while (true) {
             timeline = viewModel.timelineSnapshot()
             kotlinx.coroutines.delay(250)
         }
+    }
+    LaunchedEffect(castConnection, playbackQueue.currentItem) {
+        if (castConnection !is PlayarrCastConnectionState.Connected) return@LaunchedEffect
+        val item = playbackQueue.currentItem ?: return@LaunchedEffect
+        if (castingMediaFileId == item.mediaFileId) return@LaunchedEffect
+        viewModel.startCasting(
+            item = item,
+            queue = playbackQueue.items,
+            sender = PlayarrCastSender(
+                platform = PlayarrCastSenderPlatform.AndroidMobile,
+                appVersion = BuildConfig.VERSION_NAME,
+                deviceName = android.os.Build.MODEL ?: "Android",
+                language = language.locale.toLanguageTag(),
+            ),
+            language = language,
+        )
     }
     Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
         when (val current = state) {
@@ -4873,7 +5157,13 @@ private fun ExperiencePlayerScreen(
             )
             is ExperienceLoad.Ready -> {
                 val item = playbackQueue.currentItem
-                if (item?.music == true) {
+                val castedDeviceName = (castConnection as? PlayarrCastConnectionState.Connected)?.deviceName
+                if (item != null && castingMediaFileId == item.mediaFileId) {
+                    PlayarrCastingVisual(
+                        deviceName = castedDeviceName,
+                        title = item.displayTitle(language),
+                    )
+                } else if (item?.music == true) {
                     PlayarrMusicPlayerVisual(
                         item = item,
                         serverUrl = serverUrl,
@@ -4915,6 +5205,20 @@ private fun ExperiencePlayerScreen(
                 onQuality = viewModel::selectQuality,
                 onAudio = viewModel::selectAudioTrack,
                 onSubtitle = viewModel::selectSubtitleTrack,
+                cast = PlayarrPlayerCastState(
+                    visible = shouldOfferPlayarrCast(
+                        isTelevision = isTelevision,
+                        playServicesAvailable = viewModel.castAvailable,
+                        receiverAppIdConfigured = BuildConfig.CAST_RECEIVER_APP_ID.isNotBlank(),
+                        serverIsHttps = serverUrl.startsWith("https", ignoreCase = true),
+                    ),
+                    connectionState = castConnection,
+                    routes = castRoutes,
+                    onStartDiscovery = { viewModel.startCastDiscovery(BuildConfig.CAST_RECEIVER_APP_ID) },
+                    onStopDiscovery = viewModel::stopCastDiscovery,
+                    onSelectRoute = viewModel::selectCastRoute,
+                    onStopCasting = viewModel::stopCasting,
+                ),
             )
         } else {
             IconButton(

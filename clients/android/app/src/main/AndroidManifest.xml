@@ -42,6 +42,15 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="invite-approvals" />
+
+        <!-- Playarr Cast: read by the Cast framework at CastContext init
+             time. Must name a class with a public no-arg constructor (see
+             cast/PlayarrCastOptionsProvider.kt and this module's matching
+             proguard -keep rule); omitting or mistyping this makes casting
+             silently unavailable rather than crash. -->
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="io.streamarr.mobile.cast.PlayarrCastOptionsProvider" />
         <service
             android:name=".InviteApprovalMessagingService"
             android:exported="false">

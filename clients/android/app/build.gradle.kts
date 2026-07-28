@@ -14,6 +14,7 @@ val firebaseApiKey = providers.gradleProperty("firebaseApiKey").orElse("")
 val firebaseApplicationId = providers.gradleProperty("firebaseMobileApplicationId").orElse("")
 val firebaseProjectId = providers.gradleProperty("firebaseProjectId").orElse("")
 val firebaseSenderId = providers.gradleProperty("firebaseSenderId").orElse("")
+val castReceiverAppId = providers.gradleProperty("castReceiverAppId").orElse("")
 val playarrVersionCode = providers.environmentVariable("PLAYARR_VERSION_CODE").map(String::toInt).orElse(1)
 val playarrVersionName = providers.environmentVariable("PLAYARR_VERSION_NAME").orElse("0.1.0")
 val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH")
@@ -45,6 +46,7 @@ android {
         buildConfigField("String", "FIREBASE_APPLICATION_ID", "\"${firebaseApplicationId.get()}\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${firebaseProjectId.get()}\"")
         buildConfigField("String", "FIREBASE_SENDER_ID", "\"${firebaseSenderId.get()}\"")
+        buildConfigField("String", "CAST_RECEIVER_APP_ID", "\"${castReceiverAppId.get()}\"")
 
         // No STREAMARR_BASE_URL buildConfigField: the server base URL is a
         // runtime-configurable, DataStore-backed setting now (see
@@ -126,6 +128,7 @@ dependencies {
     implementation(libs.coil.network.okhttp)
     implementation(libs.zxing.core)
     implementation(libs.androidx.media3.ui)
+    implementation(libs.play.services.cast.framework)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 

@@ -28,6 +28,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
+import androidx.compose.material.icons.outlined.Cast
+import androidx.compose.material.icons.outlined.CastConnected
 import androidx.compose.material.icons.outlined.HighQuality
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Pause
@@ -70,6 +72,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.streamarr.mobile.cast.PlayarrCastConnectionState
+import io.streamarr.mobile.cast.PlayarrCastRoute
 import io.streamarr.shared.player.PlaybackState
 import kotlinx.coroutines.delay
 
@@ -77,6 +81,26 @@ private const val PLAYER_CONTROLS_TIMEOUT_MS = 3_500L
 
 private enum class PlayarrPlayerMenu { Quality, Audio, Subtitles }
 private enum class PlayarrPlayerFocusTarget { Back, Seek }
+private enum class PlayarrCastDialogKind { Picker, Connected }
+
+/**
+ * Everything [PlayarrPlayerChrome] needs to render the cast entry point,
+ * bundled into one parameter (rather than half a dozen more on an already
+ * large signature) -- defaulted so this stays source-compatible with any
+ * other call site. [visible] gates the whole button (see
+ * `shouldOfferPlayarrCast`); the discovery/selection/stop callbacks are
+ * plain lambdas so this file never needs to know about `PlayarrCastSession`
+ * or Hilt.
+ */
+internal data class PlayarrPlayerCastState(
+    val visible: Boolean = false,
+    val connectionState: PlayarrCastConnectionState = PlayarrCastConnectionState.Unavailable,
+    val routes: List<PlayarrCastRoute> = emptyList(),
+    val onStartDiscovery: () -> Unit = {},
+    val onStopDiscovery: () -> Unit = {},
+    val onSelectRoute: (String) -> Unit = {},
+    val onStopCasting: () -> Unit = {},
+)
 
 @Composable
 internal fun PlayarrPlayerChrome(
@@ -99,12 +123,14 @@ internal fun PlayarrPlayerChrome(
     onQuality: (String) -> Unit,
     onAudio: (String) -> Unit,
     onSubtitle: (String?) -> Unit,
+    cast: PlayarrPlayerCastState = PlayarrPlayerCastState(),
     modifier: Modifier = Modifier,
 ) {
     var visible by remember { mutableStateOf(true) }
     var activityEpoch by remember { mutableLongStateOf(0L) }
     var openMenu by remember { mutableStateOf<PlayarrPlayerMenu?>(null) }
     var playlistOpen by remember { mutableStateOf(false) }
+    var castDialog by remember { mutableStateOf<PlayarrCastDialogKind?>(null) }
     var scrubPositionMs by remember { mutableStateOf<Long?>(null) }
     var pendingFocusTarget by remember { mutableStateOf<PlayarrPlayerFocusTarget?>(null) }
     val surfaceFocusRequester = remember { FocusRequester() }
@@ -203,6 +229,32 @@ internal fun PlayarrPlayerChrome(
                     isTelevision = isTelevision,
                     onClick = { showControls(); onMinimise() },
                 )
+                if (cast.visible) {
+                    val connected = cast.connectionState is PlayarrCastConnectionState.Connected
+                    val connecting = cast.connectionState is PlayarrCastConnectionState.Connecting
+                    PlayarrPlayerTopButton(
+                        icon = if (connected || connecting) Icons.Outlined.CastConnected else Icons.Outlined.Cast,
+                        label = playarrString(PlayarrString.CastButtonLabel),
+                        accessibilityLabel = (cast.connectionState as? PlayarrCastConnectionState.Connected)
+                            ?.let { state ->
+                                playarrString(
+                                    PlayarrString.CastButtonConnectedLabel,
+                                    "device" to (state.deviceName ?: playarrString(PlayarrString.CastButtonLabel)),
+                                )
+                            }
+                            ?: playarrString(PlayarrString.CastButtonLabel),
+                        isTelevision = isTelevision,
+                        onClick = {
+                            showControls()
+                            if (connected) {
+                                castDialog = PlayarrCastDialogKind.Connected
+                            } else {
+                                cast.onStartDiscovery()
+                                castDialog = PlayarrCastDialogKind.Picker
+                            }
+                        },
+                    )
+                }
             }
         }
 
@@ -265,6 +317,71 @@ internal fun PlayarrPlayerChrome(
             onSubtitle = { onSubtitle(it); openMenu = null; showControls() },
         )
     }
+
+    castDialog?.let { kind ->
+        PlayarrCastDialog(
+            kind = kind,
+            cast = cast,
+            onDismiss = {
+                if (kind == PlayarrCastDialogKind.Picker) cast.onStopDiscovery()
+                castDialog = null
+                showControls()
+            },
+        )
+    }
+}
+
+/**
+ * A plain Material3 `AlertDialog` device picker/connected-session menu --
+ * this app's theme is not AppCompat, so the stock
+ * `MediaRouteChooserDialog`/`MediaRouteControllerDialog` cannot be used
+ * here (see `PlayarrCastSession`'s KDoc).
+ */
+@Composable
+private fun PlayarrCastDialog(
+    kind: PlayarrCastDialogKind,
+    cast: PlayarrPlayerCastState,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(playarrString(PlayarrString.CastPickerTitle)) },
+        text = {
+            when (kind) {
+                PlayarrCastDialogKind.Connected -> Text(
+                    playarrString(
+                        PlayarrString.CastButtonConnectedLabel,
+                        "device" to (
+                            (cast.connectionState as? PlayarrCastConnectionState.Connected)?.deviceName
+                                ?: playarrString(PlayarrString.CastButtonLabel)
+                            ),
+                    ),
+                )
+                PlayarrCastDialogKind.Picker -> if (cast.routes.isEmpty()) {
+                    Text(playarrString(PlayarrString.CastPickerSearching))
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        cast.routes.forEach { route ->
+                            PlayerDialogOption(label = route.name, detail = null, selected = false) {
+                                cast.onSelectRoute(route.id)
+                                onDismiss()
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (kind == PlayarrCastDialogKind.Connected) {
+                TextButton(onClick = { cast.onStopCasting(); onDismiss() }) {
+                    Text(playarrString(PlayarrString.CastStopCasting))
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.CommonClose)) }
+        },
+    )
 }
 
 @Composable
