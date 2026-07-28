@@ -1,9 +1,9 @@
 # ==============================================================================
-# Streamarr -- reference multi-node production stack (docker-compose native).
+# Playarr Server -- reference multi-node production stack (docker-compose native).
 #
 # This is a REFERENCE topology for operators who want more headroom than a
 # single systemd install (Tier 1) but don't want to run Kubernetes (Tier 3,
-# see ../kubernetes/helm/streamarr/). It deliberately mirrors the Helm
+# see ../kubernetes/helm/playarr/). It deliberately mirrors the Helm
 # chart's contract (env var names, /healthz + /readyz, non-root uid 10001,
 # read-only root filesystem) so operating knowledge transfers between the
 # two -- see infra/docker/README.md for the full mapping.
@@ -14,19 +14,19 @@
 # exactly what a tier contains:
 #
 #   docker compose -f docker-compose.prod.yml up -d
-#     -> postgres, caddy, streamarr-api (2 replicas). API/browse traffic
+#     -> postgres, caddy, playarr-api (2 replicas). API/browse traffic
 #        only -- no worker means no on-demand/background transcode
 #        capacity. The smallest useful tier.
 #
 #   docker compose -f docker-compose.prod.yml --profile standard up -d
-#     -> adds streamarr-worker (2 replicas): transcode + library-scan
+#     -> adds playarr-worker (2 replicas): transcode + library-scan
 #        capacity. The tier most single-VPS/home-server operators want.
 #
 #   docker compose -f docker-compose.prod.yml --profile ha up -d
 #     -> adds Redis (shared cache/session store) plus one extra,
-#        independently-placed streamarr-api-2 / streamarr-worker-2 node
+#        independently-placed playarr-api-2 / playarr-worker-2 node
 #        each, on top of whatever --profile standard already added ('ha'
-#        implies wanting worker capacity too, so streamarr-worker carries
+#        implies wanting worker capacity too, so playarr-worker carries
 #        both profiles -- see its `profiles:` list below). Pass both flags
 #        together for the full tier: `--profile standard --profile ha`.
 #
@@ -35,39 +35,39 @@
 # with a weak/blank credential. Provide them via a `.env` file (untracked;
 # see .gitignore) or your orchestrator's secret injection. Redis, when the
 # `ha` profile is active, is expected at `redis://redis:6379/0` -- set
-# STREAMARR_REDIS_URL to that (or leave unset; REDIS_URL is optional, see
-# infra/kubernetes/helm/streamarr/values.yaml's secret.data.redisUrl).
+# PLAYARR_REDIS_URL to that (or leave unset; REDIS_URL is optional, see
+# infra/kubernetes/helm/playarr/values.yaml's secret.data.redisUrl).
 #
 # Usage:
 #   docker compose -f infra/docker/docker-compose.prod.yml build
 #   docker compose -f infra/docker/docker-compose.prod.yml --profile standard --profile ha up -d
 # ==============================================================================
 
-x-streamarr-image: &streamarr-image
+x-playarr-image: &playarr-image
   build:
     context: ../..
     dockerfile: infra/docker/backend.Dockerfile
-  image: ${STREAMARR_IMAGE:-ghcr.io/streamarr/streamarr}:${STREAMARR_IMAGE_TAG:-0.1.0}
+  image: ${PLAYARR_IMAGE:-ghcr.io/playarr/playarr}:${PLAYARR_IMAGE_TAG:-0.1.0}
   pull_policy: build
 
-x-streamarr-env: &streamarr-env
-  # The real env vars streamarr-config::Config::from_env reads (see
-  # backend/crates/streamarr-config/src/lib.rs) -- not APP_ENV/LOG_LEVEL/
+x-playarr-env: &playarr-env
+  # The real env vars playarr-config::Config::from_env reads (see
+  # backend/crates/playarr-config/src/lib.rs) -- not APP_ENV/LOG_LEVEL/
   # LOG_FORMAT/METRICS_ENABLED/METRICS_PORT/HTTP_PORT, none of which the
   # binary actually reads (a prior pass invented those against a
   # docs-described-but-never-implemented config surface).
-  STREAMARR_LOG: ${STREAMARR_LOG_LEVEL:-info}
-  STREAMARR_HTTP_BIND_ADDR: 0.0.0.0:8484
-  STREAMARR_METRICS_BIND_ADDR: 0.0.0.0:9090
-  DATABASE_URL: postgres://streamarr:${STREAMARR_DB_PASSWORD:?Set STREAMARR_DB_PASSWORD (e.g. in a .env file) before starting the prod stack}@postgres:5432/streamarr
-  STREAMARR_ARTWORK_CACHE_DIR: /data/streamarr-cache/artwork
+  PLAYARR_LOG: ${PLAYARR_LOG_LEVEL:-info}
+  PLAYARR_HTTP_BIND_ADDR: 0.0.0.0:8484
+  PLAYARR_METRICS_BIND_ADDR: 0.0.0.0:9090
+  DATABASE_URL: postgres://playarr:${PLAYARR_DB_PASSWORD:?Set PLAYARR_DB_PASSWORD (e.g. in a .env file) before starting the prod stack}@postgres:5432/playarr
+  PLAYARR_ARTWORK_CACHE_DIR: /data/playarr-cache/artwork
   # Optional. Only meaningfully reachable when --profile ha has started the
   # `redis` service; left blank otherwise (REDIS_URL is treated as
-  # optional throughout this repo's Streamarr contract -- see
-  # infra/kubernetes/helm/streamarr/values.yaml's secret.data.redisUrl).
-  REDIS_URL: ${STREAMARR_REDIS_URL:-}
+  # optional throughout this repo's Playarr Server contract -- see
+  # infra/kubernetes/helm/playarr/values.yaml's secret.data.redisUrl).
+  REDIS_URL: ${PLAYARR_REDIS_URL:-}
 
-x-streamarr-hardening: &streamarr-hardening
+x-playarr-hardening: &playarr-hardening
   # Mirrors the Helm chart's podSecurityContext/securityContext as closely
   # as a single-host container runtime allows: non-root (the image already
   # runs as uid/gid 10001 -- see backend.Dockerfile), read-only root
@@ -83,20 +83,20 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: streamarr
-      POSTGRES_USER: streamarr
-      POSTGRES_PASSWORD: ${STREAMARR_DB_PASSWORD:?Set STREAMARR_DB_PASSWORD (e.g. in a .env file) before starting the prod stack}
+      POSTGRES_DB: playarr
+      POSTGRES_USER: playarr
+      POSTGRES_PASSWORD: ${PLAYARR_DB_PASSWORD:?Set PLAYARR_DB_PASSWORD (e.g. in a .env file) before starting the prod stack}
     volumes:
       - postgres_prod_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U streamarr -d streamarr"]
+      test: ["CMD-SHELL", "pg_isready -U playarr -d playarr"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 15s
     restart: unless-stopped
     networks:
-      - streamarr-net
+      - playarr-net
 
   # Optional shared cache / session store. Only started with --profile ha.
   redis:
@@ -112,18 +112,18 @@ services:
       retries: 5
     restart: unless-stopped
     networks:
-      - streamarr-net
+      - playarr-net
 
-  streamarr-api:
-    <<: [*streamarr-image, *streamarr-hardening]
+  playarr-api:
+    <<: [*playarr-image, *playarr-hardening]
     # `serve` takes no CLI arguments (see backend/src/main.rs) -- role
-    # selection is entirely via the STREAMARR_ROLE environment variable set
+    # selection is entirely via the PLAYARR_ROLE environment variable set
     # below. This matches the image's own default CMD; kept explicit here
     # for clarity, not because it differs from it.
     command: ["serve"]
     environment:
-      <<: *streamarr-env
-      STREAMARR_ROLE: api
+      <<: *playarr-env
+      PLAYARR_ROLE: api
     deploy:
       replicas: 2
       resources:
@@ -140,9 +140,9 @@ services:
       - "8484"
       - "9090"
     volumes:
-      - streamarr_prod_artwork_cache:/data/streamarr-cache/artwork
+      - playarr_prod_artwork_cache:/data/playarr-cache/artwork
     networks:
-      - streamarr-net
+      - playarr-net
 
   # Second, independently-scheduled API node for the `ha` tier -- pin
   # `deploy.placement.constraints` here (Swarm) or run it on a different
@@ -150,17 +150,17 @@ services:
   # alone can't schedule across hosts, so this service mostly documents
   # the intended topology for a Swarm/Nomad-managed deployment of this
   # same image.
-  streamarr-api-2:
-    <<: [*streamarr-image, *streamarr-hardening]
+  playarr-api-2:
+    <<: [*playarr-image, *playarr-hardening]
     # `serve` takes no CLI arguments (see backend/src/main.rs) -- role
-    # selection is entirely via the STREAMARR_ROLE environment variable set
+    # selection is entirely via the PLAYARR_ROLE environment variable set
     # below. This matches the image's own default CMD; kept explicit here
     # for clarity, not because it differs from it.
     command: ["serve"]
     profiles: ["ha"]
     environment:
-      <<: *streamarr-env
-      STREAMARR_ROLE: api
+      <<: *playarr-env
+      PLAYARR_ROLE: api
     deploy:
       resources:
         limits:
@@ -176,14 +176,14 @@ services:
       - "8484"
       - "9090"
     volumes:
-      - streamarr_prod_artwork_cache:/data/streamarr-cache/artwork
+      - playarr_prod_artwork_cache:/data/playarr-cache/artwork
     networks:
-      - streamarr-net
+      - playarr-net
 
-  streamarr-worker:
-    <<: [*streamarr-image, *streamarr-hardening]
+  playarr-worker:
+    <<: [*playarr-image, *playarr-hardening]
     # `serve` takes no CLI arguments (see backend/src/main.rs) -- role
-    # selection is entirely via the STREAMARR_ROLE environment variable set
+    # selection is entirely via the PLAYARR_ROLE environment variable set
     # below. This matches the image's own default CMD; kept explicit here
     # for clarity, not because it differs from it.
     command: ["serve"]
@@ -192,8 +192,8 @@ services:
     # without also having to remember `--profile standard`.
     profiles: ["standard", "ha"]
     environment:
-      <<: *streamarr-env
-      STREAMARR_ROLE: worker
+      <<: *playarr-env
+      PLAYARR_ROLE: worker
     deploy:
       replicas: 2
       resources:
@@ -210,19 +210,19 @@ services:
       - "8484"
       - "9090"
     networks:
-      - streamarr-net
+      - playarr-net
 
-  streamarr-worker-2:
-    <<: [*streamarr-image, *streamarr-hardening]
+  playarr-worker-2:
+    <<: [*playarr-image, *playarr-hardening]
     # `serve` takes no CLI arguments (see backend/src/main.rs) -- role
-    # selection is entirely via the STREAMARR_ROLE environment variable set
+    # selection is entirely via the PLAYARR_ROLE environment variable set
     # below. This matches the image's own default CMD; kept explicit here
     # for clarity, not because it differs from it.
     command: ["serve"]
     profiles: ["ha"]
     environment:
-      <<: *streamarr-env
-      STREAMARR_ROLE: worker
+      <<: *playarr-env
+      PLAYARR_ROLE: worker
     deploy:
       resources:
         limits:
@@ -238,7 +238,7 @@ services:
       - "8484"
       - "9090"
     networks:
-      - streamarr-net
+      - playarr-net
 
   # Reverse proxy / public edge. Only this service publishes host ports;
   # everything else is internal-network-only. See ./prod/Caddyfile for the
@@ -246,7 +246,7 @@ services:
   caddy:
     image: caddy:2-alpine
     environment:
-      STREAMARR_DOMAIN: ${STREAMARR_DOMAIN:-localhost}
+      PLAYARR_DOMAIN: ${PLAYARR_DOMAIN:-localhost}
     volumes:
       - ./prod/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -256,31 +256,31 @@ services:
       - "443:443"
       - "443:443/udp"
     depends_on:
-      - streamarr-api
+      - playarr-api
     restart: unless-stopped
     networks:
-      - streamarr-net
-      - streamarr-edge
+      - playarr-net
+      - playarr-edge
 
 networks:
   # Shared with docker-compose.dev.yml / docker-compose.ci.yml's network
   # name on purpose: ../observability/docker-compose.yml joins this exact
-  # network (as `external: true`) to scrape streamarr-api/worker:9090
+  # network (as `external: true`) to scrape playarr-api/worker:9090
   # regardless of which base stack is running.
-  streamarr-net:
-    name: streamarr-net
+  playarr-net:
+    name: playarr-net
   # Only Caddy sits on this one; it's what actually gets a published host
-  # port. Kept separate from streamarr-net so a compromised edge container
+  # port. Kept separate from playarr-net so a compromised edge container
   # doesn't get network-level visibility into Postgres/Redis beyond what
-  # streamarr-net already grants it (defense in depth, not a hard
+  # playarr-net already grants it (defense in depth, not a hard
   # boundary -- Caddy IS on both networks because it must reach
-  # streamarr-api).
-  streamarr-edge:
-    name: streamarr-edge
+  # playarr-api).
+  playarr-edge:
+    name: playarr-edge
 
 volumes:
   postgres_prod_data:
   redis_prod_data:
   caddy_data:
   caddy_config:
-  streamarr_prod_artwork_cache:
+  playarr_prod_artwork_cache:

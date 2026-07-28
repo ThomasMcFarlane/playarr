@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: streamarr-prod
+namespace: playarr-prod
 
 resources:
   - ../../base
@@ -9,24 +9,24 @@ resources:
 patches:
   - target:
       kind: Deployment
-      name: streamarr-api
+      name: playarr-api
     patch: |-
       - op: replace
         path: /spec/replicas
         value: 3
   - target:
       kind: Deployment
-      name: streamarr-worker
+      name: playarr-worker
     patch: |-
       - op: replace
         path: /spec/replicas
         value: 3
 
 configMapGenerator:
-  - name: streamarr-config
+  - name: playarr-config
     behavior: merge
     literals:
-      - STREAMARR_LOG=warn
+      - PLAYARR_LOG=warn
 
 # Production MUST NOT ship with base/secret.yaml's empty placeholder.
 # Remove it from the resolved resource list (e.g. by re-declaring

@@ -1,12 +1,12 @@
 # ==============================================================================
-# Streamarr -- local dev stack (Tier 2: docker-compose, per
+# Playarr Server -- local dev stack (Tier 2: docker-compose, per
 # docs/architecture/adr/0001-storage-engine.md's tier table).
 #
-# Now that backend/ builds a real `streamarr` binary, this file runs it too
-# (service `streamarr`, built from backend.Dockerfile), alongside Postgres +
-# the *arr apps + Tdarr as supervised sibling containers. `STREAMARR_ROLE`
+# Now that backend/ builds a real `playarr` binary, this file runs it too
+# (service `playarr`, built from backend.Dockerfile), alongside Postgres +
+# the *arr apps + Tdarr as supervised sibling containers. `PLAYARR_ROLE`
 # is set to `all` (API + worker in one process) -- the right default for a
-# single-node dev stack; see backend/crates/streamarr-config's docs for the
+# single-node dev stack; see backend/crates/playarr-config's docs for the
 # full `all`/`api`/`worker` role contract.
 #
 # Usage:
@@ -29,32 +29,32 @@ x-linuxserver-env: &linuxserver-env
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: streamarr-dev-postgres
+    container_name: playarr-dev-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-streamarr}
-      POSTGRES_USER: ${POSTGRES_USER:-streamarr}
+      POSTGRES_DB: ${POSTGRES_DB:-playarr}
+      POSTGRES_USER: ${POSTGRES_USER:-playarr}
       # Dev-only default password for a Postgres instance that is not
       # reachable outside this compose network unless you also publish
       # the port to a non-loopback interface. Override via a .env file
       # for anything beyond a throwaway local checkout.
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-streamarr_dev_only}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-playarr_dev_only}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-streamarr} -d ${POSTGRES_DB:-streamarr}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-playarr} -d ${POSTGRES_DB:-playarr}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
     networks:
-      - streamarr-net
+      - playarr-net
 
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
-    container_name: streamarr-dev-sonarr
+    container_name: playarr-dev-sonarr
     restart: unless-stopped
     environment:
       <<: *linuxserver-env
@@ -64,11 +64,11 @@ services:
     ports:
       - "8989:8989"
     networks:
-      - streamarr-net
+      - playarr-net
 
   radarr:
     image: lscr.io/linuxserver/radarr:latest
-    container_name: streamarr-dev-radarr
+    container_name: playarr-dev-radarr
     restart: unless-stopped
     environment:
       <<: *linuxserver-env
@@ -78,11 +78,11 @@ services:
     ports:
       - "7878:7878"
     networks:
-      - streamarr-net
+      - playarr-net
 
   lidarr:
     image: lscr.io/linuxserver/lidarr:latest
-    container_name: streamarr-dev-lidarr
+    container_name: playarr-dev-lidarr
     restart: unless-stopped
     environment:
       <<: *linuxserver-env
@@ -92,11 +92,11 @@ services:
     ports:
       - "8686:8686"
     networks:
-      - streamarr-net
+      - playarr-net
 
   bazarr:
     image: lscr.io/linuxserver/bazarr:latest
-    container_name: streamarr-dev-bazarr
+    container_name: playarr-dev-bazarr
     restart: unless-stopped
     environment:
       <<: *linuxserver-env
@@ -106,11 +106,11 @@ services:
     ports:
       - "6767:6767"
     networks:
-      - streamarr-net
+      - playarr-net
 
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
-    container_name: streamarr-dev-prowlarr
+    container_name: playarr-dev-prowlarr
     restart: unless-stopped
     environment:
       <<: *linuxserver-env
@@ -119,7 +119,7 @@ services:
     ports:
       - "9696:9696"
     networks:
-      - streamarr-net
+      - playarr-net
 
   readarr:
     # Readarr has no LSIO "stable" tag as of this writing -- `develop` is
@@ -128,7 +128,7 @@ services:
     # digest/tag once one exists if you need reproducibility beyond "dev
     # stack, latest develop build".
     image: lscr.io/linuxserver/readarr:develop
-    container_name: streamarr-dev-readarr
+    container_name: playarr-dev-readarr
     restart: unless-stopped
     environment:
       <<: *linuxserver-env
@@ -138,11 +138,11 @@ services:
     ports:
       - "8787:8787"
     networks:
-      - streamarr-net
+      - playarr-net
 
   tdarr:
     image: haveagitgat/tdarr:latest
-    container_name: streamarr-dev-tdarr
+    container_name: playarr-dev-tdarr
     restart: unless-stopped
     environment:
       <<: *linuxserver-env
@@ -153,7 +153,7 @@ services:
       internalNode: "true"
       inContainer: "true"
       ffmpegVersion: "6"
-      nodeName: "streamarr-dev-tdarr-internal"
+      nodeName: "playarr-dev-tdarr-internal"
     volumes:
       - tdarr_dev_server:/app/server
       - tdarr_dev_configs:/app/configs
@@ -163,43 +163,43 @@ services:
       - "8265:8265"
       - "8266:8266"
     networks:
-      - streamarr-net
+      - playarr-net
 
-  # The real backend binary (`backend/`, package `streamarr-bin`), built
-  # from infra/docker/backend.Dockerfile. `STREAMARR_ROLE=all` runs both
+  # The real backend binary (`backend/`, package `playarr-bin`), built
+  # from infra/docker/backend.Dockerfile. `PLAYARR_ROLE=all` runs both
   # the Axum API router and the worker-side loops (arr-sync reconciliation,
   # Tdarr dispatch) in this one process -- see
-  # backend/crates/streamarr-config's `Role` docs.
-  streamarr:
+  # backend/crates/playarr-config's `Role` docs.
+  playarr:
     build:
       context: ../..
       dockerfile: infra/docker/backend.Dockerfile
-    image: streamarr:dev
-    container_name: streamarr-dev-streamarr
+    image: playarr:dev
+    container_name: playarr-dev-playarr
     environment:
-      STREAMARR_ROLE: all
-      # Real env vars streamarr-config::Config::from_env reads -- see that
+      PLAYARR_ROLE: all
+      # Real env vars playarr-config::Config::from_env reads -- see that
       # crate's docs for the full list/defaults. Matches the postgres
       # service's own credentials above rather than hardcoding a second
       # copy of them.
-      DATABASE_URL: postgres://${POSTGRES_USER:-streamarr}:${POSTGRES_PASSWORD:-streamarr_dev_only}@postgres:5432/${POSTGRES_DB:-streamarr}
-      STREAMARR_ARTWORK_CACHE_DIR: /data/streamarr-cache/artwork
-      STREAMARR_LOG: ${STREAMARR_LOG:-info,streamarr_api=debug}
-      STREAMARR_HTTP_BIND_ADDR: 0.0.0.0:8484
-      STREAMARR_METRICS_BIND_ADDR: 0.0.0.0:9090
-      # Dev-only: unset means streamarr-bin generates a boot-lifetime JWT
+      DATABASE_URL: postgres://${POSTGRES_USER:-playarr}:${POSTGRES_PASSWORD:-playarr_dev_only}@postgres:5432/${POSTGRES_DB:-playarr}
+      PLAYARR_ARTWORK_CACHE_DIR: /data/playarr-cache/artwork
+      PLAYARR_LOG: ${PLAYARR_LOG:-info,playarr_api=debug}
+      PLAYARR_HTTP_BIND_ADDR: 0.0.0.0:8484
+      PLAYARR_METRICS_BIND_ADDR: 0.0.0.0:9090
+      # Dev-only: unset means playarr-bin generates a boot-lifetime JWT
       # secret and logs a warning (see backend/src/main.rs's
       # jwt_secret_from_env) -- fine here, tokens just won't survive a
       # container restart. Set explicitly for anything beyond a throwaway
       # local stack.
-      STREAMARR_JWT_SECRET: ${STREAMARR_JWT_SECRET:-}
+      PLAYARR_JWT_SECRET: ${PLAYARR_JWT_SECRET:-}
       # Real: the worker role's Tdarr dispatch loop (backend/src/main.rs's
       # boot_worker) reads these two directly and only starts that loop
       # when TDARR_URL is set.
       TDARR_URL: http://tdarr:8265
       TDARR_API_KEY: ${TDARR_API_KEY:-}
       # NOTE: there is no SourceInstance persistence/admin API yet (see
-      # streamarr_api::SourceInstanceRegistry's doc comment) -- nothing in
+      # playarr_api::SourceInstanceRegistry's doc comment) -- nothing in
       # the backend currently reads *arr connection info from the
       # environment, so the running server won't auto-discover the
       # services below. These are recorded here as the addresses a future
@@ -232,13 +232,13 @@ services:
       - "8484:8484"
       - "9090:9090"
     volumes:
-      - streamarr_dev_artwork_cache:/data/streamarr-cache/artwork
+      - playarr_dev_artwork_cache:/data/playarr-cache/artwork
     networks:
-      - streamarr-net
+      - playarr-net
 
 networks:
-  streamarr-net:
-    name: streamarr-net
+  playarr-net:
+    name: playarr-net
 
 volumes:
   postgres_dev_data:
@@ -252,4 +252,4 @@ volumes:
   tdarr_dev_configs:
   tdarr_dev_logs:
   media_dev:
-  streamarr_dev_artwork_cache:
+  playarr_dev_artwork_cache:

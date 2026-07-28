@@ -1,5 +1,5 @@
 # ==============================================================================
-# Streamarr -- CI dependency stack.
+# Playarr Server -- CI dependency stack.
 #
 # Same service set as docker-compose.dev.yml (Postgres 16 + the *arr apps +
 # Tdarr), tuned for a CI runner rather than a human's laptop:
@@ -11,7 +11,7 @@
 #   - Faster healthchecks (short interval/timeout, higher retry count, short
 #     start_period) so `docker compose up --wait` fails fast on a broken
 #     dependency instead of a human-scale 30s+ dev healthcheck cadence.
-#   - A `streamarr` service built from backend.Dockerfile, because CI is the
+#   - A `playarr` service built from backend.Dockerfile, because CI is the
 #     one environment that always has a buildable backend/ checkout by the
 #     time this file runs -- unlike docker-compose.dev.yml, which
 #     deliberately excludes it (see that file's header comment).
@@ -35,11 +35,11 @@ x-ci-healthcheck-defaults: &ci-healthcheck-defaults
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: streamarr-ci-postgres
+    container_name: playarr-ci-postgres
     environment:
-      POSTGRES_DB: streamarr
-      POSTGRES_USER: streamarr
-      POSTGRES_PASSWORD: streamarr_ci_only
+      POSTGRES_DB: playarr
+      POSTGRES_USER: playarr
+      POSTGRES_PASSWORD: playarr_ci_only
       # Speeds up fsync in a throwaway CI container; never do this outside
       # a stack that is destroyed at the end of every run.
       POSTGRES_INITDB_ARGS: "--no-sync"
@@ -48,14 +48,14 @@ services:
     tmpfs:
       - /var/lib/postgresql/data:uid=999,gid=999
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U streamarr -d streamarr"]
+      test: ["CMD-SHELL", "pg_isready -U playarr -d playarr"]
       <<: *ci-healthcheck-defaults
     networks:
-      - streamarr-net
+      - playarr-net
 
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
-    container_name: streamarr-ci-sonarr
+    container_name: playarr-ci-sonarr
     environment:
       <<: *linuxserver-env
     tmpfs:
@@ -66,11 +66,11 @@ services:
       test: ["CMD", "curl", "-fsS", "http://localhost:8989/ping"]
       <<: *ci-healthcheck-defaults
     networks:
-      - streamarr-net
+      - playarr-net
 
   radarr:
     image: lscr.io/linuxserver/radarr:latest
-    container_name: streamarr-ci-radarr
+    container_name: playarr-ci-radarr
     environment:
       <<: *linuxserver-env
     tmpfs:
@@ -81,11 +81,11 @@ services:
       test: ["CMD", "curl", "-fsS", "http://localhost:7878/ping"]
       <<: *ci-healthcheck-defaults
     networks:
-      - streamarr-net
+      - playarr-net
 
   lidarr:
     image: lscr.io/linuxserver/lidarr:latest
-    container_name: streamarr-ci-lidarr
+    container_name: playarr-ci-lidarr
     environment:
       <<: *linuxserver-env
     tmpfs:
@@ -96,11 +96,11 @@ services:
       test: ["CMD", "curl", "-fsS", "http://localhost:8686/ping"]
       <<: *ci-healthcheck-defaults
     networks:
-      - streamarr-net
+      - playarr-net
 
   bazarr:
     image: lscr.io/linuxserver/bazarr:latest
-    container_name: streamarr-ci-bazarr
+    container_name: playarr-ci-bazarr
     environment:
       <<: *linuxserver-env
     tmpfs:
@@ -111,11 +111,11 @@ services:
       test: ["CMD", "curl", "-fsS", "http://localhost:6767/"]
       <<: *ci-healthcheck-defaults
     networks:
-      - streamarr-net
+      - playarr-net
 
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
-    container_name: streamarr-ci-prowlarr
+    container_name: playarr-ci-prowlarr
     environment:
       <<: *linuxserver-env
     tmpfs:
@@ -126,11 +126,11 @@ services:
       test: ["CMD", "curl", "-fsS", "http://localhost:9696/ping"]
       <<: *ci-healthcheck-defaults
     networks:
-      - streamarr-net
+      - playarr-net
 
   readarr:
     image: lscr.io/linuxserver/readarr:develop
-    container_name: streamarr-ci-readarr
+    container_name: playarr-ci-readarr
     environment:
       <<: *linuxserver-env
     tmpfs:
@@ -141,11 +141,11 @@ services:
       test: ["CMD", "curl", "-fsS", "http://localhost:8787/ping"]
       <<: *ci-healthcheck-defaults
     networks:
-      - streamarr-net
+      - playarr-net
 
   tdarr:
     image: haveagitgat/tdarr:latest
-    container_name: streamarr-ci-tdarr
+    container_name: playarr-ci-tdarr
     environment:
       <<: *linuxserver-env
       serverIP: "0.0.0.0"
@@ -154,7 +154,7 @@ services:
       internalNode: "true"
       inContainer: "true"
       ffmpegVersion: "6"
-      nodeName: "streamarr-ci-tdarr-internal"
+      nodeName: "playarr-ci-tdarr-internal"
     tmpfs:
       - /app/server
       - /app/configs
@@ -166,41 +166,41 @@ services:
       test: ["CMD", "curl", "-fsS", "http://localhost:8265/"]
       <<: *ci-healthcheck-defaults
     networks:
-      - streamarr-net
+      - playarr-net
 
   # The real binary, built fresh every CI run so the dependency stack above
   # is always exercised against the current commit rather than a stale
   # published tag. See infra/docker/backend.Dockerfile for the multi-stage
   # build this triggers, and infra/docker/README.md for the env var
-  # contract (mirrors infra/kubernetes/helm/streamarr/values.yaml).
-  streamarr:
+  # contract (mirrors infra/kubernetes/helm/playarr/values.yaml).
+  playarr:
     build:
       context: ../..
       dockerfile: infra/docker/backend.Dockerfile
-    image: streamarr:ci
-    container_name: streamarr-ci-streamarr
+    image: playarr:ci
+    container_name: playarr-ci-playarr
     environment:
-      # The real env vars streamarr-config::Config::from_env reads (see
-      # backend/crates/streamarr-config/src/lib.rs) -- Role::All is the only
+      # The real env vars playarr-config::Config::from_env reads (see
+      # backend/crates/playarr-config/src/lib.rs) -- Role::All is the only
       # valid single-container role; "standalone" is rejected by Role::parse
       # and the container refuses to boot.
-      STREAMARR_LOG: debug
-      STREAMARR_HTTP_BIND_ADDR: 0.0.0.0:8484
-      STREAMARR_METRICS_BIND_ADDR: 0.0.0.0:9090
-      STREAMARR_ROLE: all
-      DATABASE_URL: postgres://streamarr:streamarr_ci_only@postgres:5432/streamarr
-      # Redis is optional per infra/kubernetes/helm/streamarr/values.yaml
+      PLAYARR_LOG: debug
+      PLAYARR_HTTP_BIND_ADDR: 0.0.0.0:8484
+      PLAYARR_METRICS_BIND_ADDR: 0.0.0.0:9090
+      PLAYARR_ROLE: all
+      DATABASE_URL: postgres://playarr:playarr_ci_only@postgres:5432/playarr
+      # Redis is optional per infra/kubernetes/helm/playarr/values.yaml
       # (REDIS_URL is wired unconditionally in the Deployment templates but
       # defaults to an empty secret value there too); this dependency
       # stack doesn't run one. Add a `redis:7-alpine` service here if/when
       # the backend makes REDIS_URL a hard startup requirement.
       REDIS_URL: ""
-      # NOTE: streamarr-arr-client's actual config schema isn't implemented
-      # yet (backend/crates/streamarr-arr-client is still a placeholder at
+      # NOTE: playarr-arr-client's actual config schema isn't implemented
+      # yet (backend/crates/playarr-arr-client is still a placeholder at
       # the time this file was written) -- these *_BASE_URL names are a
       # reasonable placeholder guess at the wiring, not a confirmed
       # contract. Reconcile with whatever config surface
-      # streamarr-arr-client/streamarr-config actually expose once
+      # playarr-arr-client/playarr-config actually expose once
       # implemented (env vars, a mounted config file, or both).
       SONARR_BASE_URL: http://sonarr:8989
       RADARR_BASE_URL: http://radarr:7878
@@ -235,8 +235,8 @@ services:
       test: ["CMD", "curl", "-fsS", "http://localhost:8484/healthz"]
       <<: *ci-healthcheck-defaults
     networks:
-      - streamarr-net
+      - playarr-net
 
 networks:
-  streamarr-net:
-    name: streamarr-ci-net
+  playarr-net:
+    name: playarr-ci-net

@@ -9,7 +9,7 @@
     "headers": { "Content-Type": "application/json" },
     "jsonBody": {
       "appName": "Readarr",
-      "instanceName": "streamarr-mock-readarr",
+      "instanceName": "playarr-mock-readarr",
       "version": "0.4.13.2755",
       "buildTime": "2026-01-01T00:00:00Z",
       "isDebug": false,

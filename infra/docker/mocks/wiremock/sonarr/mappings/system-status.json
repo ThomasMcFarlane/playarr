@@ -9,7 +9,7 @@
     "headers": { "Content-Type": "application/json" },
     "jsonBody": {
       "appName": "Sonarr",
-      "instanceName": "streamarr-mock-sonarr",
+      "instanceName": "playarr-mock-sonarr",
       "version": "4.0.9.2244",
       "buildTime": "2026-01-01T00:00:00Z",
       "isDebug": false,

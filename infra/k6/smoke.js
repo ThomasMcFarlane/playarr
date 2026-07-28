@@ -8,7 +8,7 @@
  *
  * Hits:
  *   GET /healthz            liveness probe -- see infra/kubernetes/base/*
- *                            and infra/kubernetes/helm/streamarr/values.yaml
+ *                            and infra/kubernetes/helm/playarr/values.yaml
  *                            (probes.livenessPath), which is where this path
  *                            is confirmed rather than assumed.
  *   GET /readyz              readiness probe, same source.
@@ -16,7 +16,7 @@
  *                            (referenced from docs/architecture/overview.md)
  *                            does not exist yet, so the exact route for a
  *                            version envelope isn't confirmed. Shaped after
- *                            @streamarr-tv/domain's `VersionEnvelope<T>`
+ *                            @playarr-tv/domain's `VersionEnvelope<T>`
  *                            (apiVersion, schemaVersion, data), which *is*
  *                            confirmed (clients/tv-web/packages/domain).
  *                            Override via SYSTEM_VERSION_PATH if/when the
@@ -24,10 +24,10 @@
  *
  * Run:
  *   k6 run infra/k6/smoke.js
- *   k6 run -e BASE_URL=https://dev.streamarr.example infra/k6/smoke.js
+ *   k6 run -e BASE_URL=https://dev.playarr.example infra/k6/smoke.js
  *
  * NOTE: authored as scaffolding against a backend that doesn't exist yet
- * (see backend/crates/streamarr-api, currently a stub). Not executed here.
+ * (see backend/crates/playarr-api, currently a stub). Not executed here.
  */
 
 import http from "k6/http";
@@ -37,9 +37,9 @@ import { Trend } from "k6/metrics";
 const BASE_URL = __ENV.BASE_URL || "http://localhost:8484";
 const SYSTEM_VERSION_PATH = __ENV.SYSTEM_VERSION_PATH || "/api/system/version";
 
-const healthzDuration = new Trend("streamarr_healthz_duration", true);
-const readyzDuration = new Trend("streamarr_readyz_duration", true);
-const versionDuration = new Trend("streamarr_system_version_duration", true);
+const healthzDuration = new Trend("playarr_healthz_duration", true);
+const readyzDuration = new Trend("playarr_readyz_duration", true);
+const versionDuration = new Trend("playarr_system_version_duration", true);
 
 export const options = {
   scenarios: {
@@ -58,9 +58,9 @@ export const options = {
     // (no DB/catalog joins expected), so 150ms p95 is a deliberately tight
     // bar; a smoke test that passes at "load test" thresholds isn't doing
     // its job of catching regressions early.
-    "streamarr_healthz_duration": ["p(95)<100"],
-    "streamarr_readyz_duration": ["p(95)<150"],
-    "streamarr_system_version_duration": ["p(95)<150"],
+    "playarr_healthz_duration": ["p(95)<100"],
+    "playarr_readyz_duration": ["p(95)<150"],
+    "playarr_system_version_duration": ["p(95)<150"],
   },
 };
 

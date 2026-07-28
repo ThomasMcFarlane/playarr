@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
 # EXAMPLE ONLY - not wired into any Kustomization/HelmRelease in this repo.
 #
-# This file documents the SANCTIONED GitOps auto-update path for Streamarr
+# This file documents the SANCTIONED GitOps auto-update path for Playarr Server
 # container images: Flux's image-reflector-controller +
 # image-automation-controller watch the registry, decide a new tag matches
 # policy, and commit the bump BACK INTO THIS GIT REPO (a values.yaml or
@@ -28,7 +28,7 @@
 #     source-controller, kustomize-controller, image-reflector-controller,
 #     image-automation-controller CRDs + controllers).
 #   - A Flux Kustomization (or HelmRelease, if using
-#     helm/streamarr directly) already reconciling
+#     helm/playarr directly) already reconciling
 #     infra/kubernetes/overlays/<env> (or the Helm release's values) into
 #     the cluster. That resource is NOT defined in this example file - it
 #     lives in whatever repo/path your Flux bootstrap points at.
@@ -39,14 +39,14 @@
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImageRepository
 metadata:
-  name: streamarr
+  name: playarr
   namespace: flux-system
 spec:
-  image: ghcr.io/streamarr/streamarr
+  image: ghcr.io/playarr/playarr
   interval: 5m
-  # If ghcr.io/streamarr/streamarr is private, reference a pull secret:
+  # If ghcr.io/playarr/playarr is private, reference a pull secret:
   # secretRef:
-  #   name: ghcr-streamarr-pull
+  #   name: ghcr-playarr-pull
 
 ---
 # Defines which tags are eligible and how to pick the "latest" one. This
@@ -55,11 +55,11 @@ spec:
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImagePolicy
 metadata:
-  name: streamarr
+  name: playarr
   namespace: flux-system
 spec:
   imageRepositoryRef:
-    name: streamarr
+    name: playarr
   policy:
     semver:
       # Widen/narrow per environment if you run separate ImagePolicies for
@@ -75,13 +75,13 @@ spec:
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImageUpdateAutomation
 metadata:
-  name: streamarr
+  name: playarr
   namespace: flux-system
 spec:
   interval: 5m
   sourceRef:
     kind: GitRepository
-    name: streamarr
+    name: playarr
     namespace: flux-system
   git:
     checkout:
@@ -92,7 +92,7 @@ spec:
         name: fluxcdbot
         email: fluxcdbot@users.noreply.github.com
       messageTemplate: |
-        infra(image): bump streamarr to {{range .Updated.Images}}{{println .}}{{end}}
+        infra(image): bump playarr to {{range .Updated.Images}}{{println .}}{{end}}
     push:
       # Recommended: push to a side branch and require a PR + review before
       # this reaches `main`, rather than pushing straight to main. Swap for
@@ -107,18 +107,18 @@ spec:
 # Example of the marker comments ImageUpdateAutomation looks for, using
 # Setters strategy. Add a comment exactly like this next to the image
 # reference Flux should manage. For the Helm chart, that's
-# helm/streamarr/values.yaml's `image.tag` field:
+# helm/playarr/values.yaml's `image.tag` field:
 #
 #   image:
-#     repository: ghcr.io/streamarr/streamarr
-#     tag: "0.1.0" # {"$imagepolicy": "flux-system:streamarr:tag"}
+#     repository: ghcr.io/playarr/playarr
+#     tag: "0.1.0" # {"$imagepolicy": "flux-system:playarr:tag"}
 #
 # For the kustomize skeleton, base/kustomization.yaml's `images.newTag`
 # field would carry the same marker:
 #
 #   images:
-#     - name: ghcr.io/streamarr/streamarr
-#       newTag: "0.1.0" # {"$imagepolicy": "flux-system:streamarr:tag"}
+#     - name: ghcr.io/playarr/playarr
+#       newTag: "0.1.0" # {"$imagepolicy": "flux-system:playarr:tag"}
 #
 # Marker comments are NOT added to the real values.yaml/kustomization.yaml
 # in this repo by default - opt in per-environment deliberately, since it

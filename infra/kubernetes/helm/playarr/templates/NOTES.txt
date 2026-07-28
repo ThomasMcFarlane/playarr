@@ -1,7 +1,7 @@
-Streamarr ({{ .Chart.AppVersion }}) has been deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+Playarr Server ({{ .Chart.AppVersion }}) has been deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
 
 API:
-  Service:   {{ include "streamarr.fullname" . }}-api ({{ .Values.api.service.type }}, port {{ .Values.api.service.port }})
+  Service:   {{ include "playarr.fullname" . }}-api ({{ .Values.api.service.type }}, port {{ .Values.api.service.port }})
   Replicas:  {{ if .Values.api.autoscaling.enabled }}{{ .Values.api.autoscaling.minReplicas }}-{{ .Values.api.autoscaling.maxReplicas }} (HPA){{ else }}{{ .Values.api.replicaCount }} (fixed){{ end }}
 
 Worker:
@@ -11,7 +11,7 @@ Worker:
 {{- if not .Values.secret.create }}
 
 NOTE: secret.create is false. Make sure a Secret named
-"{{ include "streamarr.secretName" . }}" exists in this namespace with
+"{{ include "playarr.secretName" . }}" exists in this namespace with
 DATABASE_URL and REDIS_URL keys before pods will become Ready - see
 infra/kubernetes/README.md for provisioning options.
 {{- end }}
@@ -23,5 +23,5 @@ kube-prometheus-stack / Prometheus Operator CRDs).
 {{- end }}
 
 Check rollout status with:
-  kubectl rollout status deployment/{{ include "streamarr.fullname" . }}-api -n {{ .Release.Namespace }}
-  kubectl rollout status deployment/{{ include "streamarr.fullname" . }}-worker -n {{ .Release.Namespace }}
+  kubectl rollout status deployment/{{ include "playarr.fullname" . }}-api -n {{ .Release.Namespace }}
+  kubectl rollout status deployment/{{ include "playarr.fullname" . }}-worker -n {{ .Release.Namespace }}

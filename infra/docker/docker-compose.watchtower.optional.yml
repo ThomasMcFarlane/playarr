@@ -7,13 +7,13 @@
 # from under you is a real availability and supply-chain risk, and directly
 # in tension with docs/architecture/overview.md's whole "one artifact per
 # release, self-update refused inside containers" design (see
-# backend.Dockerfile's `/.streamarr-container` marker -- Watchtower's
+# backend.Dockerfile's `/.playarr-container` marker -- Watchtower's
 # pull-and-recreate is the SANCTIONED replacement for that in-app self-
 # update path, precisely because it's driven by the image/tag lifecycle
 # instead of the running process patching itself).
 #
 # HOW TO LAYER THIS IN (it does nothing on its own -- `-f` it alongside a
-# base file that already defines the `streamarr-api`/`streamarr-worker`
+# base file that already defines the `playarr-api`/`playarr-worker`
 # services, i.e. docker-compose.prod.yml):
 #
 #   docker compose \
@@ -23,18 +23,18 @@
 #
 # What this overlay does, precisely:
 #   1. Adds `com.centurylinklabs.watchtower.enable=true` to every
-#      `streamarr-*` service. Watchtower is started with `--label-enable`,
+#      `playarr-*` service. Watchtower is started with `--label-enable`,
 #      so it polls/updates ONLY containers carrying this label -- Postgres,
 #      Redis, and Caddy are never touched, even though they're in the same
 #      compose project.
-#   2. Repins each `streamarr-*` service's `image:` from the exact
+#   2. Repins each `playarr-*` service's `image:` from the exact
 #      `MAJOR.MINOR.PATCH` tag the base file defaults to (matching
-#      infra/kubernetes/helm/streamarr/Chart.yaml's appVersion pinning
+#      infra/kubernetes/helm/playarr/Chart.yaml's appVersion pinning
 #      policy) to a floating `MAJOR.MINOR` tag instead. Watchtower re-pulls
 #      that SAME tag on its interval and recreates the container only if
 #      the registry digest changed -- i.e. it picks up new PATCH builds
 #      published under that minor tag, but a MINOR/MAJOR bump requires a
-#      human to edit `STREAMARR_MINOR_TAG` and redeploy. This assumes your
+#      human to edit `PLAYARR_MINOR_TAG` and redeploy. This assumes your
 #      release pipeline republishes patch releases to the same minor tag
 #      (e.g. both `0.1.4` and `0.1` point at the same digest after a patch
 #      release) -- adjust the tagging scheme on the publish side to match
@@ -50,21 +50,21 @@
 # ==============================================================================
 
 x-watchtower-pin: &watchtower-pin
-  image: ${STREAMARR_IMAGE:-ghcr.io/streamarr/streamarr}:${STREAMARR_MINOR_TAG:-0.1}
+  image: ${PLAYARR_IMAGE:-ghcr.io/playarr/playarr}:${PLAYARR_MINOR_TAG:-0.1}
   labels:
     com.centurylinklabs.watchtower.enable: "true"
 
 services:
-  streamarr-api:
+  playarr-api:
     <<: *watchtower-pin
 
-  streamarr-api-2:
+  playarr-api-2:
     <<: *watchtower-pin
 
-  streamarr-worker:
+  playarr-worker:
     <<: *watchtower-pin
 
-  streamarr-worker-2:
+  playarr-worker-2:
     <<: *watchtower-pin
 
   watchtower:
@@ -88,8 +88,8 @@ services:
       WATCHTOWER_NOTIFICATION_URL: ${WATCHTOWER_NOTIFICATION_URL:-}
     restart: unless-stopped
     networks:
-      - streamarr-net
+      - playarr-net
 
 networks:
-  streamarr-net:
-    name: streamarr-net
+  playarr-net:
+    name: playarr-net

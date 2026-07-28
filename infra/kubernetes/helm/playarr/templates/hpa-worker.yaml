@@ -2,14 +2,14 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: {{ include "streamarr.fullname" . }}-worker
+  name: {{ include "playarr.fullname" . }}-worker
   labels:
-    {{- include "streamarr.componentLabels" (dict "context" . "component" "worker") | nindent 4 }}
+    {{- include "playarr.componentLabels" (dict "context" . "component" "worker") | nindent 4 }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: {{ include "streamarr.fullname" . }}-worker
+    name: {{ include "playarr.fullname" . }}-worker
   minReplicas: {{ .Values.worker.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.worker.autoscaling.maxReplicas }}
   metrics:
@@ -38,10 +38,10 @@ spec:
   # - type: External
   #   external:
   #     metric:
-  #       name: streamarr_queue_depth
+  #       name: playarr_queue_depth
   #       selector:
   #         matchLabels:
-  #           queue: streamarr-jobs
+  #           queue: playarr-jobs
   #     target:
   #       type: AverageValue
   #       averageValue: "20"

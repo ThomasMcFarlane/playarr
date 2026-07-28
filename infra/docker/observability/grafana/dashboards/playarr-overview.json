@@ -1,8 +1,8 @@
 {
-  "uid": "streamarr-overview",
-  "title": "Streamarr Overview",
-  "description": "Minimal starter dashboard provisioned by infra/docker/observability. Intentionally scoped to the `up` metric only (guaranteed to exist for any Prometheus scrape target) rather than app-specific metric names, since backend/crates/streamarr-telemetry does not have its metric surface implemented yet -- extend this dashboard once real counters/histograms exist.",
-  "tags": ["streamarr"],
+  "uid": "playarr-overview",
+  "title": "Playarr Server Overview",
+  "description": "Minimal starter dashboard provisioned by infra/docker/observability. Intentionally scoped to the `up` metric only (guaranteed to exist for any Prometheus scrape target) rather than app-specific metric names, since backend/crates/playarr-telemetry does not have its metric surface implemented yet -- extend this dashboard once real counters/histograms exist.",
+  "tags": ["playarr"],
   "timezone": "browser",
   "schemaVersion": 39,
   "version": 1,
@@ -12,9 +12,9 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "Streamarr targets up",
-      "description": "Count of streamarr* scrape targets currently reporting healthy, by role label.",
-      "datasource": { "type": "prometheus", "uid": "streamarr-prometheus" },
+      "title": "Playarr Server targets up",
+      "description": "Count of playarr* scrape targets currently reporting healthy, by role label.",
+      "datasource": { "type": "prometheus", "uid": "playarr-prometheus" },
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
       "fieldConfig": {
         "defaults": {
@@ -39,7 +39,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(up{job=\"streamarr\"}) by (role)",
+          "expr": "sum(up{job=\"playarr\"}) by (role)",
           "legendFormat": "{{role}}"
         }
       ]
@@ -47,9 +47,9 @@
     {
       "id": 2,
       "type": "timeseries",
-      "title": "Streamarr targets up over time",
+      "title": "Playarr Server targets up over time",
       "description": "Same series as the stat panel, plotted over the selected time range -- useful for spotting flapping/restarting nodes.",
-      "datasource": { "type": "prometheus", "uid": "streamarr-prometheus" },
+      "datasource": { "type": "prometheus", "uid": "playarr-prometheus" },
       "gridPos": { "h": 8, "w": 16, "x": 8, "y": 0 },
       "fieldConfig": {
         "defaults": {
@@ -71,7 +71,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(up{job=\"streamarr\"}) by (role)",
+          "expr": "sum(up{job=\"playarr\"}) by (role)",
           "legendFormat": "{{role}}"
         }
       ]
@@ -81,7 +81,7 @@
       "type": "table",
       "title": "Scrape health by instance",
       "description": "Per-instance `up` value plus the last scrape duration, for quickly spotting which specific container is unreachable.",
-      "datasource": { "type": "prometheus", "uid": "streamarr-prometheus" },
+      "datasource": { "type": "prometheus", "uid": "playarr-prometheus" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
       "fieldConfig": { "defaults": {}, "overrides": [] },
       "options": {
@@ -90,13 +90,13 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "up{job=\"streamarr\"}",
+          "expr": "up{job=\"playarr\"}",
           "format": "table",
           "instant": true
         },
         {
           "refId": "B",
-          "expr": "scrape_duration_seconds{job=\"streamarr\"}",
+          "expr": "scrape_duration_seconds{job=\"playarr\"}",
           "format": "table",
           "instant": true
         }

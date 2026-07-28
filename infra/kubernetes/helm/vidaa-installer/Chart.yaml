@@ -10,9 +10,9 @@ keywords:
   - dns
   - emissary
 
-home: https://github.com/streamarr/streamarr
+home: https://github.com/ThomasMcFarlane/playarr
 sources:
-  - https://github.com/streamarr/streamarr
+  - https://github.com/ThomasMcFarlane/playarr
 
 maintainers:
-  - name: Streamarr maintainers
+  - name: Playarr Server maintainers

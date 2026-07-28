@@ -9,7 +9,7 @@
     "headers": { "Content-Type": "application/json" },
     "jsonBody": {
       "appName": "Prowlarr",
-      "instanceName": "streamarr-mock-prowlarr",
+      "instanceName": "playarr-mock-prowlarr",
       "version": "1.24.3.4754",
       "buildTime": "2026-01-01T00:00:00Z",
       "isDebug": false,

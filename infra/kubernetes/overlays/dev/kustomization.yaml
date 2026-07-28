@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: streamarr-dev
+namespace: playarr-dev
 
 resources:
   - ../../base
@@ -11,31 +11,31 @@ resources:
 patches:
   - target:
       kind: Deployment
-      name: streamarr-api
+      name: playarr-api
     patch: |-
       - op: replace
         path: /spec/replicas
         value: 1
   - target:
       kind: Deployment
-      name: streamarr-worker
+      name: playarr-worker
     patch: |-
       - op: replace
         path: /spec/replicas
         value: 1
 
 configMapGenerator:
-  - name: streamarr-config
+  - name: playarr-config
     behavior: merge
     literals:
-      - STREAMARR_LOG=debug
+      - PLAYARR_LOG=debug
 
 # DATABASE_URL / REDIS_URL for dev: replace base/secret.yaml's empty
 # stringData with real values from an untracked, gitignored local file,
 # e.g.:
 #   secretGenerator:
-#     - name: streamarr-secrets
+#     - name: playarr-secrets
 #       behavior: replace
 #       envs:
-#         - streamarr-secrets.dev.env   # untracked; not in this repo
+#         - playarr-secrets.dev.env   # untracked; not in this repo
 # Left commented out here since no such file exists in this scaffold.

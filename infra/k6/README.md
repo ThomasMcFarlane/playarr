@@ -1,8 +1,8 @@
-# Streamarr k6 performance harness
+# Playarr Server k6 performance harness
 
 Three [k6](https://k6.io) scripts, written against the *planned* API shape
 (health/readiness probes confirmed from `infra/kubernetes`; playback and
-transcode endpoints assumed, since `streamarr-api`/`streamarr-transcode`
+transcode endpoints assumed, since `playarr-api`/`playarr-transcode`
 are still stub crates) so they're ready to point at a real backend as soon
 as it lands, rather than being written retroactively.
 
@@ -29,16 +29,16 @@ k6 run -e BASE_URL=http://localhost:8484 infra/k6/transcode-stress.js
 ## Assumptions to revisit once the backend lands
 
 - **Base URL / port**: defaults to `http://localhost:8484`, matching
-  `HTTP_PORT` in `infra/kubernetes/helm/streamarr/values.yaml`.
+  `HTTP_PORT` in `infra/kubernetes/helm/playarr/values.yaml`.
 - **`/healthz` and `/readyz`**: confirmed against
   `infra/kubernetes/base/deployment-api.yaml` and the Helm chart's
   `probes.livenessPath`/`probes.readinessPath` -- not a guess.
 - **`/api/system/version`, `/api/playback/sessions`, `/api/transcode/jobs`**:
-  not yet confirmed against any route table (`streamarr-api` has no routes
+  not yet confirmed against any route table (`playarr-api` has no routes
   yet). Shaped to be consistent with the confirmed `VersionEnvelope<T>`
   response envelope (`clients/tv-web/packages/domain`) and the confirmed
   `PlaybackSession`/`PlayMethod` naming in
-  `backend/crates/streamarr-model/src/playback.rs`. Update the path/body
+  `backend/crates/playarr-model/src/playback.rs`. Update the path/body
   constants at the top of each script once real routes exist -- each one
   calls out its own assumptions in a header comment.
 - **`transcode-stress.js`'s "open-model" interpretation**: read as "an
@@ -49,8 +49,8 @@ k6 run -e BASE_URL=http://localhost:8484 infra/k6/transcode-stress.js
 ## Metrics
 
 Each script defines endpoint-specific custom `Trend`/`Rate`/`Counter`
-metrics (e.g. `streamarr_segment_fetch_duration`,
-`streamarr_transcode_submit_failure_rate`) in addition to k6's built-in
+metrics (e.g. `playarr_segment_fetch_duration`,
+`playarr_transcode_submit_failure_rate`) in addition to k6's built-in
 `http_req_duration`/`http_req_failed`, and gates on both in `options.thresholds`
 -- global thresholds catch a total meltdown, per-endpoint ones catch a
 single slow route hiding in an otherwise-healthy aggregate.

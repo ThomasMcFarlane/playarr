@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "streamarr.configMapName" . }}
+  name: {{ include "playarr.configMapName" . }}
   labels:
-    {{- include "streamarr.labels" . | nindent 4 }}
+    {{- include "playarr.labels" . | nindent 4 }}
   {{- with .Values.commonAnnotations }}
   annotations:
     {{- toYaml . | nindent 4 }}

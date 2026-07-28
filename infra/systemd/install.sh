@@ -1,52 +1,52 @@
 #!/usr/bin/env bash
 #
-# install.sh - install (but do NOT enable or start) the Streamarr systemd
+# install.sh - install (but do NOT enable or start) the Playarr Server systemd
 # service on a Linux host.
 #
 # What this script does:
-#   1. Creates the streamarr system user/group (if missing).
-#   2. Creates /etc/streamarr, /var/lib/streamarr, /var/log/streamarr with
+#   1. Creates the playarr system user/group (if missing).
+#   2. Creates /etc/playarr, /var/lib/playarr, /var/log/playarr with
 #      correct ownership/permissions.
-#   3. Copies the streamarr binary to /usr/local/bin/streamarr.
-#   4. Seeds /etc/streamarr/streamarr.env from streamarr.env.example if it
+#   3. Copies the playarr-server binary to /usr/local/bin/playarr-server.
+#   4. Seeds /etc/playarr/playarr.env from playarr.env.example if it
 #      doesn't already exist (never overwrites an existing env file).
 #   5. Copies the three unit files to /etc/systemd/system/.
 #   6. Runs `systemctl daemon-reload`.
 #
 # What this script deliberately does NOT do:
 #   - It does not run `systemctl enable` or `systemctl start` on anything.
-#   - It does not enable streamarr-update-check.timer (shipped disabled by
+#   - It does not enable playarr-update-check.timer (shipped disabled by
 #     design - see that file's comments).
 # Starting the service is a separate, explicit step an operator takes after
-# reviewing /etc/streamarr/streamarr.env - see the printed instructions at
+# reviewing /etc/playarr/playarr.env - see the printed instructions at
 # the end of this script.
 #
 # Usage:
-#   sudo ./install.sh [path-to-streamarr-binary]
+#   sudo ./install.sh [path-to-playarr-server-binary]
 #
-# If no binary path is given, defaults to ./streamarr relative to this
+# If no binary path is given, defaults to ./playarr-server relative to this
 # script's directory.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
-BINARY_SRC="${1:-${SCRIPT_DIR}/streamarr}"
+BINARY_SRC="${1:-${SCRIPT_DIR}/playarr-server}"
 INSTALL_BIN_DIR="/usr/local/bin"
-INSTALL_BIN_PATH="${INSTALL_BIN_DIR}/streamarr"
-CONFIG_DIR="/etc/streamarr"
-ENV_FILE="${CONFIG_DIR}/streamarr.env"
-ENV_EXAMPLE="${SCRIPT_DIR}/streamarr.env.example"
-DATA_DIR="/var/lib/streamarr"
-LOG_DIR="/var/log/streamarr"
+INSTALL_BIN_PATH="${INSTALL_BIN_DIR}/playarr-server"
+CONFIG_DIR="/etc/playarr"
+ENV_FILE="${CONFIG_DIR}/playarr.env"
+ENV_EXAMPLE="${SCRIPT_DIR}/playarr.env.example"
+DATA_DIR="/var/lib/playarr"
+LOG_DIR="/var/log/playarr"
 UNIT_DIR="/etc/systemd/system"
-SERVICE_USER="streamarr"
-SERVICE_GROUP="streamarr"
+SERVICE_USER="playarr"
+SERVICE_GROUP="playarr"
 
 UNIT_FILES=(
-  "streamarr.service"
-  "streamarr-update-check.service"
-  "streamarr-update-check.timer"
+  "playarr.service"
+  "playarr-update-check.service"
+  "playarr-update-check.timer"
 )
 
 log() {
@@ -72,7 +72,7 @@ require_linux_systemd() {
 }
 
 require_binary() {
-  [[ -f "${BINARY_SRC}" ]] || die "streamarr binary not found at ${BINARY_SRC} (pass a path as the first argument)"
+  [[ -f "${BINARY_SRC}" ]] || die "playarr-server binary not found at ${BINARY_SRC} (pass a path as the first argument)"
   [[ -x "${BINARY_SRC}" ]] || die "${BINARY_SRC} is not executable"
 }
 
@@ -112,7 +112,7 @@ seed_env_file() {
     log "warning: ${ENV_EXAMPLE} not found, skipping env file seed"
     return
   fi
-  log "seeding ${ENV_FILE} from streamarr.env.example (edit it before starting the service)"
+  log "seeding ${ENV_FILE} from playarr.env.example (edit it before starting the service)"
   install -o root -g "${SERVICE_GROUP}" -m 0640 "${ENV_EXAMPLE}" "${ENV_FILE}"
 }
 
@@ -141,15 +141,15 @@ Next steps:
      (at minimum DATABASE_URL and REDIS_URL are required)
 
   2. Enable and start the main service:
-       sudo systemctl enable --now streamarr.service
+       sudo systemctl enable --now playarr.service
 
   3. Check it came up healthy:
-       systemctl status streamarr.service
-       journalctl -u streamarr.service -f
+       systemctl status playarr.service
+       journalctl -u playarr.service -f
 
   4. Optional: opt in to the (check-only, disabled-by-default) daily
      update-check timer:
-       sudo systemctl enable --now streamarr-update-check.timer
+       sudo systemctl enable --now playarr-update-check.timer
 
 EOF
 }

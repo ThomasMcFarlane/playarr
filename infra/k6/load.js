@@ -7,9 +7,9 @@
  * load a living-room full of devices actually produces, as opposed to a
  * flat request-per-second hammer.
  *
- * Endpoint shapes are ASSUMED (streamarr-api's routes don't exist yet --
- * see backend/crates/streamarr-api, currently a stub) but grounded in the
- * confirmed domain model in backend/crates/streamarr-model/src/playback.rs
+ * Endpoint shapes are ASSUMED (playarr-api's routes don't exist yet --
+ * see backend/crates/playarr-api, currently a stub) but grounded in the
+ * confirmed domain model in backend/crates/playarr-model/src/playback.rs
  * and its TS mirror clients/tv-web/packages/domain (`PlaybackSession`,
  * `MediaFile.streamUrl`, `VersionEnvelope<T>`):
  *
@@ -23,13 +23,13 @@
  *
  * Media to "play" comes from MEDIA_FILE_IDS (comma-separated UUIDs) so this
  * script can be pointed at whatever a given dev/staging catalog actually
- * has seeded once streamarr-catalog exists; falls back to a single
+ * has seeded once playarr-catalog exists; falls back to a single
  * placeholder UUID otherwise (every request will 404 against a real
  * backend until you override it -- that's expected and fine pre-catalog).
  *
  * Run:
  *   k6 run infra/k6/load.js
- *   k6 run -e BASE_URL=https://dev.streamarr.example \
+ *   k6 run -e BASE_URL=https://dev.playarr.example \
  *          -e MEDIA_FILE_IDS=<uuid1>,<uuid2>,<uuid3> \
  *          infra/k6/load.js
  *
@@ -56,11 +56,11 @@ const mediaFileIds = new SharedArray("mediaFileIds", function () {
   return raw.split(",").map((s) => s.trim());
 });
 
-const sessionStartDuration = new Trend("streamarr_session_start_duration", true);
-const manifestFetchDuration = new Trend("streamarr_manifest_fetch_duration", true);
-const segmentFetchDuration = new Trend("streamarr_segment_fetch_duration", true);
-const segmentFetchFailureRate = new Rate("streamarr_segment_fetch_failure_rate");
-const sessionsStarted = new Counter("streamarr_sessions_started");
+const sessionStartDuration = new Trend("playarr_session_start_duration", true);
+const manifestFetchDuration = new Trend("playarr_manifest_fetch_duration", true);
+const segmentFetchDuration = new Trend("playarr_segment_fetch_duration", true);
+const segmentFetchFailureRate = new Rate("playarr_segment_fetch_failure_rate");
+const sessionsStarted = new Counter("playarr_sessions_started");
 
 export const options = {
   scenarios: {
@@ -80,10 +80,10 @@ export const options = {
     http_req_failed: ["rate<0.05"],
     // Starting a session (auth + catalog/rendition lookup) is allowed more
     // budget than serving static-ish manifest/segment bytes.
-    "streamarr_session_start_duration": ["p(95)<800", "p(99)<1500"],
-    "streamarr_manifest_fetch_duration": ["p(95)<500"],
-    "streamarr_segment_fetch_duration": ["p(95)<1000", "p(99)<2000"],
-    "streamarr_segment_fetch_failure_rate": ["rate<0.02"],
+    "playarr_session_start_duration": ["p(95)<800", "p(99)<1500"],
+    "playarr_manifest_fetch_duration": ["p(95)<500"],
+    "playarr_segment_fetch_duration": ["p(95)<1000", "p(99)<2000"],
+    "playarr_segment_fetch_failure_rate": ["rate<0.02"],
   },
 };
 

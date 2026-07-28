@@ -1,9 +1,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "streamarr.fullname" . }}-worker
+  name: {{ include "playarr.fullname" . }}-worker
   labels:
-    {{- include "streamarr.componentLabels" (dict "context" . "component" "worker") | nindent 4 }}
+    {{- include "playarr.componentLabels" (dict "context" . "component" "worker") | nindent 4 }}
   {{- with .Values.commonAnnotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -14,7 +14,7 @@ spec:
   {{- end }}
   selector:
     matchLabels:
-      {{- include "streamarr.componentSelectorLabels" (dict "context" . "component" "worker") | nindent 6 }}
+      {{- include "playarr.componentSelectorLabels" (dict "context" . "component" "worker") | nindent 6 }}
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -23,7 +23,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "streamarr.componentLabels" (dict "context" . "component" "worker") | nindent 8 }}
+        {{- include "playarr.componentLabels" (dict "context" . "component" "worker") | nindent 8 }}
         {{- with .Values.worker.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -37,7 +37,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "streamarr.serviceAccountName" . }}
+      serviceAccountName: {{ include "playarr.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       # Workers finish in-flight jobs (transcodes, imports, scans) before
@@ -45,27 +45,27 @@ spec:
       # your longest expected job duration.
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       containers:
-        - name: streamarr-worker
+        - name: playarr-worker
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
-            - name: STREAMARR_ROLE
+            - name: PLAYARR_ROLE
               value: {{ .Values.worker.role | quote }}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "streamarr.secretName" . }}
+                  name: {{ include "playarr.secretName" . }}
                   key: DATABASE_URL
             - name: REDIS_URL
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "streamarr.secretName" . }}
+                  name: {{ include "playarr.secretName" . }}
                   key: REDIS_URL
           envFrom:
             - configMapRef:
-                name: {{ include "streamarr.configMapName" . }}
+                name: {{ include "playarr.configMapName" . }}
           ports:
             - name: http
               containerPort: {{ .Values.probes.port }}

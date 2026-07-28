@@ -1,48 +1,48 @@
 [Unit]
-Description=Streamarr media automation service
-Documentation=https://github.com/streamarr/streamarr
+Description=Playarr Server media automation service
+Documentation=https://github.com/ThomasMcFarlane/playarr
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=300
 StartLimitBurst=5
-# If Postgres/Redis run on this same host, uncomment so streamarr starts
+# If Postgres/Redis run on this same host, uncomment so playarr starts
 # after them (remove if DATABASE_URL/REDIS_URL point at remote hosts):
 # After=postgresql.service redis.service
 # Wants=postgresql.service redis.service
 
 [Service]
 Type=simple
-User=streamarr
-Group=streamarr
+User=playarr
+Group=playarr
 
 # EnvironmentFile is prefixed with "-" so a missing file doesn't block
-# startup, but streamarr will fail its own config validation (and this
+# startup, but playarr will fail its own config validation (and this
 # unit will then just keep restarting - see Restart= below) without a real
 # DATABASE_URL / REDIS_URL in it. install.sh seeds this path from
-# streamarr.env.example if it doesn't already exist.
-EnvironmentFile=-/etc/streamarr/streamarr.env
+# playarr.env.example if it doesn't already exist.
+EnvironmentFile=-/etc/playarr/playarr.env
 
 # This unit always runs the single-binary "all-in-one" role (API + worker
 # in one process) - that's the systemd deployment model. The split
 # api/worker Deployments are a Kubernetes-only pattern; see
 # ../kubernetes/README.md if you need that separation on bare metal too
 # (run two copies of this unit under different names with
-# STREAMARR_ROLE=api / STREAMARR_ROLE=worker instead).
-Environment=STREAMARR_ROLE=all
+# PLAYARR_ROLE=api / PLAYARR_ROLE=worker instead).
+Environment=PLAYARR_ROLE=all
 
-ExecStart=/usr/local/bin/streamarr
-WorkingDirectory=/var/lib/streamarr
+ExecStart=/usr/local/bin/playarr-server
+WorkingDirectory=/var/lib/playarr
 
 Restart=on-failure
 RestartSec=5
 
 # Give the process time to drain in-flight requests/jobs on SIGTERM before
 # systemd escalates to SIGKILL. Keep in sync with any internal graceful
-# shutdown timeout streamarr implements.
+# shutdown timeout playarr implements.
 TimeoutStopSec=30
 
 # --- Sandboxing / hardening ---------------------------------------------
-# Conservative defaults; relax individual settings if streamarr needs
+# Conservative defaults; relax individual settings if playarr needs
 # broader filesystem/network/device access than this allows.
 NoNewPrivileges=true
 AmbientCapabilities=CAP_NET_BIND_SERVICE
@@ -50,7 +50,7 @@ CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/var/lib/streamarr /var/log/streamarr
+ReadWritePaths=/var/lib/playarr /var/log/playarr
 UMask=0027
 
 [Install]

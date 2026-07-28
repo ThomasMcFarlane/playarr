@@ -1,4 +1,4 @@
-# Default values for the streamarr chart.
+# Default values for the playarr chart.
 # This is a YAML-formatted file. Declare variables to be substituted into
 # templates/*.
 
@@ -7,7 +7,7 @@
 # ../flux-image-automation.example.yaml) is the sanctioned way to bump this
 # value via a PR, not a floating tag resolved at pull time.
 image:
-  repository: ghcr.io/streamarr/streamarr
+  repository: ghcr.io/playarr/playarr
   tag: "0.1.0"
   pullPolicy: IfNotPresent
 
@@ -43,14 +43,14 @@ securityContext:
 
 # -- Numeric port used for the container's metrics containerPort/Service
 # port declarations (k8s port fields need a plain integer; the binary's own
-# port config lives in config.STREAMARR_METRICS_BIND_ADDR above -- keep the
+# port config lives in config.PLAYARR_METRICS_BIND_ADDR above -- keep the
 # two in sync manually, nothing derives one from the other).
 metricsPort: 9090
 
 # -- Probe configuration shared by both the api and worker Deployments. The
-# streamarr binary exposes these endpoints regardless of STREAMARR_ROLE.
+# playarr binary exposes these endpoints regardless of PLAYARR_ROLE.
 # `port` has the same manual-sync caveat as metricsPort above, against
-# config.STREAMARR_HTTP_BIND_ADDR.
+# config.PLAYARR_HTTP_BIND_ADDR.
 probes:
   port: 8484
   livenessPath: /healthz
@@ -69,15 +69,15 @@ preStopSleepSeconds: 15
 
 # -- Non-secret application configuration, rendered into a ConfigMap and
 # consumed via envFrom by both Deployments. Keys are the real env vars
-# streamarr-config::Config::from_env reads (see
-# backend/crates/streamarr-config/src/lib.rs) -- not a set of
+# playarr-config::Config::from_env reads (see
+# backend/crates/playarr-config/src/lib.rs) -- not a set of
 # conveniently-named vars the binary silently ignores. `probes.port` above
-# must stay in sync with the port embedded in STREAMARR_HTTP_BIND_ADDR
+# must stay in sync with the port embedded in PLAYARR_HTTP_BIND_ADDR
 # below if either changes; nothing derives one from the other.
 config:
-  STREAMARR_LOG: "info"
-  STREAMARR_HTTP_BIND_ADDR: "0.0.0.0:8484"
-  STREAMARR_METRICS_BIND_ADDR: "0.0.0.0:9090"
+  PLAYARR_LOG: "info"
+  PLAYARR_HTTP_BIND_ADDR: "0.0.0.0:8484"
+  PLAYARR_METRICS_BIND_ADDR: "0.0.0.0:9090"
 
 # -- DATABASE_URL / REDIS_URL are secret-shaped values. This chart never
 # accepts them as plaintext values.yaml entries. Instead it renders an

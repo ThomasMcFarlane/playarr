@@ -1,7 +1,7 @@
-# Prometheus scrape config for the Streamarr observability overlay.
+# Prometheus scrape config for the Playarr Server observability overlay.
 #
 # Static target lists below cover every service name any base compose file
-# in ../ (dev/ci/prod) might expose a `streamarr*` container under. A
+# in ../ (dev/ci/prod) might expose a `playarr*` container under. A
 # target simply reports "down" if the corresponding base stack isn't the
 # one currently running -- that's expected and harmless, not a
 # misconfiguration. See ../docker-compose.yml for how this overlay joins
@@ -10,7 +10,7 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
-    project: streamarr
+    project: playarr
 
 scrape_configs:
   # Prometheus scraping itself -- standard practice, lets you alert on/
@@ -19,25 +19,25 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # docker-compose.ci.yml: single `streamarr` service (STANDALONE role).
-  # docker-compose.prod.yml: role-split `streamarr-api`/`streamarr-worker`
+  # docker-compose.ci.yml: single `playarr` service (STANDALONE role).
+  # docker-compose.prod.yml: role-split `playarr-api`/`playarr-worker`
   # (plus their `-2` --profile ha counterparts).
-  - job_name: streamarr
+  - job_name: playarr
     metrics_path: /metrics
     static_configs:
-      - targets: ["streamarr:9090"]
+      - targets: ["playarr:9090"]
         labels:
           role: standalone
-      - targets: ["streamarr-api:9090"]
+      - targets: ["playarr-api:9090"]
         labels:
           role: api
-      - targets: ["streamarr-api-2:9090"]
+      - targets: ["playarr-api-2:9090"]
         labels:
           role: api
-      - targets: ["streamarr-worker:9090"]
+      - targets: ["playarr-worker:9090"]
         labels:
           role: worker
-      - targets: ["streamarr-worker-2:9090"]
+      - targets: ["playarr-worker-2:9090"]
         labels:
           role: worker
 
@@ -46,14 +46,14 @@ scrape_configs:
   # --profile ha, where replica *count* -- not just the fixed `-2` node --
   # can change), Docker Swarm/service discovery is a better fit than a
   # hand-maintained static list. Once this stack runs under Swarm (or with
-  # a discovery-capable runtime), replace the `streamarr` job above with:
+  # a discovery-capable runtime), replace the `playarr` job above with:
   #
-  # - job_name: streamarr-sd
+  # - job_name: playarr-sd
   #   docker_sd_configs:
   #     - host: unix:///var/run/docker.sock
   #       filters:
   #         - name: label
-  #           values: ["com.docker.compose.project=streamarr"]
+  #           values: ["com.docker.compose.project=playarr"]
   #   relabel_configs:
   #     - source_labels: [__meta_docker_container_label_com_docker_compose_service]
   #       target_label: service

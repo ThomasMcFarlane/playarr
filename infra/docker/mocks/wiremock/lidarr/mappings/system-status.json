@@ -9,7 +9,7 @@
     "headers": { "Content-Type": "application/json" },
     "jsonBody": {
       "appName": "Lidarr",
-      "instanceName": "streamarr-mock-lidarr",
+      "instanceName": "playarr-mock-lidarr",
       "version": "2.9.7.4283",
       "buildTime": "2026-01-01T00:00:00Z",
       "isDebug": false,

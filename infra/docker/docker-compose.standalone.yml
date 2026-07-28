@@ -1,8 +1,8 @@
 # ==============================================================================
-# Streamarr -- minimal standalone stack: just the streamarr binary, SQLite,
+# Playarr Server -- minimal standalone stack: just the playarr binary, SQLite,
 # and nothing else.
 #
-# For testing/using Streamarr against *arr apps (Sonarr/Radarr/Lidarr/
+# For testing/using Playarr Server against *arr apps (Sonarr/Radarr/Lidarr/
 # Bazarr/Prowlarr/Readarr) and Tdarr you already run elsewhere -- on your
 # LAN, on another host, wherever -- rather than spinning up a second,
 # redundant *arr suite just to exercise this one service. This is a
@@ -23,28 +23,28 @@
 # ==============================================================================
 
 services:
-  streamarr:
+  playarr:
     build:
       context: ../..
       dockerfile: infra/docker/backend.Dockerfile
-    image: streamarr:standalone
-    container_name: streamarr-standalone
+    image: playarr:standalone
+    container_name: playarr-standalone
     environment:
-      STREAMARR_ROLE: all
+      PLAYARR_ROLE: all
       # SQLite, not Postgres -- this is a single-node stack with no
       # multi-replica coordination to exercise, so Postgres would only add
       # a second container for no benefit here. Persisted via the named
       # volume below, not /tmp, so it survives `docker compose restart`.
-      DATABASE_URL: sqlite:///data/streamarr.db
-      STREAMARR_ARTWORK_CACHE_DIR: /data/cache/artwork
-      STREAMARR_LOG: ${STREAMARR_LOG:-info,streamarr_api=debug}
-      STREAMARR_HTTP_BIND_ADDR: 0.0.0.0:8484
-      STREAMARR_METRICS_BIND_ADDR: 0.0.0.0:9090
-      # Unset means streamarr-bin generates a boot-lifetime JWT secret and
+      DATABASE_URL: sqlite:///data/playarr.db
+      PLAYARR_ARTWORK_CACHE_DIR: /data/cache/artwork
+      PLAYARR_LOG: ${PLAYARR_LOG:-info,playarr_api=debug}
+      PLAYARR_HTTP_BIND_ADDR: 0.0.0.0:8484
+      PLAYARR_METRICS_BIND_ADDR: 0.0.0.0:9090
+      # Unset means playarr-bin generates a boot-lifetime JWT secret and
       # logs a warning (backend/src/main.rs's jwt_secret_from_env) -- fine
       # for a local test, tokens just won't survive a container restart.
       # Set explicitly if you want sessions to persist across restarts.
-      STREAMARR_JWT_SECRET: ${STREAMARR_JWT_SECRET:-}
+      PLAYARR_JWT_SECRET: ${PLAYARR_JWT_SECRET:-}
       # Empty by default (falls back to backend/src/main.rs's RFC1918 +
       # loopback DEFAULT_TRUSTED_NETWORK_CIDRS). Set in a local, gitignored
       # infra/docker/.env (never committed -- this is genuinely
@@ -55,18 +55,18 @@ services:
       # localhost-forwarded connections. Replaces the whole default list
       # with this one CIDR, so it should describe your actual trusted
       # network, not just add to the defaults.
-      STREAMARR_TRUSTED_NETWORK_CIDR: ${STREAMARR_TRUSTED_NETWORK_CIDR:-}
+      PLAYARR_TRUSTED_NETWORK_CIDR: ${PLAYARR_TRUSTED_NETWORK_CIDR:-}
       # Deliberately NOT set: TDARR_URL/TDARR_API_KEY (no Tdarr in this
       # stack -- background dispatch simply has nothing to dispatch to,
       # which is fine; on-demand transcode doesn't depend on Tdarr at all,
-      # see streamarr-transcode's own docs), REDIS_URL (SQLite tier has no
+      # see playarr-transcode's own docs), REDIS_URL (SQLite tier has no
       # use for it).
     ports:
       - "8484:8484"
       - "9090:9090"
     volumes:
-      - streamarr_standalone_data:/data
+      - playarr_standalone_data:/data
     restart: unless-stopped
 
 volumes:
-  streamarr_standalone_data:
+  playarr_standalone_data:

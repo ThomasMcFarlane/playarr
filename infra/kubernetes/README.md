@@ -1,10 +1,10 @@
 # infra/kubernetes
 
-Two independent ways to deploy Streamarr to Kubernetes. Pick one per
+Two independent ways to deploy Playarr Server to Kubernetes. Pick one per
 cluster/environment - they are not meant to be layered on top of each
 other.
 
-1. **`helm/streamarr/`** - a real Helm chart. This is the more complete,
+1. **`helm/playarr/`** - a real Helm chart. This is the more complete,
    more opinionated path (autoscaling, PDB, optional Prometheus
    ServiceMonitor) and is the recommended default.
 2. **`base/` + `overlays/{dev,staging,prod}/`** - a plain kustomize
@@ -14,17 +14,17 @@ other.
    for what's out of scope today.
 
 The separate **`helm/vidaa-installer/`** chart is an optional companion, not a
-third Streamarr deployment path. It supplies the app-owned DNS policy and
+third Playarr Server deployment path. It supplies the app-owned DNS policy and
 Emissary route needed for an experimental VIDAA launcher installation on a
 cluster that already runs the permanent LAN resolver. It is inert by default;
 see its [operator guide](./helm/vidaa-installer/README.md).
 
 Both paths deploy the same two workloads:
 
-- **`streamarr-api`** - a Deployment running the `streamarr` binary with
-  `STREAMARR_ROLE=api`, fronted by a ClusterIP Service.
-- **`streamarr-worker`** - a separate Deployment running the same binary
-  with `STREAMARR_ROLE=worker`, with its own PodDisruptionBudget (Helm
+- **`playarr-api`** - a Deployment running the `playarr` binary with
+  `PLAYARR_ROLE=api`, fronted by a ClusterIP Service.
+- **`playarr-worker`** - a separate Deployment running the same binary
+  with `PLAYARR_ROLE=worker`, with its own PodDisruptionBudget (Helm
   path) so voluntary disruptions (node drains, cluster upgrades) never take
   every worker offline at once.
 
@@ -43,23 +43,23 @@ And the same two probe paths:
 | `/readyz` | `readinessProbe` |
 
 These four values (ports + paths) are assumptions made while scaffolding
-this chart, not something read from the actual `streamarr` binary's source.
+this chart, not something read from the actual `playarr` binary's source.
 If the real API/worker binary uses different ports or probe paths, update
 `values.yaml`'s `probes.*` / `config.*` (Helm) or the hardcoded values in
 `base/*.yaml` (kustomize) - both paths were built to make that a small,
 localized edit.
 
-## Helm chart (`helm/streamarr/`)
+## Helm chart (`helm/playarr/`)
 
 ```
-helm/streamarr/
-  Chart.yaml            # name=streamarr, appVersion tracks the app release
+helm/playarr/
+  Chart.yaml            # name=playarr, appVersion tracks the app release
   values.yaml            # image.tag is pinned to Chart.yaml's appVersion -
                           # never "latest"; see "Image tags" below
   templates/
     _helpers.tpl          # name/label/selector helpers
-    deployment-api.yaml    # STREAMARR_ROLE=api
-    deployment-worker.yaml # STREAMARR_ROLE=worker
+    deployment-api.yaml    # PLAYARR_ROLE=api
+    deployment-worker.yaml # PLAYARR_ROLE=worker
     hpa-api.yaml            # HorizontalPodAutoscaler for the api Deployment
     hpa-worker.yaml         # HorizontalPodAutoscaler for the worker Deployment
     service.yaml             # ClusterIP Service for api + a headless
@@ -131,9 +131,9 @@ as part of this scaffold - do that before trusting it in a real
 environment:
 
 ```sh
-helm lint helm/streamarr
-helm template streamarr helm/streamarr | less
-helm install streamarr helm/streamarr --dry-run --debug
+helm lint helm/playarr
+helm template playarr helm/playarr | less
+helm install playarr helm/playarr --dry-run --debug
 ```
 
 ## Kustomize skeleton (`base/` + `overlays/`)
@@ -147,9 +147,9 @@ base/
   configmap.yaml
   secret.yaml           # placeholder, empty stringData - see comments in-file
 overlays/
-  dev/kustomization.yaml       # namespace=streamarr-dev, replicas=1
-  staging/kustomization.yaml   # namespace=streamarr-staging, replicas=2
-  prod/kustomization.yaml      # namespace=streamarr-prod, replicas=3
+  dev/kustomization.yaml       # namespace=playarr-dev, replicas=1
+  staging/kustomization.yaml   # namespace=playarr-staging, replicas=2
+  prod/kustomization.yaml      # namespace=playarr-prod, replicas=3
 ```
 
 Deliberately minimal, per the brief: no HorizontalPodAutoscaler,
@@ -189,7 +189,7 @@ commit exactly like a human-authored change.
 
 **There is no in-cluster self-update mechanism anywhere in this chart or
 skeleton, and there must never be one.** No Deployment, controller, or
-running Streamarr process patches its own image, reaches the Kubernetes API
+running Playarr Server process patches its own image, reaches the Kubernetes API
 to mutate its own workload, or otherwise updates itself from inside the
 cluster. Every version bump is a git commit, reviewed and audited like any
 other change.
@@ -197,9 +197,9 @@ other change.
 ## Known gaps / assumptions made while scaffolding
 
 - **Ports and probe paths** (`8484`/`9090`, `/healthz`/`/readyz`) are
-  assumptions, not read from the real `streamarr` binary - see the table
+  assumptions, not read from the real `playarr` binary - see the table
   above.
-- **Image repository** (`ghcr.io/streamarr/streamarr`) is a placeholder;
+- **Image repository** (`ghcr.io/playarr/playarr`) is a placeholder;
   update `values.yaml` / `base/deployment-*.yaml` /
   `base/kustomization.yaml`'s `images.name` together if the real registry
   differs.

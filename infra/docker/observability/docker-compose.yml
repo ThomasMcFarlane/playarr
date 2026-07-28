@@ -1,8 +1,8 @@
 # ==============================================================================
-# Streamarr -- optional Prometheus + Grafana observability overlay.
+# Playarr Server -- optional Prometheus + Grafana observability overlay.
 #
 # Run as its OWN compose project (not merged with `-f` onto the base
-# stack): it joins the base stack's `streamarr-net` network as `external`
+# stack): it joins the base stack's `playarr-net` network as `external`
 # so it can scrape whichever base file (docker-compose.dev.yml,
 # docker-compose.ci.yml, or docker-compose.prod.yml) happens to be running,
 # without caring which one that is or duplicating its service
@@ -12,7 +12,7 @@
 # relative bind-mount paths (./prometheus/prometheus.yml etc.) against the
 # FIRST file's directory, not this one's -- so don't do that.
 #
-# Prerequisite: start a base stack first (it creates the `streamarr-net`
+# Prerequisite: start a base stack first (it creates the `playarr-net`
 # network this file expects to already exist):
 #   docker compose -f infra/docker/docker-compose.dev.yml up -d
 #
@@ -23,14 +23,14 @@
 # login -- see GF_SECURITY_ADMIN_PASSWORD below for a non-interactive
 # override). Prometheus UI: http://localhost:9091 (remapped from its
 # in-container default of 9090 to avoid colliding with
-# docker-compose.ci.yml's streamarr service, which publishes its own
+# docker-compose.ci.yml's playarr service, which publishes its own
 # metrics port on host 9090 -- see ../docker-compose.ci.yml).
 # ==============================================================================
 
 services:
   prometheus:
     image: prom/prometheus:v2.55.1
-    container_name: streamarr-obs-prometheus
+    container_name: playarr-obs-prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -43,11 +43,11 @@ services:
       - "9091:9090"
     restart: unless-stopped
     networks:
-      - streamarr-net
+      - playarr-net
 
   grafana:
     image: grafana/grafana-oss:11.2.0
-    container_name: streamarr-obs-grafana
+    container_name: playarr-obs-grafana
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
@@ -63,13 +63,13 @@ services:
       - prometheus
     restart: unless-stopped
     networks:
-      - streamarr-net
+      - playarr-net
 
 networks:
   # Not created here -- must already exist, created by whichever base
   # compose file (dev/ci/prod) is currently running. See header comment.
-  streamarr-net:
-    name: streamarr-net
+  playarr-net:
+    name: playarr-net
     external: true
 
 volumes:

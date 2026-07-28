@@ -2,9 +2,9 @@
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ include "streamarr.fullname" . }}-worker
+  name: {{ include "playarr.fullname" . }}-worker
   labels:
-    {{- include "streamarr.componentLabels" (dict "context" . "component" "worker") | nindent 4 }}
+    {{- include "playarr.componentLabels" (dict "context" . "component" "worker") | nindent 4 }}
 spec:
   {{- if .Values.worker.podDisruptionBudget.minAvailable }}
   minAvailable: {{ .Values.worker.podDisruptionBudget.minAvailable }}
@@ -15,5 +15,5 @@ spec:
   {{- end }}
   selector:
     matchLabels:
-      {{- include "streamarr.componentSelectorLabels" (dict "context" . "component" "worker") | nindent 6 }}
+      {{- include "playarr.componentSelectorLabels" (dict "context" . "component" "worker") | nindent 6 }}
 {{- end }}

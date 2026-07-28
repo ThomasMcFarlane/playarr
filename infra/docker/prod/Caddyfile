@@ -1,26 +1,26 @@
 # ==============================================================================
 # Reference Caddyfile for docker-compose.prod.yml.
 #
-# {$STREAMARR_DOMAIN} lets you point this at a real public hostname (Caddy
+# {$PLAYARR_DOMAIN} lets you point this at a real public hostname (Caddy
 # then handles ACME/Let's Encrypt automatically on :443) while defaulting to
 # `localhost` for a local smoke-test of the reference stack, where Caddy
 # serves plain HTTP on :80 and a locally-trusted cert on :443 without any
 # external ACME call.
 #
-# Load-balances across every `streamarr-api*` container Docker Compose has
-# resolved on the internal network. With only the base `streamarr-api`
+# Load-balances across every `playarr-api*` container Docker Compose has
+# resolved on the internal network. With only the base `playarr-api`
 # service running (no `ha` profile), Caddy simply has one healthy upstream;
-# enabling `--profile ha` adds `streamarr-api-2` as a second upstream with
+# enabling `--profile ha` adds `playarr-api-2` as a second upstream with
 # zero config changes here, because `reverse_proxy` re-resolves its
 # upstream list per dial rather than at config-load time.
 #
 # The metrics port (9090) is deliberately NOT proxied here -- Prometheus
-# (see ../observability/docker-compose.yml) scrapes streamarr-api/worker
+# (see ../observability/docker-compose.yml) scrapes playarr-api/worker
 # directly over the internal Docker network, and /metrics should never be
 # reachable from the public edge.
 # ==============================================================================
 
-{$STREAMARR_DOMAIN:localhost} {
+{$PLAYARR_DOMAIN:localhost} {
 	encode zstd gzip
 
 	log {
@@ -28,7 +28,7 @@
 		format json
 	}
 
-	reverse_proxy streamarr-api:8484 streamarr-api-2:8484 {
+	reverse_proxy playarr-api:8484 playarr-api-2:8484 {
 		lb_policy round_robin
 		lb_try_duration 5s
 		lb_try_interval 250ms
