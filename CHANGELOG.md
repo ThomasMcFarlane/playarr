@@ -15,6 +15,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Apple TV design-token mirror (`DesignTokens` / `TVTheme`) kept in lock-step with
+  `@playarr-tv/design-tokens`, applied across home, search, detail, player,
+  settings, and the device-code pairing gate. Unit tests lock the hex values,
+  spacing scale, type scale, focus motion, and 1920×1080 canvas constants.
+
 - Encode the binding client product bar in
   [`docs/architecture/client-principles.md`](docs/architecture/client-principles.md): every
   Playarr app is fully native for its platform, targets full product parity and native-class

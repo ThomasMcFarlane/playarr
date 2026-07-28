@@ -8,31 +8,55 @@ struct TVSettingsView: View {
     var body: some View {
         @Bindable var environment = environment
 
-        Form {
-            Section("Playarr Server") {
-                TextField("Server address", text: $environment.serverAddress)
-                    .textContentType(.URL)
-                    .autocorrectionDisabled()
+        ZStack {
+            TVStageBackground()
 
-                Button("Save server") {
-                    serverError = environment.saveServerAddress()
-                        ? nil
-                        : "Enter a valid HTTP or HTTPS server address."
+            ScrollView {
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.xl) {
+                    Text("Settings")
+                        .font(TVTheme.displayFont())
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+
+                    settingsCard(title: "Playarr Server") {
+                        TextField("Server address", text: $environment.serverAddress)
+                            .font(TVTheme.bodyFont())
+                            .foregroundStyle(DesignTokens.Color.textPrimary)
+                            .padding(DesignTokens.Spacing.md)
+                            .background(
+                                RoundedRectangle(cornerRadius: DesignTokens.Radius.input, style: .continuous)
+                                    .fill(DesignTokens.Color.backgroundBase)
+                            )
+                            .textContentType(.URL)
+                            .autocorrectionDisabled()
+
+                        Button("Save server") {
+                            serverError = environment.saveServerAddress()
+                                ? nil
+                                : "Enter a valid HTTP or HTTPS server address."
+                        }
+                        .font(TVTheme.bodyFont(emphasis: true))
+                        .foregroundStyle(DesignTokens.Color.brandPrimary)
+
+                        if let serverError {
+                            Label(serverError, systemImage: "exclamationmark.triangle")
+                                .font(TVTheme.captionFont())
+                                .foregroundStyle(DesignTokens.Color.stateError)
+                        }
+                    }
+
+                    settingsCard(title: "Account") {
+                        pairingContent
+                    }
+
+                    settingsCard(title: "About") {
+                        labeledRow("App", value: "Playarr for Apple TV")
+                        labeledRow("Server", value: environment.serverURL.absoluteString)
+                        labeledRow("Theme base", value: DesignTokens.Hex.backgroundBase)
+                        labeledRow("Brand primary", value: DesignTokens.Hex.brandPrimary)
+                    }
                 }
-
-                if let serverError {
-                    Label(serverError, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
-                }
-            }
-
-            Section("Account") {
-                pairingContent
-            }
-
-            Section("About") {
-                LabeledContent("App", value: "Playarr for Apple TV")
-                LabeledContent("Server", value: environment.serverURL.absoluteString)
+                .padding(DesignTokens.Spacing.xxxl)
+                .frame(maxWidth: 1100, alignment: .leading)
             }
         }
         .navigationTitle("Settings")
@@ -42,38 +66,82 @@ struct TVSettingsView: View {
         }
     }
 
+    private func settingsCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.md) {
+            Text(title)
+                .font(TVTheme.titleFont())
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+            content()
+        }
+        .padding(DesignTokens.Spacing.xl)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                .fill(DesignTokens.Color.backgroundElevated)
+        )
+    }
+
+    private func labeledRow(_ label: String, value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(TVTheme.bodyFont())
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+            Spacer()
+            Text(value)
+                .font(TVTheme.bodyFont())
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+        }
+    }
+
     @ViewBuilder
     private var pairingContent: some View {
         switch environment.pairingState {
         case .signedOut:
-            Button("Pair this Apple TV") { beginPairing() }
+            TVPrimaryButton(label: "Pair this Apple TV") { beginPairing() }
         case .requestingCode:
             ProgressView("Requesting a pairing code…")
+                .tint(DesignTokens.Color.brandPrimary)
+                .foregroundStyle(DesignTokens.Color.textSecondary)
         case .awaitingApproval(let pending):
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.md) {
                 Text("On your phone or computer, open")
-                    .foregroundStyle(.secondary)
+                    .font(TVTheme.bodyFont())
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
                 Text(pending.verificationUri)
-                    .font(.title2.bold())
+                    .font(TVTheme.titleFont())
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
                 Text(pending.userCode)
                     .font(.system(size: 58, weight: .bold, design: .monospaced))
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                    .padding(.horizontal, DesignTokens.Spacing.xl)
+                    .padding(.vertical, DesignTokens.Spacing.md)
+                    .background(
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
+                            .fill(DesignTokens.Color.backgroundRaised)
+                    )
                     .accessibilityLabel("Pairing code \(pending.userCode)")
                 ProgressView("Waiting for approval…")
+                    .tint(DesignTokens.Color.brandPrimary)
                 Button("Cancel pairing", role: .cancel) {
                     pairingTask?.cancel()
                     pairingTask = nil
                     environment.signOut()
                 }
+                .foregroundStyle(DesignTokens.Color.textSecondary)
             }
-            .padding(.vertical, 18)
+            .padding(.vertical, DesignTokens.Spacing.md)
         case .signedIn:
             Label("Paired", systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .font(TVTheme.bodyFont())
+                .foregroundStyle(DesignTokens.Color.stateSuccess)
             Button("Sign out", role: .destructive) { environment.signOut() }
+                .font(TVTheme.bodyFont())
+                .foregroundStyle(DesignTokens.Color.stateError)
         case .failed(let message):
             Label(message, systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.red)
-            Button("Try pairing again") { beginPairing() }
+                .font(TVTheme.bodyFont())
+                .foregroundStyle(DesignTokens.Color.stateError)
+            TVPrimaryButton(label: "Try pairing again") { beginPairing() }
         }
     }
 

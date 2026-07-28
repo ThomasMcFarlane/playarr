@@ -47,7 +47,10 @@ enum TVServerAddress {
 final class TVAppEnvironment {
     static let serverURLKey = "com.playarr.playarr.tvos.serverURL"
     static let deviceIDKey = "com.playarr.playarr.tvos.deviceID"
-    static let defaultServerURL = URL(string: "http://localhost:8484")!
+    /// Default points at the shared example Playarr instance so simulator
+    /// builds have a reachable catalogue without manual settings entry.
+    /// Operators can still override via Settings → Server address.
+    static let defaultServerURL = URL(string: "https://playarr.example.com")!
 
     private(set) var apiClient: PlayarrAPIClient
     private(set) var pairingState: TVPairingState = .signedOut
