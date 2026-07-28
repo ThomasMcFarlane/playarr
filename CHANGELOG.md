@@ -14,6 +14,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   SPA boots signed-in against the same server URL. Phone and tablet keep the native Compose
   experience. Shared `FocusMotion` design tokens (scale, 150 ms cubic-bezier easing) drive
   native Compose grow-on-focus animations and are covered by unit tests.
+- Add Android TV parity capture tooling under `clients/android/tools/` (`compare_surfaces.py`,
+  `parity_ae0.py`) for deterministic 1920×1080 AE comparison and triple-verify runs.
 - Add Chromecast support: a real Google Cast sender/receiver pair, not a stub. A new
   `@playarr-tv/cast-protocol` package defines one shared wire protocol (mirrored by hand into
   Kotlin and Swift); a new CAF (Cast Application Framework) custom web receiver at
