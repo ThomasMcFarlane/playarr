@@ -26,6 +26,121 @@ const LINK_CLIENT_PLATFORMS = new Set([
   "xbox",
 ]);
 
+// Short, share-friendly copy for each /clients/:id page -- distinct from the
+// longer on-page install descriptions, which assume you're already reading
+// the page rather than deciding whether to click through to it. Kept here
+// rather than imported from the React app: this worker has no i18n/React
+// runtime, and social crawlers don't execute JS to pick up a client-side
+// document.title change anyway, so this is deliberately English-only static
+// copy rather than plumbing translation keys across two different runtimes.
+const CLIENTS_SOCIAL_COPY = new Map([
+  ["vidaa", {
+    name: "Hisense VIDAA",
+    description: "Install the Playarr launcher on compatible Hisense VIDAA smart TVs.",
+  }],
+  ["android", {
+    name: "Android",
+    description: "Watch Playarr on Android phones, tablets and Android TV.",
+  }],
+  ["apple", {
+    name: "Apple",
+    description: "A native Playarr app for iPhone, iPad and Apple TV is coming soon.",
+  }],
+  ["webos", {
+    name: "LG webOS",
+    description: "The complete Playarr TV experience on LG smart TVs.",
+  }],
+  ["tizen", {
+    name: "Samsung Tizen",
+    description: "The complete Playarr TV experience on Samsung smart TVs.",
+  }],
+  ["roku", {
+    name: "Roku",
+    description: "Sideload the Playarr channel on Roku televisions.",
+  }],
+  ["chromecast", {
+    name: "Chromecast",
+    description: "Casting Playarr to Chromecast built-in devices is coming soon.",
+  }],
+  ["xbox", {
+    name: "Xbox",
+    description: "A native Playarr client for Xbox Series X|S and Xbox One is coming soon.",
+  }],
+  ["harmony", {
+    name: "HarmonyOS",
+    description: "A native Playarr client for HarmonyOS is coming soon.",
+  }],
+  ["playstation", {
+    name: "PlayStation",
+    description: "A Playarr client for PlayStation consoles is being scoped.",
+  }],
+  ["firetv", {
+    name: "Fire TV",
+    description: "A native Playarr client for Amazon Fire TV is coming soon.",
+  }],
+]);
+
+function escapeHtml(value) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Rewrites <title> and the description/og/twitter <meta> tags in the shared
+ * SPA shell to a specific client's copy, so sharing a /clients/:id link
+ * shows that platform's name in the preview instead of the generic default
+ * every route would otherwise fall back to -- a crawler never runs the
+ * client-side JS that would set document.title for that route.
+ *
+ * Plain string substitution rather than HTMLRewriter: this worker has no
+ * other dependency on the Workers-runtime-specific HTML parser, and a
+ * regex swap of a handful of exact, self-authored tags in a template this
+ * file also owns is simple to get right and, unlike HTMLRewriter, runs
+ * anywhere -- including this project's plain-Node vitest suite, with no
+ * Workers runtime polyfill needed just to test it.
+ */
+function renderClientMeta(html, clientId, copy, url) {
+  const title = escapeHtml(`Playarr for ${copy.name}`);
+  const description = escapeHtml(copy.description);
+  const canonicalUrl = escapeHtml(new URL(`/clients/${clientId}`, url).toString());
+
+  return html
+    .replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`)
+    .replace(
+      /(<meta\s+name="description"\s+content=")[^"]*(")/,
+      `$1${description}$2`
+    )
+    .replace(/(<meta\s+property="og:title"\s+content=")[^"]*(")/, `$1${title}$2`)
+    .replace(
+      /(<meta\s+property="og:description"\s+content=")[^"]*(")/,
+      `$1${description}$2`
+    )
+    .replace(/(<meta\s+property="og:url"\s+content=")[^"]*(")/, `$1${canonicalUrl}$2`)
+    .replace(/(<meta\s+name="twitter:title"\s+content=")[^"]*(")/, `$1${title}$2`)
+    .replace(
+      /(<meta\s+name="twitter:description"\s+content=")[^"]*(")/,
+      `$1${description}$2`
+    );
+}
+
+/** The bare /clients index redirects to this client's own page client-side (see ClientsPage in Clients.tsx) -- a crawler never runs that redirect, so this is what it should see instead. */
+const CLIENTS_INDEX_REDIRECT_TARGET = "vidaa";
+
+async function clientPageResponse(clientId, url, env, request) {
+  const response = await env.ASSETS.fetch(new Request(new URL("/index.html", url), request));
+  const copy = CLIENTS_SOCIAL_COPY.get(clientId);
+  if (!copy) return response;
+  const html = await response.text();
+  return new Response(renderClientMeta(html, clientId, copy, url), {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+}
+
 function json(body, init = {}) {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json; charset=utf-8");
@@ -264,6 +379,13 @@ export default {
         response = json({ error: "not_found" }, { status: 404 });
       }
       return packagedLinkEndpoint ? withLinkCors(response) : response;
+    }
+    if (url.pathname === "/clients") {
+      return clientPageResponse(CLIENTS_INDEX_REDIRECT_TARGET, url, env, request);
+    }
+    if (url.pathname.startsWith("/clients/")) {
+      const clientId = url.pathname.slice("/clients/".length);
+      return clientPageResponse(clientId, url, env, request);
     }
     if (url.pathname === "/cast") {
       return new Response(null, {

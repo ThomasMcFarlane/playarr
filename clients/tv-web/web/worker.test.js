@@ -446,3 +446,106 @@ describe("link QR code", () => {
     expect(response.status).toBe(400);
   });
 });
+
+// Mirrors the actual multi-line meta tag formatting in index.html (Prettier
+// wraps a tag's attributes onto their own lines once it has more than one),
+// so these tests prove the rewriter's regexes work against the real
+// template shape, not just a conveniently single-line stand-in for it.
+const SAMPLE_INDEX_HTML = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Playarr</title>
+    <meta
+      name="description"
+      content="Playarr is a self-hosted media server. Your library, every screen."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Playarr" />
+    <meta
+      property="og:description"
+      content="Playarr is a self-hosted media server. Your library, every screen."
+    />
+    <meta property="og:url" content="https://playarr.app/" />
+    <meta property="og:image" content="https://playarr.app/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Playarr" />
+    <meta
+      name="twitter:description"
+      content="Playarr is a self-hosted media server. Your library, every screen."
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
+`;
+
+describe("client page meta tags", () => {
+  it("rewrites the title and every description/og/twitter tag for a known client", async () => {
+    const env = environment(null);
+    env.ASSETS.fetch.mockResolvedValueOnce(
+      new Response(SAMPLE_INDEX_HTML, {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      })
+    );
+
+    const response = await worker.fetch(new Request("https://playarr.app/clients/roku"), env);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
+    expect(html).toContain("<title>Playarr for Roku</title>");
+    expect(html).toContain(
+      'content="Sideload the Playarr channel on Roku televisions."'
+    );
+    expect(html).toContain('content="Playarr for Roku"');
+    expect(html).toContain('content="https://playarr.app/clients/roku"');
+    // og:type/og:image and every other untouched tag survive unchanged.
+    expect(html).toContain('<meta property="og:type" content="website" />');
+    expect(html).toContain('content="https://playarr.app/og-image.png"');
+    // The generic copy this replaced is gone, not just supplemented.
+    expect(html).not.toContain("Playarr is a self-hosted media server");
+  });
+
+  it("requests the fetched asset at the shared index.html, not a per-client file", async () => {
+    const env = environment(null);
+    env.ASSETS.fetch.mockResolvedValueOnce(
+      new Response(SAMPLE_INDEX_HTML, { headers: { "Content-Type": "text/html" } })
+    );
+
+    await worker.fetch(new Request("https://playarr.app/clients/xbox"), env);
+
+    expect(env.ASSETS.fetch).toHaveBeenCalledOnce();
+    const requested = env.ASSETS.fetch.mock.calls[0][0];
+    expect(new URL(requested.url).pathname).toBe("/index.html");
+  });
+
+  it("leaves the generic shell untouched for an id that isn't a real client", async () => {
+    const env = environment(null);
+    env.ASSETS.fetch.mockResolvedValueOnce(
+      new Response(SAMPLE_INDEX_HTML, { headers: { "Content-Type": "text/html" } })
+    );
+
+    const response = await worker.fetch(
+      new Request("https://playarr.app/clients/not-a-real-client"),
+      env
+    );
+    const html = await response.text();
+
+    expect(html).toBe(SAMPLE_INDEX_HTML);
+  });
+
+  it("gives the bare /clients index the first client's meta tags, matching where it redirects", async () => {
+    const env = environment(null);
+    env.ASSETS.fetch.mockResolvedValueOnce(
+      new Response(SAMPLE_INDEX_HTML, { headers: { "Content-Type": "text/html" } })
+    );
+
+    const response = await worker.fetch(new Request("https://playarr.app/clients"), env);
+    const html = await response.text();
+
+    expect(html).toContain("<title>Playarr for Hisense VIDAA</title>");
+    expect(html).toContain('content="https://playarr.app/clients/vidaa"');
+  });
+});
