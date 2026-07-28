@@ -64,6 +64,11 @@ Dockerfile  text eol=lf
 *.wgt   binary
 *.ipk   binary
 *.tpk   binary
+*.hap   binary
+*.app   binary
+*.har   binary
+*.hsp   binary
+*.p7b   binary
 
 # Let GitHub's linguist skip generated/vendored content in language stats
 # without needing a separate .gitattributes per client.

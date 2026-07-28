@@ -9,6 +9,7 @@
 - [ ] Playarr iOS
 - [ ] Playarr Web
 - [ ] Playarr TV Web (Tizen / webOS / VIDAA fallback)
+- [ ] Playarr HarmonyOS (phone / tablet / Vision TV)
 - [ ] Docs
 - [ ] Infra (Docker / Kubernetes / systemd)
 - [ ] CI/CD / tooling
@@ -21,7 +22,7 @@ this checklist is here for anything CI can't see (manual testing,
 screenshots, migration steps, deliberate scope decisions).
 
 - [ ] All CI checks are green. Per-platform jobs (`backend-check`,
-      `android-check`, `ios-check`, `tv-web-check`,
+      `android-check`, `ios-check`, `harmony-check`, `tv-web-check`,
       `openapi-contract-check`) only run when this PR touches their path,
       but `ci-required` must be green regardless.
 - [ ] `cargo fmt --check`, `cargo clippy -- -D warnings`, and `cargo test`

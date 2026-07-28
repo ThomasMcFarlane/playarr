@@ -31,10 +31,10 @@ indent_size = 4
 indent_size = 4
 
 # Web / TS / JS (tv-web client).
-[*.{ts,tsx,js,jsx,mjs,cjs}]
+[*.{ts,tsx,js,jsx,mjs,cjs,ets}]
 indent_size = 2
 
-[*.{json,jsonc,yml,yaml,toml}]
+[*.{json,jsonc,json5,yml,yaml,toml}]
 indent_size = 2
 
 [*.md]

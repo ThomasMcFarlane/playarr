@@ -103,6 +103,19 @@ fastlane/test_output
 .buildResult/
 
 # ------------------------------------------------------------------------
+# HarmonyOS NEXT / OpenHarmony tooling (build + packaging artifacts)
+# ------------------------------------------------------------------------
+oh_modules/
+.hvigor/
+.clangd
+.cxx/
+*.hap
+*.app
+*.har
+*.hsp
+local.properties
+
+# ------------------------------------------------------------------------
 # Docker / Kubernetes / infra scratch state
 # ------------------------------------------------------------------------
 *.tfstate

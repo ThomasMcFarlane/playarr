@@ -27,6 +27,11 @@ tv_web_dir := "clients/tv-web"
 android_dir := "clients/android"
 ios_dir := "clients/ios"
 xbox_dir := "clients/xbox"
+# Native HarmonyOS NEXT (ArkTS/ArkUI) client: one HAP covering phone,
+# tablet/foldable and Huawei Vision TV, chosen at runtime from
+# deviceInfo.deviceType (playarr_model::ClientPlatform's HarmonyMobile /
+# HarmonyTv variants).
+harmony_dir := "clients/harmony"
 infra_dir := "infra"
 scripts_dir := "scripts"
 
@@ -127,6 +132,34 @@ xbox-core-build:
 # Test the portable Xbox client core (Playarr.Core only; see comment above).
 xbox-core-test:
     cd {{xbox_dir}} && dotnet test tests/Playarr.Core.Tests/Playarr.Core.Tests.csproj
+
+# clients/harmony/ is a native ArkTS/ArkUI HarmonyOS NEXT project. There is
+# no HarmonyOS SDK on this machine by default, so most of these recipes are
+# tiered: harmony-validate/harmony-test run with only Node (no SDK, no
+# device, seconds); harmony-sdk/harmony-build need the real OpenHarmony SDK
+# and Command Line Tools, fetched on demand; harmony-deploy needs a
+# connected device over hdc. See clients/harmony/README.md for the full
+# tier breakdown and what each one genuinely verifies.
+
+# Offline structural + contract validation for the HarmonyOS client (no SDK).
+harmony-validate:
+    cd {{harmony_dir}} && node scripts/validate.mjs
+
+# Unit-test the HarmonyOS client's pure-logic core (no SDK, no device).
+harmony-test:
+    cd {{harmony_dir}} && npm ci --prefix tools && node tools/run-core-tests.mjs
+
+# Download and unpack the OpenHarmony SDK + Command Line Tools (Linux).
+harmony-sdk:
+    cd {{harmony_dir}} && bash scripts/fetch-sdk.sh
+
+# Compile the HarmonyOS HAP. Requires `just harmony-sdk` once first.
+harmony-build MODE="debug":
+    cd {{harmony_dir}} && bash scripts/build.sh {{MODE}}
+
+# Sideload the built HAP to a connected device (HDC_TARGET env var).
+harmony-deploy:
+    cd {{harmony_dir}} && bash scripts/deploy.sh
 
 # ------------------------------------------------------------------------
 # Local dev environment (Docker Compose stack: Playarr Server + Sonarr/Radarr/

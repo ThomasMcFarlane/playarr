@@ -1,0 +1,95 @@
+# =============================================================================
+# HarmonyOS Release
+# =============================================================================
+#
+# Release-track workflow for the native HarmonyOS NEXT client
+# (clients/harmony). Triggered by pushing a tag like `harmony-v0.1.0`, or
+# manually via workflow_dispatch.
+#
+# Unlike the Xbox/iOS release workflows, this one is NOT a placeholder: the
+# HarmonyOS SDK and Command Line Tools genuinely run on Linux (hvigor,
+# ohpm, codelinter, hdc, hap-sign-tool.jar are all published for
+# linux-x64), so this job downloads the real SDK, runs the offline
+# validator and core tests, then compiles a real (unsigned by default) HAP.
+# See clients/harmony/README.md and scripts/fetch-sdk.sh /
+# scripts/build.sh / scripts/sign.sh for the full breakdown of what each
+# step verifies and what still needs a physical device.
+#
+# Signing (scripts/sign.sh) needs real Huawei AppGallery Connect material
+# that does not exist as a repository secret yet -- HARMONY_SIGN_CERT_PATH,
+# HARMONY_SIGN_P7B_PATH, HARMONY_SIGN_KEYSTORE_PATH,
+# HARMONY_SIGN_KEYSTORE_PASSWORD, HARMONY_SIGN_ALIAS. Until those secrets
+# are added to the release-harmony environment, this workflow uploads the
+# unsigned HAP only.
+# =============================================================================
+
+name: Publish HarmonyOS package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'harmony-v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-harmony-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the HarmonyOS NEXT package
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: release-harmony
+    defaults:
+      run:
+        working-directory: clients/harmony
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: clients/harmony/tools/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Cache OpenHarmony SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ohos-sdk
+          key: ohos-sdk-6.1-release-cli-5.1.0.840
+
+      - name: Fetch the OpenHarmony SDK + Command Line Tools
+        run: bash scripts/fetch-sdk.sh
+
+      - name: Validate project structure and contracts
+        run: node scripts/validate.mjs
+
+      - name: Install validation tooling & run core logic tests
+        run: |
+          npm ci --prefix tools
+          node tools/run-core-tests.mjs
+
+      - name: Build the HAP (release, unsigned)
+        run: bash scripts/build.sh release
+
+      # TODO: once HARMONY_SIGN_CERT_PATH / HARMONY_SIGN_P7B_PATH /
+      # HARMONY_SIGN_KEYSTORE_PATH / HARMONY_SIGN_KEYSTORE_PASSWORD /
+      # HARMONY_SIGN_ALIAS exist as secrets in the release-harmony
+      # environment, add a "Sign the HAP" step here that restores them to
+      # a temp directory and runs `bash scripts/sign.sh`, then upload the
+      # signed HAP alongside the unsigned one.
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playarr-harmony-package
+          path: clients/harmony/entry/build/default/outputs/default
+          if-no-files-found: error

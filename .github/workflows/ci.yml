@@ -60,6 +60,7 @@ jobs:
       android: ${{ steps.filter.outputs.android }}
       ios: ${{ steps.filter.outputs.ios }}
       xbox: ${{ steps.filter.outputs.xbox }}
+      harmony: ${{ steps.filter.outputs.harmony }}
       tv-web: ${{ steps.filter.outputs.tv-web }}
     steps:
       - uses: actions/checkout@v4
@@ -76,6 +77,8 @@ jobs:
               - 'clients/ios/**'
             xbox:
               - 'clients/xbox/**'
+            harmony:
+              - 'clients/harmony/**'
             tv-web:
               - 'clients/tv-web/**'
 
@@ -198,6 +201,44 @@ jobs:
         run: dotnet test tests/Playarr.Core.Tests/Playarr.Core.Tests.csproj
 
   # ---------------------------------------------------------------------
+  # HarmonyOS (clients/harmony -- native ArkTS/ArkUI HarmonyOS NEXT client).
+  # There is no HarmonyOS SDK available in this runner, so this job runs
+  # only the two offline tiers: structural/contract validation (Tier 0,
+  # scripts/validate.mjs) and the pure-logic core's unit tests (Tier 0b,
+  # tools/run-core-tests.mjs), matching the Justfile's harmony-validate /
+  # harmony-test recipes. Compiling a real HAP (Tier 1, needs the
+  # ~1 GB OpenHarmony SDK) is deliberately NOT gated here -- see the release
+  # workflow for that.
+  # ---------------------------------------------------------------------
+  harmony-check:
+    name: HarmonyOS client checks (validate, core tests)
+    needs: changes
+    if: needs.changes.outputs.harmony == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: clients/harmony
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: clients/harmony/tools/package-lock.json
+
+      - name: Install validation tooling
+        run: npm ci --prefix tools
+
+      - name: Validate project structure and contracts
+        run: node scripts/validate.mjs
+
+      - name: Run core logic tests
+        run: node tools/run-core-tests.mjs
+
+  # ---------------------------------------------------------------------
   # tv-web (pnpm workspace under clients/tv-web -- packages/*, apps/*, web/)
   # ---------------------------------------------------------------------
   tv-web-check:
@@ -280,6 +321,7 @@ jobs:
       - android-check
       - ios-check
       - xbox-check
+      - harmony-check
       - tv-web-check
       - openapi-contract-check
     if: always()
@@ -292,7 +334,7 @@ jobs:
           echo "$NEEDS_JSON" | jq .
 
           fail=0
-          for job in changes backend-check android-check ios-check xbox-check tv-web-check openapi-contract-check; do
+          for job in changes backend-check android-check ios-check xbox-check harmony-check tv-web-check openapi-contract-check; do
             result=$(echo "$NEEDS_JSON" | jq -r --arg j "$job" '.[$j].result // "missing"')
             echo "Job '$job' result: $result"
             case "$result" in

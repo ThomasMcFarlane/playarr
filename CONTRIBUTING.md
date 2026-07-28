@@ -82,11 +82,25 @@ does not produce a signed, installable `.app` — that needs an Xcode project
 wrapping the package, and full Xcode. `just ios-build` will move to
 `xcodebuild` once that project exists.
 
+**HarmonyOS NEXT** (`clients/harmony/`): a native ArkTS/ArkUI project, one HAP
+covering phone, tablet/foldable and Huawei Vision TV. Most of it is verifiable
+without the Huawei SDK at all:
+
+```sh
+just harmony-validate   # offline structural + contract checks (seconds)
+just harmony-test        # unit-tests the pure-logic core (seconds)
+just harmony-sdk          # fetch the OpenHarmony SDK + Command Line Tools
+just harmony-build         # compile a real HAP once the SDK is fetched
+```
+
+See `clients/harmony/README.md` for exactly what each tier verifies and what
+still needs a physical HarmonyOS device.
+
 If you're on a machine without a relevant native SDK installed (full Xcode,
-Tizen Studio, the webOS CLI), you can still read and edit the source under
-`clients/`, but you won't be able to run every platform-specific build step
-locally — check that client's own `README.md` for what's actually
-verifiable without the SDK.
+Tizen Studio, the webOS CLI, the OpenHarmony SDK), you can still read and edit
+the source under `clients/`, but you won't be able to run every platform-
+specific build step locally — check that client's own `README.md` for what's
+actually verifiable without the SDK.
 
 ## Local dev stack
 
