@@ -1,9 +1,7 @@
 ---
 /*
- * Browser-chrome shell used to present the fictional DemoScreen mockups (see
- * DemoScreen.astro and data/demo-content.ts) as if seen in a browser tab.
- * Deliberately illustrative, not a screenshot: nothing rendered inside it is
- * a capture of a real Playarr Server installation.
+ * Browser-chrome shell used to present real screenshots of the Playarr and
+ * Playarr Server interfaces as if seen in a browser tab.
  */
 interface Props extends astroHTML.JSX.HTMLAttributes {
   /** Visual weight in a stacked showcase, larger frames sit forward. */
@@ -72,6 +70,18 @@ const { size = 'md', aspect = 'wide', class: className, ...rest } = Astro.props
     color: var(--ink-muted);
     font-size: 0.68rem;
     font-weight: 650;
+  }
+
+  .viewport {
+    overflow: hidden;
+  }
+
+  .viewport :global(img) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
   }
 
   .wide .viewport {
