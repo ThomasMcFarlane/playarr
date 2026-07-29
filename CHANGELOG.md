@@ -58,6 +58,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Android TV true cross-engine AE suite (desktop Chromium web-ref vs WebView)
+  with residual *rectangles only* (no full-stage overpaint), work-detail surface,
+  and pure_ae honesty metrics.
+
 - Android TV pure full-page AE suite (`parity_pure_fullpage_ae0.py`): desktop
   Chromium vs WebView SPA freezes with zero residual-asset paint, stronger
   layout lock (scroll zero, fixed settings widths, scrollbar-gutter kill).
