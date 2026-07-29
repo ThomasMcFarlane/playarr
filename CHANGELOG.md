@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku Search opens the web empty shell first (field, filters, “Start typing
+  to search”) instead of jumping straight into results; OK opens the keyboard.
+
 - Roku library browse matches web heading ("Movies" + "1,730 TITLES"),
   numeric title sort (2 Kites before 10 Brambleford), genre kicker/meta, and
   layout chrome closer to Library.tsx. Browse key-art Poster wired (async).
