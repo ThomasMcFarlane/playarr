@@ -9,6 +9,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku home rails match web membership rules: on-deck skips artists, Start
+  watching merges recent movies+series (no artists), later rails use
+  takeUnused so titles do not repeat across rails. Nav dock gains group
+  surface chips and mid-canvas clock (`WED 29 JULY` style).
+
 - Roku home/detail hero key-art loads authenticated artwork via the Playarr
   proxy (tmp download + Poster file URI). Hero shows web-style synopsis and
   `SERIES · GENRE` kicker under the title panel.

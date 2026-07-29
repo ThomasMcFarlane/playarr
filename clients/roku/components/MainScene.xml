@@ -649,12 +649,11 @@
     <Group id="persistentHeader">
       <Poster id="navLogo" translation="[16,34]" width="48" height="48" uri="pkg:/images/pairing-logo.png" />
 
-      <!-- Clock (from: App.tsx's .app-clock, real time + date shown on
-           every authenticated screen). Deferred in the earlier shell pass,
-           added now: translation chosen to sit clear of both the logo above
-           and the dock below (logo ends y=82; dock starts y=203). -->
-      <Label id="clockTime" translation="[90,40]" width="200" height="30" scale="[0.46,0.46]" color="0xF4F0F1FF" />
-      <Label id="clockDate" translation="[90,64]" width="260" height="26" scale="[0.34,0.34]" color="0x887A82FF" />
+      <!-- Clock from .app-clock on TV stage: top band, mid-canvas
+           (right: calc(65% + ~38px) ≈ x~600 at 1920). Time + date sit on one
+           baseline row like web's grid-template-columns: auto auto. -->
+      <Label id="clockTime" translation="[600,42]" width="160" height="36" scale="[0.55,0.55]" color="0xF4F0F1FF" />
+      <Label id="clockDate" translation="[720,50]" width="360" height="28" scale="[0.36,0.36]" color="0x887A82FF" />
 
       <!-- navDock: 7 flat-indexed items (see MainScene.brs's navDockKindList
            for the matching order/behaviour), grouped visually into 3 panels
@@ -665,56 +664,41 @@
            715-803, symmetric 203px top/bottom margins. Downloads is
            deliberately omitted, Roku has no local file-storage /
            download-queue infrastructure to lead a Downloads tab to. -->
-      <!-- NOT opaque group-background panels: confirmed live against the
-           real app's own nav (.app-nav computed style) that its container
-           is fully transparent (background: rgba(0,0,0,0)), there is no
-           panel behind the icon groups at all, only each individual link
-           getting its own small rounded highlight on hover/active
-           (.app-nav-link's own background, already matched by this app's
-           navHighlight0-6 rectangles below). The 3 solid ~85%-opaque panels
-           this used to have were blocking the hero backdrop art behind them
-           with no basis in the real design. -->
+      <!-- TV .app-nav-group panels: rounded surface chips behind Search,
+           library kinds, and Playlists (not full-stage opaque). layoutNavDock
+           repositions these when Sites/Music hide. -->
       <Group id="navDock">
+        <Rectangle id="navGroupBg0" translation="[28,200]" width="104" height="96" color="0x2A242899" />
+        <Rectangle id="navGroupBg1" translation="[28,308]" width="104" height="360" color="0x2A242899" />
+        <Rectangle id="navGroupBg2" translation="[28,700]" width="104" height="96" color="0x2A242899" />
 
-        <!-- Icon centre = panel centre (32 + 96/2 = 80), so icon translation.x
-             = 80 - width/2 = 64. Labels use a wide (200px) pre-scale box so
-             the longest word ("Playlists") doesn't wrap/truncate
-             at the default (unscaled) font size before scale shrinks them
-             down. scaleRotateCenter = [width/2,height/2] = [100,10] is the
-             point that stays fixed under scale, so the point that lands at
-             the visual centre is translation + scaleRotateCenter (the scale
-             term cancels out exactly at that point), not
-             translation + scaleRotateCenter*(1-scale), a formula that looks
-             plausible but is wrong and was live-tested wrong (text rendered
-             off to the right, overlapping Home's hero title, until this was
-             corrected). Solving translation.x + 100 = 80 gives
-             translation.x = -20. -->
-        <Rectangle id="navHighlight0" translation="[40,211]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <!-- Per-item highlight = .app-nav-link active/hover (ink ~9%). -->
+        <Rectangle id="navHighlight0" translation="[40,211]" width="80" height="70" color="0xF4F0F117" visible="false" />
         <Poster id="navIcon0" translation="[64,223]" width="32" height="32" uri="pkg:/images/nav-search.png" opacity="0.62" />
         <Label id="navLabel0" translation="[-20,257]" width="200" height="20" text="Search" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
 
-        <Rectangle id="navHighlight1" translation="[40,319]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Rectangle id="navHighlight1" translation="[40,319]" width="80" height="70" color="0xF4F0F117" visible="false" />
         <Poster id="navIcon1" translation="[64,331]" width="32" height="32" uri="pkg:/images/nav-home.png" opacity="0.62" />
         <Label id="navLabel1" translation="[-20,365]" width="200" height="20" text="Home" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
 
-        <Rectangle id="navHighlight2" translation="[40,393]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Rectangle id="navHighlight2" translation="[40,393]" width="80" height="70" color="0xF4F0F117" visible="false" />
         <Poster id="navIcon2" translation="[64,405]" width="32" height="32" uri="pkg:/images/nav-series.png" opacity="0.62" />
         <Label id="navLabel2" translation="[-20,439]" width="200" height="20" text="Series" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
 
-        <Rectangle id="navHighlight3" translation="[40,467]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Rectangle id="navHighlight3" translation="[40,467]" width="80" height="70" color="0xF4F0F117" visible="false" />
         <Poster id="navIcon3" translation="[64,479]" width="32" height="32" uri="pkg:/images/nav-movies.png" opacity="0.62" />
         <Label id="navLabel3" translation="[-20,513]" width="200" height="20" text="Movies" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
 
         <!-- Sites hidden until catalog/kinds proves this viewer has a site library. -->
-        <Rectangle id="navHighlight4" translation="[40,541]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Rectangle id="navHighlight4" translation="[40,541]" width="80" height="70" color="0xF4F0F117" visible="false" />
         <Poster id="navIcon4" translation="[64,553]" width="32" height="32" uri="pkg:/images/nav-sites.png" opacity="0.62" visible="false" />
         <Label id="navLabel4" translation="[-20,587]" width="200" height="20" text="Sites" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" visible="false" />
 
-        <Rectangle id="navHighlight5" translation="[40,615]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Rectangle id="navHighlight5" translation="[40,615]" width="80" height="70" color="0xF4F0F117" visible="false" />
         <Poster id="navIcon5" translation="[64,627]" width="32" height="32" uri="pkg:/images/nav-music.png" opacity="0.62" />
         <Label id="navLabel5" translation="[-20,661]" width="200" height="20" text="Music" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
 
-        <Rectangle id="navHighlight6" translation="[40,723]" width="80" height="70" color="0xF4F0F13D" visible="false" />
+        <Rectangle id="navHighlight6" translation="[40,723]" width="80" height="70" color="0xF4F0F117" visible="false" />
         <Poster id="navIcon6" translation="[64,735]" width="32" height="32" uri="pkg:/images/nav-playlists.png" opacity="0.62" />
         <Label id="navLabel6" translation="[-20,769]" width="200" height="20" text="Playlists" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
       </Group>

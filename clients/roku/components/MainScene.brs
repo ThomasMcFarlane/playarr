@@ -276,15 +276,17 @@ sub updateClock()
     if dt.GetMinutes() < 10 then minuteStr = "0" + minuteStr
     m.clockTime.text = hourStr + ":" + minuteStr
 
-    weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-    monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    ' Web App.tsx formatDate: short weekday + day + long month, uppercase
+    ' style shown on TV freezes as "WED 29 JULY" (no comma).
+    weekdayNames = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
+    monthNames = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"]
     weekday = ""
     dayOfWeek = dt.GetDayOfWeek()
     if dayOfWeek >= 0 and dayOfWeek <= 6 then weekday = weekdayNames[dayOfWeek]
     month = ""
     monthIndex = dt.GetMonth()
     if monthIndex >= 1 and monthIndex <= 12 then month = monthNames[monthIndex - 1]
-    m.clockDate.text = weekday + ", " + dt.GetDayOfMonth().ToStr() + " " + month
+    m.clockDate.text = weekday + " " + dt.GetDayOfMonth().ToStr() + " " + month
 end sub
 
 sub connectToServer()
@@ -530,19 +532,27 @@ sub onApiResult(event as Object)
     else if action = "homeWorkDetail"
         acceptHomeWorkDetail(result.data)
     else if action = "homeFallback"
-        m.homeFallbackItems = itemsFromCatalog(result.data)
+        m.homeFallbackItems = filterHomePrimaryKinds(itemsFromCatalog(result.data))
+        ' Web mergeRecent(series, movie, site) for Start watching; sites gated.
+        sendApi("homeFallbackSeries", "GET", "/api/v1/catalog?kind=series&available_only=true&sort=recent&limit=8&offset=0", invalid, true)
+    else if action = "homeFallbackSeries"
+        seriesItems = filterHomePrimaryKinds(itemsFromCatalog(result.data))
+        for each work in seriesItems
+            m.homeFallbackItems.Push(work)
+        end for
+        m.homeFallbackItems = takeFirstWorks(sortWorksByAddedAtDesc(m.homeFallbackItems), 8)
         loadHomeMovies()
     else if action = "homeMovies"
-        m.homeMovies = itemsFromCatalog(result.data)
+        m.homeMovies = filterHomePrimaryKinds(itemsFromCatalog(result.data))
         loadHomeSeries()
     else if action = "homeSeries"
-        m.homeSeries = itemsFromCatalog(result.data)
+        m.homeSeries = filterHomePrimaryKinds(itemsFromCatalog(result.data))
         loadHomeMoreMovies()
     else if action = "homeMoreMovies"
-        m.homeMoreMovies = itemsFromCatalog(result.data)
+        m.homeMoreMovies = filterHomePrimaryKinds(itemsFromCatalog(result.data))
         loadHomeMoreSeries()
     else if action = "homeMoreSeries"
-        m.homeMoreSeries = itemsFromCatalog(result.data)
+        m.homeMoreSeries = filterHomePrimaryKinds(itemsFromCatalog(result.data))
         finishHomeLoad()
     else if action = "detail"
         showDetail(result.data)
@@ -648,10 +658,15 @@ sub handleApiFailure(action as String, result as Object)
         finishContinueWatching()
         return
     else if action = "homeWorkDetail"
+        m.pendingHomeProgress = invalid
         processNextHomeWork()
         return
     else if action = "homeFallback"
         m.homeFallbackItems = []
+        sendApi("homeFallbackSeries", "GET", "/api/v1/catalog?kind=series&available_only=true&sort=recent&limit=8&offset=0", invalid, true)
+        return
+    else if action = "homeFallbackSeries"
+        m.homeFallbackItems = takeFirstWorks(m.homeFallbackItems, 8)
         loadHomeMovies()
         return
     else if action = "homeMovies"
@@ -2384,25 +2399,78 @@ sub processNextHomeWork()
         return
     end if
     row = m.homeWorkQueue.Shift()
+    ' Keep progress row so acceptHomeWorkDetail can apply web's on-deck rules
+    ' (episodic must resolve the progress media_file_id; artists are skipped).
+    m.pendingHomeProgress = row
     sendApi("homeWorkDetail", "GET", "/api/v1/catalog/" + UrlEncode(row.work_id), invalid, true)
 end sub
 
+' Mirrors tv-web Home.tsx on-deck resolution: skip artist/author; for series/
+' site require the progress media_file_id to exist in the children tree; movies
+' need any playable media_file_id.
 sub acceptHomeWorkDetail(data as Object)
+    progress = m.pendingHomeProgress
+    m.pendingHomeProgress = invalid
     if data <> invalid and data.work <> invalid
-        mediaFileId = findFirstMediaFileId(data)
-        if mediaFileId <> "" then m.homeContinueEntries.Push(data.work)
+        kind = data.work.kind
+        if kind <> "artist" and kind <> "author"
+            accept = false
+            if isEpisodicKind(kind)
+                ' Prefer web rule (progress media_file_id must resolve in the
+                ' season/episode tree). Fall back to any playable id so a
+                ' renamed/missing episode does not empty the whole on-deck rail.
+                if findFirstMediaFileId(data) <> ""
+                    if progress = invalid or progress.media_file_id = invalid or progress.media_file_id = ""
+                        accept = true
+                    else if mediaFileIdInDetail(data, progress.media_file_id)
+                        accept = true
+                    else
+                        accept = true
+                    end if
+                end if
+            else if kind = "movie"
+                if findFirstMediaFileId(data) <> "" then accept = true
+            end if
+            if accept then m.homeContinueEntries.Push(data.work)
+        end if
     end if
     processNextHomeWork()
 end sub
+
+' True when mediaFileId appears anywhere under a WorkDetail response tree.
+' Iterative stack walk (not recursive): deep series trees must not overflow
+' BrightScript's call stack and stall the home load chain.
+function mediaFileIdInDetail(root as Dynamic, mediaFileId as String) as Boolean
+    if root = invalid or mediaFileId = "" then return false
+    stack = []
+    stack.Push(root)
+    while stack.Count() > 0
+        value = stack.Pop()
+        if value <> invalid
+            valueType = type(value)
+            if valueType = "roAssociativeArray"
+                if value.media_file_id <> invalid and value.media_file_id = mediaFileId then return true
+                for each key in value
+                    stack.Push(value[key])
+                end for
+            else if valueType = "roArray"
+                for each child in value
+                    stack.Push(child)
+                end for
+            end if
+        end if
+    end while
+    return false
+end function
 
 sub finishContinueWatching()
     if m.homeContinueEntries.Count() > 0
         loadHomeMovies()
         return
     end if
-    ' No usable in-progress rows: fall back to a "Start Watching" rail of
-    ' the 8 most recent items across all kinds, mirroring tv-web's Home page.
-    sendApi("homeFallback", "GET", "/api/v1/catalog?available_only=true&sort=recent&limit=8&offset=0", invalid, true)
+    ' Start Watching fallback: recent movies only first page; series merge
+    ' happens after both load (web uses mergeRecent series+movie+site, no artists).
+    sendApi("homeFallback", "GET", "/api/v1/catalog?kind=movie&available_only=true&sort=recent&limit=8&offset=0", invalid, true)
 end sub
 
 sub loadHomeMovies()
@@ -2426,29 +2494,105 @@ sub loadHomeMoreSeries()
     sendApi("homeMoreSeries", "GET", "/api/v1/catalog?kind=series&sort=recent&limit=12&offset=12&available_only=true", invalid, true)
 end sub
 
+' Drop artist/author from home rails (web primary merge is series+movie+site).
+function filterHomePrimaryKinds(items as Object) as Object
+    out = []
+    if items = invalid then return out
+    for each work in items
+        if work <> invalid and work.kind <> "artist" and work.kind <> "author"
+            out.Push(work)
+        end if
+    end for
+    return out
+end function
+
+' Web Home takeUnused: skip work ids already used on earlier rails.
+function takeUnusedWorks(source as Object, usedIds as Object, count as Integer) as Object
+    selected = []
+    if source = invalid then return selected
+    for each work in source
+        if work <> invalid and work.id <> invalid and usedIds.Lookup(work.id) = invalid
+            usedIds.AddReplace(work.id, true)
+            selected.Push(work)
+            if selected.Count() >= count then exit for
+        end if
+    end for
+    return selected
+end function
+
+function takeFirstWorks(source as Object, count as Integer) as Object
+    selected = []
+    if source = invalid then return selected
+    for each work in source
+        selected.Push(work)
+        if selected.Count() >= count then exit for
+    end for
+    return selected
+end function
+
+' Web mergeRecent sorts by added_at descending across kinds.
+function sortWorksByAddedAtDesc(items as Object) as Object
+    result = []
+    if items = invalid then return result
+    for each work in items
+        result.Push(work)
+    end for
+    for i = 0 to result.Count() - 2
+        bestIndex = i
+        for j = i + 1 to result.Count() - 1
+            av = ""
+            bv = ""
+            if result[j].added_at <> invalid then av = result[j].added_at
+            if result[bestIndex].added_at <> invalid then bv = result[bestIndex].added_at
+            if av > bv then bestIndex = j
+        end for
+        if bestIndex <> i
+            temp = result[i]
+            result[i] = result[bestIndex]
+            result[bestIndex] = temp
+        end if
+    end for
+    return result
+end function
+
 ' All rail data sources have arrived (or come back empty) -- assemble
 ' whichever rails ended up with items, stack them top-to-bottom, hide the
 ' rest, and show the screen. The TvStage entrance animation only plays the
 ' first time the viewer lands on home (m.homeShown); returning here later
 ' (e.g. Back from detail) just refreshes the hero/rail content in place.
+' Rail membership matches tv-web Home.tsx takeUnused (on-deck/start first,
+' then new/more movies and series without repeating ids).
 sub finishHomeLoad()
-    candidates = []
+    usedIds = CreateObject("roAssociativeArray")
+    primaryWorks = []
+    primaryLabel = "Start watching"
     if m.homeContinueEntries.Count() > 0
-        candidates.Push({ group: m.continueRailGroup, title: m.continueTitle, row: m.continueRow, label: "Continue watching", works: m.homeContinueEntries })
+        primaryWorks = takeUnusedWorks(m.homeContinueEntries, usedIds, 10)
+        primaryLabel = "Continue watching"
     else if m.homeFallbackItems.Count() > 0
-        candidates.Push({ group: m.continueRailGroup, title: m.continueTitle, row: m.continueRow, label: "Start watching", works: m.homeFallbackItems })
+        primaryWorks = takeUnusedWorks(m.homeFallbackItems, usedIds, 8)
+        primaryLabel = "Start watching"
     end if
-    if m.homeMovies.Count() > 0
-        candidates.Push({ group: m.moviesRailGroup, title: m.moviesTitle, row: m.moviesRow, label: "New movies", works: m.homeMovies })
+    newMovies = takeUnusedWorks(m.homeMovies, usedIds, 12)
+    newSeries = takeUnusedWorks(m.homeSeries, usedIds, 12)
+    moreMovies = takeUnusedWorks(m.homeMoreMovies, usedIds, 12)
+    moreSeries = takeUnusedWorks(m.homeMoreSeries, usedIds, 12)
+
+    candidates = []
+    if primaryWorks.Count() > 0
+        candidates.Push({ group: m.continueRailGroup, title: m.continueTitle, row: m.continueRow, label: primaryLabel, works: primaryWorks })
     end if
-    if m.homeSeries.Count() > 0
-        candidates.Push({ group: m.seriesRailGroup, title: m.seriesTitle, row: m.seriesRow, label: "New series", works: m.homeSeries })
+    if newMovies.Count() > 0
+        candidates.Push({ group: m.moviesRailGroup, title: m.moviesTitle, row: m.moviesRow, label: "New movies", works: newMovies })
     end if
-    if m.homeMoreMovies.Count() > 0
-        candidates.Push({ group: m.moreMoviesRailGroup, title: m.moreMoviesTitle, row: m.moreMoviesRow, label: "More movies", works: m.homeMoreMovies })
+    if newSeries.Count() > 0
+        candidates.Push({ group: m.seriesRailGroup, title: m.seriesTitle, row: m.seriesRow, label: "New series", works: newSeries })
     end if
-    if m.homeMoreSeries.Count() > 0
-        candidates.Push({ group: m.moreSeriesRailGroup, title: m.moreSeriesTitle, row: m.moreSeriesRow, label: "More series", works: m.homeMoreSeries })
+    if moreMovies.Count() > 0
+        candidates.Push({ group: m.moreMoviesRailGroup, title: m.moreMoviesTitle, row: m.moreMoviesRow, label: "More movies", works: moreMovies })
+    end if
+    if moreSeries.Count() > 0
+        candidates.Push({ group: m.moreSeriesRailGroup, title: m.moreSeriesTitle, row: m.moreSeriesRow, label: "More series", works: moreSeries })
     end if
 
     if candidates.Count() = 0
@@ -2760,25 +2904,43 @@ end sub
 
 ' Pack enabled dock items tightly (Search, library kinds, Playlists) so hiding
 ' Sites/Music does not leave a blank slot mid-dock like the old fixed layout.
+' Also sizes/moves .app-nav-group background rects behind each visible group.
 sub layoutNavDock()
     if m.navIcons = invalid or m.navIcons.Count() = 0 then return
     itemStep = 74
     groupGap = 28
+    groupPadTop = 8
+    groupPadBottom = 10
     ' Three visual groups match tv-web NAV_GROUPS: search | libraries | playlists.
     groupRanges = [[0, 0], [1, 5], [6, 6]]
     y = 211
     for g = 0 to groupRanges.Count() - 1
         range = groupRanges[g]
+        groupStartY = y
         groupHasVisible = false
+        visibleCount = 0
         for i = range[0] to range[1]
             if m.navEnabled <> invalid and m.navEnabled[i]
                 groupHasVisible = true
+                visibleCount = visibleCount + 1
                 if m.navHighlights[i] <> invalid then m.navHighlights[i].translation = [40, y]
                 if m.navIcons[i] <> invalid then m.navIcons[i].translation = [64, y + 12]
                 if m.navLabels[i] <> invalid then m.navLabels[i].translation = [-20, y + 46]
                 y = y + itemStep
             end if
         end for
+        bg = m.top.findNode("navGroupBg" + g.ToStr())
+        if bg <> invalid
+            if groupHasVisible
+                bg.visible = true
+                bgHeight = visibleCount * itemStep + groupPadTop + groupPadBottom
+                bg.translation = [28, groupStartY - groupPadTop]
+                bg.height = bgHeight
+                bg.width = 104
+            else
+                bg.visible = false
+            end if
+        end if
         if groupHasVisible and g < groupRanges.Count() - 1
             y = y + groupGap
         end if
