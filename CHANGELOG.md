@@ -9,9 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Roku channel residual-region parity assets and `scripts/parity_ae0.py`
-  for SceneGraph vs live `playarr.example.com` AE=0 compares (profiles,
-  home, search, series, movies, music, playlists, settings).
+- Roku `scripts/parity_ae0.py` pure-AE suite (pure outside residual-asset
+  rects must be 0; residual fill only on declared residual-asset rects).
 
 ### Fixed
 
