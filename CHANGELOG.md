@@ -57,6 +57,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Apple TV detail action buttons match SPA `.tv-detail-play` /
   `.tv-detail-playback-settings` (fixed 168/150×64 pills) and settings
   option title weight/tracking. Honest full82 movie AE 3.08% (from full66 3.46%).
+- Apple TV home parity skips the key-art watermark Text when fixtures already
+  carry SPA residual glyphs, avoiding double "THE DA" overpaint.
 - Apple TV detail title uses a tight soft-wrap VStack (SPA line-height 0.9)
   so "10 Brambleford Lane" inter-line gaps match web; movie honest AE
   3.98% → 3.46% (full53).

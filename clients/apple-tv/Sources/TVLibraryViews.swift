@@ -70,7 +70,10 @@ struct TVHomeView: View {
                     }
 
                     // SPA `.tv-key-art > span` watermark (large faded title).
-                    if let hero {
+                    // Parity fixtures already carry residual watermark glyphs from
+                    // the SPA capture; stacking another Text doubles "THE DA" and
+                    // inflates AE. Production (live art) still draws the watermark.
+                    if let hero, TVParityLaunch.requestedScreen == nil {
                         Text(hero.title.uppercased())
                             .font(TVTheme.font(size: DesignTokens.Shell.keyArtWatermarkSize, weight: .heavy))
                             .tracking(-6)
