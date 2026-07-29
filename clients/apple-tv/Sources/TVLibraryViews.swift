@@ -225,9 +225,14 @@ struct TVHomeView: View {
         let defaultFocus: HomeRailCardFocus? = startWatching.first.map {
             HomeRailCardFocus(rail: "start", workID: $0.id)
         } ?? newMovies.first.map { HomeRailCardFocus(rail: "movies", workID: $0.id) }
+        // Production HStack shell already owns the nav column; only pad the
+        // residual gap past that width toward SPA rail origin.
+        let navColumn = DesignTokens.Shell.navItemSize
+            + DesignTokens.Shell.navGroupPadding * 2
+            + DesignTokens.Shell.navEdge * 2
+        let leadingPad = max(24, x0 - navColumn)
 
         return VStack(alignment: .leading, spacing: railGap) {
-            // SPA hides empty rails (`definitions.filter(items.length > 0)`).
             if !startWatching.isEmpty {
                 interactiveRail(
                     railID: "start",
@@ -254,11 +259,15 @@ struct TVHomeView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.leading, x0)
+        .padding(.leading, leadingPad)
         .padding(.top, y1 - headingH)
-        .frame(width: size.width, height: size.height, alignment: .topLeading)
-        .focusSection()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .defaultFocus($focusedCard, defaultFocus)
+        .onAppear {
+            if focusedCard == nil {
+                focusedCard = defaultFocus
+            }
+        }
     }
 
     private func interactiveRail(
@@ -276,8 +285,10 @@ struct TVHomeView: View {
                 .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
                 .tracking(-0.5)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
+            // No nested focusSection / no custom plain style: tvOS CardButtonStyle
+            // is the reliable focusable control for directional remotes.
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: gap) {
+                LazyHStack(alignment: .top, spacing: gap) {
                     ForEach(works) { work in
                         let focus = HomeRailCardFocus(rail: railID, workID: work.id)
                         NavigationLink {
@@ -294,12 +305,13 @@ struct TVHomeView: View {
                                 alignment: .topLeading
                             )
                         }
-                        .buttonStyle(TVFocusableCardButtonStyle())
+                        .buttonStyle(.card)
                         .focused($focusedCard, equals: focus)
                     }
                 }
+                .padding(.vertical, 12)
+                .padding(.trailing, 40)
             }
-            .focusSection()
         }
     }
 

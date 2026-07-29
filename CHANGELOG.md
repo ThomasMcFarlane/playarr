@@ -7,7 +7,21 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Server-side artwork style bake on
+  `GET /api/v1/artwork/work/{id}/{kind}?style=stage` (and the album twin):
+  greyscale + contrast/brightness + opacity + right-edge fade for TV stage
+  key-art, cached as a PNG derivative so every client reuses one bake.
+
 ### Fixed
+
+- Apple TV production shell is a real HStack (nav column + stage) instead of a
+  ZStack overlay, and home cards use the native tvOS `.card` button style so
+  directional remote focus works end-to-end.
+
+- Roku stage key-art uses `style=stage` from the server instead of a flat
+  colour wash over full-colour posters (matches web greyscale hero blend).
 
 - Roku left nav matches tv-web TV dock: rounded group panels, 64px
   active/focus chips, route-active highlight, centred logo, and

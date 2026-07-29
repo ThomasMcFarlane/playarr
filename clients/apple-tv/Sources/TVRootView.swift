@@ -4,6 +4,8 @@ import SwiftUI
 struct TVRootView: View {
     @Environment(TVAppEnvironment.self) private var environment
     @State private var selectedTab: TVNavTab = .home
+    /// Shared focus so the shell can move between nav and stage with arrows.
+    @FocusState private var shellFocus: TVShellFocus?
 
     /// When `-PlayarrParityScreen` is set, force that tab so simctl captures
     /// hit production SwiftUI (never WebView / web-ref paint).
@@ -85,101 +87,163 @@ struct TVRootView: View {
 
     private func signedInShell(forcedSelection: TVNavTab?, detailWork: Work? = nil) -> some View {
         let tab = forcedSelection ?? selectedTab
-        return ZStack(alignment: .topLeading) {
-            // Floating left nav first in the tree so the focus engine can reach
-            // it when moving left from stage content (sibling focusSection).
-            TVFloatingNav(
-                selection: Binding(
-                    get: { forcedSelection ?? selectedTab },
-                    set: { if forcedSelection == nil { selectedTab = $0 } }
-                ),
-                suppressFocusChrome: TVParityLaunch.requestedScreen != nil,
-                // SPA never shows the settings gear in the floating nav on
-                // library/home/search/settings frames (settings is reached
-                // via other chrome). Keep gear only for live non-parity.
-                showSettings: TVParityLaunch.requestedScreen == nil
-            )
-            .padding(.leading, DesignTokens.Shell.navEdge)
-            .frame(maxHeight: .infinity, alignment: .center)
-            .focusSection()
-            .zIndex(50)
+        let parity = TVParityLaunch.requestedScreen != nil
+        let navBinding = Binding(
+            get: { forcedSelection ?? selectedTab },
+            set: { if forcedSelection == nil { selectedTab = $0 } }
+        )
 
-            // Main content fills the stage
-            NavigationStack {
-                Group {
-                    if let detailWork {
-                        TVWorkDetailView(work: detailWork, apiClient: environment.apiClient)
-                    } else {
-                        switch tab {
-                        case .home:
-                            TVHomeView()
-                        case .search:
-                            TVSearchView()
-                        case .settings:
-                            TVSettingsView()
-                        case .series:
-                            TVLibraryKindView(
-                                kindLabel: "Series",
-                                emptyMessage: "No series in your library yet.",
-                                workKind: .series,
-                                collectionNoun: "TITLES"
-                            )
-                        case .movies:
-                            TVLibraryKindView(
-                                kindLabel: "Movies",
-                                emptyMessage: "No movies in your library yet.",
-                                workKind: .movie,
-                                collectionNoun: "TITLES"
-                            )
-                        case .music:
-                            TVLibraryKindView(
-                                kindLabel: "Music",
-                                emptyMessage: "No music in your library yet.",
-                                workKind: .artist,
-                                collectionNoun: "ARTISTS"
-                            )
-                        case .playlists:
-                            TVLibraryKindView(
-                                kindLabel: "Playlists",
-                                emptyMessage: "No playlists yet.",
-                                workKind: nil,
-                                collectionNoun: "PLAYLISTS"
-                            )
-                        }
-                    }
+        // Parity freezes keep the floating ZStack chrome for AE geometry.
+        // Production uses a real HStack so the focus engine has adjacent
+        // layout peers (overlay ZStacks do not move focus with arrows).
+        if parity {
+            return AnyView(parityShell(tab: tab, detailWork: detailWork, nav: navBinding))
+        }
+        return AnyView(productionShell(tab: tab, detailWork: detailWork, nav: navBinding))
+    }
+
+    /// Interactive shell: nav column + stage side-by-side (focus-safe).
+    private func productionShell(
+        tab: TVNavTab,
+        detailWork: Work?,
+        nav: Binding<TVNavTab>
+    ) -> some View {
+        let navColumn = DesignTokens.Shell.navItemSize
+            + DesignTokens.Shell.navGroupPadding * 2
+            + DesignTokens.Shell.navEdge * 2
+
+        return ZStack(alignment: .topLeading) {
+            HStack(alignment: .center, spacing: 0) {
+                TVFloatingNav(
+                    selection: nav,
+                    suppressFocusChrome: false,
+                    showSettings: true,
+                    externalFocus: $shellFocus
+                )
+                .frame(width: navColumn)
+                .focusSection()
+
+                NavigationStack {
+                    stageContent(tab: tab, detailWork: detailWork)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .toolbar(.hidden, for: .navigationBar)
+                        .navigationBarBackButtonHidden(true)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .toolbar(.hidden, for: .navigationBar)
-                .navigationBarBackButtonHidden(true)
                 .focusSection()
             }
-            .zIndex(10)
 
-            // Logo / clock — never steals remote focus.
-            TVShellHeader(frozenClock: TVParityLaunch.requestedScreen != nil)
+            TVShellHeader(frozenClock: false)
                 .frame(maxWidth: .infinity, alignment: .top)
                 .allowsHitTesting(false)
                 .zIndex(80)
 
-            // Profile chip (live SPA shows signed-in user under the nav).
             VStack {
                 Spacer()
                 HStack {
-                    TVProfileChip(
-                        name: TVParityLaunch.requestedScreen != nil ? "Test User A" : "Viewer",
-                        version: TVParityLaunch.requestedScreen != nil ? "v0.1.0" : nil
-                    )
-                    .padding(.leading, DesignTokens.Shell.navEdge - 4)
-                    .padding(.bottom, 36)
+                    TVProfileChip(name: "Viewer", version: nil)
+                        .padding(.leading, DesignTokens.Shell.navEdge - 4)
+                        .padding(.bottom, 36)
                     Spacer()
                 }
             }
             .allowsHitTesting(false)
             .zIndex(50)
         }
-        // Shell chrome is authored for the full 1920×1080 stage, matching web
-        // CSS viewport units. Safe-area inset would shift logo/nav/header.
         .ignoresSafeArea()
+        .onAppear {
+            if shellFocus == nil {
+                shellFocus = .stage
+            }
+        }
+    }
+
+    /// Parity-only floating chrome (absolute SPA geometry).
+    private func parityShell(
+        tab: TVNavTab,
+        detailWork: Work?,
+        nav: Binding<TVNavTab>
+    ) -> some View {
+        ZStack(alignment: .topLeading) {
+            NavigationStack {
+                stageContent(tab: tab, detailWork: detailWork)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .toolbar(.hidden, for: .navigationBar)
+                    .navigationBarBackButtonHidden(true)
+            }
+
+            TVFloatingNav(
+                selection: nav,
+                suppressFocusChrome: true,
+                showSettings: false,
+                externalFocus: $shellFocus
+            )
+            .padding(.leading, DesignTokens.Shell.navEdge)
+            .frame(maxHeight: .infinity, alignment: .center)
+            .zIndex(50)
+
+            TVShellHeader(frozenClock: true)
+                .frame(maxWidth: .infinity, alignment: .top)
+                .allowsHitTesting(false)
+                .zIndex(80)
+
+            VStack {
+                Spacer()
+                HStack {
+                    TVProfileChip(name: "Test User A", version: "v0.1.0")
+                        .padding(.leading, DesignTokens.Shell.navEdge - 4)
+                        .padding(.bottom, 36)
+                    Spacer()
+                }
+            }
+            .allowsHitTesting(false)
+            .zIndex(50)
+        }
+        .ignoresSafeArea()
+    }
+
+    @ViewBuilder
+    private func stageContent(tab: TVNavTab, detailWork: Work?) -> some View {
+        if let detailWork {
+            TVWorkDetailView(work: detailWork, apiClient: environment.apiClient)
+        } else {
+            switch tab {
+            case .home:
+                TVHomeView()
+            case .search:
+                TVSearchView()
+            case .settings:
+                TVSettingsView()
+            case .series:
+                TVLibraryKindView(
+                    kindLabel: "Series",
+                    emptyMessage: "No series in your library yet.",
+                    workKind: .series,
+                    collectionNoun: "TITLES"
+                )
+            case .movies:
+                TVLibraryKindView(
+                    kindLabel: "Movies",
+                    emptyMessage: "No movies in your library yet.",
+                    workKind: .movie,
+                    collectionNoun: "TITLES"
+                )
+            case .music:
+                TVLibraryKindView(
+                    kindLabel: "Music",
+                    emptyMessage: "No music in your library yet.",
+                    workKind: .artist,
+                    collectionNoun: "ARTISTS"
+                )
+            case .playlists:
+                TVLibraryKindView(
+                    kindLabel: "Playlists",
+                    emptyMessage: "No playlists yet.",
+                    workKind: nil,
+                    collectionNoun: "PLAYLISTS"
+                )
+            }
+        }
     }
 }
 
@@ -242,6 +306,8 @@ struct TVPairingGateView: View {
         pairingTask = Task { await environment.startPairing() }
     }
 }
+
+// MARK: - Device login chrome (SPA DeviceLogin geometry)
 
 /// SPA DeviceLogin chrome measured @ 1920×1080 (same geometry as the parity
 /// fixture). Live pairing and parity fixture both mount this so product UI
@@ -377,6 +443,7 @@ struct TVDeviceLoginChrome: View {
                     Button("Try again", action: onRetry)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(DesignTokens.Color.brandPrimary)
+                        .buttonStyle(TVFocusableCardButtonStyle())
                 }
             }
         }

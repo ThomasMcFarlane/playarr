@@ -166,13 +166,20 @@ enum TVNavTab: String, CaseIterable, Identifiable {
     }
 }
 
+/// Focus identity shared between floating nav and main stage.
+enum TVShellFocus: Hashable {
+    case nav(TVNavTab)
+    case stage
+}
+
 struct TVFloatingNav: View {
     @Binding var selection: TVNavTab
     /// When true, suppress tvOS focus lift so parity captures match web chrome.
     var suppressFocusChrome: Bool = false
     /// SPA library/home frames omit the settings group from the left rail.
     var showSettings: Bool = true
-    @FocusState private var focusedTab: TVNavTab?
+    /// Parent-owned focus (required for moving between nav and stage).
+    var externalFocus: FocusState<TVShellFocus?>.Binding
 
     private let primaryTabs: [TVNavTab] = [.search, .home, .series, .movies, .music, .playlists]
 
@@ -186,7 +193,6 @@ struct TVFloatingNav: View {
             }
         }
         .frame(width: DesignTokens.Shell.navItemSize + DesignTokens.Shell.navGroupPadding * 2)
-        .focusSection()
     }
 
     private func navGroup(tabs: [TVNavTab]) -> some View {
@@ -205,14 +211,14 @@ struct TVFloatingNav: View {
                         .stroke(DesignTokens.Color.borderDefault.opacity(0.35), lineWidth: 1)
                 )
         )
-        .focusSection()
     }
 
     private func navButton(_ tab: TVNavTab) -> some View {
         let isActive = selection == tab
-        let isFocused = focusedTab == tab
+        let isFocused = externalFocus.wrappedValue == .nav(tab)
         return Button {
             selection = tab
+            externalFocus.wrappedValue = .nav(tab)
         } label: {
             VStack(spacing: 5) {
                 Image(systemName: tab.systemImage)
@@ -252,9 +258,7 @@ struct TVFloatingNav: View {
         }
         .buttonStyle(TVFocusableCardButtonStyle())
         .accessibilityLabel(tab.title)
-        .focused($focusedTab, equals: tab)
-        // Parity captures: disable focusability entirely so the system white
-        // focus pill cannot appear.
+        .focused(externalFocus, equals: .nav(tab))
         .focusable(!suppressFocusChrome)
         .focusEffectDisabled(suppressFocusChrome)
     }
