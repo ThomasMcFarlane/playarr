@@ -147,6 +147,20 @@ class SecretSafetyTests(unittest.TestCase):
         self.assertIn("url.Left(serverPrefix.Len()) = serverPrefix", helper.group(0))
         self.assertIn("return {}", helper.group(0))
 
+    def test_catalog_artwork_uses_server_proxy_not_cdn_direct(self) -> None:
+        # Stick must not fetch TMDB/CDN hosts directly (Poster stays blank).
+        helper = re.search(
+            r"function resolveImageUrl.*?end function",
+            MAIN,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(helper)
+        assert helper is not None
+        body = helper.group(0)
+        self.assertIn("/api/v1/artwork/work/", body)
+        self.assertNotIn('image.url.Left(7) = "http://"', body)
+        self.assertNotIn('image.url.Left(8) = "https://"', body)
+
     def test_authorisation_header_is_not_sent_to_external_video_hosts(self) -> None:
         self.assertIn("content.httpHeaders = contentHeadersForUrl(content.url)", MAIN)
         self.assertIn("return []", MAIN)
@@ -280,10 +294,18 @@ class BrandingAndResidualAssetTests(unittest.TestCase):
 
     def test_shell_loads_in_place_not_fullscreen_status(self) -> None:
         # Authenticated navigations keep the target shell visible while data
-        # loads; fullscreen statusGroup is not used for home/browse/search.
+        # loads; fullscreen statusGroup is not used for product chrome.
         self.assertNotIn('showStatus("Loading home"', MAIN)
         self.assertNotIn('showStatus("Loading details"', MAIN)
         self.assertNotIn('showStatus("Searching"', MAIN)
+        self.assertNotIn('showStatus("Loading library"', MAIN)
+        self.assertNotIn('showStatus("Loading playlist"', MAIN)
         self.assertIn('sendApi("catalogKinds", "GET", "/api/v1/catalog/kinds"', MAIN)
         self.assertIn("sub applyNavDockKindFilter()", MAIN)
         self.assertIn('enabled = workKind <> "site"', MAIN)
+        # Home rails use real catalog artwork (not empty residual-budget tiles).
+        self.assertIn("item.hdPosterUrl = artworkUrl(work)", MAIN)
+        self.assertNotIn(
+            "Leave artwork empty so PosterCard stays on surface-soft",
+            MAIN,
+        )

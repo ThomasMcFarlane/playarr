@@ -1183,7 +1183,12 @@ sub enterLibrary(profileName as String)
     m.profileLabel.text = profileName
     m.items = []
     m.totalItems = invalid
-    showStatus("Loading library", "Fetching available titles…", true)
+    ' Stay in the library shell while the catalogue loads (no fullscreen status).
+    m.libraryTitle.text = "Library  •  …"
+    buildRailContent(m.library, m.items, true)
+    showOnly("library")
+    m.top.screenState = "library"
+    m.library.SetFocus(true)
     loadCatalog(false)
 end sub
 
@@ -1934,7 +1939,14 @@ sub openPlaylistDetail(playlist as Object)
     m.playlistDetailStage.keyArtUri = ""
     m.playlistItems = []
     m.playlistItemQueue = []
-    showStatus("Loading playlist", "Opening “" + playlist.name + "”…", true)
+    ' Stay in the playlists shell while items hydrate (no fullscreen status).
+    m.playlistDetailOpen = true
+    m.playlistsDirectoryGroup.visible = false
+    m.playlistDetailGroup.visible = true
+    buildGridContent(m.playlistItemsGrid, m.playlistItems)
+    showOnly("playlists")
+    m.top.screenState = "playlists"
+    m.playlistItemsGrid.SetFocus(true)
     sendApi("playlistItems", "GET", "/api/v1/playlists/" + UrlEncode(playlist.id) + "/items", invalid, true)
 end sub
 
@@ -2030,12 +2042,11 @@ sub buildRailContent(row as Object, works as Object, isActive as Boolean, cardSc
         item.AddField("kind", "string", false)
         item.kind = work.kind
         item.description = JsonString(work.overview)
-        ' Leave artwork empty so PosterCard stays on surface-soft (matching
-        ' empty web-freeze tiles used for AE parity). Cross-engine poster
-        ' decode otherwise blows residual budget past 20% of stage.
-        item.hdPosterUrl = ""
+        ' Real catalog posters (same path as buildGridContent). Empty tiles
+        ' were a residual-budget shortcut and made Home look unfinished.
+        item.hdPosterUrl = artworkUrl(work)
         item.AddField("httpHeaders", "assocarray", false)
-        item.httpHeaders = {}
+        item.httpHeaders = artworkHeaders(item.hdPosterUrl, headers)
         item.AddField("activeRailFactor", "float", false)
         item.activeRailFactor = activeRailFactor
         ' Similar Titles (detailSimilar) passes 1.5 to match the real,
@@ -2062,7 +2073,14 @@ end sub
 ' GET /api/v1/artwork/work/{id}/{kind} proxy endpoint on the server, which
 ' is what any non-http(s) image.url must go through here too.
 function resolveImageUrl(work as Object, image as Object) as String
-    if image.url.Left(7) = "http://" or image.url.Left(8) = "https://" then return image.url
+    ' Always use the Playarr artwork proxy — never fetch TMDB/CDN hosts
+    ' directly from the stick. Confirmed live: catalog returns public
+    ' https://image.tmdb.org/... poster URLs that work from a browser, but
+    ' Roku Poster loads stay on surface-soft placeholders; chapter thumbs
+    ' from the same server (/api/v1/media/.../thumbnail) load fine. Proxying
+    ' keeps one TLS path (the linked server) and carries auth via httpHeaders.
+    if image = invalid or image.kind = invalid or image.kind = "" then return ""
+    if work = invalid or work.id = invalid or work.id = "" then return ""
     return m.serverUrl + "/api/v1/artwork/work/" + UrlEncode(work.id) + "/" + UrlEncode(image.kind)
 end function
 
