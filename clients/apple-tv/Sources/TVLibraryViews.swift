@@ -253,10 +253,14 @@ struct TVHomeView: View {
                     .scaledToFill()
                     .frame(width: keyW, height: size.height * 1.06)
                     .clipped()
-                    .opacity(0.72)
+                    .opacity(DesignTokens.Shell.keyArtOpacity)
                     .mask(
                         LinearGradient(
-                            colors: [.black, .black, .black.opacity(0.7), .clear],
+                            stops: [
+                                .init(color: .black, location: 0),
+                                .init(color: .black, location: DesignTokens.Shell.keyArtMaskSolidEnd),
+                                .init(color: .clear, location: 1),
+                            ],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
@@ -555,28 +559,30 @@ struct TVSearchView: View {
                     .padding(.top, DesignTokens.Shell.searchCopyTop)
 
                     // Idle empty state in the right rail.
-                    // Measured web art centre ≈ (1226, 379) @ 1920×1080.
+                    // SPA `.tv-empty-state.graphic-search`: 1:1 circle, border only,
+                    // translucent surface, pink magnifier. Measured centre ≈ (1226, 379).
                     if let viewModel, viewModel.state == .idle {
                         let art = DesignTokens.Shell.searchEmptyArtSize
-                        HStack(spacing: 24) {
-                            Circle()
-                                .stroke(DesignTokens.Color.borderDefault.opacity(0.45), lineWidth: 1)
-                                .frame(width: art, height: art)
-                                .background(
-                                    Circle().fill(DesignTokens.Color.backgroundElevated.opacity(0.5))
-                                )
-                                .overlay(
-                                    Image(systemName: "magnifyingglass")
-                                        .font(.system(size: 34, weight: .regular))
-                                        .foregroundStyle(DesignTokens.Color.brandPrimary.opacity(0.82))
-                                )
+                        HStack(spacing: 22) {
+                            ZStack {
+                                Circle()
+                                    .fill(DesignTokens.Color.backgroundRaised.opacity(0.28))
+                                Circle()
+                                    .stroke(
+                                        DesignTokens.Color.borderDefault.opacity(0.55),
+                                        lineWidth: 1
+                                    )
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 36, weight: .regular))
+                                    .foregroundStyle(DesignTokens.Color.brandPrimary.opacity(0.78))
+                            }
+                            .frame(width: art, height: art)
                             Text("Start typing to search.")
-                                .font(TVTheme.font(size: 18, weight: .semibold))
-                                .tracking(-0.4)
+                                .font(TVTheme.font(size: 17, weight: .semibold))
+                                .tracking(-0.3)
                                 .foregroundStyle(DesignTokens.Color.textPrimary)
                         }
                         .padding(.top, 379 - art / 2)
-                        // Art left edge so its centre sits at x≈1226.
                         .padding(.leading, 1226 - art / 2)
                     }
                 }

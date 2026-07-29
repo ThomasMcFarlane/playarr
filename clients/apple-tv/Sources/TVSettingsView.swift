@@ -24,50 +24,60 @@ struct TVSettingsView: View {
             TVStageBackground()
             HStack(alignment: .top, spacing: 0) {
                 // Left: section list (web Preferences)
-                VStack(alignment: .leading, spacing: 18) {
-                    HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 14) {
+                    // SPA settings heading: white filled back + Preferences + kicker.
+                    HStack(alignment: .center, spacing: 14) {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(DesignTokens.Color.textSecondary)
-                            .frame(width: 44, height: 44)
-                            .background(Circle().fill(DesignTokens.Color.backgroundRaised.opacity(0.85)))
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(DesignTokens.Color.backgroundBase)
+                            .frame(width: 48, height: 48)
+                            .background(Circle().fill(DesignTokens.Color.textPrimary))
                         Text("Preferences")
                             .font(.system(size: 34, weight: .bold))
                             .foregroundStyle(DesignTokens.Color.textPrimary)
-                        Text(sections[selectedSection].title.uppercased())
-                            .font(.system(size: 11, weight: .heavy))
-                            .tracking(1.4)
-                            .foregroundStyle(DesignTokens.Color.textDisabled)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(sections[selectedSection].title.uppercased())
+                                .font(.system(size: 10, weight: .heavy))
+                                .tracking(1.4)
+                                .foregroundStyle(DesignTokens.Color.textDisabled)
+                            Text(sections[selectedSection].description)
+                                .font(TVTheme.captionFont())
+                                .foregroundStyle(DesignTokens.Color.textDisabled)
+                                .lineLimit(2)
+                        }
+                        .padding(.leading, 4)
                     }
-                    Text(sections[selectedSection].description)
-                        .font(TVTheme.captionFont())
-                        .foregroundStyle(DesignTokens.Color.textDisabled)
 
-                    VStack(spacing: 8) {
+                    VStack(spacing: 4) {
                         ForEach(Array(sections.enumerated()), id: \.offset) { index, section in
+                            let selected = selectedSection == index
                             Button {
                                 selectedSection = index
                             } label: {
-                                HStack(spacing: 16) {
+                                HStack(spacing: 14) {
                                     Text(section.number)
-                                        .font(.system(size: 12, weight: .bold))
+                                        .font(.system(size: selected ? 11 : 12, weight: .bold))
                                         .foregroundStyle(DesignTokens.Color.textDisabled)
                                         .frame(width: 28, alignment: .leading)
                                     Text(section.title)
-                                        .font(.system(size: 18, weight: .semibold))
+                                        // SPA selected row uses larger title type.
+                                        .font(.system(
+                                            size: selected ? 28 : 17,
+                                            weight: selected ? .semibold : .medium
+                                        ))
                                         .foregroundStyle(DesignTokens.Color.textPrimary)
                                     Spacer()
                                     Image(systemName: "arrow.right")
                                         .font(.system(size: 14, weight: .semibold))
                                         .foregroundStyle(DesignTokens.Color.textDisabled)
                                 }
-                                .padding(.horizontal, 18)
-                                .padding(.vertical, 16)
+                                .padding(.horizontal, selected ? 20 : 16)
+                                .padding(.vertical, selected ? 18 : 12)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
                                         .fill(
-                                            selectedSection == index
-                                                ? DesignTokens.Color.backgroundRaised
+                                            selected
+                                                ? DesignTokens.Color.backgroundRaised.opacity(0.95)
                                                 : Color.clear
                                         )
                                 )
@@ -77,20 +87,20 @@ struct TVSettingsView: View {
                             .focusEffectDisabled(TVParityLaunch.requestedScreen != nil)
                         }
                     }
-                    .frame(width: 420)
+                    .frame(width: 400)
                     Spacer()
                 }
                 .padding(.leading, 154)
-                .padding(.top, 56)
+                .padding(.top, 48)
                 .ignoresSafeArea()
 
                 // Right: section detail
-                VStack(alignment: .leading, spacing: 28) {
+                VStack(alignment: .leading, spacing: 22) {
                     sectionDetail
                     Spacer()
                 }
-                .padding(.leading, 48)
-                .padding(.top, 160)
+                .padding(.leading, 40)
+                .padding(.top, 140)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -177,13 +187,14 @@ struct TVSettingsView: View {
     }
 
     private func themeChip(_ label: String, selected: Bool) -> some View {
+        // SPA segmented chips: compact, selected = white fill / dark label.
         Text(label)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(selected ? DesignTokens.Color.backgroundBase : DesignTokens.Color.textPrimary)
-            .padding(.horizontal, 22)
-            .padding(.vertical, 12)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(selected ? DesignTokens.Color.backgroundBase : DesignTokens.Color.textSecondary)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(selected ? DesignTokens.Color.textPrimary : Color.clear)
             )
     }

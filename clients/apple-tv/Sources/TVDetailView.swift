@@ -221,7 +221,6 @@ struct TVWorkDetailView: View {
             horizontal: .center,
             vertical: .top
         ))
-        // object-position: center 20%
         .clipped()
         .saturation(0)
         .contrast(DesignTokens.Shell.keyArtContrast)

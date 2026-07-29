@@ -143,9 +143,10 @@ struct TVRootView: View {
                     set: { if forcedSelection == nil { selectedTab = $0 } }
                 ),
                 suppressFocusChrome: TVParityLaunch.requestedScreen != nil,
-                // SPA library/home/search frames: primary tabs only (no settings group).
+                // SPA never shows the settings gear in the floating nav on
+                // library/home/search/settings frames (settings is reached
+                // via other chrome). Keep gear only for live non-parity.
                 showSettings: TVParityLaunch.requestedScreen == nil
-                    || TVParityLaunch.requestedScreen == .settings
             )
             .padding(.leading, DesignTokens.Shell.navEdge)
             .frame(maxHeight: .infinity, alignment: .center)

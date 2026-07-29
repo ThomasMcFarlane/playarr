@@ -22,6 +22,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV settings Preferences chrome matches SPA (white back button,
+  enlarged selected row title, compact theme chips); search empty-state
+  art uses translucent circle border; parity nav hides settings gear.
 - Apple TV movie detail key-art and rails follow SPA CSS tokens
   (`.tv-key-art img` 52%/106%/opacity 0.72/mask 72%, `.tv-rail-surface`
   62% with half-viewport track padding, chapter 16:9 cards, cast tiles).
