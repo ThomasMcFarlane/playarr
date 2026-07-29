@@ -37,6 +37,11 @@ internal enum class PlayarrString(
         "สแกนคิวอาร์โค้ดด้วยโทรศัพท์หรือเบราว์เซอร์อื่นเพื่อเข้าสู่ระบบบนอุปกรณ์นี้",
         "スマートフォンまたは別のブラウザーでQRコードを読み取り、この端末にサインインしてください。",
     ),
+    LoginQrSubmit(
+        "Sign in with QR code",
+        "เข้าสู่ระบบด้วยคิวอาร์โค้ด",
+        "QRコードでサインイン",
+    ),
     LoginServerUrl("Server URL", "URL เซิร์ฟเวอร์", "サーバーURL"),
     LoginDirectConnectionHint(
         "Your device connects directly to this server. Playarr does not proxy your login.",
@@ -98,6 +103,11 @@ internal enum class PlayarrString(
         "コードの更新まで {{time}}",
     ),
     DeviceLoginTryAgain("Try again", "ลองอีกครั้ง", "もう一度試す"),
+    DeviceLoginSignInManually(
+        "Sign in manually",
+        "เข้าสู่ระบบด้วยตนเอง",
+        "手動でサインイン",
+    ),
     DeviceLoginQrLabel(
         "QR code for the Playarr TV sign-in link",
         "คิวอาร์โค้ดสำหรับลิงก์เข้าสู่ระบบ Playarr TV",

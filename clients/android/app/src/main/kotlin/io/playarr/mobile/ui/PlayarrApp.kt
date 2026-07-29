@@ -511,6 +511,37 @@ private fun LoginScreen(
     var serverUrl by remember(savedServerUrl) { mutableStateOf(savedServerUrl) }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    // Web /login/qr ↔ /login toggle: TV starts on hosted QR, can switch to credentials.
+    var televisionManualLogin by remember { mutableStateOf(false) }
+
+    if (isTelevision) {
+        // Auth screens paint with AuthLight tokens so they match the web
+        // light /login/qr page even when the TV system theme is dark.
+        LaunchedEffect(Unit) { viewModel.pairTelevision() }
+
+        if (televisionManualLogin) {
+            TelevisionManualLoginScreen(
+                serverUrl = serverUrl,
+                onServerUrlChange = { serverUrl = it },
+                username = username,
+                onUsernameChange = { username = it },
+                password = password,
+                onPasswordChange = { password = it },
+                state = loginState,
+                onSubmit = { viewModel.login(serverUrl, username, password, isTelevision = true) },
+                onBackToQr = { televisionManualLogin = false },
+                onBack = onBack,
+            )
+        } else {
+            TelevisionPairingScreen(
+                state = pairingState,
+                onStart = viewModel::pairTelevision,
+                onManualLogin = { televisionManualLogin = true },
+                onBack = onBack,
+            )
+        }
+        return
+    }
 
     BoxWithConstraints(
         modifier = Modifier
@@ -524,14 +555,6 @@ private fun LoginScreen(
             .safeDrawingPadding(),
     ) {
         val compact = maxHeight < 600.dp
-        if (isTelevision) {
-            LaunchedEffect(Unit) { viewModel.pairTelevision() }
-            TelevisionPairingScreen(
-                state = pairingState,
-                onStart = viewModel::pairTelevision,
-            )
-            return@BoxWithConstraints
-        }
         MobileLoginScreen(
             serverUrl = serverUrl,
             onServerUrlChange = { serverUrl = it },
@@ -545,6 +568,18 @@ private fun LoginScreen(
             onBack = onBack,
         )
     }
+}
+
+/** Light auth tokens matching web `:root` on `/login/qr` (not system dark). */
+private object AuthLight {
+    val bg = Color(0xFFF5F3F2)
+    val surface = Color(0xFFFBFAF9)
+    val surfaceStrong = Color.White
+    val ink = Color(0xFF382621)
+    val inkSoft = Color(0xFF675961)
+    val inkMuted = Color(0xFFA5969E)
+    val lineStrong = Color(0x47382621)
+    val rose = Color(0xFFCF3157)
 }
 
 @Composable
@@ -683,179 +718,434 @@ private fun LoginField(
 
 /**
  * Television pairing UI matches web `https://playarr.example.com/login/qr`
- * (`QrLoginPage` + embedded `DeviceLogin`): centered panel, soft pink glow,
- * framed QR (240 + 12 white border, 18 radius, soft shadow), mono user code,
- * and a countdown refresh timer capped at five minutes.
+ * (`ProfileAuthLayout` + embedded `DeviceLogin` + `device-login-manual`).
  */
 @Composable
 private fun TelevisionPairingScreen(
     state: PairingState,
     onStart: () -> Unit,
+    onManualLogin: () -> Unit,
+    onBack: (() -> Unit)?,
 ) {
     val language = LocalPlayarrLanguage.current
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(WebSurface)
+            // web `.profiles-page`: rose radial + surface→bg diagonal
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(AuthLight.surface, AuthLight.bg),
+                ),
+            )
             .background(
                 Brush.radialGradient(
-                    colors = listOf(WebPink.copy(alpha = 0.14f), Color.Transparent),
-                    radius = 820f,
+                    colors = listOf(AuthLight.rose.copy(alpha = 0.13f), Color.Transparent),
+                    radius = 900f,
                 ),
-            ),
-        contentAlignment = Alignment.Center,
+            )
+            .safeDrawingPadding(),
     ) {
+        AuthStageChrome(onBack = onBack)
+
         Column(
             modifier = Modifier
-                .widthIn(max = 560.dp)
-                .fillMaxWidth()
-                .padding(horizontal = 48.dp, vertical = 40.dp)
-                .verticalScroll(rememberScrollState()),
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(top = 140.dp, bottom = 56.dp, start = 72.dp, end = 72.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
-            Text(
-                playarrString(PlayarrString.LoginKicker).uppercase(language.locale),
-                color = WebInkMuted,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 2.4.sp,
-            )
-            Text(
-                playarrString(PlayarrString.LoginHeading),
-                color = WebInk,
-                fontSize = 64.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = (-3.2).sp,
-                lineHeight = 62.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 10.dp),
-            )
-            Text(
-                playarrString(PlayarrString.LoginQrDescription),
-                color = WebInkMuted,
-                fontSize = 18.sp,
-                lineHeight = 26.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .widthIn(max = 420.dp)
-                    .padding(top = 16.dp, bottom = 36.dp),
-            )
+            Column(
+                modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    playarrString(PlayarrString.LoginKicker).uppercase(language.locale),
+                    color = AuthLight.inkMuted,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 2.6.sp,
+                )
+                Text(
+                    playarrString(PlayarrString.LoginHeading),
+                    color = AuthLight.ink,
+                    fontSize = 72.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = (-4.5).sp,
+                    lineHeight = 68.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                Text(
+                    playarrString(PlayarrString.LoginQrDescription),
+                    color = AuthLight.inkMuted,
+                    fontSize = 17.sp,
+                    lineHeight = 24.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .widthIn(max = 440.dp)
+                        .padding(top = 16.dp, bottom = 32.dp),
+                )
 
-            when (state) {
-                PairingState.Idle, PairingState.Requesting -> {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        CircularProgressIndicator(color = WebPink)
-                        Text(
-                            playarrString(PlayarrString.DeviceLoginCreatingCode),
-                            color = WebInkMuted,
-                            fontSize = 16.sp,
-                        )
-                    }
-                }
-                is PairingState.Waiting -> {
-                    val pairingDescription = playarrString(
-                        PlayarrString.DeviceLoginPairingCode,
-                        "code" to state.code.userCode,
-                    )
-                    // Web caps hosted codes at 5 minutes for the refresh UX.
-                    val lifetimeSeconds = min(
-                        5 * 60L,
-                        max(1L, state.code.expiresIn),
-                    ).toInt()
-                    var secondsRemaining by remember(state.code.deviceCode) {
-                        mutableIntStateOf(lifetimeSeconds)
-                    }
-                    LaunchedEffect(state.code.deviceCode) {
-                        secondsRemaining = lifetimeSeconds
-                        while (secondsRemaining > 0) {
-                            delay(1_000)
-                            secondsRemaining -= 1
+                when (state) {
+                    PairingState.Idle, PairingState.Requesting -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            CircularProgressIndicator(color = AuthLight.rose)
+                            Text(
+                                playarrString(PlayarrString.DeviceLoginCreatingCode),
+                                color = AuthLight.inkMuted,
+                                fontSize = 16.sp,
+                            )
                         }
-                        onStart()
                     }
+                    is PairingState.Waiting -> {
+                        val pairingDescription = playarrString(
+                            PlayarrString.DeviceLoginPairingCode,
+                            "code" to state.code.userCode,
+                        )
+                        val lifetimeSeconds = min(
+                            5 * 60L,
+                            max(1L, state.code.expiresIn),
+                        ).toInt()
+                        var secondsRemaining by remember(state.code.deviceCode) {
+                            mutableIntStateOf(lifetimeSeconds)
+                        }
+                        LaunchedEffect(state.code.deviceCode) {
+                            secondsRemaining = lifetimeSeconds
+                            while (secondsRemaining > 0) {
+                                delay(1_000)
+                                secondsRemaining -= 1
+                            }
+                            onStart()
+                        }
 
-                    PlayarrQrCode(
-                        value = state.code.verificationUriComplete,
-                        contentDescription = playarrString(PlayarrString.DeviceLoginQrLabel),
-                        modifier = Modifier.size(240.dp),
-                    )
-                    Spacer(Modifier.height(28.dp))
-                    Text(
-                        playarrString(PlayarrString.DeviceLoginScanQr),
-                        color = WebInkMuted,
-                        fontSize = 16.sp,
-                        textAlign = TextAlign.Center,
-                    )
-                    Text(
-                        state.code.verificationUri,
-                        color = WebInk,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                    Text(
-                        playarrString(PlayarrString.DeviceLoginEnterCode),
-                        color = WebInkMuted,
-                        fontSize = 16.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 10.dp),
-                    )
-                    Text(
-                        state.code.userCode,
-                        color = WebInk,
-                        fontSize = 56.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 8.sp,
-                        maxLines = 1,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .padding(top = 8.dp)
-                            .semantics { contentDescription = pairingDescription },
-                    )
-                    Text(
-                        playarrString(PlayarrString.DeviceLoginWaitingApproval),
-                        color = WebInkMuted,
-                        fontSize = 14.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 14.dp),
-                    )
-                    Text(
-                        playarrString(
-                            PlayarrString.DeviceLoginRefreshesIn,
-                            "time" to formatDeviceCodeCountdown(secondsRemaining),
-                        ),
-                        color = WebInkSoft,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 10.dp),
-                    )
-                }
-                is PairingState.Failed -> {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                        modifier = Modifier.widthIn(max = 420.dp),
-                    ) {
+                        PlayarrQrCode(
+                            value = state.code.verificationUriComplete,
+                            contentDescription = playarrString(PlayarrString.DeviceLoginQrLabel),
+                        )
+                        Spacer(Modifier.height(22.dp))
                         Text(
-                            when (val failure = state.failure) {
-                                is PairingFailure.Localized -> playarrString(failure.key)
-                                is PairingFailure.Message -> failure.text
-                            },
-                            color = MaterialTheme.colorScheme.error,
+                            playarrString(PlayarrString.DeviceLoginScanQr),
+                            color = AuthLight.inkMuted,
+                            fontSize = 15.sp,
                             textAlign = TextAlign.Center,
-                            fontSize = 16.sp,
                         )
-                        Button(onClick = onStart) {
-                            Text(playarrString(PlayarrString.DeviceLoginTryAgain))
+                        Text(
+                            state.code.verificationUri,
+                            color = AuthLight.ink,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                        Text(
+                            playarrString(PlayarrString.DeviceLoginEnterCode),
+                            color = AuthLight.inkMuted,
+                            fontSize = 15.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 10.dp),
+                        )
+                        Text(
+                            state.code.userCode,
+                            color = AuthLight.ink,
+                            fontSize = 52.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontFamily = FontFamily.Monospace,
+                            letterSpacing = (0.14 * 52).sp,
+                            maxLines = 1,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .padding(top = 6.dp)
+                                .semantics { contentDescription = pairingDescription },
+                        )
+                        Text(
+                            playarrString(PlayarrString.DeviceLoginWaitingApproval),
+                            color = AuthLight.inkMuted,
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 12.dp),
+                        )
+                        Text(
+                            playarrString(
+                                PlayarrString.DeviceLoginRefreshesIn,
+                                "time" to formatDeviceCodeCountdown(secondsRemaining),
+                            ),
+                            color = AuthLight.inkSoft,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 10.dp),
+                        )
+                    }
+                    is PairingState.Failed -> {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.widthIn(max = 420.dp),
+                        ) {
+                            Text(
+                                when (val failure = state.failure) {
+                                    is PairingFailure.Localized -> playarrString(failure.key)
+                                    is PairingFailure.Message -> failure.text
+                                },
+                                color = Color(0xFFA8464C),
+                                textAlign = TextAlign.Center,
+                                fontSize = 16.sp,
+                            )
+                            Button(
+                                onClick = onStart,
+                                shape = CircleShape,
+                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                    containerColor = AuthLight.inkSoft,
+                                    contentColor = Color.White,
+                                ),
+                            ) {
+                                Text(playarrString(PlayarrString.DeviceLoginTryAgain))
+                            }
                         }
                     }
+                }
+
+                // web `.device-login-manual.btn-secondary` pill
+                Surface(
+                    onClick = onManualLogin,
+                    shape = CircleShape,
+                    color = AuthLight.surfaceStrong,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AuthLight.lineStrong),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 28.dp)
+                        .height(54.dp),
+                ) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            playarrString(PlayarrString.DeviceLoginSignInManually),
+                            color = AuthLight.inkSoft,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TelevisionManualLoginScreen(
+    serverUrl: String,
+    onServerUrlChange: (String) -> Unit,
+    username: String,
+    onUsernameChange: (String) -> Unit,
+    password: String,
+    onPasswordChange: (String) -> Unit,
+    state: LoginState,
+    onSubmit: () -> Unit,
+    onBackToQr: () -> Unit,
+    onBack: (() -> Unit)?,
+) {
+    val language = LocalPlayarrLanguage.current
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.linearGradient(listOf(AuthLight.surface, AuthLight.bg)),
+            )
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(AuthLight.rose.copy(alpha = 0.13f), Color.Transparent),
+                    radius = 900f,
+                ),
+            )
+            .safeDrawingPadding(),
+    ) {
+        AuthStageChrome(onBack = onBackToQr)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(top = 140.dp, bottom = 56.dp, start = 72.dp, end = 72.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Column(
+                modifier = Modifier.widthIn(max = 520.dp).fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    playarrString(PlayarrString.LoginKicker).uppercase(language.locale),
+                    color = AuthLight.inkMuted,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 2.6.sp,
+                )
+                Text(
+                    playarrString(PlayarrString.LoginHeading),
+                    color = AuthLight.ink,
+                    fontSize = 56.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = (-3.5).sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 28.dp),
+                )
+                LoginField(
+                    playarrString(PlayarrString.LoginServerUrl).uppercase(language.locale),
+                    serverUrl,
+                    onServerUrlChange,
+                    KeyboardType.Uri,
+                    ImeAction.Next,
+                )
+                Text(
+                    playarrString(PlayarrString.LoginDirectConnectionHint),
+                    color = AuthLight.inkMuted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 18.dp),
+                )
+                LoginField(
+                    playarrString(PlayarrString.LoginUsername).uppercase(language.locale),
+                    username,
+                    onUsernameChange,
+                    KeyboardType.Text,
+                    ImeAction.Next,
+                )
+                Spacer(Modifier.height(16.dp))
+                LoginField(
+                    playarrString(PlayarrString.LoginPassword).uppercase(language.locale),
+                    password,
+                    onPasswordChange,
+                    KeyboardType.Password,
+                    ImeAction.Done,
+                    password = true,
+                )
+                if (state is LoginState.Failed) {
+                    Text(
+                        playarrString(state.failure.messageKey),
+                        color = Color(0xFFA8464C),
+                        fontSize = 13.sp,
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    )
+                }
+                Button(
+                    onClick = onSubmit,
+                    enabled = state != LoginState.Submitting && serverUrl.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth().padding(top = 24.dp).height(52.dp),
+                    shape = CircleShape,
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = AuthLight.inkSoft,
+                        contentColor = Color.White,
+                    ),
+                ) {
+                    if (state == LoginState.Submitting) {
+                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Color.White)
+                    } else {
+                        Text(playarrString(PlayarrString.LoginSubmit), fontWeight = FontWeight.Bold)
+                    }
+                }
+                Surface(
+                    onClick = onBackToQr,
+                    shape = CircleShape,
+                    color = AuthLight.surfaceStrong,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AuthLight.lineStrong),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp)
+                        .height(54.dp),
+                ) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            playarrString(PlayarrString.LoginQrSubmit),
+                            color = AuthLight.inkSoft,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Web `tv-stage-chrome`: logo left, optional circular back, language right. */
+@Composable
+private fun AuthStageChrome(onBack: (() -> Unit)?) {
+    val display = LocalPlayarrDisplayPreferences.current
+    var languageExpanded by remember { mutableStateOf(false) }
+    val selectedLanguage = playarrUiLanguageOptions.firstOrNull { it.preference == display.language }
+        ?: playarrUiLanguageOptions.first()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .zIndex(2f)
+            .padding(horizontal = 36.dp, vertical = 36.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.playarr_mark),
+            contentDescription = "Playarr",
+            tint = Color.Unspecified,
+            modifier = Modifier.size(40.dp),
+        )
+        onBack?.let { back ->
+            Spacer(Modifier.width(16.dp))
+            Surface(
+                onClick = back,
+                shape = CircleShape,
+                color = AuthLight.surfaceStrong.copy(alpha = 0.7f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, AuthLight.lineStrong.copy(alpha = 0.66f)),
+                modifier = Modifier.size(48.dp),
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = playarrString(PlayarrString.CommonBack),
+                        tint = AuthLight.inkSoft,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        // Use AuthLight ink so the control stays visible on the forced light page
+        // (global WebInk may still be the dark-theme light ink until palette flips).
+        Box {
+            Surface(
+                onClick = { languageExpanded = true },
+                shape = RoundedCornerShape(12.dp),
+                color = AuthLight.surfaceStrong,
+                border = androidx.compose.foundation.BorderStroke(1.dp, AuthLight.lineStrong),
+                modifier = Modifier.height(44.dp),
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("◎", color = AuthLight.inkSoft, fontSize = 14.sp)
+                    Text(
+                        selectedLanguage.label(),
+                        color = AuthLight.ink,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+            DropdownMenu(
+                expanded = languageExpanded,
+                onDismissRequest = { languageExpanded = false },
+            ) {
+                playarrUiLanguageOptions.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option.label()) },
+                        onClick = {
+                            display.setLanguage(option.preference)
+                            languageExpanded = false
+                        },
+                        enabled = option.preference != display.language,
+                    )
                 }
             }
         }
@@ -871,8 +1161,8 @@ internal fun formatDeviceCodeCountdown(seconds: Int): String {
 }
 
 /**
- * Pixel-match web `.device-login-qr`: 240px matrix, margin 2, ECC M,
- * white 12px frame, 18px radius, soft drop shadow.
+ * Matches web `.device-login-qr`: 240px matrix (margin 2, ECC M) inside a
+ * pure white 12dp frame, 18dp radius, soft brown shadow, no grey plate.
  */
 @Composable
 internal fun PlayarrQrCode(
@@ -895,38 +1185,45 @@ internal fun PlayarrQrCode(
         createBitmap(size, size).apply {
             for (y in 0 until size) {
                 for (x in 0 until size) {
-                    this[x, y] = if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE
+                    this[x, y] = if (matrix[x, y]) {
+                        android.graphics.Color.BLACK
+                    } else {
+                        android.graphics.Color.WHITE
+                    }
                 }
             }
         }
     }
-    // Outer glow halo behind the card (web soft pink radial under the QR).
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(WebPink.copy(alpha = 0.18f), Color.Transparent),
-                    radius = 280f,
+    // Soft rose halo only (no solid grey box) — matches the web page glow.
+    Box(contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .size(320.dp)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            AuthLight.rose.copy(alpha = 0.20f),
+                            AuthLight.rose.copy(alpha = 0.06f),
+                            Color.Transparent,
+                        ),
+                    ),
                 ),
-            )
-            .padding(28.dp),
-    ) {
+        )
         Surface(
-            color = Color.White,
+            color = AuthLight.surfaceStrong,
             shape = RoundedCornerShape(18.dp),
             modifier = Modifier.shadow(
-                elevation = 22.dp,
+                elevation = 24.dp,
                 shape = RoundedCornerShape(18.dp),
                 ambientColor = Color(0x17382621),
                 spotColor = Color(0x17382621),
             ),
         ) {
-            // 12dp white border around the 240dp matrix → same chrome as web.
             Image(
                 bitmap = bitmap.asImageBitmap(),
                 contentDescription = contentDescription,
-                modifier = modifier.padding(12.dp),
+                // padding first → outer chrome 264dp, matrix 240dp (web border: 12px)
+                modifier = modifier.padding(12.dp).size(240.dp),
             )
         }
     }

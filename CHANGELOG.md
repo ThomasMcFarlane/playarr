@@ -21,14 +21,18 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Android TV device-link screen matches web `/login/qr`: centred Welcome home /
-  Sign in to Playarr copy, soft pink glow, white 12dp / 18dp QR frame with ECC
-  M and quiet-zone margin 2, mono user code, and a five-minute refresh countdown.
+- Android TV device-link screen matches web `/login/qr`: light cream auth page
+  with rose glow, stage chrome (logo + language), centred Welcome home /
+  Sign in to Playarr copy, white 12dp / 18dp QR frame (ECC M, margin 2), mono
+  user code, five-minute refresh countdown, and a Sign in manually pill that
+  switches to the credential form.
 
 ### Fixed
 
 - Roku pairing QR matches `/login/qr`: rounded white 240 plate (r=18), 12px
-  edge, 216 module field, soft shadow, ink-coloured mono code.
+  edge, 216 module field, soft shadow, ink-coloured mono code. Sign-in /
+  Sign out now open the hosted playarr.app link flow (with QR) instead of
+  the code-only direct device grant.
 
 - Apple TV production shell is a real HStack (nav column + stage) instead of a
   ZStack overlay, and home cards use the native tvOS `.card` button style so
@@ -69,7 +73,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Apple TV remote focus: production home rails use real horizontal stacks (not
   absolute `.offset` stacking) with `@FocusState`, and shell/nav use
   `focusSection`, so arrow keys / Siri Remote can move between cards and the
-  left nav.
+  left nav. Left on a rail-head / first-column card now hands focus to the
+  dock via `requestNavFocus` + `resetFocus` / `prefersDefaultFocus` (ScrollView
+  no longer swallows that exit).
 
 - Apple TV home rails match SPA takeUnused membership (no title on two rails)
   and per-rail focus keys (no dual pink selection). Series detail seasons and
@@ -192,7 +198,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   QR/manual-code flow and a manual sign-in action. The approving device
   selects the Playarr Server, so the QR URL carries no server query. TV and
   VIDAA modes open QR sign-in by default. Codes show a five-minute countdown
-  and renew automatically at expiry.
+  and renew automatically at expiry without shifting the login layout: the
+  expired QR/code clears in place while the timer resets to five minutes.
 
 - Playarr Web `productSurfaces` module and tests so `tv-vidaa` and standard
   web share the same complete-client routes, shell nav hierarchy, and eight
