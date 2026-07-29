@@ -9,6 +9,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Android release workflow accepts `workflow_dispatch` with a semver input so
+  signed APKs can be published without re-pushing a tag when Actions needs a
+  manual re-run.
+
+
 - Shared Playarr login QR style tokens (`PLAYARR_QR_STYLE`: 240 tile, 12px
   white edge, 18px radius, black modules) in `@playarr-tv/device-auth`, used
   by the web SVG and the hosted `/api/link/qr` PNG so every client matches

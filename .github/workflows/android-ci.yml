@@ -4,12 +4,18 @@ on:
   push:
     tags:
       - 'android-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Semver without the android-v prefix (e.g. 0.2.11)'
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: publish-android-${{ github.ref }}
+  group: publish-android-${{ github.ref }}-${{ github.event.inputs.version || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -44,7 +50,11 @@ jobs:
         id: version
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#android-v}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            version="${{ github.event.inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME#android-v}"
+          fi
           if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
             echo "Expected a tag such as android-v1.2.3" >&2
             exit 1
