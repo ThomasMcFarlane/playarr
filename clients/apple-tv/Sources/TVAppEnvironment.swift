@@ -362,6 +362,66 @@ final class TVAppEnvironment {
         pairingState = .signedOut
     }
 
+    /// Household profiles for the current session (`GET /api/v1/users/profiles`).
+    /// Caches the last successful list so the profiles screen can still show
+    /// faces after a brief reconnect, matching web's saved-profile fallback.
+    func loadProfiles() async -> [AvailableProfile] {
+        do {
+            let profiles = try await apiClient.listProfiles()
+            cacheProfiles(profiles)
+            return profiles
+        } catch {
+            return cachedProfiles()
+        }
+    }
+
+    /// Switch to another household profile (managed-profiles login).
+    func switchToProfile(_ profile: AvailableProfile, pin: String? = nil) async throws {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"
+        let response = try await apiClient.login(
+            LoginRequest(
+                deviceID: deviceID,
+                deviceName: "Playarr Apple TV",
+                clientPlatform: .ios,
+                clientVersion: version,
+                pin: pin,
+                profileUserID: profile.id
+            )
+        )
+        try await applyPairedSession(
+            TokenResponse(
+                accessToken: response.accessToken,
+                tokenType: response.tokenType,
+                expiresIn: response.expiresIn,
+                refreshToken: response.refreshToken
+            )
+        )
+        defaults.set(profile.displayName, forKey: Self.lastProfileNameKey)
+    }
+
+    /// True when this install still has a non-expired access token for the
+    /// configured server (profiles API can load without re-pairing).
+    func hasUsableSession() async -> Bool {
+        guard let session = await tokenStore.currentSession() else { return false }
+        return session.expiresAt > Date().addingTimeInterval(30)
+    }
+
+    private static let lastProfilesKey = "com.playarr.playarr.tvos.lastProfiles"
+    private static let lastProfileNameKey = "com.playarr.playarr.tvos.lastProfileName"
+
+    private func cacheProfiles(_ profiles: [AvailableProfile]) {
+        guard let data = try? JSONEncoder().encode(profiles) else { return }
+        defaults.set(data, forKey: Self.lastProfilesKey)
+    }
+
+    private func cachedProfiles() -> [AvailableProfile] {
+        guard let data = defaults.data(forKey: Self.lastProfilesKey),
+              let profiles = try? JSONDecoder().decode([AvailableProfile].self, from: data) else {
+            return []
+        }
+        return profiles
+    }
+
     private func rebuildClients() {
         tokenStore = TVUserDefaultsTokenStore(
             defaults: defaults,

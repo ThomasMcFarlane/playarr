@@ -295,14 +295,20 @@ private struct TVProductionShell<Stage: View>: View {
     }
 }
 
+/// Auth surfaces matching web `/profiles` ↔ `/login/qr` ↔ `/login`.
+private enum TVAuthRoute: Equatable {
+    case profiles
+    case qr
+    case manual
+}
+
 /// Full-screen pairing gate: SPA `/login/qr` chrome 1:1 via
-/// `TVDeviceLoginChrome`. Server URL is not typed on the QR path; playarr.app
-/// hosted link supplies it from the phone claim. "Sign in manually" opens a
-/// direct server URL form (web `/login`).
+/// `TVDeviceLoginChrome`. Back opens `/profiles` (Who's watching?). Server
+/// URL is not typed on the QR path; playarr.app hosted link supplies it.
 struct TVPairingGateView: View {
     @Environment(TVAppEnvironment.self) private var environment
     @State private var pairingTask: Task<Void, Never>?
-    @State private var showManual = false
+    @State private var route: TVAuthRoute = .qr
     /// Countdown for the active hosted code (web `device-login-timer`).
     @State private var secondsRemaining: Int = 5 * 60
 
@@ -316,24 +322,34 @@ struct TVPairingGateView: View {
 
     var body: some View {
         Group {
-            if showManual {
+            switch route {
+            case .profiles:
+                TVProfilesView(
+                    onLinkTV: {
+                        route = .qr
+                        beginPairing(hosted: true)
+                    },
+                    onManual: { route = .manual }
+                )
+            case .manual:
                 TVDeviceLoginChrome(
                     phase: .manualServer,
                     onRetry: nil,
+                    onBack: { route = .profiles },
                     onBackToQr: {
-                        showManual = false
+                        route = .qr
                         beginPairing(hosted: true)
                     },
                     onManualConnect: { beginPairing(hosted: false) }
                 )
-            } else {
-                chrome
+            case .qr:
+                qrChrome
             }
         }
         .onAppear {
             switch environment.pairingState {
             case .signedOut, .failed:
-                if !showManual { beginPairing(hosted: true) }
+                if route == .qr { beginPairing(hosted: true) }
             default:
                 break
             }
@@ -349,7 +365,7 @@ struct TVPairingGateView: View {
             secondsRemaining = min(5 * 60, max(1, Int(pending.expiresIn)))
         }
         .task(id: "\(approvalUserCode ?? "")-\(secondsRemaining)") {
-            guard case .awaitingApproval = environment.pairingState else { return }
+            guard route == .qr, case .awaitingApproval = environment.pairingState else { return }
             guard secondsRemaining > 0 else {
                 beginPairing(hosted: true)
                 return
@@ -360,13 +376,14 @@ struct TVPairingGateView: View {
     }
 
     @ViewBuilder
-    private var chrome: some View {
+    private var qrChrome: some View {
         switch environment.pairingState {
         case .signedOut, .requestingCode:
             TVDeviceLoginChrome(
                 phase: .requesting,
                 onRetry: nil,
-                onManual: { showManual = true }
+                onManual: { route = .manual },
+                onBack: { route = .profiles }
             )
         case .awaitingApproval(let pending):
             TVDeviceLoginChrome(
@@ -379,7 +396,8 @@ struct TVPairingGateView: View {
                     secondsRemaining: secondsRemaining
                 ),
                 onRetry: nil,
-                onManual: { showManual = true }
+                onManual: { route = .manual },
+                onBack: { route = .profiles }
             )
         case .signedIn:
             EmptyView()
@@ -387,7 +405,8 @@ struct TVPairingGateView: View {
             TVDeviceLoginChrome(
                 phase: .failed(message),
                 onRetry: { beginPairing(hosted: true) },
-                onManual: { showManual = true }
+                onManual: { route = .manual },
+                onBack: { route = .profiles }
             )
         }
     }
@@ -402,6 +421,273 @@ struct TVPairingGateView: View {
     static func displayVerificationURI(_ uri: String) -> String {
         _ = uri
         return "https://playarr.app/link"
+    }
+}
+
+// MARK: - Profiles (web `/profiles` Who's watching?)
+
+/// Household profile picker. Back from `/login/qr` lands here so linked
+/// profiles stay reachable without re-scanning.
+struct TVProfilesView: View {
+    var onLinkTV: () -> Void
+    var onManual: () -> Void
+
+    @Environment(TVAppEnvironment.self) private var environment
+    @Environment(TVDisplayPreferences.self) private var displayPreferences
+    @State private var profiles: [AvailableProfile] = []
+    @State private var loadError: String?
+    @State private var isLoading = true
+    @State private var switchingID: UUID?
+    @State private var pinProfile: AvailableProfile?
+    @State private var pin = ""
+    @State private var pinError: String?
+    @FocusState private var focusedProfileID: UUID?
+
+    private var palette: TVAuthPalette {
+        TVAuthPalette.forTheme(displayPreferences.resolvedTheme)
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let s = min(
+                geo.size.width / DesignTokens.Shell.canvasWidth,
+                geo.size.height / DesignTokens.Shell.canvasHeight
+            )
+            ZStack {
+                palette.bg
+                RadialGradient(
+                    colors: [
+                        palette.brandPink.opacity(palette.isDark ? 0.13 : 0.10),
+                        .clear,
+                    ],
+                    center: UnitPoint(x: 0.50, y: 0.42),
+                    startRadius: 20 * s,
+                    endRadius: min(geo.size.width, geo.size.height) * 0.34
+                )
+
+                VStack(spacing: 0) {
+                    Text("PROFILES")
+                        .font(.system(size: 11 * s, weight: .heavy))
+                        .tracking(1.6 * s)
+                        .foregroundStyle(palette.brandPink)
+                        .padding(.top, 90 * s)
+
+                    Text("Who's watching?")
+                        .font(.system(size: 54 * s, weight: .medium))
+                        .tracking(-2.2 * s)
+                        .foregroundStyle(palette.ink)
+                        .padding(.top, 10 * s)
+
+                    if isLoading {
+                        ProgressView()
+                            .tint(palette.brandPink)
+                            .padding(.top, 72 * s)
+                    } else if profiles.isEmpty {
+                        emptyState(scale: s)
+                    } else {
+                        profileRow(scale: s)
+                            .padding(.top, 72 * s)
+                    }
+
+                    if let loadError {
+                        Text(loadError)
+                            .font(.system(size: 14 * s, weight: .medium))
+                            .foregroundStyle(palette.inkMuted)
+                            .multilineTextAlignment(.center)
+                            .padding(.top, 24 * s)
+                            .frame(maxWidth: 480 * s)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                TVAuthStageChrome(
+                    palette: palette,
+                    scale: s,
+                    showBack: true,
+                    onBack: onLinkTV
+                )
+            }
+        }
+        .ignoresSafeArea()
+        .preferredColorScheme(displayPreferences.colorScheme)
+        .task { await reload() }
+        .alert(
+            "Enter PIN",
+            isPresented: Binding(
+                get: { pinProfile != nil },
+                set: { if !$0 { pinProfile = nil; pin = ""; pinError = nil } }
+            )
+        ) {
+            SecureField("4-digit PIN", text: $pin)
+                .keyboardType(.numberPad)
+            Button("Cancel", role: .cancel) {
+                pinProfile = nil
+                pin = ""
+                pinError = nil
+            }
+            Button("Continue") {
+                guard let profile = pinProfile else { return }
+                Task { await select(profile, pin: pin) }
+            }
+        } message: {
+            Text(pinError ?? "This profile is locked.")
+        }
+    }
+
+    @ViewBuilder
+    private func emptyState(scale s: CGFloat) -> some View {
+        VStack(spacing: 20 * s) {
+            Text("No profiles on this Apple TV yet.")
+                .font(.system(size: 18 * s, weight: .medium))
+                .foregroundStyle(palette.inkMuted)
+                .multilineTextAlignment(.center)
+                .padding(.top, 56 * s)
+            Button(action: onLinkTV) {
+                Text("Link this TV")
+                    .font(.system(size: 16 * s, weight: .bold))
+                    .padding(.horizontal, 28 * s)
+                    .padding(.vertical, 16 * s)
+                    .foregroundStyle(palette.isDark ? palette.bg : Color.white)
+                    .background(palette.brandPink)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(TVFocusableCardButtonStyle())
+            Button("Sign in manually", action: onManual)
+                .font(.system(size: 15 * s, weight: .semibold))
+                .foregroundStyle(palette.inkSoft)
+                .buttonStyle(TVFocusableCardButtonStyle())
+        }
+    }
+
+    private func profileRow(scale s: CGFloat) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 38 * s) {
+                ForEach(profiles) { profile in
+                    profileCard(profile, scale: s)
+                }
+                addProfileCard(scale: s)
+            }
+            .padding(.horizontal, 120 * s)
+            .padding(.vertical, 24 * s)
+        }
+    }
+
+    private func profileCard(_ profile: AvailableProfile, scale s: CGFloat) -> some View {
+        let focused = focusedProfileID == profile.id
+        let busy = switchingID == profile.id
+        return Button {
+            if profile.pinLocked && !profile.isCurrent {
+                pinProfile = profile
+                pin = ""
+                pinError = nil
+            } else {
+                Task { await select(profile, pin: nil) }
+            }
+        } label: {
+            VStack(spacing: 16 * s) {
+                ZStack {
+                    Circle()
+                        .fill(palette.surfaceStrong)
+                        .frame(width: 120 * s, height: 120 * s)
+                        .overlay(
+                            Circle().stroke(
+                                focused || profile.isCurrent
+                                    ? palette.brandPink
+                                    : palette.lineStrong,
+                                lineWidth: focused ? 3 : 1
+                            )
+                        )
+                    Text(profileInitials(profile))
+                        .font(.system(size: 36 * s, weight: .semibold))
+                        .foregroundStyle(palette.ink)
+                    if busy {
+                        ProgressView().tint(palette.brandPink)
+                    }
+                }
+                Text(profile.displayName.isEmpty ? profile.username : profile.displayName)
+                    .font(.system(size: 16 * s, weight: .semibold))
+                    .foregroundStyle(palette.ink)
+                    .lineLimit(1)
+                if profile.pinLocked {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 12 * s))
+                        .foregroundStyle(palette.inkMuted)
+                }
+            }
+            .frame(width: 140 * s)
+            .scaleEffect(focused ? 1.06 : 1)
+        }
+        .buttonStyle(TVFocusableCardButtonStyle())
+        .focused($focusedProfileID, equals: profile.id)
+        .disabled(switchingID != nil)
+    }
+
+    private func addProfileCard(scale s: CGFloat) -> some View {
+        Button(action: onLinkTV) {
+            VStack(spacing: 16 * s) {
+                ZStack {
+                    Circle()
+                        .stroke(palette.lineStrong, style: StrokeStyle(lineWidth: 2, dash: [6, 6]))
+                        .frame(width: 120 * s, height: 120 * s)
+                    Image(systemName: "plus")
+                        .font(.system(size: 36 * s, weight: .medium))
+                        .foregroundStyle(palette.inkMuted)
+                }
+                Text("Add profile")
+                    .font(.system(size: 16 * s, weight: .semibold))
+                    .foregroundStyle(palette.inkMuted)
+            }
+            .frame(width: 140 * s)
+        }
+        .buttonStyle(TVFocusableCardButtonStyle())
+    }
+
+    private func profileInitials(_ profile: AvailableProfile) -> String {
+        let name = profile.displayName.isEmpty ? profile.username : profile.displayName
+        let parts = name.split(separator: " ").prefix(2)
+        let letters = parts.compactMap { $0.first.map(String.init) }
+        return letters.joined().uppercased()
+    }
+
+    private func reload() async {
+        isLoading = true
+        loadError = nil
+        let list = await environment.loadProfiles()
+        profiles = list
+        isLoading = false
+        if list.isEmpty {
+            let usable = await environment.hasUsableSession()
+            if !usable {
+                loadError = "Link this TV to load household profiles, or pick Add profile."
+            }
+        }
+        if focusedProfileID == nil {
+            focusedProfileID = list.first(where: \.isCurrent)?.id ?? list.first?.id
+        }
+    }
+
+    private func select(_ profile: AvailableProfile, pin submittedPin: String?) async {
+        switchingID = profile.id
+        pinError = nil
+        do {
+            try await environment.switchToProfile(profile, pin: submittedPin)
+            pinProfile = nil
+            pin = ""
+        } catch {
+            // No active session / switch failed → resume QR pairing for this TV.
+            if await environment.hasUsableSession() {
+                pinError = error.localizedDescription
+                if pinProfile == nil, profile.pinLocked {
+                    pinProfile = profile
+                }
+            } else {
+                pinProfile = nil
+                onLinkTV()
+            }
+        }
+        switchingID = nil
     }
 }
 
@@ -425,6 +711,8 @@ struct TVDeviceLoginChrome: View {
     let phase: Phase
     var onRetry: (() -> Void)?
     var onManual: (() -> Void)?
+    /// Web ← back (usually to profiles). Always shown on QR when set.
+    var onBack: (() -> Void)?
     var onBackToQr: (() -> Void)?
     var onManualConnect: (() -> Void)?
 
@@ -487,14 +775,18 @@ struct TVDeviceLoginChrome: View {
                 // Panel top ≈ y188 of 1080 → ~17.4% from top; keep vertical centre-ish.
                 .padding(.top, 40 * s)
 
-                // Web `TvStageChrome` absolute positions (logo / back / menus).
+                // Web `TvStageChrome`: logo, ← back (to profiles), theme + language.
                 TVAuthStageChrome(
                     palette: palette,
                     scale: s,
-                    // Web shows back on /login/qr when returning to profiles.
-                    // Manual form shows back to QR; pure QR gate omits it.
-                    showBack: isManual && onBackToQr != nil,
-                    onBack: onBackToQr
+                    showBack: onBack != nil || (isManual && onBackToQr != nil),
+                    onBack: {
+                        if isManual, let onBackToQr {
+                            onBackToQr()
+                        } else {
+                            onBack?()
+                        }
+                    }
                 )
             }
         }

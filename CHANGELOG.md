@@ -41,6 +41,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   logo only at nav centre-x (no centre wordmark), square theme/language
   triggers top-right, centred panel (kicker/title/desc/QR/code/timer),
   “Sign in manually” pill. Theme drives light/dark auth palette.
+  ← back opens a Who’s watching? profiles screen (list/switch/cache
+  household profiles, Add profile returns to QR link).
 
 - Apple TV pairing gate always uses the playarr.app hosted broker (even when
   a relay/server URL is remembered), so the on-screen visit line is
