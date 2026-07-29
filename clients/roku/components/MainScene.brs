@@ -334,7 +334,7 @@ sub updateClock()
     monthIndex = dt.GetMonth()
     if monthIndex >= 1 and monthIndex <= 12 then month = monthNames[monthIndex - 1]
     m.clockDate.text = weekday + " " + dt.GetDayOfMonth().ToStr() + " " + month
-    ' Pairing countdown shares the 1s clock tick.
+    ' Pairing "Code refreshes in M:SS" shares this 1s clock tick (web uses setInterval 1000).
     if m.top.screenState = "pairing" then updatePairingCountdown()
 end sub
 

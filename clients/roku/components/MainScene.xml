@@ -686,7 +686,8 @@
     <Timer id="pairingTimer" repeat="true" />
     <!-- Matches tv-web's useMinuteClock: a 30s refresh is frequent enough
          for a clock that only displays hours/minutes. -->
-    <Timer id="clockTimer" duration="30" repeat="true" />
+    <!-- 1s: header clock + pairing "Code refreshes in M:SS" (web DeviceLogin). -->
+    <Timer id="clockTimer" duration="1" repeat="true" />
     <Timer id="hostedLinkTimer" repeat="true" />
     <Timer id="heartbeatTimer" duration="20" repeat="true" />
     <Timer id="controlBarProgressTimer" duration="0.5" repeat="true" />

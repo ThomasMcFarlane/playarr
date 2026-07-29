@@ -41,6 +41,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   when a session or profile list is available, matching web LoginShell and
   Android `canReturnToProfiles`. Hidden on first-run / full sign-out.
 
+- Roku pairing “Code refreshes in” countdown ticks every second (shared
+  clock timer was 30s, so the timer looked frozen until the next half-minute).
+
 - Apple TV pairing gate is 1:1 with measured web `/login/qr` @ 1920×1080:
   logo only at nav centre-x (no centre wordmark), square theme/language
   triggers top-right, centred panel (kicker/title/desc/QR/code/timer),

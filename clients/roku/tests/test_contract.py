@@ -235,6 +235,9 @@ class SecretSafetyTests(unittest.TestCase):
         self.assertIn("function pairingCanReturnToProfiles(", MAIN)
         self.assertIn('state = "pairing" and key = "back"', MAIN)
         self.assertIn("returnFromPairingToProfiles()", MAIN)
+        # Countdown must tick every second (web setInterval 1000), not the old 30s clock.
+        self.assertIn('id="clockTimer" duration="1"', SCENE)
+        self.assertIn("updatePairingCountdown()", MAIN)
 
     def test_pairing_logo_asset_exists_as_a_real_raster_not_a_placeholder(self) -> None:
         logo_path = ROOT / "images" / "pairing-logo.png"
