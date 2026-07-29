@@ -1819,8 +1819,8 @@ sub buildGridContent(grid as Object, works as Object, cardScale = 1.5 as Float)
         item.kind = work.kind
         item.description = JsonString(work.overview)
         item.hdPosterUrl = artworkUrl(work)
-        item.AddField("httpHeaders", "assocarray", false)
-        item.httpHeaders = artworkHeaders(item.hdPosterUrl, headers)
+        item.AddField("artHeaders", "assocarray", false)
+        item.artHeaders = artworkHeaders(item.hdPosterUrl, headers)
         ' Grid screens (Library/Search/Playlists) render the real, larger
         ' .tv-title-card (330x216 at medium, confirmed live via
         ' getComputedStyle), not Home's smaller .tv-home-card (220x165)
@@ -2166,8 +2166,8 @@ sub buildPlaylistDirectoryContent()
         item.id = playlist.id
         item.title = playlist.name
         item.hdPosterUrl = ""
-        item.AddField("httpHeaders", "assocarray", false)
-        item.httpHeaders = {}
+        item.AddField("artHeaders", "assocarray", false)
+        item.artHeaders = {}
     end for
     m.playlistsGrid.content = root
     m.playlistsTitle.text = "Playlists  •  " + m.playlists.Count().ToStr()
@@ -2301,8 +2301,8 @@ sub buildRailContent(row as Object, works as Object, isActive as Boolean, cardSc
         ' Real catalog posters (same path as buildGridContent). Empty tiles
         ' were a residual-budget shortcut and made Home look unfinished.
         item.hdPosterUrl = artworkUrl(work)
-        item.AddField("httpHeaders", "assocarray", false)
-        item.httpHeaders = artworkHeaders(item.hdPosterUrl, headers)
+        item.AddField("artHeaders", "assocarray", false)
+        item.artHeaders = artworkHeaders(item.hdPosterUrl, headers)
         item.AddField("activeRailFactor", "float", false)
         item.activeRailFactor = activeRailFactor
         ' Similar Titles (detailSimilar) passes 1.5 to match the real,
@@ -3481,8 +3481,8 @@ sub buildDetailChaptersRail(isActive as Boolean)
         item.AddField("showKind", "boolean", false)
         item.showKind = true
         item.hdPosterUrl = thumbUrl
-        item.AddField("httpHeaders", "assocarray", false)
-        item.httpHeaders = artworkHeaders(thumbUrl, headers)
+        item.AddField("artHeaders", "assocarray", false)
+        item.artHeaders = artworkHeaders(thumbUrl, headers)
         item.AddField("activeRailFactor", "float", false)
         item.activeRailFactor = activeRailFactor
         item.AddField("cardScale", "float", false)
@@ -3822,8 +3822,8 @@ sub buildEpisodeContent(groups as Object, kind as String)
                 item.title = label
                 item.description = ""
                 item.hdPosterUrl = artworkUrl(album)
-                item.AddField("httpHeaders", "assocarray", false)
-                item.httpHeaders = artworkHeaders(item.hdPosterUrl, headers)
+                item.AddField("artHeaders", "assocarray", false)
+                item.artHeaders = artworkHeaders(item.hdPosterUrl, headers)
             end for
         else
             season = group.season
@@ -3839,8 +3839,8 @@ sub buildEpisodeContent(groups as Object, kind as String)
                 item.title = label
                 item.description = JsonString(ep.overview)
                 item.hdPosterUrl = episodeArtworkUrl(ep)
-                item.AddField("httpHeaders", "assocarray", false)
-                item.httpHeaders = artworkHeaders(item.hdPosterUrl, headers)
+                item.AddField("artHeaders", "assocarray", false)
+                item.artHeaders = artworkHeaders(item.hdPosterUrl, headers)
             end for
         end if
     end for

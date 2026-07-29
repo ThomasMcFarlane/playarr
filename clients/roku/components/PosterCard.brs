@@ -37,7 +37,10 @@ sub onContentChanged()
     agent = CreateObject("roHttpAgent")
     agent.SetCertificatesFile("common:/certs/ca-bundle.crt")
     agent.InitClientCertificates()
-    if content.httpHeaders <> invalid then agent.SetHeaders(content.httpHeaders)
+    ' Use custom artHeaders (assocarray). ContentNode's built-in httpHeaders
+    ' is an empty roArray and cannot be retyped via AddField, so auth headers
+    ' never stuck there and browse/home posters often stayed blank.
+    if content.artHeaders <> invalid then agent.SetHeaders(content.artHeaders)
     m.poster.SetHttpAgent(agent)
     m.poster.uri = content.hdPosterUrl
     ' A field literally named rowFocusPercent turned out to be reserved --

@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku poster cards carry auth on a custom `artHeaders` field (ContentNode
+  built-in `httpHeaders` is an empty array and could not hold Bearer tokens),
+  restoring catalog artwork on rails and library grids.
+
 - Roku queues Play/playback API requests when chapters or similar titles
   still hold the single-flight slot, so OK on Play is not silently dropped.
 
