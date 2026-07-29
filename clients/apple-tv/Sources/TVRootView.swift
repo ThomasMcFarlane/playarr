@@ -488,10 +488,6 @@ struct TVProfilesView: View {
     /// Web `.profiles-track` gap: `clamp(22px, 2.2vw, 44px)` @ 1920 → ~42.
     private func trackGap(scale s: CGFloat) -> CGFloat { 42 * s }
 
-    private var selectedProfile: AvailableProfile? {
-        profiles.first(where: { $0.id.uuidString == selectedID })
-    }
-
     var body: some View {
         GeometryReader { geo in
             let s = min(
@@ -504,8 +500,8 @@ struct TVProfilesView: View {
                 TVAuthStageBackground(palette: palette, style: .profiles)
 
                 VStack(spacing: 0) {
-                    // Web `.profiles-heading` top: clamp(104px, 15vh, 164px) @ 1080 → ~162.
-                    Color.clear.frame(height: 134 * s)
+                    // Web `.profiles-heading` top: clamp(104px, 15vh, 164px) @ 1080 → 162.
+                    Color.clear.frame(height: 162 * s)
 
                     Text("PROFILES")
                         .font(.system(size: 11 * s, weight: .heavy))
@@ -518,14 +514,15 @@ struct TVProfilesView: View {
                         .foregroundStyle(palette.ink)
                         .padding(.top, 8 * s)
 
-                    // Web row top ≈ 33vh; remaining space after heading ≈ 72–90.
+                    // Web `.profiles-row` top: clamp(252px, 33vh, 350px) → 350.
+                    // After heading band (~162 + kicker + title ≈ 250), remaining ≈ 100.
                     if isLoading {
                         ProgressView()
                             .tint(palette.brandPink)
-                            .padding(.top, 88 * s)
+                            .padding(.top, 100 * s)
                     } else {
                         profileRow(scale: s, avatarSize: size)
-                            .padding(.top, 72 * s)
+                            .padding(.top, 88 * s)
                     }
 
                     if let loadError {
@@ -541,10 +538,12 @@ struct TVProfilesView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
+                // Web `/profiles` uses bare `<TvStageChrome />` — logo + theme/language
+                // only. No back control (unlike `/login/qr` with onBack).
                 TVAuthStageChrome(
                     palette: palette,
                     scale: s,
-                    showBack: true,
+                    showBack: false,
                     onMoveDownFromChrome: {
                         if let current = profiles.first(where: \.isCurrent) {
                             focusedTarget = .profile(current.id)
@@ -554,7 +553,7 @@ struct TVProfilesView: View {
                             focusedTarget = .add
                         }
                     },
-                    onBack: onLinkTV
+                    onBack: nil
                 )
             }
         }
@@ -715,45 +714,35 @@ struct TVProfilesView: View {
         .frame(width: size)
     }
 
-    /// Web `.profile-actions` under the selected avatar (settings gear + Sign out).
+    /// Web `.profile-actions` under the selected avatar only (never under add).
     private func profileActions(for profile: AvailableProfile, scale s: CGFloat) -> some View {
         HStack(spacing: 9 * s) {
+            // Web `.profile-settings-button` — 44×44 glass circle, pink gear.
             Button {
-                // Profile settings live in the signed-in shell; open QR is not
-                // applicable. Selecting the gear keeps focus on this profile.
+                // Settings is owned by the signed-in shell; visual parity only here.
             } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 16 * s, weight: .semibold))
-                    .foregroundStyle(palette.brandPink)
-                    .frame(width: 44 * s, height: 44 * s)
-                    .background(palette.surfaceStrong.opacity(0.64), in: Capsule())
-                    .overlay(
-                        Capsule().stroke(palette.lineStrong.opacity(0.7), lineWidth: 1)
-                    )
+                TVProfileActionLabel(
+                    palette: palette,
+                    scale: s,
+                    kind: .settings
+                )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(TVProfileActionButtonStyle())
             .focusEffectDisabled(true)
             .accessibilityLabel("Settings for \(profile.displayName)")
 
+            // Web `.profile-sign-out-button` — glass pill, danger on focus.
             Button {
                 environment.signOut()
                 onLinkTV()
             } label: {
-                HStack(spacing: 7 * s) {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .font(.system(size: 14 * s, weight: .semibold))
-                    Text("Sign out")
-                        .font(.system(size: 11 * s, weight: .bold))
-                }
-                .foregroundStyle(palette.inkSoft)
-                .padding(.horizontal, 16 * s)
-                .frame(height: 44 * s)
-                .background(palette.surfaceStrong.opacity(0.64), in: Capsule())
-                .overlay(
-                    Capsule().stroke(palette.lineStrong.opacity(0.7), lineWidth: 1)
+                TVProfileActionLabel(
+                    palette: palette,
+                    scale: s,
+                    kind: .signOut
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(TVProfileActionButtonStyle())
             .focusEffectDisabled(true)
             .accessibilityLabel("Sign out \(profile.displayName)")
         }
@@ -830,10 +819,6 @@ struct TVProfilesView: View {
             if newValue == .add {
                 selectedID = "add"
             }
-        }
-        // Long-press alternative matches web "Sign in manually" secondary path.
-        .contextMenu {
-            Button("Sign in manually", action: onManual)
         }
         .accessibilityLabel("Sign in, add another profile")
     }
@@ -1182,15 +1167,14 @@ struct TVDeviceLoginChrome: View {
                         onManualConnect?()
                     }
                 } label: {
+                    // Style owns fill/type — web `.btn.btn-primary.auth-submit`.
                     Text("Connect")
-                        .font(.system(size: 15 * s, weight: .bold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16 * s)
-                        .foregroundStyle(palette.isDark ? palette.bg : Color.white)
-                        .background(palette.inkSoft)
-                        .clipShape(Capsule())
                 }
-                .buttonStyle(TVPrimaryPillButtonStyle(palette: palette))
+                .buttonStyle(TVPrimaryPillButtonStyle(
+                    palette: palette,
+                    minHeight: 58 * s,
+                    fontSize: 14.72 * s
+                ))
                 .focused($authFocus, equals: .formPrimary)
                 .focusEffectDisabled(true)
                 .onMoveCommand { direction in
@@ -1203,11 +1187,12 @@ struct TVDeviceLoginChrome: View {
                 if let onBackToQr {
                     Button(action: onBackToQr) {
                         Text("Sign in with QR code")
-                            .font(.system(size: 15 * s, weight: .bold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16 * s)
                     }
-                    .buttonStyle(TVSecondaryPillButtonStyle(palette: palette))
+                    .buttonStyle(TVSecondaryPillButtonStyle(
+                        palette: palette,
+                        minHeight: 58 * s,
+                        fontSize: 14.72 * s
+                    ))
                     .focused($authFocus, equals: .formSecondary)
                     .focusEffectDisabled(true)
                     .onMoveCommand { direction in
@@ -1223,13 +1208,14 @@ struct TVDeviceLoginChrome: View {
     private func manualButton(scale s: CGFloat) -> some View {
         if let onManual {
             Button(action: onManual) {
+                // Web `.btn.btn-secondary.device-login-manual` full-width pill.
                 Text("Sign in manually")
-                    .font(.system(size: 14.72 * s, weight: .bold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16 * s)
             }
-            // Web `.btn.btn-secondary` + focus scale 1.055.
-            .buttonStyle(TVSecondaryPillButtonStyle(palette: palette))
+            .buttonStyle(TVSecondaryPillButtonStyle(
+                palette: palette,
+                minHeight: 58 * s,
+                fontSize: 14.72 * s
+            ))
             .focused($authFocus, equals: .formPrimary)
             .focusEffectDisabled(true)
             .onMoveCommand { direction in
@@ -1238,6 +1224,7 @@ struct TVDeviceLoginChrome: View {
                     authFocus = showsBack ? .back : .language
                 }
             }
+            // Web `.device-login-manual { margin-top: 1.25rem; width: 100% }` on 560 panel.
             .padding(.top, 20 * s)
             .frame(maxWidth: 560 * s)
         }
@@ -1246,13 +1233,14 @@ struct TVDeviceLoginChrome: View {
     @ViewBuilder
     private func retryButton(scale s: CGFloat, action: @escaping () -> Void) -> some View {
         Button(action: action) {
+            // Web error path uses `.btn.btn-primary`, not secondary/pink text.
             Text("Try again")
-                .font(.system(size: 15 * s, weight: .semibold))
-                .foregroundStyle(palette.brandPink)
-                .padding(.horizontal, 20 * s)
-                .padding(.vertical, 12 * s)
         }
-        .buttonStyle(TVSecondaryPillButtonStyle(palette: palette))
+        .buttonStyle(TVPrimaryPillButtonStyle(
+            palette: palette,
+            minHeight: 58 * s,
+            fontSize: 14.72 * s
+        ))
         .focused($authFocus, equals: .formPrimary)
         .focusEffectDisabled(true)
         .onMoveCommand { direction in

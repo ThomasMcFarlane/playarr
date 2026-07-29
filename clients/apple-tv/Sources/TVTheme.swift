@@ -152,23 +152,28 @@ struct TVBackButtonStyle: ButtonStyle {
     }
 }
 
-/// Web `.btn:hover/focus-visible` + `.btn-secondary`:
-/// scale 1.055, surface fill, line-strong border.
+/// Web `.btn.btn-secondary` + `.device-login-manual` (pill):
+/// surface fill, line-strong border, ink-soft text, scale 1.055 on focus only.
+/// Label should be plain text; this style owns fill/border/radius/height chrome.
 struct TVSecondaryPillButtonStyle: ButtonStyle {
     let palette: TVAuthPalette
-    var emphasizeOnFocus: Bool = true
+    /// CSS `min-height: clamp(44px, 3.6vw, 58px)` @ 1920 → 58.
+    var minHeight: CGFloat = 58
+    /// CSS `font-size: clamp(0.72rem, 0.82vw, 0.92rem)` @ 1920 → 14.72.
+    var fontSize: CGFloat = 14.72
 
     func makeBody(configuration: Configuration) -> some View {
         TVButtonFocusBody(isPressed: configuration.isPressed) { focused, pressed in
             let active = focused || pressed
             configuration.label
-                .foregroundStyle(active && emphasizeOnFocus ? palette.ink : palette.inkSoft)
-                .background(active ? palette.surfaceStrong : palette.surface)
+                .font(.system(size: fontSize, weight: .bold))
+                .foregroundStyle(palette.inkSoft)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: minHeight)
+                .padding(.horizontal, fontSize * 1.35)
+                .background(palette.surface)
                 .overlay(
-                    Capsule().stroke(
-                        active ? palette.accent : palette.lineStrong,
-                        lineWidth: 1
-                    )
+                    Capsule().stroke(palette.lineStrong, lineWidth: 1)
                 )
                 .clipShape(Capsule())
                 .scaleEffect(active ? DesignTokens.FocusMotion.buttonFocusScale : 1)
@@ -176,16 +181,27 @@ struct TVSecondaryPillButtonStyle: ButtonStyle {
     }
 }
 
-/// Web `.btn-primary` focus: scale 1.055, slightly brighter fill.
+/// Web `.btn.btn-primary` (+ pill when `.auth-submit` / `.device-login-manual`):
+/// fill `--accent`, text `--on-accent`, scale 1.055 on focus.
+/// Dark auth: near-white fill + dark text (not brand pink).
 struct TVPrimaryPillButtonStyle: ButtonStyle {
     let palette: TVAuthPalette
+    var minHeight: CGFloat = 58
+    var fontSize: CGFloat = 14.72
 
     func makeBody(configuration: Configuration) -> some View {
         TVButtonFocusBody(isPressed: configuration.isPressed) { focused, pressed in
             let active = focused || pressed
             configuration.label
+                .font(.system(size: fontSize, weight: .bold))
+                .foregroundStyle(palette.onAccent)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: minHeight)
+                .padding(.horizontal, fontSize * 1.35)
+                .background(palette.accent)
+                .clipShape(Capsule())
                 .scaleEffect(active ? DesignTokens.FocusMotion.buttonFocusScale : 1)
-                .brightness(active ? 0.06 : 0)
+                .brightness(active ? 0.04 : 0)
         }
     }
 }
@@ -203,6 +219,73 @@ struct TVProfileCardButtonStyle: ButtonStyle {
                 .scaleEffect(active ? DesignTokens.FocusMotion.profileFocusScale : 1)
                 .offset(y: active ? -DesignTokens.FocusMotion.profileFocusLift : 0)
                 .brightness(pressed ? -0.02 : 0)
+        }
+    }
+}
+
+/// Web `.profile-action-button:hover/focus-visible` → scale 1.07.
+struct TVProfileActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        TVButtonFocusBody(isPressed: configuration.isPressed) { focused, pressed in
+            configuration.label
+                .scaleEffect(focused || pressed ? 1.07 : 1)
+        }
+    }
+}
+
+/// Web profile-actions chrome (settings gear circle / Sign out pill).
+struct TVProfileActionLabel: View {
+    enum Kind { case settings, signOut }
+
+    let palette: TVAuthPalette
+    let scale: CGFloat
+    let kind: Kind
+    @Environment(\.isFocused) private var isFocused
+
+    var body: some View {
+        let active = isFocused
+        Group {
+            switch kind {
+            case .settings:
+                Image(systemName: "gearshape")
+                    .font(.system(size: 16 * scale, weight: .regular))
+                    .foregroundStyle(active ? palette.bg : palette.brandPink)
+                    .frame(width: 44 * scale, height: 44 * scale)
+                    .background(
+                        Circle().fill(
+                            active
+                                ? palette.ink.opacity(0.88)
+                                : palette.surfaceStrong.opacity(0.64)
+                        )
+                    )
+                    .overlay(
+                        Circle().stroke(
+                            active ? Color.clear : palette.lineStrong.opacity(0.7),
+                            lineWidth: 1
+                        )
+                    )
+            case .signOut:
+                HStack(spacing: 7 * scale) {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(.system(size: 14 * scale, weight: .regular))
+                    Text("Sign out")
+                        .font(.system(size: 11 * scale, weight: .bold))
+                }
+                .foregroundStyle(active ? Color.white : palette.inkSoft)
+                .padding(.horizontal, 16 * scale)
+                .frame(height: 44 * scale)
+                .background(
+                    Capsule().fill(
+                        active ? palette.danger : palette.surfaceStrong.opacity(0.64)
+                    )
+                )
+                .overlay(
+                    Capsule().stroke(
+                        active ? Color.clear : palette.lineStrong.opacity(0.7),
+                        lineWidth: 1
+                    )
+                )
+            }
         }
     }
 }
