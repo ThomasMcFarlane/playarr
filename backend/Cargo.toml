@@ -126,6 +126,12 @@ jsonwebtoken = "9"
 moka = { version = "0.12", features = ["future"] }
 dashmap = "6"
 
+# --- images (artwork stage processing, thumbnails helpers) ---
+# jpeg/png/webp decode+encode for server-side style presets (e.g. TV stage
+# greyscale key-art). avif decode is optional; unsupported inputs fall back
+# to the original bytes at the API layer when a style cannot be applied.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+
 # --- telemetry ---
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter", "fmt"] }

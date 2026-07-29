@@ -12,6 +12,7 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 dashmap = { workspace = true }
+image = { workspace = true }
 playarr-model = { path = "../playarr-model" }
 
 [dev-dependencies]

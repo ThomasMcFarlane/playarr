@@ -20,9 +20,11 @@ use axum::extract::{Path, State};
 use axum::http::header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::Response;
-use playarr_artwork::{ArtworkCacheError, CachedArtwork};
+use axum::extract::Query;
+use playarr_artwork::{ArtworkCacheError, ArtworkStyle, CachedArtwork};
 use playarr_catalog::WorkChildren;
 use playarr_model::{ImageAsset, ImageKind, Sensitive};
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::auth_extractor::CatalogViewer;
@@ -61,8 +63,36 @@ impl From<ArtworkCacheError> for ApiError {
                 "source artwork returned an empty body",
             ),
             ArtworkCacheError::Io(msg) => ApiError::internal(msg),
+            ArtworkCacheError::Style(err) => ApiError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "artwork_style_failed",
+                format!("could not apply artwork style: {err}"),
+            ),
         }
     }
+}
+
+/// Optional style preset for `GET /api/v1/artwork/...` routes.
+///
+/// Clients request a named product look (`style=stage`) instead of
+/// re-implementing greyscale/contrast/brightness/fade per platform. Omit or
+/// pass `original` for the raw cached source bytes.
+#[derive(Debug, Default, Deserialize, utoipa::IntoParams)]
+pub struct ArtworkQuery {
+    /// Named bake: `original` (default) or `stage` (TV key-art greyscale blend).
+    #[serde(default)]
+    pub style: Option<String>,
+}
+
+fn parse_artwork_style(raw: Option<&str>) -> Result<ArtworkStyle, ApiError> {
+    let Some(raw) = raw.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Ok(ArtworkStyle::Original);
+    };
+    raw.parse::<ArtworkStyle>().map_err(|_| {
+        ApiError::bad_request(format!(
+            "unsupported artwork style {raw:?}; expected original or stage"
+        ))
+    })
 }
 
 fn parse_image_kind(raw: &str) -> Result<ImageKind, ApiError> {
@@ -156,16 +186,17 @@ async fn ensure_artwork_cached(
     owner_id: Uuid,
     kind: ImageKind,
     source: ArtworkSource,
+    style: ArtworkStyle,
 ) -> Result<CachedArtwork, ApiError> {
     let cache = playarr_artwork::shared();
     match source {
-        ArtworkSource::Public(url) => Ok(cache.ensure_cached(owner_id, kind, &url).await?),
+        ArtworkSource::Public(url) => Ok(cache.ensure_styled(owner_id, kind, &url, style).await?),
         ArtworkSource::Arr {
             cache_key,
             url,
             api_key,
         } => Ok(cache
-            .ensure_cached_with_api_key(owner_id, kind, &cache_key, &url, &api_key)
+            .ensure_styled_with_api_key(owner_id, kind, &cache_key, &url, &api_key, style)
             .await?),
     }
 }
@@ -174,12 +205,17 @@ async fn artwork_response(
     path: &FsPath,
     content_type: &'static str,
     url_hash: u64,
+    style: ArtworkStyle,
     headers: &HeaderMap,
 ) -> Result<Response, ApiError> {
     let metadata = tokio::fs::metadata(path)
         .await
         .map_err(|error| ApiError::internal(format!("could not read cached artwork: {error}")))?;
-    let etag = format!("\"{url_hash:016x}-{:x}\"", metadata.len());
+    let etag = format!(
+        "\"{url_hash:016x}-{}-{:x}\"",
+        style.as_str(),
+        metadata.len()
+    );
     if headers
         .get(IF_NONE_MATCH)
         .and_then(|value| value.to_str().ok())
@@ -212,15 +248,17 @@ async fn artwork_response(
     tag = "catalog",
     params(
         ("work_id" = Uuid, Path, description = "Work id"),
-        ("kind" = String, Path, description = "poster, backdrop, banner, logo, or thumb")
+        ("kind" = String, Path, description = "poster, backdrop, banner, logo, or thumb"),
+        ArtworkQuery
     ),
     responses(
-        (status = 200, description = "Playarr Server-cached source artwork", content_type = "image/*"),
+        (status = 200, description = "Playarr Server-cached source artwork (optionally style-baked)", content_type = "image/*"),
         (status = 304, description = "The caller already has the current cached artwork"),
-        (status = 400, description = "Unsupported artwork kind"),
+        (status = 400, description = "Unsupported artwork kind or style"),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller has neither Playarr streaming access nor admin access"),
         (status = 404, description = "Unknown work or unavailable artwork kind"),
+        (status = 422, description = "Source artwork could not be styled"),
         (status = 502, description = "The metadata-provider artwork could not be safely cached")
     )
 )]
@@ -228,9 +266,11 @@ pub async fn work_artwork_handler(
     State(state): State<AppState>,
     viewer: CatalogViewer,
     Path((work_id, kind)): Path<(Uuid, String)>,
+    Query(query): Query<ArtworkQuery>,
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
     let kind = parse_image_kind(&kind)?;
+    let style = parse_artwork_style(query.style.as_deref())?;
     let allowed = viewer.allowed_libraries();
     let detail = state.catalog.get_by_id(work_id, allowed.as_deref()).await?;
     let source = artwork_source_from_images(
@@ -239,8 +279,15 @@ pub async fn work_artwork_handler(
         &format!("work {}", detail.work.id),
         kind,
     )?;
-    let cached = ensure_artwork_cached(work_id, kind, source).await?;
-    artwork_response(&cached.path, cached.content_type, cached.url_hash, &headers).await
+    let cached = ensure_artwork_cached(work_id, kind, source, style).await?;
+    artwork_response(
+        &cached.path,
+        cached.content_type,
+        cached.url_hash,
+        style,
+        &headers,
+    )
+    .await
 }
 
 #[utoipa::path(
@@ -250,15 +297,17 @@ pub async fn work_artwork_handler(
     params(
         ("artist_work_id" = Uuid, Path, description = "Artist work id"),
         ("album_id" = Uuid, Path, description = "Album id"),
-        ("kind" = String, Path, description = "poster, backdrop, banner, logo, or thumb")
+        ("kind" = String, Path, description = "poster, backdrop, banner, logo, or thumb"),
+        ArtworkQuery
     ),
     responses(
-        (status = 200, description = "Playarr Server-cached album artwork", content_type = "image/*"),
+        (status = 200, description = "Playarr Server-cached album artwork (optionally style-baked)", content_type = "image/*"),
         (status = 304, description = "The caller already has the current cached artwork"),
-        (status = 400, description = "Unsupported artwork kind"),
+        (status = 400, description = "Unsupported artwork kind or style"),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller has neither Playarr streaming access nor admin access"),
         (status = 404, description = "Unknown artist, album, or unavailable artwork kind"),
+        (status = 422, description = "Source artwork could not be styled"),
         (status = 502, description = "The metadata-provider artwork could not be safely cached")
     )
 )]
@@ -266,9 +315,11 @@ pub async fn album_artwork_handler(
     State(state): State<AppState>,
     viewer: CatalogViewer,
     Path((artist_work_id, album_id, kind)): Path<(Uuid, Uuid, String)>,
+    Query(query): Query<ArtworkQuery>,
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
     let kind = parse_image_kind(&kind)?;
+    let style = parse_artwork_style(query.style.as_deref())?;
     let allowed = viewer.allowed_libraries();
     let detail = state
         .catalog
@@ -289,8 +340,15 @@ pub async fn album_artwork_handler(
         &format!("album {}", album.album.id),
         kind,
     )?;
-    let cached = ensure_artwork_cached(album_id, kind, source).await?;
-    artwork_response(&cached.path, cached.content_type, cached.url_hash, &headers).await
+    let cached = ensure_artwork_cached(album_id, kind, source, style).await?;
+    artwork_response(
+        &cached.path,
+        cached.content_type,
+        cached.url_hash,
+        style,
+        &headers,
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -334,6 +392,19 @@ mod tests {
     fn only_known_image_kinds_are_accepted() {
         assert_eq!(parse_image_kind("poster").unwrap(), ImageKind::Poster);
         assert!(parse_image_kind("anything").is_err());
+    }
+
+    #[test]
+    fn artwork_style_query_accepts_stage_and_defaults_to_original() {
+        assert_eq!(
+            parse_artwork_style(None).unwrap(),
+            playarr_artwork::ArtworkStyle::Original
+        );
+        assert_eq!(
+            parse_artwork_style(Some("stage")).unwrap(),
+            playarr_artwork::ArtworkStyle::Stage
+        );
+        assert!(parse_artwork_style(Some("blur-extra")).is_err());
     }
 
     #[test]

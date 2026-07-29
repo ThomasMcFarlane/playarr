@@ -6,11 +6,19 @@
 //! module) call into, so cache layout/hashing/content-type handling can
 //! never drift between the two call sites.
 //!
+//! Named client-facing looks (TV stage greyscale key-art, etc.) live in
+//! [`style`] and are materialised as derivatives next to the raw cache
+//! entry so every platform reuses one bake rather than re-filtering.
+//!
 //! Deliberately crate-local and framework-free: no `axum`/`ApiError`
 //! dependency here (that would make `playarr-arr-sync` -- which must
 //! never depend on `playarr-api`, the reverse of this workspace's real
 //! dependency direction -- unable to use it). Callers map
 //! [`ArtworkCacheError`] into their own error type.
+
+mod style;
+
+pub use style::{apply_artwork_style, ArtworkStyle, ArtworkStyleError};
 
 use std::path::{Path as FsPath, PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -125,6 +133,8 @@ pub enum ArtworkCacheError {
     Empty,
     #[error("artwork cache I/O error: {0}")]
     Io(String),
+    #[error("could not apply artwork style: {0}")]
+    Style(#[from] ArtworkStyleError),
 }
 
 pub struct CachedArtwork {
@@ -233,6 +243,16 @@ async fn remove_stale_kind_files(
     keep: &FsPath,
 ) -> Result<(), ArtworkCacheError> {
     let prefix = format!("{}-", image_kind_segment(kind));
+    // Keep the raw file and any style derivatives that share its hash stem
+    // (e.g. `backdrop-abc.stage.png` next to `backdrop-abc.jpg`).
+    let keep_stem = keep
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default()
+        // `backdrop-HASH.stage` → `backdrop-HASH` when extension-style naming
+        // uses `.stage.png` via with_extension("stage.png") on some platforms.
+        .trim_end_matches(".stage")
+        .to_string();
     let mut entries = tokio::fs::read_dir(directory)
         .await
         .map_err(|error| ArtworkCacheError::Io(format!("could not scan artwork cache: {error}")))?;
@@ -242,15 +262,26 @@ async fn remove_stale_kind_files(
         .map_err(|error| ArtworkCacheError::Io(format!("could not scan artwork cache: {error}")))?
     {
         let path = entry.path();
-        let matches_kind = entry
-            .file_name()
-            .to_str()
-            .is_some_and(|name| name.starts_with(&prefix));
-        if matches_kind && path != keep {
-            let _ = tokio::fs::remove_file(path).await;
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        if !name.starts_with(&prefix) || path == keep {
+            continue;
         }
+        if !keep_stem.is_empty() && name.starts_with(&keep_stem) {
+            continue;
+        }
+        let _ = tokio::fs::remove_file(path).await;
     }
     Ok(())
+}
+
+fn styled_cache_path(raw: &FsPath, style: ArtworkStyle) -> Option<PathBuf> {
+    let segment = style.cache_segment()?;
+    let stem = raw.file_stem()?.to_str()?;
+    let parent = raw.parent()?;
+    Some(parent.join(format!("{stem}.{segment}.png")))
 }
 
 /// A trivial per-process `ArtworkCache::new()`-shareable HTTP client +
@@ -497,6 +528,122 @@ impl ArtworkCache {
             path,
             content_type,
             url_hash,
+        })
+    }
+
+    /// Ensure the raw cache entry exists, then return a named style
+    /// derivative (materialised next to the raw file and reused on later
+    /// hits). `ArtworkStyle::Original` returns the raw entry unchanged.
+    pub async fn ensure_styled(
+        &self,
+        work_id: Uuid,
+        kind: ImageKind,
+        url: &reqwest::Url,
+        style: ArtworkStyle,
+    ) -> Result<CachedArtwork, ArtworkCacheError> {
+        let raw = self.ensure_cached(work_id, kind, url).await?;
+        self.materialise_style(raw, style).await
+    }
+
+    /// Authenticated counterpart to [`Self::ensure_styled`].
+    pub async fn ensure_styled_with_api_key(
+        &self,
+        work_id: Uuid,
+        kind: ImageKind,
+        source_key: &str,
+        url: &reqwest::Url,
+        api_key: &Sensitive<String>,
+        style: ArtworkStyle,
+    ) -> Result<CachedArtwork, ArtworkCacheError> {
+        let raw = self
+            .ensure_cached_with_api_key(work_id, kind, source_key, url, api_key)
+            .await?;
+        self.materialise_style(raw, style).await
+    }
+
+    async fn materialise_style(
+        &self,
+        raw: CachedArtwork,
+        style: ArtworkStyle,
+    ) -> Result<CachedArtwork, ArtworkCacheError> {
+        if style == ArtworkStyle::Original {
+            return Ok(raw);
+        }
+        let Some(styled_path) = styled_cache_path(&raw.path, style) else {
+            return Ok(raw);
+        };
+        if tokio::fs::try_exists(&styled_path).await.unwrap_or(false) {
+            return Ok(CachedArtwork {
+                path: styled_path,
+                content_type: style.output_content_type().unwrap_or(raw.content_type),
+                url_hash: raw.url_hash,
+            });
+        }
+
+        let lock_key = styled_path.to_string_lossy().into_owned();
+        let lock = {
+            let entry = self
+                .fill_locks
+                .entry(lock_key.clone())
+                .or_insert_with(|| Arc::new(Mutex::new(())));
+            entry.value().clone()
+        };
+        let _guard = lock.lock().await;
+        if tokio::fs::try_exists(&styled_path).await.unwrap_or(false) {
+            self.fill_locks.remove(&lock_key);
+            return Ok(CachedArtwork {
+                path: styled_path,
+                content_type: style.output_content_type().unwrap_or(raw.content_type),
+                url_hash: raw.url_hash,
+            });
+        }
+
+        let source = tokio::fs::read(&raw.path).await.map_err(|error| {
+            ArtworkCacheError::Io(format!("could not read cached artwork: {error}"))
+        })?;
+        let style_for_task = style;
+        let (bytes, content_type) = tokio::task::spawn_blocking(move || {
+            apply_artwork_style(&source, style_for_task)
+        })
+        .await
+        .map_err(|error| ArtworkCacheError::Io(format!("style worker join failed: {error}")))??;
+
+        let directory = styled_path.parent().ok_or_else(|| {
+            ArtworkCacheError::Io("styled artwork path has no parent directory".into())
+        })?;
+        let temp_path = directory.join(format!(
+            "style-{}-{}.tmp",
+            style.as_str(),
+            Uuid::new_v4()
+        ));
+        {
+            let mut file = tokio::fs::File::create(&temp_path).await.map_err(|error| {
+                ArtworkCacheError::Io(format!("could not create styled artwork file: {error}"))
+            })?;
+            file.write_all(&bytes).await.map_err(|error| {
+                ArtworkCacheError::Io(format!("could not write styled artwork: {error}"))
+            })?;
+            file.flush().await.map_err(|error| {
+                ArtworkCacheError::Io(format!("could not flush styled artwork: {error}"))
+            })?;
+        }
+        match tokio::fs::rename(&temp_path, &styled_path).await {
+            Ok(()) => {}
+            Err(_error) if tokio::fs::try_exists(&styled_path).await.unwrap_or(false) => {
+                let _ = tokio::fs::remove_file(&temp_path).await;
+            }
+            Err(error) => {
+                let _ = tokio::fs::remove_file(&temp_path).await;
+                return Err(ArtworkCacheError::Io(format!(
+                    "could not commit styled artwork: {error}"
+                )));
+            }
+        }
+        self.fill_locks.remove(&lock_key);
+        Ok(CachedArtwork {
+            path: styled_path,
+            content_type,
+            url_hash: raw.url_hash,
         })
     }
 

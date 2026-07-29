@@ -3137,6 +3137,7 @@ name = "playarr-artwork"
 version = "0.1.0"
 dependencies = [
  "dashmap",
+ "image",
  "playarr-model",
  "reqwest",
  "thiserror 1.0.69",
