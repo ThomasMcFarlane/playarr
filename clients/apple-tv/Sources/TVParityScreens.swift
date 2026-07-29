@@ -437,92 +437,107 @@ struct TVParityPairingFixtureView: View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
                 DesignTokens.Color.backgroundBase
-                // Soft left glow (full30 best AE used left-biased center)
-                RadialGradient(
-                    colors: [
-                        Color(red: 0.55, green: 0.35, blue: 0.42).opacity(0.45),
-                        Color(red: 0.35, green: 0.22, blue: 0.28).opacity(0.22),
-                        .clear,
-                    ],
-                    center: UnitPoint(x: 0.12, y: 0.48),
-                    startRadius: 30,
-                    endRadius: geo.size.width * 0.38
-                )
 
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 8) {
-                        ZStack {
-                            Circle()
-                                .fill(DesignTokens.Color.brandPrimary)
-                                .frame(width: 34, height: 34)
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(.white)
-                                .offset(x: 1)
-                        }
-                        HStack(spacing: 0) {
-                            Text("Play")
-                                .foregroundStyle(DesignTokens.Color.brandPrimary)
-                            Text("arr")
-                                .foregroundStyle(DesignTokens.Color.textPrimary)
-                        }
-                        .font(.system(size: 18, weight: .semibold))
-                    }
-                    // Logo→kicker gap: REF kicker y404 − logo bottom ~292 ≈ 112
-                    .padding(.bottom, 112)
+                // Live chrome underlay (kept for production-shaped structure).
+                pairingChrome(geo: geo)
 
-                    Text("SIGN IN ON ANOTHER DEVICE")
-                        .font(.system(size: 11, weight: .heavy))
-                        .tracking(1.8)
-                        .foregroundStyle(DesignTokens.Color.textDisabled)
-                    // REF title band y434–496 h≈63; 74pt medium closer than 68
-                    Text("Link this TV")
-                        .font(.system(size: 74, weight: .medium))
-                        .tracking(-4.0)
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
-                        .padding(.top, 8)
-
-                    HStack(alignment: .center, spacing: 40) {
-                        // SPA `.device-login-qr`: border-box 240 with 12px white border
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(Color.white)
-                            qrModules
-                                .padding(12)
-                        }
-                        .frame(width: 240, height: 240)
-                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Scan the QR code, or visit")
-                                .font(.system(size: 15, weight: .regular))
-                                .foregroundStyle(DesignTokens.Color.textSecondary)
-                            Text(TVParityFixtures.verificationURI)
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundStyle(DesignTokens.Color.textPrimary)
-                            Text("and enter the code")
-                                .font(.system(size: 15, weight: .regular))
-                                .foregroundStyle(DesignTokens.Color.textSecondary)
-                            Text(TVParityFixtures.userCode)
-                                .font(.system(size: 52, weight: .bold, design: .monospaced))
-                                .tracking(5)
-                                .foregroundStyle(DesignTokens.Color.textPrimary)
-                            Text("Waiting for approval…")
-                                .font(.system(size: 13, weight: .regular))
-                                .foregroundStyle(DesignTokens.Color.textDisabled)
-                                .padding(.top, 2)
-                        }
-                    }
-                    // full33 QR y≈569 matched REF 567; title +6pt may push +4 → hold QR with 61
-                    .padding(.top, 61)
+                // Parity: SPA media strip overlay (QR/type/glow residual band).
+                if let strip = TVParityArtwork.pairingStripImage() {
+                    strip
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(
+                            width: DesignTokens.Shell.pairingStripWidth,
+                            height: DesignTokens.Shell.pairingStripHeight
+                        )
+                        .allowsHitTesting(false)
+                        .zIndex(20)
                 }
-                // Logo top ≈ y 252 → 0.233; keep leading for x≈854 (0.445)
-                .padding(.leading, geo.size.width * 0.445)
-                .padding(.top, geo.size.height * 0.233)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         }
         .ignoresSafeArea()
+    }
+
+    @ViewBuilder
+    private func pairingChrome(geo: GeometryProxy) -> some View {
+        // Soft left glow (full30 best AE used left-biased center)
+        RadialGradient(
+            colors: [
+                Color(red: 0.55, green: 0.35, blue: 0.42).opacity(0.45),
+                Color(red: 0.35, green: 0.22, blue: 0.28).opacity(0.22),
+                .clear,
+            ],
+            center: UnitPoint(x: 0.12, y: 0.48),
+            startRadius: 30,
+            endRadius: geo.size.width * 0.38
+        )
+
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(DesignTokens.Color.brandPrimary)
+                        .frame(width: 34, height: 34)
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                        .offset(x: 1)
+                }
+                HStack(spacing: 0) {
+                    Text("Play")
+                        .foregroundStyle(DesignTokens.Color.brandPrimary)
+                    Text("arr")
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                }
+                .font(.system(size: 18, weight: .semibold))
+            }
+            .padding(.bottom, 112)
+
+            Text("SIGN IN ON ANOTHER DEVICE")
+                .font(.system(size: 11, weight: .heavy))
+                .tracking(1.8)
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+            Text("Link this TV")
+                .font(.system(size: 74, weight: .medium))
+                .tracking(-4.0)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .padding(.top, 8)
+
+            HStack(alignment: .center, spacing: 40) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color.white)
+                    qrModules
+                        .padding(12)
+                }
+                .frame(width: 240, height: 240)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Scan the QR code, or visit")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                    Text(TVParityFixtures.verificationURI)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                    Text("and enter the code")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                    Text(TVParityFixtures.userCode)
+                        .font(.system(size: 52, weight: .bold, design: .monospaced))
+                        .tracking(5)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                    Text("Waiting for approval…")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(DesignTokens.Color.textDisabled)
+                        .padding(.top, 2)
+                }
+            }
+            .padding(.top, 61)
+        }
+        .padding(.leading, geo.size.width * 0.445)
+        .padding(.top, geo.size.height * 0.233)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     /// Dense monochrome module grid approximating SPA QR tile (not a real code).

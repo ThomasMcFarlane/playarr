@@ -247,6 +247,22 @@ enum DesignTokens {
         static let libraryGridStripOriginY: CGFloat = 0
         static let libraryGridStripWidth: CGFloat = 1020
         static let libraryGridStripHeight: CGFloat = 1080
+
+        // MARK: Pairing / settings / movie residual SPA strips (parity only)
+
+        static let pairingStripWidth: CGFloat = 1920
+        static let pairingStripHeight: CGFloat = 1080
+        static let settingsListStripWidth: CGFloat = 700
+        static let settingsListStripHeight: CGFloat = 1080
+        static let settingsDetailStripOriginX: CGFloat = 700
+        static let settingsDetailStripWidth: CGFloat = 1220
+        static let settingsDetailStripHeight: CGFloat = 1080
+        static let movieCopyStripWidth: CGFloat = 900
+        static let movieCopyStripHeight: CGFloat = 900
+        static let movieChaptersStripOriginX: CGFloat = 800
+        static let movieChaptersStripOriginY: CGFloat = 520
+        static let movieChaptersStripWidth: CGFloat = 1120
+        static let movieChaptersStripHeight: CGFloat = 380
         /// `.tv-media-track-scroll` gap clamp(14, 1.3vw, 26) → 25 @ 1920
         static let detailTrackItemGap: CGFloat = 25
         /// `--tv-track-left-fade: clamp(88px, 8.8vw, 152px)` → 152 @ 1920

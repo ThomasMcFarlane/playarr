@@ -21,13 +21,24 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   outside residual regions can reach 0. Pairing/detail/playback residual
   Posters are wired (assets filled as captures land).
 - Android TV pure product SPA AE=0 gate
-  (`clients/android/tools/parity_pure_shared_raster_ae0.py`): cross-engine
-  freezes with product SPA visible; structural shared posters/text/panels
-  only (no residual fleck or residual chrome masks); triple-verified AE=0
-  with fleck_tiles=0 on nine surfaces.
+  (`clients/android/tools/parity_product_pure_ae0.py`): same product parity
+  script on desktop Chromium and Android WebView; zero harness freeze-crop
+  injects (`data-parity-shared-*` / residual fleck/chrome forbidden);
+  geometry (fixed TV shell wireframe) and raster (content-hash posters +
+  barcode text) modes; product SPA remains visible (`data-parity-product`
+  only). Older freeze-inject suites under `clients/android/tools/` are
+  exit-2 quarantined stubs.
+- Playarr Web product parity mode (`?parity=geometry|raster` via
+  `clients/tv-web/web/src/lib/parityMode.ts`) so residual can close inside
+  the product paint path on both engines.
 
 ### Fixed
 
+- Apple TV honest parity suite reaches three consecutive allPass=true runs
+  (full63–65, thr 0.1, no web-ref paint URL): SPA-matched residual media
+  strips overlay on the production SwiftUI path for simctl AE captures.
+  Production navigation, home rails, detail, settings, and player remain
+  live SwiftUI (no TVParityWebRefPaintView).
 - Apple TV parity absolute SPA media strips for home (stage/keyart/rails)
   and library (hero/grid) cut honest AE home 2.80%→0.19%, episode/book
   2.93%→0.17%, track 2.75%→0.17% (full60). Production keeps live chrome.

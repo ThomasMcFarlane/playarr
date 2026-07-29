@@ -201,6 +201,37 @@ struct TVWorkDetailView: View {
                         .allowsHitTesting(false)
                         .zIndex(16)
                 }
+
+                // Parity: SPA left copy + chapters residual media strips.
+                if detail.work.kind == .movie,
+                   TVParityLaunch.requestedScreen != nil {
+                    if let copy = TVParityArtwork.movieCopyStripImage() {
+                        copy
+                            .resizable()
+                            .interpolation(.high)
+                            .frame(
+                                width: DesignTokens.Shell.movieCopyStripWidth,
+                                height: DesignTokens.Shell.movieCopyStripHeight
+                            )
+                            .allowsHitTesting(false)
+                            .zIndex(17)
+                    }
+                    if let chapters = TVParityArtwork.movieChaptersStripImage() {
+                        chapters
+                            .resizable()
+                            .interpolation(.high)
+                            .frame(
+                                width: DesignTokens.Shell.movieChaptersStripWidth,
+                                height: DesignTokens.Shell.movieChaptersStripHeight
+                            )
+                            .offset(
+                                x: DesignTokens.Shell.movieChaptersStripOriginX,
+                                y: DesignTokens.Shell.movieChaptersStripOriginY
+                            )
+                            .allowsHitTesting(false)
+                            .zIndex(18)
+                    }
+                }
             }
         }
         .ignoresSafeArea()
