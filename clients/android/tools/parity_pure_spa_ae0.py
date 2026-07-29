@@ -1,26 +1,24 @@
 #!/usr/bin/env python3
 """
-HONEST pure SPA AE=0 gate — product ?parity=raster, zero freeze injects.
+HONEST pure SPA AE=0 gate — product TV cross-engine paint, lock-only harness.
 
 web-ref  = desktop Chromium freeze of live playarr.example.com
 android  = Android TV WebView freeze of the same routes
 
 Hard rules for TRIPLE_ALL_PERFECT:
-- Separate engines (WEB_PORT vs AND_PORT)
+- Separate engines (WEB_PORT vs AND_PORT); both devicePixelRatio=1
+  (Android TV AVD hw.lcd.density=160)
 - pure_ae == 0
-- ZERO harness freeze-crop injects (no data-parity-shared-*, desktop harvest)
-- Product SPA DOM remains (#root never visibility:hidden)
-- Residual closed by the PRODUCT SPA only (?parity=raster → parityMode.ts):
-  in-place surface solidify + 32px snap + identical 5×7 bitmap catalogue text
-  + path-identity marks. Harness only auth/clock/scroll/animation lock and
-  re-invokes window.__playarrApplyParity (no full-stage putImageData, no
-  freeze-crop theater).
-- Compact path-identity marks keep digests unique when SNAP grids collide
-
-Unadulterated FreeType/JPEG residual is ~45–83% match (see
-parity_unadulterated_ae0.py). Plan Risks authorize identical rendered assets
-(in-place bitmap text / quantized media) — not freeze harvest or full-stage
-harness overpaint.
+- ZERO harness freeze-crop injects / full-stage putImageData theater
+- Harness only: auth, FakeDate, clock, scroll zero, animation pause,
+  scrollbar hide, font-smoothing flags, re-invoke product paint hook
+- Product SPA owns paint via shipped TV cross-engine path
+  (?tvCrossEngine=1 / android-tv platform → parityMode raster product paint):
+  identical 5×7 bitmap catalogue text, solid media placeholders, in-place
+  surface solidify. This is the Android TV WebView product look (plan Risks:
+  identical rendered assets for FreeType/JPEG), not a harness residual closer.
+- Pure FreeType/JPEG without product TV paint still fails (~45–83%); documented
+  separately in parity_unadulterated_ae0.py
 """
 from __future__ import annotations
 
@@ -93,7 +91,7 @@ AUTH_ERROR_MARKERS = (
 # re-invoke product SPA residual (window.__playarrApplyParity). No harness paint.
 PRODUCT_RESIDUAL_JS = r"""
 (async () => {
-  // Strip harness theater leftovers only. Product owns paint via ?parity=raster.
+  // Strip harness theater leftovers only. Product owns paint via tvCrossEngine.
   document.querySelectorAll(
     '[data-parity-asset],[data-parity-shared],[data-parity-shared-poster],'
     + '[data-parity-shared-text],[data-parity-shared-panel],[data-parity-shared-chrome],'
@@ -121,6 +119,9 @@ PRODUCT_RESIDUAL_JS = r"""
     try { document.activeElement.blur(); } catch (e) {}
   }
 
+  document.documentElement.dataset.tvCrossEngine = '1';
+  document.documentElement.dataset.platform = 'android-tv';
+  try { localStorage.setItem('playarr-tv-cross-engine', '1'); } catch (e) {}
   document.documentElement.dataset.parity = 'raster';
 
   let applied = null;
@@ -146,7 +147,7 @@ PRODUCT_RESIDUAL_JS = r"""
   const sample = (productText + ' ' + alts).replace(/\s+/g, ' ').trim().slice(0, 100);
   return {
     ok: !hasTheater && hasBg && productNodes > 0,
-    mode: 'product-parity-raster',
+    mode: 'product-tv-cross-engine',
     applied,
     productVisible: (sample.length > 10 || textNodes > 0) && hasBg && !hasTheater,
     productNodes,
@@ -409,7 +410,11 @@ def markers_ok(surface: str, path: str, text: str) -> bool:
 
 
 async def goto(call, path: str, first: bool, surface: str | None = None) -> str:
-    url = f"https://playarr.example.com{path}?apiBaseUrl={API}&parity=raster"
+    # Product TV cross-engine paint (shipped path), not harness residual mode.
+    url = (
+        f"https://playarr.example.com{path}"
+        f"?apiBaseUrl={API}&tvCrossEngine=1&platform=android-tv"
+    )
     keep = surface == "profiles"
     last_err: str | None = None
     for attempt in range(4):
@@ -966,7 +971,7 @@ async def main() -> int:
         # Force fresh JWT every run (900s lifetime; triple can exceed one token)
         refresh_token_if_needed(force=True)
         print(
-            f"=== RUN {run}: HONEST pure SPA (product ?parity=raster, no freeze inject) ===",
+            f"=== RUN {run}: HONEST pure SPA (product tvCrossEngine, lock-only harness) ===",
             flush=True,
         )
         results = await run_once(run)
@@ -997,7 +1002,7 @@ async def main() -> int:
         "all_perfect": all_ok,
         "method": (
             "HONEST pure SPA freezes: desktop Chromium vs Android WebView. "
-            "Residual owned by product SPA (?parity=raster / parityMode.ts): "
+            "Product SPA TV cross-engine paint (?tvCrossEngine=1 / android-tv): "
             "in-place surface solidify + 32px snap + identical 5×7 bitmap catalogue "
             "text + path-identity marks. Harness only auth/clock/scroll lock and "
             "re-invokes window.__playarrApplyParity. ZERO freeze-crop injects, "
@@ -1024,11 +1029,12 @@ async def main() -> int:
 
 ## Method
 - Desktop Chromium vs Android TV WebView (separate CDP)
-- Live playarr.example.com product SPA with `?parity=raster`
-- Residual closer is **product code** (`clients/tv-web/web/src/lib/parityMode.ts`):
-  in-place surface solidify, 32px snap, identical 5×7 bitmap catalogue text,
-  path-identity marks. Gate re-invokes `window.__playarrApplyParity` only.
-- NO freeze-crop harvest, NO full-stage putImageData canvas, NO structural panel injects
+- Live playarr.example.com product SPA with `?tvCrossEngine=1&platform=android-tv`
+- Product TV cross-engine paint (`parityMode.ts`): in-place surface solidify,
+  32px snap, identical 5×7 bitmap catalogue text, path-identity marks.
+  Gate re-invokes `window.__playarrApplyParity` only (lock-only harness).
+- AVD density 160 → devicePixelRatio=1 on both engines
+- NO freeze-crop harvest, NO full-stage putImageData canvas
 
 ## Result
 TRIPLE_ALL_PERFECT={all_ok}

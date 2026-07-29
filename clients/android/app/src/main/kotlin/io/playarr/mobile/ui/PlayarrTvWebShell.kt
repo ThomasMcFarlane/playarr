@@ -77,8 +77,15 @@ fun PlayarrTvWebShell(
                 settings.builtInZoomControls = false
                 settings.displayZoomControls = false
                 settings.setSupportZoom(false)
+                settings.textZoom = 100
+                // Identify as Playarr Android TV so the SPA resolves
+                // clientPlatform=android-tv (shared TV paint / auth identity).
+                settings.userAgentString =
+                    settings.userAgentString + " PlayarrAndroidTV/" + BuildConfig.VERSION_NAME
                 // Force 1 CSS-px = 1 physical-px on the TV 1920×1080 stage
-                // (matches MainActivity's density-160 television context).
+                // (matches MainActivity's density-160 television context and
+                // AVD hw.lcd.density=160). devicePixelRatio must stay 1 so
+                // FreeType/JPEG paint matches desktop Chromium freezes.
                 setInitialScale(100)
                 // SPA is served over HTTPS while operator servers are often
                 // plain HTTP on the LAN; allow mixed content so catalogue
@@ -153,6 +160,9 @@ private const val TV_VIEWPORT_SCRIPT = """
   document.documentElement.style.width = '1920px';
   document.documentElement.style.height = '1080px';
   document.documentElement.style.overflow = 'hidden';
+  // Prefer DPR=1 when the host density is correct (AVD hw.lcd.density=160).
+  // Do not fake devicePixelRatio if the compositor is still 2× — that desyncs
+  // layout metrics from the raster scale. Operators must keep TV AVD density 160.
   if (document.body) {
     document.body.style.width = '1920px';
     document.body.style.height = '1080px';

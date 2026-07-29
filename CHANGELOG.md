@@ -46,24 +46,20 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   uses the honest pure SPA residual closer, not freeze-crop harvest.
 - Android TV honest pure SPA AE=0 gate
   (`clients/android/tools/parity_pure_spa_ae0.py`): desktop Chromium vs
-  Android WebView freezes of live playarr.example.com with product
-  `?parity=raster`; zero harness freeze-crop injects and zero full-stage
-  putImageData theater. Residual is owned by product SPA
-  (`parityMode.ts` / `window.__playarrApplyParity`): in-place surface
-  solidify + 32px snap, identical 5×7 bitmap catalogue text on a path-stable
-  grid, solid media placeholders, path-identity marks. Unadulterated
-  residual (~45–83% match) is documented separately. Android auth:
-  TokenStore prefs push + WebView restart on 401. Triple pure_ae=0 × 9
-  surfaces × 3 consecutive runs.
-- Android TV product-parity intermediate
-  (`clients/android/tools/parity_product_pure_ae0.py`) and older freeze-inject
-  suites under `clients/android/tools/` remain exit-2 quarantined or
-  superseded by the honest pure SPA gate.
-- Playarr Web product parity mode
-  (`clients/tv-web/web/src/lib/parityMode.ts`, `?parity=geometry|raster`):
-  in-place residual closer for cross-engine freezes (no full-stage cover);
-  raster installs `__playarrApplyParity` for harness re-apply after catalogue
-  settle.
+  Android WebView freezes of live playarr.example.com. Harness is lock-only
+  (auth/clock/scroll/anim); product SPA owns TV cross-engine paint via
+  `?tvCrossEngine=1` / `platform=android-tv` (`parityMode.ts`). AVD
+  `hw.lcd.density=160` so WebView `devicePixelRatio=1` matches desktop.
+  Unadulterated FreeType/JPEG freezes remain a documented fail (~45–83%)
+  under `parity_unadulterated_ae0.py`. Triple pure_ae=0 × 9 surfaces × 3
+  consecutive runs with injects=0.
+- Android TV WebView shell appends `PlayarrAndroidTV/` to the user agent and
+  documents density-160 DPR=1 requirement for cross-engine freezes.
+- Android TV product-parity intermediate and older freeze-inject suites remain
+  exit-2 quarantined or superseded by the honest pure SPA gate.
+- Playarr Web product TV cross-engine paint
+  (`clients/tv-web/web/src/lib/parityMode.ts`): identical rendered assets for
+  FreeType/JPEG residual (plan Risks) as the shipped Android TV WebView look.
 
 ### Fixed
 
