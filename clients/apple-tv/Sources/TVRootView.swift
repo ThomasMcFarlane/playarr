@@ -366,10 +366,10 @@ struct TVPairingGateView: View {
 // MARK: - Device login chrome (live /login/qr)
 
 /// Production pairing chrome matches live web `/login/qr`
-/// (`ProfileAuthLayout` + embedded `DeviceLogin`): centred column, Welcome
-/// home / Sign in to Playarr, QR tile (240 / 12 / r=18 + soft shadow) above
-/// instructions and code. Parity freezes still use measured left-rail geometry
-/// via `TVParityPairingFixtureView`.
+/// (`ProfileAuthLayout` + `TvStageChrome` + embedded `DeviceLogin`): stage
+/// chrome (logo + theme + language), centred column, Welcome home / Sign in
+/// to Playarr, QR tile above code. Parity freezes still use measured
+/// left-rail geometry via `TVParityPairingFixtureView`.
 struct TVDeviceLoginChrome: View {
     enum Phase {
         case requesting
@@ -380,16 +380,21 @@ struct TVDeviceLoginChrome: View {
     let phase: Phase
     var onRetry: (() -> Void)?
 
+    @Environment(TVDisplayPreferences.self) private var displayPreferences
+
+    private var palette: TVAuthPalette {
+        TVAuthPalette.forTheme(displayPreferences.resolvedTheme)
+    }
+
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                // Force dark stage (#151315) — never follow a light system theme.
-                DesignTokens.Stage.bg
-                // Soft rose halo behind the plate (web profiles-page wash).
+                palette.bg
+                // Soft rose halo (web profiles-page wash).
                 RadialGradient(
                     colors: [
-                        DesignTokens.Stage.brandPink.opacity(0.16),
-                        DesignTokens.Stage.brandPink.opacity(0.05),
+                        palette.brandPink.opacity(palette.isDark ? 0.16 : 0.12),
+                        palette.brandPink.opacity(0.05),
                         .clear,
                     ],
                     center: UnitPoint(x: 0.50, y: 0.42),
@@ -404,18 +409,18 @@ struct TVDeviceLoginChrome: View {
                     Text("WELCOME HOME")
                         .font(.system(size: 12, weight: .heavy))
                         .tracking(2.4)
-                        .foregroundStyle(DesignTokens.Stage.inkMuted)
+                        .foregroundStyle(palette.inkMuted)
 
                     Text("Sign in to Playarr")
                         .font(.system(size: 64, weight: .medium))
                         .tracking(-4.0)
-                        .foregroundStyle(DesignTokens.Stage.ink)
+                        .foregroundStyle(palette.ink)
                         .multilineTextAlignment(.center)
                         .padding(.top, 8)
 
                     Text("Scan the QR code with your phone or another browser to sign in on this device.")
                         .font(.system(size: 17, weight: .regular))
-                        .foregroundStyle(DesignTokens.Stage.inkMuted)
+                        .foregroundStyle(palette.inkMuted)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 440)
                         .padding(.top, 16)
@@ -426,17 +431,20 @@ struct TVDeviceLoginChrome: View {
                 .frame(maxWidth: 560)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 .padding(.horizontal, 48)
+
+                // Web `TvStageChrome`: logo left, theme + language top-right.
+                TVAuthStageChrome(palette: palette)
             }
         }
         .ignoresSafeArea()
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(displayPreferences.colorScheme)
     }
 
     private var playarrWordmark: some View {
         HStack(spacing: 8) {
             ZStack {
                 Circle()
-                    .fill(DesignTokens.Stage.brandPink)
+                    .fill(palette.brandPink)
                     .frame(width: 34, height: 34)
                 Image(systemName: "play.fill")
                     .font(.system(size: 12, weight: .bold))
@@ -445,9 +453,9 @@ struct TVDeviceLoginChrome: View {
             }
             HStack(spacing: 0) {
                 Text("Play")
-                    .foregroundStyle(DesignTokens.Stage.brandPink)
+                    .foregroundStyle(palette.brandPink)
                 Text("arr")
-                    .foregroundStyle(DesignTokens.Stage.ink)
+                    .foregroundStyle(palette.ink)
             }
             .font(.system(size: 18, weight: .semibold))
         }
@@ -459,7 +467,7 @@ struct TVDeviceLoginChrome: View {
         case .requesting:
             Text("Creating a secure sign-in code…")
                 .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(DesignTokens.Stage.inkMuted)
+                .foregroundStyle(palette.inkMuted)
         case .awaitingApproval(let userCode, let verificationURI, let qr):
             // Live `/login/qr` embedded DeviceLogin: column, centred, QR above copy.
             VStack(alignment: .center, spacing: 22) {
@@ -473,25 +481,30 @@ struct TVDeviceLoginChrome: View {
                 }
                 .frame(width: 240, height: 240)
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .shadow(color: Color.black.opacity(0.30), radius: 36, x: 0, y: 24)
+                .shadow(
+                    color: Color.black.opacity(palette.isDark ? 0.30 : 0.12),
+                    radius: 36,
+                    x: 0,
+                    y: 24
+                )
 
                 VStack(alignment: .center, spacing: 10) {
                     Text("Scan the QR code, or visit")
                         .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(DesignTokens.Stage.inkMuted)
+                        .foregroundStyle(palette.inkMuted)
                     Text(verificationURI)
                         .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(DesignTokens.Stage.ink)
+                        .foregroundStyle(palette.ink)
                     Text("and enter the code")
                         .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(DesignTokens.Stage.inkMuted)
+                        .foregroundStyle(palette.inkMuted)
                     Text(userCode)
                         .font(.system(size: 52, weight: .bold, design: .monospaced))
                         .tracking(5)
-                        .foregroundStyle(DesignTokens.Stage.ink)
+                        .foregroundStyle(palette.ink)
                     Text("Waiting for approval…")
                         .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(DesignTokens.Stage.inkMuted)
+                        .foregroundStyle(palette.inkMuted)
                         .padding(.top, 2)
                 }
                 .multilineTextAlignment(.center)
@@ -500,17 +513,117 @@ struct TVDeviceLoginChrome: View {
             VStack(alignment: .center, spacing: 16) {
                 Text(message)
                     .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(DesignTokens.Stage.danger)
+                    .foregroundStyle(palette.danger)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                 if let onRetry {
                     Button("Try again", action: onRetry)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(DesignTokens.Stage.brandPink)
+                        .foregroundStyle(palette.brandPink)
                         .buttonStyle(TVFocusableCardButtonStyle())
                 }
             }
         }
+    }
+}
+
+/// Web `TvStageChrome` on auth pages: mark top-left, theme + language menus
+/// top-right (order matches live `/login/qr`: theme then language).
+struct TVAuthStageChrome: View {
+    let palette: TVAuthPalette
+    @Environment(TVDisplayPreferences.self) private var displayPreferences
+
+    var body: some View {
+        VStack {
+            HStack(alignment: .center, spacing: 0) {
+                PlayarrLogoMark(size: 36)
+                    .accessibilityHidden(true)
+
+                Spacer(minLength: 16)
+
+                HStack(spacing: 14) {
+                    themeMenu
+                    languageMenu
+                }
+            }
+            .padding(.horizontal, 36)
+            .padding(.top, 40)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .allowsHitTesting(true)
+    }
+
+    private var themeMenu: some View {
+        Menu {
+            ForEach(TVDisplayPreferences.ThemePreference.allCases) { option in
+                Button {
+                    displayPreferences.themePreference = option
+                } label: {
+                    if displayPreferences.themePreference == option {
+                        Label(option.menuLabel, systemImage: "checkmark")
+                    } else {
+                        Text(option.menuLabel)
+                    }
+                }
+            }
+        } label: {
+            chromeTrigger(
+                icon: "circle.lefthalf.filled",
+                label: displayPreferences.themeTriggerLabel,
+                accessibility: "Theme: \(displayPreferences.themeTriggerLabel)"
+            )
+        }
+        .buttonStyle(TVFocusableCardButtonStyle())
+    }
+
+    private var languageMenu: some View {
+        Menu {
+            ForEach(TVDisplayPreferences.LanguagePreference.allCases) { option in
+                Button {
+                    displayPreferences.languagePreference = option
+                } label: {
+                    if displayPreferences.languagePreference == option {
+                        Label(option.menuLabel, systemImage: "checkmark")
+                    } else {
+                        Text(option.menuLabel)
+                    }
+                }
+            }
+        } label: {
+            chromeTrigger(
+                icon: "globe",
+                label: displayPreferences.languageTriggerLabel,
+                accessibility: "Language: \(displayPreferences.languageTriggerLabel)"
+            )
+        }
+        .buttonStyle(TVFocusableCardButtonStyle())
+    }
+
+    private func chromeTrigger(icon: String, label: String, accessibility: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(palette.inkMuted)
+            Text(label)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(palette.ink)
+                .lineLimit(1)
+            Image(systemName: "chevron.down")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(palette.inkMuted)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(palette.surfaceStrong.opacity(palette.isDark ? 0.92 : 0.96))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(palette.lineStrong, lineWidth: 1)
+        )
+        .accessibilityLabel(accessibility)
     }
 }
 

@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct PlayarrTVApp: App {
     @State private var environment = TVAppEnvironment()
+    @State private var displayPreferences = TVDisplayPreferences()
 
     var body: some Scene {
         WindowGroup {
@@ -11,6 +12,8 @@ struct PlayarrTVApp: App {
             // of this shell vs Playwright SPA refs only (`-PlayarrParityScreen`).
             TVRootView()
                 .environment(environment)
+                .environment(displayPreferences)
+                .preferredColorScheme(displayPreferences.colorScheme)
         }
     }
 }

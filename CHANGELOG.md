@@ -29,7 +29,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Roku pairing is the light web `/login/qr` layout (cream wash, WELCOME HOME, Sign in to Playarr, centered QR + code + countdown), not the dark side-by-side DeviceLogin card.
+- Roku pairing uses the web `/login/qr` centered layout (WELCOME HOME, Sign
+  in to Playarr, QR, code, countdown) in Playarr **dark** theme (cream light
+  mode was wrong for the TV shell).
+
+- Apple TV pairing gate matches web `/login/qr` stage chrome: theme menu
+  (System / Light / Dark) and language menu (Auto / English / 日本語 / ไทย)
+  top-right, logo top-left. Theme preference drives light/dark auth palette.
 
 - Apple TV pairing gate always uses the playarr.app hosted broker (even when
   a relay/server URL is remembered), so the on-screen visit line is
@@ -216,7 +222,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   VIDAA modes open QR sign-in by default. Codes show a five-minute countdown
   and renew automatically at expiry without shifting the login layout: the
   expired QR/code clears in place while the timer resets to five minutes.
-  Shared login chrome also places the theme toggle beside the language selector.
+  Shared login chrome also places a System/Light/Dark theme selector beside
+  the language selector.
 
 - Playarr Web `productSurfaces` module and tests so `tv-vidaa` and standard
   web share the same complete-client routes, shell nav hierarchy, and eight
