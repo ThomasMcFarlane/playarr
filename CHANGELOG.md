@@ -94,6 +94,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (from full103 1.52%).
 - Apple TV library title-card labels match SPA `.tv-title-card-copy strong`
   (11.5pt / weight 610 tracking, 0.72rem art→title gap).
+- Apple TV removes dead `TVParityRootView` / plain-shelf `homeFixture` so the
+  only parity path is production `TVRootView` (hero + dual rails).
 - Apple TV settings options list bottom gap after Preferences heading matches
   SPA first-option y≈162 (was y≈133).
 - Apple TV detail Playback control uses SPA-like square.grid.2x2 brand glyph.

@@ -7,9 +7,8 @@ struct PlayarrTVApp: App {
     var body: some Scene {
         WindowGroup {
             // Always production SwiftUI shell. Honest parity captures use
-            // `-PlayarrParityScreen` only (handled inside TVRootView). Full-bleed
-            // web-ref paint (`-PlayarrParityWebRefBaseURL` / TVParityRootView) is
-            // intentionally not wired — it cannot satisfy native-vs-SPA AE.
+            // `-PlayarrParityScreen` only (handled inside TVRootView). Web-ref
+            // paint is disabled (`webRefBaseURL` always nil).
             TVRootView()
                 .environment(environment)
         }
