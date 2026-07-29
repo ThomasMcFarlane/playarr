@@ -28,6 +28,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV parity player chrome tracks ui-tv tokens (spacing xl/md, raised
+  progress track, 8px-radius transport buttons) and measured SPA y positions
+  (title ≈912, progress ≈956 w650); honest suite player AE 0.34% → 0.25%.
+- Apple TV parity pairing QR y matches SPA DeviceLogin (options pad dial-in,
+  border-box 240 tile); honest suite pairing AE 2.71% → 2.01%.
 - Apple TV parity pairing fixture matches SPA DeviceLogin TV layout
   (Link this TV, QR, ABCD-2345); suite maps pairing/player to TV device
   login and player chrome instead of phone `/link` and password login.

@@ -430,13 +430,14 @@ struct TVParityRootView: View {
 
 /// Deterministic device-code pairing chrome for parity captures (no network).
 /// SPA DeviceLogin TV layout measured @ 1920×1080:
-/// content bright bbox ≈ (854, 252)–(1660, 806); left glow at x≈0.12.
+/// logo ~(883,272), kicker y≈404, title y≈434–496, QR y≈567–806 x≈854–1093 (240).
+/// full30 baseline (AE 2.71%) + QR y dial-in only (was ~37px high).
 struct TVParityPairingFixtureView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
                 DesignTokens.Color.backgroundBase
-                // SPA `.auth-backdrop` soft left glow
+                // Soft left glow (full30 best AE used left-biased center)
                 RadialGradient(
                     colors: [
                         Color(red: 0.55, green: 0.35, blue: 0.42).opacity(0.45),
@@ -448,14 +449,12 @@ struct TVParityPairingFixtureView: View {
                     endRadius: geo.size.width * 0.38
                 )
 
-                // Card content: SPA right column starts ~x 528 (0.55/2fr),
-                // card content measured from ~854 with width ~800.
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 8) {
                         ZStack {
                             Circle()
                                 .fill(DesignTokens.Color.brandPrimary)
-                                .frame(width: 32, height: 32)
+                                .frame(width: 34, height: 34)
                             Image(systemName: "play.fill")
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundStyle(.white)
@@ -469,29 +468,30 @@ struct TVParityPairingFixtureView: View {
                         }
                         .font(.system(size: 18, weight: .semibold))
                     }
-                    .padding(.bottom, 48)
+                    // Logo→kicker gap: REF kicker y404 − logo bottom ~292 ≈ 112
+                    .padding(.bottom, 112)
 
                     Text("SIGN IN ON ANOTHER DEVICE")
                         .font(.system(size: 11, weight: .heavy))
                         .tracking(1.8)
                         .foregroundStyle(DesignTokens.Color.textDisabled)
+                    // REF title band y434–496 h≈63; 74pt medium closer than 68
                     Text("Link this TV")
-                        .font(.system(size: 68, weight: .medium))
-                        .tracking(-3.5)
+                        .font(.system(size: 74, weight: .medium))
+                        .tracking(-4.0)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
                         .padding(.top, 8)
 
                     HStack(alignment: .center, spacing: 40) {
-                        // SPA `.device-login-qr` 240×240, 12px white border → 264 outer
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(Color.white)
-                            .frame(width: 240, height: 240)
-                            .overlay { qrModules }
-                            .padding(12)
-                            .background(
-                                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                    .fill(Color.white)
-                            )
+                        // SPA `.device-login-qr`: border-box 240 with 12px white border
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(Color.white)
+                            qrModules
+                                .padding(12)
+                        }
+                        .frame(width: 240, height: 240)
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
                         VStack(alignment: .leading, spacing: 10) {
                             Text("Scan the QR code, or visit")
@@ -513,9 +513,10 @@ struct TVParityPairingFixtureView: View {
                                 .padding(.top, 2)
                         }
                     }
-                    .padding(.top, 32)
+                    // full33 QR y≈569 matched REF 567; title +6pt may push +4 → hold QR with 61
+                    .padding(.top, 61)
                 }
-                // Measured SPA content origin ≈ (854, 252)
+                // Logo top ≈ y 252 → 0.233; keep leading for x≈854 (0.445)
                 .padding(.leading, geo.size.width * 0.445)
                 .padding(.top, geo.size.height * 0.233)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -559,7 +560,6 @@ struct TVParityPairingFixtureView: View {
             var seed: UInt64 = 0xA5C3_2345
             for y in 0..<n {
                 for x in 0..<n {
-                    // skip finders
                     if (x < 3 && y < 3) || (x >= n - 3 && y < 3) || (x < 3 && y >= n - 3) {
                         continue
                     }
@@ -576,42 +576,48 @@ struct TVParityPairingFixtureView: View {
                 }
             }
         }
-        .padding(18)
     }
 }
 
 /// Deterministic player chrome for parity captures (ui-tv PlayerScreen layout).
-/// Measured SPA chrome: title y≈915, progress y≈956–962, buttons below, pad 32.
+/// SPA tokens: padding spacing.xl=32, gap spacing.md=16, title 24/700,
+/// progress h=6 raised track, buttons pad sm/lg=8/24 radius 8 border 3.
+/// Measured full30 REF: title y≈912, progress y≈956 w≈650 x≈32,
+/// buttons y≈978–1013 (Back 109 / Play 94 / Forward 133 / Exit 90).
 struct TVParityPlayerFixtureView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .bottomLeading) {
                 DesignTokens.Color.backgroundBase
-                // Soft brand radial matching SPA player stage (upper-center glow).
+                // Soft brand radial — match SPA glow mean (dimmer than prior native).
                 RadialGradient(
                     colors: [
-                        Color(red: 0.45, green: 0.18, blue: 0.28).opacity(0.55),
-                        Color(red: 0.25, green: 0.12, blue: 0.18).opacity(0.28),
-                        DesignTokens.Color.backgroundBase.opacity(0.05),
+                        Color(red: 0.38, green: 0.16, blue: 0.24).opacity(0.42),
+                        Color(red: 0.22, green: 0.11, blue: 0.16).opacity(0.22),
+                        DesignTokens.Color.backgroundBase.opacity(0.04),
                         DesignTokens.Color.backgroundBase,
                     ],
-                    center: UnitPoint(x: 0.42, y: 0.32),
-                    startRadius: 20,
-                    endRadius: geo.size.width * 0.55
+                    center: UnitPoint(x: 0.45, y: 0.30),
+                    startRadius: 30,
+                    endRadius: geo.size.width * 0.52
                 )
 
-                VStack(alignment: .leading, spacing: 14) {
+                // spacing.md = 16 between chrome rows; bottom pad 33 → progress y≈956
+                // full33 title y916 vs REF 912 → +4 title→progress gap moves title up only
+                VStack(alignment: .leading, spacing: 16) {
                     Text("10 Brambleford Lane")
                         .font(.system(size: 24, weight: .bold))
                         .tracking(-0.4)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
-                    // Progress 6px, fill 35%
+                        .padding(.bottom, 4)
+                    // Progress: 6px track (raised #333), fill ~650 from measured REF
                     ZStack(alignment: .leading) {
-                        Capsule().fill(Color.white.opacity(0.12))
+                        Capsule().fill(Color(red: 0.2, green: 0.2, blue: 0.2))
                         Capsule()
                             .fill(DesignTokens.Color.brandPrimary)
-                            .frame(width: max(0, geo.size.width - 64) * 0.35)
+                            .frame(width: 650)
                     }
+                    .frame(maxWidth: .infinity)
                     .frame(height: 6)
                     HStack(spacing: 16) {
                         chromeButton("< Back")
@@ -624,7 +630,7 @@ struct TVParityPlayerFixtureView: View {
                         .foregroundStyle(DesignTokens.Color.textSecondary)
                 }
                 .padding(.horizontal, 32)
-                .padding(.bottom, 32)
+                .padding(.bottom, 33)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -632,15 +638,21 @@ struct TVParityPlayerFixtureView: View {
     }
 
     private func chromeButton(_ label: String, primary: Bool = false) -> some View {
+        // SPA TransportButton: pad 8/24 + 3px border. full33 NAT still ~14px narrow → pad 30
         Text(label)
             .font(.system(size: 14, weight: .bold))
             .foregroundStyle(DesignTokens.Color.textPrimary)
-            .padding(.horizontal, 28)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 30)
+            .padding(.vertical, 8)
             .background(
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(primary ? DesignTokens.Color.brandPrimary : Color(white: 0.16))
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(primary ? DesignTokens.Color.brandPrimary : Color(red: 0.2, green: 0.2, blue: 0.2))
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.clear, lineWidth: 3)
+            )
+            .padding(3)
     }
 }
 
