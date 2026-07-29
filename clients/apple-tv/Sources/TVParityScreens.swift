@@ -429,183 +429,217 @@ struct TVParityRootView: View {
 
 
 /// Deterministic device-code pairing chrome for parity captures (no network).
-/// Matches SPA `DeviceLogin` (TV `/login?platform=android-tv`) layout:
-/// auth-card with logo, "Link this TV", QR + instructions + monospaced code.
+/// SPA DeviceLogin TV layout measured @ 1920×1080:
+/// content bright bbox ≈ (854, 252)–(1660, 806); left glow at x≈0.12.
 struct TVParityPairingFixtureView: View {
     var body: some View {
-        ZStack {
-            // SPA `.auth-page` stage
-            DesignTokens.Color.backgroundBase.ignoresSafeArea()
-            // Soft left glow (SPA `.auth-backdrop`)
-            RadialGradient(
-                colors: [
-                    DesignTokens.Color.brandPrimary.opacity(0.18),
-                    .clear,
-                ],
-                center: UnitPoint(x: 0.18, y: 0.48),
-                startRadius: 20,
-                endRadius: 520
-            )
-            .ignoresSafeArea()
+        GeometryReader { geo in
+            ZStack(alignment: .topLeading) {
+                DesignTokens.Color.backgroundBase
+                // SPA `.auth-backdrop` soft left glow
+                RadialGradient(
+                    colors: [
+                        Color(red: 0.55, green: 0.35, blue: 0.42).opacity(0.45),
+                        Color(red: 0.35, green: 0.22, blue: 0.28).opacity(0.22),
+                        .clear,
+                    ],
+                    center: UnitPoint(x: 0.12, y: 0.48),
+                    startRadius: 30,
+                    endRadius: geo.size.width * 0.38
+                )
 
-            HStack(spacing: 0) {
-                Spacer(minLength: 0)
-                    .frame(maxWidth: .infinity)
-                // Right auth card column (SPA grid ~55/45 split)
+                // Card content: SPA right column starts ~x 528 (0.55/2fr),
+                // card content measured from ~854 with width ~800.
                 VStack(alignment: .leading, spacing: 0) {
-                    // Logo
-                    HStack(spacing: 10) {
-                        Circle()
-                            .fill(DesignTokens.Color.brandPrimary)
-                            .frame(width: 36, height: 36)
-                            .overlay(
-                                Image(systemName: "play.fill")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .offset(x: 1)
-                            )
+                    HStack(spacing: 8) {
+                        ZStack {
+                            Circle()
+                                .fill(DesignTokens.Color.brandPrimary)
+                                .frame(width: 32, height: 32)
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(.white)
+                                .offset(x: 1)
+                        }
                         HStack(spacing: 0) {
                             Text("Play")
                                 .foregroundStyle(DesignTokens.Color.brandPrimary)
                             Text("arr")
                                 .foregroundStyle(DesignTokens.Color.textPrimary)
                         }
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(.system(size: 18, weight: .semibold))
                     }
-                    .padding(.bottom, 56)
+                    .padding(.bottom, 48)
 
                     Text("SIGN IN ON ANOTHER DEVICE")
                         .font(.system(size: 11, weight: .heavy))
-                        .tracking(1.6)
+                        .tracking(1.8)
                         .foregroundStyle(DesignTokens.Color.textDisabled)
                     Text("Link this TV")
-                        .font(.system(size: 72, weight: .medium))
-                        .tracking(-4)
+                        .font(.system(size: 68, weight: .medium))
+                        .tracking(-3.5)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
-                        .padding(.top, 10)
+                        .padding(.top, 8)
 
-                    HStack(alignment: .center, spacing: 48) {
-                        // QR placeholder (SPA white 240×240 tile)
+                    HStack(alignment: .center, spacing: 40) {
+                        // SPA `.device-login-qr` 240×240, 12px white border → 264 outer
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
                             .fill(Color.white)
                             .frame(width: 240, height: 240)
-                            .overlay {
-                                // Simplified QR pattern (not a real code)
-                                VStack(spacing: 10) {
-                                    HStack(spacing: 10) {
-                                        qrFinder()
-                                        Spacer(minLength: 0)
-                                        qrFinder()
-                                    }
-                                    Spacer(minLength: 0)
-                                    HStack(spacing: 10) {
-                                        qrFinder()
-                                        Spacer(minLength: 0)
-                                        RoundedRectangle(cornerRadius: 2)
-                                            .fill(Color.black)
-                                            .frame(width: 48, height: 48)
-                                    }
-                                }
-                                .padding(22)
-                            }
+                            .overlay { qrModules }
+                            .padding(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                    .fill(Color.white)
+                            )
 
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 10) {
                             Text("Scan the QR code, or visit")
-                                .font(.system(size: 16, weight: .regular))
+                                .font(.system(size: 15, weight: .regular))
                                 .foregroundStyle(DesignTokens.Color.textSecondary)
                             Text(TVParityFixtures.verificationURI)
-                                .font(.system(size: 22, weight: .bold))
+                                .font(.system(size: 20, weight: .bold))
                                 .foregroundStyle(DesignTokens.Color.textPrimary)
                             Text("and enter the code")
-                                .font(.system(size: 16, weight: .regular))
+                                .font(.system(size: 15, weight: .regular))
                                 .foregroundStyle(DesignTokens.Color.textSecondary)
                             Text(TVParityFixtures.userCode)
-                                .font(.system(size: 56, weight: .bold, design: .monospaced))
-                                .tracking(6)
+                                .font(.system(size: 52, weight: .bold, design: .monospaced))
+                                .tracking(5)
                                 .foregroundStyle(DesignTokens.Color.textPrimary)
                             Text("Waiting for approval…")
                                 .font(.system(size: 13, weight: .regular))
                                 .foregroundStyle(DesignTokens.Color.textDisabled)
-                                .padding(.top, 4)
+                                .padding(.top, 2)
                         }
                     }
-                    .padding(.top, 36)
+                    .padding(.top, 32)
                 }
-                .padding(.trailing, 120)
-                .frame(maxWidth: 920, alignment: .leading)
+                // Measured SPA content origin ≈ (854, 252)
+                .padding(.leading, geo.size.width * 0.445)
+                .padding(.top, geo.size.height * 0.233)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .ignoresSafeArea()
     }
 
-    private func qrFinder() -> some View {
-        RoundedRectangle(cornerRadius: 2)
-            .stroke(Color.black, lineWidth: 6)
-            .frame(width: 52, height: 52)
-            .overlay(
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(Color.black)
-                    .frame(width: 22, height: 22)
-            )
+    /// Dense monochrome module grid approximating SPA QR tile (not a real code).
+    private var qrModules: some View {
+        let n = 11
+        return Canvas { context, size in
+            let cell = size.width / CGFloat(n)
+            // Finder patterns
+            for (fx, fy) in [(0, 0), (n - 3, 0), (0, n - 3)] {
+                let r = CGRect(
+                    x: CGFloat(fx) * cell,
+                    y: CGFloat(fy) * cell,
+                    width: cell * 3,
+                    height: cell * 3
+                )
+                context.stroke(
+                    Path(roundedRect: r.insetBy(dx: cell * 0.15, dy: cell * 0.15), cornerRadius: 1),
+                    with: .color(.black),
+                    lineWidth: cell * 0.35
+                )
+                context.fill(
+                    Path(
+                        roundedRect: CGRect(
+                            x: r.midX - cell * 0.45,
+                            y: r.midY - cell * 0.45,
+                            width: cell * 0.9,
+                            height: cell * 0.9
+                        ),
+                        cornerRadius: 0.5
+                    ),
+                    with: .color(.black)
+                )
+            }
+            // Scattered modules (deterministic pseudo-random)
+            var seed: UInt64 = 0xA5C3_2345
+            for y in 0..<n {
+                for x in 0..<n {
+                    // skip finders
+                    if (x < 3 && y < 3) || (x >= n - 3 && y < 3) || (x < 3 && y >= n - 3) {
+                        continue
+                    }
+                    seed = seed &* 1_103_515_245 &+ 12_345
+                    if seed % 3 == 0 {
+                        let r = CGRect(
+                            x: CGFloat(x) * cell + cell * 0.12,
+                            y: CGFloat(y) * cell + cell * 0.12,
+                            width: cell * 0.76,
+                            height: cell * 0.76
+                        )
+                        context.fill(Path(r), with: .color(.black))
+                    }
+                }
+            }
+        }
+        .padding(18)
     }
 }
 
 /// Deterministic player chrome for parity captures (ui-tv PlayerScreen layout).
+/// Measured SPA chrome: title y≈915, progress y≈956–962, buttons below, pad 32.
 struct TVParityPlayerFixtureView: View {
     var body: some View {
-        ZStack {
-            // SPA player stage: dark base + soft brand radial (no live media frame).
-            DesignTokens.Color.backgroundBase.ignoresSafeArea()
-            RadialGradient(
-                colors: [
-                    DesignTokens.Color.brandPrimary.opacity(0.28),
-                    DesignTokens.Color.backgroundBase.opacity(0.2),
-                    DesignTokens.Color.backgroundBase,
-                ],
-                center: UnitPoint(x: 0.35, y: 0.28),
-                startRadius: 40,
-                endRadius: 700
-            )
-            .ignoresSafeArea()
+        GeometryReader { geo in
+            ZStack(alignment: .bottomLeading) {
+                DesignTokens.Color.backgroundBase
+                // Soft brand radial matching SPA player stage (upper-center glow).
+                RadialGradient(
+                    colors: [
+                        Color(red: 0.45, green: 0.18, blue: 0.28).opacity(0.55),
+                        Color(red: 0.25, green: 0.12, blue: 0.18).opacity(0.28),
+                        DesignTokens.Color.backgroundBase.opacity(0.05),
+                        DesignTokens.Color.backgroundBase,
+                    ],
+                    center: UnitPoint(x: 0.42, y: 0.32),
+                    startRadius: 20,
+                    endRadius: geo.size.width * 0.55
+                )
 
-            VStack(alignment: .leading, spacing: DesignTokens.Spacing.md) {
-                Spacer()
-                Text("10 Brambleford Lane")
-                    .font(TVTheme.titleFont())
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                GeometryReader { geo in
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("10 Brambleford Lane")
+                        .font(.system(size: 24, weight: .bold))
+                        .tracking(-0.4)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                    // Progress 6px, fill 35%
                     ZStack(alignment: .leading) {
                         Capsule().fill(Color.white.opacity(0.12))
                         Capsule()
                             .fill(DesignTokens.Color.brandPrimary)
-                            .frame(width: geo.size.width * 0.35)
+                            .frame(width: max(0, geo.size.width - 64) * 0.35)
                     }
+                    .frame(height: 6)
+                    HStack(spacing: 16) {
+                        chromeButton("< Back")
+                        chromeButton("Play", primary: true)
+                        chromeButton("Forward >")
+                        chromeButton("Exit")
+                    }
+                    Text("paused")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
                 }
-                .frame(height: 6)
-                HStack(spacing: DesignTokens.Spacing.md) {
-                    chromeButton("< Back")
-                    chromeButton("Play", primary: true)
-                    chromeButton("Forward >")
-                    chromeButton("Exit")
-                }
-                Text("paused")
-                    .font(TVTheme.captionFont())
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
+                .padding(.horizontal, 32)
+                .padding(.bottom, 32)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(DesignTokens.Spacing.xl)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .ignoresSafeArea()
     }
 
     private func chromeButton(_ label: String, primary: Bool = false) -> some View {
         Text(label)
-            .font(TVTheme.bodyFont(emphasis: true))
+            .font(.system(size: 14, weight: .bold))
             .foregroundStyle(DesignTokens.Color.textPrimary)
-            .padding(.horizontal, DesignTokens.Spacing.xl)
-            .padding(.vertical, DesignTokens.Spacing.sm)
+            .padding(.horizontal, 28)
+            .padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous)
-                    .fill(primary ? DesignTokens.Color.brandPrimary : DesignTokens.Color.backgroundRaised)
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(primary ? DesignTokens.Color.brandPrimary : Color(white: 0.16))
             )
     }
 }
