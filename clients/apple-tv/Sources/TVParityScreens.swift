@@ -75,17 +75,102 @@ enum TVParityFixtures {
             ("30 Sample Nights: The Sequel", .movie, "The sequel.", "Horror"),
             ("47 Sample Metres", .movie, "Sharks and a shark cage.", "Thriller"),
         ]
-        return titles.enumerated().map { index, item in
+        return makeWorks(titles, idBase: 1)
+    }
+
+    /// Library-directory fixtures aligned with SPA suite reference frames
+    /// (series → Test Series J first; music → Sample Band Two first).
+    static func libraryWorks(kind: WorkKind?) -> [Work] {
+        switch kind {
+        case .artist:
+            return makeWorks(musicTitles, idBase: 100)
+        case .series, .author, .none:
+            // `/library` redirects to series; detail-book shares that frame.
+            return makeWorks(seriesTitles, idBase: 200)
+        case .movie:
+            return makeWorks(movieTitles, idBase: 300)
+        case .site:
+            return makeWorks(seriesTitles, idBase: 400)
+        }
+    }
+
+    private static let seriesTitles: [(String, WorkKind, String, String)] = [
+        // genres: primary kicker + optional secondary for preview meta line
+        (
+            "Test Series J",
+            .series,
+            "In 1963, all the prisoners and guards mysteriously disappear from Test Series J. In the present day, they resurface and a secret agency are tasked with re-capturing them.",
+            "Action|Crime"
+        ),
+        ("Test Series K", .series, "A teenage spy inherits a dangerous mission.", "Action"),
+        ("Test Series L", .series, "Consciousness is digital and bodies are interchangeable.", "Sci-Fi"),
+        ("Test Series M", .series, "An animated spy-family sitcom.", "Comedy"),
+        ("Test Series N", .series, "Old gods and new clash in modern America.", "Fantasy"),
+        ("Test Series V", .series, "A vampire with a soul fights for redemption.", "Drama"),
+        ("Test Series W", .series, "A tech billionaire rebuilds a police precinct.", "Action"),
+        ("Test Series X", .series, "A billionaire vigilante returns to Starling City.", "Action"),
+        ("Test Series O", .series, "A young Avatar must master the four elements.", "Adventure"),
+        ("Test Series P", .series, "A retired superhero returns to protect his city.", "Action"),
+        ("Sample Movie Foxtrot", .series, "Wakanda forever.", "Action"),
+        ("Test Series S", .series, "A criminal mastermind helps the FBI.", "Crime"),
+    ]
+
+    private static let musicTitles: [(String, WorkKind, String, String)] = [
+        (
+            "Sample Band Two",
+            .artist,
+            "Sample Band Two are an Australian rock band formed in Sydney in 1973. Their music has been variously described as hard rock, blues rock and heavy metal, although the band calls it simply \"rock and roll\". They are cited as a formative influence on the new…",
+            "Hard Rock|Rock"
+        ),
+        ("Sample Artist A", .artist, "Swedish metal band with pop-metal hooks.", "Metal"),
+        ("Sample Artist B", .artist, "American rock band from Wilkes-Barre.", "Rock"),
+        ("Sample Artist C", .artist, "Electronic rock project of Klayton.", "Electronic"),
+        ("Sample Artist H", .artist, "American hard rock singer-songwriter.", "Hard Rock"),
+        ("Sample Artist D", .artist, "South African rap-rave group.", "Hip-Hop"),
+        ("Sample Artist I", .artist, "American rapper from Detroit.", "Hip-Hop"),
+        ("Sample Artist F", .artist, "American gothic rock band.", "Rock"),
+        ("Sample Artist G", .artist, "American Christian rock band.", "Rock"),
+        ("Sample Artist E", .artist, "American heavy metal band.", "Metal"),
+        ("Sample Artist K", .artist, "French progressive death metal band.", "Metal"),
+        ("Sample Artist J", .artist, "American hard rock band led by Lzzy Hale.", "Hard Rock"),
+    ]
+
+    private static let movieTitles: [(String, WorkKind, String, String)] = [
+        (
+            "10 Brambleford Lane",
+            .movie,
+            "After a catastrophic car crash, a young woman wakes up in a survivalist's underground bunker, where he claims to have saved her from an apocalyptic attack that has left the outside world uninhabitable.",
+            "Thriller"
+        ),
+        ("10,000 Sample", .movie, "A prehistoric adventure.", "Action"),
+        ("2001: A Sample Voyage", .movie, "A voyage to Jupiter.", "Sci-Fi"),
+        ("Sample Film 2012", .movie, "The end of the world.", "Action"),
+        ("28 Sample Years", .movie, "The rage virus returns.", "Horror"),
+        ("28 Sample Years: The Sequel", .movie, "The next chapter.", "Horror"),
+        ("30 Sample Nights", .movie, "Vampires in the arctic dark.", "Horror"),
+        ("30 Sample Nights: The Sequel", .movie, "The sequel.", "Horror"),
+        ("47 Sample Metres", .movie, "Sharks and a shark cage.", "Thriller"),
+        ("Sample Movie Echo", .movie, "Silence is survival.", "Horror"),
+        ("Voyage", .movie, "Linguists contact an alien species.", "Sci-Fi"),
+        ("Sample Movie 2049", .movie, "A new blade runner unearths a secret.", "Sci-Fi"),
+    ]
+
+    private static func makeWorks(
+        _ titles: [(String, WorkKind, String, String)],
+        idBase: Int
+    ) -> [Work] {
+        titles.enumerated().map { index, item in
             Work(
-                id: UUID(uuidString: String(format: "00000000-0000-4000-8000-%012d", index + 1))!,
+                id: UUID(uuidString: String(format: "00000000-0000-4000-8000-%012d", idBase + index))!,
                 kind: item.1,
                 title: item.0,
                 sortTitle: item.0.lowercased(),
                 overview: item.2,
                 images: [],
-                genres: [item.3],
+                genres: item.3.split(separator: "|").map(String.init),
                 tags: [],
-                addedAt: Date(timeIntervalSince1970: 1_700_000_000 + Double(index)),
+                // 2026-01-15 + index days — matches SPA suite year labels.
+                addedAt: Date(timeIntervalSince1970: 1_768_435_200 + Double(index) * 86_400),
                 monitored: true,
                 availability: .available
             )

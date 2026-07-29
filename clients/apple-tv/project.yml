@@ -14,6 +14,9 @@ targets:
     sources:
       - path: Sources
       - path: Supporting/Assets.xcassets
+      - path: Supporting/Fixtures
+        buildPhase: resources
+        type: folder
     info:
       path: Supporting/Info.plist
       properties:

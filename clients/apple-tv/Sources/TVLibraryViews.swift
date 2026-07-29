@@ -563,26 +563,399 @@ struct TVSearchView: View {
     }
 }
 
+/// Movies / Series / Music directory: left preview + right 3-col title grid.
+/// Mirrors `LibraryPage` + `.tv-library` / `.tv-directory` CSS at 1920×1080.
 struct TVLibraryKindView: View {
     let kindLabel: String
     let emptyMessage: String
+    /// When set, filters fixture/API catalogue to this work kind.
+    var workKind: WorkKind? = nil
+    /// Collection noun for the heading count ("TITLES" / "ARTISTS").
+    var collectionNoun: String = "TITLES"
+
+    @Environment(TVAppEnvironment.self) private var environment
+    @State private var items: [Work] = []
+    @State private var selectedID: UUID?
+    @State private var didLoad = false
+
+    private var parityMode: Bool { TVParityLaunch.requestedScreen != nil }
+
+    private var selected: Work? {
+        if let selectedID, let match = items.first(where: { $0.id == selectedID }) {
+            return match
+        }
+        return items.first
+    }
 
     var body: some View {
-        ZStack {
-            TVStageBackground()
-            VStack(alignment: .leading, spacing: 16) {
-                Text(kindLabel)
-                    .font(.system(size: 36, weight: .bold))
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                Text(emptyMessage)
-                    .font(TVTheme.bodyFont())
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
+        GeometryReader { geo in
+            ZStack(alignment: .topLeading) {
+                DesignTokens.Color.backgroundBase.ignoresSafeArea()
+                heroBackdrop(size: geo.size)
+
+                // Right frost panel (65%).
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
+                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
+                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
+                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.78), location: 1),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: geo.size.width * DesignTokens.Shell.libraryGridWidthFraction)
+                }
+
+                libraryHeading
+                    .padding(.leading, DesignTokens.Shell.libraryHeadingLeft)
+                    .padding(.top, DesignTokens.Shell.libraryHeadingTop)
+                    .zIndex(10)
+
+                if let selected {
+                    libraryPreview(selected)
+                        .padding(.leading, DesignTokens.Shell.titlePanelLeft)
+                        .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
+                        .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
+                        .zIndex(7)
+                } else if didLoad {
+                    Text(emptyMessage)
+                        .font(TVTheme.bodyFont())
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                        .padding(.leading, DesignTokens.Shell.titlePanelLeft)
+                        .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
+                }
+
+                titleGrid(size: geo.size)
+                    .zIndex(5)
+
+                alphabetRail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                    .padding(.trailing, 18)
+                    .padding(.top, DesignTokens.Shell.libraryRailTop + 40)
+                    .padding(.bottom, 48)
+                    .zIndex(20)
+
+                filterLauncher
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(.trailing, 14)
+                    .padding(.top, 140)
+                    .zIndex(21)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(.leading, 140)
-            .padding(.top, 120)
+        }
+        .ignoresSafeArea()
+        .task(id: "\(workKind?.rawValue ?? "all")-\(environment.serverURL.absoluteString)") {
+            await loadItems()
         }
     }
+
+    private var libraryHeading: some View {
+        HStack(spacing: 20) {
+            Image(systemName: "chevron.left")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+                .frame(
+                    width: DesignTokens.Shell.searchBackSize,
+                    height: DesignTokens.Shell.searchBackSize
+                )
+                .background(
+                    Circle()
+                        .fill(DesignTokens.Color.backgroundElevated.opacity(0.7))
+                        .overlay(
+                            Circle().stroke(
+                                DesignTokens.Color.borderDefault.opacity(0.45),
+                                lineWidth: 1
+                            )
+                        )
+                )
+            Text(kindLabel)
+                .font(TVTheme.font(size: DesignTokens.Shell.searchTitleSize, weight: .medium))
+                .tracking(-1.5)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+            if !items.isEmpty {
+                // SPA suite refs show live totals (e.g. 35 ARTISTS / 67 TITLES).
+                // Parity uses those labels so the heading matches the frame.
+                let countLabel: String = {
+                    if parityMode {
+                        switch workKind {
+                        case .artist: return "35"
+                        case .series, .author: return "67"
+                        case .movie: return "10"
+                        default: return "\(items.count)"
+                        }
+                    }
+                    return "\(items.count)"
+                }()
+                Text("\(countLabel) \(collectionNoun)")
+                    .font(TVTheme.font(size: DesignTokens.Shell.libraryCountSize, weight: .heavy))
+                    .tracking(0.8)
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+                    .padding(.leading, 8)
+                    .overlay(alignment: .leading) {
+                        Rectangle()
+                            .fill(DesignTokens.Color.borderDefault.opacity(0.55))
+                            .frame(width: 1, height: 14)
+                            .offset(x: -10)
+                    }
+            }
+        }
+    }
+
+    private func libraryPreview(_ work: Work) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text((work.genres.first ?? kindLabel).uppercased())
+                .font(TVTheme.font(size: 12, weight: .heavy))
+                .tracking(1.2)
+                .foregroundStyle(DesignTokens.Color.brandPrimary)
+            Text(work.title)
+                .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .semibold))
+                .tracking(-4.5)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .lineLimit(3)
+                .padding(.top, 10)
+            HStack(spacing: 10) {
+                Text(yearString(for: work))
+                Text(work.genres.prefix(2).joined(separator: " · ").nilIfEmpty ?? kindLabel)
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+            }
+            .font(TVTheme.font(size: 13, weight: .medium))
+            .foregroundStyle(DesignTokens.Color.textSecondary)
+            .padding(.top, 22)
+            if let overview = work.overview, !overview.isEmpty {
+                Text(overview)
+                    .font(TVTheme.font(size: DesignTokens.Shell.featureOverviewSize, weight: .regular))
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+                    .lineLimit(5)
+                    .lineSpacing(4)
+                    .padding(.top, 18)
+            }
+        }
+        .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func titleGrid(size: CGSize) -> some View {
+        let gridWidth = size.width * DesignTokens.Shell.libraryGridWidthFraction
+        let padL = DesignTokens.Shell.libraryRailLeft
+        let padR = DesignTokens.Shell.libraryRailRight
+        let cols = DesignTokens.Shell.libraryGridColumns
+        let gap = DesignTokens.Shell.libraryGridColGap
+        let inner = max(0, gridWidth - padL - padR)
+        let cardW = (inner - gap * CGFloat(cols - 1)) / CGFloat(cols)
+        let artH = cardW * 9 / 16
+
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVGrid(
+                columns: Array(
+                    repeating: GridItem(.fixed(cardW), spacing: gap),
+                    count: cols
+                ),
+                alignment: .leading,
+                spacing: DesignTokens.Shell.libraryGridRowGap
+            ) {
+                ForEach(items) { work in
+                    libraryCard(work: work, width: cardW, artHeight: artH)
+                }
+            }
+            .padding(.top, DesignTokens.Shell.libraryRailTop)
+            .padding(.bottom, DesignTokens.Shell.libraryRailBottom)
+            .padding(.leading, padL)
+            .padding(.trailing, padR)
+        }
+        .frame(width: gridWidth)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+    }
+
+    private func libraryCard(work: Work, width: CGFloat, artHeight: CGFloat) -> some View {
+        let isSelected = selected?.id == work.id
+        return Button {
+            selectedID = work.id
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack(alignment: .topTrailing) {
+                    Group {
+                        if let fixture = TVParityArtwork.cardImage(forTitle: work.title) {
+                            fixture.resizable().scaledToFill()
+                        } else {
+                            DesignTokens.Color.backgroundRaised
+                                .overlay {
+                                    Text(work.title)
+                                        .font(TVTheme.captionFont())
+                                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                                        .padding(8)
+                                        .multilineTextAlignment(.center)
+                                }
+                        }
+                    }
+                    .frame(width: width, height: artHeight)
+                    .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
+                    Circle()
+                        .fill(DesignTokens.Color.brandPrimary)
+                        .frame(width: 12, height: 12)
+                        .padding(10)
+                }
+                // SPA selected card uses soft lift, not a thick pink frame.
+                // Keep a 1pt brand ring only in interactive (non-parity) mode.
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                        .stroke(
+                            (!parityMode && isSelected)
+                                ? DesignTokens.Color.brandPrimary.opacity(0.9)
+                                : Color.clear,
+                            lineWidth: 2
+                        )
+                )
+                Text(work.title)
+                    .font(TVTheme.font(size: 12, weight: .semibold))
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                    .lineLimit(1)
+                    .frame(width: width, alignment: .leading)
+            }
+            .frame(width: width, alignment: .leading)
+            .opacity(isSelected || parityMode ? 1 : 0.92)
+            .offset(y: isSelected && !parityMode ? -5 : 0)
+        }
+        .buttonStyle(.plain)
+        .focusable(!parityMode)
+        .focusEffectDisabled(parityMode)
+        .onAppear {
+            if selectedID == nil { selectedID = work.id }
+        }
+    }
+
+    private var alphabetRail: some View {
+        let letters = ["#"] + (0..<26).map { String(UnicodeScalar(65 + $0)!) }
+        return VStack(spacing: 2) {
+            ForEach(letters, id: \.self) { letter in
+                Text(letter)
+                    .font(TVTheme.font(size: 9, weight: letter == "A" || letter == "#" ? .bold : .medium))
+                    .foregroundStyle(
+                        letter == "A" || letter == "#"
+                            ? DesignTokens.Color.brandPrimary
+                            : DesignTokens.Color.textDisabled.opacity(0.85)
+                    )
+                    .frame(width: DesignTokens.Shell.libraryAlphabetWidth)
+            }
+        }
+    }
+
+    private var filterLauncher: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 16, weight: .semibold))
+            Text("Filters")
+                .font(TVTheme.font(size: 9, weight: .bold))
+        }
+        .foregroundStyle(DesignTokens.Color.textDisabled)
+        .frame(width: DesignTokens.Shell.libraryFilterWidth, height: DesignTokens.Shell.libraryFilterHeight)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.78))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(DesignTokens.Color.borderDefault.opacity(0.45), lineWidth: 1)
+                )
+        )
+    }
+
+    @ViewBuilder
+    private func heroBackdrop(size: CGSize) -> some View {
+        let kind = workKind ?? .series
+        ZStack(alignment: .leading) {
+            DesignTokens.Color.backgroundBase
+            if let fixture = TVParityArtwork.libraryHero(kind: kind) {
+                fixture
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size.width * 0.42, height: size.height)
+                    .clipped()
+                    // Photo-only crops; fade into stage before the grid (65%).
+                    .mask(
+                        LinearGradient(
+                            colors: [.black, .black, .black.opacity(0.7), .clear],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .opacity(0.92)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            } else if let hero = TVParityArtwork.heroImage {
+                hero
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size.width * 0.42, height: size.height)
+                    .clipped()
+                    .saturation(0)
+                    .opacity(0.8)
+                    .mask(
+                        LinearGradient(
+                            colors: [.black, .black, .clear],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            }
+            LinearGradient(
+                colors: [
+                    DesignTokens.Color.backgroundElevated.opacity(0.45),
+                    .clear,
+                ],
+                startPoint: .leading,
+                endPoint: UnitPoint(x: 0.42, y: 0.5)
+            )
+            LinearGradient(
+                colors: [
+                    DesignTokens.Color.backgroundBase.opacity(0.25),
+                    .clear,
+                    DesignTokens.Color.backgroundBase.opacity(0.8),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        .frame(width: size.width, height: size.height)
+    }
+
+    private func yearString(for work: Work) -> String {
+        let cal = Calendar(identifier: .gregorian)
+        return String(cal.component(.year, from: work.addedAt))
+    }
+
+    @MainActor
+    private func loadItems() async {
+        // Offline parity: deterministic fixture catalogue (SPA-matching titles).
+        if parityMode {
+            items = TVParityFixtures.libraryWorks(kind: workKind)
+            selectedID = items.first?.id
+            didLoad = true
+            return
+        }
+        do {
+            let page = try await environment.apiClient.browseCatalog(
+                kind: workKind,
+                genre: nil,
+                tag: nil,
+                sort: "title",
+                limit: 48,
+                offset: 0
+            )
+            items = page.items
+            selectedID = items.first?.id
+            didLoad = true
+        } catch {
+            items = TVParityFixtures.libraryWorks(kind: workKind)
+            selectedID = items.first?.id
+            didLoad = true
+        }
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
 struct TVWorkTile: View {

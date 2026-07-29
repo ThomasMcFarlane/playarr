@@ -24,6 +24,7 @@
 6A1B2C3D4E5F60718293A4C1 /* PlayarrLogoAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1B2C3D4E5F60718293A4C0 /* PlayarrLogoAsset.swift */; };
 6A1B2C3D4E5F60718293A4D1 /* PlayarrAvatarAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1B2C3D4E5F60718293A4D0 /* PlayarrAvatarAsset.swift */; };
 6A1B2C3D4E5F60718293A4D3 /* TVParityArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1B2C3D4E5F60718293A4D2 /* TVParityArtwork.swift */; };
+6A1B2C3D4E5F60718293A4E1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6A1B2C3D4E5F60718293A4E0 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,6 +57,7 @@
 6A1B2C3D4E5F60718293A4C0 /* PlayarrLogoAsset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayarrLogoAsset.swift; sourceTree = "<group>"; };
 6A1B2C3D4E5F60718293A4D0 /* PlayarrAvatarAsset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayarrAvatarAsset.swift; sourceTree = "<group>"; };
 6A1B2C3D4E5F60718293A4D2 /* TVParityArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVParityArtwork.swift; sourceTree = "<group>"; };
+6A1B2C3D4E5F60718293A4E0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = Supporting/Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -122,6 +124,7 @@
 			children = (
 				DB2B72D2056E6445413753C7 /* Packages */,
 				C58245455747F1533147EFAD /* Sources */,
+				6A1B2C3D4E5F60718293A4E0 /* Assets.xcassets */,
 				66A396CCE97C43937D7A9BD7 /* Tests */,
 				3C10A307C8E1D18D0055C05D /* Products */,
 			);
@@ -136,6 +139,7 @@
 			buildPhases = (
 				FEF49D8951F4C942BCFB42A2 /* Sources */,
 				5A7117D1999A629F0214700A /* Frameworks */,
+				6A1B2C3D4E5F60718293A4E2 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -200,6 +204,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		6A1B2C3D4E5F60718293A4E2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6A1B2C3D4E5F60718293A4E1 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		6E2D563667F6EE146BF2D230 /* Sources */ = {

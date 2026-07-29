@@ -185,6 +185,35 @@ enum DesignTokens {
         static let searchEmptyArtSize: CGFloat = 132
         /// Right rail is 62% of stage (`.tv-rail-surface` width).
         static let searchRailWidthFraction: CGFloat = 0.62
+
+        // MARK: Library directory (`.tv-library` / `.tv-directory` @ 1920×1080)
+
+        /// Heading left matches search: `clamp(102px, 8vw, 160px)` → 154
+        static let libraryHeadingLeft: CGFloat = 154
+        /// Heading top: `clamp(34px, 5.2vh, 66px)` → 56
+        static let libraryHeadingTop: CGFloat = 56
+        /// Count label size ~ `clamp(0.5rem, 0.58vw, 0.72rem)` → 11
+        static let libraryCountSize: CGFloat = 11
+        /// Grid panel width 65% (`.tv-library-grid-panel`)
+        static let libraryGridWidthFraction: CGFloat = 0.65
+        /// `--library-rail-top: clamp(128px, 15vh, 174px)` → 162
+        static let libraryRailTop: CGFloat = 162
+        /// `--library-rail-bottom: clamp(48px, 6vh, 78px)` → 65
+        static let libraryRailBottom: CGFloat = 65
+        /// `--library-rail-left: clamp(28px, 2.8vw, 54px)` → 54
+        static let libraryRailLeft: CGFloat = 54
+        /// Right pad for alphabet/filters: edge 14 + control 62 + gap 30 ≈ 106
+        static let libraryRailRight: CGFloat = 106
+        /// Grid gap: row ~27, col ~26
+        static let libraryGridRowGap: CGFloat = 27
+        static let libraryGridColGap: CGFloat = 26
+        /// 3-column screen-medium default
+        static let libraryGridColumns: Int = 3
+        /// Alphabet rail width
+        static let libraryAlphabetWidth: CGFloat = 28
+        /// Filter launcher size ~62×72
+        static let libraryFilterWidth: CGFloat = 56
+        static let libraryFilterHeight: CGFloat = 68
     }
 
     /// Hex lock strings for unit tests (stage + arr).

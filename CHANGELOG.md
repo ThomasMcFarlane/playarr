@@ -9,6 +9,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV parity `detail-*` screens now open the SPA library directory
+  (movies / series / music) instead of work-detail chrome, with a left
+  preview + 3-column title grid matching `.tv-library` CSS geometry and
+  fixture artwork cropped from suite reference frames.
+
 - Android TV WebView profile auto-click is once-per-session
   (`sessionStorage`), so navigating to `/profiles` no longer bounces to home.
 

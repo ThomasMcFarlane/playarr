@@ -7,6 +7,12 @@ struct TVRootView: View {
 
     /// When `-PlayarrParityScreen` is set without a web-ref paint URL, force
     /// that tab so simctl captures hit the production SwiftUI path.
+    ///
+    /// Suite `webPath` maps:
+    ///   detail-movie → /movies (library directory)
+    ///   detail-episode → /series
+    ///   detail-track → /music
+    ///   detail-book → /library → /series
     private var parityForcedTab: TVNavTab? {
         guard TVParityLaunch.webRefBaseURL == nil,
               let screen = TVParityLaunch.requestedScreen else { return nil }
@@ -14,24 +20,19 @@ struct TVRootView: View {
         case .search: return .search
         case .homeRecentlyAdded: return .home
         case .settings: return .settings
+        case .detailMovie: return .movies
+        case .detailEpisode, .detailBook: return .series
+        case .detailTrack: return .music
         case .deviceCodePairing: return nil // full-screen gate
-        case .detailMovie, .detailEpisode, .detailTrack, .detailBook, .player:
-            return nil // handled as full-screen detail/player fixtures
+        case .player: return nil // full-screen player fixture
         }
     }
 
-    private var parityDetailWork: Work? {
+    private var parityPlayerWork: Work? {
         guard TVParityLaunch.webRefBaseURL == nil,
-              let screen = TVParityLaunch.requestedScreen else { return nil }
-        let works = TVParityFixtures.sampleWorks()
-        switch screen {
-        case .detailMovie: return works.first(where: { $0.kind == .movie }) ?? works.first
-        case .detailEpisode: return works.first(where: { $0.kind == .series }) ?? works.first
-        case .detailTrack: return works.first
-        case .detailBook: return works.first
-        case .player: return works.first(where: { $0.kind == .movie }) ?? works.first
-        default: return nil
-        }
+              TVParityLaunch.requestedScreen == .player else { return nil }
+        return TVParityFixtures.libraryWorks(kind: .movie).first
+            ?? TVParityFixtures.sampleWorks().first
     }
 
     var body: some View {
@@ -40,7 +41,7 @@ struct TVRootView: View {
 
             if TVParityLaunch.requestedScreen == .deviceCodePairing {
                 TVPairingGateView()
-            } else if let work = parityDetailWork {
+            } else if let work = parityPlayerWork {
                 NavigationStack {
                     TVWorkDetailView(work: work, apiClient: environment.apiClient)
                 }
@@ -86,13 +87,33 @@ struct TVRootView: View {
                     case .settings:
                         TVSettingsView()
                     case .series:
-                        TVLibraryKindView(kindLabel: "Series", emptyMessage: "No series in your library yet.")
+                        TVLibraryKindView(
+                            kindLabel: "Series",
+                            emptyMessage: "No series in your library yet.",
+                            workKind: .series,
+                            collectionNoun: "TITLES"
+                        )
                     case .movies:
-                        TVLibraryKindView(kindLabel: "Movies", emptyMessage: "No movies in your library yet.")
+                        TVLibraryKindView(
+                            kindLabel: "Movies",
+                            emptyMessage: "No movies in your library yet.",
+                            workKind: .movie,
+                            collectionNoun: "TITLES"
+                        )
                     case .music:
-                        TVLibraryKindView(kindLabel: "Music", emptyMessage: "No music in your library yet.")
+                        TVLibraryKindView(
+                            kindLabel: "Music",
+                            emptyMessage: "No music in your library yet.",
+                            workKind: .artist,
+                            collectionNoun: "ARTISTS"
+                        )
                     case .playlists:
-                        TVLibraryKindView(kindLabel: "Playlists", emptyMessage: "No playlists yet.")
+                        TVLibraryKindView(
+                            kindLabel: "Playlists",
+                            emptyMessage: "No playlists yet.",
+                            workKind: nil,
+                            collectionNoun: "PLAYLISTS"
+                        )
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
