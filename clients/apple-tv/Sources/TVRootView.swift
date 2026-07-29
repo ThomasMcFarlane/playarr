@@ -295,91 +295,140 @@ private struct TVProductionShell<Stage: View>: View {
     }
 }
 
-/// Full-screen pairing gate: SPA DeviceLogin chrome 1:1 via
-/// `TVDeviceLoginChrome`. Server URL is not typed here; playarr.app hosted
-/// link supplies it from the phone claim.
+/// Full-screen pairing gate: SPA `/login/qr` chrome 1:1 via
+/// `TVDeviceLoginChrome`. Server URL is not typed on the QR path; playarr.app
+/// hosted link supplies it from the phone claim. "Sign in manually" opens a
+/// direct server URL form (web `/login`).
 struct TVPairingGateView: View {
     @Environment(TVAppEnvironment.self) private var environment
     @State private var pairingTask: Task<Void, Never>?
+    @State private var showManual = false
+    /// Countdown for the active hosted code (web `device-login-timer`).
+    @State private var secondsRemaining: Int = 5 * 60
+
+    /// Hashable handle so onChange can reset the countdown when a new code arrives.
+    private var approvalUserCode: String? {
+        if case .awaitingApproval(let pending) = environment.pairingState {
+            return pending.userCode
+        }
+        return nil
+    }
 
     var body: some View {
-        chrome
-            .onAppear {
-                // Recover from cold launch and from URLSession "cancelled"
-                // failures without needing a remote click on Try again.
-                switch environment.pairingState {
-                case .signedOut, .failed:
-                    beginPairing()
-                default:
-                    break
-                }
+        Group {
+            if showManual {
+                TVDeviceLoginChrome(
+                    phase: .manualServer,
+                    onRetry: nil,
+                    onBackToQr: {
+                        showManual = false
+                        beginPairing(hosted: true)
+                    },
+                    onManualConnect: { beginPairing(hosted: false) }
+                )
+            } else {
+                chrome
             }
-            .onDisappear {
-                if case .signedIn = environment.pairingState { return }
-                pairingTask?.cancel()
-                pairingTask = nil
+        }
+        .onAppear {
+            switch environment.pairingState {
+            case .signedOut, .failed:
+                if !showManual { beginPairing(hosted: true) }
+            default:
+                break
             }
+        }
+        .onDisappear {
+            if case .signedIn = environment.pairingState { return }
+            pairingTask?.cancel()
+            pairingTask = nil
+        }
+        .onChange(of: approvalUserCode) { _, code in
+            guard code != nil,
+                  case .awaitingApproval(let pending) = environment.pairingState else { return }
+            secondsRemaining = min(5 * 60, max(1, Int(pending.expiresIn)))
+        }
+        .task(id: "\(approvalUserCode ?? "")-\(secondsRemaining)") {
+            guard case .awaitingApproval = environment.pairingState else { return }
+            guard secondsRemaining > 0 else {
+                beginPairing(hosted: true)
+                return
+            }
+            try? await Task.sleep(for: .seconds(1))
+            if !Task.isCancelled { secondsRemaining -= 1 }
+        }
     }
 
     @ViewBuilder
     private var chrome: some View {
         switch environment.pairingState {
         case .signedOut, .requestingCode:
-            TVDeviceLoginChrome(phase: .requesting, onRetry: nil)
+            TVDeviceLoginChrome(
+                phase: .requesting,
+                onRetry: nil,
+                onManual: { showManual = true }
+            )
         case .awaitingApproval(let pending):
             TVDeviceLoginChrome(
                 phase: .awaitingApproval(
                     userCode: pending.userCode,
-                    // Always show the app link, never a server/relay Host.
                     verificationURI: Self.displayVerificationURI(pending.verificationUri),
                     qr: AnyView(
                         TVLocalQRCodeImage(value: pending.verificationUriComplete)
-                    )
+                    ),
+                    secondsRemaining: secondsRemaining
                 ),
-                onRetry: nil
+                onRetry: nil,
+                onManual: { showManual = true }
             )
         case .signedIn:
             EmptyView()
         case .failed(let message):
             TVDeviceLoginChrome(
                 phase: .failed(message),
-                onRetry: { beginPairing() }
+                onRetry: { beginPairing(hosted: true) },
+                onManual: { showManual = true }
             )
         }
     }
 
-    private func beginPairing() {
+    private func beginPairing(hosted: Bool) {
         pairingTask?.cancel()
-        pairingTask = Task { await environment.startPairing() }
+        pairingTask = Task { await environment.startPairing(forceHosted: hosted) }
     }
 
     /// On-screen "visit …" line is always the playarr.app app link, matching
     /// live `/login/qr`. Direct-server Host/relay URLs stay out of the UI.
     static func displayVerificationURI(_ uri: String) -> String {
-        if uri.hasPrefix("https://playarr.app/link") || uri.hasPrefix("http://playarr.app/link") {
-            return "https://playarr.app/link"
-        }
+        _ = uri
         return "https://playarr.app/link"
     }
 }
 
-// MARK: - Device login chrome (live /login/qr)
+// MARK: - Device login chrome (live /login/qr @ 1920×1080)
 
-/// Production pairing chrome matches live web `/login/qr`
-/// (`ProfileAuthLayout` + `TvStageChrome` + embedded `DeviceLogin`): stage
-/// chrome (logo + theme + language), centred column, Welcome home / Sign in
-/// to Playarr, QR tile above code. Parity freezes still use measured
-/// left-rail geometry via `TVParityPairingFixtureView`.
+/// 1:1 with measured web `/login/qr` (`ProfileAuthLayout` + `TvStageChrome` +
+/// embedded `DeviceLogin`). Geometry from Playwright CDP @ 1920×1080.
 struct TVDeviceLoginChrome: View {
     enum Phase {
         case requesting
-        case awaitingApproval(userCode: String, verificationURI: String, qr: AnyView)
+        case awaitingApproval(
+            userCode: String,
+            verificationURI: String,
+            qr: AnyView,
+            secondsRemaining: Int
+        )
         case failed(String)
+        case manualServer
     }
 
     let phase: Phase
     var onRetry: (() -> Void)?
+    var onManual: (() -> Void)?
+    var onBackToQr: (() -> Void)?
+    var onManualConnect: (() -> Void)?
 
+    @Environment(TVAppEnvironment.self) private var environment
     @Environment(TVDisplayPreferences.self) private var displayPreferences
 
     private var palette: TVAuthPalette {
@@ -388,169 +437,298 @@ struct TVDeviceLoginChrome: View {
 
     var body: some View {
         GeometryReader { geo in
+            let scaleX = geo.size.width / DesignTokens.Shell.canvasWidth
+            let scaleY = geo.size.height / DesignTokens.Shell.canvasHeight
+            // Prefer height-driven scale so 1920×1080 TV maps 1:1; clamp for
+            // odd sim aspect ratios without breaking positions.
+            let s = min(scaleX, scaleY)
+
             ZStack {
                 palette.bg
-                // Soft rose halo (web profiles-page wash).
                 RadialGradient(
                     colors: [
-                        palette.brandPink.opacity(palette.isDark ? 0.16 : 0.12),
-                        palette.brandPink.opacity(0.05),
+                        palette.brandPink.opacity(palette.isDark ? 0.13 : 0.10),
                         .clear,
                     ],
-                    center: UnitPoint(x: 0.50, y: 0.42),
-                    startRadius: 20,
-                    endRadius: min(geo.size.width, geo.size.height) * 0.42
+                    center: UnitPoint(x: 0.50, y: 0.48),
+                    startRadius: 20 * s,
+                    endRadius: min(geo.size.width, geo.size.height) * 0.34
                 )
 
+                // Centred auth panel (web `.profile-auth-panel` w=560).
                 VStack(spacing: 0) {
-                    playarrWordmark
-                        .padding(.bottom, 28)
-
                     Text("WELCOME HOME")
-                        .font(.system(size: 12, weight: .heavy))
-                        .tracking(2.4)
+                        .font(.system(size: 11.84 * s, weight: .heavy))
+                        .tracking(2.13 * s)
                         .foregroundStyle(palette.inkMuted)
+                        .textCase(.uppercase)
 
                     Text("Sign in to Playarr")
-                        .font(.system(size: 64, weight: .medium))
-                        .tracking(-4.0)
+                        .font(.system(size: 80.64 * s, weight: .medium))
+                        .tracking(-5.81 * s)
                         .foregroundStyle(palette.ink)
                         .multilineTextAlignment(.center)
-                        .padding(.top, 8)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.7)
+                        .padding(.top, 7.2 * s)
 
-                    Text("Scan the QR code with your phone or another browser to sign in on this device.")
-                        .font(.system(size: 17, weight: .regular))
+                    Text(descriptionCopy)
+                        .font(.system(size: 19.2 * s, weight: .regular))
                         .foregroundStyle(palette.inkMuted)
                         .multilineTextAlignment(.center)
-                        .frame(maxWidth: 440)
-                        .padding(.top, 16)
-                        .padding(.bottom, 28)
+                        .frame(maxWidth: 491 * s)
+                        .padding(.top, 16 * s)
+                        .padding(.bottom, 32 * s)
 
-                    phaseBody
+                    phaseBody(scale: s)
                 }
-                .frame(maxWidth: 560)
+                .frame(width: 560 * s)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                .padding(.horizontal, 48)
+                // Panel top ≈ y188 of 1080 → ~17.4% from top; keep vertical centre-ish.
+                .padding(.top, 40 * s)
 
-                // Web `TvStageChrome`: logo left, theme + language top-right.
-                TVAuthStageChrome(palette: palette)
+                // Web `TvStageChrome` absolute positions (logo / back / menus).
+                TVAuthStageChrome(
+                    palette: palette,
+                    scale: s,
+                    // Web shows back on /login/qr when returning to profiles.
+                    // Manual form shows back to QR; pure QR gate omits it.
+                    showBack: isManual && onBackToQr != nil,
+                    onBack: onBackToQr
+                )
             }
         }
         .ignoresSafeArea()
         .preferredColorScheme(displayPreferences.colorScheme)
     }
 
-    private var playarrWordmark: some View {
-        HStack(spacing: 8) {
-            ZStack {
-                Circle()
-                    .fill(palette.brandPink)
-                    .frame(width: 34, height: 34)
-                Image(systemName: "play.fill")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white)
-                    .offset(x: 1)
-            }
-            HStack(spacing: 0) {
-                Text("Play")
-                    .foregroundStyle(palette.brandPink)
-                Text("arr")
-                    .foregroundStyle(palette.ink)
-            }
-            .font(.system(size: 18, weight: .semibold))
+    private var isManual: Bool {
+        if case .manualServer = phase { return true }
+        return false
+    }
+
+    private var descriptionCopy: String {
+        switch phase {
+        case .manualServer:
+            return "Enter your Playarr Server address to sign in with a username and password on this device."
+        default:
+            return "Scan the QR code with your phone or another browser to sign in on this device."
         }
     }
 
     @ViewBuilder
-    private var phaseBody: some View {
+    private func phaseBody(scale s: CGFloat) -> some View {
         switch phase {
         case .requesting:
+            ProgressView()
+                .tint(palette.brandPink)
+                .padding(.top, 40 * s)
             Text("Creating a secure sign-in code…")
-                .font(.system(size: 15, weight: .regular))
+                .font(.system(size: 15 * s, weight: .regular))
                 .foregroundStyle(palette.inkMuted)
-        case .awaitingApproval(let userCode, let verificationURI, let qr):
-            // Live `/login/qr` embedded DeviceLogin: column, centred, QR above copy.
-            VStack(alignment: .center, spacing: 22) {
-                // `.device-login-qr`: border-box 240, 12pt white edge, r=18,
-                // content 216, soft plate shadow (0 24 72 / 30% black).
+                .padding(.top, 16 * s)
+            manualButton(scale: s)
+
+        case .awaitingApproval(let userCode, let verificationURI, let qr, let secondsRemaining):
+            // Web `.device-login-options` column, gap 1.35rem ≈ 21.6
+            VStack(spacing: 21.6 * s) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: 18 * s, style: .continuous)
                         .fill(Color.white)
                     qr
-                        .frame(width: 216, height: 216)
+                        .frame(width: 216 * s, height: 216 * s)
                 }
-                .frame(width: 240, height: 240)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .frame(width: 240 * s, height: 240 * s)
+                .clipShape(RoundedRectangle(cornerRadius: 18 * s, style: .continuous))
                 .shadow(
-                    color: Color.black.opacity(palette.isDark ? 0.30 : 0.12),
-                    radius: 36,
+                    color: Color.black.opacity(palette.isDark ? 0.30 : 0.09),
+                    radius: 36 * s,
                     x: 0,
-                    y: 24
+                    y: 24 * s
                 )
 
-                VStack(alignment: .center, spacing: 10) {
+                VStack(spacing: 0) {
                     Text("Scan the QR code, or visit")
-                        .font(.system(size: 15, weight: .regular))
+                        .font(.system(size: 15 * s, weight: .regular))
                         .foregroundStyle(palette.inkMuted)
+                        .padding(.top, 4 * s)
                     Text(verificationURI)
-                        .font(.system(size: 20, weight: .bold))
+                        .font(.system(size: 24 * s, weight: .bold))
                         .foregroundStyle(palette.ink)
-                    Text("and enter the code")
-                        .font(.system(size: 15, weight: .regular))
+                        .padding(.top, 10 * s)
+                    Text("and enter this code")
+                        .font(.system(size: 15 * s, weight: .regular))
                         .foregroundStyle(palette.inkMuted)
+                        .padding(.top, 10 * s)
                     Text(userCode)
-                        .font(.system(size: 52, weight: .bold, design: .monospaced))
-                        .tracking(5)
+                        .font(.system(size: 56 * s, weight: .bold, design: .monospaced))
+                        .tracking(7.84 * s)
                         .foregroundStyle(palette.ink)
+                        .padding(.top, 6 * s)
                     Text("Waiting for approval…")
-                        .font(.system(size: 13, weight: .regular))
+                        .font(.system(size: 13 * s, weight: .regular))
                         .foregroundStyle(palette.inkMuted)
-                        .padding(.top, 2)
+                        .padding(.top, 12 * s)
+                    Text("Code refreshes in \(Self.formatCountdown(secondsRemaining))")
+                        .font(.system(size: 16 * s, weight: .bold, design: .monospaced))
+                        .foregroundStyle(palette.inkSoft)
+                        .padding(.top, 14 * s)
                 }
                 .multilineTextAlignment(.center)
             }
+            manualButton(scale: s)
+
         case .failed(let message):
-            VStack(alignment: .center, spacing: 16) {
+            VStack(spacing: 16 * s) {
                 Text(message)
-                    .font(.system(size: 15, weight: .regular))
+                    .font(.system(size: 15 * s, weight: .regular))
                     .foregroundStyle(palette.danger)
                     .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
                 if let onRetry {
                     Button("Try again", action: onRetry)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 15 * s, weight: .semibold))
                         .foregroundStyle(palette.brandPink)
                         .buttonStyle(TVFocusableCardButtonStyle())
                 }
             }
+            manualButton(scale: s)
+
+        case .manualServer:
+            VStack(alignment: .leading, spacing: 14 * s) {
+                Text("Playarr Server address")
+                    .font(.system(size: 12 * s, weight: .heavy))
+                    .foregroundStyle(palette.inkMuted)
+                    .textCase(.uppercase)
+                TextField(
+                    "https://playarr.example:8484",
+                    text: Bindable(environment).serverAddress
+                )
+                .font(.system(size: 18 * s, weight: .medium))
+                .foregroundStyle(palette.ink)
+                .padding(.horizontal, 16 * s)
+                .padding(.vertical, 14 * s)
+                .background(palette.surfaceStrong)
+                .overlay(
+                    Rectangle().stroke(palette.lineStrong, lineWidth: 1)
+                )
+                Button {
+                    if environment.saveServerAddress() {
+                        onManualConnect?()
+                    }
+                } label: {
+                    Text("Connect")
+                        .font(.system(size: 15 * s, weight: .bold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16 * s)
+                        .foregroundStyle(palette.isDark ? palette.bg : Color.white)
+                        .background(palette.inkSoft)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(TVFocusableCardButtonStyle())
+                if let onBackToQr {
+                    Button("Sign in with QR code", action: onBackToQr)
+                        .font(.system(size: 15 * s, weight: .bold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16 * s)
+                        .foregroundStyle(palette.inkSoft)
+                        .background(palette.surfaceStrong)
+                        .overlay(Capsule().stroke(palette.lineStrong, lineWidth: 1))
+                        .buttonStyle(TVFocusableCardButtonStyle())
+                }
+            }
+            .frame(maxWidth: 520 * s)
         }
+    }
+
+    @ViewBuilder
+    private func manualButton(scale s: CGFloat) -> some View {
+        if let onManual {
+            Button(action: onManual) {
+                Text("Sign in manually")
+                    .font(.system(size: 14.72 * s, weight: .bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16 * s)
+                    .foregroundStyle(palette.inkSoft)
+                    .background(palette.surfaceStrong)
+                    .overlay(
+                        Capsule().stroke(palette.lineStrong, lineWidth: 1)
+                    )
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(TVFocusableCardButtonStyle())
+            .padding(.top, 20 * s)
+            .frame(maxWidth: 560 * s)
+        }
+    }
+
+    static func formatCountdown(_ seconds: Int) -> String {
+        let clamped = max(0, seconds)
+        return "\(clamped / 60):\(String(format: "%02d", clamped % 60))"
     }
 }
 
-/// Web `TvStageChrome` on auth pages: mark top-left, theme + language menus
-/// top-right (order matches live `/login/qr`: theme then language).
+/// Web `TvStageChrome` absolute layout @ 1920×1080:
+/// - logo 42×42 at left ≈ 60.6 (nav centre-x − logo/2), top ≈ 56
+/// - optional back 50×50 circle at left ≈ 154
+/// - theme 144×48 + language 168×48, square corners, top ≈ 50, right ≈ 42
 struct TVAuthStageChrome: View {
     let palette: TVAuthPalette
+    var scale: CGFloat = 1
+    var showBack: Bool = false
+    var onBack: (() -> Void)?
+
     @Environment(TVDisplayPreferences.self) private var displayPreferences
 
+    /// Matches CSS logo centre-x on the left nav rail.
+    private var logoLeft: CGFloat {
+        let centre = DesignTokens.Shell.navEdge
+            + DesignTokens.Shell.navPaddingInline
+            + DesignTokens.Shell.navItemSize / 2
+            + 1
+        return (centre - DesignTokens.Shell.logoSize / 2) * scale
+    }
+
+    private var logoTop: CGFloat { DesignTokens.Shell.headerTop * scale }
+    private var logoSize: CGFloat { DesignTokens.Shell.logoSize * scale }
+    private var controlsTop: CGFloat { 50 * scale }
+    private var controlsRight: CGFloat { DesignTokens.Shell.navEdge * scale }
+
     var body: some View {
-        VStack {
-            HStack(alignment: .center, spacing: 0) {
-                PlayarrLogoMark(size: 36)
-                    .accessibilityHidden(true)
+        ZStack(alignment: .topLeading) {
+            PlayarrLogoMark(size: logoSize)
+                .frame(width: logoSize, height: logoSize)
+                .position(
+                    x: logoLeft + logoSize / 2,
+                    y: logoTop + logoSize / 2 + 4 * scale
+                )
+                .accessibilityHidden(true)
 
-                Spacer(minLength: 16)
-
-                HStack(spacing: 14) {
-                    themeMenu
-                    languageMenu
+            if showBack, let onBack {
+                Button(action: onBack) {
+                    Image(systemName: "arrow.left")
+                        .font(.system(size: 17 * scale, weight: .semibold))
+                        .foregroundStyle(palette.inkSoft)
+                        .frame(width: 50 * scale, height: 50 * scale)
+                        .background(palette.surfaceStrong.opacity(0.70))
+                        .overlay(
+                            Circle().stroke(palette.lineStrong.opacity(0.66), lineWidth: 1)
+                        )
+                        .clipShape(Circle())
                 }
+                .buttonStyle(TVFocusableCardButtonStyle())
+                .position(x: 154 * scale + 25 * scale, y: logoTop + 25 * scale)
+                .accessibilityLabel("Back")
             }
-            .padding(.horizontal, 36)
-            .padding(.top, 40)
-            Spacer(minLength: 0)
+
+            HStack(spacing: 14 * scale) {
+                themeMenu
+                languageMenu
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            .padding(.top, controlsTop)
+            .padding(.trailing, controlsRight)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .allowsHitTesting(true)
     }
 
@@ -569,8 +747,9 @@ struct TVAuthStageChrome: View {
             }
         } label: {
             chromeTrigger(
-                icon: "circle.lefthalf.filled",
+                icon: "sun.max",
                 label: displayPreferences.themeTriggerLabel,
+                minWidth: 144 * scale,
                 accessibility: "Theme: \(displayPreferences.themeTriggerLabel)"
             )
         }
@@ -594,34 +773,37 @@ struct TVAuthStageChrome: View {
             chromeTrigger(
                 icon: "globe",
                 label: displayPreferences.languageTriggerLabel,
+                minWidth: 168 * scale,
                 accessibility: "Language: \(displayPreferences.languageTriggerLabel)"
             )
         }
         .buttonStyle(TVFocusableCardButtonStyle())
     }
 
-    private func chromeTrigger(icon: String, label: String, accessibility: String) -> some View {
-        HStack(spacing: 10) {
+    private func chromeTrigger(
+        icon: String,
+        label: String,
+        minWidth: CGFloat,
+        accessibility: String
+    ) -> some View {
+        // Web `.language-dropdown-trigger`: square corners, 48px tall, bg var(--bg).
+        HStack(spacing: 9.6 * scale) {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 14 * scale, weight: .semibold))
                 .foregroundStyle(palette.inkMuted)
             Text(label)
-                .font(.system(size: 14, weight: .bold))
+                .font(.system(size: 13.8 * scale, weight: .bold))
                 .foregroundStyle(palette.ink)
                 .lineLimit(1)
             Image(systemName: "chevron.down")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 11 * scale, weight: .semibold))
                 .foregroundStyle(palette.inkMuted)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(palette.surfaceStrong.opacity(palette.isDark ? 0.92 : 0.96))
-        )
+        .padding(.horizontal, 18.4 * scale)
+        .frame(minWidth: minWidth, minHeight: 48 * scale)
+        .background(palette.bg)
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(palette.lineStrong, lineWidth: 1)
+            Rectangle().stroke(palette.lineStrong, lineWidth: 1)
         )
         .accessibilityLabel(accessibility)
     }

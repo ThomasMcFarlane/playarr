@@ -56,4 +56,16 @@ describe("ProfileAuthLayout", () => {
     expect(markup).toContain('data-tv-scroll-axis="vertical"');
     expect(markup).toContain('data-navigation-scroll-key="auth:fields"');
   });
+
+  it("uses the same broad 900px wash as the Android login screen", () => {
+    const css = readFileSync(
+      new URL("../styles/global.css", import.meta.url),
+      "utf8"
+    );
+    const loginBackground = css.match(
+      /\.login-profile-page\s*\{(?<declarations>[^}]*)\}/
+    )?.groups?.declarations;
+
+    expect(loginBackground).toContain("circle 900px at 50% 50%");
+  });
 });

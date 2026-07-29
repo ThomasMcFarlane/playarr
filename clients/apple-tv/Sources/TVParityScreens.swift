@@ -179,10 +179,12 @@ struct TVParityPairingFixtureView: View {
             phase: .awaitingApproval(
                 userCode: TVParityFixtures.userCode,
                 verificationURI: TVParityFixtures.verificationURI,
-                qr: AnyView(TVParityQRModules())
+                qr: AnyView(TVParityQRModules()),
+                secondsRemaining: 5 * 60
             ),
             onRetry: nil
         )
+        .environment(TVDisplayPreferences())
     }
 }
 

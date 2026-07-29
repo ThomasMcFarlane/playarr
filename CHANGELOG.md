@@ -21,11 +21,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Android TV device-link screen matches web `/login/qr` structure in the dark
-  TV shell (web dark theme tokens): rose glow on charcoal, stage chrome, centred
-  Welcome home / Sign in to Playarr copy, white scannable QR plate (12dp / 18dp,
-  ECC M), mono user code, five-minute refresh countdown, and Sign in manually.
-  Layout fits 1080p without clipping.
+- Android TV device-link screen matches web `/login/qr`: theme + language chrome
+  dropdowns (same square trigger style as web), theme-reactive light/dark tokens,
+  white scannable QR plate, mono code, refresh countdown, and Sign in manually
+  pill. Layout fits 1080p without clipping.
 
 ### Fixed
 
@@ -33,9 +32,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   copy + QR, top-right Theme (System/Light/Dark) and Language (Auto/en/ja/th)
   pickers. Light theme remains available via the selector.
 
-- Apple TV pairing gate matches web `/login/qr` stage chrome: theme menu
-  (System / Light / Dark) and language menu (Auto / English / 日本語 / ไทย)
-  top-right, logo top-left. Theme preference drives light/dark auth palette.
+- Apple TV pairing gate is 1:1 with measured web `/login/qr` @ 1920×1080:
+  logo only at nav centre-x (no centre wordmark), square theme/language
+  triggers top-right, centred panel (kicker/title/desc/QR/code/timer),
+  “Sign in manually” pill. Theme drives light/dark auth palette.
 
 - Apple TV pairing gate always uses the playarr.app hosted broker (even when
   a relay/server URL is remembered), so the on-screen visit line is
@@ -222,8 +222,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   VIDAA modes open QR sign-in by default. Codes show a five-minute countdown
   and renew automatically at expiry without shifting the login layout: the
   expired QR/code clears in place while the timer resets to five minutes.
-  Shared login chrome also places a System/Light/Dark theme selector beside
-  the language selector.
+  Shared login chrome also uses the broader Android-sized background wash and
+  places a System/Light/Dark theme selector beside the language selector.
 
 - Playarr Web `productSurfaces` module and tests so `tv-vidaa` and standard
   web share the same complete-client routes, shell nav hierarchy, and eight

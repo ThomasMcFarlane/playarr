@@ -159,14 +159,11 @@ final class TVAppEnvironment {
         pairingState = .signedIn
     }
 
-    /// TV pairing chrome always uses the playarr.app hosted broker so the
-    /// on-screen code / QR encode `https://playarr.app/link` (never the
-    /// server's public or relay Host). The phone claim still supplies the
-    /// real API base URL. Direct RFC 8628 against a typed server remains
-    /// available only via explicit Settings "server address" + a future
-    /// advanced path; a remembered relay must not take over the QR gate.
+    /// Default QR gate uses the playarr.app hosted broker so the on-screen
+    /// code / QR encode `https://playarr.app/link` (never a server/relay Host).
+    /// "Sign in manually" and Settings can force direct RFC 8628.
     static func shouldUseHostedDeviceLink(hasConfiguredServer: Bool) -> Bool {
-        // `hasConfiguredServer` is intentionally ignored for the gate.
+        // Remembered server alone must not take over the QR gate.
         _ = hasConfiguredServer
         return true
     }
@@ -189,15 +186,14 @@ final class TVAppEnvironment {
         return true
     }
 
-    /// Starts pairing. When no server is configured, requests a code from
-    /// playarr.app, waits for the phone claim (server URL + server device
-    /// code), then polls the real server token endpoint. When a server is
-    /// already configured (Settings / prior link / launch arg), uses direct
-    /// RFC 8628 and retries across the known address group.
-    func startPairing() async {
+    /// Starts pairing. Default is hosted playarr.app link (QR gate). Pass
+    /// `forceHosted: false` for "Sign in manually" / Settings direct device flow.
+    func startPairing(forceHosted: Bool? = nil) async {
         pairingState = .requestingCode
         do {
-            if Self.shouldUseHostedDeviceLink(hasConfiguredServer: hasConfiguredServer) {
+            let useHosted = forceHosted
+                ?? Self.shouldUseHostedDeviceLink(hasConfiguredServer: hasConfiguredServer)
+            if useHosted {
                 try await startHostedPairing()
             } else {
                 try await startDirectPairing()
