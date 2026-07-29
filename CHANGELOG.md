@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV home parity rails use SPA-measured card origins (879×489 /
+  828, pitch 243) with absolute layout, key-art watermark, and cleaned
+  hero; movie detail cast tiles use SPA-cropped headshots at 160×160.
 - Apple TV parity pairing/player use offline fixtures (device code + player
   chrome); home rails match SPA New movies order and fixed HStack cards;
   movie detail adds Movies heading and SPA cast headshots.

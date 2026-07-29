@@ -140,6 +140,17 @@ enum DesignTokens {
         static let homeCardHeight: CGFloat = 123
         // Track scroll gap: clamp(14px, 1.3vw, 26px) → 25.
         static let homeCardGap: CGFloat = 25
+        // Measured SPA home card pitch (pink unwatched dots) @ 1920×1080.
+        static let homeCardPitchX: CGFloat = 243
+        /// First Start-watching card art top-left (measured from suite ref).
+        static let homeCardOriginX: CGFloat = 879
+        static let homeCardOriginY1: CGFloat = 489
+        /// First New-movies card art top-left.
+        static let homeCardOriginY2: CGFloat = 828
+        /// Title block under home card art.
+        static let homeCardTitleBlock: CGFloat = 36
+        /// Rail heading sits above card art.
+        static let homeRailHeadingOffsetY: CGFloat = 36
         // `.tv-home-rails { left: 38% }`
         static let railLeftInset: CGFloat = 0.38
         // `--tv-track-left-fade: clamp(88px, 8.8vw, 152px)` + 8px pad → 160.
@@ -158,6 +169,12 @@ enum DesignTokens {
         static let featureOverviewSize: CGFloat = 13
         // Rail heading: clamp(0.76rem, 0.92vw, 1.18rem) → ~18.
         static let railHeadingSize: CGFloat = 18
+        // SPA `.tv-key-art > span` watermark: top 28%, left 18%, max 34vw, weight 760, opacity 0.22.
+        static let keyArtWatermarkTopFraction: CGFloat = 0.28
+        static let keyArtWatermarkLeftFraction: CGFloat = 0.18
+        static let keyArtWatermarkMaxWidthFraction: CGFloat = 0.34
+        static let keyArtWatermarkSize: CGFloat = 120
+        static let keyArtWatermarkOpacity: CGFloat = 0.22
 
         // MARK: Search page (`.tv-library-heading` + `.tv-search-copy` @ 1920×1080)
 

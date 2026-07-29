@@ -237,17 +237,20 @@ struct TVWorkDetailView: View {
                 Text("8 people")
                     .font(TVTheme.font(size: 11, weight: .medium))
                     .foregroundStyle(DesignTokens.Color.textDisabled)
-                HStack(spacing: 14) {
+                HStack(spacing: 18) {
                     ForEach(0..<4, id: \.self) { i in
                         Group {
                             if let face = TVParityArtwork.castImage(index: i) {
-                                face.resizable().scaledToFill()
+                                face
+                                    .resizable()
+                                    .interpolation(.high)
+                                    .scaledToFill()
                             } else {
                                 DesignTokens.Color.backgroundRaised.opacity(0.85)
                             }
                         }
-                        .frame(width: 140, height: 140)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .frame(width: 160, height: 160)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                 }
             }

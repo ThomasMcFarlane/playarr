@@ -69,6 +69,23 @@ struct TVHomeView: View {
                         .frame(width: geo.size.width * (1 - DesignTokens.Shell.railLeftInset))
                     }
 
+                    // SPA `.tv-key-art > span` watermark (large faded title).
+                    if let hero {
+                        Text(hero.title.uppercased())
+                            .font(TVTheme.font(size: DesignTokens.Shell.keyArtWatermarkSize, weight: .heavy))
+                            .tracking(-6)
+                            .foregroundStyle(DesignTokens.Color.textDisabled.opacity(DesignTokens.Shell.keyArtWatermarkOpacity))
+                            .lineLimit(2)
+                            .frame(
+                                maxWidth: geo.size.width * DesignTokens.Shell.keyArtWatermarkMaxWidthFraction,
+                                alignment: .leading
+                            )
+                            .padding(.leading, geo.size.width * DesignTokens.Shell.keyArtWatermarkLeftFraction)
+                            .padding(.top, geo.size.height * DesignTokens.Shell.keyArtWatermarkTopFraction)
+                            .zIndex(1)
+                            .allowsHitTesting(false)
+                    }
+
                     // `.tv-home-feature` — top 24%, left 8vw, width min(24vw,455).
                     if let hero {
                         VStack(alignment: .leading, spacing: 0) {
@@ -78,7 +95,7 @@ struct TVHomeView: View {
                                 .foregroundStyle(DesignTokens.Color.brandPrimary)
                                 .textCase(.uppercase)
                             Text(hero.title)
-                                .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .semibold))
+                                .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .medium))
                                 .tracking(-4.5)
                                 .foregroundStyle(DesignTokens.Color.textPrimary)
                                 .lineLimit(3)
@@ -99,49 +116,102 @@ struct TVHomeView: View {
                         .zIndex(2)
                     }
 
-                    // `.tv-home-rails` — left 38%, padding-block ~half height, track fade.
-                    VStack(alignment: .leading, spacing: DesignTokens.Shell.railTrackGap) {
-                        let movies = viewModel.works.filter { $0.kind == .movie }
-                        let series = viewModel.works.filter { $0.kind == .series }
-                        // SPA Start watching: series first, then remaining catalogue.
-                        let startWatching = Array((series + viewModel.works.filter { $0.kind != .series }).prefix(12))
-                        // SPA New movies order (newest-first on live; fixed for parity).
-                        let newMovies: [Work] = {
-                            if TVParityLaunch.requestedScreen != nil {
-                                let preferred = [
-                                    "28 Sample Years",
-                                    "28 Sample Years: The Sequel",
-                                    "30 Sample Nights",
-                                    "30 Sample Nights: The Sequel",
-                                    "47 Sample Metres",
-                                    "10,000 Sample",
-                                    "2001: A Sample Voyage",
-                                    "Sample Film 2012",
-                                ]
-                                var ordered: [Work] = []
-                                for title in preferred {
-                                    if let match = movies.first(where: { $0.title == title }) {
-                                        ordered.append(match)
-                                    }
-                                }
-                                for m in movies where !ordered.contains(where: { $0.id == m.id }) {
-                                    ordered.append(m)
-                                }
-                                return ordered
-                            }
-                            return Array((movies.isEmpty ? viewModel.works : movies).prefix(12))
-                        }()
-                        rail(title: "Start watching", works: startWatching)
-                        rail(title: "New movies", works: Array(newMovies.prefix(12)))
-                    }
-                    .padding(.leading, geo.size.width * DesignTokens.Shell.railLeftInset)
-                    .padding(.trailing, 24)
-                    .padding(.top, geo.size.height * DesignTokens.Shell.railContentTopFraction)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    homeRails(viewModel: viewModel, size: geo.size)
+                        .zIndex(3)
                 }
             }
             .ignoresSafeArea()
         }
+    }
+
+    @ViewBuilder
+    private func homeRails(viewModel: TVHomeViewModel, size: CGSize) -> some View {
+        let movies = viewModel.works.filter { $0.kind == .movie }
+        let series = viewModel.works.filter { $0.kind == .series }
+        let startWatching = Array((series + viewModel.works.filter { $0.kind != .series }).prefix(12))
+        let newMovies: [Work] = {
+            if TVParityLaunch.requestedScreen != nil {
+                let preferred = [
+                    "28 Sample Years",
+                    "28 Sample Years: The Sequel",
+                    "30 Sample Nights",
+                    "30 Sample Nights: The Sequel",
+                    "47 Sample Metres",
+                    "10,000 Sample",
+                    "2001: A Sample Voyage",
+                    "Sample Film 2012",
+                ]
+                var ordered: [Work] = []
+                for title in preferred {
+                    if let match = movies.first(where: { $0.title == title }) {
+                        ordered.append(match)
+                    }
+                }
+                for m in movies where !ordered.contains(where: { $0.id == m.id }) {
+                    ordered.append(m)
+                }
+                return ordered
+            }
+            return Array((movies.isEmpty ? viewModel.works : movies).prefix(12))
+        }()
+
+        if TVParityLaunch.requestedScreen != nil {
+            // Absolute SPA-measured card origins (pink-dot geometry).
+            parityHomeRails(
+                startWatching: Array(startWatching.prefix(5)),
+                newMovies: Array(newMovies.prefix(5)),
+                size: size
+            )
+        } else {
+            VStack(alignment: .leading, spacing: DesignTokens.Shell.railTrackGap) {
+                rail(title: "Start watching", works: startWatching)
+                rail(title: "New movies", works: Array(newMovies.prefix(12)))
+            }
+            .padding(.leading, size.width * DesignTokens.Shell.railLeftInset)
+            .padding(.trailing, 24)
+            .padding(.top, size.height * DesignTokens.Shell.railContentTopFraction)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    /// Fixed 2×5 home rails at SPA-measured art origins.
+    private func parityHomeRails(startWatching: [Work], newMovies: [Work], size: CGSize) -> some View {
+        let artW = DesignTokens.Shell.homeCardWidth
+        let artH = DesignTokens.Shell.homeCardHeight
+        let pitch = DesignTokens.Shell.homeCardPitchX
+        let titleBlock = DesignTokens.Shell.homeCardTitleBlock
+        let headingH = DesignTokens.Shell.homeRailHeadingOffsetY
+        let x0 = DesignTokens.Shell.homeCardOriginX
+        let y1 = DesignTokens.Shell.homeCardOriginY1
+        let y2 = DesignTokens.Shell.homeCardOriginY2
+
+        return ZStack(alignment: .topLeading) {
+            Text("Start watching")
+                .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
+                .tracking(-0.5)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .offset(x: x0, y: y1 - headingH - 8)
+
+            ForEach(Array(startWatching.enumerated()), id: \.element.id) { index, work in
+                TVHomeCard(work: work, apiClient: environment.apiClient, isSelected: false)
+                    .frame(width: artW, height: artH + titleBlock, alignment: .topLeading)
+                    .offset(x: x0 + CGFloat(index) * pitch, y: y1)
+            }
+
+            Text("New movies")
+                .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
+                .tracking(-0.5)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .offset(x: x0, y: y2 - headingH - 8)
+
+            ForEach(Array(newMovies.enumerated()), id: \.element.id) { index, work in
+                TVHomeCard(work: work, apiClient: environment.apiClient, isSelected: false)
+                    .frame(width: artW, height: artH + titleBlock, alignment: .topLeading)
+                    .offset(x: x0 + CGFloat(index) * pitch, y: y2)
+            }
+        }
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .allowsHitTesting(false)
     }
 
     private func heroWork(from works: [Work]) -> Work? {
@@ -167,33 +237,41 @@ struct TVHomeView: View {
             // Fixture hero is a lossless crop of the already-filtered SPA
             // key art — display as-is (no re-greyscale). Live API art still
             // gets the CSS-equivalent filter chain.
+            // SPA `.tv-key-art img`: width 52%, height 106%, greyscale, opacity 0.72 dark.
             let liveURL = hero.flatMap { imageURL(for: $0, prefer: .backdrop) }
+            let keyW = size.width * 0.52
             if let fixture = TVParityArtwork.heroImage,
                TVParityLaunch.requestedScreen != nil || liveURL == nil {
                 fixture
                     .resizable()
                     .scaledToFill()
-                    .frame(width: size.width * 0.58, height: size.height)
+                    .frame(width: keyW, height: size.height * 1.06)
                     .clipped()
+                    .opacity(0.72)
+                    .mask(
+                        LinearGradient(
+                            colors: [.black, .black, .black.opacity(0.7), .clear],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             } else if let url = liveURL {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
-                        // Web `.tv-key-art`: grayscale(1) contrast(0.88) brightness(1.1)
-                        // and darker variant contrast(0.82) brightness(0.6) in places.
                         image
                             .resizable()
                             .scaledToFill()
-                            .frame(width: size.width * 0.58, height: size.height)
+                            .frame(width: keyW, height: size.height * 1.06)
                             .clipped()
                             .saturation(0)
-                            .contrast(0.88)
-                            .brightness(0.05)
-                            .opacity(0.9)
+                            .contrast(0.82)
+                            .brightness(-0.05)
+                            .opacity(0.72)
                             .mask(
                                 LinearGradient(
-                                    colors: [.black, .black, .clear],
+                                    colors: [.black, .black, .black.opacity(0.7), .clear],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
