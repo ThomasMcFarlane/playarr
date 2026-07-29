@@ -784,6 +784,8 @@
     <Timer id="heartbeatTimer" duration="20" repeat="true" />
     <Timer id="controlBarProgressTimer" duration="0.5" repeat="true" />
     <Timer id="playerAutoHideTimer" duration="3" repeat="false" />
+    <!-- Deferred browse key-art download so acceptBrowseCatalog can paint first. -->
+    <Timer id="browseKeyArtTimer" duration="0.15" repeat="false" />
   </children>
   <script type="text/brightscript" uri="pkg:/source/Config.brs" />
   <script type="text/brightscript" uri="pkg:/source/Storage.brs" />

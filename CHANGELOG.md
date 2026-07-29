@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku library browse defers key-art download so the grid paints first, then
+  loads authenticated backdrop art (same tmp-file path as home hero).
+
 - Roku Search opens the web empty shell first (field, filters, “Start typing
   to search”) instead of jumping straight into results; OK opens the keyboard.
 

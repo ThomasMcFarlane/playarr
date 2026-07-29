@@ -134,6 +134,7 @@ sub init()
     m.playerTimeLabel = m.top.findNode("playerTimeLabel")
     m.controlBarProgressTimer = m.top.findNode("controlBarProgressTimer")
     m.playerAutoHideTimer = m.top.findNode("playerAutoHideTimer")
+    m.browseKeyArtTimer = m.top.findNode("browseKeyArtTimer")
 
     m.profilesRow.ObserveField("rowItemSelected", "onProfileSelected")
     m.profileActions.ObserveField("itemSelected", "onProfileActionSelected")
@@ -237,6 +238,9 @@ sub init()
     m.video.ObserveField("downloadedSegment", "onDownloadedSegment")
     m.controlBarProgressTimer.ObserveField("fire", "updatePlayerProgress")
     m.playerAutoHideTimer.ObserveField("fire", "hidePlayerControls")
+    if m.browseKeyArtTimer <> invalid
+        m.browseKeyArtTimer.ObserveField("fire", "onBrowseKeyArtTimer")
+    end if
 
     m.requestBusy = false
     m.items = []
@@ -1744,21 +1748,40 @@ sub updateBrowsePreview(work as Object)
     overview = work.overview
     if overview = invalid or overview = "" then overview = "No synopsis available."
     m.browsePreviewOverview.text = overview
-    ' Full-bleed key art via HttpAgent (async). Sync GetToFile here blocked
-    ' acceptBrowseCatalog from painting the grid (UI stuck on "…").
+    ' Defer key-art download so acceptBrowseCatalog paints the grid first.
+    ' Home hero uses sync GetToFile successfully; here it must not block paint.
     if m.browseKeyArt <> invalid
         uri = heroArtworkUrl(work)
+        m.browseKeyArtPendingUri = uri
         if uri = ""
             m.browseKeyArt.uri = ""
+            m.browseKeyArt.visible = false
+        else if m.browseKeyArtTimer <> invalid
+            m.browseKeyArtTimer.control = "stop"
+            m.browseKeyArtTimer.control = "start"
         else
-            m.browseKeyArtAgent = CreateObject("roHttpAgent")
-            m.browseKeyArtAgent.SetCertificatesFile("common:/certs/ca-bundle.crt")
-            m.browseKeyArtAgent.InitClientCertificates()
-            m.browseKeyArtAgent.SetHeaders(ClientHeaders(m.accessToken))
-            m.browseKeyArt.SetHttpAgent(m.browseKeyArtAgent)
-            m.browseKeyArt.uri = uri
-            m.browseKeyArt.visible = true
+            onBrowseKeyArtTimer()
         end if
+    end if
+end sub
+
+sub onBrowseKeyArtTimer()
+    uri = m.browseKeyArtPendingUri
+    if m.browseKeyArt = invalid then return
+    if uri = invalid or uri = ""
+        m.browseKeyArt.uri = ""
+        m.browseKeyArt.visible = false
+        return
+    end if
+    xfer = CreateObject("roUrlTransfer")
+    xfer.SetCertificatesFile("common:/certs/ca-bundle.crt")
+    xfer.InitClientCertificates()
+    xfer.SetUrl(uri)
+    xfer.SetHeaders(ClientHeaders(m.accessToken))
+    tmpPath = "tmp:/playarr-browse-keyart.jpg"
+    if xfer.GetToFile(tmpPath)
+        m.browseKeyArt.uri = tmpPath
+        m.browseKeyArt.visible = true
     end if
 end sub
 
