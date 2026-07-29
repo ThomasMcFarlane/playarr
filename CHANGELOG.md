@@ -37,6 +37,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   “Sign in manually” pill (opens server entry). Focus uses accent borders.
   Light theme remains available via the selector.
 
+- Roku pairing Back (chrome control + remote Back) returns to Who’s watching
+  when a session or profile list is available, matching web LoginShell and
+  Android `canReturnToProfiles`. Hidden on first-run / full sign-out.
+
 - Apple TV pairing gate is 1:1 with measured web `/login/qr` @ 1920×1080:
   logo only at nav centre-x (no centre wordmark), square theme/language
   triggers top-right, centred panel (kicker/title/desc/QR/code/timer),

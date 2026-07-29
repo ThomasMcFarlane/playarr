@@ -37,6 +37,8 @@ sub init()
     m.pairingBackBtn = m.top.findNode("pairingBackBtn")
     m.themePreference = LoadPairingThemePreference()
     m.languagePreference = LoadPairingLanguagePreference()
+    m.pairingReturnToProfiles = false
+    m.pairingChromeIsLight = false
 
     m.hostedLinkTimer = m.top.findNode("hostedLinkTimer")
     m.profilesGroup = m.top.findNode("profilesGroup")
@@ -896,9 +898,51 @@ sub beginPairing()
     ' always https://playarr.app/link?…). Direct POST /oauth/device/code to
     ' a remembered relay URL only shows a typed code and cannot use the
     ' hosted `/api/link/qr` renderer (it only encodes playarr.app links).
+    '
+    ' Back → profiles when this was opened from an authenticated shell or a
+    ' session still exists (web LoginShell onBack → /profiles; Android
+    ' canReturnToProfiles). First-run / full sign-out hides the chrome back.
+    prior = m.top.screenState
+    m.pairingReturnToProfiles = pairingHasSession() or prior = "profiles" or prior = "settings" or prior = "home" or prior = "library" or prior = "browse" or prior = "search" or prior = "playlists" or prior = "detail"
     m.pairingTimer.control = "stop"
     m.hostedLinkTimer.control = "stop"
     beginHostedLink()
+end sub
+
+function pairingHasSession() as Boolean
+    if m.accessToken <> invalid and m.accessToken <> "" then return true
+    if m.refreshToken <> invalid and m.refreshToken <> "" then return true
+    return false
+end function
+
+function pairingCanReturnToProfiles() as Boolean
+    if m.pairingReturnToProfiles = true then return true
+    if pairingHasSession() then return true
+    if m.profiles <> invalid and m.profiles.Count() > 0 then return true
+    return false
+end function
+
+' Web tv-page-back / Android AuthStageChrome: leave device-link and show
+' Who's watching again. Stops QR poll timers so pairing does not keep running.
+sub returnFromPairingToProfiles()
+    if not pairingCanReturnToProfiles() then return
+    m.hostedLinkTimer.control = "stop"
+    m.pairingTimer.control = "stop"
+    m.pairingCodeExpiresAt = 0
+    if m.accessToken <> invalid and m.accessToken <> ""
+        loadProfiles()
+        return
+    end if
+    if m.refreshToken <> invalid and m.refreshToken <> "" and m.deviceId <> invalid and m.deviceId <> ""
+        refreshSession()
+        return
+    end if
+    ' Cached profile list only (e.g. left Who's watching then lost access token).
+    if m.profiles = invalid then m.profiles = []
+    buildProfileAvatarContent(m.profiles)
+    showOnly("profiles")
+    m.top.screenState = "profiles"
+    m.profilesRow.SetFocus(true)
 end sub
 
 ' Pairing chrome in place of fullscreen statusGroup (no Loading wall).
@@ -989,6 +1033,13 @@ sub applyPairingChrome()
     if m.pairingManualHint <> invalid
         m.pairingManualHint.visible = false
         m.pairingManualHint.text = ""
+    end if
+    ' Chrome back only when Who's watching is reachable (web + Android parity).
+    canBack = pairingCanReturnToProfiles()
+    if m.pairingBackBtn <> invalid then m.pairingBackBtn.visible = canBack
+    if m.pairingBackHit <> invalid
+        m.pairingBackHit.visible = canBack
+        m.pairingBackHit.focusable = canBack
     end if
     applyPairingChromeFocus()
 end sub
@@ -1429,6 +1480,8 @@ sub onProfileActionSelected(event as Object)
         m.accessToken = ""
         m.refreshToken = ""
         m.deviceId = ""
+        m.profiles = []
+        m.pairingReturnToProfiles = false
         publishArtAuthHeaders()
         m.profileLabel.text = ""
         beginPairing()
@@ -5104,16 +5157,18 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             openServerDialog()
             return true
         else if m.pairingBackHit <> invalid and m.pairingBackHit.IsInFocusChain()
-            ' Web back returns to profiles when session still has tokens.
-            if m.accessToken <> invalid and m.accessToken <> ""
-                loadProfiles()
-            else
-                openServerDialog()
-            end if
+            returnFromPairingToProfiles()
             return true
         end if
+    else if state = "pairing" and key = "back"
+        ' Remote Back = chrome back: return to Who's watching when possible.
+        if pairingCanReturnToProfiles()
+            returnFromPairingToProfiles()
+            return true
+        end if
+        return false
     else if state = "pairing" and key = "right"
-        if m.pairingBackHit <> invalid and m.pairingBackHit.IsInFocusChain()
+        if m.pairingBackHit <> invalid and m.pairingBackHit.visible and m.pairingBackHit.IsInFocusChain()
             if m.pairingThemeHit <> invalid then m.pairingThemeHit.SetFocus(true)
             applyPairingChromeFocus()
             return true
@@ -5136,9 +5191,11 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             applyPairingChromeFocus()
             return true
         else if m.pairingThemeHit <> invalid and m.pairingThemeHit.IsInFocusChain()
-            if m.pairingBackHit <> invalid then m.pairingBackHit.SetFocus(true)
-            applyPairingChromeFocus()
-            return true
+            if m.pairingBackHit <> invalid and m.pairingBackHit.visible
+                m.pairingBackHit.SetFocus(true)
+                applyPairingChromeFocus()
+                return true
+            end if
         end if
     else if state = "pairing" and key = "down"
         if m.pairingThemeHit <> invalid and m.pairingThemeHit.IsInFocusChain() or (m.pairingLangHit <> invalid and m.pairingLangHit.IsInFocusChain()) or (m.pairingBackHit <> invalid and m.pairingBackHit.IsInFocusChain())

@@ -230,6 +230,11 @@ class SecretSafetyTests(unittest.TestCase):
         self.assertIn('text="Sign in manually"', SCENE)
         self.assertIn("applyPairingChromeFocus()", MAIN)
         self.assertIn("openServerDialog()", MAIN)
+        # Chrome / remote Back returns to Who's watching when a session exists.
+        self.assertIn("sub returnFromPairingToProfiles(", MAIN)
+        self.assertIn("function pairingCanReturnToProfiles(", MAIN)
+        self.assertIn('state = "pairing" and key = "back"', MAIN)
+        self.assertIn("returnFromPairingToProfiles()", MAIN)
 
     def test_pairing_logo_asset_exists_as_a_real_raster_not_a_placeholder(self) -> None:
         logo_path = ROOT / "images" / "pairing-logo.png"
