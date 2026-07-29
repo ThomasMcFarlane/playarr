@@ -34,6 +34,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   watching picker (same as web `/login/qr` → `/profiles`). Saved profiles
   are visible even when the hosted QR flow left the server URL blank.
 
+- Android TV Who’s watching matches web `/profiles` 1:1: rose stage wash,
+  centred heading and profile track, SVG preset avatars, glass settings /
+  sign-out pills, dashed add-profile plate, square theme + language chrome,
+  and a geometrically centred back arrow on the login stage.
+
 ### Fixed
 
 - Fresh Web builds accept custom numeric QR SVG sizes instead of narrowing the

@@ -1223,7 +1223,7 @@ private fun AuthStageChrome(onBack: (() -> Unit)?) {
         )
         onBack?.let { back ->
             Spacer(Modifier.width(18.dp))
-            // web `.tv-page-back.tv-stage-chrome-back` circular control → profiles
+            // web `.tv-page-back.tv-stage-chrome-back` — circle with centred stroke arrow
             val backLabel = playarrString(PlayarrString.CommonBack)
             Surface(
                 onClick = back,
@@ -1235,7 +1235,21 @@ private fun AuthStageChrome(onBack: (() -> Unit)?) {
                     .semantics { contentDescription = backLabel },
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("←", color = tokens.inkSoft, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    // Geometric arrow (Text "←" baseline sits off-centre).
+                    Canvas(Modifier.size(18.dp)) {
+                        val stroke = Stroke(
+                            width = 2.2.dp.toPx(),
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round,
+                        )
+                        val midY = size.height / 2f
+                        val left = size.width * 0.18f
+                        val right = size.width * 0.82f
+                        val head = size.width * 0.32f
+                        drawLine(tokens.inkSoft, Offset(right, midY), Offset(left, midY), stroke.width, StrokeCap.Round)
+                        drawLine(tokens.inkSoft, Offset(left + head, midY - head * 0.85f), Offset(left, midY), stroke.width, StrokeCap.Round)
+                        drawLine(tokens.inkSoft, Offset(left + head, midY + head * 0.85f), Offset(left, midY), stroke.width, StrokeCap.Round)
+                    }
                 }
             }
         }

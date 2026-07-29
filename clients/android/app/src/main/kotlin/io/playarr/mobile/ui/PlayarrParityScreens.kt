@@ -6,12 +6,15 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -30,6 +33,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -77,20 +81,33 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import io.playarr.mobile.R
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
@@ -1565,7 +1582,41 @@ internal fun ExperienceProfilesScreen(
             }
         }
     }
-    Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(WebSurface, WebBackground)))) {
+    // Web `.profiles-page` stage wash.
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(WebSurface, WebBackground),
+                    start = Offset.Zero,
+                    end = Offset.Infinite,
+                ),
+            )
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(ProfilesBrandRose.copy(alpha = 0.13f), Color.Transparent),
+                    radius = 900f,
+                ),
+            ),
+    ) {
+        // Web `::before` edge fades.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.horizontalGradient(
+                        0f to WebBackground.copy(alpha = 0.94f),
+                        0.25f to Color.Transparent,
+                    ),
+                )
+                .background(
+                    Brush.verticalGradient(
+                        0f to WebBackground.copy(alpha = 0.90f),
+                        0.26f to Color.Transparent,
+                    ),
+                ),
+        )
         when (val current = state) {
             ParityLoad.Loading -> ParityLoading(playarrString(PlayarrString.ProfilesLoading))
             is ParityLoad.Failed -> ParityFailure(current.message, viewModel::load)
@@ -1578,144 +1629,66 @@ internal fun ExperienceProfilesScreen(
                     }
                 }
                 LaunchedEffect(profiles) {
-                    selectedId = profiles.firstOrNull { it.isCurrent }?.id ?: profiles.firstOrNull()?.id
+                    selectedId = profiles.firstOrNull { it.isCurrent }?.id
+                        ?: profiles.firstOrNull()?.id
+                        ?: AddProfileId
                 }
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    contentPadding = PaddingValues(bottom = 36.dp),
-                ) {
-                    item {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                playarrString(PlayarrString.ProfilesTitle).uppercase(LocalPlayarrLanguage.current.locale),
-                                color = WebPink,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 1.4.sp,
-                                modifier = Modifier.padding(top = if (isTelevision) 90.dp else 78.dp),
-                            )
-                            Text(
-                                playarrString(PlayarrString.ProfilesHeading),
-                                color = WebInk,
-                                fontSize = if (isTelevision) 54.sp else 38.sp,
-                                fontWeight = FontWeight.Medium,
-                                letterSpacing = (-2).sp,
-                            )
-                        }
-                    }
-                    item {
-                        LazyRow(
-                            modifier = Modifier.fillMaxWidth().padding(top = if (isTelevision) 72.dp else 42.dp),
-                            horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 38.dp else 22.dp),
-                            contentPadding = PaddingValues(horizontal = if (isTelevision) 120.dp else 34.dp),
-                        ) {
-                            items(profiles, key = AvailableProfile::id) { profile ->
-                                ProfileChoice(
-                                    profile = profile,
-                                    avatar = if (profile.id == currentUserId) {
-                                        currentAvatar ?: current.value.profileAvatars[profile.id]
-                                    } else {
-                                        current.value.profileAvatars[profile.id]
-                                    },
-                                    selected = selectedId == profile.id,
-                                    isTelevision = isTelevision,
-                                    switching = switchingProfileId == profile.id,
-                                    enabled = switchingProfileId == null,
-                                    onFocus = { selectedId = profile.id },
-                                    onClick = { requestAction(profile, ProfileAction.Select) },
-                                    onSettings = { requestAction(profile, ProfileAction.Settings) },
-                                    onSignOut = if (profile.id in current.value.savedProfileIds || profile.isCurrent) {
-                                        ({ viewModel.signOut(profile.id) })
-                                    } else {
-                                        null
-                                    },
-                                )
-                            }
-                            item(AddProfileId) {
-                                AddProfileChoice(
-                                    selected = selectedId == AddProfileId,
-                                    isTelevision = isTelevision,
-                                    enabled = switchingProfileId == null,
-                                    onFocus = { selectedId = AddProfileId },
-                                    onClick = onAddProfile,
-                                )
-                            }
-                        }
-                    }
-                    actionError?.let { error ->
-                        item {
-                            Text(
-                                playarrText(error),
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.padding(18.dp),
-                            )
-                        }
-                    }
-                    current.value.loadWarning?.let { warning ->
-                        item {
-                            Text(
-                                playarrString(
-                                    PlayarrString.ProfilesErrorShowingSaved,
-                                    "message" to playarrText(warning),
-                                ),
-                                color = WebInkMuted,
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(18.dp),
-                            )
-                        }
-                    }
-                    if (isTelevision) {
-                        item {
-                            val event = updateControl.event
-                            val busy = event is AndroidUpdateEvent.Checking ||
-                                event is AndroidUpdateEvent.Downloading ||
-                                event is AndroidUpdateEvent.Installing
-                            val label = when (event) {
-                                AndroidUpdateEvent.Checking -> playarrString(PlayarrString.ProfilesUpdateChecking)
-                                is AndroidUpdateEvent.UpToDate -> playarrString(PlayarrString.ProfilesUpdateCurrent)
-                                is AndroidUpdateEvent.Downloading -> event.progress?.let { progress ->
-                                    playarrString(PlayarrString.ProfilesUpdateDownloadingProgress, "progress" to progress)
-                                } ?: playarrString(PlayarrString.ProfilesUpdateDownloading)
-                                is AndroidUpdateEvent.PermissionRequired -> playarrString(PlayarrString.ProfilesUpdateAllowInstall)
-                                is AndroidUpdateEvent.Installing -> playarrString(PlayarrString.ProfilesUpdateInstalling)
-                                is AndroidUpdateEvent.Error -> playarrString(PlayarrString.ProfilesUpdateRetry)
-                                null -> playarrString(PlayarrString.ProfilesCheckForUpdates)
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                OutlinedButton(
-                                    onClick = updateControl.check,
-                                    enabled = !busy,
-                                    modifier = Modifier.padding(top = 28.dp),
-                                ) { Text(label) }
-                                if (event is AndroidUpdateEvent.Error) {
-                                    Text(event.message, color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
-                                }
-                            }
-                        }
-                    }
+                if (isTelevision) {
+                    TelevisionProfilesStage(
+                        profiles = profiles,
+                        selectedId = selectedId,
+                        currentUserId = currentUserId,
+                        currentAvatar = currentAvatar,
+                        avatars = current.value.profileAvatars,
+                        savedProfileIds = current.value.savedProfileIds,
+                        switchingProfileId = switchingProfileId,
+                        updateControl = updateControl,
+                        actionError = actionError,
+                        loadWarning = current.value.loadWarning,
+                        onSelectId = { selectedId = it },
+                        onSelect = { requestAction(it, ProfileAction.Select) },
+                        onSettings = { requestAction(it, ProfileAction.Settings) },
+                        onSignOut = { viewModel.signOut(it) },
+                        onAddProfile = onAddProfile,
+                    )
+                } else {
+                    MobileProfilesStage(
+                        profiles = profiles,
+                        selectedId = selectedId,
+                        currentUserId = currentUserId,
+                        currentAvatar = currentAvatar,
+                        avatars = current.value.profileAvatars,
+                        savedProfileIds = current.value.savedProfileIds,
+                        switchingProfileId = switchingProfileId,
+                        actionError = actionError,
+                        loadWarning = current.value.loadWarning,
+                        onSelectId = { selectedId = it },
+                        onSelect = { requestAction(it, ProfileAction.Select) },
+                        onSettings = { requestAction(it, ProfileAction.Settings) },
+                        onSignOut = { viewModel.signOut(it) },
+                        onAddProfile = onAddProfile,
+                    )
                 }
             }
         }
-        PlayarrLogo(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.statusBars)
-                .padding(
-                    start = if (isTelevision) 59.dp else 18.dp,
-                    top = if (isTelevision) 34.dp else 14.dp,
-                ),
-            iconSize = if (isTelevision) 42.dp else 30.dp,
-        )
-        PlayarrLanguageDropdown(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.statusBars)
-                .padding(
-                    end = if (isTelevision) 44.dp else 14.dp,
-                    top = if (isTelevision) 26.dp else 6.dp,
-                ),
-        )
+        // Web `TvStageChrome` — logo left, theme + language right.
+        if (isTelevision) {
+            ProfilesStageChrome()
+        } else {
+            PlayarrLogo(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(start = 18.dp, top = 14.dp),
+                iconSize = 30.dp,
+            )
+            PlayarrLanguageDropdown(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(end = 14.dp, top = 6.dp),
+            )
+        }
     }
     pinProfile?.let { profile ->
         val busy = switchingProfileId == profile.id
@@ -1780,6 +1753,522 @@ internal fun ExperienceProfilesScreen(
     }
 }
 
+/**
+ * Web `/profiles` television stage: absolute heading, centred horizontal
+ * profile track, glass update control. Matches `.profiles-page` metrics at
+ * 1920×1080 (heading top ~120, row top ~300, avatar ~200).
+ */
+@Composable
+private fun TelevisionProfilesStage(
+    profiles: List<AvailableProfile>,
+    selectedId: String?,
+    currentUserId: String,
+    currentAvatar: ProfileAvatarPreference?,
+    avatars: Map<String, ProfileAvatarPreference>,
+    savedProfileIds: Set<String>,
+    switchingProfileId: String?,
+    updateControl: ProfilesUpdateControl,
+    actionError: PlayarrMessage?,
+    loadWarning: PlayarrMessage?,
+    onSelectId: (String) -> Unit,
+    onSelect: (AvailableProfile) -> Unit,
+    onSettings: (AvailableProfile) -> Unit,
+    onSignOut: (String) -> Unit,
+    onAddProfile: () -> Unit,
+) {
+    val language = LocalPlayarrLanguage.current
+    Box(Modifier.fillMaxSize()) {
+        // `.profiles-heading`
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 120.dp)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                playarrString(PlayarrString.ProfilesTitle).uppercase(language.locale),
+                color = ProfilesBrandRose,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 2.2.sp,
+            )
+            Text(
+                playarrString(PlayarrString.ProfilesHeading),
+                color = WebInk,
+                fontSize = 56.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = (-3.6).sp,
+                lineHeight = 54.sp,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+
+        // `.profiles-row` / `.profiles-track` — centred when few profiles (web
+        // `justify-content: center`), horizontally scrollable when many.
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(top = 300.dp)
+                .height(420.dp),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            val track: @Composable () -> Unit = {
+                profiles.forEach { profile ->
+                    ProfileChoice(
+                        profile = profile,
+                        avatar = if (profile.id == currentUserId) {
+                            currentAvatar ?: avatars[profile.id]
+                        } else {
+                            avatars[profile.id]
+                        },
+                        selected = selectedId == profile.id,
+                        isTelevision = true,
+                        switching = switchingProfileId == profile.id,
+                        enabled = switchingProfileId == null,
+                        onFocus = { onSelectId(profile.id) },
+                        onClick = { onSelect(profile) },
+                        onSettings = { onSettings(profile) },
+                        onSignOut = if (profile.id in savedProfileIds || profile.isCurrent) {
+                            ({ onSignOut(profile.id) })
+                        } else {
+                            null
+                        },
+                    )
+                }
+                AddProfileChoice(
+                    selected = selectedId == AddProfileId,
+                    isTelevision = true,
+                    enabled = switchingProfileId == null,
+                    onFocus = { onSelectId(AddProfileId) },
+                    onClick = onAddProfile,
+                )
+            }
+            // Prefer centred Row for the common household-size list; fall back
+            // to LazyRow when the track would overflow a 1920 stage.
+            if (profiles.size <= 5) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 140.dp),
+                    horizontalArrangement = Arrangement.spacedBy(38.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.Top,
+                ) { track() }
+            } else {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(38.dp),
+                    contentPadding = PaddingValues(horizontal = 140.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    items(profiles, key = AvailableProfile::id) { profile ->
+                        ProfileChoice(
+                            profile = profile,
+                            avatar = if (profile.id == currentUserId) {
+                                currentAvatar ?: avatars[profile.id]
+                            } else {
+                                avatars[profile.id]
+                            },
+                            selected = selectedId == profile.id,
+                            isTelevision = true,
+                            switching = switchingProfileId == profile.id,
+                            enabled = switchingProfileId == null,
+                            onFocus = { onSelectId(profile.id) },
+                            onClick = { onSelect(profile) },
+                            onSettings = { onSettings(profile) },
+                            onSignOut = if (profile.id in savedProfileIds || profile.isCurrent) {
+                                ({ onSignOut(profile.id) })
+                            } else {
+                                null
+                            },
+                        )
+                    }
+                    item(AddProfileId) {
+                        AddProfileChoice(
+                            selected = selectedId == AddProfileId,
+                            isTelevision = true,
+                            enabled = switchingProfileId == null,
+                            onFocus = { onSelectId(AddProfileId) },
+                            onClick = onAddProfile,
+                        )
+                    }
+                }
+            }
+        }
+
+        // `.profile-update-control` bottom-left
+        val event = updateControl.event
+        val busy = event is AndroidUpdateEvent.Checking ||
+            event is AndroidUpdateEvent.Downloading ||
+            event is AndroidUpdateEvent.Installing
+        val label = when (event) {
+            AndroidUpdateEvent.Checking -> playarrString(PlayarrString.ProfilesUpdateChecking)
+            is AndroidUpdateEvent.UpToDate -> playarrString(PlayarrString.ProfilesUpdateCurrent)
+            is AndroidUpdateEvent.Downloading -> event.progress?.let { progress ->
+                playarrString(PlayarrString.ProfilesUpdateDownloadingProgress, "progress" to progress)
+            } ?: playarrString(PlayarrString.ProfilesUpdateDownloading)
+            is AndroidUpdateEvent.PermissionRequired -> playarrString(PlayarrString.ProfilesUpdateAllowInstall)
+            is AndroidUpdateEvent.Installing -> playarrString(PlayarrString.ProfilesUpdateInstalling)
+            is AndroidUpdateEvent.Error -> playarrString(PlayarrString.ProfilesUpdateRetry)
+            null -> playarrString(PlayarrString.ProfilesCheckForUpdates)
+        }
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 40.dp, bottom = 36.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            ProfilesGlassPill(
+                onClick = updateControl.check,
+                enabled = !busy,
+            ) {
+                Text(
+                    label,
+                    color = WebInkSoft,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            if (event is AndroidUpdateEvent.Error) {
+                Text(event.message, color = MaterialTheme.colorScheme.error, fontSize = 10.sp)
+            }
+            actionError?.let {
+                Text(playarrText(it), color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+            }
+            loadWarning?.let {
+                Text(
+                    playarrString(
+                        PlayarrString.ProfilesErrorShowingSaved,
+                        "message" to playarrText(it),
+                    ),
+                    color = WebInkMuted,
+                    fontSize = 11.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MobileProfilesStage(
+    profiles: List<AvailableProfile>,
+    selectedId: String?,
+    currentUserId: String,
+    currentAvatar: ProfileAvatarPreference?,
+    avatars: Map<String, ProfileAvatarPreference>,
+    savedProfileIds: Set<String>,
+    switchingProfileId: String?,
+    actionError: PlayarrMessage?,
+    loadWarning: PlayarrMessage?,
+    onSelectId: (String) -> Unit,
+    onSelect: (AvailableProfile) -> Unit,
+    onSettings: (AvailableProfile) -> Unit,
+    onSignOut: (String) -> Unit,
+    onAddProfile: () -> Unit,
+) {
+    val language = LocalPlayarrLanguage.current
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        contentPadding = PaddingValues(bottom = 36.dp),
+    ) {
+        item {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    playarrString(PlayarrString.ProfilesTitle).uppercase(language.locale),
+                    color = ProfilesBrandRose,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.4.sp,
+                    modifier = Modifier.padding(top = 78.dp),
+                )
+                Text(
+                    playarrString(PlayarrString.ProfilesHeading),
+                    color = WebInk,
+                    fontSize = 38.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = (-2).sp,
+                )
+            }
+        }
+        item {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth().padding(top = 42.dp),
+                horizontalArrangement = Arrangement.spacedBy(22.dp),
+                contentPadding = PaddingValues(horizontal = 34.dp),
+            ) {
+                items(profiles, key = AvailableProfile::id) { profile ->
+                    ProfileChoice(
+                        profile = profile,
+                        avatar = if (profile.id == currentUserId) {
+                            currentAvatar ?: avatars[profile.id]
+                        } else {
+                            avatars[profile.id]
+                        },
+                        selected = selectedId == profile.id,
+                        isTelevision = false,
+                        switching = switchingProfileId == profile.id,
+                        enabled = switchingProfileId == null,
+                        onFocus = { onSelectId(profile.id) },
+                        onClick = { onSelect(profile) },
+                        onSettings = { onSettings(profile) },
+                        onSignOut = if (profile.id in savedProfileIds || profile.isCurrent) {
+                            ({ onSignOut(profile.id) })
+                        } else {
+                            null
+                        },
+                    )
+                }
+                item(AddProfileId) {
+                    AddProfileChoice(
+                        selected = selectedId == AddProfileId,
+                        isTelevision = false,
+                        enabled = switchingProfileId == null,
+                        onFocus = { onSelectId(AddProfileId) },
+                        onClick = onAddProfile,
+                    )
+                }
+            }
+        }
+        actionError?.let { error ->
+            item {
+                Text(playarrText(error), color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(18.dp))
+            }
+        }
+        loadWarning?.let { warning ->
+            item {
+                Text(
+                    playarrString(
+                        PlayarrString.ProfilesErrorShowingSaved,
+                        "message" to playarrText(warning),
+                    ),
+                    color = WebInkMuted,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(18.dp),
+                )
+            }
+        }
+    }
+}
+
+/** Web `TvStageChrome` on profiles (logo + theme + language, no back). */
+@Composable
+private fun BoxScope.ProfilesStageChrome() {
+    val display = LocalPlayarrDisplayPreferences.current
+    Icon(
+        painter = painterResource(R.drawable.playarr_mark),
+        contentDescription = "Playarr",
+        tint = Color.Unspecified,
+        modifier = Modifier
+            .align(Alignment.TopStart)
+            .padding(start = 51.dp, top = 34.dp)
+            .size(42.dp)
+            .zIndex(3f),
+    )
+    Row(
+        modifier = Modifier
+            .align(Alignment.TopEnd)
+            .padding(end = 36.dp, top = 30.dp)
+            .zIndex(3f),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ProfilesChromeThemeDropdown(display)
+        ProfilesChromeLanguageDropdown(display)
+    }
+}
+
+@Composable
+private fun ProfilesChromeThemeDropdown(display: PlayarrDisplayPreferences) {
+    var expanded by remember { mutableStateOf(false) }
+    val label = when (display.theme) {
+        PlayarrThemePreference.System -> playarrString(PlayarrString.SettingsThemeSystem)
+        PlayarrThemePreference.Light -> playarrString(PlayarrString.SettingsThemeLight)
+        PlayarrThemePreference.Dark -> playarrString(PlayarrString.SettingsThemeDark)
+    }
+    Box {
+        ProfilesChromeTrigger(
+            label = label,
+            expanded = expanded,
+            minWidth = 144.dp,
+            leading = { ProfilesThemeIcon(WebInkMuted) },
+            onClick = { expanded = !expanded },
+        )
+        androidx.compose.material3.DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            PlayarrThemePreference.entries.forEach { option ->
+                val optionLabel = when (option) {
+                    PlayarrThemePreference.System -> playarrString(PlayarrString.SettingsThemeSystem)
+                    PlayarrThemePreference.Light -> playarrString(PlayarrString.SettingsThemeLight)
+                    PlayarrThemePreference.Dark -> playarrString(PlayarrString.SettingsThemeDark)
+                }
+                androidx.compose.material3.DropdownMenuItem(
+                    text = {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(optionLabel)
+                            if (option == display.theme) Text("✓", color = ProfilesBrandRose)
+                        }
+                    },
+                    onClick = {
+                        display.setTheme(option)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfilesChromeLanguageDropdown(display: PlayarrDisplayPreferences) {
+    var expanded by remember { mutableStateOf(false) }
+    val selected = playarrUiLanguageOptions.firstOrNull { it.preference == display.language }
+        ?: playarrUiLanguageOptions.first()
+    Box {
+        ProfilesChromeTrigger(
+            label = selected.label(),
+            expanded = expanded,
+            minWidth = 168.dp,
+            leading = { ProfilesGlobeIcon(WebInkMuted) },
+            onClick = { expanded = !expanded },
+        )
+        androidx.compose.material3.DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            playarrUiLanguageOptions.forEach { option ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(option.label())
+                            if (option.preference == display.language) Text("✓", color = ProfilesBrandRose)
+                        }
+                    },
+                    onClick = {
+                        display.setLanguage(option.preference)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfilesChromeTrigger(
+    label: String,
+    expanded: Boolean,
+    minWidth: Dp,
+    leading: @Composable () -> Unit,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(0.dp),
+        color = if (expanded) WebSurfaceStrong else WebBackground,
+        border = BorderStroke(1.dp, if (expanded) WebInkSoft else WebInkMuted.copy(alpha = 0.45f)),
+        modifier = Modifier
+            .widthIn(min = minWidth)
+            .height(48.dp)
+            .scale(if (expanded) 1.02f else 1f),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            leading()
+            Text(
+                label,
+                color = WebInk,
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Canvas(Modifier.size(12.dp).rotate(if (expanded) 180f else 0f)) {
+                val stroke = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val s = size.width / 24f
+                val path = Path().apply {
+                    moveTo(6f * s, 9f * s)
+                    lineTo(12f * s, 15f * s)
+                    lineTo(18f * s, 9f * s)
+                }
+                drawPath(path, color = WebInkMuted, style = stroke)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfilesThemeIcon(color: Color) {
+    Canvas(Modifier.size(16.dp)) {
+        val stroke = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round)
+        val s = size.width / 24f
+        drawCircle(color = color, radius = 4f * s, center = Offset(12f * s, 12f * s), style = stroke)
+        listOf(
+            Offset(12f, 3f) to Offset(12f, 5f),
+            Offset(12f, 19f) to Offset(12f, 21f),
+            Offset(3f, 12f) to Offset(5f, 12f),
+            Offset(19f, 12f) to Offset(21f, 12f),
+            Offset(5.64f, 5.64f) to Offset(7.06f, 7.06f),
+            Offset(16.94f, 16.94f) to Offset(18.36f, 18.36f),
+            Offset(18.36f, 5.64f) to Offset(16.94f, 7.06f),
+            Offset(7.06f, 16.94f) to Offset(5.64f, 18.36f),
+        ).forEach { (a, b) ->
+            drawLine(color, Offset(a.x * s, a.y * s), Offset(b.x * s, b.y * s), stroke.width, StrokeCap.Round)
+        }
+    }
+}
+
+@Composable
+private fun ProfilesGlobeIcon(color: Color) {
+    Canvas(Modifier.size(16.dp)) {
+        val stroke = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round)
+        val s = size.width / 24f
+        drawCircle(color, radius = 8.5f * s, center = Offset(12f * s, 12f * s), style = stroke)
+        drawLine(color, Offset(3.5f * s, 12f * s), Offset(20.5f * s, 12f * s), stroke.width, StrokeCap.Round)
+        val left = Path().apply {
+            moveTo(12f * s, 3.5f * s)
+            cubicTo(9.8f * s, 5.8f * s, 8.7f * s, 8.6f * s, 8.7f * s, 12f * s)
+            cubicTo(8.7f * s, 15.4f * s, 9.8f * s, 18.2f * s, 12f * s, 20.5f * s)
+        }
+        val right = Path().apply {
+            moveTo(12f * s, 3.5f * s)
+            cubicTo(14.2f * s, 5.8f * s, 15.3f * s, 8.6f * s, 15.3f * s, 12f * s)
+            cubicTo(15.3f * s, 15.4f * s, 14.2f * s, 18.2f * s, 12f * s, 20.5f * s)
+        }
+        drawPath(left, color, style = stroke)
+        drawPath(right, color, style = stroke)
+    }
+}
+
+/** Web `.profile-update-button` / action glass pill. */
+@Composable
+private fun ProfilesGlassPill(
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = CircleShape,
+        color = WebSurfaceStrong.copy(alpha = 0.72f),
+        border = BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.35f)),
+        shadowElevation = 8.dp,
+        modifier = Modifier.heightIn(min = 44.dp),
+    ) {
+        Box(
+            Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            contentAlignment = Alignment.Center,
+        ) { content() }
+    }
+}
+
 @Composable
 private fun ProfileChoice(
     profile: AvailableProfile,
@@ -1793,30 +2282,57 @@ private fun ProfileChoice(
     onSettings: () -> Unit,
     onSignOut: (() -> Unit)?,
 ) {
-    val size = if (isTelevision) 176.dp else 132.dp
+    // Web `.profile-choice` flex-basis clamp(160px, 13vw, 244px) → ~200 at 1080p TV.
+    val cardWidth = if (isTelevision) 200.dp else 148.dp
+    val avatarSize = if (isTelevision) 200.dp else 132.dp
     val avatarDescription = playarrString(
         if (profile.isCurrent) PlayarrString.ProfilesAvatarLabelCurrent else PlayarrString.ProfilesAvatarLabel,
         "name" to profile.displayName,
     )
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(size + 28.dp)) {
+    val lift = if (selected) Modifier.offset(y = (-8).dp).scale(1.045f) else Modifier
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .width(cardWidth)
+            .then(lift)
+            .onFocusChanged { if (it.isFocused) onFocus() },
+    ) {
         Surface(
             onClick = onClick,
             enabled = enabled,
-            modifier = Modifier
-                .size(size)
-                .scale(if (selected) FocusMotion.selectedScale else FocusMotion.restScale)
-                .then(if (selected) Modifier.border(4.dp, WebPink.copy(alpha = 0.42f), CircleShape) else Modifier)
-                .onFocusChanged { if (it.isFocused) onFocus() }
-                .semantics { contentDescription = avatarDescription },
             shape = CircleShape,
-            color = WebPink,
+            color = Color.Transparent,
+            modifier = Modifier
+                .size(avatarSize)
+                .semantics { contentDescription = avatarDescription }
+                .then(
+                    if (selected) {
+                        Modifier.shadow(
+                            elevation = 22.dp,
+                            shape = CircleShape,
+                            ambientColor = Color(0x2E1F0E14),
+                            spotColor = Color(0x2E1F0E14),
+                        )
+                    } else {
+                        Modifier
+                    },
+                )
+                .border(
+                    width = if (selected) 4.dp else 1.dp,
+                    color = if (selected) {
+                        ProfilesBrandRose.copy(alpha = 0.42f)
+                    } else {
+                        WebInkMuted.copy(alpha = 0.35f)
+                    },
+                    shape = CircleShape,
+                )
+                .scale(if (selected) 1.035f else 1f),
         ) {
             Box(contentAlignment = Alignment.Center) {
                 PlayarrProfileAvatar(
                     userId = profile.id,
                     preference = avatar,
                     modifier = Modifier.fillMaxSize(),
-                    glyphSize = if (isTelevision) 68.sp else 50.sp,
                 )
                 if (profile.pinLocked) {
                     Icon(
@@ -1828,7 +2344,18 @@ private fun ProfileChoice(
                 }
             }
         }
-        Text(profile.displayName, color = WebInk, fontSize = if (isTelevision) 16.sp else 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(top = 13.dp))
+        Text(
+            profile.displayName,
+            color = if (selected) WebInk else WebInkSoft,
+            fontSize = if (isTelevision) 16.sp else 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .padding(top = 12.dp)
+                .fillMaxWidth(),
+        )
         Text(
             playarrString(
                 when {
@@ -1839,19 +2366,56 @@ private fun ProfileChoice(
                 },
             ).uppercase(LocalPlayarrLanguage.current.locale),
             color = WebInkMuted,
-            fontSize = 8.sp,
+            fontSize = if (isTelevision) 10.sp else 8.sp,
             fontWeight = FontWeight.Bold,
+            letterSpacing = 0.6.sp,
+            modifier = Modifier.padding(top = 4.dp),
         )
-        if (selected) Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            IconButton(onClick = onSettings, enabled = enabled, modifier = Modifier.background(WebSurfaceStrong, CircleShape)) {
-                Icon(
-                    Icons.Outlined.Settings,
-                    playarrString(PlayarrString.ProfilesSettingsFor, "name" to profile.displayName),
-                    tint = WebPink,
-                )
-            }
-            onSignOut?.let { action ->
-                OutlinedButton(onClick = action, enabled = enabled) { Text(playarrString(PlayarrString.ProfilesSignOut)) }
+        if (selected) {
+            // Web `.profile-actions`
+            Row(
+                modifier = Modifier.padding(top = 18.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // `.profile-settings-button` 44×44
+                Surface(
+                    onClick = onSettings,
+                    enabled = enabled,
+                    shape = CircleShape,
+                    color = WebSurfaceStrong.copy(alpha = 0.64f),
+                    border = BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.35f)),
+                    modifier = Modifier.size(44.dp),
+                ) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        ProfilesSettingsIcon(ProfilesBrandRose)
+                    }
+                }
+                onSignOut?.let { action ->
+                    // `.profile-sign-out-button`
+                    Surface(
+                        onClick = action,
+                        enabled = enabled,
+                        shape = CircleShape,
+                        color = WebSurfaceStrong.copy(alpha = 0.64f),
+                        border = BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.35f)),
+                        modifier = Modifier.heightIn(min = 44.dp),
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            ProfilesSignOutIcon(WebInkSoft)
+                            Text(
+                                playarrString(PlayarrString.ProfilesSignOut),
+                                color = WebInkSoft,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -1865,36 +2429,141 @@ private fun AddProfileChoice(
     onFocus: () -> Unit,
     onClick: () -> Unit,
 ) {
-    val size = if (isTelevision) 176.dp else 132.dp
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(size + 28.dp)) {
-        Surface(
-            onClick = onClick,
-            enabled = enabled,
+    val cardWidth = if (isTelevision) 200.dp else 148.dp
+    val avatarSize = if (isTelevision) 200.dp else 132.dp
+    val lift = if (selected) Modifier.offset(y = (-8).dp).scale(1.045f) else Modifier
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .width(cardWidth)
+            .then(lift)
+            .onFocusChanged { if (it.isFocused) onFocus() },
+    ) {
+        // Web `.profile-add .profile-avatar` dashed plate.
+        Box(
             modifier = Modifier
-                .size(size)
-                .scale(if (selected) FocusMotion.selectedScale else FocusMotion.restScale)
-                .then(if (selected) Modifier.border(4.dp, WebPink.copy(alpha = 0.42f), CircleShape) else Modifier)
-                .onFocusChanged { if (it.isFocused) onFocus() },
-            shape = CircleShape,
-            color = WebSurfaceStrong,
+                .size(avatarSize)
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            WebSurfaceStrong.copy(alpha = 0.84f),
+                            ProfilesBrandRose.copy(alpha = 0.18f),
+                        ),
+                    ),
+                )
+                .drawBehind {
+                    drawCircle(
+                        color = WebInkMuted.copy(alpha = 0.45f),
+                        style = Stroke(
+                            width = 1.5.dp.toPx(),
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f)),
+                        ),
+                    )
+                    if (selected) {
+                        drawCircle(
+                            color = ProfilesBrandRose.copy(alpha = 0.42f),
+                            style = Stroke(width = 4.dp.toPx()),
+                        )
+                    }
+                }
+                .clickable(enabled = enabled, onClick = onClick),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text("+", color = WebPink, fontSize = if (isTelevision) 68.sp else 52.sp, fontWeight = FontWeight.Light)
-            }
+            Text(
+                "+",
+                color = WebInkSoft,
+                fontSize = if (isTelevision) 72.sp else 52.sp,
+                fontWeight = FontWeight.Light,
+            )
         }
         Text(
             playarrString(PlayarrString.ProfilesSignIn),
-            color = WebInk,
+            color = if (selected) WebInk else WebInkSoft,
             fontSize = if (isTelevision) 16.sp else 14.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(top = 13.dp),
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(top = 12.dp),
         )
         Text(
             playarrString(PlayarrString.ProfilesAddAnother).uppercase(LocalPlayarrLanguage.current.locale),
             color = WebInkMuted,
-            fontSize = 8.sp,
+            fontSize = if (isTelevision) 10.sp else 8.sp,
             fontWeight = FontWeight.Bold,
+            letterSpacing = 0.6.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 4.dp),
         )
+    }
+}
+
+/** Web `SettingsIcon` stroke gear. */
+@Composable
+private fun ProfilesSettingsIcon(color: Color) {
+    Canvas(Modifier.size(18.dp)) {
+        val stroke = Stroke(width = 1.7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val s = size.width / 24f
+        drawCircle(color, radius = 3f * s, center = Offset(12f * s, 12f * s), style = stroke)
+        val path = Path().apply {
+            // Simplified gear ring from web SettingsIcon path.
+            moveTo(19.4f * s, 13.5f * s)
+            lineTo(21.4f * s, 12f * s)
+            lineTo(19.4f * s, 8.6f * s)
+            lineTo(17.1f * s, 9.5f * s)
+            lineTo(14.5f * s, 8f * s)
+            lineTo(14f * s, 5.5f * s)
+            lineTo(10f * s, 5.5f * s)
+            lineTo(9.5f * s, 8f * s)
+            lineTo(6.9f * s, 9.5f * s)
+            lineTo(4.6f * s, 8.6f * s)
+            lineTo(2.6f * s, 12f * s)
+            lineTo(4.6f * s, 13.5f * s)
+            lineTo(4.6f * s, 16.5f * s)
+            lineTo(2.6f * s, 18f * s)
+            lineTo(4.6f * s, 21.4f * s)
+            lineTo(6.9f * s, 20.5f * s)
+            lineTo(9.5f * s, 22f * s)
+            lineTo(10f * s, 24.5f * s)
+            lineTo(14f * s, 24.5f * s)
+            lineTo(14.5f * s, 22f * s)
+            lineTo(17.1f * s, 20.5f * s)
+            lineTo(19.4f * s, 21.4f * s)
+            lineTo(21.4f * s, 18f * s)
+            lineTo(19.4f * s, 16.5f * s)
+            close()
+        }
+        // Use a simpler hex-ish gear via concentric stroke circle + ticks.
+        drawCircle(color, radius = 7.5f * s, center = Offset(12f * s, 12f * s), style = stroke)
+        for (i in 0 until 8) {
+            val angle = Math.toRadians(i * 45.0)
+            val inner = 8.2f * s
+            val outer = 10.5f * s
+            val cx = 12f * s
+            val cy = 12f * s
+            drawLine(
+                color,
+                Offset(cx + (inner * kotlin.math.cos(angle)).toFloat(), cy + (inner * kotlin.math.sin(angle)).toFloat()),
+                Offset(cx + (outer * kotlin.math.cos(angle)).toFloat(), cy + (outer * kotlin.math.sin(angle)).toFloat()),
+                stroke.width,
+                StrokeCap.Round,
+            )
+        }
+    }
+}
+
+/** Web `SignOutIcon` door + arrow. */
+@Composable
+private fun ProfilesSignOutIcon(color: Color) {
+    Canvas(Modifier.size(18.dp)) {
+        val stroke = Stroke(width = 1.7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val s = size.width / 24f
+        // Door frame: M10 5H5v14h5
+        drawLine(color, Offset(10f * s, 5f * s), Offset(5f * s, 5f * s), stroke.width, StrokeCap.Round)
+        drawLine(color, Offset(5f * s, 5f * s), Offset(5f * s, 19f * s), stroke.width, StrokeCap.Round)
+        drawLine(color, Offset(5f * s, 19f * s), Offset(10f * s, 19f * s), stroke.width, StrokeCap.Round)
+        // Arrow: M13 8l4 4-4 4  and M8 12h9
+        drawLine(color, Offset(8f * s, 12f * s), Offset(17f * s, 12f * s), stroke.width, StrokeCap.Round)
+        drawLine(color, Offset(13f * s, 8f * s), Offset(17f * s, 12f * s), stroke.width, StrokeCap.Round)
+        drawLine(color, Offset(17f * s, 12f * s), Offset(13f * s, 16f * s), stroke.width, StrokeCap.Round)
     }
 }
 
