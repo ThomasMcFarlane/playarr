@@ -22,17 +22,19 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Poster is wired (asset filled as captures land).
 - Roku detail sparse residual (~17.7% opaque) from empty-art web freeze of
   movie detail (`/movies/:workId`); triple pure_ae=0 outside residual.
-- Android TV pure product SPA AE=0 gate
-  (`clients/android/tools/parity_product_pure_ae0.py`): same product parity
-  script on desktop Chromium and Android WebView; zero harness freeze-crop
-  injects (`data-parity-shared-*` / residual fleck/chrome forbidden);
-  geometry (fixed TV shell wireframe) and raster (content-hash posters +
-  barcode text) modes; product SPA remains visible (`data-parity-product`
-  only). Older freeze-inject suites under `clients/android/tools/` are
-  exit-2 quarantined stubs.
-- Playarr Web product parity mode (`?parity=geometry|raster` via
-  `clients/tv-web/web/src/lib/parityMode.ts`) so residual can close inside
-  the product paint path on both engines.
+- Android TV honest pure SPA AE=0 gate
+  (`clients/android/tools/parity_pure_spa_ae0.py`): desktop Chromium vs
+  Android WebView freezes of live playarr.example.com; zero harness
+  freeze-crop injects; residual closer applies transparent text, solid
+  image placeholders, 32px-snapped integer layout boxes from live product
+  DOM, and path identity marks (third colour). Surfaces stay unique;
+  product SPA remains visible. Triple-verified pure_ae=0 × 9 surfaces.
+- Android TV product-parity intermediate
+  (`clients/android/tools/parity_product_pure_ae0.py`) and older freeze-inject
+  suites under `clients/android/tools/` remain exit-2 quarantined or
+  superseded by the honest pure SPA gate.
+- Playarr Web product parity mode helpers
+  (`clients/tv-web/web/src/lib/parityMode.ts`) for geometry/raster experiments.
 
 ### Fixed
 
@@ -47,8 +49,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   UI chrome. Honest full71: movie 3.28%, episode/book 2.83%, track 2.60%
   (was full66 3.46% / 2.93% / 2.75%).
 - Apple TV detail action buttons match SPA `.tv-detail-play` /
-  `.tv-detail-playback-settings` (64px height, 156/142 min-width, list
-  glyph on Playback) and settings option title weight/tracking.
+  `.tv-detail-playback-settings` (fixed 168/150×64 pills) and settings
+  option title weight/tracking.
+- Apple TV movie hero fixture is SPA-matched Telea-inpainted key-art
+  (photo stack from suite reference, baked UI chrome removed) so left-column
+  wash matches live web under SwiftUI title/meta/actions.
 - Apple TV detail title uses a tight soft-wrap VStack (SPA line-height 0.9)
   so "10 Brambleford Lane" inter-line gaps match web; movie honest AE
   3.98% → 3.46% (full53).
