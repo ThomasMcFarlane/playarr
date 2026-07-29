@@ -302,7 +302,8 @@ sub updateClock()
 end sub
 
 sub connectToServer()
-    showStatus("Connecting", "Checking " + m.serverUrl + "…", true)
+    ' Stay on pairing chrome (no fullscreen Loading wall).
+    showPairingBusy("Connecting…", "Checking " + m.serverUrl + "…")
     sendApi("version", "GET", "/api/system/version", invalid, false)
 end sub
 
@@ -352,7 +353,7 @@ end sub
 ' existing on-device RFC 8628 token exchange.
 sub beginHostedLink()
     if m.requestBusy then return
-    showStatus("Link this Roku", "Requesting a secure sign-in link…", true)
+    showPairingBusy("Link this Roku", "Requesting a secure sign-in link…")
     startApiRequest({
         action: "hostedLinkCode"
         method: "POST"
@@ -366,7 +367,7 @@ end sub
 sub acceptHostedLinkCode(data as Object)
     if data = invalid or data.device_code = invalid or data.user_code = invalid
         m.lastFailedAction = "hostedLinkCode"
-        showStatus("Couldn’t continue", "Playarr linking is unavailable right now." + Chr(10) + "Press OK to retry.", false)
+        showPairingBusy("Couldn’t continue", "Playarr linking is unavailable right now." + Chr(10) + "Press OK to retry.")
         return
     end if
     m.hostedDeviceCode = data.device_code
@@ -419,7 +420,7 @@ end sub
 sub acceptHostedLinkClaim(data as Object)
     if data = invalid or data.server_url = invalid or data.server_device_code = invalid
         m.lastFailedAction = "hostedLinkCode"
-        showStatus("Couldn’t continue", "Playarr returned an invalid link response." + Chr(10) + "Press OK to retry.", false)
+        showPairingBusy("Couldn’t continue", "Playarr returned an invalid link response." + Chr(10) + "Press OK to retry.")
         return
     end if
     m.hostedLinkTimer.control = "stop"
@@ -793,7 +794,12 @@ sub handleApiFailure(action as String, result as Object)
     end if
 
     m.lastFailedAction = action
-    showStatus("Couldn’t continue", result.error + Chr(10) + "Press OK to retry.", false)
+    ' Pre-auth: stay on pairing chrome. Never a fullscreen Loading wall mid-link.
+    if m.accessToken = invalid or m.accessToken = ""
+        showPairingBusy("Couldn’t continue", result.error + Chr(10) + "Press OK to retry.")
+    else
+        showStatus("Couldn’t continue", result.error + Chr(10) + "Press OK to retry.", false)
+    end if
     flushPendingPlaybackRequest()
 end sub
 
@@ -813,15 +819,28 @@ end sub
 sub beginPairing()
     m.pairingTimer.control = "stop"
     m.hostedLinkTimer.control = "stop"
-    showStatus("Link this Roku", "Requesting a secure sign-in code…", true)
+    showPairingBusy("Link this Roku", "Requesting a secure sign-in code…")
     sendApi("deviceCode", "POST", "/api/v1/oauth/device/code", {
         client_platform: AppConfig().clientPlatform
     }, false)
 end sub
 
+' Pairing chrome in place of fullscreen statusGroup (no Loading wall).
+sub showPairingBusy(title as String, message as String)
+    m.pairingInstruction.text = message
+    m.pairingCode.text = ""
+    m.pairingStatus.text = title
+    m.pairingManualHint.text = ""
+    if m.pairingQr <> invalid then m.pairingQr.visible = false
+    if m.pairingQrBg <> invalid then m.pairingQrBg.visible = false
+    showOnly("pairing")
+    m.top.screenState = "pairing"
+    m.top.SetFocus(true)
+end sub
+
 sub acceptDeviceCode(data as Object)
     if data = invalid
-        showStatus("Couldn’t continue", "The server returned an invalid device code.", false)
+        showPairingBusy("Couldn’t continue", "The server returned an invalid device code.")
         return
     end if
     m.deviceCode = data.device_code

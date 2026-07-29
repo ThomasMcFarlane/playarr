@@ -196,12 +196,14 @@ class SecretSafetyTests(unittest.TestCase):
         # column, decorative glow) -- these checks pin the structural
         # pieces of that pass so a future edit doesn't silently drop them,
         # without over-constraining exact pixel values.
-        self.assertIn('id="pairingGlow1"', SCENE)
+        # Glow Rectangles and solid chrome Posters removed (painted as slabs).
+        self.assertNotIn('id="pairingGlow1"', SCENE)
         self.assertIn('id="pairingLogoIcon"', SCENE)
         self.assertIn('uri="pkg:/images/pairing-logo.png"', SCENE)
         self.assertIn('text="SIGN IN ON ANOTHER DEVICE"', SCENE)
         self.assertIn('id="pairingQrBg"', SCENE)
-        self.assertIn('id="pairingManualHintBg"', SCENE)
+        self.assertNotIn('id="pairingManualHintBg"', SCENE)
+        self.assertIn("sub showPairingBusy(", MAIN)
         # The functional ids the .brs logic drives must still all exist.
         for pairing_id in (
             "pairingQr",
@@ -308,6 +310,10 @@ class BrandingAndResidualAssetTests(unittest.TestCase):
         self.assertNotIn('showStatus("Searching"', MAIN)
         self.assertNotIn('showStatus("Loading library"', MAIN)
         self.assertNotIn('showStatus("Loading playlist"', MAIN)
+        self.assertNotIn('showStatus("Connecting"', MAIN)
+        self.assertNotIn('showStatus("Link this Roku"', MAIN)
+        self.assertIn("sub showPairingBusy(", MAIN)
+        self.assertIn('visible="false"', SCENE)  # statusGroup starts hidden
         # Product surfaces must not swap to status walls on bad payloads.
         self.assertNotIn('showStatus("Library unavailable"', MAIN)
         self.assertNotIn('showStatus("Search unavailable"', MAIN)

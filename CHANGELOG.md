@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Roku shell cleanup: circular avatar PNGs (no square slabs), pairing without
+  glow/QR empty white box, profiles without solid chrome Posters, connect/
+  link busy state stays on pairing chrome (no fullscreen Loading wall).
+
 - Roku Search/Playlists no longer paint web-freeze crop Posters (those showed
   as solid dark/blue panel slabs cutting the shell). Native labels only.
 

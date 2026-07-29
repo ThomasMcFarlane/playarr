@@ -12,21 +12,11 @@
     <Rectangle id="homeLeftProxy" translation="[0,0]" width="1" height="1"
       color="0x00000000" focusable="true" visible="true" />
 
-    <Group id="statusGroup" visible="true">
-      <!--
-        Small centered logo mark added for visual consistency with the
-        rebuilt pairingGroup below (tv-web's TvStageChrome logo appears on
-        every pre-auth screen, this is the loading/error equivalent). Purely
-        additive/decorative: existing spinner/title/message positions below
-        are untouched, so this carries no risk to this screen's established
-        behavior. Single-color "Playarr" wordmark rather than pairingGroup's
-        two-tone Play/arr split: centered text can't be built from two
-        independently-centered Labels without a visible gap, so the fancier
-        treatment is left to the left-anchored pairing screen only.
-      -->
+    <!-- Fatal/error only. Never default-visible (no fullscreen Loading wall). -->
+    <Group id="statusGroup" visible="false">
       <Poster id="statusLogoIcon" translation="[934,260]" width="52" height="52" uri="pkg:/images/pairing-logo.png" loadDisplayMode="scaleToFit" />
       <Label translation="[760,322]" width="400" height="40" text="Playarr" horizAlign="center" scale="[0.72,0.72]" scaleRotateCenter="[200,20]" color="0xFFFFFFFF" />
-      <BusySpinner id="spinner" translation="[920,440]" control="start" />
+      <BusySpinner id="spinner" translation="[920,440]" control="stop" />
       <Label id="statusTitle" translation="[310,560]" width="1300" height="55" horizAlign="center" scale="[1.06,1.06]" scaleRotateCenter="[650,28]" color="0xFFFFFFFF" />
       <Label id="statusMessage" translation="[360,625]" width="1600" height="173" horizAlign="center" vertAlign="top" wrap="true" scale="[0.75,0.75]" scaleRotateCenter="[800,86]" color="0xA9B7C9FF" />
     </Group>
@@ -59,73 +49,21 @@
       those exact scale factors (0.38, 2.69) rather than re-deriving them.
     -->
     <Group id="pairingGroup" visible="false">
-      <!--
-        Decorative glow (from: .auth-backdrop's
-        radial-gradient(circle at 52% 48%, accent-soft, transparent 34%)).
-        SceneGraph has no gradient-fill primitive (see TvStage.xml's file
-        header comment for the same limitation), so this is approximated
-        with three stacked, increasingly-opaque, increasingly-small accent
-        colored Rectangles anchored lower-left, faking a soft falloff.
-        Declared first so later siblings draw in front of it (see
-        MainScene.xml's homeGroup comment on document-order layering).
-      -->
-      <Rectangle id="pairingGlow1" translation="[-120,600]" width="760" height="760" color="0xCF315710" />
-      <Rectangle id="pairingGlow2" translation="[-40,660]" width="560" height="560" color="0xCF31571C" />
-      <Rectangle id="pairingGlow3" translation="[40,720]" width="360" height="360" color="0xCF315728" />
-
-      <!--
-        Logo lockup (from: .app-logo-icon + .app-logo-accent). The source
-        icon is an SVG (clients/tv-web/web/public/playarr-icon.svg); Poster
-        needs a raster asset, so it was rasterised once with rsvg-convert
-        into images/pairing-logo.png (176x176, downscaled at draw time),
-        the real mark, not a placeholder rectangle.
-        The wordmark's two-tone treatment ("Play" muted, "arr" full-bright,
-        from the JSX's `<span className="app-logo-accent">Play</span>arr`
-        split) has no rich-text equivalent on a SceneGraph Label, so it is
-        approximated with two adjacent plain Labels; the 70px gap between
-        them is an estimate of "Play"'s rendered width at this font size,
-        not a measured value.
-      -->
+      <!-- No decorative glow Rectangles: they painted large solid pink/purple
+           slabs on device (SceneGraph has no soft radial gradient). -->
       <Poster id="pairingLogoIcon" translation="[855,350]" width="52" height="52" uri="pkg:/images/pairing-logo.png" loadDisplayMode="scaleToFit" />
-      <!--
-        Two-tone wordmark matches web (.app-logo-accent on "Play", ink on "arr").
-        SceneGraph Labels clip by width, so "Play" keeps a generous width while
-        "arr" is translated to sit flush after the measured glyph advance
-        (~48px at scale 0.72 on Roku default font).
-      -->
       <Label translation="[855,410]" width="200" height="32" text="Play" scale="[0.72,0.72]" color="0xA9B7C9FF" />
       <Label translation="[903,410]" width="120" height="32" text="arr" scale="[0.72,0.72]" color="0xFFFFFFFF" />
-
-      <!-- Kicker (from: .page-kicker, 12px/uppercase/0.18em letter-spacing; copy mirrors tv-web's components.deviceLogin.kicker string). -->
       <Label translation="[855,478]" width="600" height="20" text="SIGN IN ON ANOTHER DEVICE" scale="[0.38,0.38]" color="0x5C6B80FF" />
-      <!-- Title (from: .auth-title, 86px). Text unchanged ("Link this Roku" is this channel's own copy, matching tv-web's device-specific "Link this TV"). -->
       <Label translation="[855,515]" width="700" height="50" text="Link this Roku" scale="[2.69,2.69]" color="0xFFFFFFFF" />
-
-      <!--
-        QR (from: .device-login-qr, 240x240 with a solid white 12px
-        border/background). pairingQrBg approximates that white card
-        behind the code; Roku Rectangle has no corner-radius field so the
-        border reads square rather than the source's 18px rounded corners.
-      -->
-      <Rectangle id="pairingQrBg" translation="[843,668]" width="264" height="264" color="0xFFFFFFFF" />
+      <!-- QR card only visible when a QR URI is set (never empty white box). -->
+      <Rectangle id="pairingQrBg" translation="[843,668]" width="264" height="264" color="0xFFFFFFFF" visible="false" />
       <Poster id="pairingQr" translation="[855,680]" width="240" height="240" loadDisplayMode="scaleToFit" visible="false" />
-
-      <!-- Instructions column (from: .device-login-instructions), right of the QR, left-anchored like the rest of the column. -->
-      <Label id="pairingInstruction" translation="[1165,680]" width="933" height="96" wrap="true" scale="[0.75,0.75]" color="0xA9B7C9FF" />
-      <Label id="pairingCode" translation="[1165,760]" width="300" height="50" scale="[2.4,2.4]" color="0xCF3157FF" />
-      <Label id="pairingStatus" translation="[1165,840]" width="600" height="40" scale="[0.75,0.75]" color="0xFFFFFFFF" />
-      <!--
-        Manual-entry hint (from: the source's error-state "Try again"
-        .btn-primary pill, the closest analog available here). This screen
-        has no real focusable button for the "*" shortcut, so a true pill
-        control isn't wired up; the light-pill look is approximated purely
-        as a static backdrop behind the hint text (dark text on a light
-        fill, mirroring on-accent on accent) rather than risking a
-        tight text-fitted pill overflowing on unmeasured real-device font
-        metrics.
-      -->
-      <Rectangle id="pairingManualHintBg" translation="[1155,882]" width="620" height="46" color="0xDFDCDDFF" />
-      <Label id="pairingManualHint" translation="[1165,894]" width="600" height="30" scale="[0.62,0.62]" color="0x211D21FF" />
+      <Label id="pairingInstruction" translation="[855,620]" width="933" height="96" wrap="true" scale="[0.75,0.75]" color="0xA9B7C9FF" />
+      <Label id="pairingCode" translation="[855,720]" width="500" height="50" scale="[2.4,2.4]" color="0xCF3157FF" />
+      <Label id="pairingStatus" translation="[855,820]" width="800" height="40" scale="[0.75,0.75]" color="0xFFFFFFFF" />
+      <!-- No solid light-pill Rectangle (read as a slab). Plain status text only. -->
+      <Label id="pairingManualHint" translation="[855,880]" width="800" height="30" scale="[0.62,0.62]" color="0xA9B7C9FF" />
     </Group>
 
     <!--
@@ -188,23 +126,11 @@
         rowItemSpacing="[[48,0]]" rowHeights="[350]" showRowLabel="false"
         focusXOffset="[0]" rowFocusAnimationStyle="fixedFocusWrap"
         focusBitmapBlendColor="0x00000000" />
-      <!--
-        tv-web Profiles actions: gear circle + Sign out pill under the active
-        avatar, plus Auto (top-right) and Clients (bottom-right) chrome.
-        Visible Posters match web assets; LabelList stays the focusable
-        D-pad control (opacity near-zero so only the painted chrome shows).
-      -->
-      <Poster id="profilesAuto" translation="[1702,44]" width="187" height="53"
-        uri="pkg:/images/profiles-auto.png" loadDisplayMode="scaleToFit" />
-      <Poster id="profilesGear" translation="[732,697]" width="56" height="56"
-        uri="pkg:/images/profiles-gear.png" loadDisplayMode="scaleToFit" />
-      <Poster id="profilesSignOut" translation="[792,699]" width="168" height="52"
-        uri="pkg:/images/profiles-signout.png" loadDisplayMode="scaleToFit" />
-      <Poster id="profilesClients" translation="[1775,998]" width="108" height="57"
-        uri="pkg:/images/profiles-clients.png" loadDisplayMode="scaleToFit" />
-      <!-- Opacity 0: LabelList stays focusable for D-pad but must not paint
-           "Settings"/"Sign out" text under the chrome Posters (dual UI). -->
-      <LabelList id="profileActions" translation="[731,696]" itemSize="[348,39]" numRows="2" focusBitmapBlendColor="0x00000000" opacity="0" />
+      <!-- Native labels only. Crop-Poster chrome painted solid dark slabs. -->
+      <Label id="profilesAuto" translation="[1700,50]" width="180" height="36" text="Auto" horizAlign="right" scale="[0.55,0.55]" color="0xF4F0F1FF" />
+      <Label id="profilesClients" translation="[1700,1000]" width="180" height="36" text="Clients" horizAlign="right" scale="[0.5,0.5]" color="0xA9B7C9FF" />
+      <!-- Focusable Settings / Sign out (no solid PNG slab under avatars). -->
+      <LabelList id="profileActions" translation="[760,700]" itemSize="[280,42]" numRows="2" focusBitmapBlendColor="0x3A343CFF" />
     </Group>
 
     <!--
@@ -742,8 +668,6 @@
     <Group id="playerControls" visible="false">
       <!-- Visual chrome matched to tv-web player bar (web freeze crop). Labels
            stay focusable/key-driven but paint is the chrome Poster + progress. -->
-      <Poster id="playerBarChrome" translation="[0,936]" width="1920" height="58"
-        uri="pkg:/images/playback-controls-chrome.png" loadDisplayMode="scaleToFit" />
       <Rectangle id="playerBarBg" translation="[0,900]" width="1920" height="180" color="0x070B1400" />
       <Rectangle id="playerProgressTrack" translation="[80,940]" width="1760" height="4" color="0xFFFFFF33" />
       <Rectangle id="playerBufferedFill" translation="[80,940]" width="0" height="4" color="0xFFFFFF57" />
