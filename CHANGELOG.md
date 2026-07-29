@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku queues Play/playback API requests when chapters or similar titles
+  still hold the single-flight slot, so OK on Play is not silently dropped.
+
 - Roku library browse defers key-art download so the grid paints first, then
   loads authenticated backdrop art (same tmp-file path as home hero).
 

@@ -227,6 +227,7 @@ sub init()
     m.preferredAudioLanguage = invalid
 
     m.detailActions.ObserveField("itemSelected", "onDetailActionSelected")
+    m.pendingPlaybackRequest = invalid
     m.detailEpisodes.ObserveField("rowItemSelected", "onDetailEpisodeSelected")
     m.detailChapters.ObserveField("rowItemSelected", "onDetailChapterSelected")
     m.detailSimilar.ObserveField("rowItemSelected", "onDetailSimilarSelected")
@@ -437,7 +438,6 @@ sub acceptHostedLinkClaim(data as Object)
 end sub
 
 sub sendApi(action as String, method as String, path as String, body as Dynamic, authenticated = true as Boolean)
-    if m.requestBusy then return
     request = {
         action: action
         method: method
@@ -447,6 +447,14 @@ sub sendApi(action as String, method as String, path as String, body as Dynamic,
         accessToken: ""
     }
     if authenticated then request.accessToken = m.accessToken
+    ' Playback must never be silently dropped while chapters/similar are
+    ' still in flight (single-flight requestBusy). Queue and flush next.
+    if m.requestBusy
+        if action = "playback"
+            m.pendingPlaybackRequest = request
+        end if
+        return
+    end if
     startApiRequest(request)
 end sub
 
@@ -459,6 +467,14 @@ sub startApiRequest(request as Object)
     task.request = request
     m.apiTask = task
     task.control = "RUN"
+end sub
+
+sub flushPendingPlaybackRequest()
+    if m.pendingPlaybackRequest = invalid then return
+    if m.requestBusy then return
+    req = m.pendingPlaybackRequest
+    m.pendingPlaybackRequest = invalid
+    startApiRequest(req)
 end sub
 
 sub onApiResult(event as Object)
@@ -579,6 +595,9 @@ sub onApiResult(event as Object)
         m.queuedPlaybackEvent = invalid
         sendPlaybackEvent(queued)
     end if
+    ' After any completed request, start a queued Play if the viewer hit
+    ' Play while chapters/similar still held the single-flight slot.
+    flushPendingPlaybackRequest()
 end sub
 
 sub handleApiFailure(action as String, result as Object)
@@ -720,6 +739,7 @@ sub handleApiFailure(action as String, result as Object)
 
     m.lastFailedAction = action
     showStatus("Couldn’t continue", result.error + Chr(10) + "Press OK to retry.", false)
+    flushPendingPlaybackRequest()
 end sub
 
 sub refreshSession()
