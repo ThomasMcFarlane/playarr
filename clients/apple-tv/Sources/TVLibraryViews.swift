@@ -52,43 +52,63 @@ struct TVHomeView: View {
                     // Key art (left half), greyscale wash like web
                     heroBackdrop(hero: hero, size: geo.size)
 
-                    // Title panel — clear of floating nav (nav ~100pt wide).
+                    // `.tv-home-rails` frost gradient (right 62%).
+                    HStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
+                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
+                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
+                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.78), location: 1),
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: geo.size.width * (1 - DesignTokens.Shell.railLeftInset))
+                    }
+
+                    // `.tv-home-feature` — top 24%, left 8vw, width min(24vw,455).
                     if let hero {
-                        VStack(alignment: .leading, spacing: 18) {
-                            // SPA kicker: "SERIES · CRIME"
+                        VStack(alignment: .leading, spacing: 0) {
                             Text(kindKicker(hero))
                                 .font(TVTheme.font(size: 12, weight: .heavy))
                                 .tracking(1.2)
                                 .foregroundStyle(DesignTokens.Color.brandPrimary)
                                 .textCase(.uppercase)
                             Text(hero.title)
-                                .font(TVTheme.heroTitleFont())
+                                .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .semibold))
+                                .tracking(-4.5)
                                 .foregroundStyle(DesignTokens.Color.textPrimary)
                                 .lineLimit(3)
                                 .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
+                                .padding(.top, 10)
                             if let overview = hero.overview, !overview.isEmpty {
                                 Text(overview)
-                                    .font(TVTheme.font(size: 16, weight: .regular))
-                                    .foregroundStyle(DesignTokens.Color.textSecondary)
-                                    .lineLimit(4)
+                                    .font(TVTheme.font(size: DesignTokens.Shell.featureOverviewSize, weight: .regular))
+                                    .foregroundStyle(DesignTokens.Color.textDisabled)
+                                    .lineLimit(5)
+                                    .lineSpacing(4)
                                     .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
+                                    .padding(.top, 22)
                             }
                         }
-                        .padding(.leading, 200)
+                        .padding(.leading, DesignTokens.Shell.titlePanelLeft)
                         .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
                         .zIndex(2)
                     }
 
-                    // Right rails panel — titles mirror live SPA home rails.
-                    VStack(alignment: .leading, spacing: 36) {
+                    // `.tv-home-rails` — left 38%, padding-block ~half height, track fade.
+                    VStack(alignment: .leading, spacing: DesignTokens.Shell.railTrackGap) {
                         let movies = viewModel.works.filter { $0.kind == .movie }
                         let series = viewModel.works.filter { $0.kind == .series }
                         rail(title: "Start watching", works: Array((series + viewModel.works).prefix(12)))
                         rail(title: "New movies", works: Array((movies.isEmpty ? viewModel.works : movies).prefix(12)))
                     }
-                    .padding(.leading, geo.size.width * DesignTokens.Shell.railLeftInset + 24)
-                    .padding(.trailing, 48)
-                    .padding(.top, geo.size.height * 0.26)
+                    .padding(.leading, geo.size.width * DesignTokens.Shell.railLeftInset)
+                    .padding(.trailing, 24)
+                    .padding(.top, geo.size.height * DesignTokens.Shell.railContentTopFraction)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
             }
@@ -174,10 +194,14 @@ struct TVHomeView: View {
     }
 
     private func rail(title: String, works: [Work]) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 0) {
+            // `.tv-media-track-heading h2`
             Text(title)
-                .font(TVTheme.font(size: 20, weight: .bold))
+                .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
+                .tracking(-0.5)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
+                .padding(.leading, DesignTokens.Shell.railTrackLeftFade)
+                .padding(.bottom, 17)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: DesignTokens.Shell.homeCardGap) {
                     ForEach(works) { work in
@@ -190,13 +214,17 @@ struct TVHomeView: View {
                                 isSelected: focusedWorkID == work.id
                             )
                         }
-                        .buttonStyle(.card)
+                        .buttonStyle(.plain)
                         .focusable(TVParityLaunch.requestedScreen == nil)
                         .focusEffectDisabled(TVParityLaunch.requestedScreen != nil)
                         .onAppear { if focusedWorkID == nil { focusedWorkID = work.id } }
                     }
                 }
-                .padding(.vertical, 12)
+                // Track scroll pad: 18 top, left = track-left-fade + 8.
+                .padding(.top, 18)
+                .padding(.bottom, 8)
+                .padding(.leading, DesignTokens.Shell.railTrackLeftFade + 8)
+                .padding(.trailing, 46)
             }
             .scrollClipDisabled()
         }
@@ -236,14 +264,17 @@ struct TVHomeCard: View {
                     )
             )
 
+            // `.tv-home-card > strong` / `small`
             Text(work.title)
-                .font(TVTheme.font(size: 13, weight: .semibold))
+                .font(TVTheme.font(size: 12, weight: .semibold))
                 .foregroundStyle(DesignTokens.Color.textPrimary)
                 .lineLimit(1)
                 .frame(width: DesignTokens.Shell.homeCardWidth, alignment: .leading)
+                .padding(.top, 8)
             Text(work.kind.rawValue.capitalized)
-                .font(TVTheme.font(size: 11, weight: .medium))
+                .font(TVTheme.font(size: 10, weight: .bold))
                 .foregroundStyle(DesignTokens.Color.textDisabled)
+                .padding(.top, 2)
         }
         .frame(width: DesignTokens.Shell.homeCardWidth, alignment: .leading)
     }

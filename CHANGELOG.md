@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV home shell geometry aligned to SPA CSS clamps at 1920×1080
+  (feature panel 24%/8vw, rails left 38% with track-left-fade, cards 219×123
+  16:9, gap 25px).
+
 - Apple TV parity home/detail use fixture hero and rail artwork
   extracted from the SPA suite reference so offline captures share posters
   with the web home frame; profile chip uses the suite avatar raster.
@@ -147,6 +151,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   composables to the standard Modifier contract without changing left-to-right layouts.
 
 ### Fixed
+
+- Apple TV home shell geometry aligned to SPA CSS clamps at 1920×1080
+  (feature panel 24%/8vw, rails left 38% with track-left-fade, cards 219×123
+  16:9, gap 25px).
 
 - Apple TV parity home/detail use fixture hero and rail artwork
   extracted from the SPA suite reference so offline captures share posters
@@ -569,6 +577,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   of maintaining a separate administrator page.
 
 ### Fixed
+
+- Apple TV home shell geometry aligned to SPA CSS clamps at 1920×1080
+  (feature panel 24%/8vw, rails left 38% with track-left-fade, cards 219×123
+  16:9, gap 25px).
 
 - Apple TV parity home/detail use fixture hero and rail artwork
   extracted from the SPA suite reference so offline captures share posters

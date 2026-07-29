@@ -135,13 +135,29 @@ enum DesignTokens {
         static let headerTop: CGFloat = 56
         /// `clamp(30px, 2.35vw, 42px)` → 42
         static let logoSize: CGFloat = 42
-        static let homeCardWidth: CGFloat = 220
-        static let homeCardHeight: CGFloat = 124
-        static let homeCardGap: CGFloat = 18
-        static let railLeftInset: CGFloat = 0.38 // fraction of width
-        static let titlePanelLeft: CGFloat = 200
-        static let titlePanelTopFraction: CGFloat = 0.31
-        static let titlePanelWidth: CGFloat = 480
+        // `.tv-home-card`: clamp(150px, 11.4vw, 225px) @ 1920 → 219; 16:9 art.
+        static let homeCardWidth: CGFloat = 219
+        static let homeCardHeight: CGFloat = 123
+        // Track scroll gap: clamp(14px, 1.3vw, 26px) → 25.
+        static let homeCardGap: CGFloat = 25
+        // `.tv-home-rails { left: 38% }`
+        static let railLeftInset: CGFloat = 0.38
+        // `--tv-track-left-fade: clamp(88px, 8.8vw, 152px)` + 8px pad → 160.
+        static let railTrackLeftFade: CGFloat = 160
+        // Rails padding-block half viewport; first card pink top-right ≈ y 508 @ 1080.
+        static let railContentTopFraction: CGFloat = 0.395
+        // Gap between media tracks: clamp(38px, 5vh, 64px) → 54.
+        static let railTrackGap: CGFloat = 54
+        // `.tv-home-feature`: top 24%, left clamp(102,8vw,160)→154, width min(24vw,455)→455.
+        static let titlePanelLeft: CGFloat = 154
+        static let titlePanelTopFraction: CGFloat = 0.24
+        static let titlePanelWidth: CGFloat = 455
+        // Feature h2: clamp(2.2rem, 3.6vw, 5rem) → ~69.
+        static let featureTitleSize: CGFloat = 69
+        // Overview: clamp(0.58rem, 0.67vw, 0.84rem) → ~13.
+        static let featureOverviewSize: CGFloat = 13
+        // Rail heading: clamp(0.76rem, 0.92vw, 1.18rem) → ~18.
+        static let railHeadingSize: CGFloat = 18
 
         // MARK: Search page (`.tv-library-heading` + `.tv-search-copy` @ 1920×1080)
 

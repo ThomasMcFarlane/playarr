@@ -63,6 +63,13 @@ final class DesignTokensTests: XCTestCase {
         XCTAssertEqual(DesignTokens.Shell.searchContentLeft, 154)
         XCTAssertEqual(DesignTokens.Shell.searchCopyTop, 130)
         XCTAssertEqual(DesignTokens.Shell.searchFormHeight, 76)
+        XCTAssertEqual(DesignTokens.Shell.homeCardWidth, 219)
+        XCTAssertEqual(DesignTokens.Shell.homeCardHeight, 123)
+        XCTAssertEqual(DesignTokens.Shell.homeCardGap, 25)
+        XCTAssertEqual(DesignTokens.Shell.railLeftInset, 0.38, accuracy: 0.001)
+        XCTAssertEqual(DesignTokens.Shell.railTrackLeftFade, 160)
+        XCTAssertEqual(DesignTokens.Shell.titlePanelTopFraction, 0.24, accuracy: 0.001)
+        XCTAssertEqual(DesignTokens.Shell.titlePanelLeft, 154)
     }
 
     func testRadiusScale() {
