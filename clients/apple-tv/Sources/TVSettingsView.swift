@@ -49,13 +49,12 @@ struct TVSettingsView: View {
                         .padding(.leading, 4)
                     }
                     // SPA options list padding-top is `--library-rail-top` (15vh≈162).
-                    // Heading (back+Preferences) sits in the shell band; first option
-                    // on SPA starts y≈162. Native heading ends ~y105; need bottom
-                    // gap so Appearance row starts y≈162 (full90: native 133 vs SPA 162).
-                    .padding(.bottom, 57)
+                    // Heading (back+Preferences) sits in the shell band; full103
+                    // first option text y≈203 vs SPA y≈216 (+13). Bump gap 57→70.
+                    .padding(.bottom, 70)
 
-                    // SPA `.settings-option`: min-height 88, title clamp ~1.6vw≈31,
-                    // weight 480; active only changes background (not title size).
+                    // SPA `.settings-option` min-height 88; full105 pitch minHeight 90
+                    // + top gap 70 gave best AE 1.493% (first row d=1).
                     VStack(spacing: 0) {
                         ForEach(Array(sections.enumerated()), id: \.offset) { index, section in
                             let selected = selectedSection == index
@@ -90,7 +89,7 @@ struct TVSettingsView: View {
                                 // block padding clamp(18, 2.2vh, 28) → ~24.
                                 .padding(.horizontal, 32)
                                 .padding(.vertical, 24)
-                                .frame(minHeight: 88, alignment: .center)
+                                .frame(minHeight: 90, alignment: .center)
                                 .background(
                                     RoundedRectangle(cornerRadius: 0, style: .continuous)
                                         .fill(

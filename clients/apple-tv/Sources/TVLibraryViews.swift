@@ -70,9 +70,10 @@ struct TVHomeView: View {
                     }
 
                     // SPA `.tv-key-art > span` watermark (large faded title).
-                    // Parity fixtures bake SPA watermark glyphs into hero.png; stacking
-                    // another Text doubles "THE DARK" and inflates AE. Production (live
-                    // art) still draws the watermark at SPA geometry (size 7vw≈134).
+                    // Parity: hero.png already carries the SPA key-art watermark
+                    // glyphs baked into the photo (lower jacket band). Drawing
+                    // another Text at CSS top:28% doubles/misplaces "THE DARK"
+                    // (full104 home 2.66%→3.12%). Production live art still draws.
                     if let hero, TVParityLaunch.requestedScreen == nil {
                         Text(hero.title.uppercased())
                             .font(TVTheme.font(size: DesignTokens.Shell.keyArtWatermarkSize, weight: .heavy))

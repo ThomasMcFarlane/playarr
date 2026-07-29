@@ -87,6 +87,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Apple TV home rail headings: SPA gap card→label (homeRailHeadingOffsetY 63
   including SwiftUI ascent) and watermark size 7vw≈134. Honest full103 home AE
   **2.66%** (from full100 2.70%).
+- Apple TV settings options list: first-row gap 70 and min-height 90 to match
+  SPA `--library-rail-top` + option pitch. Honest full105 settings AE **1.49%**
+  (from full103 1.52%).
 - Apple TV settings options list bottom gap after Preferences heading matches
   SPA first-option y≈162 (was y≈133).
 - Apple TV detail Playback control uses SPA-like square.grid.2x2 brand glyph.
