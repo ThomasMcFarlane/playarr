@@ -25,6 +25,7 @@ const LINK_CLIENT_PLATFORMS = new Set([
   "tv-webos",
   "tv-tizen",
   "tv-vidaa",
+  "tv-roku",
   "tv-fire",
   "xbox",
 ]);
