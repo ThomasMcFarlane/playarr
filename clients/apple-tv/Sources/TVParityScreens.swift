@@ -183,11 +183,11 @@ struct TVParityPairingFixtureView: View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
                 DesignTokens.Color.backgroundBase
-                // Soft left glow (full30 best AE used left-biased center)
+                // SPA left wash is cool/neutral (sampled mean ~35,31,34) — not pink.
                 RadialGradient(
                     colors: [
-                        Color(red: 0.55, green: 0.35, blue: 0.42).opacity(0.45),
-                        Color(red: 0.35, green: 0.22, blue: 0.28).opacity(0.22),
+                        Color(red: 0.28, green: 0.26, blue: 0.28).opacity(0.38),
+                        Color(red: 0.18, green: 0.16, blue: 0.18).opacity(0.18),
                         .clear,
                     ],
                     center: UnitPoint(x: 0.12, y: 0.48),

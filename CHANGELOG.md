@@ -105,6 +105,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Apple TV library preview titles use DemiBold (SPA weight 560) with top pad 16;
   hero-series fixture brightness lifted toward SPA. Honest full112 episode/book
   AE **2.76%**, track **2.54%** (from full109 2.84% / 2.61%).
+- Apple TV pairing left wash uses SPA-sampled cool grey (not pink) so residual
+  is QR/glyph only under approved E5/E3 geometric exclusions.
+
 - Apple TV settings options list bottom gap after Preferences heading matches
   SPA first-option y≈162 (was y≈133).
 - Apple TV detail Playback control uses SPA-like square.grid.2x2 brand glyph.
