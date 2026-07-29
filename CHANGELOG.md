@@ -74,6 +74,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Apple TV pairing never shows “code expired”: expired hosted/device codes
   auto-renew like web `DeviceLogin.renewCode` (silent loop + 30s claim grace).
 
+- Apple TV auth chrome no longer traps focus: Down from theme/language/back
+  reaches Sign in manually / Connect (web ProfileAuthLayout Arrow bridge).
+
 - Apple TV pairing gate always uses the playarr.app hosted broker (even when
   a relay/server URL is remembered), so the on-screen visit line is
   `https://playarr.app/link` and never a `v4-…relay.playarr.app` Host.

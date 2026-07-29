@@ -522,6 +522,9 @@ struct TVProfilesView: View {
                     palette: palette,
                     scale: s,
                     showBack: true,
+                    onMoveDownFromChrome: {
+                        focusedProfileID = profiles.first?.id
+                    },
                     onBack: onLinkTV
                 )
             }
@@ -724,6 +727,17 @@ struct TVProfilesView: View {
 
 // MARK: - Device login chrome (live /login/qr @ 1920×1080)
 
+/// Focus graph for auth chrome ↔ form (web ArrowUp/Down bridge on
+/// ProfileAuthLayout). Full-screen chrome overlays trap tvOS focus unless we
+/// own the hand-off explicitly.
+enum TVAuthFocus: Hashable {
+    case back
+    case theme
+    case language
+    case formPrimary
+    case formSecondary
+}
+
 /// 1:1 with measured web `/login/qr` (`ProfileAuthLayout` + `TvStageChrome` +
 /// embedded `DeviceLogin`). Geometry from Playwright CDP @ 1920×1080.
 struct TVDeviceLoginChrome: View {
@@ -749,9 +763,14 @@ struct TVDeviceLoginChrome: View {
 
     @Environment(TVAppEnvironment.self) private var environment
     @Environment(TVDisplayPreferences.self) private var displayPreferences
+    @FocusState private var authFocus: TVAuthFocus?
 
     private var palette: TVAuthPalette {
         TVAuthPalette.forTheme(displayPreferences.resolvedTheme)
+    }
+
+    private var showsBack: Bool {
+        onBack != nil || (isManual && onBackToQr != nil)
     }
 
     var body: some View {
@@ -761,48 +780,60 @@ struct TVDeviceLoginChrome: View {
             // Prefer height-driven scale so 1920×1080 TV maps 1:1; clamp for
             // odd sim aspect ratios without breaking positions.
             let s = min(scaleX, scaleY)
+            // Top chrome strip height (logo/back/menus) — keep focusable chrome
+            // out of a full-screen ZStack so Down can reach the form.
+            let chromeHeight = 120 * s
 
             ZStack {
                 // Web `.login-profile-page`: 900px rose radial + 145° surface→bg.
                 TVAuthStageBackground(palette: palette, style: .login)
 
-                // Centred auth panel (web `.profile-auth-panel` w=560).
+                // Form column first in the focus graph (below chrome strip).
                 VStack(spacing: 0) {
-                    Text("WELCOME HOME")
-                        .font(.system(size: 11.84 * s, weight: .heavy))
-                        .tracking(2.13 * s)
-                        .foregroundStyle(palette.inkMuted)
-                        .textCase(.uppercase)
+                    Color.clear
+                        .frame(height: chromeHeight)
+                        .accessibilityHidden(true)
 
-                    Text("Sign in to Playarr")
-                        .font(.system(size: 80.64 * s, weight: .medium))
-                        .tracking(-5.81 * s)
-                        .foregroundStyle(palette.ink)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.7)
-                        .padding(.top, 7.2 * s)
+                    VStack(spacing: 0) {
+                        Text("WELCOME HOME")
+                            .font(.system(size: 11.84 * s, weight: .heavy))
+                            .tracking(2.13 * s)
+                            .foregroundStyle(palette.inkMuted)
+                            .textCase(.uppercase)
 
-                    Text(descriptionCopy)
-                        .font(.system(size: 19.2 * s, weight: .regular))
-                        .foregroundStyle(palette.inkMuted)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 491 * s)
-                        .padding(.top, 16 * s)
-                        .padding(.bottom, 32 * s)
+                        Text("Sign in to Playarr")
+                            .font(.system(size: 80.64 * s, weight: .medium))
+                            .tracking(-5.81 * s)
+                            .foregroundStyle(palette.ink)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.7)
+                            .padding(.top, 7.2 * s)
 
-                    phaseBody(scale: s)
+                        Text(descriptionCopy)
+                            .font(.system(size: 19.2 * s, weight: .regular))
+                            .foregroundStyle(palette.inkMuted)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: 491 * s)
+                            .padding(.top, 16 * s)
+                            .padding(.bottom, 32 * s)
+
+                        phaseBody(scale: s)
+                    }
+                    .frame(width: 560 * s)
+                    .frame(maxWidth: .infinity, alignment: .center)
+
+                    Spacer(minLength: 0)
                 }
-                .frame(width: 560 * s)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                // Panel top ≈ y188 of 1080 → ~17.4% from top; keep vertical centre-ish.
-                .padding(.top, 40 * s)
 
-                // Web `TvStageChrome`: logo, ← back (to profiles), theme + language.
+                // Absolute visual chrome; focus moves via shared authFocus +
+                // onMoveCommand (not geometric search through a full overlay).
                 TVAuthStageChrome(
                     palette: palette,
                     scale: s,
-                    showBack: onBack != nil || (isManual && onBackToQr != nil),
+                    showBack: showsBack,
+                    authFocus: $authFocus,
+                    onMoveDownFromChrome: { authFocus = .formPrimary },
                     onBack: {
                         if isManual, let onBackToQr {
                             onBackToQr()
@@ -815,6 +846,12 @@ struct TVDeviceLoginChrome: View {
         }
         .ignoresSafeArea()
         .preferredColorScheme(displayPreferences.colorScheme)
+        .onAppear {
+            // Land on the form (Sign in manually / Connect), not the top menus.
+            if authFocus == nil {
+                authFocus = .formPrimary
+            }
+        }
     }
 
     private var isManual: Bool {
@@ -900,15 +937,7 @@ struct TVDeviceLoginChrome: View {
                     .foregroundStyle(palette.danger)
                     .multilineTextAlignment(.center)
                 if let onRetry {
-                    Button(action: onRetry) {
-                        Text("Try again")
-                            .font(.system(size: 15 * s, weight: .semibold))
-                            .foregroundStyle(palette.brandPink)
-                            .padding(.horizontal, 20 * s)
-                            .padding(.vertical, 12 * s)
-                    }
-                    .buttonStyle(TVSecondaryPillButtonStyle(palette: palette))
-                    .focusEffectDisabled(true)
+                    retryButton(scale: s, action: onRetry)
                 }
             }
             manualButton(scale: s)
@@ -945,7 +974,15 @@ struct TVDeviceLoginChrome: View {
                         .clipShape(Capsule())
                 }
                 .buttonStyle(TVPrimaryPillButtonStyle(palette: palette))
+                .focused($authFocus, equals: .formPrimary)
                 .focusEffectDisabled(true)
+                .onMoveCommand { direction in
+                    if direction == .up {
+                        authFocus = showsBack ? .back : .language
+                    } else if direction == .down {
+                        authFocus = .formSecondary
+                    }
+                }
                 if let onBackToQr {
                     Button(action: onBackToQr) {
                         Text("Sign in with QR code")
@@ -954,7 +991,11 @@ struct TVDeviceLoginChrome: View {
                             .padding(.vertical, 16 * s)
                     }
                     .buttonStyle(TVSecondaryPillButtonStyle(palette: palette))
+                    .focused($authFocus, equals: .formSecondary)
                     .focusEffectDisabled(true)
+                    .onMoveCommand { direction in
+                        if direction == .up { authFocus = .formPrimary }
+                    }
                 }
             }
             .frame(maxWidth: 520 * s)
@@ -972,9 +1013,35 @@ struct TVDeviceLoginChrome: View {
             }
             // Web `.btn.btn-secondary` + focus scale 1.055.
             .buttonStyle(TVSecondaryPillButtonStyle(palette: palette))
+            .focused($authFocus, equals: .formPrimary)
             .focusEffectDisabled(true)
+            .onMoveCommand { direction in
+                // Up from the form lands on the top chrome (web focus bridge).
+                if direction == .up {
+                    authFocus = showsBack ? .back : .language
+                }
+            }
             .padding(.top, 20 * s)
             .frame(maxWidth: 560 * s)
+        }
+    }
+
+    @ViewBuilder
+    private func retryButton(scale s: CGFloat, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text("Try again")
+                .font(.system(size: 15 * s, weight: .semibold))
+                .foregroundStyle(palette.brandPink)
+                .padding(.horizontal, 20 * s)
+                .padding(.vertical, 12 * s)
+        }
+        .buttonStyle(TVSecondaryPillButtonStyle(palette: palette))
+        .focused($authFocus, equals: .formPrimary)
+        .focusEffectDisabled(true)
+        .onMoveCommand { direction in
+            if direction == .up {
+                authFocus = showsBack ? .back : .language
+            }
         }
     }
 
@@ -988,10 +1055,15 @@ struct TVDeviceLoginChrome: View {
 /// - logo 42×42 at left ≈ 60.6 (nav centre-x − logo/2), top ≈ 56
 /// - optional back 50×50 circle at left ≈ 154
 /// - theme 144×48 + language 168×48, square corners, top ≈ 50, right ≈ 42
+///
+/// Focus: only a top strip is focusable; Down is handed to the form via
+/// `onMoveDownFromChrome` (full-screen chrome frames trap the focus engine).
 struct TVAuthStageChrome: View {
     let palette: TVAuthPalette
     var scale: CGFloat = 1
     var showBack: Bool = false
+    var authFocus: FocusState<TVAuthFocus?>.Binding?
+    var onMoveDownFromChrome: (() -> Void)?
     var onBack: (() -> Void)?
 
     @Environment(TVDisplayPreferences.self) private var displayPreferences
@@ -1009,37 +1081,52 @@ struct TVAuthStageChrome: View {
     private var logoSize: CGFloat { DesignTokens.Shell.logoSize * scale }
     private var controlsTop: CGFloat { 50 * scale }
     private var controlsRight: CGFloat { DesignTokens.Shell.navEdge * scale }
+    private var chromeStripHeight: CGFloat { 120 * scale }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            PlayarrLogoMark(size: logoSize)
-                .frame(width: logoSize, height: logoSize)
-                .position(
-                    x: logoLeft + logoSize / 2,
-                    y: logoTop + logoSize / 2 + 4 * scale
-                )
-                .accessibilityHidden(true)
+        VStack(spacing: 0) {
+            ZStack(alignment: .topLeading) {
+                PlayarrLogoMark(size: logoSize)
+                    .frame(width: logoSize, height: logoSize)
+                    .position(
+                        x: logoLeft + logoSize / 2,
+                        y: logoTop + logoSize / 2 + 4 * scale
+                    )
+                    .accessibilityHidden(true)
+                    .allowsHitTesting(false)
 
-            if showBack, let onBack {
-                Button(action: onBack) {
-                    Image(systemName: "arrow.left")
-                        .font(.system(size: 17 * scale, weight: .semibold))
-                        .frame(width: 50 * scale, height: 50 * scale)
+                if showBack, let onBack {
+                    Button(action: onBack) {
+                        Image(systemName: "arrow.left")
+                            .font(.system(size: 17 * scale, weight: .semibold))
+                            .frame(width: 50 * scale, height: 50 * scale)
+                    }
+                    // Web `.tv-page-back:hover/focus` → ink fill, scale 1.1.
+                    .buttonStyle(TVBackButtonStyle(palette: palette))
+                    .focusEffectDisabled(true)
+                    .modifier(TVAuthChromeFocusModifier(
+                        binding: authFocus,
+                        value: .back,
+                        onDown: onMoveDownFromChrome
+                    ))
+                    .position(x: 154 * scale + 25 * scale, y: logoTop + 25 * scale)
+                    .accessibilityLabel("Back")
                 }
-                // Web `.tv-page-back:hover/focus` → ink fill, scale 1.1.
-                .buttonStyle(TVBackButtonStyle(palette: palette))
-                .focusEffectDisabled(true)
-                .position(x: 154 * scale + 25 * scale, y: logoTop + 25 * scale)
-                .accessibilityLabel("Back")
-            }
 
-            HStack(spacing: 14 * scale) {
-                themeMenu
-                languageMenu
+                HStack(spacing: 14 * scale) {
+                    themeMenu
+                    languageMenu
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .padding(.top, controlsTop)
+                .padding(.trailing, controlsRight)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-            .padding(.top, controlsTop)
-            .padding(.trailing, controlsRight)
+            .frame(height: chromeStripHeight)
+            .frame(maxWidth: .infinity)
+
+            // Non-interactive remainder so chrome is not a full-screen focus island.
+            Spacer(minLength: 0)
+                .allowsHitTesting(false)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .allowsHitTesting(true)
@@ -1069,6 +1156,13 @@ struct TVAuthStageChrome: View {
         // Web `.language-dropdown-trigger:hover/focus` → accent border, scale 1.02.
         .buttonStyle(TVChromeMenuButtonStyle(palette: palette))
         .focusEffectDisabled(true)
+        .modifier(TVAuthChromeFocusModifier(
+            binding: authFocus,
+            value: .theme,
+            onDown: onMoveDownFromChrome,
+            onLeft: showBack ? { authFocus?.wrappedValue = .back } : nil,
+            onRight: { authFocus?.wrappedValue = .language }
+        ))
     }
 
     private var languageMenu: some View {
@@ -1094,6 +1188,12 @@ struct TVAuthStageChrome: View {
         }
         .buttonStyle(TVChromeMenuButtonStyle(palette: palette))
         .focusEffectDisabled(true)
+        .modifier(TVAuthChromeFocusModifier(
+            binding: authFocus,
+            value: .language,
+            onDown: onMoveDownFromChrome,
+            onLeft: { authFocus?.wrappedValue = .theme }
+        ))
     }
 
     private func chromeTrigger(
@@ -1119,6 +1219,36 @@ struct TVAuthStageChrome: View {
         .frame(minWidth: minWidth, minHeight: 48 * scale)
         .contentShape(Rectangle())
         .accessibilityLabel(accessibility)
+    }
+}
+
+/// Optional FocusState wiring + directional hand-off for stage-chrome controls.
+private struct TVAuthChromeFocusModifier: ViewModifier {
+    var binding: FocusState<TVAuthFocus?>.Binding?
+    let value: TVAuthFocus
+    var onDown: (() -> Void)?
+    var onLeft: (() -> Void)?
+    var onRight: (() -> Void)?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let binding {
+            content
+                .focused(binding, equals: value)
+                .onMoveCommand { direction in
+                    switch direction {
+                    case .down: onDown?()
+                    case .left: onLeft?()
+                    case .right: onRight?()
+                    default: break
+                    }
+                }
+        } else {
+            content
+                .onMoveCommand { direction in
+                    if direction == .down { onDown?() }
+                }
+        }
     }
 }
 
