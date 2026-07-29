@@ -11,7 +11,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Android release workflow accepts `workflow_dispatch` with a semver input so
   signed APKs can be published without re-pushing a tag when Actions needs a
-  manual re-run.
+  manual re-run. Job-level `runner.temp` was removed so GitHub can parse the
+  workflow again (that expression blocked all tag-triggered publishes).
 
 
 - Shared Playarr login QR style tokens (`PLAYARR_QR_STYLE`: 240 tile, 12px
