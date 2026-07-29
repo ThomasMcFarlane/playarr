@@ -99,7 +99,10 @@ struct TVHomeView: View {
                                 .tracking(-4.5)
                                 .foregroundStyle(DesignTokens.Color.textPrimary)
                                 .lineLimit(3)
-                                .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
+                                .frame(
+                                    maxWidth: DesignTokens.Shell.featureTitleMaxWidth,
+                                    alignment: .leading
+                                )
                                 .padding(.top, 10)
                             if let overview = hero.overview, !overview.isEmpty {
                                 Text(overview)
@@ -107,7 +110,10 @@ struct TVHomeView: View {
                                     .foregroundStyle(DesignTokens.Color.textDisabled)
                                     .lineLimit(5)
                                     .lineSpacing(4)
-                                    .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
+                                    .frame(
+                                        maxWidth: DesignTokens.Shell.featureOverviewMaxWidth,
+                                        alignment: .leading
+                                    )
                                     .padding(.top, 22)
                             }
                         }
@@ -840,12 +846,14 @@ struct TVLibraryKindView: View {
                 .font(TVTheme.font(size: 12, weight: .heavy))
                 .tracking(1.2)
                 .foregroundStyle(DesignTokens.Color.brandPrimary)
-            // SPA `.tv-library-preview h2`: weight ~560, tracking -0.072em.
+            // SPA `.tv-library-preview h2`: weight ~560, tracking -0.072em, max-width 9ch.
             Text(work.title)
                 .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .medium))
                 .tracking(-5.0)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
+                .frame(maxWidth: DesignTokens.Shell.featureTitleMaxWidth, alignment: .leading)
                 .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 10)
             // SPA `.tv-preview-meta`: year then genres with soft separator.
             previewMeta(work)

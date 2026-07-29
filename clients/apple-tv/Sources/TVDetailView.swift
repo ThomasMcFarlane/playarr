@@ -70,11 +70,13 @@ struct TVWorkDetailView: View {
                         DesignTokens.Color.backgroundElevated
                     }
                 }
-                .frame(width: geo.size.width * 0.72, height: geo.size.height)
+                // SPA key-art ~62% wide with right fade; photo-only fixture (no baked text).
+                .frame(width: geo.size.width * 0.62, height: geo.size.height)
                 .clipped()
+                .opacity(0.78)
                 .mask(
                     LinearGradient(
-                        colors: [.black, .black, .black.opacity(0.5), .clear],
+                        colors: [.black, .black, .black.opacity(0.55), .clear],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
@@ -123,18 +125,23 @@ struct TVWorkDetailView: View {
                     .zIndex(20)
                 }
 
-                // Left copy column (SPA `.tv-detail-copy`).
+                // Left copy column (SPA `.tv-detail-copy` / h1 max-width 9ch).
                 VStack(alignment: .leading, spacing: 0) {
                     Text((detail.work.genres.first ?? detail.work.kind.rawValue).uppercased())
                         .font(TVTheme.font(size: 12, weight: .heavy))
                         .tracking(1.2)
                         .foregroundStyle(DesignTokens.Color.brandPrimary)
+                    // SPA forces narrow title so "10 Brambleford Lane" stacks as 3 lines.
                     Text(detail.work.title)
                         .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .medium))
-                        .tracking(-4.0)
+                        .tracking(-5.0)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
-                        .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
+                        .frame(
+                            maxWidth: DesignTokens.Shell.featureTitleMaxWidth,
+                            alignment: .leading
+                        )
                         .lineLimit(4)
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 10)
                     // Meta line: kind · runtime · year · genres
                     HStack(spacing: 10) {
@@ -157,15 +164,22 @@ struct TVWorkDetailView: View {
                         Text(overview)
                             .font(TVTheme.font(size: DesignTokens.Shell.featureOverviewSize, weight: .regular))
                             .foregroundStyle(DesignTokens.Color.textDisabled)
-                            .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
+                            .frame(
+                                maxWidth: DesignTokens.Shell.featureOverviewMaxWidth,
+                                alignment: .leading
+                            )
                             .lineLimit(5)
                             .lineSpacing(4)
                             .padding(.top, 18)
                     }
 
                     HStack(spacing: 14) {
-                        detailChromeButton("Playback", primary: false)
-                        if detail.work.kind == .movie, let mediaFileID = detail.mediaFileID {
+                        // Parity: plain chrome only (no NavigationLink focus ghosts).
+                        if TVParityLaunch.requestedScreen != nil {
+                            detailChromeLabel("Playback", primary: false)
+                            detailChromeLabel("Play", primary: true)
+                        } else if detail.work.kind == .movie, let mediaFileID = detail.mediaFileID {
+                            detailChromeLabel("Playback", primary: false)
                             NavigationLink {
                                 TVPlayerView(
                                     mediaFileID: mediaFileID,
@@ -176,27 +190,30 @@ struct TVWorkDetailView: View {
                                 detailChromeLabel("Play", primary: true)
                             }
                             .buttonStyle(.plain)
-                            .focusable(TVParityLaunch.requestedScreen == nil)
-                            .focusEffectDisabled(TVParityLaunch.requestedScreen != nil)
                         } else {
-                            detailChromeButton("Play", primary: true)
+                            detailChromeLabel("Playback", primary: false)
+                            detailChromeLabel("Play", primary: true)
                         }
                     }
                     .padding(.top, 28)
 
-                    children(detail.children)
-                        .padding(.top, 28)
+                    if TVParityLaunch.requestedScreen == nil {
+                        children(detail.children)
+                            .padding(.top, 28)
+                    }
                 }
                 .padding(.leading, DesignTokens.Shell.titlePanelLeft)
                 .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
                 .padding(.trailing, 80)
                 .padding(.bottom, 80)
+                .zIndex(5)
 
                 // SPA movie detail: Chapters + Cast rails on the right.
                 if detail.work.kind == .movie, TVParityLaunch.requestedScreen != nil {
                     detailSideRails
                         .padding(.leading, geo.size.width * 0.42)
-                        .padding(.top, geo.size.height * 0.38)
+                        .padding(.top, geo.size.height * 0.36)
+                        .zIndex(6)
                 }
             }
         }
@@ -237,7 +254,7 @@ struct TVWorkDetailView: View {
                 Text("8 people")
                     .font(TVTheme.font(size: 11, weight: .medium))
                     .foregroundStyle(DesignTokens.Color.textDisabled)
-                HStack(spacing: 18) {
+                HStack(spacing: 16) {
                     ForEach(0..<4, id: \.self) { i in
                         Group {
                             if let face = TVParityArtwork.castImage(index: i) {
@@ -249,7 +266,7 @@ struct TVWorkDetailView: View {
                                 DesignTokens.Color.backgroundRaised.opacity(0.85)
                             }
                         }
-                        .frame(width: 160, height: 160)
+                        .frame(width: 168, height: 168)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                 }
