@@ -9,10 +9,6 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Hosted Apple TV **simulator** manual-install zip (`docs/artifacts/playarr-apple-tv-sim`,
-  install via `install-sim.sh` / `simctl`). Simulator-only; not a device IPA.
-
-
 ### Added
 
 - Android release `0.2.13` (versionCode 2013) with the correct Playarr app
