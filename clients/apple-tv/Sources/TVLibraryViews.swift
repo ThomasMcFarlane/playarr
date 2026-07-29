@@ -99,6 +99,8 @@ struct TVHomeView: View {
                                 .tracking(1.2)
                                 .foregroundStyle(DesignTokens.Color.brandPrimary)
                                 .textCase(.uppercase)
+                            // Home title: keep Medium + top 10 (full110 DemiBold/16
+                            // regressed home 2.66→2.71%). Library preview uses DemiBold.
                             Text(hero.title)
                                 .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .medium))
                                 .tracking(-4.5)
@@ -898,15 +900,18 @@ struct TVLibraryKindView: View {
                 .font(TVTheme.font(size: 12, weight: .heavy))
                 .tracking(1.2)
                 .foregroundStyle(DesignTokens.Color.brandPrimary)
-            // SPA `.tv-library-preview h2`: weight ~560, tracking -0.072em, max-width 9ch.
+            // SPA `.tv-library-preview h2` / `.tv-detail-copy h1`: weight 560,
+            // tracking -0.072em, max-width 9ch. DemiBold (semibold) matches
+            // white-pixel mass better than Medium (full109 title thr200:
+            // native 3479 vs SPA 4996).
             Text(work.title)
-                .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .medium))
+                .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .semibold))
                 .tracking(-5.0)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
                 .frame(maxWidth: DesignTokens.Shell.featureTitleMaxWidth, alignment: .leading)
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 10)
+                .padding(.top, 16)
             // SPA `.tv-preview-meta`: year then genres with soft separator.
             previewMeta(work)
                 .padding(.top, 22)
