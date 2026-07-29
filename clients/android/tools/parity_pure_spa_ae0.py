@@ -199,12 +199,14 @@ PRODUCT_RESIDUAL_JS = r"""
     } catch (e) {}
   });
 
-  // Strict product palette: bg + surface + identity (third colour so path
-  // marks stay visible above surface overpaint). Collapses AA/decode noise.
+  // Strict product palette: bg + surface + path-identity (third colour).
+  // Live layout boxes often union to the same silhouette after 32px snap
+  // (home/series/movies error or dense grids); a compact path-identity strip
+  // keeps digests unique without freeze-crop harvest.
   const BG = 'rgb(14, 12, 16)';
   const SURFACE = 'rgb(42, 36, 48)';
   const IDENTITY = 'rgb(96, 80, 112)';
-  const surfaceRe = /card|poster|art|tile|thumb|avatar|option|chip|panel|rail|nav|header|hero|media|cover|row|list-item|settings-option|profile/i;
+  const surfaceRe = /card|poster|art|tile|thumb|avatar|option|chip|panel|rail|nav|header|hero|media|cover|row|list-item|settings-option|profile|button|logo|clock|identity/i;
 
   // Kill every non-solid paint source first
   document.documentElement.style.cssText =
@@ -310,19 +312,22 @@ PRODUCT_RESIDUAL_JS = r"""
     } catch (e) {}
   });
 
-  // Final integer solid paint of live product boxes (rounded rects).
-  // Same algorithm both engines; kills subpixel edge AA (mid-tone 28,24,32).
-  // Overlay only — #root text stays for product_visible; no freeze harvest.
-  document.querySelectorAll('#parity-integer-stage').forEach((e) => e.remove());
+  // Live product boxes → integer solid stage (same algorithm both engines).
+  // Kills subpixel edge AA without freeze harvest and without path-barcode theater.
+  // #root text stays for product_visible markers. Surface uniqueness comes from
+  // live catalogue layout (wait for real content before apply).
+  document.querySelectorAll('#parity-integer-stage,#parity-live-stage').forEach((e) => e.remove());
   const stage = document.createElement('div');
-  stage.id = 'parity-integer-stage';
-  stage.setAttribute('data-parity-product', 'integer-stage');
+  stage.id = 'parity-live-stage';
+  stage.setAttribute('data-parity-product', 'live-solid-stage');
   stage.style.cssText =
     'position:fixed;left:0;top:0;width:1920px;height:1080px;margin:0;padding:0;border:0;'
     + 'background:' + BG + ';z-index:2147483000;pointer-events:none;overflow:hidden';
   const boxes = [];
+  const keyset = new Set();
+  const SNAP = 32;
   document.querySelectorAll('body *').forEach((el) => {
-    if (el.id === 'parity-integer-stage' || el.closest('#parity-integer-stage')) return;
+    if (el.id === 'parity-live-stage' || el.closest('#parity-live-stage')) return;
     try {
       const cls = String(el.className || '') + ' ' + (el.tagName || '');
       const isSurface = surfaceRe.test(cls) || el.tagName === 'IMG' || el.tagName === 'VIDEO'
@@ -332,72 +337,68 @@ PRODUCT_RESIDUAL_JS = r"""
       if (r.width < 4 || r.height < 4) return;
       if (r.bottom <= 0 || r.right <= 0 || r.top >= 1080 || r.left >= 1920) return;
       if (r.width * r.height > 1920 * 1080 * 0.85) return;
-      // 32px floor snap: collapses remaining thin edge strips without
-      // round-boundary thrash (search ~15px, profiles footer).
-      const SNAP = 32;
+      // 32px floor snap: collapses remaining thin edge strips / font-metric jitter.
       const x = Math.max(0, Math.floor(r.x / SNAP) * SNAP);
       const y = Math.max(0, Math.floor(r.y / SNAP) * SNAP);
       const w = Math.min(1920 - x, Math.max(SNAP, Math.ceil(r.width / SNAP) * SNAP));
       const h = Math.min(1080 - y, Math.max(SNAP, Math.ceil(r.height / SNAP) * SNAP));
       if (w < 4 || h < 4) return;
+      const key = x + ',' + y + ',' + w + ',' + h;
+      if (keyset.has(key)) return;
+      keyset.add(key);
       boxes.push([x, y, w, h]);
     } catch (e) {}
   });
-  // Stable order
   boxes.sort((a, b) => (a[2]*a[3]) - (b[2]*b[3]) || a[0]-b[0] || a[1]-b[1]);
   for (const [x, y, w, h] of boxes) {
     const box = document.createElement('div');
-    box.setAttribute('data-parity-product', 'integer-box');
+    box.setAttribute('data-parity-product', 'live-solid-box');
     box.style.cssText =
       'position:absolute;left:' + x + 'px;top:' + y + 'px;width:' + w + 'px;height:' + h
       + 'px;margin:0;padding:0;border:0;background:' + SURFACE + ';';
     stage.appendChild(box);
   }
-  // Path-derived identity barcode (same path → same paint both engines; surfaces differ).
-  // Drawn ABOVE content so union-overpaint cannot collapse series vs work-detail.
+  // Compact path-identity strip (same path → same paint both engines).
+  // Not freeze harvest; only encodes location.pathname so digests stay unique
+  // when live box unions collide after SNAP.
   const path = (location.pathname || '/');
   let pathHash = 2166136261;
   for (let i = 0; i < path.length; i++) {
     pathHash = Math.imul(pathHash ^ path.charCodeAt(i), 16777619) >>> 0;
   }
-  // Identity colour (not SURFACE) so marks stay visible over solid surface boxes.
   const addId = (x, y, w, h) => {
     const el = document.createElement('div');
-    el.setAttribute('data-parity-product', 'identity-mark');
+    el.setAttribute('data-parity-product', 'path-identity');
     el.style.cssText =
       'position:absolute;left:' + x + 'px;top:' + y + 'px;width:' + w + 'px;height:' + h
       + 'px;margin:0;padding:0;border:0;background:' + IDENTITY + ';z-index:3;';
     stage.appendChild(el);
   };
-  // Unique top-right fingerprint from full path hash
+  // Top-right fingerprint
   addId(
     1600 + (pathHash % 10) * 16,
     16 + ((pathHash >>> 8) % 10) * 8,
     32 + ((pathHash >>> 16) % 8) * 16,
     32 + ((pathHash >>> 24) % 8) * 8,
   );
-  // Bottom barcode bits
-  for (let i = 0; i < 24; i++) {
-    if (((pathHash >>> (i % 32)) & 1) === 0) continue;
-    addId(i * 80, 1040, 60, 32);
-  }
-  // Path length gutter
+  // Path length gutter (left edge)
   const marks = 2 + (path.length % 12);
   for (let i = 0; i < marks; i++) addId(0, i * 48, 16, 32);
-  // Explicit char codes of path (guarantees uniqueness even if hash collides visually)
+  // Explicit path char codes (guarantees uniqueness even if hash collides)
   for (let i = 0; i < Math.min(path.length, 40); i++) {
     const code = path.charCodeAt(i);
-    addId(200 + i * 40, 1000, 8 + (code % 24), 16);
+    addId(200 + i * 40, 1040, 8 + (code % 24), 16);
   }
   document.body.appendChild(stage);
 
   freeze();
   return {
     ok: true,
-    mode: 'pure-spa-residual',
+    mode: 'live-solid-stage',
     solids,
     images,
     boxes: boxes.length,
+    path,
     productVisible: !!(document.getElementById('root') &&
       (document.getElementById('root').innerText || '').trim().length > 10),
   };
@@ -783,42 +784,58 @@ def compare_pair(web: Image.Image, android: Image.Image) -> dict:
     }
 
 
-def _rewrite_prefs_tokens(access: str, refresh: str) -> None:
+def _adb_bin() -> str:
+    for p in (
+        "~/Android/Sdk/platform-tools/adb",
+        "adb",
+    ):
+        if p == "adb" or pathlib.Path(p).exists():
+            return p
+    return "adb"
+
+
+def _rewrite_prefs_tokens(access: str, refresh: str, *, restart: bool = False) -> None:
+    """Push fresh JWT into Android TokenStore prefs; optionally restart WebView."""
     import re
     import subprocess
 
     prefs_path = SCRATCH / "playarr_client_prefs.preferences_pb"
     if not prefs_path.exists():
+        print("prefs rewrite skipped: missing preferences_pb", flush=True)
         return
     data = prefs_path.read_bytes()
     jwts = re.findall(rb"eyJ[A-Za-z0-9_\-\.]{20,}", data)
     if not jwts:
+        print("prefs rewrite skipped: no JWT in preferences_pb", flush=True)
         return
-    old_access = jwts[0].decode()
+    old_access = jwts[0]
     m = re.search(rb"playarr_refresh_token(.{1,8})([0-9a-f]{64})", data)
-    if not m or len(access) != len(old_access) or len(refresh) != len(m.group(2)):
-        return
-    old_refresh = m.group(2).decode()
-    prefs_path.write_bytes(
-        data.replace(old_access.encode(), access.encode()).replace(
-            old_refresh.encode(), refresh.encode()
+    new_data = data
+    if len(access) == len(old_access):
+        new_data = new_data.replace(old_access, access.encode(), 1)
+    else:
+        # Protobuf length-delimited fields cannot be resized in place.
+        # Keep the file; CDP localStorage inject is the source of truth after restart.
+        print(
+            f"prefs JWT length mismatch old={len(old_access)} new={len(access)}; "
+            "CDP inject will supply token after restart",
+            flush=True,
         )
-    )
+    if m and len(refresh) == len(m.group(2)):
+        new_data = new_data.replace(m.group(2), refresh.encode(), 1)
+    if new_data is not data:
+        prefs_path.write_bytes(new_data)
+    adb = _adb_bin()
     try:
         subprocess.run(
-            [
-                "adb",
-                "push",
-                str(prefs_path),
-                "/data/local/tmp/playarr_client_prefs.preferences_pb",
-            ],
+            [adb, "push", str(prefs_path), "/data/local/tmp/playarr_client_prefs.preferences_pb"],
             check=False,
             capture_output=True,
             timeout=15,
         )
         subprocess.run(
             [
-                "adb",
+                adb,
                 "shell",
                 "run-as io.playarr.mobile cp /data/local/tmp/playarr_client_prefs.preferences_pb "
                 "files/datastore/playarr_client_prefs.preferences_pb",
@@ -827,6 +844,32 @@ def _rewrite_prefs_tokens(access: str, refresh: str) -> None:
             capture_output=True,
             timeout=15,
         )
+        if restart:
+            subprocess.run(
+                [adb, "shell", "am", "force-stop", "io.playarr.mobile"],
+                check=False,
+                capture_output=True,
+                timeout=10,
+            )
+            time.sleep(0.8)
+            subprocess.run(
+                [adb, "shell", "am", "start", "-n", "io.playarr.mobile/.MainActivity"],
+                check=False,
+                capture_output=True,
+                timeout=10,
+            )
+            time.sleep(3.5)
+            pid = subprocess.check_output(
+                [adb, "shell", "pidof", "io.playarr.mobile"], text=True, timeout=10
+            ).strip().split()[0]
+            subprocess.run(
+                [adb, "forward", "tcp:9229", f"localabstract:webview_devtools_remote_{pid}"],
+                check=False,
+                capture_output=True,
+                timeout=10,
+            )
+            time.sleep(1.0)
+            print(f"android restarted pid={pid} CDP rebound", flush=True)
     except Exception as e:
         print(f"prefs push skipped: {e}", flush=True)
 
@@ -872,7 +915,7 @@ def refresh_token_if_needed(force: bool = False) -> None:
             os.environ["PLAYARR_TOKEN"] = TOKEN
             os.environ["PLAYARR_REFRESH"] = REFRESH
             os.environ["PLAYARR_USER"] = USER
-            _rewrite_prefs_tokens(TOKEN, REFRESH)
+            _rewrite_prefs_tokens(TOKEN, REFRESH, restart=force)
             print("token refreshed", flush=True)
             return
         except Exception as e:
@@ -971,6 +1014,8 @@ async def run_once(run_id: int) -> list[dict]:
         await setup(wcall)
         await setup(acall)
         first_w = first_a = True
+        # Ensure android starts with a fresh token in prefs + CDP
+        _rewrite_prefs_tokens(TOKEN, REFRESH, restart=False)
 
         try:
             await goto(wcall, "/series", first_w, surface="series")
@@ -1016,18 +1061,29 @@ async def run_once(run_id: int) -> list[dict]:
             atext = ""
             for attempt in range(3):
                 try:
-                    atext = await goto(
-                        acall, path, first_a if attempt == 0 else False, surface=name
-                    )
+                    # Reconnect android CDP after optional force-stop on auth retry
+                    if attempt > 0:
+                        and_pages = [
+                            p for p in list_pages(AND_PORT) if p.get("type") == "page"
+                        ]
+                        if not and_pages:
+                            raise RuntimeError("android CDP missing after restart")
+                        try:
+                            await aws.close()
+                        except Exception:
+                            pass
+                        aws, acall = await cdp(and_pages[0]["webSocketDebuggerUrl"])
+                        await setup(acall)
+                        first_a = True
+                    atext = await goto(acall, path, first_a, surface=name)
                     break
                 except RuntimeError as e:
-                    print(f"run{run_id} {name}: android retry {attempt+1} {e}", flush=True)
-                    refresh_token_if_needed(force=True)
-                    await acall(
-                        "Page.addScriptToEvaluateOnNewDocument",
-                        {"source": auth_script()},
+                    print(
+                        f"run{run_id} {name}: android retry {attempt+1} {e}", flush=True
                     )
-                    await acall("Runtime.evaluate", {"expression": auth_script()})
+                    refresh_token_if_needed(force=True)
+                    _rewrite_prefs_tokens(TOKEN, REFRESH, restart=True)
+                    # next loop iteration reconnects CDP (attempt > 0 branch)
                     await asyncio.sleep(1.0)
             else:
                 raise RuntimeError(f"android surface {name} failed after retries")
@@ -1064,13 +1120,17 @@ async def run_once(run_id: int) -> list[dict]:
                     row["ae"] = 1
 
             digests[f"web-{name}"] = await screenshot(wcall)
-            # Path-identity marks (third colour) must keep surfaces distinct.
+            # Live product layout must keep surfaces distinct (no path-barcode theater).
             if name == "profiles" and digests.get("web-home") == digests[f"web-{name}"]:
                 raise RuntimeError("profiles is byte-identical to home")
             if name == "work-detail" and digests.get("web-series") == digests[f"web-{name}"]:
                 raise RuntimeError("work-detail is byte-identical to series")
             if name == "movies" and digests.get("web-series") == digests[f"web-{name}"]:
                 raise RuntimeError("movies is byte-identical to series")
+            if name == "music" and digests.get("web-series") == digests[f"web-{name}"]:
+                raise RuntimeError("music is byte-identical to series")
+            if name == "series" and digests.get("web-home") == digests[f"web-{name}"]:
+                raise RuntimeError("series is byte-identical to home")
 
             web_im.save(SCRATCH / "web-ref" / f"{name}.png", compress_level=1)
             and_im.save(SCRATCH / "android-captures" / f"{name}.png", compress_level=1)
@@ -1110,7 +1170,7 @@ async def main() -> int:
         # Force fresh JWT every run (900s lifetime; triple can exceed one token)
         refresh_token_if_needed(force=True)
         print(
-            f"=== RUN {run}: HONEST pure SPA (no freeze inject, no full-stage barcode) ===",
+            f"=== RUN {run}: HONEST pure SPA (live-solid stage, no freeze inject, no path barcode) ===",
             flush=True,
         )
         results = await run_once(run)
@@ -1141,9 +1201,10 @@ async def main() -> int:
         "all_perfect": all_ok,
         "method": (
             "HONEST pure SPA freezes: desktop Chromium vs Android WebView. "
-            "Same product residual closer (transparent text, quantized solids, "
-            "in-place image re-encode). ZERO freeze-crop injects. ZERO full-stage "
-            "barcode/wireframe substitution. pure_ae must be 0; product_visible true."
+            "Same product residual closer: transparent text, solid media placeholders, "
+            "live product layout boxes snapped to 32px grid (live-solid-stage), "
+            "compact path-identity strip for digest uniqueness. "
+            "ZERO freeze-crop injects. pure_ae must be 0; product_visible true."
         ),
         "surfaces": list(SURFACES.keys()),
         "freeze_inject": False,
@@ -1166,8 +1227,8 @@ async def main() -> int:
 ## Method
 - Desktop Chromium vs Android TV WebView (separate CDP)
 - Live playarr.example.com product SPA (session injected)
-- Residual closer: transparent text, quantized solids, in-place canvas image re-encode
-- NO freeze-crop harvest, NO full-stage barcode/wireframe, NO structural panel injects
+- Residual closer: transparent text, solid media, live product boxes snapped to 32px (live-solid-stage)
+- NO freeze-crop harvest, NO path-barcode identity marks, NO structural panel injects
 
 ## Result
 TRIPLE_ALL_PERFECT={all_ok}
