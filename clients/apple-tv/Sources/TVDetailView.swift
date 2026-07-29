@@ -73,20 +73,21 @@ struct TVWorkDetailView: View {
                 // SPA key-art ~62% wide with right fade; photo-only fixture (no baked text).
                 .frame(width: geo.size.width * 0.62, height: geo.size.height)
                 .clipped()
-                .opacity(0.78)
+                .opacity(0.92)
                 .mask(
                     LinearGradient(
-                        colors: [.black, .black, .black.opacity(0.55), .clear],
+                        colors: [.black, .black, .black.opacity(0.65), .clear],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
 
+                // Lighter wash so house/storm key-art stays visible like SPA.
                 LinearGradient(
                     colors: [
-                        DesignTokens.Color.backgroundBase.opacity(0.2),
-                        DesignTokens.Color.backgroundBase.opacity(0.75),
-                        DesignTokens.Color.backgroundBase.opacity(0.95),
+                        DesignTokens.Color.backgroundBase.opacity(0.12),
+                        DesignTokens.Color.backgroundBase.opacity(0.45),
+                        DesignTokens.Color.backgroundBase.opacity(0.82),
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -210,11 +211,11 @@ struct TVWorkDetailView: View {
 
                 // SPA movie detail: Chapters + Cast rails on the right.
                 if detail.work.kind == .movie, TVParityLaunch.requestedScreen != nil {
-                    // SPA: chapters mid-right (~y 400), cast bottom (~y 820).
+                    // SPA ref: chapters heading ~y 550, cards ~y 590–710, cast ~y 880.
                     detailSideRails
-                        .padding(.leading, geo.size.width * 0.42)
-                        .padding(.top, geo.size.height * 0.34)
-                        .padding(.trailing, 48)
+                        .padding(.leading, geo.size.width * 0.48)
+                        .padding(.top, geo.size.height * 0.50)
+                        .padding(.trailing, 36)
                         .zIndex(6)
                 }
             }
@@ -223,33 +224,41 @@ struct TVWorkDetailView: View {
     }
 
     private var detailSideRails: some View {
-        VStack(alignment: .leading, spacing: 36) {
-            VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 28) {
+            VStack(alignment: .leading, spacing: 10) {
                 Text("Chapters")
                     .font(TVTheme.font(size: 18, weight: .semibold))
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                 Text("7 scene markers")
                     .font(TVTheme.font(size: 11, weight: .medium))
                     .foregroundStyle(DesignTokens.Color.textDisabled)
-                HStack(spacing: 18) {
-                    ForEach(1..<5, id: \.self) { n in
-                        VStack(alignment: .leading, spacing: 8) {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(DesignTokens.Color.backgroundRaised.opacity(0.9))
+                HStack(spacing: 16) {
+                    ForEach(0..<4, id: \.self) { n in
+                        let minutes = n * 15
+                        VStack(alignment: .leading, spacing: 6) {
+                            // SPA chapter cards: dark raised panel, index bottom-right.
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(DesignTokens.Color.backgroundRaised.opacity(0.72))
                                 .frame(width: 200, height: 112)
-                                .overlay {
-                                    Text(String(format: "%02d", n))
-                                        .font(TVTheme.font(size: 22, weight: .semibold))
+                                .overlay(alignment: .bottomTrailing) {
+                                    Text(String(format: "%02d", n + 1))
+                                        .font(TVTheme.font(size: 16, weight: .semibold))
                                         .foregroundStyle(DesignTokens.Color.textDisabled)
+                                        .padding(.trailing, 12)
+                                        .padding(.bottom, 10)
                                 }
-                            Text("Chapter \(n)")
-                                .font(TVTheme.font(size: 12, weight: .medium))
-                                .foregroundStyle(DesignTokens.Color.textSecondary)
+                            HStack(spacing: 6) {
+                                Text("\(minutes):00")
+                                    .foregroundStyle(DesignTokens.Color.textDisabled)
+                                Text("Chapter \(n + 1)")
+                                    .foregroundStyle(DesignTokens.Color.textSecondary)
+                            }
+                            .font(TVTheme.font(size: 11, weight: .medium))
                         }
                     }
                 }
             }
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
                 Text("Cast")
                     .font(TVTheme.font(size: 18, weight: .semibold))
                     .foregroundStyle(DesignTokens.Color.textPrimary)

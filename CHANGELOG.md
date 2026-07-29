@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV home/movie parity key-art uses pure TMDB photo fixtures (no
+  baked SPA chrome), wider title wrap so "Brambleford" stays intact, and
+  movie chapters/cast rails match SPA measured placement.
 - Apple TV movie detail uses house-only key-art (no baked SPA chrome),
   tighter 9ch title wrap, and re-cropped cast headshots.
 - Apple TV detail titles honour SPA `max-width: 9ch` stacking; home/movie

@@ -165,9 +165,10 @@ enum DesignTokens {
         static let titlePanelWidth: CGFloat = 455
         // Feature h2: clamp(2.2rem, 3.6vw, 5rem) → ~69.
         static let featureTitleSize: CGFloat = 69
-        /// SPA detail/library h2 `max-width: 9ch` — force "10 / Brambleford / Lane".
-        /// At ~69pt with tight tracking, ~280px wraps after "10".
-        static let featureTitleMaxWidth: CGFloat = 280
+        /// SPA detail h2 stacks "10 / Brambleford / Lane". Measured SPA
+        /// "Brambleford" glyph run is ~300px at this size; 320 keeps the word
+        /// intact while still wrapping "Lane" onto a third line.
+        static let featureTitleMaxWidth: CGFloat = 320
         // Overview: clamp(0.58rem, 0.67vw, 0.84rem) → ~13.
         static let featureOverviewSize: CGFloat = 13
         /// SPA overview `max-width: 42ch` at small body size ≈ 300.
