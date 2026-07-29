@@ -362,16 +362,25 @@ struct TVPairingGateView: View {
         .onChange(of: approvalUserCode) { _, code in
             guard code != nil,
                   case .awaitingApproval(let pending) = environment.pairingState else { return }
+            // Cap on-screen lifetime to 5 minutes like web MAX_DEVICE_CODE_LIFETIME.
             secondsRemaining = min(5 * 60, max(1, Int(pending.expiresIn)))
         }
-        .task(id: "\(approvalUserCode ?? "")-\(secondsRemaining)") {
-            guard route == .qr, case .awaitingApproval = environment.pairingState else { return }
-            guard secondsRemaining > 0 else {
-                beginPairing(hosted: true)
-                return
+        // Countdown only — expiry renew is owned by startPairing's silent loop
+        // (and pollUntilClaim grace), matching web renewCode without an error flash.
+        .task(id: approvalUserCode) {
+            guard route == .qr else { return }
+            while !Task.isCancelled {
+                guard case .awaitingApproval = environment.pairingState else { return }
+                if secondsRemaining <= 0 {
+                    // Blank briefly then silent renew (web setDeviceCode(null) + renewCode).
+                    beginPairing(hosted: true)
+                    return
+                }
+                try? await Task.sleep(for: .seconds(1))
+                if !Task.isCancelled, case .awaitingApproval = environment.pairingState {
+                    secondsRemaining -= 1
+                }
             }
-            try? await Task.sleep(for: .seconds(1))
-            if !Task.isCancelled { secondsRemaining -= 1 }
         }
     }
 
@@ -402,18 +411,34 @@ struct TVPairingGateView: View {
         case .signedIn:
             EmptyView()
         case .failed(let message):
-            TVDeviceLoginChrome(
-                phase: .failed(message),
-                onRetry: { beginPairing(hosted: true) },
-                onManual: { route = .manual },
-                onBack: { route = .profiles }
-            )
+            // Never park on expiry copy — web auto-renews instead.
+            if Self.isExpiryMessage(message) {
+                TVDeviceLoginChrome(
+                    phase: .requesting,
+                    onRetry: nil,
+                    onManual: { route = .manual },
+                    onBack: { route = .profiles }
+                )
+                .task { beginPairing(hosted: true) }
+            } else {
+                TVDeviceLoginChrome(
+                    phase: .failed(message),
+                    onRetry: { beginPairing(hosted: true) },
+                    onManual: { route = .manual },
+                    onBack: { route = .profiles }
+                )
+            }
         }
     }
 
     private func beginPairing(hosted: Bool) {
         pairingTask?.cancel()
         pairingTask = Task { await environment.startPairing(forceHosted: hosted) }
+    }
+
+    /// Web `isExpiredCodeError` — treat as silent renew, never error chrome.
+    private static func isExpiryMessage(_ message: String) -> Bool {
+        message.range(of: #"\bexpired\b"#, options: .regularExpression) != nil
     }
 
     /// On-screen "visit …" line is always the playarr.app app link, matching

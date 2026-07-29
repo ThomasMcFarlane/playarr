@@ -188,38 +188,61 @@ final class TVAppEnvironment {
 
     /// Starts pairing. Default is hosted playarr.app link (QR gate). Pass
     /// `forceHosted: false` for "Sign in manually" / Settings direct device flow.
+    ///
+    /// Expired codes renew silently forever (web `DeviceLogin.renewCode` / catch
+    /// expired → renew) — never show an error for normal code refresh.
     func startPairing(forceHosted: Bool? = nil) async {
-        pairingState = .requestingCode
-        do {
-            let useHosted = forceHosted
-                ?? Self.shouldUseHostedDeviceLink(hasConfiguredServer: hasConfiguredServer)
-            if useHosted {
-                try await startHostedPairing()
-            } else {
-                try await startDirectPairing()
+        let useHosted = forceHosted
+            ?? Self.shouldUseHostedDeviceLink(hasConfiguredServer: hasConfiguredServer)
+
+        // Loop so expiry auto-refreshes without a failed chrome flash.
+        while !Task.isCancelled {
+            pairingState = .requestingCode
+            do {
+                if useHosted {
+                    try await startHostedPairing()
+                } else {
+                    try await startDirectPairing()
+                }
+                return
+            } catch is CancellationError {
+                // Leave state alone — a newer renew task or dismiss owns it.
+                return
+            } catch let error as URLError where error.code == .cancelled {
+                return
+            } catch let error as HostedDeviceLinkError where error == .expired {
+                // Web: isExpiredCodeError → renewCode(); no error UI.
+                continue
+            } catch let error as DeviceFlowError {
+                if case .authorizationExpired = error {
+                    continue
+                }
+                pairingState = .failed(Self.message(for: error))
+                return
+            } catch let error as HostedDeviceLinkError {
+                pairingState = .failed(Self.message(for: error))
+                return
+            } catch {
+                pairingState = .failed(error.localizedDescription)
+                return
             }
-        } catch is CancellationError {
-            // Quietly reset when the pairing Task is cancelled (view refresh /
-            // Try again). Do not surface URLSession's "cancelled" string.
-            if case .signedIn = pairingState { return }
-            pairingState = .signedOut
-        } catch let error as URLError where error.code == .cancelled {
-            if case .signedIn = pairingState { return }
-            pairingState = .signedOut
-        } catch let error as DeviceFlowError {
-            pairingState = .failed(Self.message(for: error))
-        } catch let error as HostedDeviceLinkError {
-            pairingState = .failed(Self.message(for: error))
-        } catch {
-            pairingState = .failed(error.localizedDescription)
         }
     }
+
+    /// Web `HOSTED_LINK_CLAIM_REDEMPTION_GRACE_MS` — keep polling briefly after
+    /// the displayed code lifetime so a phone that claims at the last second
+    /// still lands, then the outer loop requests a fresh code.
+    private static let hostedClaimRedemptionGrace: TimeInterval = 30
 
     private func startHostedPairing() async throws {
         let pending = try await hostedLinkClient.requestCode()
         pairingState = .awaitingApproval(pending)
 
-        let claim = try await hostedLinkClient.pollUntilClaim(pending)
+        // Poll past the on-screen countdown (web grace) before treating as expired.
+        let claim = try await hostedLinkClient.pollUntilClaim(
+            pending,
+            extraGrace: Self.hostedClaimRedemptionGrace
+        )
         let primaryURL = try Self.requireServerURL(claim.serverURL)
         let groupURLs = Self.distinctServerURLs(
             primary: claim.serverURL,
@@ -262,12 +285,18 @@ final class TVAppEnvironment {
         await serverGroupStore.recordSuccess(url: authorizer.baseURL.absoluteString)
 
         pairingState = .awaitingApproval(pending)
-        let token = try await deviceAuthorizer.pollForToken(
-            deviceCode: pending.deviceCode,
-            interval: TimeInterval(pending.interval),
-            expiresIn: TimeInterval(pending.expiresIn)
-        )
-        try await applyPairedSession(token)
+        do {
+            let token = try await deviceAuthorizer.pollForToken(
+                deviceCode: pending.deviceCode,
+                interval: TimeInterval(pending.interval),
+                expiresIn: TimeInterval(pending.expiresIn)
+            )
+            try await applyPairedSession(token)
+        } catch let error as DeviceFlowError {
+            // Map device-flow expiry into the silent-renew path of startPairing.
+            if case .authorizationExpired = error { throw error }
+            throw error
+        }
     }
 
     /// Persists the device-flow tokens and rebuilds `apiClient` so every

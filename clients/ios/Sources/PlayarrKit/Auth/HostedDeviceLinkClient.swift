@@ -116,8 +116,16 @@ public actor HostedDeviceLinkClient {
     }
 
     /// Polls until the phone-side claim arrives, the code expires, or the task is cancelled.
-    public func pollUntilClaim(_ code: DeviceCodeResponse) async throws -> HostedLinkClaim {
-        let deadline = Date().addingTimeInterval(TimeInterval(max(code.expiresIn, 1)))
+    ///
+    /// - Parameter extraGrace: Seconds to keep polling after `expires_in` (web
+    ///   `HOSTED_LINK_CLAIM_REDEMPTION_GRACE_MS`, default 0). Callers that auto-
+    ///   renew the code should pass ~30 so a last-second phone claim still wins.
+    public func pollUntilClaim(
+        _ code: DeviceCodeResponse,
+        extraGrace: TimeInterval = 0
+    ) async throws -> HostedLinkClaim {
+        let lifetime = TimeInterval(max(code.expiresIn, 1)) + max(0, extraGrace)
+        let deadline = Date().addingTimeInterval(lifetime)
         let interval = max(TimeInterval(code.interval), 1)
 
         while true {
@@ -139,6 +147,7 @@ public actor HostedDeviceLinkClient {
             case 202:
                 continue
             case 404:
+                // Broker has dropped the code — same silent-renew path as web.
                 throw HostedDeviceLinkError.expired
             case 200:
                 return try decodeClaim(data)
