@@ -63,9 +63,12 @@ struct TVSettingsView: View {
                                         .font(.system(size: 10, weight: .heavy))
                                         .foregroundStyle(DesignTokens.Color.textDisabled)
                                         .frame(width: 32, alignment: .leading)
+                                    // SPA `.settings-option-copy strong`:
+                                    // clamp(1.15rem, 1.6vw, 1.85rem) → ~31 @ 1920,
+                                    // weight 480, letter-spacing -0.035em.
                                     Text(section.title)
-                                        .font(.system(size: 30, weight: .medium))
-                                        .tracking(-1.0)
+                                        .font(.system(size: 31, weight: .regular))
+                                        .tracking(-1.1)
                                         .foregroundStyle(DesignTokens.Color.textPrimary)
                                         .lineLimit(1)
                                     Spacer(minLength: 0)
@@ -76,14 +79,20 @@ struct TVSettingsView: View {
                                                 ? DesignTokens.Color.textPrimary
                                                 : DesignTokens.Color.textDisabled
                                         )
+                                        // SPA active arrow: translateX(5px)
+                                        .offset(x: selected ? 5 : 0)
                                 }
-                                .padding(.horizontal, 28)
+                                // SPA padding-inline clamp(18, 2vw, 32) → 32;
+                                // block padding clamp(18, 2.2vh, 28) → ~24.
+                                .padding(.horizontal, 32)
+                                .padding(.vertical, 24)
                                 .frame(minHeight: 88, alignment: .center)
                                 .background(
                                     RoundedRectangle(cornerRadius: 0, style: .continuous)
                                         .fill(
                                             selected
-                                                ? DesignTokens.Color.backgroundRaised.opacity(0.9)
+                                                // SPA `--surface-soft` active fill
+                                                ? DesignTokens.Color.backgroundRaised.opacity(0.72)
                                                 : Color.clear
                                         )
                                 )

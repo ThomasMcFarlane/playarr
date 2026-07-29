@@ -138,7 +138,9 @@ struct TVWorkDetailView: View {
                             .padding(.top, 18)
                     }
 
-                    HStack(spacing: 14) {
+                    // SPA `.tv-detail-actions` gap clamp(10, 0.9vw, 16) → 16;
+                    // margin-top clamp(24, 3.5vh, 46) → 38 @ 1080.
+                    HStack(spacing: DesignTokens.Shell.detailActionGap) {
                         // Parity: plain chrome only (no NavigationLink focus ghosts).
                         // SPA suite ref includes both secondary Playback + primary Play.
                         if TVParityLaunch.requestedScreen != nil {
@@ -161,7 +163,7 @@ struct TVWorkDetailView: View {
                             detailChromeLabel("Play", primary: true)
                         }
                     }
-                    .padding(.top, 28)
+                    .padding(.top, DesignTokens.Shell.detailActionTopGap)
 
                     if TVParityLaunch.requestedScreen == nil {
                         children(detail.children)
@@ -446,21 +448,36 @@ struct TVWorkDetailView: View {
         detailChromeLabel(label, primary: primary)
     }
 
+    /// SPA `.tv-detail-play` / `.tv-detail-playback-settings` @ 1920×1080:
+    /// height clamp(44, 4.2vw, 64) → 64; play min-width 156; settings min-width 142;
+    /// font ~0.62vw≈12; play focused = brand fill + white label.
     private func detailChromeLabel(_ label: String, primary: Bool) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: primary ? 10 : 8) {
             if primary {
                 Image(systemName: "play.fill")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 12, weight: .bold))
+            } else {
+                // SPA playback-settings leading glyph (equaliser bars).
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(DesignTokens.Color.brandPrimary)
             }
             Text(label)
-                .font(TVTheme.font(size: 16, weight: .bold))
+                .font(TVTheme.font(size: 12, weight: .semibold))
         }
-        .foregroundStyle(DesignTokens.Color.textPrimary)
-        .padding(.horizontal, 28)
-        .padding(.vertical, 14)
+        .foregroundStyle(primary ? Color.white : DesignTokens.Color.textPrimary)
+        .frame(
+            minWidth: primary
+                ? DesignTokens.Shell.detailPlayMinWidth
+                : DesignTokens.Shell.detailPlaybackMinWidth,
+            minHeight: DesignTokens.Shell.detailActionHeight
+        )
+        .padding(.horizontal, primary ? 22 : 16)
         .background(
             Capsule().fill(
-                primary ? DesignTokens.Color.brandPrimary : DesignTokens.Color.backgroundRaised.opacity(0.9)
+                primary
+                    ? DesignTokens.Color.brandPrimary
+                    : DesignTokens.Color.backgroundRaised.opacity(0.72)
             )
         )
     }

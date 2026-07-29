@@ -44,6 +44,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ghosts are gone. Library series/music heroes Telea-inpainted to drop baked
   UI chrome. Honest full71: movie 3.28%, episode/book 2.83%, track 2.60%
   (was full66 3.46% / 2.93% / 2.75%).
+- Apple TV detail action buttons match SPA `.tv-detail-play` /
+  `.tv-detail-playback-settings` (64px height, 156/142 min-width, list
+  glyph on Playback) and settings option title weight/tracking.
 - Apple TV detail title uses a tight soft-wrap VStack (SPA line-height 0.9)
   so "10 Brambleford Lane" inter-line gaps match web; movie honest AE
   3.98% → 3.46% (full53).
