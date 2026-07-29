@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Themed/monochrome adaptive-icon layer. Same geometry as playarr-icon.svg /
+  playarr_mark, single-colour so Android can recolor it.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 512 mark scaled into ~72dp safe zone: translate 18, scale 72/512 -->
+    <group
+        android:translateX="18"
+        android:translateY="18"
+        android:scaleX="0.140625"
+        android:scaleY="0.140625">
+        <path
+            android:fillColor="@android:color/transparent"
+            android:pathData="M171,92A184,184 0,1 1,92 256"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="38" />
+        <path
+            android:fillColor="@android:color/transparent"
+            android:pathData="M191,151A124,124 0,1 1,151 323"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="28" />
+        <path
+            android:fillColor="@android:color/transparent"
+            android:pathData="M199,210A66,66 0,1 1,199 302"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="20" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M220,180c0,-18 20,-29 35,-19l130,82c12,8 12,26 0,34l-130,82c-15,10 -35,-1 -35,-19z" />
+    </group>
+</vector>
