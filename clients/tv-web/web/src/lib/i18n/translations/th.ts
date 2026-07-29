@@ -166,6 +166,10 @@ export const th: Translations = {
   "components.serverChoiceModal.connecting": "กำลังเชื่อมต่อ…",
   "components.serverChoiceModal.cancel": "ยกเลิก",
   "components.themeToggle.useTheme": "ใช้ธีม {{theme}}",
+  "components.themeDropdown.label": "ธีม",
+  "components.themeDropdown.optionDark": "มืด",
+  "components.themeDropdown.optionLight": "สว่าง",
+  "components.themeDropdown.optionSystem": "ระบบ",
   "components.updateToast.updateAvailable": "มี Playarr เวอร์ชันใหม่พร้อมใช้งานแล้ว",
   "components.updateToast.packageUpdateRequired":
     "เซิร์ฟเวอร์ Playarr Server ของคุณไม่รองรับแอป Playarr ที่ติดตั้งอยู่นี้แล้ว โปรดติดตั้งแพ็กเกจเวอร์ชันใหม่เพื่อใช้งานต่อ",

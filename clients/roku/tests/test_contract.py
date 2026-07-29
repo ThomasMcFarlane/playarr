@@ -192,15 +192,15 @@ class SecretSafetyTests(unittest.TestCase):
         self.assertIn("openServerDialog()", MAIN)
 
     def test_pairing_screen_matches_web_login_qr(self) -> None:
-        # Pairing mirrors web `/login/qr` (ProfileAuthLayout + embedded
-        # DeviceLogin): light AuthLight wash, WELCOME HOME kicker, Sign in
-        # to Playarr title, centered QR tile + code stack.
+        # Pairing mirrors web `/login/qr` layout (centered panel + QR stack)
+        # in Playarr dark theme (TV product), not desktop light AuthLight.
         self.assertNotIn('id="pairingGlow1"', SCENE)
         self.assertIn('id="pairingAuthBg"', SCENE)
         self.assertIn('uri="pkg:/images/pairing-auth-bg.png"', SCENE)
         self.assertIn('id="pairingLogoIcon"', SCENE)
         self.assertIn('text="WELCOME HOME"', SCENE)
         self.assertIn('text="Sign in to Playarr"', SCENE)
+        self.assertIn('color="0xF4F0F1FF"', SCENE)  # dark-theme ink on title
         self.assertIn('id="pairingQrBg"', SCENE)
         self.assertIn('id="pairingQrFrame"', SCENE)
         self.assertIn("sub showPairingBusy(", MAIN)

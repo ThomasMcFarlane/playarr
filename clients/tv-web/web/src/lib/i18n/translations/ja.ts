@@ -166,6 +166,10 @@ export const ja: Translations = {
   "components.serverChoiceModal.connecting": "接続しています…",
   "components.serverChoiceModal.cancel": "キャンセル",
   "components.themeToggle.useTheme": "{{theme}}テーマを使用",
+  "components.themeDropdown.label": "テーマ",
+  "components.themeDropdown.optionDark": "ダーク",
+  "components.themeDropdown.optionLight": "ライト",
+  "components.themeDropdown.optionSystem": "システム",
   "components.updateToast.updateAvailable": "Playarrの新しいバージョンが利用可能です。",
   "components.updateToast.packageUpdateRequired":
     "インストール済みのPlayarrアプリは、このPlayarr Serverサーバーではサポートされなくなりました。続行するには新しいパッケージをインストールしてください。",

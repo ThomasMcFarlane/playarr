@@ -3,10 +3,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { LanguageProvider } from "../lib/i18n/LanguageProvider";
+import { ThemeProvider } from "../lib/theme";
 import { ProfileAuthLayout } from "./ProfileAuthLayout";
 
 function renderLayout(children: ReactNode): string {
-  return renderToStaticMarkup(<LanguageProvider>{children}</LanguageProvider>);
+  return renderToStaticMarkup(
+    <ThemeProvider>
+      <LanguageProvider>{children}</LanguageProvider>
+    </ThemeProvider>
+  );
 }
 
 describe("ProfileAuthLayout", () => {

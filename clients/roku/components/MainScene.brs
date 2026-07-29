@@ -19,6 +19,16 @@ sub init()
     m.pairingTimerLabel = m.top.findNode("pairingTimer")
     m.pairingCodeExpiresAt = 0
     m.pairingManualHint = m.top.findNode("pairingManualHint")
+    m.pairingAuthBg = m.top.findNode("pairingAuthBg")
+    m.pairingThemeHit = m.top.findNode("pairingThemeHit")
+    m.pairingLangHit = m.top.findNode("pairingLangHit")
+    m.pairingThemeLabel = m.top.findNode("pairingThemeLabel")
+    m.pairingLangLabel = m.top.findNode("pairingLangLabel")
+    m.pairingThemePill = m.top.findNode("pairingThemePill")
+    m.pairingLangPill = m.top.findNode("pairingLangPill")
+    m.themePreference = LoadPairingThemePreference()
+    m.languagePreference = LoadPairingLanguagePreference()
+
     m.hostedLinkTimer = m.top.findNode("hostedLinkTimer")
     m.profilesGroup = m.top.findNode("profilesGroup")
     m.profilesRow = m.top.findNode("profilesRow")
@@ -369,7 +379,8 @@ end sub
 ' existing on-device RFC 8628 token exchange.
 sub beginHostedLink()
     if m.requestBusy then return
-    showPairingBusy("Sign in to Playarr", "Creating a secure sign-in code…")
+    strings = PairingUiStrings(ResolvePairingLanguage(m.languagePreference))
+    showPairingBusy(strings.title, strings.creating)
     startApiRequest({
         action: "hostedLinkCode"
         method: "POST"
@@ -383,21 +394,22 @@ end sub
 sub acceptHostedLinkCode(data as Object)
     if data = invalid or data.device_code = invalid or data.user_code = invalid
         m.lastFailedAction = "hostedLinkCode"
-        showPairingBusy("Couldn’t continue", "Playarr linking is unavailable right now.")
+        strings = PairingUiStrings(ResolvePairingLanguage(m.languagePreference))
+        showPairingBusy(strings.failed, strings.unavailable)
         return
     end if
     m.hostedDeviceCode = data.device_code
     m.hostedLinkInterval = data.interval
     if m.hostedLinkInterval < 2 then m.hostedLinkInterval = 2
-    ' Copy matches web LoginShell + embedded DeviceLogin on /login/qr.
-    if m.pairingKicker <> invalid then m.pairingKicker.text = "WELCOME HOME"
-    if m.pairingTitle <> invalid then m.pairingTitle.text = "Sign in to Playarr"
+    strings = PairingUiStrings(ResolvePairingLanguage(m.languagePreference))
+    if m.pairingKicker <> invalid then m.pairingKicker.text = UCase(strings.kicker)
+    if m.pairingTitle <> invalid then m.pairingTitle.text = strings.title
     if m.pairingDescription <> invalid
-        m.pairingDescription.text = "Scan the QR code with your phone or another browser to sign in on this device."
+        m.pairingDescription.text = strings.description
         m.pairingDescription.visible = true
     end if
     if m.pairingScan <> invalid
-        m.pairingScan.text = "Scan the QR code, or visit"
+        m.pairingScan.text = strings.scan
         m.pairingScan.visible = true
     end if
     if m.pairingUrl <> invalid
@@ -407,12 +419,13 @@ sub acceptHostedLinkCode(data as Object)
         m.pairingUrl.visible = true
     end if
     if m.pairingEnter <> invalid
-        m.pairingEnter.text = "and enter this code"
+        m.pairingEnter.text = strings.enter
         m.pairingEnter.visible = true
     end if
     m.pairingCode.text = data.user_code
-    m.pairingStatus.text = "Waiting for approval…"
-    m.pairingManualHint.text = "Press * for manual server entry"
+    m.pairingStatus.text = strings.waiting
+    m.pairingManualHint.text = strings.manual
+    applyPairingChrome()
     ' expires_in seconds (hosted) — cap 5 minutes like web.
     expiresIn = data.expires_in
     if expiresIn = invalid then expiresIn = 300
@@ -880,9 +893,11 @@ sub beginPairing()
 end sub
 
 ' Pairing chrome in place of fullscreen statusGroup (no Loading wall).
-' Matches web /login/qr light panel (kicker + title + message).
+' Matches web /login/qr panel (kicker + title + message) with theme/lang chrome.
 sub showPairingBusy(title as String, message as String)
-    if m.pairingKicker <> invalid then m.pairingKicker.text = "WELCOME HOME"
+    applyPairingChrome()
+    strings = PairingUiStrings(ResolvePairingLanguage(m.languagePreference))
+    if m.pairingKicker <> invalid then m.pairingKicker.text = UCase(strings.kicker)
     if m.pairingTitle <> invalid then m.pairingTitle.text = title
     if m.pairingDescription <> invalid
         m.pairingDescription.text = message
@@ -894,12 +909,115 @@ sub showPairingBusy(title as String, message as String)
     m.pairingCode.text = ""
     m.pairingStatus.text = ""
     if m.pairingTimerLabel <> invalid then m.pairingTimerLabel.text = ""
-    m.pairingManualHint.text = "Press * for manual server entry"
+    m.pairingManualHint.text = strings.manual
     m.pairingCodeExpiresAt = 0
     hidePairingQr()
     showOnly("pairing")
     m.top.screenState = "pairing"
-    m.top.SetFocus(true)
+    if m.pairingThemeHit <> invalid
+        m.pairingThemeHit.SetFocus(true)
+    else
+        m.top.SetFocus(true)
+    end if
+end sub
+
+' Apply theme wash + ink colours + chrome labels for current prefs.
+sub applyPairingChrome()
+    theme = ResolvePairingTheme(m.themePreference)
+    lang = ResolvePairingLanguage(m.languagePreference)
+    isLight = theme = "light"
+    if m.pairingAuthBg <> invalid
+        if isLight
+            m.pairingAuthBg.uri = "pkg:/images/pairing-auth-bg-light.png"
+        else
+            m.pairingAuthBg.uri = "pkg:/images/pairing-auth-bg.png"
+        end if
+    end if
+    pillUri = "pkg:/images/pairing-chrome-pill.png"
+    if isLight then pillUri = "pkg:/images/pairing-chrome-pill-light.png"
+    if m.pairingThemePill <> invalid then m.pairingThemePill.uri = pillUri
+    if m.pairingLangPill <> invalid then m.pairingLangPill.uri = pillUri
+    ink = &hF4F0F1FF
+    inkSoft = &hC5B8BDFF
+    inkMuted = &h887A82FF
+    if isLight
+        ink = &h382621FF
+        inkSoft = &h675961FF
+        inkMuted = &hA5969EFF
+    end if
+    if m.pairingKicker <> invalid then m.pairingKicker.color = inkMuted
+    if m.pairingTitle <> invalid then m.pairingTitle.color = ink
+    if m.pairingDescription <> invalid then m.pairingDescription.color = inkSoft
+    if m.pairingScan <> invalid then m.pairingScan.color = inkSoft
+    if m.pairingUrl <> invalid then m.pairingUrl.color = ink
+    if m.pairingEnter <> invalid then m.pairingEnter.color = inkSoft
+    if m.pairingCode <> invalid then m.pairingCode.color = ink
+    if m.pairingStatus <> invalid then m.pairingStatus.color = inkSoft
+    if m.pairingTimerLabel <> invalid then m.pairingTimerLabel.color = inkMuted
+    if m.pairingManualHint <> invalid then m.pairingManualHint.color = inkMuted
+    if m.pairingThemeLabel <> invalid
+        m.pairingThemeLabel.color = ink
+        m.pairingThemeLabel.text = PairingThemeChromeLabel(m.themePreference, lang)
+    end if
+    if m.pairingLangLabel <> invalid
+        m.pairingLangLabel.color = ink
+        m.pairingLangLabel.text = PairingLanguageChromeLabel(m.languagePreference)
+    end if
+end sub
+
+sub refreshPairingCopy()
+    strings = PairingUiStrings(ResolvePairingLanguage(m.languagePreference))
+    if m.pairingKicker <> invalid then m.pairingKicker.text = UCase(strings.kicker)
+    if m.pairingTitle <> invalid then m.pairingTitle.text = strings.title
+    if m.pairingDescription <> invalid and m.pairingDescription.visible
+        ' Keep busy message if QR hidden; otherwise description.
+        if m.pairingQr = invalid or not m.pairingQr.visible
+            ' leave busy message
+        else
+            m.pairingDescription.text = strings.description
+        end if
+    end if
+    if m.pairingScan <> invalid and m.pairingScan.visible then m.pairingScan.text = strings.scan
+    if m.pairingEnter <> invalid and m.pairingEnter.visible then m.pairingEnter.text = strings.enter
+    if m.pairingStatus <> invalid and m.pairingStatus.text <> "" then m.pairingStatus.text = strings.waiting
+    if m.pairingManualHint <> invalid then m.pairingManualHint.text = strings.manual
+    applyPairingChrome()
+    updatePairingCountdown()
+end sub
+
+sub openPairingThemePicker()
+    lang = ResolvePairingLanguage(m.languagePreference)
+    dialog = CreateObject("roSGNode", "Dialog")
+    dialog.title = "Theme"
+    dialog.buttons = PairingThemeOptionLabels(lang)
+    dialog.ObserveField("buttonSelected", "onPairingThemeDialogButton")
+    m.top.dialog = dialog
+end sub
+
+sub openPairingLanguagePicker()
+    dialog = CreateObject("roSGNode", "Dialog")
+    dialog.title = "Language"
+    dialog.buttons = PairingLanguageOptionLabels()
+    dialog.ObserveField("buttonSelected", "onPairingLanguageDialogButton")
+    m.top.dialog = dialog
+end sub
+
+sub onPairingThemeDialogButton(event as Object)
+    index = event.GetData()
+    if m.top.dialog <> invalid then m.top.dialog.close = true
+    m.themePreference = PairingThemePreferenceFromIndex(index)
+    SavePairingThemePreference(m.themePreference)
+    applyPairingChrome()
+    if m.pairingThemeHit <> invalid then m.pairingThemeHit.SetFocus(true)
+end sub
+
+sub onPairingLanguageDialogButton(event as Object)
+    index = event.GetData()
+    if m.top.dialog <> invalid then m.top.dialog.close = true
+    m.languagePreference = PairingLanguagePreferenceFromIndex(index)
+    SavePairingLanguagePreference(m.languagePreference)
+    refreshPairingCopy()
+    if m.pairingLangHit <> invalid then m.pairingLangHit.SetFocus(true)
 end sub
 
 sub hidePairingQr()
@@ -923,7 +1041,8 @@ sub updatePairingCountdown()
     minStr = minutes.ToStr()
     secStr = seconds.ToStr()
     if seconds < 10 then secStr = "0" + secStr
-    m.pairingTimerLabel.text = "Code refreshes in " + minStr + ":" + secStr
+    strings = PairingUiStrings(ResolvePairingLanguage(m.languagePreference))
+    m.pairingTimerLabel.text = strings.refreshesPrefix + minStr + ":" + secStr
     ' Auto-renew once when the code expires (same as web renewCode).
     if remaining = 0 and m.top.screenState = "pairing"
         m.pairingCodeExpiresAt = 0
@@ -4894,6 +5013,24 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return moveHomeFocus(-1)
     else if state = "home" and key = "down"
         return moveHomeFocus(1)
+    else if state = "pairing" and key = "OK"
+        if m.pairingThemeHit <> invalid and m.pairingThemeHit.IsInFocusChain()
+            openPairingThemePicker()
+            return true
+        else if m.pairingLangHit <> invalid and m.pairingLangHit.IsInFocusChain()
+            openPairingLanguagePicker()
+            return true
+        end if
+    else if state = "pairing" and key = "right"
+        if m.pairingThemeHit <> invalid and m.pairingThemeHit.IsInFocusChain()
+            if m.pairingLangHit <> invalid then m.pairingLangHit.SetFocus(true)
+            return true
+        end if
+    else if state = "pairing" and key = "left"
+        if m.pairingLangHit <> invalid and m.pairingLangHit.IsInFocusChain()
+            if m.pairingThemeHit <> invalid then m.pairingThemeHit.SetFocus(true)
+            return true
+        end if
     else if state = "pairing" and key = "options"
         m.hostedLinkTimer.control = "stop"
         m.pairingTimer.control = "stop"

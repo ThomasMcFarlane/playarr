@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { LanguageProvider } from "../../lib/i18n/LanguageProvider";
 import { ThemeProvider } from "../../lib/theme";
+import { THEME_OPTIONS } from "../ThemeDropdown";
 import { TvDetailHeading, TvStageChrome } from "./TvStage";
 
 describe("TvDetailHeading", () => {
@@ -38,7 +39,7 @@ describe("TvDetailHeading", () => {
 });
 
 describe("TvStageChrome", () => {
-  it("places the theme toggle beside the language selector", () => {
+  it("places the theme dropdown beside the language selector", () => {
     const markup = renderToStaticMarkup(
       <ThemeProvider>
         <LanguageProvider>
@@ -46,13 +47,17 @@ describe("TvStageChrome", () => {
         </LanguageProvider>
       </ThemeProvider>
     );
-    const themeToggle = markup.indexOf('class="theme-toggle"');
+    const themeDropdown = markup.indexOf(
+      'class="language-dropdown theme-dropdown tv-stage-chrome-theme"'
+    );
     const languageToggle = markup.indexOf(
       'class="language-dropdown tv-stage-chrome-language"'
     );
 
     expect(markup).toContain('class="tv-stage-chrome-controls"');
-    expect(themeToggle).toBeGreaterThan(-1);
-    expect(languageToggle).toBeGreaterThan(themeToggle);
+    expect(markup).toContain(">System<");
+    expect(THEME_OPTIONS).toEqual(["system", "light", "dark"]);
+    expect(themeDropdown).toBeGreaterThan(-1);
+    expect(languageToggle).toBeGreaterThan(themeDropdown);
   });
 });

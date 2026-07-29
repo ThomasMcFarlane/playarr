@@ -170,6 +170,10 @@ export const en = {
   "components.serverChoiceModal.connecting": "Connecting…",
   "components.serverChoiceModal.wherePlay": "Where should Playarr play {{title}}?",
   "components.themeToggle.useTheme": "Use {{theme}} theme",
+  "components.themeDropdown.label": "Theme",
+  "components.themeDropdown.optionDark": "Dark",
+  "components.themeDropdown.optionLight": "Light",
+  "components.themeDropdown.optionSystem": "System",
   "components.updateToast.dismiss": "Dismiss",
   "components.updateToast.packageUpdateRequired":
     "This installed Playarr app is no longer supported by your Playarr Server. Install a newer package to continue.",

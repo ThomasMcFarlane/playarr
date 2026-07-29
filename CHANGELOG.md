@@ -29,9 +29,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Roku pairing uses the web `/login/qr` centered layout (WELCOME HOME, Sign
-  in to Playarr, QR, code, countdown) in Playarr **dark** theme (cream light
-  mode was wrong for the TV shell).
+- Roku pairing matches web `/login/qr` chrome: dark stage by default, centered
+  copy + QR, top-right Theme (System/Light/Dark) and Language (Auto/en/ja/th)
+  pickers. Light theme remains available via the selector.
 
 - Apple TV pairing gate matches web `/login/qr` stage chrome: theme menu
   (System / Light / Dark) and language menu (Auto / English / 日本語 / ไทย)

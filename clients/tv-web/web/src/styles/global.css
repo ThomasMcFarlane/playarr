@@ -8783,6 +8783,14 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   pointer-events: auto;
 }
 
+.theme-dropdown-trigger {
+  min-width: 144px;
+}
+
+.theme-dropdown-options {
+  padding-block: 0.35rem;
+}
+
 .profiles-page::before {
   position: absolute;
   inset: 0;
@@ -10638,19 +10646,18 @@ html.is-native-scroll-root .profile-auth-scroll {
   }
 
   /*
-   * .tv-stage-chrome-language is a fixed-size corner control (see its base
-   * rule above), not a full-width block element like the other places this
-   * component is used -- undo the block-mode rules above for it specifically,
-   * since a position:absolute element with only `right` set and no `left`
-   * would otherwise stretch to width:100% of its containing block and push
-   * past the left edge of the screen.
+   * The stage chrome selectors are compact corner controls, not full-width
+   * block elements like the other places LanguageDropdown is used.
    */
+  .language-dropdown.tv-stage-chrome-theme,
   .language-dropdown.tv-stage-chrome-language {
     width: fit-content;
   }
 
+  .tv-stage-chrome-theme .language-dropdown-trigger,
   .tv-stage-chrome-language .language-dropdown-trigger {
     width: auto;
+    min-width: 0;
   }
 
   .tv-stage-chrome-language .language-dropdown-menu {

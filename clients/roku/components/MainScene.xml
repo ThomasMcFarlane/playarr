@@ -23,38 +23,43 @@
     </Group>
 
     <!--
-      Pairing = web `/login/qr` (ProfileAuthLayout + embedded DeviceLogin).
-      Light AuthLight tokens (bg #F5F3F2, ink #382621, muted #A5969E, rose
-      #CF3157). Centered column, NOT the dark side-by-side DeviceLogin TV
-      card. QR tile = .device-login-qr (240 border-box, 12px edge, r=18).
-      Pre-rendered cream+rose wash (pairing-auth-bg.png) because SceneGraph
-      has no soft radial gradient.
+      Pairing = web `/login/qr` layout (centered ProfileAuth panel + embedded
+      DeviceLogin stack) in Playarr **dark** theme (same as the rest of the
+      Roku shell: --bg #151315, --ink #f4f0f1). Browser /login/qr often looks
+      light because desktop defaults to light theme; TV product is dark.
+      QR tile stays white plate + black modules (.device-login-qr).
     -->
     <Group id="pairingGroup" visible="false">
       <Poster id="pairingAuthBg" translation="[0,0]" width="1920" height="1080" uri="pkg:/images/pairing-auth-bg.png" loadDisplayMode="scaleToFill" />
-      <!-- Top chrome: mark only (web also has back + language; * opens manual). -->
+      <!-- tv-stage-chrome: logo left; theme + language pills right (web TvStageChrome). -->
       <Poster id="pairingLogoIcon" translation="[48,40]" width="40" height="40" uri="pkg:/images/pairing-logo.png" loadDisplayMode="scaleToFit" />
+      <Group id="pairingChromeControls" translation="[1320,36]">
+        <Poster id="pairingThemePill" translation="[0,0]" width="200" height="44" uri="pkg:/images/pairing-chrome-pill.png" />
+        <Label id="pairingThemeLabel" translation="[16,8]" width="170" height="28" text="Dark" scale="[0.45,0.45]" color="0xF4F0F1FF" />
+        <Rectangle id="pairingThemeHit" translation="[0,0]" width="200" height="44" color="0x00000000" focusable="true" />
+        <Poster id="pairingLangPill" translation="[220,0]" width="200" height="44" uri="pkg:/images/pairing-chrome-pill.png" />
+        <Label id="pairingLangLabel" translation="[236,8]" width="170" height="28" text="Auto" scale="[0.45,0.45]" color="0xF4F0F1FF" />
+        <Rectangle id="pairingLangHit" translation="[220,0]" width="200" height="44" color="0x00000000" focusable="true" />
+      </Group>
 
-      <!-- Centered auth panel (max 560 like .profile-auth-panel). -->
-      <Label id="pairingKicker" translation="[0,160]" width="1920" height="28" text="WELCOME HOME" horizAlign="center" scale="[0.36,0.36]" scaleRotateCenter="[960,14]" color="0xA5969EFF" />
-      <Label id="pairingTitle" translation="[0,195]" width="1920" height="100" text="Sign in to Playarr" horizAlign="center" scale="[2.25,2.25]" scaleRotateCenter="[960,0]" color="0x382621FF" />
-      <Label id="pairingDescription" translation="[460,330]" width="1000" height="100" text="Scan the QR code with your phone or another browser to sign in on this device." horizAlign="center" wrap="true" maxLines="3" scale="[0.52,0.52]" scaleRotateCenter="[500,0]" color="0xA5969EFF" />
+      <!-- Centered auth panel; dark ink tokens (default). -->
+      <Label id="pairingKicker" translation="[0,160]" width="1920" height="28" text="WELCOME HOME" horizAlign="center" scale="[0.36,0.36]" scaleRotateCenter="[960,14]" color="0x887A82FF" />
+      <Label id="pairingTitle" translation="[0,195]" width="1920" height="100" text="Sign in to Playarr" horizAlign="center" scale="[2.25,2.25]" scaleRotateCenter="[960,0]" color="0xF4F0F1FF" />
+      <Label id="pairingDescription" translation="[460,330]" width="1000" height="100" text="Scan the QR code with your phone or another browser to sign in on this device." horizAlign="center" wrap="true" maxLines="3" scale="[0.52,0.52]" scaleRotateCenter="[500,0]" color="0xC5B8BDFF" />
 
-      <!-- QR: frame shadow + white plate 240 + modules 216 @ 12px inset. Centered x=(1920-240)/2=840. -->
+      <!-- QR tile: white plate (unchanged) on dark stage. Centered x=840. -->
       <Poster id="pairingQrFrame" translation="[828,410]" width="264" height="268" uri="pkg:/images/pairing-qr-frame.png" loadDisplayMode="scaleToFit" visible="false" />
       <Poster id="pairingQrBg" translation="[840,420]" width="240" height="240" uri="pkg:/images/pairing-qr-plate.png" loadDisplayMode="scaleToFit" visible="false" />
       <Poster id="pairingQr" translation="[852,432]" width="216" height="216" loadDisplayMode="scaleToFit" visible="false" />
 
-      <!-- Instructions under QR (same order as embedded DeviceLogin). -->
-      <Label id="pairingScan" translation="[0,690]" width="1920" height="28" text="Scan the QR code, or visit" horizAlign="center" scale="[0.48,0.48]" scaleRotateCenter="[960,14]" color="0xA5969EFF" />
-      <Label id="pairingUrl" translation="[0,725]" width="1920" height="36" text="https://playarr.app/link" horizAlign="center" scale="[0.70,0.70]" scaleRotateCenter="[960,18]" color="0x382621FF" />
-      <Label id="pairingEnter" translation="[0,770]" width="1920" height="28" text="and enter this code" horizAlign="center" scale="[0.48,0.48]" scaleRotateCenter="[960,14]" color="0xA5969EFF" />
-      <Label id="pairingCode" translation="[0,800]" width="1920" height="70" text="" horizAlign="center" scale="[1.70,1.70]" scaleRotateCenter="[960,0]" color="0x382621FF" />
-      <Label id="pairingStatus" translation="[0,900]" width="1920" height="28" text="" horizAlign="center" scale="[0.45,0.45]" scaleRotateCenter="[960,14]" color="0xA5969EFF" />
-      <Label id="pairingTimer" translation="[0,935]" width="1920" height="28" text="" horizAlign="center" scale="[0.45,0.45]" scaleRotateCenter="[960,14]" color="0x675961FF" />
-      <!-- Kept for busy/error copy; also used as legacy instruction field. -->
-      <Label id="pairingInstruction" translation="[560,340]" width="800" height="80" text="" horizAlign="center" wrap="true" maxLines="3" scale="[0.55,0.55]" scaleRotateCenter="[400,0]" color="0xA5969EFF" visible="false" />
-      <Label id="pairingManualHint" translation="[0,980]" width="1920" height="28" text="Press * for manual server entry" horizAlign="center" scale="[0.42,0.42]" scaleRotateCenter="[960,14]" color="0xA5969EFF" />
+      <Label id="pairingScan" translation="[0,690]" width="1920" height="28" text="Scan the QR code, or visit" horizAlign="center" scale="[0.48,0.48]" scaleRotateCenter="[960,14]" color="0xC5B8BDFF" />
+      <Label id="pairingUrl" translation="[0,725]" width="1920" height="36" text="https://playarr.app/link" horizAlign="center" scale="[0.70,0.70]" scaleRotateCenter="[960,18]" color="0xF4F0F1FF" />
+      <Label id="pairingEnter" translation="[0,770]" width="1920" height="28" text="and enter this code" horizAlign="center" scale="[0.48,0.48]" scaleRotateCenter="[960,14]" color="0xC5B8BDFF" />
+      <Label id="pairingCode" translation="[0,800]" width="1920" height="70" text="" horizAlign="center" scale="[1.70,1.70]" scaleRotateCenter="[960,0]" color="0xF4F0F1FF" />
+      <Label id="pairingStatus" translation="[0,900]" width="1920" height="28" text="" horizAlign="center" scale="[0.45,0.45]" scaleRotateCenter="[960,14]" color="0xC5B8BDFF" />
+      <Label id="pairingTimer" translation="[0,935]" width="1920" height="28" text="" horizAlign="center" scale="[0.45,0.45]" scaleRotateCenter="[960,14]" color="0x887A82FF" />
+      <Label id="pairingInstruction" translation="[460,330]" width="1000" height="100" text="" horizAlign="center" wrap="true" maxLines="3" scale="[0.52,0.52]" scaleRotateCenter="[500,0]" color="0xC5B8BDFF" visible="false" />
+      <Label id="pairingManualHint" translation="[0,980]" width="1920" height="28" text="Press * for manual server entry" horizAlign="center" scale="[0.42,0.42]" scaleRotateCenter="[960,14]" color="0x887A82FF" />
     </Group>
 
     <!--
@@ -680,5 +685,6 @@
   <script type="text/brightscript" uri="pkg:/source/Config.brs" />
   <script type="text/brightscript" uri="pkg:/source/Storage.brs" />
   <script type="text/brightscript" uri="pkg:/source/Api.brs" />
+  <script type="text/brightscript" uri="pkg:/source/PairingPrefs.brs" />
   <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
 </component>
