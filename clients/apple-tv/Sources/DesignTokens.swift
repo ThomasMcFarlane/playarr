@@ -149,8 +149,9 @@ enum DesignTokens {
         static let homeCardOriginY2: CGFloat = 828
         /// Title block under home card art.
         static let homeCardTitleBlock: CGFloat = 36
-        /// Rail heading sits above card art.
-        static let homeRailHeadingOffsetY: CGFloat = 36
+        /// SPA rail heading glyph peak y≈435; card origin y1=489. SwiftUI Text
+        /// ascent adds ~9px under frame top, so gap = 489−435+9 ≈ 63.
+        static let homeRailHeadingOffsetY: CGFloat = 63
         // `.tv-home-rails { left: 38% }`
         static let railLeftInset: CGFloat = 0.38
         // `--tv-track-left-fade: clamp(88px, 8.8vw, 152px)` + 8px pad → 160.
@@ -175,11 +176,13 @@ enum DesignTokens {
         static let featureOverviewMaxWidth: CGFloat = 300
         // Rail heading: clamp(0.76rem, 0.92vw, 1.18rem) → ~18.
         static let railHeadingSize: CGFloat = 18
-        // SPA `.tv-key-art > span` watermark: top 28%, left 18%, max 34vw, weight 760, opacity 0.22.
+        // SPA `.tv-key-art > span` watermark: top 28%, left 18%, max 34vw,
+        // font-size clamp(3rem, 7vw, 9rem) → 134 @ 1920, weight 760, opacity 0.22,
+        // line-height 0.82.
         static let keyArtWatermarkTopFraction: CGFloat = 0.28
         static let keyArtWatermarkLeftFraction: CGFloat = 0.18
         static let keyArtWatermarkMaxWidthFraction: CGFloat = 0.34
-        static let keyArtWatermarkSize: CGFloat = 120
+        static let keyArtWatermarkSize: CGFloat = 134
         static let keyArtWatermarkOpacity: CGFloat = 0.22
 
         // MARK: Key art (`.tv-key-art img` @ 1920×1080 dark theme)

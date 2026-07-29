@@ -82,6 +82,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   match SPA key-art crop) and SPA action pill widths (Playback 142, Play 163
   from CSS min-width clamps). Honest full100 movie AE **2.21%** (from full99
   3.05%); other screens unchanged.
+- Apple TV home rail headings: SPA gap card→label (homeRailHeadingOffsetY 63
+  including SwiftUI ascent) and watermark size 7vw≈134. Honest full103 home AE
+  **2.66%** (from full100 2.70%).
 - Apple TV settings options list bottom gap after Preferences heading matches
   SPA first-option y≈162 (was y≈133).
 - Apple TV detail Playback control uses SPA-like square.grid.2x2 brand glyph.

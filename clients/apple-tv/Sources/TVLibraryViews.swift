@@ -70,13 +70,14 @@ struct TVHomeView: View {
                     }
 
                     // SPA `.tv-key-art > span` watermark (large faded title).
-                    // Parity fixtures already carry residual watermark glyphs from
-                    // the SPA capture; stacking another Text doubles "THE DA" and
-                    // inflates AE. Production (live art) still draws the watermark.
+                    // Parity fixtures bake SPA watermark glyphs into hero.png; stacking
+                    // another Text doubles "THE DARK" and inflates AE. Production (live
+                    // art) still draws the watermark at SPA geometry (size 7vw≈134).
                     if let hero, TVParityLaunch.requestedScreen == nil {
                         Text(hero.title.uppercased())
                             .font(TVTheme.font(size: DesignTokens.Shell.keyArtWatermarkSize, weight: .heavy))
-                            .tracking(-6)
+                            .tracking(-4)
+                            .lineSpacing(-DesignTokens.Shell.keyArtWatermarkSize * 0.18)
                             .foregroundStyle(DesignTokens.Color.textDisabled.opacity(DesignTokens.Shell.keyArtWatermarkOpacity))
                             .lineLimit(2)
                             .frame(
@@ -196,7 +197,7 @@ struct TVHomeView: View {
                 .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
                 .tracking(-0.5)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
-                .offset(x: x0, y: y1 - headingH - 8)
+                .offset(x: x0, y: y1 - headingH)
 
             ForEach(Array(startWatching.enumerated()), id: \.element.id) { index, work in
                 homeCardAt(
@@ -212,7 +213,7 @@ struct TVHomeView: View {
                 .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
                 .tracking(-0.5)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
-                .offset(x: x0, y: y2 - headingH - 8)
+                .offset(x: x0, y: y2 - headingH)
 
             ForEach(Array(newMovies.enumerated()), id: \.element.id) { index, work in
                 homeCardAt(
