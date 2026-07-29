@@ -57,17 +57,23 @@ enum TVParityFixtures {
 
     /// Deterministic catalogue for production-SwiftUI parity captures (no network).
     static func sampleWorks() -> [Work] {
-        let titles = [
-            ("Test Series Y", WorkKind.series, "A serial killer stalks the Scottish wilderness."),
-            ("Test Series R", WorkKind.series, "Crime drama set in Aberdeen."),
-            ("10,000 Sample", WorkKind.movie, "A prehistoric adventure."),
-            ("2001: A Sample Voyage", WorkKind.movie, "A voyage to Jupiter."),
-            ("Sample Film 2012", WorkKind.movie, "The end of the world."),
-            ("28 Sample Years", WorkKind.movie, "The rage virus returns."),
-            ("28 Sample Years: The Sequel", WorkKind.movie, "The next chapter."),
-            ("30 Sample Nights", WorkKind.movie, "Vampires in the arctic dark."),
-            ("30 Sample Nights: The Sequel", WorkKind.movie, "The sequel."),
-            ("47 Sample Metres", WorkKind.movie, "Sharks and a shark cage."),
+        // Overviews/genres mirror the authenticated SPA home reference frame.
+        let titles: [(String, WorkKind, String, String)] = [
+            (
+                "Test Series Y",
+                .series,
+                "A serial killer stalks the Scottish wilderness. When a young man’s body is discovered, DI Monica Kennedy must catch the murderer before a small community is torn apart.",
+                "Crime"
+            ),
+            ("Test Series R", .series, "Crime drama set in Aberdeen.", "Crime"),
+            ("10,000 Sample", .movie, "A prehistoric adventure.", "Action"),
+            ("2001: A Sample Voyage", .movie, "A voyage to Jupiter.", "Sci-Fi"),
+            ("Sample Film 2012", .movie, "The end of the world.", "Action"),
+            ("28 Sample Years", .movie, "The rage virus returns.", "Horror"),
+            ("28 Sample Years: The Sequel", .movie, "The next chapter.", "Horror"),
+            ("30 Sample Nights", .movie, "Vampires in the arctic dark.", "Horror"),
+            ("30 Sample Nights: The Sequel", .movie, "The sequel.", "Horror"),
+            ("47 Sample Metres", .movie, "Sharks and a shark cage.", "Thriller"),
         ]
         return titles.enumerated().map { index, item in
             Work(
@@ -77,7 +83,7 @@ enum TVParityFixtures {
                 sortTitle: item.0.lowercased(),
                 overview: item.2,
                 images: [],
-                genres: ["Drama"],
+                genres: [item.3],
                 tags: [],
                 addedAt: Date(timeIntervalSince1970: 1_700_000_000 + Double(index)),
                 monitored: true,
