@@ -83,7 +83,12 @@
              confirmed live once the old colour-border was removed and a
              no-art card (an artist with no image) went fully invisible
              except for its title text. -->
-        <Rectangle id="posterBg" width="220" height="124" color="0x312A30FF" />
+        <!-- Surface-soft match to live web .tv-home-card-art (sampled
+             ~rgb(38,33,38) @1920 from playarr.example.com home freeze).
+             Prior 0x312A30 left cards above the parity suite's dark-bg
+             normalise threshold while web cards fell below it, inventing
+             large pure-AE false positives on empty art tiles. -->
+        <Rectangle id="posterBg" width="220" height="124" color="0x262126FF" />
         <!-- scaleToZoom (crop-to-fill, preserving aspect ratio), NOT
              scaleToFill (stretch-to-fill, distorting it): confirmed live
              that scaleToFill visibly warped tall 2:3 poster art stretched

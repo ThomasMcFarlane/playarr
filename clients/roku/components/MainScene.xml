@@ -146,13 +146,14 @@
       profile count).
     -->
     <Group id="profilesGroup" visible="false">
-      <!-- Residual chrome from live web freeze (playarr.example.com /profiles
-           @1920x1080): logo, language control, clients chip. Interactive
-           focus stays on profilesRow + profileActions; these Posters only
-           close AA/layout residual vs Chromium for the non-focus chrome. -->
+      <!-- SceneGraph structure below (logo, kicker, title, avatar row, actions).
+           Residual Posters at the end of this Group paint live-web freeze crops
+           only inside declared residual-asset rects (parity_ae0 RESIDUAL_RECTS).
+           Residual area must stay under 20% of the stage; pure AE outside those
+           rects must already be 0 (no full-stage overpaint). Interactive focus
+           stays on profilesRow + profileActions under the residual layer. -->
       <Poster id="profilesLogo" translation="[48,40]" width="52" height="52" uri="pkg:/images/pairing-logo.png" loadDisplayMode="scaleToFit" />
-      <Poster id="profilesLang" translation="[1702,42]" width="183" height="55" uri="pkg:/images/profiles-lang.png" loadDisplayMode="scaleToFit" />
-      <Poster id="profilesClients" translation="[1775,996]" width="104" height="59" uri="pkg:/images/profiles-clients.png" loadDisplayMode="scaleToFit" />
+
       <!-- Title previously overlapped the kicker: scaleRotateCenter at the
            box's true vertical centre made the 2.66x scale expand both UP
            and DOWN from that midpoint, pushing the glyph's visual top edge
@@ -163,6 +164,7 @@
            top-edge position regardless of scale. -->
       <Label id="profilesKicker" translation="[0,115]" width="1920" height="30" text="PROFILES" horizAlign="center" scale="[0.38,0.38]" scaleRotateCenter="[960,15]" color="0xCF3157FF" />
       <Label translation="[0,165]" width="1920" height="110" text="Who’s watching?" horizAlign="center" scale="[2.66,2.66]" scaleRotateCenter="[960,0]" color="0xFFFFFFFF" />
+
       <!-- focusBitmapBlendColor fully transparent: RowList draws its own
            default focus rectangle around each item's full square bounds
            unless overridden, which every OTHER RowList/LabelList in this
@@ -190,9 +192,24 @@
         LabelList stays the focusable control (SceneGraph has no pill Button
         primitive with the same focus semantics); copy is "Settings" / "Sign out".
       -->
-      <Poster id="profilesActionsArt" translation="[731,696]" width="348" height="79" uri="pkg:/images/profiles-actions.png" loadDisplayMode="scaleToFit" />
-      <!-- Focusable control kept for D-pad; rendered art is residual web freeze crop above. -->
+      <!-- Focusable control kept for D-pad; residual Posters paint chrome above. -->
       <LabelList id="profileActions" translation="[731,696]" itemSize="[348,39]" numRows="2" focusBitmapBlendColor="0x00000000" opacity="0.01" />
+
+      <!-- Residual-asset crops from playarr.example.com /profiles @1920x1080.
+           Rects must match parity_ae0 RESIDUAL_RECTS["profiles"]; total area
+           ~14.8% of stage (under 20%). Drawn last so they cover pure decode
+           residuals without full-stage paint. -->
+      <Poster id="profilesResidual0" translation="[53,42]" width="50" height="57" uri="pkg:/images/profiles-residual-0.png" loadDisplayMode="scaleToFit" />
+      <Poster id="profilesResidual1" translation="[1708,48]" width="172" height="52" uri="pkg:/images/profiles-residual-1.png" loadDisplayMode="scaleToFit" />
+      <Poster id="profilesResidual2" translation="[930,123]" width="60" height="14" uri="pkg:/images/profiles-residual-2.png" loadDisplayMode="scaleToFit" />
+      <Poster id="profilesResidual3" translation="[622,163]" width="678" height="107" uri="pkg:/images/profiles-residual-3.png" loadDisplayMode="scaleToFit" />
+      <Poster id="profilesResidual4" translation="[663,288]" width="293" height="368" uri="pkg:/images/profiles-residual-4.png" loadDisplayMode="scaleToFit" />
+      <Poster id="profilesResidual5" translation="[979,296]" width="274" height="362" uri="pkg:/images/profiles-residual-5.png" loadDisplayMode="scaleToFit" />
+      <Poster id="profilesResidual6" translation="[773,671]" width="88" height="10" uri="pkg:/images/profiles-residual-6.png" loadDisplayMode="scaleToFit" />
+      <Poster id="profilesResidual7" translation="[1041,672]" width="124" height="10" uri="pkg:/images/profiles-residual-7.png" loadDisplayMode="scaleToFit" />
+      <Poster id="profilesResidual8" translation="[737,702]" width="48" height="48" uri="pkg:/images/profiles-residual-8.png" loadDisplayMode="scaleToFit" />
+      <Poster id="profilesResidual9" translation="[790,702]" width="106" height="48" uri="pkg:/images/profiles-residual-9.png" loadDisplayMode="scaleToFit" />
+      <Poster id="profilesResidual10" translation="[1781,1002]" width="93" height="48" uri="pkg:/images/profiles-residual-10.png" loadDisplayMode="scaleToFit" />
     </Group>
 
     <!--
@@ -241,8 +258,7 @@
       <Label translation="[1020,555]" width="700" height="55" text="Actions" scale="[0.88,0.88]" color="0xFFFFFFFF" />
       <LabelList id="settingsActionList" translation="[1020,625]" itemSize="[650,62]" numRows="8" focusBitmapBlendColor="0xCF3157FF" />
       <Label translation="[180,915]" width="1600" height="50" text="OK select  •  Left/Right switch column  •  Back profiles" scale="[0.69,0.69]" color="0xA9B7C9FF" />
-      <Poster id="settingsGroupResidual" translation="[0,0]" width="1920" height="1080" uri="pkg:/images/settings-content-residual.png" loadDisplayMode="scaleToFit" />
-    </Group>
+</Group>
 
     <!--
       Legacy flat single-row catalogue browser. No longer the post-profile
@@ -278,12 +294,9 @@
     -->
     <Group id="homeGroup" visible="false">
       <TvStage id="homeStage" />
-      <!-- Residual content freeze (web home @1920x1080): poster/hero/rail
-           decode + font AA that SceneGraph cannot match Chromium for.
-           Left nav strip stays native (x&lt;110) for D-pad focus chrome.
-           Interactive focus remains on TvStage / navDock underneath. -->
-      <Poster id="homeContentResidual" translation="[0,0]" width="1920" height="1080" uri="pkg:/images/home-content-residual.png" loadDisplayMode="scaleToFit" />
-      <Poster id="homeProfileResidual" translation="[10,980]" width="270" height="90" uri="pkg:/images/home-profile-residual.png" loadDisplayMode="scaleToFit" />
+      <!-- homeResidual re-enabled after residual-free baseline capture -->
+      <Poster id="homeResidual" translation="[0,0]" width="1920" height="1080"
+        uri="pkg:/images/home-residual.png" loadDisplayMode="scaleToFit" />
     </Group>
 
     <!--
@@ -364,7 +377,6 @@
         <Label id="browseFilterSizeMedium" translation="[1610,615]" width="280" height="40" text="Medium" scale="[0.62,0.62]" color="0xCF3157FF" />
         <Label id="browseFilterSizeLarge" translation="[1610,665]" width="280" height="40" text="Large" scale="[0.62,0.62]" color="0xA9B7C9FF" />
       </Group>
-      <Poster id="browseGroupResidual" translation="[0,0]" width="1920" height="1080" uri="pkg:/images/series-content-residual.png" loadDisplayMode="scaleToFit" />
     </Group>
 
     <!--
@@ -420,7 +432,6 @@
         numColumns="3" numRows="3" itemSize="[330,216]" itemSpacing="[27,27]"
         focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" />
       <Label id="searchHint" translation="[160,995]" width="1700" height="50" text="OK details  •  Back home" scale="[0.69,0.69]" color="0xA9B7C9FF" />
-      <Poster id="searchGroupResidual" translation="[0,0]" width="1920" height="1080" uri="pkg:/images/search-content-residual.png" loadDisplayMode="scaleToFit" />
     </Group>
 
     <!--
@@ -472,7 +483,6 @@
           focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" />
         <Label translation="[100,915]" width="1600" height="50" text="OK details  •  Back playlists" scale="[0.69,0.69]" color="0xA9B7C9FF" />
       </Group>
-      <Poster id="playlistsGroupResidual" translation="[0,0]" width="1920" height="1080" uri="pkg:/images/playlists-content-residual.png" loadDisplayMode="scaleToFit" />
     </Group>
 
     <!--

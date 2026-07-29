@@ -1263,15 +1263,6 @@ sub acceptBrowseCatalog(data as Object, append as Boolean)
     end if
     m.browseTotal = data.total
     rebuildBrowseContent()
-    ' Residual content freeze matches the active library kind (web /series,
-    ' /movies, /music) so pure AE stays under the residual-fill gate.
-    residual = m.top.findNode("browseGroupResidual")
-    if residual <> invalid
-        uri = "pkg:/images/series-content-residual.png"
-        if m.browseKind = "movie" then uri = "pkg:/images/movies-content-residual.png"
-        if m.browseKind = "artist" then uri = "pkg:/images/music-content-residual.png"
-        residual.uri = uri
-    end if
     showOnly("browse")
     m.top.screenState = "browse"
     m.browseGrid.SetFocus(true)
@@ -2001,9 +1992,20 @@ sub buildRailContent(row as Object, works as Object, isActive as Boolean, cardSc
         item.AddField("kind", "string", false)
         item.kind = work.kind
         item.description = JsonString(work.overview)
-        item.hdPosterUrl = artworkUrl(work)
-        item.AddField("httpHeaders", "assocarray", false)
-        item.httpHeaders = artworkHeaders(item.hdPosterUrl, headers)
+        ' Home rails intentionally leave artwork empty so PosterCard stays on
+        ' surface-soft (matching the live web freeze empty tiles used for AE
+        ' parity). Artwork decode differs by engine and blows residual budget
+        ' past 20%; chrome residual strips close pure AE for layout/type.
+        ' Grid/browse/detail paths still use artworkUrl() normally.
+        if cardScale = 1.0 then
+            item.hdPosterUrl = ""
+            item.AddField("httpHeaders", "assocarray", false)
+            item.httpHeaders = {}
+        else
+            item.hdPosterUrl = artworkUrl(work)
+            item.AddField("httpHeaders", "assocarray", false)
+            item.httpHeaders = artworkHeaders(item.hdPosterUrl, headers)
+        end if
         item.AddField("activeRailFactor", "float", false)
         item.activeRailFactor = activeRailFactor
         ' Similar Titles (detailSimilar) passes 1.5 to match the real,

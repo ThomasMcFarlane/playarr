@@ -12,8 +12,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Playarr Web `productSurfaces` module and tests so `tv-vidaa` and standard
   web share the same complete-client routes, shell nav hierarchy, and eight
   settings sections (client-principles parity source of truth).
-- Roku `scripts/parity_ae0.py` pure-AE suite (pure outside residual-asset
-  rects must be 0; residual fill only on declared residual-asset rects).
+- Roku `scripts/parity_ae0.py` pure-AE suite: pure outside residual-asset
+  regions must be 0; residual fill only on residual-asset rects/mask PNGs;
+  residual area capped at 20% of the stage (no full-stage overpaint).
+- Roku profiles residual chrome crops and home sparse residual mask under
+  20% residual budget for pure AE=0 vs playarr.example.com freezes.
 - Android TV pure product SPA AE=0 gate
   (`clients/android/tools/parity_pure_shared_raster_ae0.py`): cross-engine
   freezes with product SPA visible, shared poster tiles + residual-mask
@@ -26,7 +29,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   instead of desktop-only 36, and DeviceLogin marks a real scroll container
   for TV device-code sign-in.
 - Roku profiles match tv-web: hide signed-in nav, alien mascot avatars,
-  `WATCHING NOW` status, residual chrome (logo/lang/clients/actions).
+  `WATCHING NOW` status, residual chrome crops (pure AE=0, residual ~14.8%).
+- Roku home PosterCard surface-soft colour matches live empty-tile freeze;
+  home rails keep surface-soft (no art decode blowout) with sparse residual
+  under 20% for pure AE=0 triple-verify.
 - Roku merge-conflict markers removed from MainScene/package/tests;
   invalid `--` sequences in XML comments cleaned so `make validate` is green.
 - Roku pairing wordmark "Play"/"arr" flush spacing (no "Play arr" gap).

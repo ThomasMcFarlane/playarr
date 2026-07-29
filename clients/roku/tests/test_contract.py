@@ -250,27 +250,26 @@ class BrandingAndResidualAssetTests(unittest.TestCase):
 
     def test_profiles_hides_nav_chrome(self) -> None:
         self.assertIn('name <> "profiles"', MAIN)
-        self.assertIn("profilesLogo", SCENE)
-        self.assertIn("profilesLang", SCENE)
 
-    def test_residual_content_assets_exist_for_parity_surfaces(self) -> None:
-        images = ROOT / "images"
-        for name in (
-            "home-content-residual.png",
-            "search-content-residual.png",
-            "series-content-residual.png",
-            "movies-content-residual.png",
-            "music-content-residual.png",
-            "playlists-content-residual.png",
-            "settings-content-residual.png",
-        ):
-            path = images / name
-            self.assertTrue(path.is_file(), name)
-            self.assertGreater(path.stat().st_size, 5000, name)
+    def test_parity_suite_forbids_full_stage_residual_fill_theater(self) -> None:
+        suite = (ROOT / "scripts" / "parity_ae0.py").read_text(encoding="utf-8")
+        self.assertIn("pure_ae == 0", suite)
+        self.assertIn("MAX_RESIDUAL_FRAC", suite)
+        # Must not fill every pure-diff pixel unconditionally
+        self.assertNotIn("filled[mask] = w[mask]", suite)
+        self.assertIn("RESIDUAL_RECTS", suite)
 
-    def test_scene_wires_residual_posters(self) -> None:
-        self.assertIn("homeContentResidual", SCENE)
-        self.assertIn("browseGroupResidual", SCENE)
-        self.assertIn("searchGroupResidual", SCENE)
-        self.assertIn("playlistsGroupResidual", SCENE)
-        self.assertIn("settingsGroupResidual", SCENE)
+    def test_scene_has_no_full_stage_residual_overpaint(self) -> None:
+        self.assertNotIn("homeContentResidual", SCENE)
+        self.assertNotIn("browseGroupResidual", SCENE)
+        self.assertNotIn("searchGroupResidual", SCENE)
+        self.assertNotIn("playlistsGroupResidual", SCENE)
+        self.assertNotIn("settingsGroupResidual", SCENE)
+        self.assertNotIn("content-residual.png", SCENE)
+
+    def test_parity_ae0_suite_requires_pure_outside_residual_rects(self) -> None:
+        suite = (ROOT / "scripts" / "parity_ae0.py").read_text(encoding="utf-8")
+        self.assertIn("pure_ae == 0", suite)
+        self.assertIn("MAX_RESIDUAL_FRAC", suite)
+        # Must not fill every pure-diff pixel unconditionally
+        self.assertNotIn("filled[mask] = w[mask]", suite)
