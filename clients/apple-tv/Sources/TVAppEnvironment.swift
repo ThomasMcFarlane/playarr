@@ -198,6 +198,12 @@ final class TVAppEnvironment {
                 try await startDirectPairing()
             }
         } catch is CancellationError {
+            // Quietly reset when the pairing Task is cancelled (view refresh /
+            // Try again). Do not surface URLSession's "cancelled" string.
+            if case .signedIn = pairingState { return }
+            pairingState = .signedOut
+        } catch let error as URLError where error.code == .cancelled {
+            if case .signedIn = pairingState { return }
             pairingState = .signedOut
         } catch let error as DeviceFlowError {
             pairingState = .failed(Self.message(for: error))

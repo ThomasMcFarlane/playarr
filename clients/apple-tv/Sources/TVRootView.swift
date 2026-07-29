@@ -192,11 +192,17 @@ struct TVPairingGateView: View {
     var body: some View {
         chrome
             .onAppear {
-                if case .signedOut = environment.pairingState {
+                // Recover from cold launch and from URLSession "cancelled"
+                // failures without needing a remote click on Try again.
+                switch environment.pairingState {
+                case .signedOut, .failed:
                     beginPairing()
+                default:
+                    break
                 }
             }
             .onDisappear {
+                if case .signedIn = environment.pairingState { return }
                 pairingTask?.cancel()
                 pairingTask = nil
             }

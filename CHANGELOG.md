@@ -9,6 +9,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Roku Home after profile select no longer stays as left-nav-only empty stage:
+  stage layers reveal immediately while rails load, key-art no longer blocks
+  the SceneGraph thread with sync `GetToFile`, API requests queue instead of
+  silently dropping when busy, and `findFirstMediaFileId` is iterative so deep
+  series trees cannot stall the Continue Watching chain.
+
 - Roku stage background is Playarr dark `#151315` (was cool navy `#070B14`,
   which read as blue on the TV).
 
