@@ -212,16 +212,18 @@ enum DesignTokens {
         static let detailChapterCardWidth: CGFloat = 268
         /// 16:9 art height for 268 width
         static let detailChapterCardHeight: CGFloat = 151
-        /// Person art: ~168 measured from SPA cast tiles
-        static let detailCastTileSize: CGFloat = 168
+        /// Person art reuses `.tv-episode-card` in SPA: flex-basis clamp(180, 14vw, 268)
+        /// and `.tv-episode-art` aspect-ratio 16/9 → 268×151 @ 1920.
+        static let detailCastTileSize: CGFloat = 268
+        static let detailCastTileHeight: CGFloat = 151
         /// `.tv-media-track-scroll` gap clamp(14, 1.3vw, 26) → 25 @ 1920
         static let detailTrackItemGap: CGFloat = 25
         /// `--tv-track-left-fade: clamp(88px, 8.8vw, 152px)` → 152 @ 1920
         /// (rail starts 38% = 730 + 152 = 882; matches SPA "Chapters" x≈883)
         static let detailTrackLeftFade: CGFloat = 152
-        /// SPA chapters section is taller than 4×151 cards + labels (full34:
-        /// Cast heading y 861 vs native 836). Extra gap before cast track.
-        static let detailCastTopExtra: CGFloat = 26
+        /// SPA cast tiles start y≈934; native was y≈918 with 268×151 (full68).
+        /// Extra gap before cast track aligns the band (26→42 ≈ +16px).
+        static let detailCastTopExtra: CGFloat = 42
 
         // MARK: Search page (`.tv-library-heading` + `.tv-search-copy` @ 1920×1080)
 

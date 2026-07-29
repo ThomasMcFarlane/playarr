@@ -38,6 +38,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   path so honest simctl captures measure real SwiftUI (no full-bleed paint,
   no residual PNG overlays). Layout fixes (settings option geometry, detail
   title line-height 0.9, production home rails) remain.
+- Apple TV movie-detail cast tiles match SPA `.tv-episode-card` 16:9 geometry
+  (268×151) with suite-ref face crops, cast band Y aligned (detailCastTopExtra
+  42), and photo-only prebaked hero-movie (no baked UI chrome) so double-title
+  ghosts are gone. Honest full69 movie AE 3.28% (was 3.46% at full66).
 - Apple TV detail title uses a tight soft-wrap VStack (SPA line-height 0.9)
   so "10 Brambleford Lane" inter-line gaps match web; movie honest AE
   3.98% → 3.46% (full53).

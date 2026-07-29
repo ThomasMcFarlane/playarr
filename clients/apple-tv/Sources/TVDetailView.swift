@@ -140,6 +140,7 @@ struct TVWorkDetailView: View {
 
                     HStack(spacing: 14) {
                         // Parity: plain chrome only (no NavigationLink focus ghosts).
+                        // SPA suite ref includes both secondary Playback + primary Play.
                         if TVParityLaunch.requestedScreen != nil {
                             detailChromeLabel("Playback", primary: false)
                             detailChromeLabel("Play", primary: true)
@@ -390,7 +391,7 @@ struct TVWorkDetailView: View {
                             }
                             .frame(
                                 width: DesignTokens.Shell.detailCastTileSize,
-                                height: DesignTokens.Shell.detailCastTileSize
+                                height: DesignTokens.Shell.detailCastTileHeight
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
