@@ -15,7 +15,12 @@ paint for parity (other platforms’ WebView shells are not a model for Apple).
 - Movie, episode, track, and book detail-to-playback navigation using real
   media-file identifiers returned by the server.
 - AVKit playback after Playarr Server direct-play/HLS negotiation.
-- Phone-friendly device-code pairing and an editable self-hosted server address.
+- Phone-friendly pairing via playarr.app hosted device link (QR / code). The
+  linking device supplies the Playarr Server API URL in the claim — the TV does
+  not ask for a server address on first launch.
+- Advanced: Settings → Server connection can set a direct server URL (or pass
+  `-PlayarrServerURL` for dev/parity). Direct RFC 8628 pairing is used only
+  when a server is already configured.
 
 The backend currently has one Apple-platform `ios` compatibility and policy
 value rather than a separate tvOS value. This client therefore identifies as

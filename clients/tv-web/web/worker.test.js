@@ -296,7 +296,7 @@ describe("hosted device linking", () => {
     expect(preflight.headers.has("Access-Control-Allow-Origin")).toBe(false);
   });
 
-  it.each(["android-mobile", "android-tv", "tv-webos", "tv-tizen", "tv-roku", "tv-fire", "xbox"])(
+  it.each(["android-mobile", "android-tv", "ios", "tv-webos", "tv-tizen", "tv-roku", "tv-fire", "xbox"])(
     "preserves the %s client platform in the link session",
     async (clientPlatform) => {
       const env = environment(null);

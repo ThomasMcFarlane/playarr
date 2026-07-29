@@ -9,6 +9,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV first-launch pairing no longer asks for a server address. It uses
+  the playarr.app hosted device link (QR/code); the linking phone supplies the
+  API base URL in the claim, matching web/Android TV. Settings still holds an
+  advanced server override for direct device flow.
+
 - Roku Search empty shell uses native SceneGraph title/field/empty magnifier (web crop Posters were misaligned).
 
 - Roku Home leftmost card hands focus to a proxy so Left opens the nav dock
@@ -34,6 +39,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   XML typo repaired.
 
 ### Changed
+
+- PlayarrKit adds `HostedDeviceLinkClient` for playarr.app `/api/link/*` first
+  contact. Hosted link broker accepts `ios` as a client platform (alongside
+  existing TV/mobile platforms).
 
 - Roku poster cards carry auth on a custom `artHeaders` field (ContentNode
   built-in `httpHeaders` is an empty array and could not hold Bearer tokens),

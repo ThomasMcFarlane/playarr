@@ -176,21 +176,21 @@ struct TVRootView: View {
     }
 }
 
-/// Full-screen pairing gate aligned with ui-tv / device-code display.
+/// Full-screen pairing gate aligned with web device-login / hosted link.
+/// Server URL is **not** typed here: playarr.app QR/code linking supplies it
+/// from the phone (or Settings holds an advanced override after first link).
 struct TVPairingGateView: View {
     @Environment(TVAppEnvironment.self) private var environment
     @State private var pairingTask: Task<Void, Never>?
-    @State private var serverError: String?
 
     var body: some View {
         ZStack {
             TVStageBackground()
             VStack(spacing: DesignTokens.Spacing.lg) {
-                Text("Playarr Server")
+                Text("Link this Apple TV")
                     .font(TVTheme.heroTitleFont())
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                 pairingBody
-                serverAddressEditor
             }
             .padding(DesignTokens.Spacing.xxxl)
             .frame(maxWidth: 1200)
@@ -216,6 +216,31 @@ struct TVPairingGateView: View {
             ProgressView().tint(DesignTokens.Color.brandPrimary)
         case .awaitingApproval(let pending):
             VStack(spacing: DesignTokens.Spacing.md) {
+                if let qrURL = HostedDeviceLinkClient.qrImageURL(
+                    for: pending.verificationUriComplete
+                ) {
+                    AsyncImage(url: qrURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .interpolation(.none)
+                                .scaledToFit()
+                        case .failure:
+                            Color.white.opacity(0.08)
+                        case .empty:
+                            ProgressView().tint(DesignTokens.Color.brandPrimary)
+                        @unknown default:
+                            Color.white.opacity(0.08)
+                        }
+                    }
+                    .frame(width: 240, height: 240)
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                            .fill(Color.white)
+                    )
+                }
                 Text("Scan the QR code, or visit")
                     .font(TVTheme.subtitleFont())
                     .foregroundStyle(DesignTokens.Color.textSecondary)
@@ -256,42 +281,6 @@ struct TVPairingGateView: View {
                 .multilineTextAlignment(.center)
             TVPrimaryButton(label: "Try again") { beginPairing() }
         }
-    }
-
-    private var serverAddressEditor: some View {
-        VStack(spacing: DesignTokens.Spacing.sm) {
-            Text("Server address")
-                .font(TVTheme.captionFont())
-                .foregroundStyle(DesignTokens.Color.textSecondary)
-            TextField(
-                "https://playarr.example",
-                text: Bindable(environment).serverAddress
-            )
-            .font(TVTheme.bodyFont())
-            .foregroundStyle(DesignTokens.Color.textPrimary)
-            .padding(DesignTokens.Spacing.md)
-            .frame(maxWidth: 720)
-            .background(
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
-                    .fill(DesignTokens.Color.backgroundRaised)
-            )
-            .textContentType(.URL)
-            .autocorrectionDisabled()
-            Button("Save server") {
-                serverError = environment.saveServerAddress()
-                    ? nil
-                    : "Enter a valid HTTP or HTTPS server address."
-                if serverError == nil { beginPairing() }
-            }
-            .font(TVTheme.bodyFont(emphasis: true))
-            .foregroundStyle(DesignTokens.Color.brandPrimary)
-            if let serverError {
-                Text(serverError)
-                    .font(TVTheme.captionFont())
-                    .foregroundStyle(DesignTokens.Color.stateError)
-            }
-        }
-        .padding(.top, DesignTokens.Spacing.xl)
     }
 
     private func beginPairing() {

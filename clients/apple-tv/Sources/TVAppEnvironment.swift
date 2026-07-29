@@ -47,20 +47,24 @@ enum TVServerAddress {
 final class TVAppEnvironment {
     static let serverURLKey = "com.playarr.playarr.tvos.serverURL"
     static let deviceIDKey = "com.playarr.playarr.tvos.deviceID"
-    /// Default Playarr Server API. The SPA host (playarr.example.com) is not
-    /// the API — use the LAN/Tailscale API port operators expose for clients.
-    /// Overridable via Settings → Server address or `-PlayarrServerURL`.
-    static let defaultServerURL = URL(string: "http://192.0.2.83:8484")!
+    /// Placeholder base URL only until a real server arrives via hosted link
+    /// claim or Settings. Never the product default for first launch — the
+    /// linking device supplies the API host (QR / playarr.app claim).
+    static let bootstrapPlaceholderURL = HostedDeviceLinkConfiguration.playarrAppOrigin
 
     private(set) var apiClient: PlayarrAPIClient
     private(set) var pairingState: TVPairingState = .signedOut
     private(set) var serverURL: URL
+    /// True when the operator (or a prior successful link) configured a
+    /// Playarr Server API base. False on first launch → hosted device link.
+    private(set) var hasConfiguredServer: Bool
 
     var serverAddress: String
 
     private let defaults: UserDefaults
     private let deviceID: UUID
     private var deviceAuthorizer: any TVDeviceAuthorizing
+    private let hostedLinkClient: HostedDeviceLinkClient
     private var accessToken: Sensitive<String>?
     private var refreshToken: Sensitive<String>?
     /// The remembered *group* of server addresses for this Apple TV —
@@ -74,6 +78,9 @@ final class TVAppEnvironment {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.serverGroupStore = UserDefaultsKnownServerGroupStore(defaults: defaults)
+        self.hostedLinkClient = HostedDeviceLinkClient(
+            configuration: HostedDeviceLinkConfiguration(clientPlatform: .ios)
+        )
 
         let args = ProcessInfo.processInfo.arguments
         let launchURL: URL? = {
@@ -82,19 +89,23 @@ final class TVAppEnvironment {
             return TVServerAddress.normalisedURL(from: args[idx + 1])
         }()
         let storedURL = defaults.string(forKey: Self.serverURLKey).flatMap(URL.init(string:))
-        let resolvedURL = launchURL ?? storedURL ?? Self.defaultServerURL
-        serverURL = resolvedURL
-        serverAddress = resolvedURL.absoluteString
+        let resolvedURL = launchURL ?? storedURL
+        let effectiveURL = resolvedURL ?? Self.bootstrapPlaceholderURL
+        hasConfiguredServer = resolvedURL != nil
+        serverURL = effectiveURL
+        serverAddress = resolvedURL?.absoluteString ?? ""
 
+        let resolvedDeviceID: UUID
         if let storedID = defaults.string(forKey: Self.deviceIDKey).flatMap(UUID.init(uuidString:)) {
-            deviceID = storedID
+            resolvedDeviceID = storedID
         } else {
             let generatedID = UUID()
-            deviceID = generatedID
+            resolvedDeviceID = generatedID
             defaults.set(generatedID.uuidString, forKey: Self.deviceIDKey)
         }
+        deviceID = resolvedDeviceID
 
-        let configuration = Self.apiConfiguration(serverURL: resolvedURL, deviceID: deviceID)
+        let configuration = Self.apiConfiguration(serverURL: effectiveURL, deviceID: resolvedDeviceID)
         // Optional parity bootstrap: `-PlayarrAccessToken <jwt>` forces signed-in
         // so visual captures hit the production shell with a real catalogue.
         let launchToken: String? = {
@@ -114,7 +125,7 @@ final class TVAppEnvironment {
         }
         deviceAuthorizer = DeviceFlowClient(
             configuration: DeviceFlowConfiguration(
-                baseURL: resolvedURL,
+                baseURL: effectiveURL,
                 // The current server contract has no separate tvOS case;
                 // Apple platforms share the `ios` compatibility/policy row.
                 clientPlatform: .ios
@@ -122,11 +133,19 @@ final class TVAppEnvironment {
         )
     }
 
+    /// First launch (no stored/launch server URL) uses playarr.app hosted
+    /// link so the phone supplies the API host. Advanced: Settings server
+    /// address or `-PlayarrServerURL` uses direct RFC 8628 against that host.
+    static func shouldUseHostedDeviceLink(hasConfiguredServer: Bool) -> Bool {
+        !hasConfiguredServer
+    }
+
     @discardableResult
     func saveServerAddress() -> Bool {
         guard let url = TVServerAddress.normalisedURL(from: serverAddress) else { return false }
         serverURL = url
         serverAddress = url.absoluteString
+        hasConfiguredServer = true
         defaults.set(url.absoluteString, forKey: Self.serverURLKey)
         rebuildClients()
         signOut()
@@ -139,42 +158,87 @@ final class TVAppEnvironment {
         return true
     }
 
-    /// Requests a device code, retrying across every address this Apple TV
-    /// has ever remembered for its current server group (`lastGoodURL`
-    /// first, §7.1's fast path) before surfacing a failure -- §6.4/§8 Phase
-    /// 5: "retry across the list before ever re-prompting; only ever
-    /// re-prompt for credentials, never for an address, once a group is
-    /// known." The address that actually answers becomes `serverURL` (and
-    /// this Apple TV's new `lastGoodURL`) so the rest of pairing --
-    /// `pollForToken`, and every catalog/playback call once signed in --
-    /// consistently targets the address that's actually reachable, not
-    /// whichever one happened to be configured before this attempt.
+    /// Starts pairing. When no server is configured, requests a code from
+    /// playarr.app, waits for the phone claim (server URL + server device
+    /// code), then polls the real server token endpoint. When a server is
+    /// already configured (Settings / prior link / launch arg), uses direct
+    /// RFC 8628 and retries across the known address group.
     func startPairing() async {
         pairingState = .requestingCode
         do {
-            let (pending, authorizer) = try await requestDeviceCodeAcrossKnownAddresses()
-            if authorizer.baseURL != serverURL {
-                adoptWorkingServerURL(authorizer.baseURL)
+            if Self.shouldUseHostedDeviceLink(hasConfiguredServer: hasConfiguredServer) {
+                try await startHostedPairing()
+            } else {
+                try await startDirectPairing()
             }
-            deviceAuthorizer = authorizer
-            await serverGroupStore.recordSuccess(url: authorizer.baseURL.absoluteString)
-
-            pairingState = .awaitingApproval(pending)
-            let token = try await deviceAuthorizer.pollForToken(
-                deviceCode: pending.deviceCode,
-                interval: TimeInterval(pending.interval),
-                expiresIn: TimeInterval(pending.expiresIn)
-            )
-            accessToken = Sensitive(token.accessToken)
-            refreshToken = Sensitive(token.refreshToken)
-            pairingState = .signedIn
         } catch is CancellationError {
             pairingState = .signedOut
         } catch let error as DeviceFlowError {
             pairingState = .failed(Self.message(for: error))
+        } catch let error as HostedDeviceLinkError {
+            pairingState = .failed(Self.message(for: error))
         } catch {
             pairingState = .failed(error.localizedDescription)
         }
+    }
+
+    private func startHostedPairing() async throws {
+        let pending = try await hostedLinkClient.requestCode()
+        pairingState = .awaitingApproval(pending)
+
+        let claim = try await hostedLinkClient.pollUntilClaim(pending)
+        let primaryURL = try Self.requireServerURL(claim.serverURL)
+        let groupURLs = Self.distinctServerURLs(
+            primary: claim.serverURL,
+            others: claim.serverURLs
+        )
+
+        adoptWorkingServerURL(primaryURL)
+        await serverGroupStore.remember(
+            KnownServerGroup(
+                servers: groupURLs.map { KnownServer(url: $0) },
+                lastGoodURL: primaryURL.absoluteString
+            )
+        )
+
+        let authorizer = DeviceFlowClient(
+            configuration: DeviceFlowConfiguration(baseURL: primaryURL, clientPlatform: .ios)
+        )
+        deviceAuthorizer = authorizer
+
+        // Remaining TTL on the hosted session; poll interval stays short
+        // like the web client after the claim arrives.
+        let remaining = max(TimeInterval(pending.expiresIn) - 1, 30)
+        let token = try await authorizer.pollForToken(
+            deviceCode: claim.serverDeviceCode,
+            interval: 1,
+            expiresIn: remaining
+        )
+        accessToken = Sensitive(token.accessToken)
+        refreshToken = Sensitive(token.refreshToken)
+        pairingState = .signedIn
+    }
+
+    /// Direct device flow against a configured server, retrying across every
+    /// address this Apple TV has remembered for its current server group
+    /// (`lastGoodURL` first, §7.1's fast path) before surfacing a failure.
+    private func startDirectPairing() async throws {
+        let (pending, authorizer) = try await requestDeviceCodeAcrossKnownAddresses()
+        if authorizer.baseURL != serverURL {
+            adoptWorkingServerURL(authorizer.baseURL)
+        }
+        deviceAuthorizer = authorizer
+        await serverGroupStore.recordSuccess(url: authorizer.baseURL.absoluteString)
+
+        pairingState = .awaitingApproval(pending)
+        let token = try await deviceAuthorizer.pollForToken(
+            deviceCode: pending.deviceCode,
+            interval: TimeInterval(pending.interval),
+            expiresIn: TimeInterval(pending.expiresIn)
+        )
+        accessToken = Sensitive(token.accessToken)
+        refreshToken = Sensitive(token.refreshToken)
+        pairingState = .signedIn
     }
 
     /// Tries `requestDeviceCode()` against `serverURL` first, then every
@@ -232,6 +296,7 @@ final class TVAppEnvironment {
     private func adoptWorkingServerURL(_ url: URL) {
         serverURL = url
         serverAddress = url.absoluteString
+        hasConfiguredServer = true
         defaults.set(url.absoluteString, forKey: Self.serverURLKey)
         apiClient = APIClient(configuration: Self.apiConfiguration(serverURL: url, deviceID: deviceID))
     }
@@ -260,6 +325,26 @@ final class TVAppEnvironment {
         )
     }
 
+    private static func requireServerURL(_ raw: String) throws -> URL {
+        guard let url = TVServerAddress.normalisedURL(from: raw) else {
+            throw HostedDeviceLinkError.invalidClaim
+        }
+        return url
+    }
+
+    private static func distinctServerURLs(primary: String, others: [String]) -> [String] {
+        var seen = Set<String>()
+        var ordered: [String] = []
+        for raw in [primary] + others {
+            guard let url = TVServerAddress.normalisedURL(from: raw) else { continue }
+            let key = url.absoluteString
+            if seen.insert(key).inserted {
+                ordered.append(key)
+            }
+        }
+        return ordered
+    }
+
     private static func message(for error: DeviceFlowError) -> String {
         switch error {
         case .authorizationExpired: return "The pairing code expired. Request a new code."
@@ -270,6 +355,21 @@ final class TVAppEnvironment {
         case .oauth: return "The server could not complete device pairing."
         case .transport(let underlying), .decoding(let underlying):
             return underlying.localizedDescription
+        }
+    }
+
+    private static func message(for error: HostedDeviceLinkError) -> String {
+        switch error {
+        case .expired:
+            return "That Playarr link code expired. Try again."
+        case .invalidClaim:
+            return "Playarr returned an invalid TV link response."
+        case .http(let status):
+            return "Playarr linking is unavailable (HTTP \(status))."
+        case .invalidBaseURL, .invalidResponse:
+            return "Playarr linking is unavailable."
+        case .transportMessage(let message):
+            return message
         }
     }
 }

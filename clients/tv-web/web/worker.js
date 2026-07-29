@@ -19,6 +19,7 @@ const LINK_CODE_POLL_SECONDS = 2;
 const LINK_CLIENT_PLATFORMS = new Set([
   "android-mobile",
   "android-tv",
+  "ios",
   "tv-webos",
   "tv-tizen",
   "tv-roku",

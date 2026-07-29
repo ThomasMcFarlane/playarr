@@ -30,4 +30,13 @@ final class TVServerAddressTests: XCTestCase {
     func testRejectsEmptyAddress() {
         XCTAssertNil(TVServerAddress.normalisedURL(from: "   "))
     }
+
+    func testFirstLaunchUsesHostedDeviceLink() {
+        XCTAssertTrue(TVAppEnvironment.shouldUseHostedDeviceLink(hasConfiguredServer: false))
+    }
+
+    func testConfiguredServerUsesDirectDeviceFlow() {
+        XCTAssertFalse(TVAppEnvironment.shouldUseHostedDeviceLink(hasConfiguredServer: true))
+    }
 }
+
