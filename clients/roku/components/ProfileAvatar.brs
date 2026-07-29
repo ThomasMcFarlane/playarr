@@ -1,4 +1,5 @@
 sub init()
+    m.circleGroup = m.top.findNode("circleGroup")
     m.focusRing = m.top.findNode("focusRing")
     m.avatarImage = m.top.findNode("avatarImage")
     m.initial = m.top.findNode("initial")
@@ -7,39 +8,28 @@ sub init()
 end sub
 
 ' itemContent fields set by buildProfileAvatarContent() in MainScene.brs:
-'   title        - profile display name (also the RowList item's own title)
-'   presetId     - one of the six fixed preset ids (astronaut/cat/dinosaur/
-'                  robot/pirate/alien), pre-resolved by MainScene so this
-'                  component stays a dumb renderer, same division of labour
-'                  as PosterCard (MainScene resolves artworkUrl, PosterCard
-'                  just displays content.hdPosterUrl).
-'   initial      - single uppercase letter drawn over the gradient circle,
-'                  standing in for tv-web's SVG mascot icon (see this
-'                  component's XML header comment for why)
-'   statusText   - the Linked/PIN-locked/etc suffix line
+'   title / presetId / initial / statusText
 sub onContentChanged()
     content = m.top.itemContent
     if content = invalid then return
     m.avatarImage.uri = "pkg:/images/avatar-" + content.presetId + ".png"
-    ' Only the synthetic "+" avatar uses a letter/symbol overlay. Preset art
-    ' already includes the mascot illustration (matching tv-web ProfileAvatar).
-    if content.presetId = "add"
-        m.initial.text = content.initial
-        m.initial.visible = true
-    else
-        m.initial.text = ""
-        m.initial.visible = false
-    end if
+    ' Preset + add art already include mascot / plus — no letter overlay.
+    m.initial.text = ""
+    m.initial.visible = false
     m.name.text = content.title
     m.status.text = content.statusText
 end sub
 
-' Mirrors PosterCard's onFocusChanged: fades in a focus ring (this
-' component's circular equivalent of PosterCard's focusFrame Rectangle) and
-' scales the whole item up slightly.
+' Web: focused avatar scales from its centre and lifts slightly. Scale the
+' circle group only (labels stay put) with pivot at the circle centre so
+' neighbours stay on one horizontal baseline.
 sub onFocusChanged()
     effective = m.top.focusPercent * m.top.activeRailFactor
     m.focusRing.opacity = effective
-    scale = 1 + (effective * 0.04)
-    m.top.scale = [scale, scale]
+    if m.circleGroup = invalid then return
+    scale = 1 + (effective * 0.05)
+    m.circleGroup.scale = [scale, scale]
+    ' Subtle lift (web translateY(-8px)) without shifting RowList slot.
+    lift = Int(-8 * effective)
+    m.circleGroup.translation = [20, 16 + lift]
 end sub

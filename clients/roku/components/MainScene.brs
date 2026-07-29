@@ -1406,8 +1406,8 @@ sub updateProfileActionsLayout()
         return
     end if
     m.profileActionsGroup.visible = true
-    itemWidth = 260
-    spacing = 25
+    itemWidth = 280
+    spacing = 32
     rowX = 0
     if m.profilesRow <> invalid and m.profilesRow.translation <> invalid
         rowX = m.profilesRow.translation[0]
@@ -1418,8 +1418,8 @@ sub updateProfileActionsLayout()
     x = centerX - Int(actionsW / 2)
     if x < 40 then x = 40
     if x > 1920 - actionsW - 40 then x = 1920 - actionsW - 40
-    ' Under name/status band (avatar y≈320 + 340 item).
-    m.profileActionsGroup.translation = [x, 680]
+    ' Under name/status band (row y≈300 + 360 item).
+    m.profileActionsGroup.translation = [x, 700]
 end sub
 
 sub onProfilesRowFocused(event as Object)
@@ -1502,21 +1502,19 @@ sub buildProfileAvatarContent(profiles as Object)
     ' Keep full status line (was truncating as "ADD ANOTHER…").
     list.Push(addItem)
 
-    ' Geometry measured from live web profiles freeze (1920x1080): avatar
-    ' centres at x≈818 and x≈1103 (spacing 285), tops near y≈358. Equal
-    ' item boxes of 260 with 25px gap centre the pair correctly; y=350 puts
-    ' the 271px art near the web vertical band.
-    itemWidth = 260
-    spacing = 25
+    ' Equal item boxes 280×360 (240 circle + ring pad + labels). Gap 32.
+    ' Circles centre on a shared baseline; focus scales from circle centre.
+    itemWidth = 280
+    spacing = 32
     count = list.Count()
     rowWidth = count * itemWidth + (count - 1) * spacing
     x = 960 - Int(rowWidth / 2)
     if x < 40 then x = 40
-    m.profilesRow.translation = [x, 320]
-    m.profilesRow.rowItemSize = [[itemWidth, 340]]
+    m.profilesRow.translation = [x, 300]
+    m.profilesRow.rowItemSize = [[itemWidth, 360]]
     m.profilesRow.rowItemSpacing = [[spacing, 0]]
-    m.profilesRow.rowHeights = [340]
-    m.profilesRow.itemSize = [1800, 340]
+    m.profilesRow.rowHeights = [360]
+    m.profilesRow.itemSize = [1800, 360]
     m.profilesRow.content = root
     ' Prefer current profile for under-avatar actions on first paint.
     m.profilesFocusIndex = 0

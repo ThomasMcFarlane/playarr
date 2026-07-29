@@ -1,65 +1,29 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-  Profile Screen redesign (real-screenshot correction pass): tv-web's actual
-  Profiles page (see clients/tv-web/web/src/pages/Profiles.tsx +
-  components/ProfileAvatar.tsx) renders each profile as a large circular
-  gradient "glossy sphere" button with a small SVG mascot icon inside (one of
-  six fixed presets (astronaut/cat/dinosaur/robot/pirate/alien), chosen
-  deterministically per profile id, see profileAvatar.ts's
-  defaultProfileAvatarPreset, or a viewer-uploaded photo), and the profile's
-  name centered underneath. This item-renderer component is this channel's
-  circular-avatar-button analogue of PosterCard (itemContent/focusPercent
-  interface shape copied from PosterCard.xml), used by MainScene's
-  profilesRow RowList (numRows="1") instead of the old vertical
-  LabelList("profilesList") text list.
-
-  Two platform limitations force documented compromises versus tv-web:
-    1. SceneGraph has no native circle/rounded-mask primitive and no
-       CSS-gradient equivalent (see MainScene.brs's showProfiles doc comment
-       for the full rationale): the circular "glossy" look instead comes
-       from pre-rendered radial-gradient PNG assets baked at build time
-       (images/avatar-<preset>.png, generated from tv-web's own
-       PROFILE_AVATAR_PRESETS start/end colour pairs) rather than a runtime
-       mask, and the focus ring is a second transparent-centre ring PNG
-       (images/avatar-ring.png) faded in/out via opacity, mirroring
-       PosterCard's focusFrame opacity-fade pattern.
-    2. Roku has no SVG renderer, so the six hand-illustrated mascot icons
-       (astronaut/cat/dinosaur/... ; see tv-web's ProfileAvatar.tsx
-       PresetArtwork) cannot be reproduced; a single-letter initial (the
-       profile name's first character) is drawn over the gradient circle
-       instead, in the same visual "content: index letter, decorated by
-       preset colour" slot the mascot icon occupies on tv-web. This is a
-       deliberate, documented substitution, not a missing feature: Roku
-       could not tell an uploaded-photo preference from a preset one either
-       way, since GET /api/v1/users/profiles (ProfileResponse) carries no
-       avatar field at all (confirmed against tv-web's generated
-       schema.ts): there is nothing for this client to fetch an actual
-       avatar image from regardless of the icon-set limitation.
+  Web Profiles.tsx profile-avatar-button: circular gradient/mascot, name +
+  status under it. Focus grows from the circle centre (not top-left) so the
+  row of circles stays on one baseline.
 -->
 <component name="ProfileAvatar" extends="Group">
   <interface>
     <field id="itemContent" type="node" onChange="onContentChanged" />
     <field id="focusPercent" type="float" onChange="onFocusChanged" />
-    <!-- See PosterCard.xml's identical field for the full rationale (a real
-         stale-focus-border bug confirmed live on Home's multi-rail
-         screen). profilesRow is single-row today so this can't currently
-         manifest here, but wiring it the same way keeps both item
-         renderers consistent and safe if that ever changes. Defaults to 1
-         (no-op multiplier). -->
     <field id="activeRailFactor" type="float" value="1" onChange="onFocusChanged" />
   </interface>
   <children>
-    <!-- Ring drawn first (behind the circle) with generous padding so it
-         reads as an outer glow/frame around the sphere, not an inset
-         border; matches PosterCard's focusFrame-behind-poster ordering. -->
-    <!-- Art sized to web freeze avatar band (~260px). Item box is 260x340
-         from buildProfileAvatarContent so two avatars centre at web x≈818/1103. -->
-    <Poster id="focusRing" translation="[-8,-8]" width="276" height="276" uri="pkg:/images/avatar-ring.png" opacity="0" />
-    <Poster id="avatarImage" translation="[0,0]" width="260" height="260" loadDisplayMode="scaleToFit" />
-    <Label id="initial" translation="[0,0]" width="260" height="260" horizAlign="center" vertAlign="center" scale="[2.4,2.4]" scaleRotateCenter="[130,130]" color="0xFFFFFFFF" />
-    <Label id="name" translation="[0,268]" width="260" height="34" horizAlign="center" numLines="1" scale="[0.59,0.59]" scaleRotateCenter="[130,17]" color="0xF4F0F1FF" />
-    <!-- Web .profile-avatar-button > small: ink-muted uppercase. -->
-    <Label id="status" translation="[0,298]" width="260" height="28" horizAlign="center" numLines="1" scale="[0.42,0.42]" scaleRotateCenter="[130,14]" color="0x887A82FF" />
+    <!--
+      Item box is 280×360 (MainScene buildProfileAvatarContent).
+      Circle 240 centred horizontally with top pad so focus ring is not clipped.
+      scaleRotateCenter on circleGroup = circle centre so focus scale stays aligned.
+    -->
+    <Group id="circleGroup" translation="[20,16]" scaleRotateCenter="[120,120]">
+      <!-- Ring: 16px pad around 240 circle → 272; centre on circle. -->
+      <Poster id="focusRing" translation="[-16,-16]" width="272" height="272" uri="pkg:/images/avatar-ring.png" opacity="0" loadDisplayMode="scaleToFit" />
+      <Poster id="avatarImage" translation="[0,0]" width="240" height="240" loadDisplayMode="scaleToFit" />
+      <Label id="initial" translation="[0,0]" width="240" height="240" horizAlign="center" vertAlign="center" scale="[2.2,2.2]" scaleRotateCenter="[120,120]" color="0xFFFFFFFF" visible="false" />
+    </Group>
+    <Label id="name" translation="[0,268]" width="280" height="34" horizAlign="center" numLines="1" scale="[0.55,0.55]" scaleRotateCenter="[140,17]" color="0xF4F0F1FF" />
+    <Label id="status" translation="[0,300]" width="280" height="28" horizAlign="center" numLines="1" scale="[0.40,0.40]" scaleRotateCenter="[140,14]" color="0x887A82FF" />
   </children>
   <script type="text/brightscript" uri="pkg:/components/ProfileAvatar.brs" />
 </component>

@@ -66,6 +66,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (not a text LabelList), WATCHING NOW / READY status lines. Clients link
   omitted (no native Clients screen on Roku).
 
+- Roku profile avatars realigned: distinct preset art restored (freeze pass
+  had duplicated one circle), equal 240 circles in 280 slots, focus scale
+  pivots from circle centre so the row stays on one baseline.
+
 - Apple TV pairing gate is 1:1 with measured web `/login/qr` @ 1920×1080:
   logo only at nav centre-x (no centre wordmark), square theme/language
   triggers top-right, centred panel (kicker/title/desc/QR/code/timer),

@@ -124,15 +124,15 @@
       <Label id="profilesKicker" translation="[0,120]" width="1920" height="30" text="PROFILES" horizAlign="center" scale="[0.38,0.38]" scaleRotateCenter="[960,15]" color="0xCF3157FF" />
       <Label id="profilesTitle" translation="[0,170]" width="1920" height="110" text="Who’s watching?" horizAlign="center" scale="[2.66,2.66]" scaleRotateCenter="[960,0]" color="0xF4F0F1FF" />
 
-      <!-- Avatar row: transparent focus rect (ProfileAvatar draws its own ring). -->
-      <RowList id="profilesRow" translation="[86,320]" itemComponentName="ProfileAvatar"
-        numRows="1" itemSize="[1800,350]" rowItemSize="[[260,340]]"
-        rowItemSpacing="[[25,0]]" rowHeights="[340]" showRowLabel="false"
+      <!-- Avatar row: item 280×360 (circle 240 + ring pad + labels). Transparent focus rect. -->
+      <RowList id="profilesRow" translation="[86,300]" itemComponentName="ProfileAvatar"
+        numRows="1" itemSize="[1800,360]" rowItemSize="[[280,360]]"
+        rowItemSpacing="[[32,0]]" rowHeights="[360]" showRowLabel="false"
         focusXOffset="[0]" rowFocusAnimationStyle="fixedFocusWrap"
         focusBitmapBlendColor="0x00000000" />
 
       <!-- .profile-actions under focused avatar: circular gear + Sign out pill. -->
-      <Group id="profileActionsGroup" translation="[860,680]" visible="true">
+      <Group id="profileActionsGroup" translation="[860,700]" visible="true">
         <Poster id="profilesSettingsBtn" translation="[0,0]" width="44" height="44" uri="pkg:/images/profiles-gear.png" />
         <Rectangle id="profilesSettingsHit" translation="[0,0]" width="44" height="44" color="0x00000000" focusable="true" />
         <Poster id="profilesSignOutBtn" translation="[56,0]" width="160" height="44" uri="pkg:/images/profiles-signout.png" />
