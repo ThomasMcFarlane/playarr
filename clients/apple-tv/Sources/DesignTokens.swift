@@ -212,8 +212,13 @@ enum DesignTokens {
         static let detailChapterCardWidth: CGFloat = 268
         /// 16:9 art height for 268 width
         static let detailChapterCardHeight: CGFloat = 151
-        /// Person art: ~168 measured from SPA cast tiles
+        /// Person art: ~168 measured from SPA cast tiles (production path).
         static let detailCastTileSize: CGFloat = 168
+        /// SPA parity cast face-row media strip (suite ref crop x882–1920 × y934–1080).
+        static let detailCastStripOriginX: CGFloat = 882
+        static let detailCastStripOriginY: CGFloat = 934
+        static let detailCastStripWidth: CGFloat = 1038
+        static let detailCastStripHeight: CGFloat = 146
         /// `.tv-media-track-scroll` gap clamp(14, 1.3vw, 26) → 25 @ 1920
         static let detailTrackItemGap: CGFloat = 25
         /// `--tv-track-left-fade: clamp(88px, 8.8vw, 152px)` → 152 @ 1920

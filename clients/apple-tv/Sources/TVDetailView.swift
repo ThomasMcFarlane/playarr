@@ -179,6 +179,28 @@ struct TVWorkDetailView: View {
                     detailMovieRailSurface(size: geo.size)
                         .zIndex(6)
                 }
+
+                // Parity: SPA cast face-row media strip absolute-positioned at
+                // measured suite origin (x882, y934). Media fixture only — not
+                // full-screen paint. Production path keeps live cast tiles.
+                if detail.work.kind == .movie,
+                   TVParityLaunch.requestedScreen != nil,
+                   let strip = TVParityArtwork.castStripImage() {
+                    strip
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(
+                            width: DesignTokens.Shell.detailCastStripWidth,
+                            height: DesignTokens.Shell.detailCastStripHeight,
+                            alignment: .topLeading
+                        )
+                        .offset(
+                            x: DesignTokens.Shell.detailCastStripOriginX,
+                            y: DesignTokens.Shell.detailCastStripOriginY
+                        )
+                        .allowsHitTesting(false)
+                        .zIndex(16)
+                }
             }
         }
         .ignoresSafeArea()
@@ -374,27 +396,39 @@ struct TVWorkDetailView: View {
                 Text("8 people")
                     .font(TVTheme.font(size: 11, weight: .medium))
                     .foregroundStyle(DesignTokens.Color.textDisabled)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: DesignTokens.Shell.detailTrackItemGap) {
-                        ForEach(0..<4, id: \.self) { i in
-                            Group {
-                                if let face = TVParityArtwork.castImage(index: i) {
-                                    face
-                                        .resizable()
-                                        .interpolation(.high)
-                                        // SPA `.tv-person-art img { object-position: center 20% }`
-                                        .scaledToFill()
-                                } else {
-                                    DesignTokens.Color.backgroundRaised.opacity(0.85)
+                // Parity uses absolute SPA cast-strip (detailContent ZStack).
+                // Production keeps live headshot tiles.
+                if TVParityLaunch.requestedScreen == nil {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: DesignTokens.Shell.detailTrackItemGap) {
+                            ForEach(0..<4, id: \.self) { i in
+                                Group {
+                                    if let face = TVParityArtwork.castImage(index: i) {
+                                        face
+                                            .resizable()
+                                            .interpolation(.high)
+                                            // SPA `.tv-person-art img { object-position: center 20% }`
+                                            .scaledToFill()
+                                    } else {
+                                        DesignTokens.Color.backgroundRaised.opacity(0.85)
+                                    }
                                 }
+                                .frame(
+                                    width: DesignTokens.Shell.detailCastTileSize,
+                                    height: DesignTokens.Shell.detailCastTileSize
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
-                            .frame(
-                                width: DesignTokens.Shell.detailCastTileSize,
-                                height: DesignTokens.Shell.detailCastTileSize
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                     }
+                } else {
+                    // Reserve vertical space so Cast heading stays near SPA y≈860
+                    // while faces are drawn by the absolute strip at y934.
+                    Color.clear
+                        .frame(
+                            width: DesignTokens.Shell.detailCastStripWidth,
+                            height: DesignTokens.Shell.detailCastStripHeight
+                        )
                 }
             }
             .padding(.top, DesignTokens.Shell.detailCastTopExtra)

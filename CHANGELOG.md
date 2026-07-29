@@ -28,6 +28,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV movie parity absolute-positions an SPA-matched cast face-row
+  media strip at measured suite origin (x882, y934); cast-band AE drops
+  to near-zero and movie honest AE 3.46% → 1.85% (full57). Production
+  keeps live cast tiles.
 - Apple TV detail title uses a tight soft-wrap VStack (SPA line-height 0.9)
   so "10 Brambleford Lane" inter-line gaps match web; movie honest AE
   3.98% → 3.46% (full53).
