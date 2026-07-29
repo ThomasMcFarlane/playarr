@@ -74,10 +74,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shape; the target remains full native Compose + Media3 on television.
 - Add Android TV parity capture tooling under `clients/android/tools/` (`compare_surfaces.py`,
   `parity_ae0.py`, `parity_unpainted_ae0.py`, `parity_cross_engine_ae0.py`,
-  `parity_pure_spa_ae0.py`, `parity_pure_interactive_ae0.py`) for deterministic 1920×1080 AE
+  `parity_pure_spa_ae0.py`, `parity_pure_interactive_ae0.py`, `parity_cross_engine_pure_ae0.py`) for deterministic 1920×1080 AE
   comparison and triple-verify runs. The interactive pure suite freezes the live SPA in the TV
   WebView with zero desktop asset painting (local image self-freeze + stability gate), and
-  records focused/unfocused animation evidence frames.
+  records focused/unfocused animation evidence frames. The cross-engine pure suite
+  freezes desktop Chromium and the TV WebView on live playarr.example.com, records pure
+  residual metrics, then applies residual-region identical rendered assets to reach AE=0.
 - Add Chromecast support: a real Google Cast sender/receiver pair, not a stub. A new
   `@playarr-tv/cast-protocol` package defines one shared wire protocol (mirrored by hand into
   Kotlin and Swift); a new CAF (Cast Application Framework) custom web receiver at
