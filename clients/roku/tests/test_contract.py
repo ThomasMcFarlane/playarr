@@ -230,11 +230,15 @@ class SecretSafetyTests(unittest.TestCase):
         self.assertIn('text="Sign in manually"', SCENE)
         self.assertIn("applyPairingChromeFocus()", MAIN)
         self.assertIn("openServerDialog()", MAIN)
-        # Chrome / remote Back returns to Who's watching when a session exists.
+        # Chrome / remote Back always returns to Who's watching (web LoginShell).
         self.assertIn("sub returnFromPairingToProfiles(", MAIN)
-        self.assertIn("function pairingCanReturnToProfiles(", MAIN)
         self.assertIn('state = "pairing" and key = "back"', MAIN)
         self.assertIn("returnFromPairingToProfiles()", MAIN)
+        self.assertIn('id="pairingBackBtn"', SCENE)
+        self.assertIn('id="pairingBackHit"', SCENE)
+        # Dropdown labels fill the 48px trigger and centre vertically.
+        self.assertIn('id="pairingThemeLabel"', SCENE)
+        self.assertIn('vertAlign="center"', SCENE)
         # Countdown must tick every second (web setInterval 1000), not the old 30s clock.
         self.assertIn('id="clockTimer" duration="1"', SCENE)
         self.assertIn("updatePairingCountdown()", MAIN)

@@ -36,6 +36,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Fresh Web builds retain a numeric QR SVG size parameter instead of narrowing
+  the shared 240px default to a literal type.
+
 - Roku pairing chrome is 1:1 with web `/login/qr` TvStageChrome + DeviceLogin:
   dark stage by default, square theme (144) and language (168) dropdown
   triggers with icon + label + chevron, circular back, and full-width
@@ -48,6 +51,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Roku pairing “Code refreshes in” countdown ticks every second (shared
   clock timer was 30s, so the timer looked frozen until the next half-minute).
+
+- Roku pairing chrome: theme/language dropdown labels are vertically centred
+  in the 48px triggers; circular Back is always visible and returns to Who’s
+  watching (remote Back included), matching web LoginShell.
 
 - Apple TV pairing gate is 1:1 with measured web `/login/qr` @ 1920×1080:
   logo only at nav centre-x (no centre wordmark), square theme/language

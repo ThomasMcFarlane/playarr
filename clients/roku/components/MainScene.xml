@@ -33,20 +33,21 @@
       <Poster id="pairingAuthBg" translation="[0,0]" width="1920" height="1080" uri="pkg:/images/pairing-auth-bg.png" loadDisplayMode="scaleToFill" />
       <!-- tv-stage-chrome 1:1: logo, circular back, square theme + language triggers. -->
       <Poster id="pairingLogoIcon" translation="[34,40]" width="42" height="42" uri="pkg:/images/pairing-logo.png" loadDisplayMode="scaleToFit" />
+      <!-- Always visible (web LoginShell onBack → /profiles). -->
       <Poster id="pairingBackBtn" translation="[92,36]" width="50" height="50" uri="pkg:/images/pairing-back-btn.png" />
       <Rectangle id="pairingBackHit" translation="[92,36]" width="50" height="50" color="0x00000000" focusable="true" />
       <!-- .tv-stage-chrome-controls: right edge, gap 12, theme min 144 / lang min 168 × 48. -->
       <Group id="pairingChromeControls" translation="[1520,40]">
-        <!-- Theme: .theme-dropdown-trigger min-width 144; icon + label + chevron. -->
+        <!-- Theme: labels use full 48px height + vertAlign center (no top-biased scale). -->
         <Poster id="pairingThemePill" translation="[0,0]" width="144" height="48" uri="pkg:/images/pairing-chrome-dd-theme.png" />
         <Poster id="pairingThemeIcon" translation="[14,16]" width="16" height="16" uri="pkg:/images/pairing-icon-theme.png" />
-        <Label id="pairingThemeLabel" translation="[36,12]" width="84" height="24" text="Dark" scale="[0.42,0.42]" color="0xF4F0F1FF" />
+        <Label id="pairingThemeLabel" translation="[36,0]" width="84" height="48" text="Dark" horizAlign="left" vertAlign="center" scale="[0.42,0.42]" scaleRotateCenter="[0,24]" color="0xF4F0F1FF" />
         <Poster id="pairingThemeChevron" translation="[118,18]" width="12" height="12" uri="pkg:/images/pairing-icon-chevron.png" />
         <Rectangle id="pairingThemeHit" translation="[0,0]" width="144" height="48" color="0x00000000" focusable="true" />
         <!-- Language: gap 12; .language-dropdown-trigger min-width 168. -->
         <Poster id="pairingLangPill" translation="[156,0]" width="168" height="48" uri="pkg:/images/pairing-chrome-dd.png" />
         <Poster id="pairingLangIcon" translation="[170,16]" width="16" height="16" uri="pkg:/images/pairing-icon-lang.png" />
-        <Label id="pairingLangLabel" translation="[194,12]" width="100" height="24" text="Auto" scale="[0.42,0.42]" color="0xF4F0F1FF" />
+        <Label id="pairingLangLabel" translation="[194,0]" width="100" height="48" text="Auto" horizAlign="left" vertAlign="center" scale="[0.42,0.42]" scaleRotateCenter="[0,24]" color="0xF4F0F1FF" />
         <Poster id="pairingLangChevron" translation="[298,18]" width="12" height="12" uri="pkg:/images/pairing-icon-chevron.png" />
         <Rectangle id="pairingLangHit" translation="[156,0]" width="168" height="48" color="0x00000000" focusable="true" />
       </Group>
@@ -69,7 +70,7 @@
       <Label id="pairingInstruction" translation="[460,300]" width="1000" height="90" text="" horizAlign="center" wrap="true" maxLines="3" scale="[0.52,0.52]" scaleRotateCenter="[500,0]" color="0xC5B8BDFF" visible="false" />
       <!-- .device-login-manual: full panel width pill (560), centered. -->
       <Poster id="pairingManualPill" translation="[680,940]" width="560" height="56" uri="pkg:/images/pairing-manual-pill.png" />
-      <Label id="pairingManualLabel" translation="[680,952]" width="560" height="32" text="Sign in manually" horizAlign="center" scale="[0.50,0.50]" scaleRotateCenter="[280,16]" color="0xC5B8BDFF" />
+      <Label id="pairingManualLabel" translation="[680,940]" width="560" height="56" text="Sign in manually" horizAlign="center" vertAlign="center" scale="[0.50,0.50]" scaleRotateCenter="[280,28]" color="0xC5B8BDFF" />
       <Rectangle id="pairingManualHit" translation="[680,940]" width="560" height="56" color="0x00000000" focusable="true" />
       <Label id="pairingManualHint" translation="[0,1010]" width="1920" height="24" text="" horizAlign="center" scale="[0.38,0.38]" scaleRotateCenter="[960,12]" color="0x887A82FF" visible="false" />
     </Group>
