@@ -1,5 +1,9 @@
-import { useState } from "react";
-import { useLocation, useNavigate, type Location } from "react-router-dom";
+import { useState, type ReactNode } from "react";
+import {
+  useLocation,
+  useNavigate,
+  type Location,
+} from "react-router-dom";
 import { ApiError } from "@playarr-tv/api-client";
 import { useApiBaseUrl, useAuth } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
@@ -37,7 +41,7 @@ interface LocationState {
 export function LoginPage() {
   const { t } = useLanguage();
   useDocumentTitle(t("pages.login.title"));
-  const { login, loginWithDeviceToken } = useAuth();
+  const { login } = useAuth();
   const [apiBaseUrl] = useApiBaseUrl();
   const navigate = useNavigate();
   const location = useLocation();
@@ -82,97 +86,175 @@ export function LoginPage() {
     }
   }
 
-  if (IS_TV) {
-    return (
+  function showQrLogin() {
+    setError(null);
+    navigate("/login/qr", { state: location.state });
+  }
+
+  return (
+    <LoginShell
+      descriptionKey="pages.login.description"
+      onBack={returnToProfiles}
+      transitionFromProfiles={state?.profileTransition}
+    >
+      <form onSubmit={(event) => void handleSubmit(event)}>
+        <label className="auth-label" htmlFor="login-server-url">
+          {t("pages.login.serverUrlLabel")}
+        </label>
+        <input
+          id="login-server-url"
+          name="server-url"
+          type="text"
+          className="input auth-input"
+          autoComplete="url"
+          inputMode="url"
+          autoCapitalize="none"
+          spellCheck={false}
+          autoFocus
+          required
+          value={serverUrl}
+          onChange={(event) => setServerUrl(event.target.value)}
+          placeholder={t("pages.login.serverUrlPlaceholder")}
+        />
+        <p className="hint auth-server-hint">
+          {needsInsecureContentPermission
+            ? t("pages.login.insecureHint")
+            : t("pages.login.directConnectionHint")}
+        </p>
+
+        <label className="auth-label" htmlFor="login-username">
+          {t("pages.login.usernameLabel")}
+        </label>
+        <input
+          id="login-username"
+          name="username"
+          type="text"
+          className="input auth-input"
+          autoComplete="username"
+          required
+          value={username}
+          onChange={(event) => setUsername(event.target.value)}
+        />
+
+        <label className="auth-label" htmlFor="login-password">
+          {t("pages.login.passwordLabel")}
+        </label>
+        <input
+          id="login-password"
+          name="password"
+          type="password"
+          className={`input auth-input${error ? " is-error" : ""}`}
+          autoComplete="current-password"
+          required
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+        />
+
+        {error && (
+          <p className="error-text auth-error">
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          className="btn btn-primary auth-submit"
+          disabled={submitting}
+        >
+          {submitting
+            ? t("pages.login.submitting")
+            : t("pages.login.submit")}
+        </button>
+      </form>
+      <button
+        type="button"
+        className="btn btn-secondary auth-qr-submit"
+        disabled={submitting}
+        onClick={showQrLogin}
+      >
+        {t("pages.login.qrSubmit")}
+      </button>
+    </LoginShell>
+  );
+}
+
+/**
+ * QR/device-code sign-in lives at its own URL while retaining the manual
+ * login page's exact shell. It always starts with the hosted link broker;
+ * the approving phone/browser selects the Playarr Server, so the QR route
+ * neither knows nor carries a server URL.
+ */
+export function QrLoginPage() {
+  const { t } = useLanguage();
+  useDocumentTitle(t("pages.login.title"));
+  const { loginWithDeviceToken } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const state = location.state as LocationState | null;
+  const showManualLogin = () => {
+    navigate("/login", {
+      replace: true,
+      state: location.state,
+    });
+  };
+  const finishLogin = () => {
+    const destination = state?.from ?? "/";
+    const destinationState =
+      state?.fromState ??
+      (typeof destination === "object" && "state" in destination
+        ? destination.state
+        : undefined);
+    navigate(destination, { replace: true, state: destinationState });
+  };
+  const returnToProfiles = () => {
+    navigate("/profiles", {
+      replace: true,
+      state: { loginFrom: loginDestinationPath(state?.from) },
+    });
+  };
+
+  return (
+    <LoginShell
+      descriptionKey="pages.login.qrDescription"
+      onBack={returnToProfiles}
+      transitionFromProfiles={state?.profileTransition}
+    >
       <DeviceLogin
+        embedded
+        hostedLink={!IS_TV}
+        onBack={showManualLogin}
         onAuthenticated={(token, connection) => {
           loginWithDeviceToken(token, connection);
           finishLogin();
         }}
       />
-    );
-  }
+    </LoginShell>
+  );
+}
 
+function LoginShell({
+  children,
+  descriptionKey,
+  onBack,
+  transitionFromProfiles,
+}: {
+  children: ReactNode;
+  descriptionKey: TranslationKey;
+  onBack: () => void;
+  transitionFromProfiles?: boolean;
+}) {
+  const { t } = useLanguage();
   return (
     <ProfileAuthLayout
       className="login-profile-page"
       backLabel={t("pages.profiles.backAriaLabel")}
-      onBack={returnToProfiles}
-      transitionFromProfiles={state?.profileTransition}
+      onBack={onBack}
+      transitionFromProfiles={transitionFromProfiles}
     >
-        <p className="page-kicker">{t("pages.login.kicker")}</p>
-        <h1 className="auth-title">{t("pages.login.heading")}</h1>
-        <p className="muted auth-description">
-          {t("pages.login.description")}
-        </p>
-
-        <form onSubmit={(event) => void handleSubmit(event)}>
-          <label className="auth-label" htmlFor="login-server-url">
-            {t("pages.login.serverUrlLabel")}
-          </label>
-          <input
-            id="login-server-url"
-            name="server-url"
-            type="text"
-            className="input auth-input"
-            autoComplete="url"
-            inputMode="url"
-            autoCapitalize="none"
-            spellCheck={false}
-            autoFocus
-            required
-            value={serverUrl}
-            onChange={(event) => setServerUrl(event.target.value)}
-            placeholder={t("pages.login.serverUrlPlaceholder")}
-          />
-          <p className="hint auth-server-hint">
-            {needsInsecureContentPermission
-              ? t("pages.login.insecureHint")
-              : t("pages.login.directConnectionHint")}
-          </p>
-
-          <label className="auth-label" htmlFor="login-username">
-            {t("pages.login.usernameLabel")}
-          </label>
-          <input
-            id="login-username"
-            name="username"
-            type="text"
-            className="input auth-input"
-            autoComplete="username"
-            required
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-          />
-
-          <label className="auth-label" htmlFor="login-password">
-            {t("pages.login.passwordLabel")}
-          </label>
-          <input
-            id="login-password"
-            name="password"
-            type="password"
-            className={`input auth-input${error ? " is-error" : ""}`}
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-
-          {error && (
-            <p className="error-text auth-error">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            className="btn btn-primary auth-submit"
-            disabled={submitting}
-          >
-            {submitting ? t("pages.login.submitting") : t("pages.login.submit")}
-          </button>
-        </form>
+      <p className="page-kicker">{t("pages.login.kicker")}</p>
+      <h1 className="auth-title">{t("pages.login.heading")}</h1>
+      <p className="muted auth-description">{t(descriptionKey)}</p>
+      {children}
     </ProfileAuthLayout>
   );
 }

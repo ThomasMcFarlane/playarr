@@ -8320,7 +8320,7 @@ export interface operations {
                     /**
                      * @example {
                      *       "device_code": "3c8f1e2a-9b7d-4e21-8a6f-5d0c1b2e4f3a",
-                     *       "expires_in": 600,
+                     *       "expires_in": 300,
                      *       "interval": 5,
                      *       "user_code": "ABCD-2345",
                      *       "verification_uri": "https://playarr.example/link",

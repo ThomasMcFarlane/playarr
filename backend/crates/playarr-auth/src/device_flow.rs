@@ -217,7 +217,7 @@ pub struct DeviceFlowConfig {
     /// How long a `device_code`/`user_code` pair stays valid before
     /// [`TokenError::ExpiredToken`]. RFC 8628 §3.2 recommends this be
     /// "sufficiently large" for a user to complete the out-of-band step;
-    /// 10-15 minutes is typical.
+    /// Playarr's production default is five minutes.
     pub code_ttl: Duration,
     /// Minimum gap the device must leave between polls (RFC 8628 §3.5's
     /// `interval`). Enforced server-side, not just advertised.

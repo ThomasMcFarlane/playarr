@@ -7,6 +7,7 @@ import {
 } from "@playarr-tv/device-auth";
 
 const HOSTED_LINK_ORIGIN = "https://playarr.app";
+export const HOSTED_LINK_CLAIM_REDEMPTION_GRACE_MS = 30 * 1000;
 
 interface HostedLinkSession {
   client_platform: ClientPlatform;
@@ -44,6 +45,18 @@ export interface HostedLinkPollOptions extends HostedLinkRequestOptions {
   wait?: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
 }
 
+export type HostedLinkClientPlatform = Extract<
+  ClientPlatform,
+  | "web"
+  | "android-mobile"
+  | "android-tv"
+  | "tv-webos"
+  | "tv-tizen"
+  | "tv-vidaa"
+  | "tv-fire"
+  | "xbox"
+>;
+
 export function shouldUseHostedDeviceLink(
   isPackagedTv: boolean,
   configuredApiBaseUrl?: string,
@@ -77,9 +90,9 @@ function waitForHostedLink(milliseconds: number, signal?: AbortSignal): Promise<
   });
 }
 
-/** Starts first-contact TV linking against playarr.app, before a TV knows any Playarr Server URL. */
+/** Starts brokered linking against playarr.app before this client knows a Playarr Server URL. */
 export async function requestHostedDeviceLink(
-  clientPlatform: Extract<ClientPlatform, "tv-webos" | "tv-tizen" | "tv-vidaa" | "tv-fire" | "xbox">,
+  clientPlatform: HostedLinkClientPlatform,
   options: HostedLinkRequestOptions = {}
 ): Promise<HostedLinkCode> {
   const response = await hostedLinkFetch(options.fetchImpl)(`${HOSTED_LINK_ORIGIN}/api/link/code`, {
@@ -111,13 +124,29 @@ export async function pollHostedDeviceLink(
   const fetchImpl = hostedLinkFetch(options.fetchImpl);
   const now = options.now ?? Date.now;
   const wait = options.wait ?? waitForHostedLink;
-  while (now() < code.expiresAt) {
-    await wait(code.intervalSeconds * 1000, options.signal);
+  let skipWait = false;
+  let postExpiryRequestMade = false;
+  while (now() < code.expiresAt || !postExpiryRequestMade) {
+    if (!skipWait) {
+      await wait(code.intervalSeconds * 1000, options.signal);
+    }
+    skipWait = false;
+    if (now() >= code.expiresAt) {
+      postExpiryRequestMade = true;
+    }
     const response = await fetchImpl(
       `${HOSTED_LINK_ORIGIN}/api/link/code/${encodeURIComponent(code.deviceCode)}`,
       { headers: { Accept: "application/json" }, signal: options.signal }
     );
-    if (response.status === 202) continue;
+    if (response.status === 202) {
+      // A request may have started just before expiry and returned pending
+      // just after approval was written. Make exactly one immediate request
+      // that starts inside the Worker's claimed-session redemption grace.
+      if (now() >= code.expiresAt && !postExpiryRequestMade) {
+        skipWait = true;
+      }
+      continue;
+    }
     if (response.status === 404) throw new Error("That Playarr link code expired. Try again.");
     if (!response.ok) {
       throw new Error(`Playarr linking is unavailable (HTTP ${response.status}).`);

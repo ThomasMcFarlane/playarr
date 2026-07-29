@@ -81,7 +81,7 @@ call this document makes. Full rationale is in the referenced section.
 | Cross-node library identity | New `GroupLibrary` entity, `SourceInstance.group_library_id` maps a node's own local library into it (§5.1) | Routing/grants keyed directly on a local `SourceInstance.id` (does not work: that id is minted independently per node and is not the same value across peers, so a routing rule referencing it would only ever match on the node that created it) |
 | Does `Work`/`MediaFile` itself sync across peers? | No. Stays strictly node-local, single writer (`ReconciliationPoller`, unchanged). A new `peer_leaf_availability` table is a read-only annotation (§4) | Replicating `Work` rows peer-to-peer keyed by external ref: creates a second writer of the same local `works` table `ReconciliationPoller`'s own poll-as-truth diff already owns exclusively, and its `SyncOp::Delete` path (a title has left the local *arr instance) has no way to distinguish "genuinely gone" from "a peer just re-upserted it" without new scoping work this design does not want to make foundational |
 | Refresh tokens across peers | Not synced. Client retries the *same* refresh call against the next remembered address before falling back to full (credentials-only, never address-only) re-login (§3.7) | Syncing `refresh_token_families` with a max-generation-wins merge rule: technically arguable, but leaves an unresolved race if the same token is redeemed against two peers inside one sync interval, and two of the three source proposals independently declined to build it for exactly that reason |
-| RFC 8628 device-pairing state across peers | Not synced. Android first contact uses a ten-minute `playarr.app` broker record; the selected browser profile creates and approves the real per-peer device credential, which Android redeems directly (§6.3) | Syncing `DeviceAuthorization` on the normal ~60s poll cadence: correctness risk against a ~10 minute, security-sensitive, human-paced flow that a lagging sync pass could visibly break |
+| RFC 8628 device-pairing state across peers | Not synced. Android first contact uses a five-minute `playarr.app` broker record; the selected browser profile creates and approves the real per-peer device credential, which Android redeems directly (§6.3) | Syncing `DeviceAuthorization` on the normal ~60s poll cadence: correctness risk against a ~5 minute, security-sensitive, human-paced flow that a lagging sync pass could visibly break |
 | TV pairing artifact address awareness | The issuing peer embeds a `PeerAddressBundle` (§6.1, reused) directly into `verification_uri_complete` via the same `servers=` param the invite flow uses, so the QR/code itself is self-contained (§6.3) | Relying only on the approving device's own remembered `KnownServerGroup` for fan-out, with no address data in the artifact itself: fails for an approver who has never talked to this group before (a guest's phone, a different household member's browser with a stale cache) and does not literally satisfy the user's explicit requirement that "the QR code encodes the multiple server addresses" |
 | Redirect vs. proxy delivery | Per-rule `DeliveryMode::Auto` (default) computes Redirect-if-target-address-is-client-reachable-else-Proxy per request from an operator-set flag; `Redirect`/`Proxy` remain available as explicit overrides (§5.3) | A single static field with no computed default: correct only if the admin never misconfigures reachability, and doesn't fail safe when they do |
 | Where routing is evaluated | The **entire** playback negotiation (direct-play/rendition/transcode decision) is forwarded to the owning peer, not just the final stream URL (§5.2) | Swapping only the response URL while still running local negotiation logic: silently wrong, because `can_direct_play`/rendition selection/on-demand transcode all require probing the actual file, which the entry node does not have |
@@ -97,7 +97,7 @@ call this document makes. Full rationale is in the referenced section.
   `LeafSelector`, §4.2) is a natural, low-risk follow-up once this lands,
   noted in §8 as future work, not built here.
 - No hosted media or peer-sync relay is introduced. Android first-contact
-  linking is the narrow exception: `playarr.app` stores a ten-minute pairing
+  linking is the narrow exception: `playarr.app` stores a five-minute pairing
   record containing a single-use Playarr Server device code, but never a password,
   browser bearer token, refresh token, or media request. The Android client
   still redeems the credential and reaches Playarr Server directly.
@@ -760,7 +760,7 @@ Same reasoning, narrower stakes: `InMemoryDeviceAuthorizationStore`/
 `DashMapDeviceFlowHandler` (confirmed genuinely in-process-only, no
 persistence: §1.1) stays exactly as it is; this design does not add a
 `Sqlx*` implementation or wire it into `PeerSyncPoller`. RFC 8628 device
-codes are short-lived (10-minute TTL) and security-sensitive; a ~60s poll
+codes are short-lived (5-minute TTL) and security-sensitive; a ~60s poll
 cadence is a bad fit for "the approving human is standing there waiting."
 §6.3 covers the narrow alternative that replaces syncing this state
 outright: one small server-side addition (embedding the group's address

@@ -1151,7 +1151,7 @@ async fn boot_api(
         Arc::new(InMemoryDeviceAuthorizationStore::new()),
         refresh.clone(),
         DeviceFlowConfig {
-            code_ttl: chrono::Duration::minutes(10),
+            code_ttl: chrono::Duration::minutes(5),
             polling_interval: chrono::Duration::seconds(5),
             verification_base_uri: std::env::var("PLAYARR_DEVICE_VERIFICATION_URI")
                 .unwrap_or_else(|_| "/link".to_string()),

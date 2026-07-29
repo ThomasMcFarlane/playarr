@@ -720,8 +720,10 @@ private fun LoginField(
 }
 
 /**
- * Television pairing UI matches web `https://playarr.example.com/login/qr`
- * (`ProfileAuthLayout` + embedded `DeviceLogin` + `device-login-manual`).
+ * Television pairing UI matches web `https://playarr.example.com/login/qr`.
+ *
+ * Sized to fit a 1920×1080 stage without scroll: decorative QR glow does not
+ * inflate layout height, and vertical padding scales with available height.
  */
 @Composable
 private fun TelevisionPairingScreen(
@@ -734,7 +736,6 @@ private fun TelevisionPairingScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            // web `.profiles-page`: rose radial + surface→bg diagonal
             .background(
                 Brush.linearGradient(
                     colors = listOf(AuthLight.surface, AuthLight.bg),
@@ -750,16 +751,23 @@ private fun TelevisionPairingScreen(
     ) {
         AuthStageChrome(onBack = onBack)
 
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(top = 140.dp, bottom = 56.dp, start = 72.dp, end = 72.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+                .padding(top = 88.dp, bottom = 28.dp, start = 64.dp, end = 64.dp),
+            contentAlignment = Alignment.Center,
         ) {
+            // Scale type/QR slightly on short stages so nothing clips.
+            val tight = maxHeight < 920.dp
+            val titleSp = if (tight) 48.sp else 56.sp
+            val codeSp = if (tight) 40.sp else 48.sp
+            val qrMatrix = if (tight) 200.dp else 240.dp
+            val gap = if (tight) 10.dp else 14.dp
+
             Column(
-                modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth(),
+                modifier = Modifier
+                    .widthIn(max = 560.dp)
+                    .fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
@@ -772,35 +780,40 @@ private fun TelevisionPairingScreen(
                 Text(
                     playarrString(PlayarrString.LoginHeading),
                     color = AuthLight.ink,
-                    fontSize = 72.sp,
+                    fontSize = titleSp,
                     fontWeight = FontWeight.Medium,
-                    letterSpacing = (-4.5).sp,
-                    lineHeight = 68.sp,
+                    letterSpacing = (-3.6).sp,
+                    lineHeight = titleSp * 0.95f,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 8.dp),
+                    maxLines = 1,
+                    modifier = Modifier.padding(top = 6.dp),
                 )
                 Text(
                     playarrString(PlayarrString.LoginQrDescription),
                     color = AuthLight.inkMuted,
-                    fontSize = 17.sp,
-                    lineHeight = 24.sp,
+                    fontSize = if (tight) 14.sp else 16.sp,
+                    lineHeight = if (tight) 20.sp else 22.sp,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
-                        .widthIn(max = 440.dp)
-                        .padding(top = 16.dp, bottom = 32.dp),
+                        .widthIn(max = 420.dp)
+                        .padding(top = 10.dp, bottom = gap + 6.dp),
                 )
 
                 when (state) {
                     PairingState.Idle, PairingState.Requesting -> {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
-                            CircularProgressIndicator(color = AuthLight.rose)
+                            CircularProgressIndicator(
+                                color = AuthLight.rose,
+                                modifier = Modifier.size(28.dp),
+                                strokeWidth = 2.5.dp,
+                            )
                             Text(
                                 playarrString(PlayarrString.DeviceLoginCreatingCode),
                                 color = AuthLight.inkMuted,
-                                fontSize = 16.sp,
+                                fontSize = 15.sp,
                             )
                         }
                     }
@@ -828,48 +841,49 @@ private fun TelevisionPairingScreen(
                         PlayarrQrCode(
                             value = state.code.verificationUriComplete,
                             contentDescription = playarrString(PlayarrString.DeviceLoginQrLabel),
+                            matrixSize = qrMatrix,
                         )
-                        Spacer(Modifier.height(22.dp))
+                        Spacer(Modifier.height(gap))
                         Text(
                             playarrString(PlayarrString.DeviceLoginScanQr),
                             color = AuthLight.inkMuted,
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             textAlign = TextAlign.Center,
                         )
                         Text(
                             state.code.verificationUri,
                             color = AuthLight.ink,
-                            fontSize = 22.sp,
+                            fontSize = if (tight) 18.sp else 20.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(top = 8.dp),
+                            modifier = Modifier.padding(top = 6.dp),
                         )
                         Text(
                             playarrString(PlayarrString.DeviceLoginEnterCode),
                             color = AuthLight.inkMuted,
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(top = 10.dp),
+                            modifier = Modifier.padding(top = 8.dp),
                         )
                         Text(
                             state.code.userCode,
                             color = AuthLight.ink,
-                            fontSize = 52.sp,
+                            fontSize = codeSp,
                             fontWeight = FontWeight.ExtraBold,
                             fontFamily = FontFamily.Monospace,
-                            letterSpacing = (0.14 * 52).sp,
+                            letterSpacing = (0.12f * codeSp.value).sp,
                             maxLines = 1,
                             textAlign = TextAlign.Center,
                             modifier = Modifier
-                                .padding(top = 6.dp)
+                                .padding(top = 4.dp)
                                 .semantics { contentDescription = pairingDescription },
                         )
                         Text(
                             playarrString(PlayarrString.DeviceLoginWaitingApproval),
                             color = AuthLight.inkMuted,
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(top = 12.dp),
+                            modifier = Modifier.padding(top = 8.dp),
                         )
                         Text(
                             playarrString(
@@ -877,17 +891,17 @@ private fun TelevisionPairingScreen(
                                 "time" to formatDeviceCodeCountdown(secondsRemaining),
                             ),
                             color = AuthLight.inkSoft,
-                            fontSize = 14.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
                             textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(top = 10.dp),
+                            modifier = Modifier.padding(top = 6.dp),
                         )
                     }
                     is PairingState.Failed -> {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
                             modifier = Modifier.widthIn(max = 420.dp),
                         ) {
                             Text(
@@ -897,7 +911,7 @@ private fun TelevisionPairingScreen(
                                 },
                                 color = Color(0xFFA8464C),
                                 textAlign = TextAlign.Center,
-                                fontSize = 16.sp,
+                                fontSize = 15.sp,
                             )
                             Button(
                                 onClick = onStart,
@@ -913,7 +927,6 @@ private fun TelevisionPairingScreen(
                     }
                 }
 
-                // web `.device-login-manual.btn-secondary` pill
                 Surface(
                     onClick = onManualLogin,
                     shape = CircleShape,
@@ -921,14 +934,14 @@ private fun TelevisionPairingScreen(
                     border = androidx.compose.foundation.BorderStroke(1.dp, AuthLight.lineStrong),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 28.dp)
-                        .height(54.dp),
+                        .padding(top = if (tight) 16.dp else 22.dp)
+                        .height(48.dp),
                 ) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
                             playarrString(PlayarrString.DeviceLoginSignInManually),
                             color = AuthLight.inkSoft,
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                         )
                     }
@@ -967,16 +980,17 @@ private fun TelevisionManualLoginScreen(
             .safeDrawingPadding(),
     ) {
         AuthStageChrome(onBack = onBackToQr)
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(top = 140.dp, bottom = 56.dp, start = 72.dp, end = 72.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+                .padding(top = 88.dp, bottom = 28.dp, start = 64.dp, end = 64.dp),
+            contentAlignment = Alignment.Center,
         ) {
             Column(
-                modifier = Modifier.widthIn(max = 520.dp).fillMaxWidth(),
+                modifier = Modifier
+                    .widthIn(max = 520.dp)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
@@ -989,11 +1003,12 @@ private fun TelevisionManualLoginScreen(
                 Text(
                     playarrString(PlayarrString.LoginHeading),
                     color = AuthLight.ink,
-                    fontSize = 56.sp,
+                    fontSize = 48.sp,
                     fontWeight = FontWeight.Medium,
-                    letterSpacing = (-3.5).sp,
+                    letterSpacing = (-3.2).sp,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 8.dp, bottom = 28.dp),
+                    maxLines = 1,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 22.dp),
                 )
                 LoginField(
                     playarrString(PlayarrString.LoginServerUrl).uppercase(language.locale),
@@ -1164,19 +1179,22 @@ internal fun formatDeviceCodeCountdown(seconds: Int): String {
 }
 
 /**
- * Matches live `/login/qr` `.device-login-qr` / `PLAYARR_QR_STYLE`:
- * border-box 240, 12dp white edge, r=18, content matrix 216 (margin 2, ECC M),
- * pure black modules on white, soft plate shadow. No extra outer chrome.
+ * Matches live `/login/qr` `.device-login-qr`:
+ * white 12dp frame, r=18, ECC M + quiet-zone margin 2, soft shadow.
+ * [matrixSize] is the outer border-box (default 240dp). Layout height is only
+ * the card — no decorative glow plate that could push the stage off-screen.
  */
 @Composable
 internal fun PlayarrQrCode(
     value: String,
     contentDescription: String,
     modifier: Modifier = Modifier,
+    matrixSize: androidx.compose.ui.unit.Dp = 240.dp,
 ) {
-    // Content box only — white edge is the Surface padding (12dp × 2 + 216 = 240).
-    val contentPx = 216
-    val bitmap = remember(value) {
+    val frame = 12.dp
+    val contentDp = matrixSize - frame * 2
+    val contentPx = contentDp.value.toInt().coerceAtLeast(96)
+    val bitmap = remember(value, contentPx) {
         val matrix = QRCodeWriter().encode(
             value,
             BarcodeFormat.QR_CODE,
@@ -1202,26 +1220,23 @@ internal fun PlayarrQrCode(
     Surface(
         color = Color.White,
         shape = RoundedCornerShape(18.dp),
-        // CSS: box-shadow 0 24px 72px rgba(0,0,0,0.3)
         modifier = modifier
-            .size(240.dp)
+            .size(matrixSize)
             .shadow(
-                elevation = 28.dp,
+                elevation = 24.dp,
                 shape = RoundedCornerShape(18.dp),
-                ambientColor = Color.Black.copy(alpha = 0.30f),
-                spotColor = Color.Black.copy(alpha = 0.30f),
+                ambientColor = Color.Black.copy(alpha = 0.22f),
+                spotColor = Color.Black.copy(alpha = 0.22f),
             ),
     ) {
         Image(
             bitmap = bitmap.asImageBitmap(),
             contentDescription = contentDescription,
             contentScale = ContentScale.FillBounds,
-            // Nearest-neighbour: avoid grey antialias on module edges (web crispEdges).
             filterQuality = FilterQuality.None,
             modifier = Modifier
-                .padding(12.dp)
-                .size(216.dp)
-                .clip(RoundedCornerShape(0.dp)),
+                .padding(frame)
+                .size(contentDp),
         )
     }
 }

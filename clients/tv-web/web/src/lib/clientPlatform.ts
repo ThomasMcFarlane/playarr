@@ -102,12 +102,12 @@ export const IS_TIZEN = PLAYARR_CLIENT_PLATFORM === "tv-tizen";
 export const IS_XBOX = PLAYARR_CLIENT_PLATFORM === "xbox";
 export const IS_PACKAGED_TV = IS_WEBOS || IS_TIZEN;
 
-export function shouldStartPackagedTvLink(
-  isPackagedTv: boolean,
+export function shouldStartTvLink(
+  isTv: boolean,
   currentUserId: string | undefined,
   savedProfileCount: number
 ): boolean {
-  return isPackagedTv && currentUserId === undefined && savedProfileCount === 0;
+  return isTv && currentUserId === undefined && savedProfileCount === 0;
 }
 
 export const IS_TV =

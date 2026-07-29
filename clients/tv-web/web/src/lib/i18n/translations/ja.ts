@@ -29,6 +29,8 @@ export const ja: Translations = {
   "components.deviceLogin.scanQr": "QRコードを読み取るか、こちらにアクセスしてください",
   "components.deviceLogin.enterCode": "このコードを入力してください",
   "components.deviceLogin.pairingCode": "ペアリングコード {{code}}",
+  "components.deviceLogin.refreshesIn": "コードの更新まで {{time}}",
+  "components.deviceLogin.signInManually": "手動でサインイン",
   "components.deviceLogin.waitingApproval": "承認をお待ちください…",
   "components.deviceLogin.tryAgain": "もう一度試す",
   "components.languageDropdown.noResults": "言語が見つかりません",
@@ -291,6 +293,9 @@ export const ja: Translations = {
     "ブラウザがこの直接HTTP接続をブロックしました。playarr.appのサイト設定を開き、「安全でないコンテンツ」を「許可」に設定してPlayarrを再読み込みしてから、もう一度お試しください。",
   "pages.login.errorLanUnreachable":
     "このLANサーバーに接続できませんでした。URLを確認し、ブラウザから確認を求められたらローカルネットワークへのアクセスを許可してください。",
+  "pages.login.qrDescription":
+    "スマートフォンまたは別のブラウザでQRコードを読み取り、このデバイスにサインインしてください。",
+  "pages.login.qrSubmit": "QRコードでサインイン",
 
   "pages.musicDetail.albums": "アルバム",
   "pages.musicDetail.play": "{{title}}を再生",

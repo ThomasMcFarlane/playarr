@@ -17,9 +17,9 @@ continuing to serve ordinary application routes from Static Assets. Android rele
 a short-lived latest-version manifest and an immutable, versioned APK route used by the native
 television self-update action.
 
-The Worker also owns the short-lived Android first-contact broker under `/api/link/*`. Each
-generated code is isolated in a Durable Object and expires after ten minutes. The record contains
-only the Android device secret, the selected Playarr Server addresses, and a single-use
+The Worker also owns the short-lived first-contact broker under `/api/link/*`. Each
+generated code is isolated in a Durable Object and expires after five minutes. The record contains
+only the requesting device secret, the selected Playarr Server addresses, and a single-use
 Playarr Server device code; it never receives a password, browser bearer token, or refresh token.
 
 ## One-time Cloudflare and GitHub setup

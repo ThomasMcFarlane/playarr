@@ -29,7 +29,7 @@ import {
   subscribeToAndroidTvUpdates,
   type AndroidTvUpdateState,
 } from "../lib/androidTvUpdate";
-import { PLAYARR_CLIENT_PLATFORM } from "../lib/clientPlatform";
+import { IS_TV, PLAYARR_CLIENT_PLATFORM } from "../lib/clientPlatform";
 
 interface ProfileLocationState {
   backTo?: unknown;
@@ -200,7 +200,7 @@ export function ProfilesPage(
       destination: string,
       destinationState?: unknown
     ) => {
-      navigate("/login", {
+      navigate(IS_TV ? "/login/qr" : "/login", {
         state: {
           from: destination,
           fromState: destinationState,

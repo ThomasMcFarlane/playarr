@@ -32,8 +32,17 @@ describe("hosted device linking", () => {
     ).toBe(false);
   });
 
-  it.each(["tv-webos", "tv-tizen", "tv-vidaa", "tv-fire", "xbox"] as const)(
-    "requests a first-contact code for packaged %s clients",
+  it.each([
+    "web",
+    "android-mobile",
+    "android-tv",
+    "tv-webos",
+    "tv-tizen",
+    "tv-vidaa",
+    "tv-fire",
+    "xbox",
+  ] as const)(
+    "requests a brokered first-contact code for %s clients",
     async (clientPlatform) => {
       const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
         new Response(
@@ -42,7 +51,7 @@ describe("hosted device linking", () => {
             user_code: "ABCD-2345",
             verification_uri: "https://playarr.app/link",
             verification_uri_complete: "https://playarr.app/link?user_code=ABCD-2345",
-            expires_in: 600,
+            expires_in: 300,
             interval: 2,
           }),
           { status: 200 }
@@ -57,7 +66,7 @@ describe("hosted device linking", () => {
       expect(code).toMatchObject({
         deviceCode: "hosted-secret",
         userCode: "ABCD-2345",
-        expiresAt: 601_000,
+        expiresAt: 301_000,
       });
       const requestInit = fetch.mock.calls[0]?.[1] as RequestInit | undefined;
       expect(JSON.parse(String(requestInit?.body))).toEqual({
@@ -90,9 +99,9 @@ describe("hosted device linking", () => {
           userCode: "ABCD-2345",
           verificationUri: "https://playarr.app/link",
           verificationUriComplete: "https://playarr.app/link?user_code=ABCD-2345",
-          expiresInSeconds: 600,
+          expiresInSeconds: 300,
           intervalSeconds: 2,
-          expiresAt: 601_000,
+          expiresAt: 301_000,
         },
         {
           fetchImpl: fetch as typeof globalThis.fetch,
@@ -105,6 +114,91 @@ describe("hosted device linking", () => {
       server_device_code: "server-device-secret",
     });
     expect(wait).toHaveBeenCalledTimes(2);
+  });
+
+  it("makes one final claim-collection request when its wait crosses expiry", async () => {
+    let now = 1_000;
+    const fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ error: "authorization_pending" }), {
+        status: 202,
+      })
+    );
+    const wait = vi.fn(async () => {
+      now = 2_001;
+    });
+
+    await expect(
+      pollHostedDeviceLink(
+        {
+          deviceCode: "hosted-secret",
+          userCode: "ABCD-2345",
+          verificationUri: "https://playarr.app/link",
+          verificationUriComplete:
+            "https://playarr.app/link?user_code=ABCD-2345",
+          expiresInSeconds: 1,
+          intervalSeconds: 2,
+          expiresAt: 2_000,
+        },
+        {
+          fetchImpl: fetch as typeof globalThis.fetch,
+          now: () => now,
+          wait,
+        }
+      )
+    ).rejects.toThrow(/expired/i);
+
+    expect(wait).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("collects a claim when a pre-expiry pending response crosses the deadline", async () => {
+    let now = 1_000;
+    const fetch = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        now = 2_001;
+        return new Response(
+          JSON.stringify({ error: "authorization_pending" }),
+          { status: 202 }
+        );
+      })
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            user_code: "ABCD-2345",
+            server_url: "http://playarr.lan:8484",
+            server_device_code: "server-device-secret",
+            server_urls: ["http://playarr.lan:8484"],
+          }),
+          { status: 200 }
+        )
+      );
+    const wait = vi.fn(async () => undefined);
+
+    await expect(
+      pollHostedDeviceLink(
+        {
+          deviceCode: "hosted-secret",
+          userCode: "ABCD-2345",
+          verificationUri: "https://playarr.app/link",
+          verificationUriComplete:
+            "https://playarr.app/link?user_code=ABCD-2345",
+          expiresInSeconds: 1,
+          intervalSeconds: 2,
+          expiresAt: 2_000,
+        },
+        {
+          fetchImpl: fetch as typeof globalThis.fetch,
+          now: () => now,
+          wait,
+        }
+      )
+    ).resolves.toMatchObject({
+      server_device_code: "server-device-secret",
+    });
+
+    expect(wait).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it("distinguishes hosted codes from legacy per-server codes", async () => {
@@ -130,7 +224,7 @@ describe("hosted device linking", () => {
       user_code: "WXYZ-6789",
       verification_uri: "https://playarr.app/link",
       verification_uri_complete: "https://playarr.app/link?user_code=WXYZ-6789",
-      expires_in: 600,
+      expires_in: 300,
       interval: 5,
     }));
     const authorizeDevice = vi.fn(async () => undefined);
@@ -162,7 +256,7 @@ describe("hosted device linking", () => {
         user_code: "WXYZ-6789",
         verification_uri: "https://playarr.app/link",
         verification_uri_complete: "https://playarr.app/link?user_code=WXYZ-6789",
-        expires_in: 600,
+        expires_in: 300,
         interval: 5,
       })),
       authorizeDevice: vi.fn(async () => undefined),

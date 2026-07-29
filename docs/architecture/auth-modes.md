@@ -257,14 +257,14 @@ paths an earlier draft of this doc used):
      "user_code": "WXYZ-2349",
      "verification_uri": "https://playarr.example/link",
      "verification_uri_complete": "https://playarr.example/link?user_code=WXYZ-2349",
-     "expires_in": 600,
+     "expires_in": 300,
      "interval": 5
    }
    ```
 
    `expires_in`/`interval` are configuration (`DeviceFlowConfig::code_ttl`/
    `polling_interval`), not hardcoded — `backend/src/main.rs` wires them to
-   10 minutes and 5 seconds respectively today. Unless
+   5 minutes and 5 seconds respectively today. Unless
    `PLAYARR_DEVICE_VERIFICATION_URI` supplies a public URL, the API builds
    the `/link` origin from the request's `Host` and standard forwarded host/
    protocol headers so a LAN TV does not display the server's unusable

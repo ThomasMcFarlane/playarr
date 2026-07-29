@@ -107,11 +107,14 @@ the real Web entry. What differs per app is confined to:
   which transfers the chosen Playarr Server addresses and its real
   server-scoped device grant. An operator-provided `?apiBaseUrl=` or
   packaged `playarr-config.json` remains an optional default.
-- **Whether device-code or password login is used** — packaged TVs always
-  show the shared QR/manual-code `DeviceLogin`. The hosted Web bundle also
-  uses that screen when embedded by Android TV or running on VIDAA;
-  ordinary desktop/mobile browsers sign in directly and host the
-  authenticated `/link` approval page. In every case,
+- **Whether device-code or password login is used** — TV and VIDAA identities
+  open the shared `/login/qr` route by default. It uses the same login shell
+  as `/login`, replacing only the credential form with the hosted
+  QR/manual-code `DeviceLogin` and a manual sign-in action. Ordinary
+  desktop/mobile browsers can choose that QR route directly from `/login`.
+  The QR route carries no server URL: the authenticated `/link` approval page
+  on the other device supplies the chosen Playarr Server through the hosted
+  broker. In every case,
   `@playarr-tv/device-auth`'s `ensureAccessToken` retains the transparent
   trusted-network fallback and refresh path for subsequent requests.
 - **Input/runtime policy** — the same pages retain pointer, touch, keyboard,

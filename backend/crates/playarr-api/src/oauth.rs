@@ -98,7 +98,7 @@ fn token_error_response(err: TokenError) -> Response {
             "user_code": "ABCD-2345",
             "verification_uri": "https://playarr.example/link",
             "verification_uri_complete": "https://playarr.example/link?user_code=ABCD-2345",
-            "expires_in": 600,
+            "expires_in": 300,
             "interval": 5
         }))
     )

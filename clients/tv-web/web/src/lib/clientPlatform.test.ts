@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   resolveClientPlatform,
-  shouldStartPackagedTvLink,
+  shouldStartTvLink,
 } from "./clientPlatform";
 
 function createMemoryStorage(): Storage {
@@ -107,11 +107,11 @@ describe("resolveClientPlatform", () => {
   });
 });
 
-describe("shouldStartPackagedTvLink", () => {
-  it("opens first-contact linking only for a fresh installed TV", () => {
-    expect(shouldStartPackagedTvLink(true, undefined, 0)).toBe(true);
-    expect(shouldStartPackagedTvLink(true, "viewer-id", 0)).toBe(false);
-    expect(shouldStartPackagedTvLink(true, undefined, 1)).toBe(false);
-    expect(shouldStartPackagedTvLink(false, undefined, 0)).toBe(false);
+describe("shouldStartTvLink", () => {
+  it("opens first-contact linking only for a fresh TV identity", () => {
+    expect(shouldStartTvLink(true, undefined, 0)).toBe(true);
+    expect(shouldStartTvLink(true, "viewer-id", 0)).toBe(false);
+    expect(shouldStartTvLink(true, undefined, 1)).toBe(false);
+    expect(shouldStartTvLink(false, undefined, 0)).toBe(false);
   });
 });

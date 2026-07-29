@@ -84,6 +84,7 @@ export const COMPLETE_CLIENT_SHELL_ROUTES: readonly ProductRoute[] = [
 /** Pre-auth and account surfaces shared by web and hosted TV identities. */
 export const COMPLETE_CLIENT_PUBLIC_ROUTES: readonly ProductRoute[] = [
   { path: "/login", id: "login", label: "Login", shelled: false },
+  { path: "/login/qr", id: "qr-login", label: "QR login", shelled: false },
   { path: "/signup", id: "signup", label: "Signup", shelled: false },
   { path: "/link", id: "device-link", label: "Device link approval", shelled: false },
   { path: "/profiles", id: "profiles", label: "Profiles", shelled: false },

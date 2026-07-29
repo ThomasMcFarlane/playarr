@@ -688,8 +688,16 @@ export class ApiClient {
     this.assertOk(await this.raw.POST("/api/v1/oauth/device/authorize", { body }));
   }
 
-  async requestDeviceToken(body: DeviceTokenRequest): Promise<TokenResponse> {
-    return this.unwrap(await this.raw.POST("/api/v1/oauth/token", { body }));
+  async requestDeviceToken(
+    body: DeviceTokenRequest,
+    options: { signal?: AbortSignal } = {}
+  ): Promise<TokenResponse> {
+    return this.unwrap(
+      await this.raw.POST("/api/v1/oauth/token", {
+        body,
+        signal: options.signal,
+      })
+    );
   }
 
   // ---------------------------------------------------------------------

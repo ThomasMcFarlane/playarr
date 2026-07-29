@@ -25,9 +25,17 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with rose glow, stage chrome (logo + language), centred Welcome home /
   Sign in to Playarr copy, white 12dp / 18dp QR frame (ECC M, margin 2), mono
   user code, five-minute refresh countdown, and a Sign in manually pill that
-  switches to the credential form.
+  switches to the credential form. Layout scales to fit a 1080p stage without
+  scrolling or clipping (no oversized QR glow plate).
 
 ### Fixed
+
+- Apple TV pairing gate always uses the playarr.app hosted broker (even when
+  a relay/server URL is remembered), so the on-screen visit line is
+  `https://playarr.app/link` and never a `v4-…relay.playarr.app` Host.
+  QR modules are generated locally (Core Image, ECC M, black on white) so
+  the tile cannot go blank when `/api/link/qr` rejects a non-app URL.
+  Pairing chrome is forced dark stage (`#151315` + rose wash).
 
 - Pairing QR tile locked to live `/login/qr` `.device-login-qr` across
   clients: border-box 240, 12px white edge, r=18, content 216, ECC M /
@@ -207,6 +215,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   VIDAA modes open QR sign-in by default. Codes show a five-minute countdown
   and renew automatically at expiry without shifting the login layout: the
   expired QR/code clears in place while the timer resets to five minutes.
+  Shared login chrome also places the theme toggle beside the language selector.
 
 - Playarr Web `productSurfaces` module and tests so `tv-vidaa` and standard
   web share the same complete-client routes, shell nav hierarchy, and eight

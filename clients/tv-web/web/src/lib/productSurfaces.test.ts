@@ -34,6 +34,7 @@ describe("productSurfaces — complete client catalogue", () => {
     const ids = COMPLETE_CLIENT_ROUTES.map((route) => route.id);
     for (const required of [
       "login",
+      "qr-login",
       "profiles",
       "home",
       "search",
@@ -190,16 +191,23 @@ describe("productSurfaces — shipped App wiring (real entry points)", () => {
     );
   });
 
-  it("Login uses device-code for IS_TV (includes tv-vidaa)", () => {
-    expect(loginSource).toContain("IS_TV");
+  it("Login uses device-code for TVs and offers it to ordinary Web users", () => {
     expect(loginSource).toContain("DeviceLogin");
+    expect(loginSource).toContain('t("pages.login.qrSubmit")');
+    expect(loginSource).toContain("embedded");
+    expect(loginSource).toContain("hostedLink");
+    expect(appSource).toContain(
+      '<Route path="/login/qr" element={<QrLoginPage />} />'
+    );
   });
 
-  it("DeviceLogin marks a real scroll container (TV login chrome)", () => {
+  it("DeviceLogin marks a real scroll container and displays code expiry", () => {
     expect(deviceLoginSource).toContain("data-tv-scroll-container");
     expect(deviceLoginSource).toContain(
       'data-navigation-scroll-key="auth:device-login"'
     );
+    expect(deviceLoginSource).toContain('role="timer"');
+    expect(deviceLoginSource).toContain("formatDeviceCodeCountdown");
   });
 
   it("ten-foot CSS applies to both android-tv and tv-vidaa", () => {

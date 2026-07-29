@@ -32,7 +32,7 @@ import { SettingsProfileLockPage } from "./pages/settings/ProfileLock";
 import { SettingsInvitePage } from "./pages/settings/Invite";
 import { SettingsRequestLatencyPage } from "./pages/settings/RequestLatency";
 import { SettingsProfileAvatarPage } from "./pages/settings/ProfileAvatar";
-import { LoginPage } from "./pages/Login";
+import { LoginPage, QrLoginPage } from "./pages/Login";
 import { SignupPage } from "./pages/Signup";
 import { DeviceLinkPage } from "./pages/DeviceLink";
 import { SearchPage } from "./pages/Search";
@@ -73,9 +73,9 @@ import { useTvNavigation } from "./lib/useTvNavigation";
 import { useOnlineStatus } from "./lib/useOnlineStatus";
 import { useDownloads } from "./lib/DownloadsProvider";
 import {
-  IS_PACKAGED_TV,
+  IS_TV,
   PLAYARR_CLIENT_PLATFORM,
-  shouldStartPackagedTvLink,
+  shouldStartTvLink,
 } from "./lib/clientPlatform";
 import { PRODUCT_NAV_GROUPS } from "./lib/productSurfaces";
 import { useLanguage } from "./lib/i18n/LanguageProvider";
@@ -335,8 +335,8 @@ function AppShell() {
     }
   }, [currentUserId, playerSession]);
 
-  if (shouldStartPackagedTvLink(IS_PACKAGED_TV, currentUserId, savedProfiles.length)) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+  if (shouldStartTvLink(IS_TV, currentUserId, savedProfiles.length)) {
+    return <Navigate to="/login/qr" replace state={{ from: location }} />;
   }
 
   if (authFailed) {
@@ -574,6 +574,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/login/qr" element={<QrLoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/link" element={<DeviceLinkPage />} />
       <Route path="/profiles" element={<ProfilesPage />} />

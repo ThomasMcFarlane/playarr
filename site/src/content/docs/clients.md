@@ -291,7 +291,7 @@ No Playarr package contains your server address, your credentials or a token. Ev
 
 ### Direct sign-in
 
-Browsers, phones and tablets take the Playarr URL on the sign-in screen alongside a username and password (`POST /api/v1/auth/login`). A URL with no scheme is treated as HTTP, which is what LAN self-hosting usually needs. Household profiles come from `GET /api/v1/users/profiles`, with a four-digit PIN when a profile is locked.
+Browsers, phones and tablets can enter a Playarr URL and use a username and password (`POST /api/v1/auth/login`), or choose **Sign in with QR code** to open the separate `/login/qr` route. QR sign-in uses the same hosted first-contact broker as TV and VIDAA: the QR URL contains no server address, and the approving phone or browser supplies the selected Playarr Server. A manually entered URL with no scheme is treated as HTTP, which is what LAN self-hosting usually needs. Household profiles come from `GET /api/v1/users/profiles`, with a four-digit PIN when a profile is locked.
 
 The server's default is `PLAYARR_AUTH_MODE=full-account`, so a username and password are required. Under the opt-in `trusted-network` mode a bearer token is instead acquired on demand, with no interaction and no credentials, the first time a call needs one, and a request from outside the allowlist is refused rather than falling back to a password prompt.
 
@@ -308,15 +308,15 @@ The TV displays the user code, you approve it from a phone or laptop that is alr
 
 ### Hosted first-contact linking at `playarr.app/link`
 
-Typing `http://192.168.1.50:8484` on a TV remote is miserable, so televisions that know *nothing*, no address, no account, use a hosted link broker instead. Android TV and Google TV use it by default and never ask for a URL at all; the packaged webOS and Tizen shells use it on a generic first launch; VIDAA uses it too.
+Typing `http://192.168.1.50:8484` on a TV remote is miserable, so clients that know *nothing*, no address, no account, can use a hosted link broker instead. Android TV, Google TV, packaged webOS/Tizen and VIDAA use it for first contact; ordinary Web uses the same broker when **Sign in with QR code** is selected.
 
-1. The television requests a code (`POST /api/link/code`) and shows a QR code, the address `playarr.app/link`, and a short manual code.
+1. The requesting client requests a code (`POST /api/link/code`) and shows a QR code, the address `playarr.app/link`, and a short manual code.
 2. You scan the QR with a phone, or open <https://playarr.app/link> and type the code. Codes are eight characters drawn from a 32-character unambiguous alphabet, `A`–`Z` without `I` or `O`, and `2`–`9`, formatted `XXXX-XXXX`.
-3. In your **already signed-in browser**, you pick the Playarr server and household profile you want on that television.
+3. In your **already signed-in browser**, you pick the Playarr server and household profile you want on that client.
 4. The browser asks *your own Playarr server* for a short-lived device credential for that profile, and hands only that credential plus the server-address bundle back through the broker.
-5. The television redeems the credential directly with Playarr and stores the selected URL along with any peer addresses supplied with it.
+5. The requesting client redeems the credential directly with Playarr and stores the selected URL along with any peer addresses supplied with it.
 
-Each code lives in its own isolated Durable Object, **expires after ten minutes**, and is polled every two seconds.
+Each code lives in its own isolated Durable Object, **expires after five minutes**, and is polled every two seconds. The device shows the time remaining and automatically replaces an expired code.
 
 > **What the link record contains:** only the device secret, the selected Playarr server addresses, and a single-use Playarr device code. **It never receives a password, a browser bearer token, or a refresh token.** The broker holds no runtime secrets, and no API or playback traffic passes through it.
 

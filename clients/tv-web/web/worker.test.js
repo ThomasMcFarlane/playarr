@@ -323,6 +323,21 @@ describe("hosted device linking", () => {
     }
   );
 
+  it("rejects unsupported client platforms instead of rewriting their identity", async () => {
+    const response = await worker.fetch(
+      new Request("https://playarr.app/api/link/code", {
+        method: "POST",
+        body: JSON.stringify({ client_platform: "not-a-playarr-client" }),
+      }),
+      environment(null)
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "invalid_request",
+    });
+  });
+
   it("creates, authorises, and returns a one-time pairing claim", async () => {
     const env = environment(null);
     const created = await worker.fetch(
@@ -373,6 +388,51 @@ describe("hosted device linking", () => {
       server_device_code: "server-secret-device-code",
       server_urls: ["http://playarr.lan:8484"],
     });
+  });
+
+  it("lets the secret-holder collect a claim approved just before display expiry", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    try {
+      const env = environment(null);
+      const created = await worker.fetch(
+        new Request("https://playarr.app/api/link/code", {
+          method: "POST",
+          body: JSON.stringify({ client_platform: "web" }),
+        }),
+        env
+      );
+      const code = await created.json();
+
+      now.mockReturnValue(300_999);
+      const authorised = await worker.fetch(
+        new Request("https://playarr.app/api/link/authorize", {
+          method: "POST",
+          body: JSON.stringify({
+            user_code: code.user_code,
+            server_url: "http://playarr.lan:8484",
+            server_device_code: "server-secret-device-code",
+            server_urls: ["http://playarr.lan:8484"],
+          }),
+        }),
+        env
+      );
+      expect(authorised.status).toBe(200);
+
+      now.mockReturnValue(301_001);
+      const linked = await worker.fetch(
+        new Request(
+          `https://playarr.app/api/link/code/${encodeURIComponent(code.device_code)}`
+        ),
+        env
+      );
+
+      expect(linked.status).toBe(200);
+      await expect(linked.json()).resolves.toMatchObject({
+        server_device_code: "server-secret-device-code",
+      });
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it("rejects polling without the high-entropy device secret", async () => {

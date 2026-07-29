@@ -29,6 +29,8 @@ export const th: Translations = {
   "components.deviceLogin.scanQr": "สแกนคิวอาร์โค้ด หรือเข้าไปที่",
   "components.deviceLogin.enterCode": "แล้วป้อนรหัสนี้",
   "components.deviceLogin.pairingCode": "รหัสจับคู่ {{code}}",
+  "components.deviceLogin.refreshesIn": "รหัสจะรีเฟรชใน {{time}}",
+  "components.deviceLogin.signInManually": "เข้าสู่ระบบด้วยตนเอง",
   "components.deviceLogin.waitingApproval": "กำลังรอการอนุมัติ…",
   "components.deviceLogin.tryAgain": "ลองอีกครั้ง",
   "components.languageDropdown.noResults": "ไม่พบภาษาที่ค้นหา",
@@ -294,6 +296,9 @@ export const th: Translations = {
     "เบราว์เซอร์บล็อกการเชื่อมต่อ HTTP โดยตรงนี้ กรุณาเปิดการตั้งค่าไซต์สำหรับ playarr.app ตั้งค่า Insecure content เป็น Allow โหลด Playarr ใหม่ แล้วลองอีกครั้ง",
   "pages.login.errorLanUnreachable":
     "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ LAN นี้ได้ กรุณาตรวจสอบ URL และอนุญาต Local Network Access เมื่อเบราว์เซอร์ของคุณถาม",
+  "pages.login.qrDescription":
+    "สแกนคิวอาร์โค้ดด้วยโทรศัพท์หรือเบราว์เซอร์อื่น เพื่อเข้าสู่ระบบบนอุปกรณ์นี้",
+  "pages.login.qrSubmit": "เข้าสู่ระบบด้วยคิวอาร์โค้ด",
 
   "pages.musicDetail.albums": "อัลบั้ม",
   "pages.musicDetail.play": "เล่น {{title}}",
