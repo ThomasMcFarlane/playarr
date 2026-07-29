@@ -182,6 +182,42 @@ enum DesignTokens {
         static let keyArtWatermarkSize: CGFloat = 120
         static let keyArtWatermarkOpacity: CGFloat = 0.22
 
+        // MARK: Key art (`.tv-key-art img` @ 1920×1080 dark theme)
+        /// `width: 52%`
+        static let keyArtWidthFraction: CGFloat = 0.52
+        /// `height: 106%`
+        static let keyArtHeightFraction: CGFloat = 1.06
+        /// `transform: scale(1.04)`
+        static let keyArtScale: CGFloat = 1.04
+        /// dark: `opacity: 0.72`
+        static let keyArtOpacity: CGFloat = 0.72
+        /// dark: `filter: contrast(0.82)`
+        static let keyArtContrast: CGFloat = 0.82
+        /// dark: `filter: brightness(0.6)` — SwiftUI brightness is additive; map via opacity stack.
+        static let keyArtBrightness: CGFloat = -0.15
+        /// mask solid to 72% then fade (`#000 0%, #000 72%, transparent 100%`)
+        static let keyArtMaskSolidEnd: CGFloat = 0.72
+        /// `object-position: center 20%` → alignment unit point y
+        static let keyArtObjectPositionY: CGFloat = 0.20
+
+        // MARK: Rail surface (`.tv-rail-surface` / `.tv-movie-browser`)
+        /// `width: 62%` right-aligned → left starts at 38%
+        static let detailRailWidthFraction: CGFloat = 0.62
+        /// `.is-vertical-tracks { padding: var(--viewport-half-height) 0 }`
+        static let detailRailContentTopFraction: CGFloat = 0.50
+        /// `.tv-media-track + .tv-media-track { margin-top: clamp(38px, 5vh, 64px) }` → 54
+        static let detailMediaTrackGap: CGFloat = 54
+        /// Chapter card: `.tv-episode-card` flex-basis clamp(180, 14vw, 268) → 268 @ 1920
+        static let detailChapterCardWidth: CGFloat = 268
+        /// 16:9 art height for 268 width
+        static let detailChapterCardHeight: CGFloat = 151
+        /// Person art: ~168 measured from SPA cast tiles
+        static let detailCastTileSize: CGFloat = 168
+        /// `.tv-media-track-scroll` gap clamp(14, 1.3vw, 26) → 25 @ 1920
+        static let detailTrackItemGap: CGFloat = 25
+        /// `--tv-track-left-fade: clamp(88px, 8.8vw, 152px)` → 152 @ 1920
+        static let detailTrackLeftFade: CGFloat = 152
+
         // MARK: Search page (`.tv-library-heading` + `.tv-search-copy` @ 1920×1080)
 
         /// `clamp(102px, 8vw, 160px)` → 154

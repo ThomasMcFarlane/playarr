@@ -49,49 +49,19 @@ struct TVWorkDetailView: View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
                 DesignTokens.Color.backgroundElevated
-                // Backdrop + fixture fallback (parity offline detail).
-                // Backdrop: fixture hero for parity / offline; live URL otherwise.
-                Group {
-                    if let fixture = TVParityArtwork.libraryHero(kind: detail.work.kind)
-                        ?? TVParityArtwork.heroImage,
-                       TVParityLaunch.requestedScreen != nil || backdropURL(for: detail.work) == nil {
-                        fixture.resizable().scaledToFill()
-                    } else if let url = backdropURL(for: detail.work) {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image.resizable().scaledToFill()
-                                    .saturation(0).opacity(0.55)
-                            default:
-                                TVParityArtwork.heroImage?.resizable().scaledToFill()
-                            }
-                        }
-                    } else {
-                        DesignTokens.Color.backgroundElevated
-                    }
-                }
-                // SPA key-art ~62% wide with right fade; photo-only fixture (no baked text).
-                .frame(width: geo.size.width * 0.62, height: geo.size.height)
-                .clipped()
-                .opacity(0.92)
-                .mask(
-                    LinearGradient(
-                        colors: [.black, .black, .black.opacity(0.65), .clear],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+                // SPA `.tv-key-art img`: width 52%, height 106%, object-position center 20%,
+                // dark filter grayscale + contrast(0.82) + brightness(0.6), opacity 0.72,
+                // mask solid→72% then fade, scale 1.04.
+                detailKeyArt(detail: detail, size: geo.size)
+                    .zIndex(0)
 
-                // Lighter wash so house/storm key-art stays visible like SPA.
-                LinearGradient(
-                    colors: [
-                        DesignTokens.Color.backgroundBase.opacity(0.12),
-                        DesignTokens.Color.backgroundBase.opacity(0.45),
-                        DesignTokens.Color.backgroundBase.opacity(0.82),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+                // SPA `.tv-key-art::after` dual gradient wash.
+                detailKeyArtAfterOverlay
+                    .zIndex(1)
+
+                // SPA `.tv-stage-wash`.
+                detailStageWash
+                    .zIndex(2)
 
                 if TVParityLaunch.requestedScreen != nil, detail.work.kind == .movie {
                     HStack(spacing: 20) {
@@ -209,13 +179,10 @@ struct TVWorkDetailView: View {
                 .padding(.bottom, 80)
                 .zIndex(5)
 
-                // SPA movie detail: Chapters + Cast rails on the right.
+                // SPA `.tv-rail-surface.tv-movie-browser`: width 62% right,
+                // vertical-tracks padding-top = half viewport, frost gradient.
                 if detail.work.kind == .movie, TVParityLaunch.requestedScreen != nil {
-                    // SPA ref: chapters heading ~y 550, cards ~y 590–710, cast ~y 880.
-                    detailSideRails
-                        .padding(.leading, geo.size.width * 0.48)
-                        .padding(.top, geo.size.height * 0.50)
-                        .padding(.trailing, 36)
+                    detailMovieRailSurface(size: geo.size)
                         .zIndex(6)
                 }
             }
@@ -223,29 +190,162 @@ struct TVWorkDetailView: View {
         .ignoresSafeArea()
     }
 
+    /// SPA `.tv-key-art img` with dark-theme filter chain.
+    @ViewBuilder
+    private func detailKeyArt(detail: WorkDetail, size: CGSize) -> some View {
+        let keyW = size.width * DesignTokens.Shell.keyArtWidthFraction
+        let keyH = size.height * DesignTokens.Shell.keyArtHeightFraction
+        Group {
+            if let fixture = TVParityArtwork.libraryHero(kind: detail.work.kind)
+                ?? TVParityArtwork.heroImage,
+               TVParityLaunch.requestedScreen != nil || backdropURL(for: detail.work) == nil {
+                fixture
+                    .resizable()
+                    .scaledToFill()
+            } else if let url = backdropURL(for: detail.work) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    default:
+                        (TVParityArtwork.heroImage ?? Image(systemName: "film"))
+                            .resizable()
+                            .scaledToFill()
+                    }
+                }
+            } else {
+                DesignTokens.Color.backgroundElevated
+            }
+        }
+        .frame(width: keyW, height: keyH, alignment: Alignment(
+            horizontal: .center,
+            vertical: .top
+        ))
+        // object-position: center 20%
+        .clipped()
+        .saturation(0)
+        .contrast(DesignTokens.Shell.keyArtContrast)
+        .brightness(DesignTokens.Shell.keyArtBrightness)
+        .opacity(DesignTokens.Shell.keyArtOpacity)
+        .scaleEffect(DesignTokens.Shell.keyArtScale)
+        .mask(
+            LinearGradient(
+                stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .black, location: DesignTokens.Shell.keyArtMaskSolidEnd),
+                    .init(color: .clear, location: 1),
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .offset(y: -(keyH - size.height) * DesignTokens.Shell.keyArtObjectPositionY)
+    }
+
+    /// SPA `.tv-key-art::after`.
+    private var detailKeyArtAfterOverlay: some View {
+        ZStack {
+            LinearGradient(
+                stops: [
+                    .init(color: DesignTokens.Color.backgroundElevated, location: 0),
+                    .init(color: .clear, location: 0.22),
+                    .init(color: .clear, location: 1),
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            LinearGradient(
+                stops: [
+                    .init(color: DesignTokens.Color.backgroundElevated, location: 0),
+                    .init(color: .clear, location: 0.22),
+                    .init(color: .clear, location: 0.82),
+                    .init(color: DesignTokens.Color.backgroundElevated, location: 1),
+                ],
+                startPoint: .bottom,
+                endPoint: .top
+            )
+        }
+        .allowsHitTesting(false)
+    }
+
+    /// SPA `.tv-stage-wash`.
+    private var detailStageWash: some View {
+        ZStack {
+            LinearGradient(
+                stops: [
+                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0.94), location: 0),
+                    .init(color: .clear, location: 0.31),
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            LinearGradient(
+                stops: [
+                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0.50), location: 0),
+                    .init(color: .clear, location: 0.34),
+                ],
+                startPoint: .trailing,
+                endPoint: .leading
+            )
+        }
+        .allowsHitTesting(false)
+    }
+
+    /// SPA `.tv-rail-surface.is-vertical-tracks.tv-movie-browser`.
+    private func detailMovieRailSurface(size: CGSize) -> some View {
+        let railW = size.width * DesignTokens.Shell.detailRailWidthFraction
+        return HStack(spacing: 0) {
+            Spacer(minLength: 0)
+            ZStack(alignment: .topLeading) {
+                // Frost gradient (dark theme).
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
+                        .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
+                        .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
+                        .init(color: DesignTokens.Color.backgroundRaised.opacity(0.78), location: 1),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                detailSideRails
+                    .padding(.top, size.height * DesignTokens.Shell.detailRailContentTopFraction)
+                    .padding(.leading, DesignTokens.Shell.detailTrackLeftFade)
+                    .padding(.trailing, 36)
+            }
+            .frame(width: railW, height: size.height)
+        }
+        .frame(width: size.width, height: size.height)
+    }
+
     private var detailSideRails: some View {
-        VStack(alignment: .leading, spacing: 28) {
+        VStack(alignment: .leading, spacing: DesignTokens.Shell.detailMediaTrackGap) {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Chapters")
-                    .font(TVTheme.font(size: 18, weight: .semibold))
+                    .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                 Text("7 scene markers")
                     .font(TVTheme.font(size: 11, weight: .medium))
                     .foregroundStyle(DesignTokens.Color.textDisabled)
-                HStack(spacing: 16) {
+                HStack(spacing: DesignTokens.Shell.detailTrackItemGap) {
                     ForEach(0..<4, id: \.self) { n in
                         let minutes = n * 15
-                        VStack(alignment: .leading, spacing: 6) {
-                            // SPA chapter cards: dark raised panel, index bottom-right.
+                        VStack(alignment: .leading, spacing: 8) {
+                            // SPA `.tv-episode-art` 16:9 dark panel, index bottom-right.
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(DesignTokens.Color.backgroundRaised.opacity(0.72))
-                                .frame(width: 200, height: 112)
+                                .fill(DesignTokens.Color.backgroundRaised.opacity(0.85))
+                                .frame(
+                                    width: DesignTokens.Shell.detailChapterCardWidth,
+                                    height: DesignTokens.Shell.detailChapterCardHeight
+                                )
                                 .overlay(alignment: .bottomTrailing) {
                                     Text(String(format: "%02d", n + 1))
                                         .font(TVTheme.font(size: 16, weight: .semibold))
                                         .foregroundStyle(DesignTokens.Color.textDisabled)
-                                        .padding(.trailing, 12)
-                                        .padding(.bottom, 10)
+                                        .padding(.trailing, 14)
+                                        .padding(.bottom, 12)
                                 }
                             HStack(spacing: 6) {
                                 Text("\(minutes):00")
@@ -260,24 +360,28 @@ struct TVWorkDetailView: View {
             }
             VStack(alignment: .leading, spacing: 10) {
                 Text("Cast")
-                    .font(TVTheme.font(size: 18, weight: .semibold))
+                    .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                 Text("8 people")
                     .font(TVTheme.font(size: 11, weight: .medium))
                     .foregroundStyle(DesignTokens.Color.textDisabled)
-                HStack(spacing: 16) {
+                HStack(spacing: DesignTokens.Shell.detailTrackItemGap) {
                     ForEach(0..<4, id: \.self) { i in
                         Group {
                             if let face = TVParityArtwork.castImage(index: i) {
                                 face
                                     .resizable()
                                     .interpolation(.high)
+                                    // SPA `.tv-person-art img { object-position: center 20% }`
                                     .scaledToFill()
                             } else {
                                 DesignTokens.Color.backgroundRaised.opacity(0.85)
                             }
                         }
-                        .frame(width: 168, height: 168)
+                        .frame(
+                            width: DesignTokens.Shell.detailCastTileSize,
+                            height: DesignTokens.Shell.detailCastTileSize
+                        )
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                 }
