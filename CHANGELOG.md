@@ -9,6 +9,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Roku parity_ae0 rejects black/corrupt plugin_inspect freezes (mean < 3)
+  so dark shells cannot false-pass after normalise_bg.
+
+- Roku Search empty shell uses web-matched chrome assets (header, pill field,
+  Filters chip, empty magnifier block) so the surface is no longer a dual
+  text layout fighting Chromium.
+
 - Roku product shell: residual freeze Posters removed from SceneGraph (single
   native UI, no stacked second interface); signed-in product errors stay
   in-shell instead of fullscreen status walls; Sites dock slot stays hard-

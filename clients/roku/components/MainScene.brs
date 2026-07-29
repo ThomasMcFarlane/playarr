@@ -1976,11 +1976,19 @@ sub showSearchEmptyState(empty as Boolean)
     if m.searchPreviewTitle <> invalid then m.searchPreviewTitle.visible = not empty
     if m.searchPreviewMeta <> invalid then m.searchPreviewMeta.visible = not empty
     if m.searchPreviewOverview <> invalid then m.searchPreviewOverview.visible = not empty
-    if empty and m.searchHint <> invalid
-        m.searchHint.text = "OK type query  •  Back home"
-    else if m.searchHint <> invalid
-        m.searchHint.text = "OK details  •  Back home"
+    ' Empty shell matches web: Filters chip visible, type-filter Labels hidden.
+    ' After results, show type filters for D-pad filtering.
+    chip = m.top.findNode("searchFiltersChip")
+    if chip <> invalid then chip.visible = empty
+    if m.searchFilterLabels <> invalid
+        for each lab in m.searchFilterLabels
+            if lab <> invalid then lab.visible = not empty
+        end for
     end if
+    filters = m.top.findNode("searchFilters")
+    if filters <> invalid then filters.visible = not empty
+    ' No Roku footer hint on empty Search (web has none).
+    if m.searchHint <> invalid then m.searchHint.visible = false
 end sub
 
 sub openSearchDialog()
