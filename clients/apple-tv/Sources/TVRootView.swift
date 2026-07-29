@@ -489,9 +489,31 @@ struct TVProfilesView: View {
     /// Web `selectedId` — drives under-avatar actions (settings / sign out).
     @State private var selectedID: String = "add"
     @FocusState private var focusedTarget: TVProfilesFocus?
+    /// Shared with `TVAuthStageChrome` so ArrowUp from the avatar row can
+    /// reach theme/language (web ProfileAuthLayout focus bridge).
+    @FocusState private var chromeFocus: TVAuthFocus?
 
     private var palette: TVAuthPalette {
         TVAuthPalette.forTheme(displayPreferences.resolvedTheme)
+    }
+
+    /// Leave the profile track and land on top chrome (language is the usual
+    /// right-side entry; theme is one Left away).
+    private func moveFocusToChrome() {
+        focusedTarget = nil
+        chromeFocus = .language
+    }
+
+    /// Leave chrome and land on the profile track (current → first → add).
+    private func moveFocusToProfiles() {
+        chromeFocus = nil
+        if let current = profiles.first(where: \.isCurrent) {
+            focusedTarget = .profile(current.id)
+        } else if let first = profiles.first {
+            focusedTarget = .profile(first.id)
+        } else {
+            focusedTarget = .add
+        }
     }
 
     /// Web `.profile-choice` max: `clamp(160px, 13vw, 244px)` @ 1920 → 244.
@@ -559,15 +581,8 @@ struct TVProfilesView: View {
                     palette: palette,
                     scale: s,
                     showBack: false,
-                    onMoveDownFromChrome: {
-                        if let current = profiles.first(where: \.isCurrent) {
-                            focusedTarget = .profile(current.id)
-                        } else if let first = profiles.first {
-                            focusedTarget = .profile(first.id)
-                        } else {
-                            focusedTarget = .add
-                        }
-                    },
+                    authFocus: $chromeFocus,
+                    onMoveDownFromChrome: { moveFocusToProfiles() },
                     onBack: nil
                 )
             }
@@ -733,6 +748,12 @@ struct TVProfilesView: View {
                     selectedID = profile.id.uuidString
                 }
             }
+            .onMoveCommand { direction in
+                // Web ArrowUp from profiles track → stage chrome language/theme.
+                if direction == .up {
+                    moveFocusToChrome()
+                }
+            }
             .disabled(switchingID != nil)
             .accessibilityLabel(profile.displayName.isEmpty ? profile.username : profile.displayName)
 
@@ -848,6 +869,11 @@ struct TVProfilesView: View {
         .onChange(of: focusedTarget) { _, newValue in
             if newValue == .add {
                 selectedID = "add"
+            }
+        }
+        .onMoveCommand { direction in
+            if direction == .up {
+                moveFocusToChrome()
             }
         }
         .accessibilityLabel("Sign in, add another profile")

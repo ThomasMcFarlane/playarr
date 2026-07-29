@@ -103,6 +103,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Apple TV pairing never shows “code expired”: expired hosted/device codes
   auto-renew like web `DeviceLogin.renewCode` (silent loop + 30s claim grace).
 
+- Apple TV Who’s watching ArrowUp from the avatar / add tile returns focus
+  to stage chrome (theme/language), matching the login QR Down/Up bridge.
+
 - Apple TV Who’s watching (`TVProfilesView`) matches web `/profiles` 1:1:
   large gradient avatars (~244px @ 1080p), status labels (Watching now /
   PIN required / Ready), selected settings + Sign out actions, and an
