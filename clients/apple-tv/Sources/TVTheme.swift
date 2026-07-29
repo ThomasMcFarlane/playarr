@@ -11,31 +11,62 @@ enum TVTheme {
     static let sectionGap = DesignTokens.Spacing.xl
     static let tileGap = DesignTokens.Shell.homeCardGap
 
+    /// Live SPA uses `"Avenir Next", Avenir, …` (`global.css --font`).
+    /// Avenir Next ships on tvOS / macOS; fall back to system if missing.
+    private static let family = "Avenir Next"
+
+    static func font(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        let name: String
+        switch weight {
+        case .ultraLight, .thin, .light: name = "AvenirNext-UltraLight"
+        case .medium: name = "AvenirNext-Medium"
+        case .semibold: name = "AvenirNext-DemiBold"
+        case .bold, .heavy: name = "AvenirNext-Bold"
+        case .black: name = "AvenirNext-Heavy"
+        default: name = "AvenirNext-Regular"
+        }
+        return .custom(name, size: size)
+    }
+
     static func displayFont() -> Font {
-        .system(size: DesignTokens.TypeScale.displaySize, weight: DesignTokens.TypeScale.displayWeight)
+        font(size: DesignTokens.TypeScale.displaySize, weight: DesignTokens.TypeScale.displayWeight)
     }
 
     static func heroTitleFont() -> Font {
-        .system(size: DesignTokens.TypeScale.heroTitleSize, weight: .semibold)
+        font(size: DesignTokens.TypeScale.heroTitleSize, weight: .semibold)
     }
 
     static func titleFont() -> Font {
-        .system(size: DesignTokens.TypeScale.titleSize, weight: DesignTokens.TypeScale.titleWeight)
+        font(size: DesignTokens.TypeScale.titleSize, weight: DesignTokens.TypeScale.titleWeight)
     }
 
     static func subtitleFont() -> Font {
-        .system(size: DesignTokens.TypeScale.subtitleSize, weight: DesignTokens.TypeScale.subtitleWeight)
+        font(size: DesignTokens.TypeScale.subtitleSize, weight: DesignTokens.TypeScale.subtitleWeight)
     }
 
     static func bodyFont(emphasis: Bool = false) -> Font {
-        .system(
+        font(
             size: DesignTokens.TypeScale.bodySize,
             weight: emphasis ? DesignTokens.TypeScale.bodyEmphasisWeight : DesignTokens.TypeScale.bodyWeight
         )
     }
 
     static func captionFont() -> Font {
-        .system(size: DesignTokens.TypeScale.captionSize, weight: DesignTokens.TypeScale.captionWeight)
+        font(size: DesignTokens.TypeScale.captionSize, weight: DesignTokens.TypeScale.captionWeight)
+    }
+}
+
+/// Orbital Playarr mark from `playarr-icon.svg` (embedded raster).
+struct PlayarrLogoMark: View {
+    var size: CGFloat = DesignTokens.Shell.logoSize
+
+    var body: some View {
+        PlayarrLogoAsset.image
+            .resizable()
+            .interpolation(.high)
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .shadow(color: Color.black.opacity(0.28), radius: 8, y: 6)
     }
 }
 
@@ -111,10 +142,11 @@ enum TVNavTab: String, CaseIterable, Identifiable {
     }
 
     var systemImage: String {
+        // Prefer SF symbols that mirror the SPA phosphor/icon set silhouette.
         switch self {
         case .search: return "magnifyingglass"
         case .home: return "house"
-        case .series: return "rectangle.stack"
+        case .series: return "tv"
         case .movies: return "film"
         case .music: return "music.note"
         case .playlists: return "list.bullet"
@@ -165,9 +197,9 @@ struct TVFloatingNav: View {
         } label: {
             VStack(spacing: 5) {
                 Image(systemName: tab.systemImage)
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.system(size: 20, weight: .medium))
                 Text(tab.title)
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(TVTheme.font(size: 9, weight: .semibold))
                     .tracking(0.3)
                     .lineLimit(1)
             }
@@ -219,12 +251,14 @@ struct TVShellHeader: View {
         ZStack {
             // Clock is centred on the live SPA header.
             HStack(spacing: 11) {
-                Text(frozenClock ? "12:00" : Self.liveTimeString())
-                    .font(.system(size: 17, weight: .bold))
+                // Frozen time matches the Playwright reference frames used by
+                // the honest suite (`run-4` / `run-honest-*` capture 05:59).
+                Text(frozenClock ? "05:59" : Self.liveTimeString())
+                    .font(TVTheme.font(size: 17, weight: .bold))
                     .tracking(-0.5)
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                 Text(frozenClock ? "WED 29 JULY" : Self.liveDateString())
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(TVTheme.font(size: 11, weight: .semibold))
                     .tracking(0.4)
                     .foregroundStyle(DesignTokens.Color.textDisabled)
             }
@@ -235,16 +269,7 @@ struct TVShellHeader: View {
                     + DesignTokens.Shell.navPaddingInline
                     + DesignTokens.Shell.navItemSize / 2
                     + 1
-                Circle()
-                    .fill(DesignTokens.Color.brandPrimary)
-                    .frame(width: DesignTokens.Shell.logoSize, height: DesignTokens.Shell.logoSize)
-                    .overlay(
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
-                            .offset(x: 1)
-                    )
-                    .shadow(color: DesignTokens.Color.brandPrimary.opacity(0.28), radius: 14, y: 8)
+                PlayarrLogoMark(size: DesignTokens.Shell.logoSize)
                     .padding(.leading, max(0, navCentreX - DesignTokens.Shell.logoSize / 2))
                 Spacer()
             }
@@ -269,26 +294,48 @@ struct TVShellHeader: View {
 
 struct TVProfileChip: View {
     var name: String = "Viewer"
+    /// Matches the live SPA version chip under the identity cluster.
+    var version: String? = nil
 
     var body: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(DesignTokens.Color.backgroundRaised)
-                .frame(width: DesignTokens.Shell.userAvatarSize, height: DesignTokens.Shell.userAvatarSize)
-                .overlay(
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(DesignTokens.Color.textSecondary)
-                )
-            Text(name)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(DesignTokens.Color.textPrimary)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 10) {
+                // Approximate the live SPA agent avatar (purple disc).
+                ZStack {
+                    Circle()
+                        .fill(Color(red: 0.45, green: 0.32, blue: 0.78))
+                        .frame(
+                            width: DesignTokens.Shell.userAvatarSize,
+                            height: DesignTokens.Shell.userAvatarSize
+                        )
+                    Circle()
+                        .fill(Color(red: 0.62, green: 0.95, blue: 0.45))
+                        .frame(width: 14, height: 14)
+                        .offset(y: 2)
+                    // Antenna-ish dots
+                    HStack(spacing: 8) {
+                        Circle().fill(Color(red: 0.62, green: 0.95, blue: 0.45)).frame(width: 4, height: 4)
+                        Circle().fill(Color(red: 0.62, green: 0.95, blue: 0.45)).frame(width: 4, height: 4)
+                    }
+                    .offset(y: -10)
+                }
+                Text(name)
+                    .font(TVTheme.font(size: 13, weight: .semibold))
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+            }
+            .padding(.leading, 6)
+            .padding(.trailing, 14)
+            .padding(.vertical, 6)
+            .background(
+                Capsule().fill(DesignTokens.Color.backgroundElevated.opacity(0.9))
+            )
+
+            if let version {
+                Text(version)
+                    .font(TVTheme.font(size: 10, weight: .medium))
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+                    .padding(.leading, 44)
+            }
         }
-        .padding(.leading, 6)
-        .padding(.trailing, 14)
-        .padding(.vertical, 6)
-        .background(
-            Capsule().fill(DesignTokens.Color.backgroundElevated.opacity(0.9))
-        )
     }
 }

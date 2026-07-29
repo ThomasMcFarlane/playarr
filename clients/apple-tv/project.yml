@@ -13,6 +13,7 @@ targets:
     platform: tvOS
     sources:
       - path: Sources
+      - path: Supporting/Assets.xcassets
     info:
       path: Supporting/Info.plist
       properties:

@@ -304,8 +304,8 @@ struct TVSearchView: View {
                                     )
                             )
                         Text("Search")
-                            .font(.system(size: DesignTokens.Shell.searchTitleSize, weight: .semibold))
-                            .tracking(-1.2)
+                            .font(TVTheme.font(size: DesignTokens.Shell.searchTitleSize, weight: .semibold))
+                            .tracking(-1.5)
                             .foregroundStyle(DesignTokens.Color.textPrimary)
                     }
                     .padding(.leading, left)
@@ -325,7 +325,7 @@ struct TVSearchView: View {
                                 .padding(.top, DesignTokens.Shell.searchFilterTopGap)
 
                             Text("Find any available movie, series, artist or playlist.")
-                                .font(.system(size: 14, weight: .regular))
+                                .font(TVTheme.font(size: 14, weight: .regular))
                                 .foregroundStyle(DesignTokens.Color.textDisabled)
                                 .frame(maxWidth: 340, alignment: .leading)
                                 .lineSpacing(4)
@@ -342,31 +342,29 @@ struct TVSearchView: View {
                     .padding(.top, DesignTokens.Shell.searchCopyTop)
 
                     // Idle empty state in the right rail.
-                    // Web places it mid-rail (icon centre ≈ y 380–420 @ 1080p).
+                    // Measured web art centre ≈ (1226, 379) @ 1920×1080.
                     if let viewModel, viewModel.state == .idle {
-                        HStack(spacing: 28) {
+                        let art = DesignTokens.Shell.searchEmptyArtSize
+                        HStack(spacing: 24) {
                             Circle()
-                                .stroke(DesignTokens.Color.borderDefault.opacity(0.5), lineWidth: 1)
-                                .frame(
-                                    width: DesignTokens.Shell.searchEmptyArtSize,
-                                    height: DesignTokens.Shell.searchEmptyArtSize
-                                )
+                                .stroke(DesignTokens.Color.borderDefault.opacity(0.45), lineWidth: 1)
+                                .frame(width: art, height: art)
                                 .background(
-                                    Circle().fill(DesignTokens.Color.backgroundElevated.opacity(0.54))
+                                    Circle().fill(DesignTokens.Color.backgroundElevated.opacity(0.5))
                                 )
                                 .overlay(
                                     Image(systemName: "magnifyingglass")
-                                        .font(.system(size: 36, weight: .medium))
-                                        .foregroundStyle(DesignTokens.Color.brandPrimary.opacity(0.85))
+                                        .font(.system(size: 34, weight: .regular))
+                                        .foregroundStyle(DesignTokens.Color.brandPrimary.opacity(0.82))
                                 )
                             Text("Start typing to search.")
-                                .font(.system(size: 20, weight: .semibold))
-                                .tracking(-0.3)
+                                .font(TVTheme.font(size: 18, weight: .semibold))
+                                .tracking(-0.4)
                                 .foregroundStyle(DesignTokens.Color.textPrimary)
                         }
-                        .frame(width: railWidth, alignment: .center)
-                        .padding(.top, geo.size.height * 0.29)
-                        .offset(x: railLeading)
+                        .padding(.top, 379 - art / 2)
+                        // Art left edge so its centre sits at x≈1226.
+                        .padding(.leading, 1226 - art / 2)
                     }
                 }
             }
@@ -389,22 +387,22 @@ struct TVSearchView: View {
             if parityMode {
                 HStack(spacing: 12) {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 18, weight: .medium))
+                        .font(.system(size: 18, weight: .regular))
                         .foregroundStyle(DesignTokens.Color.textDisabled)
                         .frame(width: 24, height: 24)
                     Text("Search your libraries and playlists")
-                        .font(.system(size: 17, weight: .medium))
+                        .font(TVTheme.font(size: 17, weight: .medium))
                         .foregroundStyle(DesignTokens.Color.textDisabled)
                     Spacer(minLength: 0)
                 }
             } else {
                 HStack(spacing: 12) {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 18, weight: .medium))
+                        .font(.system(size: 18, weight: .regular))
                         .foregroundStyle(DesignTokens.Color.textDisabled)
                         .frame(width: 24, height: 24)
                     TextField("Search your libraries and playlists", text: query)
-                        .font(.system(size: 17, weight: .medium))
+                        .font(TVTheme.font(size: 17, weight: .medium))
                         .foregroundStyle(DesignTokens.Color.textPrimary)
                         .focused($searchFieldFocused)
                         .onSubmit(onSubmit)
@@ -415,16 +413,17 @@ struct TVSearchView: View {
         .padding(.trailing, 16)
         .frame(width: width, height: DesignTokens.Shell.searchFormHeight, alignment: .leading)
         .background(
+            // Web: color-mix(surface-strong 88%, transparent) over stage.
             Capsule()
-                .fill(DesignTokens.Color.backgroundElevated.opacity(0.88))
+                .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.88))
         )
         .overlay(
             Capsule().stroke(
-                DesignTokens.Color.brandPrimary.opacity(0.72),
-                lineWidth: 1.5
+                DesignTokens.Color.brandPrimary.opacity(0.55),
+                lineWidth: 1.25
             )
         )
-        .shadow(color: Color.black.opacity(0.18), radius: 26, y: 12)
+        .shadow(color: Color.black.opacity(0.14), radius: 22, y: 10)
         .focusEffectDisabled(parityMode)
         .allowsHitTesting(!parityMode)
     }
@@ -435,17 +434,17 @@ struct TVSearchView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(DesignTokens.Color.brandPrimary)
             Text("Filters")
-                .font(.system(size: 12, weight: .bold))
+                .font(TVTheme.font(size: 12, weight: .bold))
                 .foregroundStyle(DesignTokens.Color.textPrimary)
             Text("All libraries")
-                .font(.system(size: 11, weight: .medium))
+                .font(TVTheme.font(size: 11, weight: .medium))
                 .foregroundStyle(DesignTokens.Color.textDisabled)
                 .lineLimit(1)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(
-            Capsule().fill(DesignTokens.Color.backgroundElevated.opacity(0.78))
+            Capsule().fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.78))
         )
         .shadow(color: Color.black.opacity(0.12), radius: 16, y: 8)
     }

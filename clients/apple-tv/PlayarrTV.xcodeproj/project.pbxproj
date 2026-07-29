@@ -21,6 +21,7 @@
 		BDE28F6F95544F39B3758DF4 /* TVServerAddressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12FAD6061A7EC7A3F76D02CF /* TVServerAddressTests.swift */; };
 		D4F8C82E8C75016BF2E13541 /* TVViewModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3BE36C32CF04D86B4AE838A /* TVViewModels.swift */; };
 		E767AB886D58490C7EEB8970 /* TVDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12E4DA2002EFA25EC8BDF5D8 /* TVDetailView.swift */; };
+6A1B2C3D4E5F60718293A4C1 /* PlayarrLogoAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1B2C3D4E5F60718293A4C0 /* PlayarrLogoAsset.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -50,6 +51,7 @@
 		E53D2E91ED2B7BA71E18FA96 /* TVPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPlayerView.swift; sourceTree = "<group>"; };
 		F39006E3292B3C3FCE2911BE /* TVLibraryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVLibraryViews.swift; sourceTree = "<group>"; };
 		F3BE36C32CF04D86B4AE838A /* TVViewModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVViewModels.swift; sourceTree = "<group>"; };
+6A1B2C3D4E5F60718293A4C0 /* PlayarrLogoAsset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayarrLogoAsset.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -95,6 +97,7 @@
 				2D582C12CA26152EFDEE5953 /* TVRootView.swift */,
 				61029885CE1ECACC599117A4 /* TVSettingsView.swift */,
 				6A1B2C3D4E5F60718293A4B1 /* TVTheme.swift */,
+				6A1B2C3D4E5F60718293A4C0 /* PlayarrLogoAsset.swift */,
 				F3BE36C32CF04D86B4AE838A /* TVViewModels.swift */,
 			);
 			path = Sources;
@@ -216,6 +219,7 @@
 				4667E9FA407CD2E4D3FA1F50 /* TVRootView.swift in Sources */,
 				B3106D278BEB5C717AF146C8 /* TVSettingsView.swift in Sources */,
 				6A1B2C3D4E5F60718293A4B6 /* TVTheme.swift in Sources */,
+				6A1B2C3D4E5F60718293A4C1 /* PlayarrLogoAsset.swift in Sources */,
 				D4F8C82E8C75016BF2E13541 /* TVViewModels.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

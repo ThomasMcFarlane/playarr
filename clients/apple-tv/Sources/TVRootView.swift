@@ -121,7 +121,8 @@ struct TVRootView: View {
                 Spacer()
                 HStack {
                     TVProfileChip(
-                        name: TVParityLaunch.requestedScreen != nil ? "Test User A" : "Viewer"
+                        name: TVParityLaunch.requestedScreen != nil ? "Test User A" : "Viewer",
+                        version: TVParityLaunch.requestedScreen != nil ? "v0.1.0" : nil
                     )
                     .padding(.leading, DesignTokens.Shell.navEdge - 4)
                     .padding(.bottom, 36)

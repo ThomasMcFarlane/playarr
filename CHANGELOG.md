@@ -15,7 +15,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Apple TV search shell geometry aligned to live SPA CSS at 1920×1080
   (heading/form/empty positions, nav group chrome with labels, safe-area
   ignored for stage coordinates). Honest AE on search improved from ~1.33%
-  to ~0.52% vs authenticated playarr.example.com (still above the 0.1% bar).
+  to ~0.50% vs authenticated playarr.example.com (still above the 0.1% bar).
+- Apple TV shell uses Avenir Next (SPA `--font`), an embedded raster of
+  `playarr-icon.svg` for the header mark, frozen clock matching the suite
+  reference frames, and measured empty-state placement on search.
 
 ### Added
 
