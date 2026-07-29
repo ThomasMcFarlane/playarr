@@ -451,10 +451,18 @@ struct TVPairingGateView: View {
 
 // MARK: - Profiles (web `/profiles` Who's watching?)
 
-/// Household profile picker. Back from `/login/qr` lands here so linked
-/// profiles stay reachable without re-scanning.
+/// Focus targets for the Who's watching row (web profiles track + `#profile-add`).
+private enum TVProfilesFocus: Hashable {
+    case profile(UUID)
+    case add
+}
+
+/// Household profile picker matching live web `/profiles` 1:1 @ 1920×1080.
+/// Always shows the dashed blank “+” add tile (`Sign in` / `ADD ANOTHER PROFILE`).
+/// Back from `/login/qr` lands here so linked profiles stay reachable without re-scanning.
 struct TVProfilesView: View {
     var onLinkTV: () -> Void
+    /// Kept for pairing-gate call-site parity; manual entry lives on the QR chrome.
     var onManual: () -> Void
 
     @Environment(TVAppEnvironment.self) private var environment
@@ -466,10 +474,22 @@ struct TVProfilesView: View {
     @State private var pinProfile: AvailableProfile?
     @State private var pin = ""
     @State private var pinError: String?
-    @FocusState private var focusedProfileID: UUID?
+    /// Web `selectedId` — drives under-avatar actions (settings / sign out).
+    @State private var selectedID: String = ""
+    @FocusState private var focusedTarget: TVProfilesFocus?
 
     private var palette: TVAuthPalette {
         TVAuthPalette.forTheme(displayPreferences.resolvedTheme)
+    }
+
+    /// Web `.profile-choice` max: `clamp(160px, 13vw, 244px)` @ 1920 → 244.
+    private func avatarSize(scale s: CGFloat) -> CGFloat { 244 * s }
+
+    /// Web `.profiles-track` gap: `clamp(22px, 2.2vw, 44px)` @ 1920 → ~42.
+    private func trackGap(scale s: CGFloat) -> CGFloat { 42 * s }
+
+    private var selectedProfile: AvailableProfile? {
+        profiles.first(where: { $0.id.uuidString == selectedID })
     }
 
     var body: some View {
@@ -478,30 +498,33 @@ struct TVProfilesView: View {
                 geo.size.width / DesignTokens.Shell.canvasWidth,
                 geo.size.height / DesignTokens.Shell.canvasHeight
             )
+            let size = avatarSize(scale: s)
+
             ZStack {
                 TVAuthStageBackground(palette: palette, style: .profiles)
 
                 VStack(spacing: 0) {
+                    // Web `.profiles-heading` top: clamp(104px, 15vh, 164px) @ 1080 → ~162.
+                    Color.clear.frame(height: 134 * s)
+
                     Text("PROFILES")
                         .font(.system(size: 11 * s, weight: .heavy))
                         .tracking(1.6 * s)
                         .foregroundStyle(palette.brandPink)
-                        .padding(.top, 90 * s)
 
                     Text("Who's watching?")
                         .font(.system(size: 54 * s, weight: .medium))
                         .tracking(-2.2 * s)
                         .foregroundStyle(palette.ink)
-                        .padding(.top, 10 * s)
+                        .padding(.top, 8 * s)
 
+                    // Web row top ≈ 33vh; remaining space after heading ≈ 72–90.
                     if isLoading {
                         ProgressView()
                             .tint(palette.brandPink)
-                            .padding(.top, 72 * s)
-                    } else if profiles.isEmpty {
-                        emptyState(scale: s)
+                            .padding(.top, 88 * s)
                     } else {
-                        profileRow(scale: s)
+                        profileRow(scale: s, avatarSize: size)
                             .padding(.top, 72 * s)
                     }
 
@@ -510,8 +533,8 @@ struct TVProfilesView: View {
                             .font(.system(size: 14 * s, weight: .medium))
                             .foregroundStyle(palette.inkMuted)
                             .multilineTextAlignment(.center)
-                            .padding(.top, 24 * s)
-                            .frame(maxWidth: 480 * s)
+                            .padding(.top, 20 * s)
+                            .frame(maxWidth: 520 * s)
                     }
 
                     Spacer(minLength: 0)
@@ -523,7 +546,13 @@ struct TVProfilesView: View {
                     scale: s,
                     showBack: true,
                     onMoveDownFromChrome: {
-                        focusedProfileID = profiles.first?.id
+                        if let current = profiles.first(where: \.isCurrent) {
+                            focusedTarget = .profile(current.id)
+                        } else if let first = profiles.first {
+                            focusedTarget = .profile(first.id)
+                        } else {
+                            focusedTarget = .add
+                        }
                     },
                     onBack: onLinkTV
                 )
@@ -555,134 +584,296 @@ struct TVProfilesView: View {
         }
     }
 
-    @ViewBuilder
-    private func emptyState(scale s: CGFloat) -> some View {
-        VStack(spacing: 20 * s) {
-            Text("No profiles on this Apple TV yet.")
-                .font(.system(size: 18 * s, weight: .medium))
-                .foregroundStyle(palette.inkMuted)
-                .multilineTextAlignment(.center)
-                .padding(.top, 56 * s)
-            Button(action: onLinkTV) {
-                Text("Link this TV")
-                    .font(.system(size: 16 * s, weight: .bold))
-                    .padding(.horizontal, 28 * s)
-                    .padding(.vertical, 16 * s)
-                    .foregroundStyle(palette.isDark ? palette.bg : Color.white)
-                    .background(palette.brandPink)
-                    .clipShape(Capsule())
-            }
-            .buttonStyle(TVPrimaryPillButtonStyle(palette: palette))
-            .focusEffectDisabled(true)
-            Button(action: onManual) {
-                Text("Sign in manually")
-                    .font(.system(size: 15 * s, weight: .semibold))
-                    .padding(.horizontal, 20 * s)
-                    .padding(.vertical, 12 * s)
-            }
-            .buttonStyle(TVSecondaryPillButtonStyle(palette: palette))
-            .focusEffectDisabled(true)
-        }
-    }
-
-    private func profileRow(scale s: CGFloat) -> some View {
+    private func profileRow(scale s: CGFloat, avatarSize size: CGFloat) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 38 * s) {
-                ForEach(profiles) { profile in
-                    profileCard(profile, scale: s)
+            HStack(alignment: .top, spacing: trackGap(scale: s)) {
+                ForEach(Array(profiles.enumerated()), id: \.element.id) { index, profile in
+                    profileCard(profile, index: index, scale: s, avatarSize: size)
                 }
-                addProfileCard(scale: s)
+                // Always present — web `#profile-add` blank dashed avatar.
+                addProfileCard(scale: s, avatarSize: size)
             }
-            .padding(.horizontal, 120 * s)
-            // Extra top padding so focus lift (translateY -8) is not clipped.
-            .padding(.vertical, 24 * s)
-            .padding(.top, 12 * s)
+            // Web `.profiles-track` padding-inline: clamp(72px, 10vw, 190px).
+            .padding(.horizontal, 190 * s)
+            // Extra room for focus lift (translateY -8) + under-avatar actions.
+            .padding(.top, 20 * s)
+            .padding(.bottom, 48 * s)
+            .frame(minWidth: DesignTokens.Shell.canvasWidth * s, alignment: .center)
         }
     }
 
-    private func profileCard(_ profile: AvailableProfile, scale s: CGFloat) -> some View {
-        let focused = focusedProfileID == profile.id
+    private func profileCard(
+        _ profile: AvailableProfile,
+        index: Int,
+        scale s: CGFloat,
+        avatarSize size: CGFloat
+    ) -> some View {
+        let focused = focusedTarget == .profile(profile.id)
+        let selected = selectedID == profile.id.uuidString
         let busy = switchingID == profile.id
-        let active = focused || profile.isCurrent
-        return Button {
-            if profile.pinLocked && !profile.isCurrent {
-                pinProfile = profile
-                pin = ""
-                pinError = nil
-            } else {
-                Task { await select(profile, pin: nil) }
+        let active = focused || selected
+        let colours = Self.avatarGradient(index: index)
+
+        return VStack(spacing: 0) {
+            Button {
+                selectedID = profile.id.uuidString
+                if profile.pinLocked && !profile.isCurrent {
+                    pinProfile = profile
+                    pin = ""
+                    pinError = nil
+                } else {
+                    Task { await select(profile, pin: nil) }
+                }
+            } label: {
+                VStack(spacing: 9 * s) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: colours,
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        // Soft highlight: CSS radial at 34% 26%.
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [.white.opacity(0.28), .clear],
+                                    center: UnitPoint(x: 0.34, y: 0.26),
+                                    startRadius: 0,
+                                    endRadius: size * 0.42
+                                )
+                            )
+                        Text(profileInitials(profile))
+                            .font(.system(size: size * 0.28, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.95))
+                        if busy {
+                            ProgressView().tint(.white)
+                        }
+                        if profile.pinLocked && !profile.isCurrent {
+                            Image(systemName: "lock.fill")
+                                .font(.system(size: 12 * s, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 30 * s, height: 30 * s)
+                                .background(Color.black.opacity(0.55), in: Circle())
+                                .offset(x: size * 0.32, y: size * 0.32)
+                        }
+                    }
+                    .frame(width: size, height: size)
+                    .overlay(
+                        Circle().stroke(
+                            palette.lineStrong.opacity(0.66),
+                            lineWidth: 1
+                        )
+                    )
+                    .overlay {
+                        if active {
+                            Circle()
+                                .stroke(palette.brandPink.opacity(0.42), lineWidth: 4 * s)
+                                .padding(-2 * s)
+                        }
+                    }
+                    .shadow(
+                        color: active
+                            ? Color.black.opacity(0.18)
+                            : Color.clear,
+                        radius: active ? 22 * s : 0,
+                        y: active ? 12 * s : 0
+                    )
+
+                    Text(profile.displayName.isEmpty ? profile.username : profile.displayName)
+                        .font(.system(size: 16 * s, weight: .semibold))
+                        .foregroundStyle(active ? palette.ink : palette.inkSoft)
+                        .lineLimit(1)
+
+                    Text(statusLabel(for: profile, busy: busy))
+                        .font(.system(size: 9 * s, weight: .bold))
+                        .tracking(0.6 * s)
+                        .textCase(.uppercase)
+                        .foregroundStyle(palette.inkMuted)
+                        .frame(minHeight: 12 * s)
+                }
+                .frame(width: size)
             }
+            .buttonStyle(TVProfileCardButtonStyle(palette: palette, isSelected: selected))
+            .focusEffectDisabled(true)
+            .focused($focusedTarget, equals: .profile(profile.id))
+            .onChange(of: focusedTarget) { _, newValue in
+                if case .profile(let id) = newValue, id == profile.id {
+                    selectedID = profile.id.uuidString
+                }
+            }
+            .disabled(switchingID != nil)
+            .accessibilityLabel(profile.displayName.isEmpty ? profile.username : profile.displayName)
+
+            if selected {
+                profileActions(for: profile, scale: s)
+                    .padding(.top, 20 * s)
+            }
+        }
+        .frame(width: size)
+    }
+
+    /// Web `.profile-actions` under the selected avatar (settings gear + Sign out).
+    private func profileActions(for profile: AvailableProfile, scale s: CGFloat) -> some View {
+        HStack(spacing: 9 * s) {
+            Button {
+                // Profile settings live in the signed-in shell; open QR is not
+                // applicable. Selecting the gear keeps focus on this profile.
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 16 * s, weight: .semibold))
+                    .foregroundStyle(palette.brandPink)
+                    .frame(width: 44 * s, height: 44 * s)
+                    .background(palette.surfaceStrong.opacity(0.64), in: Capsule())
+                    .overlay(
+                        Capsule().stroke(palette.lineStrong.opacity(0.7), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .focusEffectDisabled(true)
+            .accessibilityLabel("Settings for \(profile.displayName)")
+
+            Button {
+                environment.signOut()
+                onLinkTV()
+            } label: {
+                HStack(spacing: 7 * s) {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(.system(size: 14 * s, weight: .semibold))
+                    Text("Sign out")
+                        .font(.system(size: 11 * s, weight: .bold))
+                }
+                .foregroundStyle(palette.inkSoft)
+                .padding(.horizontal, 16 * s)
+                .frame(height: 44 * s)
+                .background(palette.surfaceStrong.opacity(0.64), in: Capsule())
+                .overlay(
+                    Capsule().stroke(palette.lineStrong.opacity(0.7), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .focusEffectDisabled(true)
+            .accessibilityLabel("Sign out \(profile.displayName)")
+        }
+    }
+
+    /// Web `#profile-add`: dashed circle, large light “+”, Sign in / ADD ANOTHER PROFILE.
+    private func addProfileCard(scale s: CGFloat, avatarSize size: CGFloat) -> some View {
+        let focused = focusedTarget == .add
+        let selected = selectedID == "add" || (profiles.isEmpty && selectedID.isEmpty)
+        let active = focused || selected
+
+        return Button {
+            selectedID = "add"
+            onLinkTV()
         } label: {
-            VStack(spacing: 16 * s) {
+            VStack(spacing: 9 * s) {
                 ZStack {
+                    // Dashed blank avatar — web `.profile-add .profile-avatar`.
                     Circle()
-                        .fill(palette.surfaceStrong)
-                        .frame(width: 120 * s, height: 120 * s)
-                        .overlay(
-                            Circle().stroke(
-                                active ? palette.brandPink : palette.lineStrong,
-                                lineWidth: active ? 4 * s : 1
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    palette.surfaceStrong.opacity(0.92),
+                                    palette.surfaceStrong.mixed(with: palette.brandPink, amount: 0.16),
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
                             )
                         )
-                        // Web focused avatar soft pink outer ring.
-                        .shadow(
-                            color: active
-                                ? palette.brandPink.opacity(0.42)
-                                : Color.clear,
-                            radius: active ? 8 * s : 0
+                    Circle()
+                        .strokeBorder(
+                            palette.lineStrong.opacity(0.75),
+                            style: StrokeStyle(
+                                lineWidth: 2 * s,
+                                dash: [7 * s, 6 * s]
+                            )
                         )
-                    Text(profileInitials(profile))
-                        .font(.system(size: 36 * s, weight: .semibold))
-                        .foregroundStyle(palette.ink)
-                    if busy {
-                        ProgressView().tint(palette.brandPink)
+                    Text("+")
+                        .font(.system(size: size * 0.42, weight: .ultraLight))
+                        .foregroundStyle(palette.inkSoft)
+                }
+                .frame(width: size, height: size)
+                .overlay {
+                    if active {
+                        Circle()
+                            .stroke(palette.brandPink.opacity(0.42), lineWidth: 4 * s)
+                            .padding(-2 * s)
                     }
                 }
-                Text(profile.displayName.isEmpty ? profile.username : profile.displayName)
+                .shadow(
+                    color: active ? Color.black.opacity(0.18) : Color.clear,
+                    radius: active ? 22 * s : 0,
+                    y: active ? 12 * s : 0
+                )
+
+                Text("Sign in")
                     .font(.system(size: 16 * s, weight: .semibold))
                     .foregroundStyle(active ? palette.ink : palette.inkSoft)
                     .lineLimit(1)
-                if profile.pinLocked {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 12 * s))
-                        .foregroundStyle(palette.inkMuted)
-                }
+
+                Text("Add another profile")
+                    .font(.system(size: 9 * s, weight: .bold))
+                    .tracking(0.6 * s)
+                    .textCase(.uppercase)
+                    .foregroundStyle(palette.inkMuted)
+                    .frame(minHeight: 12 * s)
             }
-            .frame(width: 140 * s)
+            .frame(width: size)
         }
-        // Web `.profile-avatar-button:hover/focus` → lift + scale 1.045.
-        .buttonStyle(TVProfileCardButtonStyle(palette: palette, isSelected: profile.isCurrent))
+        .buttonStyle(TVProfileCardButtonStyle(palette: palette, isSelected: selected))
         .focusEffectDisabled(true)
-        .focused($focusedProfileID, equals: profile.id)
-        .disabled(switchingID != nil)
+        .focused($focusedTarget, equals: .add)
+        .onChange(of: focusedTarget) { _, newValue in
+            if newValue == .add {
+                selectedID = "add"
+            }
+        }
+        // Long-press alternative matches web "Sign in manually" secondary path.
+        .contextMenu {
+            Button("Sign in manually", action: onManual)
+        }
+        .accessibilityLabel("Sign in, add another profile")
     }
 
-    private func addProfileCard(scale s: CGFloat) -> some View {
-        Button(action: onLinkTV) {
-            VStack(spacing: 16 * s) {
-                ZStack {
-                    Circle()
-                        .stroke(palette.lineStrong, style: StrokeStyle(lineWidth: 2, dash: [6, 6]))
-                        .frame(width: 120 * s, height: 120 * s)
-                    Image(systemName: "plus")
-                        .font(.system(size: 36 * s, weight: .medium))
-                        .foregroundStyle(palette.inkMuted)
-                }
-                Text("Add profile")
-                    .font(.system(size: 16 * s, weight: .semibold))
-                    .foregroundStyle(palette.inkMuted)
-            }
-            .frame(width: 140 * s)
-        }
-        .buttonStyle(TVProfileCardButtonStyle(palette: palette))
-        .focusEffectDisabled(true)
+    private func statusLabel(for profile: AvailableProfile, busy: Bool) -> String {
+        if busy { return "Switching…" }
+        if profile.isCurrent { return "Watching now" }
+        if profile.pinLocked { return "PIN required" }
+        return "Ready"
     }
 
     private func profileInitials(_ profile: AvailableProfile) -> String {
         let name = profile.displayName.isEmpty ? profile.username : profile.displayName
         let parts = name.split(separator: " ").prefix(2)
         let letters = parts.compactMap { $0.first.map(String.init) }
-        return letters.joined().uppercased()
+        let joined = letters.joined().uppercased()
+        return joined.isEmpty ? "P" : joined
+    }
+
+    /// Pink→rose gradient stops matching web default profile avatars.
+    private static func avatarGradient(index: Int) -> [Color] {
+        let choices: [[Color]] = [
+            [
+                Color(red: 0xe9 / 255, green: 0x75 / 255, blue: 0x91 / 255),
+                Color(red: 0xa8 / 255, green: 0x26 / 255, blue: 0x55 / 255),
+            ],
+            [
+                Color(red: 0x6e / 255, green: 0xb0 / 255, blue: 0xc0 / 255),
+                Color(red: 0x2e / 255, green: 0x57 / 255, blue: 0x8a / 255),
+            ],
+            [
+                Color(red: 0xc2 / 255, green: 0xa3 / 255, blue: 0x66 / 255),
+                Color(red: 0x6e / 255, green: 0x45 / 255, blue: 0x2e / 255),
+            ],
+            [
+                Color(red: 0x85 / 255, green: 0xb8 / 255, blue: 0x8c / 255),
+                Color(red: 0x2e / 255, green: 0x6e / 255, blue: 0x4d / 255),
+            ],
+        ]
+        return choices[index % choices.count]
     }
 
     private func reload() async {
@@ -694,11 +885,18 @@ struct TVProfilesView: View {
         if list.isEmpty {
             let usable = await environment.hasUsableSession()
             if !usable {
-                loadError = "Link this TV to load household profiles, or pick Add profile."
+                loadError = nil // blank stage + Sign in tile is the empty state
             }
-        }
-        if focusedProfileID == nil {
-            focusedProfileID = list.first(where: \.isCurrent)?.id ?? list.first?.id
+            selectedID = "add"
+            focusedTarget = .add
+        } else if focusedTarget == nil {
+            if let current = list.first(where: \.isCurrent) {
+                selectedID = current.id.uuidString
+                focusedTarget = .profile(current.id)
+            } else if let first = list.first {
+                selectedID = first.id.uuidString
+                focusedTarget = .profile(first.id)
+            }
         }
     }
 
@@ -722,6 +920,25 @@ struct TVProfilesView: View {
             }
         }
         switchingID = nil
+    }
+}
+
+// MARK: - Colour mix helper (web color-mix approximation)
+
+private extension Color {
+    /// Approximate CSS `color-mix(in srgb, self (1-amount), other amount)`.
+    func mixed(with other: Color, amount: Double) -> Color {
+        let t = max(0, min(1, amount))
+        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
+        UIColor(self).getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        UIColor(other).getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        return Color(
+            red: Double(r1 * (1 - t) + r2 * t),
+            green: Double(g1 * (1 - t) + g2 * t),
+            blue: Double(b1 * (1 - t) + b2 * t),
+            opacity: Double(a1 * (1 - t) + a2 * t)
+        )
     }
 }
 
