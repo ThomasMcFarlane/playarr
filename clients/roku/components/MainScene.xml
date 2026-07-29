@@ -4,7 +4,8 @@
     <field id="screenState" type="string" value="starting" />
   </interface>
   <children>
-    <Rectangle width="1920" height="1080" color="0x070B14FF" />
+    <!-- Playarr dark bg #151315 warm charcoal (not cool navy 070B14). -->
+    <Rectangle width="1920" height="1080" color="0x151315FF" />
 
     <!-- Focus proxy: when a Home rail is on column 0, focus moves here so Left
          can enter the nav dock (RowList swallows Left/Right and never bubbles).
@@ -667,7 +668,7 @@
     <Group id="playerControls" visible="false">
       <!-- Visual chrome matched to tv-web player bar (web freeze crop). Labels
            stay focusable/key-driven but paint is the chrome Poster + progress. -->
-      <Rectangle id="playerBarBg" translation="[0,900]" width="1920" height="180" color="0x070B1400" />
+      <Rectangle id="playerBarBg" translation="[0,900]" width="1920" height="180" color="0x15131500" />
       <Rectangle id="playerProgressTrack" translation="[80,940]" width="1760" height="4" color="0xFFFFFF33" />
       <Rectangle id="playerBufferedFill" translation="[80,940]" width="0" height="4" color="0xFFFFFF57" />
       <Rectangle id="playerProgressFill" translation="[80,940]" width="0" height="4" color="0xCF3157FF" />

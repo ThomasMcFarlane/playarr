@@ -31,7 +31,8 @@ OUT = SCRATCH / RUN
 REPO_IMAGES = pathlib.Path(__file__).resolve().parents[1] / "images"
 STAGE_W, STAGE_H = 1920, 1080
 STAGE = STAGE_W * STAGE_H
-BG = np.array([7, 11, 20], dtype=np.uint8)
+# Playarr dark --bg: #151315 (not cool navy 7,11,20)
+BG = np.array([21, 19, 21], dtype=np.uint8)
 MAX_RESIDUAL_FRAC = 0.20
 
 SURFACES = [

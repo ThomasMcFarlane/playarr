@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Roku stage background is Playarr dark `#151315` (was cool navy `#070B14`,
+  which read as blue on the TV).
+
 - Roku shell cleanup: circular avatar PNGs (no square slabs), pairing without
   glow/QR empty white box, profiles without solid chrome Posters, connect/
   link busy state stays on pairing chrome (no fullscreen Loading wall).
@@ -20,6 +23,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the playarr.app hosted device link (QR/code); the linking phone supplies the
   API base URL in the claim, matching web/Android TV. Settings still holds an
   advanced server override for direct device flow.
+
+- Apple TV ships a real App Icon (Playarr mark on dark landscape tile) instead
+  of an empty `ASSETCATALOG_COMPILER_APPICON_NAME`, and restores a stored
+  device session on launch when still valid.
 
 - Apple TV pairing gate uses the same SPA DeviceLogin chrome as the parity
   fixture (logo, kicker, “Link this TV”, QR + instructions). Session tokens
@@ -131,6 +138,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   runs; pairing and detail included via real device-link and work-detail nav.
 
 ### Added
+
+- Standard Playarr Web sign-in can open a QR/manual-code login for the
+  selected server. Device codes now show a five-minute countdown and renew
+  automatically at expiry; direct-server and hosted-link codes share the
+  same five-minute lifetime.
 
 - Playarr Web `productSurfaces` module and tests so `tv-vidaa` and standard
   web share the same complete-client routes, shell nav hierarchy, and eight
