@@ -9,6 +9,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Android release `0.2.12` (versionCode 2012): full signed APK without R8
+  resource shrink so browser/TV package installers no longer fail with
+  "problem parsing the package". Clients page still links the latest alias.
+
+
 - Android release `0.2.11` (versionCode 2011) published to playarr.app with a
   proper Playarr release certificate so TV **Check for updates** can install
   signed builds.

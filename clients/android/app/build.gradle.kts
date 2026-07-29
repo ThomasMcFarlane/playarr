@@ -64,15 +64,24 @@ android {
                 storePassword = releaseKeystorePassword.get()
                 keyAlias = releaseKeyAlias.get()
                 keyPassword = releaseKeyPassword.get()
+                // Sideload installers on some Android TV / OEM builds still
+                // expect v1 JAR signing in addition to APK Signature Scheme v2.
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
             }
         }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Sideload installers (TV browsers, file managers) have been
+            // rejecting over-shrunk packages with "problem parsing the
+            // package". Ship a signed release without R8/resource shrink so
+            // the package stays a plain, complete APK; size is still fine
+            // for over-the-air install.
+            isMinifyEnabled = false
+            isShrinkResources = false
             if (releaseSigningReady) {
                 signingConfig = signingConfigs.getByName("playarrRelease")
             }
