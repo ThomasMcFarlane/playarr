@@ -394,13 +394,36 @@ final class TVAppEnvironment {
     /// Household profiles for the current session (`GET /api/v1/users/profiles`).
     /// Caches the last successful list so the profiles screen can still show
     /// faces after a brief reconnect, matching web's saved-profile fallback.
+    /// Times out quickly so Who’s watching never blocks on a hung network
+    /// (empty stage must still show the dashed add tile).
     func loadProfiles() async -> [AvailableProfile] {
+        let cached = cachedProfiles()
         do {
-            let profiles = try await apiClient.listProfiles()
+            let profiles = try await withTimeout(seconds: 4) {
+                try await self.apiClient.listProfiles()
+            }
             cacheProfiles(profiles)
             return profiles
         } catch {
-            return cachedProfiles()
+            return cached
+        }
+    }
+
+    private func withTimeout<T: Sendable>(
+        seconds: Double,
+        operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(for: .seconds(seconds))
+                throw URLError(.timedOut)
+            }
+            guard let first = try await group.next() else {
+                throw URLError(.timedOut)
+            }
+            group.cancelAll()
+            return first
         }
     }
 

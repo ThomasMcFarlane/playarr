@@ -308,7 +308,17 @@ private enum TVAuthRoute: Equatable {
 struct TVPairingGateView: View {
     @Environment(TVAppEnvironment.self) private var environment
     @State private var pairingTask: Task<Void, Never>?
-    @State private var route: TVAuthRoute = .qr
+    /// Default QR. Pass `-PlayarrStartRoute profiles` to open Who’s watching first
+    /// (dev/sim verification of the dashed add tile without re-install thrash).
+    @State private var route: TVAuthRoute = {
+        let args = ProcessInfo.processInfo.arguments
+        if let idx = args.firstIndex(of: "-PlayarrStartRoute"),
+           args.indices.contains(idx + 1),
+           args[idx + 1].lowercased() == "profiles" {
+            return .profiles
+        }
+        return .qr
+    }()
     /// Countdown for the active hosted code (web `device-login-timer`).
     @State private var secondsRemaining: Int = 5 * 60
 
@@ -469,13 +479,15 @@ struct TVProfilesView: View {
     @Environment(TVDisplayPreferences.self) private var displayPreferences
     @State private var profiles: [AvailableProfile] = []
     @State private var loadError: String?
-    @State private var isLoading = true
+    /// Never start true: empty households must show the dashed + tile on first
+    /// paint (web `#profile-add`), not a spinner-only void.
+    @State private var isLoading = false
     @State private var switchingID: UUID?
     @State private var pinProfile: AvailableProfile?
     @State private var pin = ""
     @State private var pinError: String?
     /// Web `selectedId` — drives under-avatar actions (settings / sign out).
-    @State private var selectedID: String = ""
+    @State private var selectedID: String = "add"
     @FocusState private var focusedTarget: TVProfilesFocus?
 
     private var palette: TVAuthPalette {
@@ -514,16 +526,19 @@ struct TVProfilesView: View {
                         .foregroundStyle(palette.ink)
                         .padding(.top, 8 * s)
 
-                    // Web `.profiles-row` top: clamp(252px, 33vh, 350px) → 350.
-                    // After heading band (~162 + kicker + title ≈ 250), remaining ≈ 100.
-                    if isLoading {
-                        ProgressView()
-                            .tint(palette.brandPink)
-                            .padding(.top, 100 * s)
-                    } else {
-                        profileRow(scale: s, avatarSize: size)
-                            .padding(.top, 88 * s)
-                    }
+                    // Always paint the track (including the dashed + add tile).
+                    // Never gate the empty household on isLoading — web shows
+                    // `#profile-add` immediately; a spinner-only empty state
+                    // is what looked like “no circle to add an account”.
+                    profileRow(scale: s, avatarSize: size)
+                        .padding(.top, 88 * s)
+                        .overlay(alignment: .top) {
+                            if isLoading && profiles.isEmpty {
+                                ProgressView()
+                                    .tint(palette.brandPink)
+                                    .padding(.top, 40 * s)
+                            }
+                        }
 
                     if let loadError {
                         Text(loadError)
@@ -584,21 +599,36 @@ struct TVProfilesView: View {
     }
 
     private func profileRow(scale s: CGFloat, avatarSize size: CGFloat) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: trackGap(scale: s)) {
-                ForEach(Array(profiles.enumerated()), id: \.element.id) { index, profile in
-                    profileCard(profile, index: index, scale: s, avatarSize: size)
+        // Fixed height so a horizontal ScrollView cannot collapse to 0 in a
+        // VStack (classic SwiftUI layout trap that hid the add circle entirely).
+        let rowHeight = size + 160 * s
+        return Group {
+            if profiles.count <= 4 {
+                // Centre the track when few faces (web `justify-content: center`).
+                HStack(alignment: .top, spacing: trackGap(scale: s)) {
+                    ForEach(Array(profiles.enumerated()), id: \.element.id) { index, profile in
+                        profileCard(profile, index: index, scale: s, avatarSize: size)
+                    }
+                    addProfileCard(scale: s, avatarSize: size)
                 }
-                // Always present — web `#profile-add` blank dashed avatar.
-                addProfileCard(scale: s, avatarSize: size)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.horizontal, 72 * s)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: trackGap(scale: s)) {
+                        ForEach(Array(profiles.enumerated()), id: \.element.id) { index, profile in
+                            profileCard(profile, index: index, scale: s, avatarSize: size)
+                        }
+                        // Always present — web `#profile-add` blank dashed avatar.
+                        addProfileCard(scale: s, avatarSize: size)
+                    }
+                    // Web `.profiles-track` padding-inline: clamp(72px, 10vw, 190px).
+                    .padding(.horizontal, 190 * s)
+                    .padding(.vertical, 20 * s)
+                }
             }
-            // Web `.profiles-track` padding-inline: clamp(72px, 10vw, 190px).
-            .padding(.horizontal, 190 * s)
-            // Extra room for focus lift (translateY -8) + under-avatar actions.
-            .padding(.top, 20 * s)
-            .padding(.bottom, 48 * s)
-            .frame(minWidth: DesignTokens.Shell.canvasWidth * s, alignment: .center)
         }
+        .frame(height: rowHeight, alignment: .top)
     }
 
     private func profileCard(
@@ -862,18 +892,25 @@ struct TVProfilesView: View {
     }
 
     private func reload() async {
-        isLoading = true
         loadError = nil
+        // Prefer cache first so faces (or empty + tile) appear without waiting
+        // on a slow/hung profiles HTTP call.
+        isLoading = true
+        focusedTarget = focusedTarget ?? .add
         let list = await environment.loadProfiles()
         profiles = list
         isLoading = false
         if list.isEmpty {
-            let usable = await environment.hasUsableSession()
-            if !usable {
-                loadError = nil // blank stage + Sign in tile is the empty state
-            }
             selectedID = "add"
             focusedTarget = .add
+        } else if case .add = focusedTarget {
+            if let current = list.first(where: \.isCurrent) {
+                selectedID = current.id.uuidString
+                focusedTarget = .profile(current.id)
+            } else if let first = list.first {
+                selectedID = first.id.uuidString
+                focusedTarget = .profile(first.id)
+            }
         } else if focusedTarget == nil {
             if let current = list.first(where: \.isCurrent) {
                 selectedID = current.id.uuidString

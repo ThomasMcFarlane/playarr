@@ -107,12 +107,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   large gradient avatars (~244px @ 1080p), status labels (Watching now /
   PIN required / Ready), selected settings + Sign out actions, and an
   always-visible dashed blank “+” add tile labelled **Sign in** /
-  **ADD ANOTHER PROFILE** (empty household no longer hides behind a
-  separate empty state). Selecting the add tile returns to QR pairing.
-  Profiles chrome is bare `TvStageChrome` (logo + theme/language only; no
-  invented Back). Login form pills use web tokens: primary fill
-  `--accent` / text `--on-accent` (dark: near-white on dark), secondary
-  surface + line border + ink-soft (full-width **Sign in manually**).
+  **ADD ANOTHER PROFILE**. Empty households no longer show invented
+  “Link this TV / Sign in manually” pills or a spinner-only void; the
+  dashed add circle paints on first frame (profiles HTTP times out in 4s
+  so a hung network cannot hide it). Profiles chrome is bare
+  `TvStageChrome` (logo + theme/language only). Login form pills use web
+  tokens: primary fill `--accent` / text `--on-accent`, secondary surface
+  + line border + ink-soft (full-width **Sign in manually**).
 
 - Apple TV auth chrome no longer traps focus: Down from theme/language/back
   reaches Sign in manually / Connect (web ProfileAuthLayout Arrow bridge).
