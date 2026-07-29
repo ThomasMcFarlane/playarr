@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV home fixture hero/posters use pre-filtered SPA suite
+  crops (no double greyscale) and search title weight matches SPA ~580.
 - Apple TV home shell geometry aligned to SPA CSS clamps at 1920×1080
   (feature panel 24%/8vw, rails left 38% with track-left-fade, cards 219×123
   16:9, gap 25px).
@@ -154,6 +156,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV home fixture hero/posters use pre-filtered SPA suite
+  crops (no double greyscale) and search title weight matches SPA ~580.
 - Apple TV home shell geometry aligned to SPA CSS clamps at 1920×1080
   (feature panel 24%/8vw, rails left 38% with track-left-fade, cards 219×123
   16:9, gap 25px).
@@ -580,6 +584,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV home fixture hero/posters use pre-filtered SPA suite
+  crops (no double greyscale) and search title weight matches SPA ~580.
 - Apple TV home shell geometry aligned to SPA CSS clamps at 1920×1080
   (feature panel 24%/8vw, rails left 38% with track-left-fade, cards 219×123
   16:9, gap 25px).

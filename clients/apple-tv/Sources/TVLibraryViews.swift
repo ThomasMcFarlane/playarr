@@ -136,61 +136,65 @@ struct TVHomeView: View {
     private func heroBackdrop(hero: Work?, size: CGSize) -> some View {
         ZStack(alignment: .leading) {
             DesignTokens.Color.backgroundBase
-            // Prefer live artwork; fall back to suite fixture hero for offline parity.
-            if let hero, let url = imageURL(for: hero, prefer: .backdrop) {
+            // Fixture hero is a lossless crop of the already-filtered SPA
+            // key art — display as-is (no re-greyscale). Live API art still
+            // gets the CSS-equivalent filter chain.
+            let liveURL = hero.flatMap { imageURL(for: $0, prefer: .backdrop) }
+            if let fixture = TVParityArtwork.heroImage,
+               TVParityLaunch.requestedScreen != nil || liveURL == nil {
+                fixture
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size.width * 0.58, height: size.height)
+                    .clipped()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            } else if let url = liveURL {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
-                        heroImageLayer(image, size: size)
+                        // Web `.tv-key-art`: grayscale(1) contrast(0.88) brightness(1.1)
+                        // and darker variant contrast(0.82) brightness(0.6) in places.
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: size.width * 0.58, height: size.height)
+                            .clipped()
+                            .saturation(0)
+                            .contrast(0.88)
+                            .brightness(0.05)
+                            .opacity(0.9)
+                            .mask(
+                                LinearGradient(
+                                    colors: [.black, .black, .clear],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
                     default:
-                        if let fixture = TVParityArtwork.heroImage {
-                            heroImageLayer(fixture, size: size)
-                        }
+                        EmptyView()
                     }
                 }
-            } else if let fixture = TVParityArtwork.heroImage {
-                heroImageLayer(fixture, size: size)
             }
-            // Stage wash
+            // Soft stage washes (web key-art overlays).
             LinearGradient(
                 colors: [
-                    DesignTokens.Color.backgroundElevated.opacity(0.94),
+                    DesignTokens.Color.backgroundElevated.opacity(0.55),
                     .clear,
                 ],
                 startPoint: .leading,
-                endPoint: UnitPoint(x: 0.35, y: 0.5)
+                endPoint: UnitPoint(x: 0.42, y: 0.5)
             )
             LinearGradient(
                 colors: [
-                    DesignTokens.Color.backgroundBase,
+                    DesignTokens.Color.backgroundBase.opacity(0.35),
                     .clear,
-                    DesignTokens.Color.backgroundBase.opacity(0.9),
+                    DesignTokens.Color.backgroundBase.opacity(0.75),
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .opacity(0.55)
         }
         .frame(width: size.width, height: size.height)
-    }
-
-    private func heroImageLayer(_ image: Image, size: CGSize) -> some View {
-        image
-            .resizable()
-            .scaledToFill()
-            .frame(width: size.width * 0.62, height: size.height * 1.06)
-            .clipped()
-            .saturation(0)
-            .contrast(0.85)
-            .brightness(-0.12)
-            .opacity(0.78)
-            .mask(
-                LinearGradient(
-                    colors: [.black, .black, .clear],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
     }
 
     private func rail(title: String, works: [Work]) -> some View {
@@ -337,7 +341,6 @@ struct TVSearchView: View {
                 let left = DesignTokens.Shell.searchContentLeft
                 let copyWidth = min(DesignTokens.Shell.searchCopyWidth, geo.size.width * 0.31)
                 let railWidth = geo.size.width * DesignTokens.Shell.searchRailWidthFraction
-                let railLeading = geo.size.width - railWidth
 
                 ZStack(alignment: .topLeading) {
                     // Right rail surface (frosted gradient, 62% width).
@@ -376,8 +379,9 @@ struct TVSearchView: View {
                                         )
                                     )
                             )
+                        // Web h1: weight ~580, size ~34 — AvenirNext-Medium is closer than DemiBold.
                         Text("Search")
-                            .font(TVTheme.font(size: DesignTokens.Shell.searchTitleSize, weight: .semibold))
+                            .font(TVTheme.font(size: DesignTokens.Shell.searchTitleSize, weight: .medium))
                             .tracking(-1.5)
                             .foregroundStyle(DesignTokens.Color.textPrimary)
                     }
