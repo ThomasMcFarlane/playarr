@@ -461,7 +461,7 @@ struct TVWorkDetailView: View {
                     .font(.system(size: 11, weight: .bold))
             } else {
                 // SPA playback-settings leading glyph (equaliser bars).
-                Image(systemName: "slider.horizontal.3")
+                Image(systemName: "square.grid.2x2.fill")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(DesignTokens.Color.brandPrimary)
             }
