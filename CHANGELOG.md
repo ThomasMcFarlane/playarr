@@ -60,6 +60,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   scale 1.02 + accent border, back scale 1.1 + ink invert, secondary pills
   scale 1.055, profile cards lift −8px / scale 1.045 with pink ring.
 
+- Apple TV auth backdrop matches web `.login-profile-page`: fixed **900px**
+  rose radial at 50%/50% (was ~34% of screen, too small) plus 145° linear
+  surface→bg at 72%. Profiles page uses the softer 34% stop wash.
+
 - Apple TV pairing gate always uses the playarr.app hosted broker (even when
   a relay/server URL is remembered), so the on-screen visit line is
   `https://playarr.app/link` and never a `v4-…relay.playarr.app` Host.

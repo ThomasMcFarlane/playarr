@@ -98,6 +98,74 @@ final class TVDisplayPreferences {
     var languageTriggerLabel: String { languagePreference.menuLabel }
 }
 
+/// Web auth stage wash — measured from `.login-profile-page` / `.profiles-page`.
+enum TVAuthBackgroundStyle {
+    /// `.login-profile-page`: `circle 900px at 50% 50%` → transparent 100%.
+    case login
+    /// `.profiles-page`: `circle at 50% 48%` → transparent 34%.
+    case profiles
+}
+
+/// Full-bleed auth backdrop matching web layered gradients 1:1 @ 1920×1080.
+struct TVAuthStageBackground: View {
+    let palette: TVAuthPalette
+    var style: TVAuthBackgroundStyle = .login
+
+    var body: some View {
+        GeometryReader { geo in
+            // Scale fixed CSS px radii with the design canvas height.
+            let scale = geo.size.height / DesignTokens.Shell.canvasHeight
+            // Farthest-corner radius for percentage-based CSS radials.
+            let farthestCorner = hypot(geo.size.width / 2, geo.size.height / 2)
+
+            ZStack {
+                // CSS: linear-gradient(145deg, var(--surface), var(--bg) 72%)
+                LinearGradient(
+                    stops: [
+                        .init(color: palette.surface, location: 0),
+                        .init(color: palette.bg, location: 0.72),
+                        .init(color: palette.bg, location: 1),
+                    ],
+                    // 145° clockwise from up ≈ down-right on screen.
+                    startPoint: UnitPoint(x: 0.18, y: 0.0),
+                    endPoint: UnitPoint(x: 0.82, y: 1.0)
+                )
+
+                // Rose glow — login uses a fixed 900 CSS-px radius; profiles
+                // uses farthest-corner with a 34% transparency stop.
+                switch style {
+                case .login:
+                    // `radial-gradient(circle 900px at 50% 50%, #cf3157 13%, transparent 100%)`
+                    RadialGradient(
+                        colors: [
+                            palette.brandPink.opacity(0.13),
+                            Color.clear,
+                        ],
+                        center: UnitPoint(x: 0.50, y: 0.50),
+                        startRadius: 0,
+                        endRadius: 900 * scale
+                    )
+                case .profiles:
+                    // `radial-gradient(circle at 50% 48%, #cf3157 13%, transparent 34%)`
+                    RadialGradient(
+                        gradient: Gradient(stops: [
+                            .init(color: palette.brandPink.opacity(0.13), location: 0),
+                            .init(color: Color.clear, location: 0.34),
+                            .init(color: Color.clear, location: 1),
+                        ]),
+                        center: UnitPoint(x: 0.50, y: 0.48),
+                        startRadius: 0,
+                        endRadius: farthestCorner
+                    )
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+}
+
 /// Auth stage palette that flips with `TVDisplayPreferences.resolvedTheme`
 /// (web `:root` light vs `[data-theme="dark"]`).
 struct TVAuthPalette {

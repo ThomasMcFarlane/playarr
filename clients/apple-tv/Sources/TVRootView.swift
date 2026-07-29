@@ -454,16 +454,7 @@ struct TVProfilesView: View {
                 geo.size.height / DesignTokens.Shell.canvasHeight
             )
             ZStack {
-                palette.bg
-                RadialGradient(
-                    colors: [
-                        palette.brandPink.opacity(palette.isDark ? 0.13 : 0.10),
-                        .clear,
-                    ],
-                    center: UnitPoint(x: 0.50, y: 0.42),
-                    startRadius: 20 * s,
-                    endRadius: min(geo.size.width, geo.size.height) * 0.34
-                )
+                TVAuthStageBackground(palette: palette, style: .profiles)
 
                 VStack(spacing: 0) {
                     Text("PROFILES")
@@ -747,16 +738,8 @@ struct TVDeviceLoginChrome: View {
             let s = min(scaleX, scaleY)
 
             ZStack {
-                palette.bg
-                RadialGradient(
-                    colors: [
-                        palette.brandPink.opacity(palette.isDark ? 0.13 : 0.10),
-                        .clear,
-                    ],
-                    center: UnitPoint(x: 0.50, y: 0.48),
-                    startRadius: 20 * s,
-                    endRadius: min(geo.size.width, geo.size.height) * 0.34
-                )
+                // Web `.login-profile-page`: 900px rose radial + 145° surface→bg.
+                TVAuthStageBackground(palette: palette, style: .login)
 
                 // Centred auth panel (web `.profile-auth-panel` w=560).
                 VStack(spacing: 0) {
