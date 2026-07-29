@@ -33,6 +33,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV movie-detail rail keeps SPA x≈883 for Chapters/Cast by
+  clipping overflow chapter rows (horizontal scroll) and adding measured
+  cast-track top inset; cast fixtures refreshed from SPA crops. Honest
+  suite movie AE 8.78% → 7.24%.
 - Apple TV parity player chrome tracks ui-tv tokens (spacing xl/md, raised
   progress track, 8px-radius transport buttons) and measured SPA y positions
   (title ≈912, progress ≈956 w650); honest suite player AE 0.34% → 0.25%.

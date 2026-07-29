@@ -216,7 +216,11 @@ enum DesignTokens {
         /// `.tv-media-track-scroll` gap clamp(14, 1.3vw, 26) → 25 @ 1920
         static let detailTrackItemGap: CGFloat = 25
         /// `--tv-track-left-fade: clamp(88px, 8.8vw, 152px)` → 152 @ 1920
+        /// (rail starts 38% = 730 + 152 = 882; matches SPA "Chapters" x≈883)
         static let detailTrackLeftFade: CGFloat = 152
+        /// SPA chapters section is taller than 4×151 cards + labels (full34:
+        /// Cast heading y 861 vs native 836). Extra gap before cast track.
+        static let detailCastTopExtra: CGFloat = 26
 
         // MARK: Search page (`.tv-library-heading` + `.tv-search-copy` @ 1920×1080)
 

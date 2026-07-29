@@ -309,12 +309,16 @@ struct TVWorkDetailView: View {
                     startPoint: .leading,
                     endPoint: .trailing
                 )
+                // Constrain rails to rail width so wide chapter HStacks scroll
+                // rightward instead of expanding left and shifting SPA x≈883.
                 detailSideRails
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, size.height * DesignTokens.Shell.detailRailContentTopFraction)
                     .padding(.leading, DesignTokens.Shell.detailTrackLeftFade)
                     .padding(.trailing, 36)
             }
-            .frame(width: railW, height: size.height)
+            .frame(width: railW, height: size.height, alignment: .topLeading)
+            .clipped()
         }
         .frame(width: size.width, height: size.height)
     }
@@ -328,31 +332,34 @@ struct TVWorkDetailView: View {
                 Text("7 scene markers")
                     .font(TVTheme.font(size: 11, weight: .medium))
                     .foregroundStyle(DesignTokens.Color.textDisabled)
-                HStack(spacing: DesignTokens.Shell.detailTrackItemGap) {
-                    ForEach(0..<4, id: \.self) { n in
-                        let minutes = n * 15
-                        VStack(alignment: .leading, spacing: 8) {
-                            // SPA `.tv-episode-art` 16:9 dark panel, index bottom-right.
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(DesignTokens.Color.backgroundRaised.opacity(0.85))
-                                .frame(
-                                    width: DesignTokens.Shell.detailChapterCardWidth,
-                                    height: DesignTokens.Shell.detailChapterCardHeight
-                                )
-                                .overlay(alignment: .bottomTrailing) {
-                                    Text(String(format: "%02d", n + 1))
-                                        .font(TVTheme.font(size: 16, weight: .semibold))
+                // SPA `.tv-media-track-scroll` is overflow-x; keep leading edge fixed.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DesignTokens.Shell.detailTrackItemGap) {
+                        ForEach(0..<4, id: \.self) { n in
+                            let minutes = n * 15
+                            VStack(alignment: .leading, spacing: 8) {
+                                // SPA `.tv-episode-art` 16:9 dark panel, index bottom-right.
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(DesignTokens.Color.backgroundRaised.opacity(0.85))
+                                    .frame(
+                                        width: DesignTokens.Shell.detailChapterCardWidth,
+                                        height: DesignTokens.Shell.detailChapterCardHeight
+                                    )
+                                    .overlay(alignment: .bottomTrailing) {
+                                        Text(String(format: "%02d", n + 1))
+                                            .font(TVTheme.font(size: 16, weight: .semibold))
+                                            .foregroundStyle(DesignTokens.Color.textDisabled)
+                                            .padding(.trailing, 14)
+                                            .padding(.bottom, 12)
+                                    }
+                                HStack(spacing: 6) {
+                                    Text("\(minutes):00")
                                         .foregroundStyle(DesignTokens.Color.textDisabled)
-                                        .padding(.trailing, 14)
-                                        .padding(.bottom, 12)
+                                    Text("Chapter \(n + 1)")
+                                        .foregroundStyle(DesignTokens.Color.textSecondary)
                                 }
-                            HStack(spacing: 6) {
-                                Text("\(minutes):00")
-                                    .foregroundStyle(DesignTokens.Color.textDisabled)
-                                Text("Chapter \(n + 1)")
-                                    .foregroundStyle(DesignTokens.Color.textSecondary)
+                                .font(TVTheme.font(size: 11, weight: .medium))
                             }
-                            .font(TVTheme.font(size: 11, weight: .medium))
                         }
                     }
                 }
@@ -364,27 +371,30 @@ struct TVWorkDetailView: View {
                 Text("8 people")
                     .font(TVTheme.font(size: 11, weight: .medium))
                     .foregroundStyle(DesignTokens.Color.textDisabled)
-                HStack(spacing: DesignTokens.Shell.detailTrackItemGap) {
-                    ForEach(0..<4, id: \.self) { i in
-                        Group {
-                            if let face = TVParityArtwork.castImage(index: i) {
-                                face
-                                    .resizable()
-                                    .interpolation(.high)
-                                    // SPA `.tv-person-art img { object-position: center 20% }`
-                                    .scaledToFill()
-                            } else {
-                                DesignTokens.Color.backgroundRaised.opacity(0.85)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DesignTokens.Shell.detailTrackItemGap) {
+                        ForEach(0..<4, id: \.self) { i in
+                            Group {
+                                if let face = TVParityArtwork.castImage(index: i) {
+                                    face
+                                        .resizable()
+                                        .interpolation(.high)
+                                        // SPA `.tv-person-art img { object-position: center 20% }`
+                                        .scaledToFill()
+                                } else {
+                                    DesignTokens.Color.backgroundRaised.opacity(0.85)
+                                }
                             }
+                            .frame(
+                                width: DesignTokens.Shell.detailCastTileSize,
+                                height: DesignTokens.Shell.detailCastTileSize
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
-                        .frame(
-                            width: DesignTokens.Shell.detailCastTileSize,
-                            height: DesignTokens.Shell.detailCastTileSize
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                 }
             }
+            .padding(.top, DesignTokens.Shell.detailCastTopExtra)
         }
     }
 
