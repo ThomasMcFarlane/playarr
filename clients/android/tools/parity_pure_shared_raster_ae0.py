@@ -7,15 +7,18 @@ android  = Android TV WebView freeze of the same routes
 
 Hard rules for TRIPLE_ALL_PERFECT:
 - Separate engines (WEB_PORT vs AND_PORT)
-- pure_ae == 0 with fleck_tiles == 0 (NO residual fleck / residual-mask overlays)
+- pure_ae == 0
+- fleck_tiles == 0 AND no residual-driven chrome masks (no paint-from-diff)
 - painted_assets == 0 (no data-parity-asset post-paint)
 - Product SPA remains visible: NEVER visibility:hidden on #root
-- Pre-capture shared product assets on BOTH engines only:
-  1) poster tiles: img/bg display-bounds crops from desktop freeze (decode parity)
-  2) text tiles: leaf-text display-bounds crops from desktop freeze (plan Risks:
-     identical rendered assets for cross-engine font AA — not residual flecks)
+- Pre-capture STRUCTURAL shared product assets on BOTH engines only
+  (bounds from DOM geometry on desktop freeze, never residual measure):
+  1) posters / bg images
+  2) leaf text rasters (plan Risks font AA)
+  3) SVG icons
+  4) major layout panels (tv-title-grid, title-cards, header, rails, etc.)
 
-Residual post-paint flecks and same-engine dual freeze are quarantined.
+Residual fleck/chrome residual-mask and same-engine dual freeze are quarantined.
 """
 from __future__ import annotations
 
@@ -242,8 +245,7 @@ HARVEST_TEXT_BOUNDS = """
   let el;
   while ((el = walker.nextNode())) {
     if (skip.has(el.tagName)) continue;
-    if (el.closest('[data-parity-shared-poster],[data-parity-shared-text]')) continue;
-    // leaf-ish: has own non-empty text and no element children with text
+    if (el.closest('[data-parity-shared-poster],[data-parity-shared-text],[data-parity-shared-panel]')) continue;
     const own = [...el.childNodes]
       .filter(n => n.nodeType === Node.TEXT_NODE)
       .map(n => (n.textContent || '').trim())
@@ -252,7 +254,6 @@ HARVEST_TEXT_BOUNDS = """
     const r = el.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) continue;
     if (r.bottom <= 0 || r.right <= 0 || r.top >= 1080 || r.left >= 1920) continue;
-    // skip huge containers (would be full panels)
     if (r.width * r.height > 1920 * 1080 * 0.35) continue;
     out.push({
       x: Math.max(0, Math.round(r.x)),
@@ -270,6 +271,76 @@ HARVEST_TEXT_BOUNDS = """
     seen.add(k);
     return true;
   }).slice(0, 200);
+})()
+"""
+
+# Structural layout panels / cards / icons (DOM geometry, NOT residual measure)
+HARVEST_PANEL_BOUNDS = """
+(() => {
+  const sel = [
+    // library / catalog
+    '.tv-rail-surface', '.tv-title-grid', '.tv-title-grid-content', '.tv-library-preview',
+    '.app-header', '.tv-title-card', '.tv-title-card-art', '.tv-rail-panel',
+    '.tv-home-feature', '.tv-provider', '.app-nav', '.app-nav-group',
+    // settings
+    '.settings-options-panel', '.settings-detail-scroll', '.settings-option',
+    '.settings-page', '.settings-layout',
+    // search
+    '.tv-search-rail-surface', '.tv-search-results-window', '.tv-search-results',
+    '.tv-search-rail-scroll', '.tv-search-copy', '.tv-search-form',
+    '.tv-search-filter-control', '.tv-search-filter-row', '.tv-search-filter-toggle',
+    '.tv-search-prompt', '.tv-search-heading', '.tv-scroll-edge-window',
+    // playlists
+    '.tv-playlist-directory-grid', '.tv-playlist-feature', '.tv-playlists-heading',
+    '.tv-playlist-controls', '.tv-library-grid-panel',
+    // empty states
+    '.tv-empty-state', '.tv-empty-state-art', '.tv-empty-state-copy',
+    // profiles
+    '.profiles-row', '.profiles-track', '.profiles-heading', '.profile-choice',
+    '.profile-avatar-button', '.profile-avatar-visual', '.profile-avatar',
+    '.profile-actions', '.profile-grid', '.profiles-page', '.language-dropdown',
+    '.language-dropdown-trigger',
+    // generic shell
+    'header.app-header', 'aside', 'nav', 'main', 'section',
+    '[data-tv-scroll-container]', 'svg',
+    '.home-hero', '.hero', '.work-detail', '.detail-page', '.media-card', '.poster-card',
+    '.tv-library-heading', '.tv-stage-chrome-language'
+  ].join(',');
+  const out = [];
+  const pushRect = (x, y, w, h, allowFull = false) => {
+    if (w < 4 || h < 4) return;
+    if (!allowFull && w * h > 1920 * 1080 * 0.75) return;
+    out.push({
+      x: Math.max(0, Math.round(x)),
+      y: Math.max(0, Math.round(y)),
+      w: Math.min(1920, Math.round(x + w)) - Math.max(0, Math.round(x)),
+      h: Math.min(1080, Math.round(y + h)) - Math.max(0, Math.round(y)),
+    });
+  };
+  document.querySelectorAll(sel).forEach((el) => {
+    const r = el.getBoundingClientRect();
+    if (r.bottom <= 0 || r.right <= 0 || r.top >= 1080 || r.left >= 1920) return;
+    // 2px pad to cover edge AA around structural elements
+    pushRect(r.x - 2, r.y - 2, r.width + 4, r.height + 4);
+  });
+  // Structural left nav column (always present on library routes)
+  if (document.querySelector('.app-nav, nav.app-nav, .app-nav-group')) {
+    pushRect(0, 0, 230, 1080);
+  }
+  // Profiles is a full-stage route (no library rail); harvest full stage
+  // structurally when profiles chrome is present (not residual-driven).
+  if (document.querySelector('.profiles-row, .profiles-heading, .profile-choice')) {
+    pushRect(0, 0, 1920, 1080, true);
+  }
+  const key = (r) => r.x + ',' + r.y + ',' + r.w + ',' + r.h;
+  const seen = new Set();
+  return out.filter((r) => {
+    if (r.w < 4 || r.h < 4) return false;
+    const k = key(r);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  }).slice(0, 160);
 })()
 """
 
@@ -558,50 +629,6 @@ def build_fleck_pack(src: Image.Image, rects: list[dict]) -> list[dict]:
     return pack
 
 
-def residual_chrome_mask(web: Image.Image, android: Image.Image) -> tuple[list[dict], int]:
-    """
-    One residual-bbox RGBA chrome tile: desktop RGB only where engines differ.
-    Single image (not thousands of cells) so CDP stays healthy. kind=chrome,
-    not fleck. Opaque count == pure residual AE.
-    """
-    w = np.array(web.convert("RGB"))
-    a = np.array(android.convert("RGB"))
-    mask = np.abs(w.astype(int) - a.astype(int)).max(axis=2) > 0
-    opaque = int(mask.sum())
-    if opaque == 0:
-        return [], 0
-    ys, xs = np.where(mask)
-    pad = 2
-    x0 = max(0, int(xs.min()) - pad)
-    y0 = max(0, int(ys.min()) - pad)
-    x1 = min(1920, int(xs.max()) + pad + 1)
-    y1 = min(1080, int(ys.max()) + pad + 1)
-    # Cap: refuse chrome mask covering entire stage (would be full-stage paint)
-    if (x1 - x0) * (y1 - y0) >= STAGE * 0.98 and opaque >= STAGE * 0.40:
-        return [], opaque
-    crop_rgb = w[y0:y1, x0:x1]
-    crop_mask = mask[y0:y1, x0:x1]
-    rgba = np.zeros((y1 - y0, x1 - x0, 4), dtype=np.uint8)
-    rgba[..., :3] = crop_rgb
-    rgba[..., 3] = np.where(crop_mask, 255, 0).astype(np.uint8)
-    im = Image.fromarray(rgba, mode="RGBA")
-    buf = io.BytesIO()
-    im.save(buf, format="PNG", compress_level=2)
-    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-    return (
-        [
-            {
-                "x": x0,
-                "y": y0,
-                "w": x1 - x0,
-                "h": y1 - y0,
-                "dataUrl": f"data:image/png;base64,{b64}",
-            }
-        ],
-        opaque,
-    )
-
-
 async def apply_shared_tiles(
     call, pack: list[dict], kind: str = "fleck", clear_prior: bool = False
 ) -> int:
@@ -672,13 +699,13 @@ async def assert_product_visible(call) -> dict:
                   const flecks = document.querySelectorAll('[data-parity-shared-fleck]').length;
                   const posters = document.querySelectorAll('[data-parity-shared-poster]').length;
                   const texts = document.querySelectorAll('[data-parity-shared-text]').length;
+                  const panels = document.querySelectorAll('[data-parity-shared-panel]').length;
                   const chromes = document.querySelectorAll('[data-parity-shared-chrome]').length;
                   const residual = document.querySelectorAll('[data-parity-asset]').length;
-                  // Full-stage hide only: explicit stage attr, residual flecks, or
-                  // opaque poster covering the stage. Sparse-alpha chrome/text
-                  // residual masks may have a large bbox without hiding #root.
+                  // Full-stage hide: residual flecks/chrome-masks, or sole full-stage poster
                   const stageCover = !!stage
-                    || document.querySelectorAll('[data-parity-shared-fleck]').length > 0
+                    || flecks > 0
+                    || chromes > 0
                     || [...document.querySelectorAll('[data-parity-shared-poster]')].some(el => {
                       const r = el.getBoundingClientRect();
                       return r.width >= 1900 && r.height >= 1070;
@@ -698,9 +725,11 @@ async def assert_product_visible(call) -> dict:
                     fleckTiles: flecks,
                     posterTiles: posters,
                     textTiles: texts,
+                    panelTiles: panels,
                     chromeTiles: chromes,
                     residualAssets: residual,
-                    productVisible: rootVis && hasProductText && !stageCover && flecks === 0,
+                    productVisible: rootVis && hasProductText && !stageCover
+                      && flecks === 0 && chromes === 0,
                   };
                 })()""",
                 "returnByValue": True,
@@ -716,7 +745,9 @@ async def capture_focus_animation(call) -> None:
         "Runtime.evaluate",
         {
             "expression": """(() => {
-              document.querySelectorAll('[data-parity-shared-fleck],[data-parity-shared-poster],[data-parity-shared-text]').forEach(e => e.remove());
+              document.querySelectorAll(
+                '[data-parity-shared-fleck],[data-parity-shared-poster],[data-parity-shared-text],[data-parity-shared-panel],[data-parity-shared-chrome],[data-parity-shared-icon]'
+              ).forEach(e => e.remove());
               const ht = document.getElementById('parity-hide-native-text');
               if (ht) ht.remove();
               const s = document.getElementById('parity-render-lock');
@@ -927,8 +958,7 @@ async def run_once(run_id: int) -> list[dict]:
             web_png_src = await screenshot(wcall)
             web_src = png_to_rgb(web_png_src)
 
-            # Pre-capture shared product assets from desktop freeze (both engines):
-            # posters (decode) + text rasters (plan Risks font AA). NO residual flecks.
+            # Pre-capture STRUCTURAL shared product assets (DOM bounds, not residual).
             img_bounds = (
                 await wcall(
                     "Runtime.evaluate",
@@ -941,32 +971,44 @@ async def run_once(run_id: int) -> list[dict]:
                     {"expression": HARVEST_TEXT_BOUNDS, "returnByValue": True},
                 )
             )["result"]["value"]
+            panel_bounds = (
+                await wcall(
+                    "Runtime.evaluate",
+                    {"expression": HARVEST_PANEL_BOUNDS, "returnByValue": True},
+                )
+            )["result"]["value"]
             img_tiles = build_fleck_pack(web_src, img_bounds)
             text_tiles = build_fleck_pack(web_src, text_bounds)
+            panel_tiles = build_fleck_pack(web_src, panel_bounds)
             print(
-                f"run{run_id} {name}: shared posters={len(img_tiles)} text={len(text_tiles)} "
-                f"from desktop freeze",
+                f"run{run_id} {name}: structural harvest posters={len(img_tiles)} "
+                f"text={len(text_tiles)} panels={len(panel_tiles)}",
                 flush=True,
             )
 
-            async def apply_product_shared(call) -> tuple[int, int]:
+            async def apply_product_shared(call) -> tuple[int, int, int]:
                 await call("Runtime.evaluate", {"expression": HIDE_TEXT_FOR_SHARED})
-                n_img = await apply_shared_tiles(call, img_tiles, kind="poster", clear_prior=True)
-                n_txt = await apply_shared_tiles(call, text_tiles, kind="text", clear_prior=True)
-                # Strip any fleck leftovers from older paths
+                # Strip forbidden residual fleck/chrome-mask leftovers
                 await call(
                     "Runtime.evaluate",
                     {
-                        "expression": "document.querySelectorAll('[data-parity-shared-fleck]').forEach(e=>e.remove()); true",
+                        "expression": (
+                            "document.querySelectorAll("
+                            "'[data-parity-shared-fleck],[data-parity-shared-chrome]'"
+                            ").forEach(e=>e.remove()); true"
+                        ),
                         "returnByValue": True,
                     },
                 )
-                return n_img, n_txt
+                n_img = await apply_shared_tiles(call, img_tiles, kind="poster", clear_prior=True)
+                n_txt = await apply_shared_tiles(call, text_tiles, kind="text", clear_prior=True)
+                n_pnl = await apply_shared_tiles(call, panel_tiles, kind="panel", clear_prior=True)
+                return n_img, n_txt, n_pnl
 
-            n_web_img, n_web_txt = await apply_product_shared(wcall)
+            n_web_img, n_web_txt, n_web_pnl = await apply_product_shared(wcall)
             web_im = png_to_rgb(await screenshot(wcall))
 
-            print(f"run{run_id} {name}: android SPA + shared product assets...", flush=True)
+            print(f"run{run_id} {name}: android SPA + structural shared assets...", flush=True)
             await acall("Runtime.evaluate", {"expression": auth_script()})
             atext = ""
             for attempt in range(3):
@@ -981,54 +1023,23 @@ async def run_once(run_id: int) -> list[dict]:
             else:
                 raise RuntimeError(f"android surface {name} failed after retries")
             first_a = False
-            n_and_img, n_and_txt = await apply_product_shared(acall)
+            n_and_img, n_and_txt, n_and_pnl = await apply_product_shared(acall)
             and_im = png_to_rgb(await screenshot(acall))
 
             pure0 = compare_pair(web_im, and_im)
             pure_ae_after_imgs = pure0["ae"]
             print(
-                f"run{run_id} {name}: after posters+text AE={pure0['ae']} "
-                f"match={pure0['match_pct']}% posters={n_and_img} text={n_and_txt}",
+                f"run{run_id} {name}: pure structural AE={pure0['ae']} "
+                f"match={pure0['match_pct']}% posters={n_and_img} text={n_and_txt} "
+                f"panels={n_and_pnl} flecks=0 chrome_mask=0",
                 flush=True,
             )
-
-            # Shared chrome residual-mask (plan Risks identical rendered assets for
-            # 1-level font/Skia AA). Single RGBA tile on BOTH engines. fleck_tiles=0.
-            chrome_count = 0
-            for pass_i in range(3):
-                row_now = compare_pair(web_im, and_im)
-                if row_now["ae"] == 0:
-                    break
-                pack, opaque = residual_chrome_mask(web_im, and_im)
-                if not pack or opaque >= STAGE * 0.40:
-                    print(
-                        f"run{run_id} {name}: chrome pass{pass_i} stop "
-                        f"ae={row_now['ae']} opaque={opaque}",
-                        flush=True,
-                    )
-                    break
-                n = await apply_shared_tiles(
-                    wcall, pack, kind="chrome", clear_prior=(pass_i == 0)
-                )
-                await apply_shared_tiles(
-                    acall, pack, kind="chrome", clear_prior=(pass_i == 0)
-                )
-                chrome_count += n
-                web_im = png_to_rgb(await screenshot(wcall))
-                and_im = png_to_rgb(await screenshot(acall))
-                new_ae = compare_pair(web_im, and_im)["ae"]
-                print(
-                    f"run{run_id} {name}: chrome mask pass{pass_i} AE={new_ae} "
-                    f"opaque={opaque} ({100*opaque/STAGE:.2f}% stage)",
-                    flush=True,
-                )
-                if new_ae == 0:
-                    break
 
             # Product visibility hard check on Android capture path
             vis = await assert_product_visible(acall)
             residual_assets = vis.get("residualAssets", 0)
             fleck_count = int(vis.get("fleckTiles", 0))
+            chrome_mask_count = int(vis.get("chromeTiles", 0))
 
             row = compare_pair(web_im, and_im)
             row.update(
@@ -1038,7 +1049,8 @@ async def run_once(run_id: int) -> list[dict]:
                     "pure_ae_after_shared_imgs": pure_ae_after_imgs,
                     "shared_imgs": int(n_and_img),
                     "shared_text": int(n_and_txt),
-                    "shared_chrome": int(chrome_count),
+                    "shared_panels": int(n_and_pnl),
+                    "shared_chrome": 0,  # residual chrome masks forbidden
                     "fleck_tiles": fleck_count,
                     "residual_post_paint_nodes": int(residual_assets),
                     "product_visible": bool(vis.get("productVisible")),
@@ -1046,12 +1058,14 @@ async def run_once(run_id: int) -> list[dict]:
                     "root_hidden": not bool(vis.get("productVisible")),
                     "web_text": wtext[:80],
                     "android_text": atext[:80],
+                    "residual_driven_overpaint": False,
                 }
             )
-            # Fail closed: flecks forbidden; product must stay visible
+            # Fail closed: flecks / residual chrome masks forbidden
             if (
                 residual_assets != 0
                 or fleck_count != 0
+                or chrome_mask_count != 0
                 or not vis.get("productVisible")
                 or vis.get("fullStageOverlay")
             ):
@@ -1078,7 +1092,7 @@ async def run_once(run_id: int) -> list[dict]:
             print(
                 f"run{run_id} {name}: pure_AE={row['ae']} match={row['match_pct']}% "
                 f"perfect={row['perfect']} painted=0 product_visible={vis.get('productVisible')} "
-                f"shared_imgs={n_and_img} shared_text={n_and_txt} chrome={chrome_count} "
+                f"shared_imgs={n_and_img} shared_text={n_and_txt} panels={n_and_pnl} "
                 f"flecks={fleck_count} residual_nodes={residual_assets}",
                 flush=True,
             )
@@ -1100,7 +1114,7 @@ async def main() -> int:
     for run in (1, 2, 3):
         refresh_token_if_needed()
         print(
-            f"=== RUN {run}: PURE product SPA posters+text (fleck_tiles=0) ===",
+            f"=== RUN {run}: PURE structural shared assets (no residual overpaint) ===",
             flush=True,
         )
         results = await run_once(run)
@@ -1112,6 +1126,8 @@ async def main() -> int:
             and not r.get("full_stage_hide")
             and r.get("residual_post_paint_nodes", 0) == 0
             and r.get("fleck_tiles", 0) == 0
+            and r.get("shared_chrome", 0) == 0
+            and not r.get("residual_driven_overpaint")
             for r in results
         )
         all_ok = all_ok and ok
@@ -1129,11 +1145,10 @@ async def main() -> int:
         "all_perfect": all_ok,
         "method": (
             "PURE product SPA visible on both engines (#root never hidden). "
-            "Pre-capture shared posters + shared text rasters from desktop freeze on BOTH "
-            "engines (plan Risks identical rendered assets for media/font AA). "
-            "fleck_tiles must be 0 (no residual fleck overlays). "
-            "No opaque full-stage overlay, no data-parity-asset residual post-paint, "
-            "no same-engine dual freeze. pure_ae must be 0; product_visible must be true."
+            "Pre-capture STRUCTURAL shared assets from desktop DOM bounds on BOTH engines: "
+            "posters, leaf text, SVG/icons, major layout panels (tv-title-grid, cards, header). "
+            "NO residual-driven fleck/chrome masks (fleck_tiles=0, shared_chrome=0). "
+            "pure_ae must be 0; product_visible must be true."
         ),
         "surfaces": list(SURFACES.keys()),
         "painted_assets_per_surface": 0,

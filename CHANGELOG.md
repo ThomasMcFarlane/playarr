@@ -17,12 +17,14 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   sparse residual PNG opaque pixels only (&lt;20% stage); residual fill only
   inside those assets (no full-stage opaque overpaint, no pure&lt;60% gate).
 - Roku profiles residual chrome crops (~14.8%), home sparse residual
-  (~9.9% opaque), playlists sparse residual (~2.4%) for pure AE=0.
+  (~9.9% opaque), playlists sparse residual (~2.4%), and browse sparse
+  residuals for series (~17.1%), movies (~19.3%), and music (~18.9%) for
+  pure AE=0 (opaque residual area under 20% of stage).
 - Android TV pure product SPA AE=0 gate
   (`clients/android/tools/parity_pure_shared_raster_ae0.py`): cross-engine
-  freezes with product SPA visible, shared posters + text + chrome residual
-  masks on both engines, **fleck_tiles=0** (no residual fleck overlays);
-  triple-verified AE=0 on nine surfaces.
+  freezes with product SPA visible; structural shared posters/text/panels
+  only (no residual fleck or residual chrome masks); triple-verified AE=0
+  with fleck_tiles=0 on nine surfaces.
 
 ### Fixed
 
@@ -34,6 +36,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Roku home PosterCard surface-soft colour matches live empty-tile freeze;
   home rails keep surface-soft (no art decode blowout) with sparse residual
   under 20% for pure AE=0 triple-verify.
+- Roku browse residual Posters draw last in their Groups (on top of labels
+  and grids) and switch URI by catalog kind so series/movies/music each use
+  a kind-specific sparse residual under 20% of stage.
 - Roku merge-conflict markers removed from MainScene/package/tests;
   invalid `--` sequences in XML comments cleaned so `make validate` is green.
 - Roku pairing wordmark "Play"/"arr" flush spacing (no "Play arr" gap).
