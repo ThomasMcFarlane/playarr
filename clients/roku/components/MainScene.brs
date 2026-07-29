@@ -10,6 +10,14 @@ sub init()
     m.pairingQr = m.top.findNode("pairingQr")
     m.pairingQrBg = m.top.findNode("pairingQrBg")
     m.pairingQrFrame = m.top.findNode("pairingQrFrame")
+    m.pairingKicker = m.top.findNode("pairingKicker")
+    m.pairingTitle = m.top.findNode("pairingTitle")
+    m.pairingDescription = m.top.findNode("pairingDescription")
+    m.pairingScan = m.top.findNode("pairingScan")
+    m.pairingUrl = m.top.findNode("pairingUrl")
+    m.pairingEnter = m.top.findNode("pairingEnter")
+    m.pairingTimerLabel = m.top.findNode("pairingTimer")
+    m.pairingCodeExpiresAt = 0
     m.pairingManualHint = m.top.findNode("pairingManualHint")
     m.hostedLinkTimer = m.top.findNode("hostedLinkTimer")
     m.profilesGroup = m.top.findNode("profilesGroup")
@@ -305,6 +313,8 @@ sub updateClock()
     monthIndex = dt.GetMonth()
     if monthIndex >= 1 and monthIndex <= 12 then month = monthNames[monthIndex - 1]
     m.clockDate.text = weekday + " " + dt.GetDayOfMonth().ToStr() + " " + month
+    ' Pairing countdown shares the 1s clock tick.
+    if m.top.screenState = "pairing" then updatePairingCountdown()
 end sub
 
 sub connectToServer()
@@ -359,7 +369,7 @@ end sub
 ' existing on-device RFC 8628 token exchange.
 sub beginHostedLink()
     if m.requestBusy then return
-    showPairingBusy("Link this Roku", "Requesting a secure sign-in link…")
+    showPairingBusy("Sign in to Playarr", "Creating a secure sign-in code…")
     startApiRequest({
         action: "hostedLinkCode"
         method: "POST"
@@ -373,37 +383,54 @@ end sub
 sub acceptHostedLinkCode(data as Object)
     if data = invalid or data.device_code = invalid or data.user_code = invalid
         m.lastFailedAction = "hostedLinkCode"
-        showPairingBusy("Couldn’t continue", "Playarr linking is unavailable right now." + Chr(10) + "Press OK to retry.")
+        showPairingBusy("Couldn’t continue", "Playarr linking is unavailable right now.")
         return
     end if
     m.hostedDeviceCode = data.device_code
     m.hostedLinkInterval = data.interval
     if m.hostedLinkInterval < 2 then m.hostedLinkInterval = 2
-    m.pairingInstruction.text = "Scan the code, or open " + data.verification_uri + " and enter:"
+    ' Copy matches web LoginShell + embedded DeviceLogin on /login/qr.
+    if m.pairingKicker <> invalid then m.pairingKicker.text = "WELCOME HOME"
+    if m.pairingTitle <> invalid then m.pairingTitle.text = "Sign in to Playarr"
+    if m.pairingDescription <> invalid
+        m.pairingDescription.text = "Scan the QR code with your phone or another browser to sign in on this device."
+        m.pairingDescription.visible = true
+    end if
+    if m.pairingScan <> invalid
+        m.pairingScan.text = "Scan the QR code, or visit"
+        m.pairingScan.visible = true
+    end if
+    if m.pairingUrl <> invalid
+        uri = data.verification_uri
+        if uri = invalid then uri = "https://playarr.app/link"
+        m.pairingUrl.text = uri
+        m.pairingUrl.visible = true
+    end if
+    if m.pairingEnter <> invalid
+        m.pairingEnter.text = "and enter this code"
+        m.pairingEnter.visible = true
+    end if
     m.pairingCode.text = data.user_code
     m.pairingStatus.text = "Waiting for approval…"
-    m.pairingManualHint.text = "Press * to enter a server address manually instead"
-    ' Some hosted-link responses omit verification_uri_complete (observed
-    ' live: user_code/verification_uri were present but this field was
-    ' missing, silently skipping the QR entirely since this whole block was
-    ' previously gated on it alone). Fall back to building the same
-    ' completed-verification URL by hand from verification_uri + user_code
-    ' (matches the shape verification_uri_complete would have had:
-    ' "<verification_uri>?user_code=<user_code>").
+    m.pairingManualHint.text = "Press * for manual server entry"
+    ' expires_in seconds (hosted) — cap 5 minutes like web.
+    expiresIn = data.expires_in
+    if expiresIn = invalid then expiresIn = 300
+    if expiresIn > 300 then expiresIn = 300
+    if expiresIn < 1 then expiresIn = 300
+    m.pairingCodeExpiresAt = CreateObject("roDateTime").AsSeconds() + expiresIn
+    updatePairingCountdown()
     qrTargetUrl = data.verification_uri_complete
     if qrTargetUrl = invalid and data.verification_uri <> invalid and data.user_code <> invalid
         qrTargetUrl = data.verification_uri + "?user_code=" + data.user_code
     end if
     if qrTargetUrl <> invalid
-        ' Hosted PNG matches PLAYARR_QR_STYLE (black/white, margin 2, content
-        ' box 216@2x). Plate + frame supply the rounded white tile chrome.
         m.pairingQr.uri = AppConfig().hostedLinkOrigin + "/api/link/qr?value=" + UrlEncode(qrTargetUrl)
         m.pairingQr.visible = true
         if m.pairingQrBg <> invalid then m.pairingQrBg.visible = true
         if m.pairingQrFrame <> invalid then m.pairingQrFrame.visible = true
     else
-        if m.pairingQrBg <> invalid then m.pairingQrBg.visible = false
-        if m.pairingQrFrame <> invalid then m.pairingQrFrame.visible = false
+        hidePairingQr()
     end if
     showOnly("pairing")
     m.top.screenState = "pairing"
@@ -853,11 +880,22 @@ sub beginPairing()
 end sub
 
 ' Pairing chrome in place of fullscreen statusGroup (no Loading wall).
+' Matches web /login/qr light panel (kicker + title + message).
 sub showPairingBusy(title as String, message as String)
-    m.pairingInstruction.text = message
+    if m.pairingKicker <> invalid then m.pairingKicker.text = "WELCOME HOME"
+    if m.pairingTitle <> invalid then m.pairingTitle.text = title
+    if m.pairingDescription <> invalid
+        m.pairingDescription.text = message
+        m.pairingDescription.visible = true
+    end if
+    if m.pairingScan <> invalid then m.pairingScan.visible = false
+    if m.pairingUrl <> invalid then m.pairingUrl.visible = false
+    if m.pairingEnter <> invalid then m.pairingEnter.visible = false
     m.pairingCode.text = ""
-    m.pairingStatus.text = title
-    m.pairingManualHint.text = ""
+    m.pairingStatus.text = ""
+    if m.pairingTimerLabel <> invalid then m.pairingTimerLabel.text = ""
+    m.pairingManualHint.text = "Press * for manual server entry"
+    m.pairingCodeExpiresAt = 0
     hidePairingQr()
     showOnly("pairing")
     m.top.screenState = "pairing"
@@ -870,6 +908,29 @@ sub hidePairingQr()
     if m.pairingQrFrame <> invalid then m.pairingQrFrame.visible = false
 end sub
 
+' Web device-login-timer: "Code refreshes in m:ss".
+sub updatePairingCountdown()
+    if m.pairingTimerLabel = invalid then return
+    if m.pairingCodeExpiresAt = invalid or m.pairingCodeExpiresAt <= 0
+        m.pairingTimerLabel.text = ""
+        return
+    end if
+    now = CreateObject("roDateTime").AsSeconds()
+    remaining = m.pairingCodeExpiresAt - now
+    if remaining < 0 then remaining = 0
+    minutes = Int(remaining / 60)
+    seconds = remaining - (minutes * 60)
+    minStr = minutes.ToStr()
+    secStr = seconds.ToStr()
+    if seconds < 10 then secStr = "0" + secStr
+    m.pairingTimerLabel.text = "Code refreshes in " + minStr + ":" + secStr
+    ' Auto-renew once when the code expires (same as web renewCode).
+    if remaining = 0 and m.top.screenState = "pairing"
+        m.pairingCodeExpiresAt = 0
+        beginHostedLink()
+    end if
+end sub
+
 sub acceptDeviceCode(data as Object)
     if data = invalid
         showPairingBusy("Couldn’t continue", "The server returned an invalid device code.")
@@ -878,10 +939,34 @@ sub acceptDeviceCode(data as Object)
     m.deviceCode = data.device_code
     m.pollInterval = data.interval
     if m.pollInterval < 5 then m.pollInterval = 5
-    m.pairingInstruction.text = "Scan the QR code, or visit " + data.verification_uri + " and enter:"
+    if m.pairingKicker <> invalid then m.pairingKicker.text = "WELCOME HOME"
+    if m.pairingTitle <> invalid then m.pairingTitle.text = "Sign in to Playarr"
+    if m.pairingDescription <> invalid
+        m.pairingDescription.text = "Scan the QR code with your phone or another browser to sign in on this device."
+        m.pairingDescription.visible = true
+    end if
+    if m.pairingScan <> invalid
+        m.pairingScan.text = "Scan the QR code, or visit"
+        m.pairingScan.visible = true
+    end if
+    if m.pairingUrl <> invalid
+        uri = data.verification_uri
+        if uri = invalid then uri = ""
+        m.pairingUrl.text = uri
+        m.pairingUrl.visible = true
+    end if
+    if m.pairingEnter <> invalid
+        m.pairingEnter.text = "and enter this code"
+        m.pairingEnter.visible = true
+    end if
     m.pairingCode.text = data.user_code
     m.pairingStatus.text = "Waiting for approval…"
-    m.pairingManualHint.text = "Press * to enter a server address manually instead"
+    m.pairingManualHint.text = "Press * for manual server entry"
+    expiresIn = data.expires_in
+    if expiresIn = invalid then expiresIn = 300
+    if expiresIn > 300 then expiresIn = 300
+    m.pairingCodeExpiresAt = CreateObject("roDateTime").AsSeconds() + expiresIn
+    updatePairingCountdown()
     ' Prefer hosted QR when the complete URI is a playarr.app link; otherwise
     ' hide the tile (hosted /api/link/qr refuses non-playarr.app values).
     qrTarget = data.verification_uri_complete

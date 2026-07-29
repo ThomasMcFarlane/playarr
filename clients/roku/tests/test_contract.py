@@ -16,7 +16,8 @@ class ApiContractTests(unittest.TestCase):
         expected = {
             "GET /api/system/version": ('"version", "GET", "/api/system/version"'),
             "POST /api/v1/auth/refresh": ('"refresh", "POST", "/api/v1/auth/refresh"'),
-            "POST /api/v1/oauth/device/code": ('"deviceCode", "POST", "/api/v1/oauth/device/code"'),
+            # Pairing uses hosted playarr.app link (QR login); token poll still
+            # hits the real server device-token endpoint after the claim.
             "POST /api/v1/oauth/token": ('"deviceToken", "POST", "/api/v1/oauth/token"'),
             "GET /api/v1/users/profiles": ('"profiles", "GET", "/api/v1/users/profiles"'),
             "GET /api/v1/catalog": 'path = "/api/v1/catalog?',
@@ -190,27 +191,31 @@ class SecretSafetyTests(unittest.TestCase):
         self.assertIn('key = "options"', MAIN)
         self.assertIn("openServerDialog()", MAIN)
 
-    def test_pairing_screen_matches_the_real_device_login_visual_pass(self) -> None:
-        # Visual-correction phase: pairingGroup was rebuilt to mirror
-        # tv-web's real DeviceLogin page (logo lockup, kicker, left-anchored
-        # column, decorative glow) -- these checks pin the structural
-        # pieces of that pass so a future edit doesn't silently drop them,
-        # without over-constraining exact pixel values.
-        # Glow Rectangles and solid chrome Posters removed (painted as slabs).
+    def test_pairing_screen_matches_web_login_qr(self) -> None:
+        # Pairing mirrors web `/login/qr` (ProfileAuthLayout + embedded
+        # DeviceLogin): light AuthLight wash, WELCOME HOME kicker, Sign in
+        # to Playarr title, centered QR tile + code stack.
         self.assertNotIn('id="pairingGlow1"', SCENE)
+        self.assertIn('id="pairingAuthBg"', SCENE)
+        self.assertIn('uri="pkg:/images/pairing-auth-bg.png"', SCENE)
         self.assertIn('id="pairingLogoIcon"', SCENE)
-        self.assertIn('uri="pkg:/images/pairing-logo.png"', SCENE)
-        self.assertIn('text="SIGN IN ON ANOTHER DEVICE"', SCENE)
+        self.assertIn('text="WELCOME HOME"', SCENE)
+        self.assertIn('text="Sign in to Playarr"', SCENE)
         self.assertIn('id="pairingQrBg"', SCENE)
-        self.assertNotIn('id="pairingManualHintBg"', SCENE)
+        self.assertIn('id="pairingQrFrame"', SCENE)
         self.assertIn("sub showPairingBusy(", MAIN)
+        self.assertIn("beginHostedLink()", MAIN)
         # The functional ids the .brs logic drives must still all exist.
         for pairing_id in (
             "pairingQr",
-            "pairingInstruction",
             "pairingCode",
             "pairingStatus",
             "pairingManualHint",
+            "pairingKicker",
+            "pairingTitle",
+            "pairingDescription",
+            "pairingUrl",
+            "pairingTimer",
         ):
             with self.subTest(pairing_id=pairing_id):
                 self.assertIn(f'id="{pairing_id}"', SCENE)

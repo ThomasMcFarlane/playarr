@@ -30,6 +30,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Roku pairing is the light web `/login/qr` layout (cream wash, WELCOME HOME, Sign in to Playarr, centered QR + code + countdown), not the dark side-by-side DeviceLogin card.
+
 - Apple TV pairing gate always uses the playarr.app hosted broker (even when
   a relay/server URL is remembered), so the on-screen visit line is
   `https://playarr.app/link` and never a `v4-…relay.playarr.app` Host.

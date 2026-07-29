@@ -23,56 +23,38 @@
     </Group>
 
     <!--
-      Visual-correction phase: rebuilt to match tv-web's real DeviceLogin
-      page (clients/tv-web/web/src/components/DeviceLogin.tsx +
-      src/styles/global.css's .auth-page/.auth-card/.device-login-*
-      rules, dark theme values under :root[data-theme="dark"]), confirmed
-      against a live Playwright capture of https://playarr.app/login at
-      1920x1080. All logic (beginHostedLink/pollHostedLink/
-      acceptHostedLinkClaim/openServerDialog, see MainScene.brs) is
-      unchanged; only node geometry/color/text below moved.
-
-      Layout math: .auth-page is `display:grid;
-      grid-template-columns:minmax(0,1fr) minmax(340px,0.72fr)`, and
-      .device-login-page overrides that to
-      `minmax(260px,0.55fr) minmax(680px,1.45fr)`. At 1920px that resolves
-      to a 528px decorative left column and a 1392px right column; the
-      .auth-card inside it is `width:min(100% - 3rem,880px)` centered via
-      margin:0 auto, so its left edge lands at
-      528 + (1392-880)/2 = 784px, plus the card's own
-      `padding:clamp(24px,4vw,70px)` (70px at this width) puts actual
-      content at x=854, rounded to 855 below, matching the captured
-      screenshot's observed x=855-925 lockup position.
-
-      Kicker/title font sizes (.page-kicker 0.64vw=12px,
-      .auth-title clamp(...,4.5vw,...)=86px) are numerically identical to
-      TvStage.xml's own stageKicker/stageTitle sizing, so this reuses
-      those exact scale factors (0.38, 2.69) rather than re-deriving them.
+      Pairing = web `/login/qr` (ProfileAuthLayout + embedded DeviceLogin).
+      Light AuthLight tokens (bg #F5F3F2, ink #382621, muted #A5969E, rose
+      #CF3157). Centered column, NOT the dark side-by-side DeviceLogin TV
+      card. QR tile = .device-login-qr (240 border-box, 12px edge, r=18).
+      Pre-rendered cream+rose wash (pairing-auth-bg.png) because SceneGraph
+      has no soft radial gradient.
     -->
     <Group id="pairingGroup" visible="false">
-      <!-- No decorative glow Rectangles: they painted large solid pink/purple
-           slabs on device (SceneGraph has no soft radial gradient). -->
-      <Poster id="pairingLogoIcon" translation="[855,350]" width="52" height="52" uri="pkg:/images/pairing-logo.png" loadDisplayMode="scaleToFit" />
-      <Label translation="[855,410]" width="200" height="32" text="Play" scale="[0.72,0.72]" color="0xA9B7C9FF" />
-      <Label translation="[903,410]" width="120" height="32" text="arr" scale="[0.72,0.72]" color="0xFFFFFFFF" />
-      <Label translation="[855,478]" width="600" height="20" text="SIGN IN ON ANOTHER DEVICE" scale="[0.38,0.38]" color="0x5C6B80FF" />
-      <Label translation="[855,515]" width="700" height="50" text="Link this Roku" scale="[2.69,2.69]" color="0xFFFFFFFF" />
-      <!--
-        QR tile matches tv-web `.device-login-qr` exactly (see /login/qr):
-          border-box 240×240, white plate, border-radius 18, 12px white edge,
-          modules 216×216 inside. Roku has no border-radius, so the plate is
-          pre-rendered (`pairing-qr-plate.png`); modules come from
-          playarr.app `/api/link/qr` (same black/white + margin 2 as the SVG).
-        Soft shadow frame sits behind the plate for the SPA card lift.
-      -->
-      <Poster id="pairingQrFrame" translation="[847,612]" width="264" height="268" uri="pkg:/images/pairing-qr-frame.png" loadDisplayMode="scaleToFit" visible="false" />
-      <Poster id="pairingQrBg" translation="[855,620]" width="240" height="240" uri="pkg:/images/pairing-qr-plate.png" loadDisplayMode="scaleToFit" visible="false" />
-      <Poster id="pairingQr" translation="[867,632]" width="216" height="216" loadDisplayMode="scaleToFit" visible="false" />
-      <Label id="pairingInstruction" translation="[1140,620]" width="700" height="96" wrap="true" scale="[0.7,0.7]" color="0xC5B8BDFF" />
-      <!-- Code uses ink (not accent pink) — matches live /login/qr mono code. -->
-      <Label id="pairingCode" translation="[1140,720]" width="500" height="50" scale="[2.2,2.2]" color="0xF4F0F1FF" />
-      <Label id="pairingStatus" translation="[1140,820]" width="700" height="40" scale="[0.7,0.7]" color="0x887A82FF" />
-      <Label id="pairingManualHint" translation="[1140,880]" width="700" height="30" scale="[0.58,0.58]" color="0x887A82FF" />
+      <Poster id="pairingAuthBg" translation="[0,0]" width="1920" height="1080" uri="pkg:/images/pairing-auth-bg.png" loadDisplayMode="scaleToFill" />
+      <!-- Top chrome: mark only (web also has back + language; * opens manual). -->
+      <Poster id="pairingLogoIcon" translation="[48,40]" width="40" height="40" uri="pkg:/images/pairing-logo.png" loadDisplayMode="scaleToFit" />
+
+      <!-- Centered auth panel (max 560 like .profile-auth-panel). -->
+      <Label id="pairingKicker" translation="[0,160]" width="1920" height="28" text="WELCOME HOME" horizAlign="center" scale="[0.36,0.36]" scaleRotateCenter="[960,14]" color="0xA5969EFF" />
+      <Label id="pairingTitle" translation="[0,195]" width="1920" height="100" text="Sign in to Playarr" horizAlign="center" scale="[2.25,2.25]" scaleRotateCenter="[960,0]" color="0x382621FF" />
+      <Label id="pairingDescription" translation="[460,330]" width="1000" height="100" text="Scan the QR code with your phone or another browser to sign in on this device." horizAlign="center" wrap="true" maxLines="3" scale="[0.52,0.52]" scaleRotateCenter="[500,0]" color="0xA5969EFF" />
+
+      <!-- QR: frame shadow + white plate 240 + modules 216 @ 12px inset. Centered x=(1920-240)/2=840. -->
+      <Poster id="pairingQrFrame" translation="[828,410]" width="264" height="268" uri="pkg:/images/pairing-qr-frame.png" loadDisplayMode="scaleToFit" visible="false" />
+      <Poster id="pairingQrBg" translation="[840,420]" width="240" height="240" uri="pkg:/images/pairing-qr-plate.png" loadDisplayMode="scaleToFit" visible="false" />
+      <Poster id="pairingQr" translation="[852,432]" width="216" height="216" loadDisplayMode="scaleToFit" visible="false" />
+
+      <!-- Instructions under QR (same order as embedded DeviceLogin). -->
+      <Label id="pairingScan" translation="[0,690]" width="1920" height="28" text="Scan the QR code, or visit" horizAlign="center" scale="[0.48,0.48]" scaleRotateCenter="[960,14]" color="0xA5969EFF" />
+      <Label id="pairingUrl" translation="[0,725]" width="1920" height="36" text="https://playarr.app/link" horizAlign="center" scale="[0.70,0.70]" scaleRotateCenter="[960,18]" color="0x382621FF" />
+      <Label id="pairingEnter" translation="[0,770]" width="1920" height="28" text="and enter this code" horizAlign="center" scale="[0.48,0.48]" scaleRotateCenter="[960,14]" color="0xA5969EFF" />
+      <Label id="pairingCode" translation="[0,800]" width="1920" height="70" text="" horizAlign="center" scale="[1.70,1.70]" scaleRotateCenter="[960,0]" color="0x382621FF" />
+      <Label id="pairingStatus" translation="[0,900]" width="1920" height="28" text="" horizAlign="center" scale="[0.45,0.45]" scaleRotateCenter="[960,14]" color="0xA5969EFF" />
+      <Label id="pairingTimer" translation="[0,935]" width="1920" height="28" text="" horizAlign="center" scale="[0.45,0.45]" scaleRotateCenter="[960,14]" color="0x675961FF" />
+      <!-- Kept for busy/error copy; also used as legacy instruction field. -->
+      <Label id="pairingInstruction" translation="[560,340]" width="800" height="80" text="" horizAlign="center" wrap="true" maxLines="3" scale="[0.55,0.55]" scaleRotateCenter="[400,0]" color="0xA5969EFF" visible="false" />
+      <Label id="pairingManualHint" translation="[0,980]" width="1920" height="28" text="Press * for manual server entry" horizAlign="center" scale="[0.42,0.42]" scaleRotateCenter="[960,14]" color="0xA5969EFF" />
     </Group>
 
     <!--
